@@ -1,13 +1,3 @@
-//! This module defines the `Resource<T>` type in the public API of Wasmtime.
-//!
-//! The purpose of this type is to represent a typed resource on the host where
-//! the runtime representation is just a 32-bit integer plus some minor state
-//! tracking. Notably the `T` enables statically differentiating resources from
-//! one another and enables up-front type-checking where the lift/lower
-//! operations need not do any type-checking at all.
-//!
-//! The actual `T` type parameter is just a guide, no `T` value is ever needed.
-
 use crate::AsContextMut;
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
@@ -20,126 +10,30 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
-/// A host-defined resource in the component model.
-///
-/// This type can be thought of as roughly a newtype wrapper around `u32` for
-/// use as a resource with the component model. The main guarantee that the
-/// component model provides is that the `u32` is not forgeable by guests and
-/// there are guaranteed semantics about when a `u32` may be in use by the guest
-/// and when it's guaranteed no longer needed. This means that it is safe for
-/// embedders to consider the internal `u32` representation "trusted" and use it
-/// for things like table indices with infallible accessors that panic on
-/// out-of-bounds. This should only panic for embedder bugs, not because of any
-/// possible behavior in the guest.
-///
-/// A `Resource<T>` value dynamically represents both an `(own $t)` in the
-/// component model as well as a `(borrow $t)`. It can be inspected via
-/// [`Resource::owned`] to test whether it is an owned handle. An owned handle
-/// which is not actively borrowed can be destroyed at any time as it's
-/// guaranteed that the guest does not have access to it. A borrowed handle, on
-/// the other hand, may be accessed by the guest so it's not necessarily
-/// guaranteed to be able to be destroyed.
-///
-/// Note that the "own" and "borrow" here refer to the component model, not
-/// Rust. The semantics of Rust ownership and borrowing are slightly different
-/// than the component model's (but spiritually the same) in that more dynamic
-/// tracking is employed as part of the component model. This means that it's
-/// possible to get runtime errors when using a `Resource<T>`. For example it is
-/// an error to call [`Resource::new_borrow`] and pass that to a component
-/// function expecting `(own $t)` and this is not statically disallowed.
-///
-/// The [`Resource`] type implements both the [`Lift`] and [`Lower`] trait to be
-/// used with typed functions in the component model or as part of aggregate
-/// structures and datatypes.
-///
-/// # Destruction of a resource
-///
-/// Resources in the component model are optionally defined with a destructor,
-/// but this host resource type does not specify a destructor. It is left up to
-/// the embedder to be able to determine how best to a destroy a resource when
-/// it is owned.
-///
-/// Note, though, that while [`Resource`] itself does not specify destructors
-/// it's still possible to do so via the [`Linker::resource`] definition. When a
-/// resource type is defined for a guest component a destructor can be specified
-/// which can be used to hook into resource destruction triggered by the guest.
-///
-/// This means that there are two ways that resource destruction is handled:
-///
-/// * Host resources destroyed by the guest can hook into the
-///   [`Linker::resource`] destructor closure to handle resource destruction.
-///   This could, for example, remove table entries.
-///
-/// * Host resources owned by the host itself have no automatic means of
-///   destruction. The host can make its own determination that its own resource
-///   is not lent out to the guest and at that time choose to destroy or
-///   deallocate it.
-///
-/// # Dynamic behavior of a resource
-///
-/// A host-defined [`Resource`] does not necessarily represent a static value.
-/// Its internals may change throughout its usage to track the state associated
-/// with the resource. The internal 32-bit host-defined representation never
-/// changes, however.
-///
-/// For example if there's a component model function of the form:
-///
-/// ```wasm
-/// (func (param "a" (borrow $t)) (param "b" (own $t)))
-/// ```
-///
-/// Then that can be extracted in Rust with:
-///
-/// ```rust,ignore
-/// let func = instance.get_typed_func::<(&Resource<T>, &Resource<T>), ()>(&mut store, "name")?;
-/// ```
-///
-/// Here the exact same resource can be provided as both arguments but that is
-/// not valid to do so because the same resource cannot be actively borrowed and
-/// passed by-value as the second parameter at the same time. The internal state
-/// in `Resource<T>` will track this information and provide a dynamic runtime
-/// error in this situation.
-///
-/// Mostly it's important to be aware that there is dynamic state associated
-/// with a [`Resource<T>`] to provide errors in situations that cannot be
-/// statically ruled out.
-///
-/// # Borrows and host responsibilities
-///
-/// Borrows to resources in the component model are guaranteed to be transient
-/// such that if a borrow is passed as part of a function call then when the
-/// function returns it's guaranteed that the guest no longer has access to the
-/// resource. This guarantee, however, must be manually upheld by the host when
-/// it receives its own borrow.
-///
-/// As mentioned above the [`Resource<T>`] type can represent a borrowed value
-/// in addition to an owned value. This means a guest can provide the host with
-/// a borrow, such as an argument to an imported function:
-///
-/// ```rust,ignore
-/// linker.root().func_wrap("name", |_cx, (r,): (Resource<MyType>,)| {
-///     assert!(!r.owned());
-///     // .. here `r` is a borrowed value provided by the guest and the host
-///     // shouldn't continue to access it beyond the scope of this call
-/// })?;
-/// ```
-///
-/// In this situation the host should take care to not attempt to persist the
-/// resource beyond the scope of the call. It's the host's resource so it
-/// technically can do what it wants with it but nothing is statically
-/// preventing `r` to stay pinned to the lifetime of the closure invocation.
-/// It's considered a mistake that the host performed if `r` is persisted too
-/// long and accessed at the wrong time.
-///
-/// [`Linker::resource`]: crate::component::LinkerInstance::resource
-pub struct Resource<T> {
+/// Internal type in Wasmtime used to represent host-defined resources that are
+/// not tracked within the store.
+pub struct HostResource<T: HostResourceType<D>, D> {
     /// The host-defined 32-bit representation of this resource.
     rep: u32,
 
-    /// Dear rust please consider `T` used even though it's not actually used.
-    _marker: marker::PhantomData<fn() -> T>,
+    /// Metadata, if necessary, tracking the type of this resource.
+    ty: D,
 
+    /// Internal state about borrows and such.
     state: AtomicResourceState,
+
+    _marker: marker::PhantomData<fn() -> T>,
+}
+
+// FIXME(rust-lang/rust#110338) the `D` type parameter here should be an
+// associated type. In a first attempt at doing that the `wasmtime-wasi-io`
+// crate failed to compiled with obscure errors. At least this is an internal
+// trait for now...
+pub trait HostResourceType<D> {
+    /// Tests whether `ty` matches this resource type.
+    fn typecheck(ty: ResourceType) -> Option<D>;
+    /// Converts `Data` to a `ResourceType`.
+    fn resource_type(data: D) -> ResourceType;
 }
 
 /// Internal dynamic state tracking for this resource. This can be one of
@@ -239,48 +133,37 @@ impl ResourceState {
     }
 }
 
-impl<T> Resource<T>
+impl<T, D> HostResource<T, D>
 where
-    T: 'static,
+    T: HostResourceType<D>,
+    D: PartialEq + Send + Sync + Copy + 'static,
 {
-    /// Creates a new owned resource with the `rep` specified.
-    ///
-    /// The returned value is suitable for passing to a guest as either a
-    /// `(borrow $t)` or `(own $t)`.
-    pub fn new_own(rep: u32) -> Resource<T> {
-        Resource {
+    pub fn new_own(rep: u32, ty: D) -> Self {
+        HostResource {
             state: AtomicResourceState::NOT_IN_TABLE,
             rep,
+            ty,
             _marker: marker::PhantomData,
         }
     }
 
-    /// Creates a new borrowed resource which isn't actually rooted in any
-    /// ownership.
-    ///
-    /// This can be used to pass to a guest as a borrowed resource and the
-    /// embedder will know that the `rep` won't be in use by the guest
-    /// afterwards. Exactly how the lifetime of `rep` works is up to the
-    /// embedder.
-    pub fn new_borrow(rep: u32) -> Resource<T> {
-        Resource {
+    pub fn new_borrow(rep: u32, ty: D) -> Self {
+        HostResource {
             state: AtomicResourceState::BORROW,
             rep,
+            ty,
             _marker: marker::PhantomData,
         }
     }
 
-    /// Returns the underlying 32-bit representation used to originally create
-    /// this resource.
     pub fn rep(&self) -> u32 {
         self.rep
     }
 
-    /// Returns whether this is an owned resource or not.
-    ///
-    /// Owned resources can be safely destroyed by the embedder at any time, and
-    /// borrowed resources have an owner somewhere else on the stack so can only
-    /// be accessed, not destroyed.
+    pub fn ty(&self) -> D {
+        self.ty
+    }
+
     pub fn owned(&self) -> bool {
         match self.state.get() {
             ResourceState::Borrow => false,
@@ -291,6 +174,10 @@ where
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
         match ty {
             InterfaceType::Own(t) => {
+                match T::typecheck(cx.resource_type(t)) {
+                    Some(t) if t == self.ty => {}
+                    _ => bail!("resource type mismatch"),
+                }
                 let rep = match self.state.get() {
                     // If this is a borrow resource then this is a dynamic
                     // error on behalf of the embedder.
@@ -320,6 +207,10 @@ where
                 cx.guest_resource_lower_own(t, rep)
             }
             InterfaceType::Borrow(t) => {
+                match T::typecheck(cx.resource_type(t)) {
+                    Some(t) if t == self.ty => {}
+                    _ => bail!("resource type mismatch"),
+                }
                 let rep = match self.state.get() {
                     // If this is already a borrowed resource, nothing else to
                     // do and the rep is passed through.
@@ -357,18 +248,17 @@ where
     }
 
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let (state, rep) = match ty {
+        let (state, rep, ty) = match ty {
             // Ownership is being transferred from a guest to the host, so move
             // it from the guest table into a new `Resource`. Note that this
             // isn't immediately inserted into the host table and that's left
             // for the future if it's necessary to take a borrow from this owned
             // resource.
             InterfaceType::Own(t) => {
-                debug_assert!(cx.resource_type(t) == ResourceType::host::<T>());
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
                 assert!(dtor.is_some());
                 assert!(flags.is_none());
-                (AtomicResourceState::NOT_IN_TABLE, rep)
+                (AtomicResourceState::NOT_IN_TABLE, rep, t)
             }
 
             // The borrow here is lifted from the guest, but note the lack of
@@ -379,42 +269,27 @@ where
             // This effectively mirrors that even though the canonical ABI
             // isn't really all that applicable in host context here.
             InterfaceType::Borrow(t) => {
-                debug_assert!(cx.resource_type(t) == ResourceType::host::<T>());
                 let rep = cx.guest_resource_lift_borrow(t, index)?;
-                (AtomicResourceState::BORROW, rep)
+                (AtomicResourceState::BORROW, rep, t)
             }
             _ => bad_type_info(),
         };
-        Ok(Resource {
+        let ty = T::typecheck(cx.resource_type(ty)).unwrap();
+        Ok(HostResource {
             state,
             rep,
+            ty,
             _marker: marker::PhantomData,
         })
     }
 
-    /// Attempts to convert a [`ResourceAny`] into [`Resource`].
-    ///
-    /// This method will check that `resource` has type
-    /// `ResourceType::host::<T>()` and then convert it into a typed version of
-    /// the resource.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if `resource` does not have type
-    /// `ResourceType::host::<T>()`. This function may also return an error if
-    /// `resource` is no longer valid, for example it was previously converted.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if `resource` does not belong to the `store`
-    /// specified.
-    pub fn try_from_resource_any(resource: ResourceAny, store: impl AsContextMut) -> Result<Self> {
-        resource.try_into_resource(store)
-    }
-
-    /// See [`ResourceAny::try_from_resource`]
     pub fn try_into_resource_any(self, mut store: impl AsContextMut) -> Result<ResourceAny> {
-        let Resource { rep, state, .. } = self;
+        let HostResource {
+            rep,
+            state,
+            ty,
+            _marker: _,
+        } = self;
         let store = store.as_context_mut();
 
         let mut tables = HostResourceTables::new_host(store.0);
@@ -427,11 +302,15 @@ where
             ResourceState::Taken => bail!("host resource already consumed"),
             ResourceState::Index(idx) => (idx, true),
         };
-        Ok(ResourceAny::new(idx, ResourceType::host::<T>(), owned))
+        Ok(ResourceAny::new(idx, T::resource_type(ty), owned))
     }
 }
 
-unsafe impl<T: 'static> ComponentType for Resource<T> {
+unsafe impl<T, D> ComponentType for HostResource<T, D>
+where
+    T: HostResourceType<D>,
+    D: PartialEq + Send + Sync + Copy + 'static,
+{
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as ComponentType>::Lower;
@@ -441,7 +320,7 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
             InterfaceType::Own(t) | InterfaceType::Borrow(t) => *t,
             other => bail!("expected `own` or `borrow`, found `{}`", desc(other)),
         };
-        if !types.resource_type(resource).is_host::<T>() {
+        if T::typecheck(types.resource_type(resource)).is_none() {
             bail!("resource type mismatch");
         }
 
@@ -449,7 +328,11 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
     }
 }
 
-unsafe impl<T: 'static> Lower for Resource<T> {
+unsafe impl<T, D> Lower for HostResource<T, D>
+where
+    T: HostResourceType<D>,
+    D: PartialEq + Send + Sync + Copy + 'static,
+{
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
@@ -471,14 +354,18 @@ unsafe impl<T: 'static> Lower for Resource<T> {
     }
 }
 
-unsafe impl<T: 'static> Lift for Resource<T> {
+unsafe impl<T, D> Lift for HostResource<T, D>
+where
+    T: HostResourceType<D>,
+    D: PartialEq + Send + Sync + Copy + 'static,
+{
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
         let index = u32::linear_lift_from_flat(cx, InterfaceType::U32, src)?;
-        Resource::lift_from_index(cx, ty, index)
+        HostResource::lift_from_index(cx, ty, index)
     }
 
     fn linear_lift_from_memory(
@@ -487,11 +374,15 @@ unsafe impl<T: 'static> Lift for Resource<T> {
         bytes: &[u8],
     ) -> Result<Self> {
         let index = u32::linear_lift_from_memory(cx, InterfaceType::U32, bytes)?;
-        Resource::lift_from_index(cx, ty, index)
+        HostResource::lift_from_index(cx, ty, index)
     }
 }
 
-impl<T> fmt::Debug for Resource<T> {
+impl<T, D> fmt::Debug for HostResource<T, D>
+where
+    T: HostResourceType<D>,
+    D: PartialEq + Send + Sync + Copy + 'static,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let state = match self.state.get() {
             ResourceState::Borrow => "borrow",

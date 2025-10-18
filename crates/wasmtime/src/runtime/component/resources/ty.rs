@@ -47,6 +47,24 @@ impl ResourceType {
         }
     }
 
+    /// Creates a new host resource type which is identified by the `payload`
+    /// runtime argument.
+    ///
+    /// The `payload` argument to this function is an arbitrary 32-bit value
+    /// that the host can use to distinguish one resource from another.
+    /// A resource type of type `ResourceType::host_dynamic(2)` will match the
+    /// type of the value produced by `ResourceDynamic::new_{own,borrow}(_, 2)`,
+    /// for example.
+    ///
+    /// This type of resource is disjoint from all other types of resources. For
+    /// example any resource with type `ResourceType::host::<u32>()` will be a
+    /// different type than all types created by this function.
+    pub fn host_dynamic(payload: u32) -> ResourceType {
+        ResourceType {
+            kind: ResourceTypeKind::HostDynamic(payload),
+        }
+    }
+
     pub(crate) fn guest(
         store: StoreId,
         instance: &ComponentInstance,
@@ -85,11 +103,19 @@ impl ResourceType {
             _ => false,
         }
     }
+
+    pub(crate) fn as_host_dynamic(&self) -> Option<u32> {
+        match self.kind {
+            ResourceTypeKind::HostDynamic(payload) => Some(payload),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum ResourceTypeKind {
     Host(TypeId),
+    HostDynamic(u32),
     Guest {
         store: StoreId,
         // For now this is the `*mut ComponentInstance` pointer within the store

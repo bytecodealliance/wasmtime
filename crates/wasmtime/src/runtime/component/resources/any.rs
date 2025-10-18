@@ -11,8 +11,9 @@
 
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
+use crate::component::resources::host::{HostResource, HostResourceType};
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
-use crate::component::{ComponentType, Lift, Lower, Resource, ResourceType};
+use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::ValRaw;
 use crate::{AsContextMut, StoreContextMut, Trap};
@@ -79,17 +80,31 @@ impl ResourceAny {
     }
 
     /// See [`Resource::try_from_resource_any`]
-    pub fn try_into_resource<T: 'static>(
+    pub fn try_into_resource<T: 'static>(self, store: impl AsContextMut) -> Result<Resource<T>> {
+        Resource::try_from_resource_any(self, store)
+    }
+
+    /// See [`ResourceDynamic::try_from_resource_any`]
+    pub fn try_into_resource_dynamic(self, store: impl AsContextMut) -> Result<ResourceDynamic> {
+        ResourceDynamic::try_from_resource_any(self, store)
+    }
+
+    /// See [`Resource::try_from_resource_any`]
+    pub(crate) fn try_into_host_resource<T, D>(
         self,
         mut store: impl AsContextMut,
-    ) -> Result<Resource<T>> {
+    ) -> Result<HostResource<T, D>>
+    where
+        T: HostResourceType<D>,
+        D: PartialEq + Send + Sync + Copy + 'static,
+    {
         let store = store.as_context_mut();
         let mut tables = HostResourceTables::new_host(store.0);
         let ResourceAny { idx, ty, owned } = self;
-        ensure!(ty == ResourceType::host::<T>(), "resource type mismatch");
+        let ty = T::typecheck(ty).ok_or_else(|| anyhow::anyhow!("resource type mismatch"))?;
         if owned {
             let rep = tables.host_resource_lift_own(idx)?;
-            Ok(Resource::new_own(rep))
+            Ok(HostResource::new_own(rep, ty))
         } else {
             // For borrowed handles, first acquire the `rep` via lifting the
             // borrow. Afterwards though remove any dynamic state associated
@@ -102,7 +117,7 @@ impl ResourceAny {
             let rep = tables.host_resource_lift_borrow(idx)?;
             let res = tables.host_resource_drop(idx)?;
             assert!(res.is_none());
-            Ok(Resource::new_borrow(rep))
+            Ok(HostResource::new_borrow(rep, ty))
         }
     }
 

@@ -1530,3 +1530,114 @@ fn resource_any_to_typed_handles_borrow() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn resource_dynamic() -> Result<()> {
+    let r = ResourceDynamic::new_own(1, 2);
+    assert_eq!(r.rep(), 1);
+    assert!(r.owned());
+    assert_eq!(r.ty(), 2);
+
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let r2 = r.try_into_resource_any(&mut store)?;
+    assert_eq!(r2.ty(), ResourceType::host_dynamic(2));
+    assert!(r2.owned());
+
+    let r3 = r2.try_into_resource_dynamic(&mut store)?;
+    assert_eq!(r3.rep(), 1);
+    assert_eq!(r3.ty(), 2);
+
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (import "u" (type $u (sub resource)))
+
+                (core func $t_drop (canon resource.drop $t))
+                (core func $u_drop (canon resource.drop $u))
+
+                (func (export "drop-t") (param "x" (own $t))
+                    (canon lift (core func $t_drop)))
+                (func (export "drop-u") (param "x" (own $u))
+                    (canon lift (core func $u_drop)))
+            )
+        "#,
+    )?;
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .resource("t", ResourceType::host_dynamic(2), |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("u", ResourceType::host_dynamic(3), |_, _| Ok(()))?;
+    let instance = linker.instantiate(&mut store, &c)?;
+
+    let drop_t = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")?;
+    let drop_u = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-u")?;
+
+    drop_t.call(&mut store, (ResourceDynamic::new_own(1, 2),))?;
+    drop_t.post_return(&mut store)?;
+
+    drop_u.call(&mut store, (ResourceDynamic::new_own(2, 3),))?;
+    drop_u.post_return(&mut store)?;
+
+    assert!(
+        drop_t
+            .call(&mut store, (ResourceDynamic::new_own(1, 1),))
+            .is_err()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn resource_dynamic_not_static() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (core func $t_drop (canon resource.drop $t))
+                (func (export "drop-t") (param "x" (own $t))
+                    (canon lift (core func $t_drop)))
+            )
+        "#,
+    )?;
+
+    struct T;
+
+    {
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .resource("t", ResourceType::host_dynamic(2), |_, _| Ok(()))?;
+        let instance = linker.instantiate(&mut store, &c)?;
+        instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")?;
+        assert!(
+            instance
+                .get_typed_func::<(Resource<T>,), ()>(&mut store, "drop-t")
+                .is_err()
+        );
+    }
+
+    {
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .resource("t", ResourceType::host::<T>(), |_, _| Ok(()))?;
+        let instance = linker.instantiate(&mut store, &c)?;
+        assert!(
+            instance
+                .get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")
+                .is_err()
+        );
+        instance.get_typed_func::<(Resource<T>,), ()>(&mut store, "drop-t")?;
+    }
+
+    Ok(())
+}
