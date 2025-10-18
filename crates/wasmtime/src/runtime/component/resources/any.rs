@@ -1,6 +1,6 @@
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
-use crate::component::resources::{HostResourceIndex, HostResourceTables, ResourceState};
+use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, Resource, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::ValRaw;
@@ -41,6 +41,10 @@ pub struct ResourceAny {
 }
 
 impl ResourceAny {
+    pub(crate) fn new(idx: HostResourceIndex, ty: ResourceType, owned: bool) -> ResourceAny {
+        ResourceAny { idx, ty, owned }
+    }
+
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
     ///
     /// * `resource` is the resource to convert.
@@ -58,26 +62,9 @@ impl ResourceAny {
     /// such as when it's already lowered into a component.
     pub fn try_from_resource<T: 'static>(
         resource: Resource<T>,
-        mut store: impl AsContextMut,
+        store: impl AsContextMut,
     ) -> Result<Self> {
-        let Resource { rep, state, .. } = resource;
-        let store = store.as_context_mut();
-
-        let mut tables = HostResourceTables::new_host(store.0);
-        let (idx, owned) = match state.get() {
-            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, false),
-            ResourceState::NotInTable => {
-                let idx = tables.host_resource_lower_own(rep, None, None)?;
-                (idx, true)
-            }
-            ResourceState::Taken => bail!("host resource already consumed"),
-            ResourceState::Index(idx) => (idx, true),
-        };
-        Ok(Self {
-            idx,
-            ty: ResourceType::host::<T>(),
-            owned,
-        })
+        resource.try_into_resource_any(store)
     }
 
     /// See [`Resource::try_from_resource_any`]
