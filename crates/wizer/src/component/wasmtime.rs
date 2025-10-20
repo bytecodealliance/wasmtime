@@ -1,9 +1,7 @@
 use crate::Wizer;
 use crate::component::ComponentInstanceState;
 use anyhow::{Context, anyhow};
-use wasmtime::component::{
-    Component, ComponentExportIndex, Instance, Lift, WasmList, types::ComponentItem,
-};
+use wasmtime::component::{Component, ComponentExportIndex, Instance, Lift, types::ComponentItem};
 use wasmtime::{Result, Store};
 
 impl Wizer {
@@ -86,12 +84,7 @@ pub struct WasmtimeWizerComponent<'a, T: 'static> {
 }
 
 impl<T: Send> WasmtimeWizerComponent<'_, T> {
-    async fn call_func<R, R2>(
-        &mut self,
-        instance: &str,
-        func: &str,
-        use_ret: impl FnOnce(&mut Store<T>, R) -> R2,
-    ) -> R2
+    async fn call_func<R>(&mut self, instance: &str, func: &str) -> R
     where
         R: Lift + 'static,
     {
@@ -109,40 +102,29 @@ impl<T: Send> WasmtimeWizerComponent<'_, T> {
             .get_typed_func::<(), (R,)>(&mut *self.store, func_export)
             .unwrap();
         let ret = func.call_async(&mut *self.store, ()).await.unwrap().0;
-        let ret = use_ret(&mut *self.store, ret);
         func.post_return_async(&mut *self.store).await.unwrap();
         ret
     }
 }
 
 impl<T: Send> ComponentInstanceState for WasmtimeWizerComponent<'_, T> {
-    async fn call_func_ret_list_u8(
-        &mut self,
-        instance: &str,
-        func: &str,
-        contents: impl FnOnce(&[u8]) + Send,
-    ) {
-        self.call_func(instance, func, |store, list: WasmList<u8>| {
-            contents(list.as_le_slice(&store));
-        })
-        .await
+    async fn call_func_ret_list_u8(&mut self, instance: &str, func: &str) -> Vec<u8> {
+        self.call_func(instance, func).await
     }
 
     async fn call_func_ret_s32(&mut self, instance: &str, func: &str) -> i32 {
-        self.call_func(instance, func, |_, r| r).await
+        self.call_func(instance, func).await
     }
 
     async fn call_func_ret_s64(&mut self, instance: &str, func: &str) -> i64 {
-        self.call_func(instance, func, |_, r| r).await
+        self.call_func(instance, func).await
     }
 
     async fn call_func_ret_f32(&mut self, instance: &str, func: &str) -> u32 {
-        self.call_func(instance, func, |_, r: f32| r.to_bits())
-            .await
+        self.call_func::<f32>(instance, func).await.to_bits()
     }
 
     async fn call_func_ret_f64(&mut self, instance: &str, func: &str) -> u64 {
-        self.call_func(instance, func, |_, r: f64| r.to_bits())
-            .await
+        self.call_func::<f64>(instance, func).await.to_bits()
     }
 }

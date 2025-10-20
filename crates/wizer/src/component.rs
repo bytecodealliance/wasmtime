@@ -58,8 +58,7 @@ pub trait ComponentInstanceState: Send {
         &mut self,
         instance: &str,
         func: &str,
-        contents: impl FnOnce(&[u8]) + Send,
-    ) -> impl Future<Output = ()> + Send;
+    ) -> impl Future<Output = Vec<u8>> + Send;
 
     /// Same as [`Self::call_func_ret_list_u8`], but for the `s32` WIT type.
     fn call_func_ret_s32(&mut self, instance: &str, func: &str)

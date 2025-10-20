@@ -28,7 +28,7 @@ impl Wizer {
                 data_section.active(
                     seg.memory_index,
                     &ConstExpr::i32_const(seg.offset as i32),
-                    seg.data.iter().copied(),
+                    seg.data().iter().copied(),
                 );
             }
         };

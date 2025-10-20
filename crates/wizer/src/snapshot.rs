@@ -2,6 +2,7 @@ use crate::InstanceState;
 use crate::info::ModuleContext;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 /// The maximum number of data segments that we will emit. Most
 /// engines support more than this, but we want to leave some
@@ -40,13 +41,21 @@ pub struct DataSegment {
     pub memory_index: u32,
 
     /// This data segment's initialized memory that it originated from.
-    pub data: Vec<u8>,
+    pub memory: Arc<Vec<u8>>,
 
     /// The offset within the memory that `data` should be copied to.
     pub offset: u32,
 
     /// This segment's length.
     pub len: u32,
+}
+
+impl DataSegment {
+    pub fn data(&self) -> &[u8] {
+        let start = usize::try_from(self.offset).unwrap();
+        let end = start + usize::try_from(self.len).unwrap();
+        &self.memory[start..end]
+    }
 }
 
 impl DataSegment {
@@ -64,12 +73,14 @@ impl DataSegment {
     ///
     /// `self` must be in front of `other` and they must not overlap with each
     /// other.
-    fn merge(&mut self, other: &Self) {
+    fn merge(&self, other: &Self) -> DataSegment {
         let gap = self.gap(other);
 
-        self.len += gap + other.len;
-        self.data.extend(std::iter::repeat(0).take(gap as usize));
-        self.data.extend_from_slice(&other.data);
+        DataSegment {
+            offset: self.offset,
+            len: self.len + gap + other.len,
+            ..self.clone()
+        }
     }
 }
 
@@ -120,45 +131,42 @@ async fn snapshot_memories(
         .defined_memories()
         .zip(module.defined_memory_exports.as_ref().unwrap());
     for ((memory_index, ty), name) in iter {
-        instance
-            .memory_contents(&name, |memory| {
-                let page_size = 1 << ty.page_size_log2.unwrap_or(16);
-                let num_wasm_pages = memory.len() / page_size;
-                memory_mins.push(num_wasm_pages as u64);
+        let memory = Arc::new(instance.memory_contents(&name).await);
+        let page_size = 1 << ty.page_size_log2.unwrap_or(16);
+        let num_wasm_pages = memory.len() / page_size;
+        memory_mins.push(num_wasm_pages as u64);
 
-                let memory_data = &memory[..];
+        let memory_data = &memory[..];
 
-                // Consider each Wasm page in parallel. Create data segments for each
-                // region of non-zero memory.
-                data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
-                    let page_end = (i + 1) * page_size;
-                    let mut start = i * page_size;
-                    let mut segments = vec![];
-                    while start < page_end {
-                        let nonzero = match memory_data[start..page_end]
-                            .iter()
-                            .position(|byte| *byte != 0)
-                        {
-                            None => break,
-                            Some(i) => i,
-                        };
-                        start += nonzero;
-                        let end = memory_data[start..page_end]
-                            .iter()
-                            .position(|byte| *byte == 0)
-                            .map_or(page_end, |zero| start + zero);
-                        segments.push(DataSegment {
-                            memory_index,
-                            data: memory_data[start..end].to_vec(),
-                            offset: u32::try_from(start).unwrap(),
-                            len: u32::try_from(end - start).unwrap(),
-                        });
-                        start = end;
-                    }
-                    segments
-                }));
-            })
-            .await;
+        // Consider each Wasm page in parallel. Create data segments for each
+        // region of non-zero memory.
+        data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
+            let page_end = (i + 1) * page_size;
+            let mut start = i * page_size;
+            let mut segments = vec![];
+            while start < page_end {
+                let nonzero = match memory_data[start..page_end]
+                    .iter()
+                    .position(|byte| *byte != 0)
+                {
+                    None => break,
+                    Some(i) => i,
+                };
+                start += nonzero;
+                let end = memory_data[start..page_end]
+                    .iter()
+                    .position(|byte| *byte == 0)
+                    .map_or(page_end, |zero| start + zero);
+                segments.push(DataSegment {
+                    memory_index,
+                    memory: memory.clone(),
+                    offset: u32::try_from(start).unwrap(),
+                    len: u32::try_from(end - start).unwrap(),
+                });
+                start = end;
+            }
+            segments
+        }));
     }
 
     if data_segments.is_empty() {
@@ -198,7 +206,8 @@ async fn snapshot_memories(
 
         // Okay, merge them together into `a` (so that the next iteration can
         // merge it with its predecessor) and then omit `b`!
-        a.merge(b);
+        let merged = a.merge(b);
+        *a = merged;
     }
 
     remove_excess_segments(&mut merged_data_segments);
@@ -247,10 +256,8 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment>) {
     smallest_gaps.sort_unstable_by(|a, b| a.index.cmp(&b.index).reverse());
     for GapIndex { index, .. } in smallest_gaps {
         let index = usize::try_from(index).unwrap();
-        let [a, b] = merged_data_segments
-            .get_disjoint_mut([index, index + 1])
-            .unwrap();
-        a.merge(b);
+        let merged = merged_data_segments[index].merge(&merged_data_segments[index + 1]);
+        merged_data_segments[index] = merged;
 
         // Okay to use `swap_remove` here because, even though it makes
         // `merged_data_segments` unsorted, the segments are still sorted within

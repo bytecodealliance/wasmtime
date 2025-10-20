@@ -386,9 +386,5 @@ pub trait InstanceState {
     /// # Panics
     ///
     /// This function panics if `name` isn't an exported memory.
-    fn memory_contents(
-        &mut self,
-        name: &str,
-        contents: impl FnOnce(&[u8]) + Send,
-    ) -> impl Future<Output = ()> + Send;
+    fn memory_contents(&mut self, name: &str) -> impl Future<Output = Vec<u8>> + Send;
 }

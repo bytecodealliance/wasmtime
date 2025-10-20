@@ -105,8 +105,8 @@ impl<T: Send> InstanceState for WasmtimeWizer<'_, T> {
         }
     }
 
-    async fn memory_contents(&mut self, name: &str, contents: impl FnOnce(&[u8]) + Send) {
+    async fn memory_contents(&mut self, name: &str) -> Vec<u8> {
         let memory = self.instance.get_memory(&mut *self.store, name).unwrap();
-        contents(memory.data(&self.store))
+        memory.data(&self.store).to_vec()
     }
 }
