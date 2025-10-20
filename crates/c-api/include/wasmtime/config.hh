@@ -398,6 +398,14 @@ public:
     wasmtime_config_wasm_exceptions_set(ptr.get(), enable);
   }
 
+  /// \brief Configures whether the WebAssembly custom-page-sizes proposal will
+  /// be enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_custom_page_sizes
+  void wasm_custom_page_sizes(bool enable) {
+    wasmtime_config_wasm_custom_page_sizes_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
   /// \brief Configures whether the WebAssembly component model proposal will be
   /// enabled
