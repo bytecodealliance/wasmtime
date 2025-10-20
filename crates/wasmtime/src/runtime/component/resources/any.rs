@@ -5,7 +5,7 @@
 //! This is in contrast with `Resource<T>`, for example, and `ResourceAny` has
 //! more "state" behind it. Specifically a `ResourceAny` has a type and a
 //! `HostResourceIndex` which points inside of a `HostResourceData` structure
-//! inside of a stoer. The `ResourceAny::resource_drop` method, or a conversion
+//! inside of a store. The `ResourceAny::resource_drop` method, or a conversion
 //! to `Resource<T>`, is required to be called to avoid leaking data within a
 //! store.
 

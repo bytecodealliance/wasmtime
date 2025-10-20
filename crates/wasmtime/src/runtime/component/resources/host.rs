@@ -27,7 +27,7 @@ pub struct HostResource<T: HostResourceType<D>, D> {
 
 // FIXME(rust-lang/rust#110338) the `D` type parameter here should be an
 // associated type. In a first attempt at doing that the `wasmtime-wasi-io`
-// crate failed to compiled with obscure errors. At least this is an internal
+// crate failed to compile with obscure errors. At least this is an internal
 // trait for now...
 pub trait HostResourceType<D> {
     /// Tests whether `ty` matches this resource type.
