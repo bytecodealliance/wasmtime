@@ -21,9 +21,8 @@ class MemoryType {
 
   struct deleter {
     void operator()(wasm_memorytype_t *p) const {
-      if (p != nullptr) {
-        wasm_memorytype_delete(p);
-      }
+      assert(p != nullptr);
+      wasm_memorytype_delete(p);
     }
   };
 
@@ -88,8 +87,10 @@ public:
     auto *err = wasmtime_memorytype_new(min, false, 0, false, false, 16, &p);
     assert(err == nullptr);
     assert(p != nullptr);
-    *this = MemoryType(p);
+    ptr.reset(p);
+    ref.ptr = p;
   }
+
   /// Creates a new 32-bit wasm memory type with the specified minimum number of
   /// pages for the minimum size, and maximum number of pages for the max size.
   MemoryType(uint32_t min, uint32_t max) {
@@ -97,7 +98,8 @@ public:
     auto *err = wasmtime_memorytype_new(min, true, max, false, false, 16, &p);
     assert(err == nullptr);
     assert(p != nullptr);
-    *this = MemoryType(p);
+    ptr.reset(p);
+    ref.ptr = p;
   }
 
   /// Same as the `MemoryType` constructor, except creates a 64-bit memory.
