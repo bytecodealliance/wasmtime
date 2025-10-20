@@ -652,7 +652,7 @@ public:
   bool is_f32() const { return raw.kind == WASMTIME_COMPONENT_F32; }
 
   /// \brief Returns the f32 value, only valid if `is_f32()`.
-  uint64_t get_f32() const {
+  float get_f32() const {
     assert(is_f32());
     return raw.of.f32;
   }
@@ -661,7 +661,7 @@ public:
   bool is_f64() const { return raw.kind == WASMTIME_COMPONENT_F64; }
 
   /// \brief Returns the f64 value, only valid if `is_f64()`.
-  uint64_t get_f64() const {
+  double get_f64() const {
     assert(is_f64());
     return raw.of.f64;
   }
