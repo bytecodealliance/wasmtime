@@ -1,6 +1,6 @@
 ## 38.0.0
 
-Unreleased.
+Released 2025-10-20.
 
 ### Added
 
