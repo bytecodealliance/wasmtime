@@ -1,3 +1,13 @@
+## 38.0.1
+
+Released 2025-10-20.
+
+### Fixed
+
+* Fixed some automation that went wrong with the 38.0.0 release.
+
+--------------------------------------------------------------------------------
+
 ## 38.0.0
 
 Released 2025-10-20.
