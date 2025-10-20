@@ -492,7 +492,7 @@ impl RunCommand {
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_default_values(
-                        store,
+                        &mut *store,
                         main_target.unwrap_core(),
                     )?;
                 }
