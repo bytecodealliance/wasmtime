@@ -543,9 +543,6 @@ public:
     WitOption::transfer(std::move(v.raw), raw.of.option);
   }
 
-  /// Creates a new option value.
-  Val(std::optional<Val> raw) : Val(WitOption(raw)) {}
-
   /// Creates a new result value.
   Val(WitResult r) {
     raw.kind = WASMTIME_COMPONENT_RESULT;
