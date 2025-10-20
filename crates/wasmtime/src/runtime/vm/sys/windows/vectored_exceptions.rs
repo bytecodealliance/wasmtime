@@ -10,7 +10,7 @@
 //!
 //! # Continue Handlers
 //!
-//! Most of this is pretty standard, there's not quite as much subtelty here as
+//! Most of this is pretty standard, there's not quite as much subtlety here as
 //! compared to Unix. One perhaps surprising part though is the use of a
 //! "Vectored Continue Handler" in addition to an exception handler. Strictly
 //! this is not necessary as our exception handler will return
@@ -22,7 +22,7 @@
 //! Windows's behavior here seems to first execute the ordered list of vectored
 //! exception handlers until one returns `EXCEPTION_CONTINUE_EXECUTION`. If this
 //! list is exhausted then it seems to go to default SEH routines which abort
-//! the process. If the exception is handled then the ordered ilst of vectored
+//! the process. If the exception is handled then the ordered list of vectored
 //! continue handlers is then consulted. The first one to return
 //! `EXCEPTION_CONTINUE_EXECUTION` short-circuits the rest of the list. If the
 //! list is exhausted then the program resumes.
