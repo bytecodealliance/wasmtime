@@ -43,44 +43,6 @@ pub struct Request {
     pub(crate) body: Body,
 }
 
-impl TryFrom<Request> for http::Request<Body> {
-    type Error = http::Error;
-
-    fn try_from(
-        Request {
-            method,
-            scheme,
-            authority,
-            path_with_query,
-            headers,
-            options: _,
-            body,
-        }: Request,
-    ) -> Result<Self, Self::Error> {
-        // Reconstruct URI from its components
-        let mut uri_builder = http::Uri::builder();
-        if let Some(s) = scheme {
-            uri_builder = uri_builder.scheme(s);
-        }
-        if let Some(a) = authority {
-            uri_builder = uri_builder.authority(a.as_str());
-        }
-        if let Some(pq) = path_with_query {
-            uri_builder = uri_builder.path_and_query(pq.as_str());
-        }
-        let uri: http::Uri = uri_builder.build()?;
-
-        let mut req = http::Request::builder().method(method).uri(uri);
-
-        if let Some(headers_mut) = req.headers_mut() {
-            *headers_mut = Arc::unwrap_or_clone(headers);
-        } else {
-            tracing::warn!("failed to get mutable headers from http request builder");
-        }
-        req.body(body)
-    }
-}
-
 impl Request {
     /// Construct a new [Request]
     ///
@@ -199,6 +161,32 @@ impl Request {
                 return Err(ErrorCode::InternalError(Some(format!("{err:#}"))).into());
             }
         };
+        // This match must appear before any potential errors handled with '?'
+        // (or errors have to explicitly be addressed and drop the body, as above),
+        // as otherwise the Body::Guest resources will not be cleaned up when dropped.
+        // see: https://github.com/bytecodealliance/wasmtime/pull/11440#discussion_r2326139381
+        // for additional context.
+        let body = match body {
+            Body::Guest {
+                contents_rx,
+                trailers_rx,
+                result_tx,
+            } => GuestBody::new(
+                &mut store,
+                contents_rx,
+                trailers_rx,
+                result_tx,
+                fut,
+                content_length,
+                ErrorCode::HttpRequestBodySize,
+                getter,
+            )
+            .boxed(),
+            Body::Host { body, result_tx } => {
+                _ = result_tx.send(Box::new(fut));
+                body
+            }
+        };
         let mut headers = Arc::unwrap_or_clone(headers);
         let mut store_ctx = store.as_context_mut();
         let WasiHttpCtxView { ctx, table: _ } = getter(store_ctx.data_mut());
@@ -236,27 +224,6 @@ impl Request {
             ))
             .into());
         }
-        let body = match body {
-            Body::Guest {
-                contents_rx,
-                trailers_rx,
-                result_tx,
-            } => GuestBody::new(
-                store,
-                contents_rx,
-                trailers_rx,
-                result_tx,
-                fut,
-                content_length,
-                ErrorCode::HttpRequestBodySize,
-                getter,
-            )
-            .boxed(),
-            Body::Host { body, result_tx } => {
-                _ = result_tx.send(Box::new(fut));
-                body
-            }
-        };
         let req = req
             .method(method)
             .uri(uri)
@@ -500,7 +467,7 @@ mod tests {
     use super::*;
     use crate::p3::WasiHttpCtx;
     use anyhow::Result;
-    use http_body_util::{BodyExt, Full};
+    use http_body_util::{BodyExt, Empty, Full};
     use std::future::Future;
     use std::str::FromStr;
     use std::task::{Context, Waker};
@@ -600,7 +567,7 @@ mod tests {
             None,
             headers,
             None,
-            Full::new(Bytes::new()).map_err(|x| match x {}).boxed(),
+            Empty::new().map_err(|x| match x {}).boxed(),
         );
         let mut store = Store::new(&engine, TestCtx::new());
         let result = req.into_http(&mut store, async {
