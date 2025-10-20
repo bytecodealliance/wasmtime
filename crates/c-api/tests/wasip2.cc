@@ -2,7 +2,6 @@
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(wasip2, smoke) {
@@ -16,11 +15,11 @@ TEST(wasip2, smoke) {
       )END",
   };
 
-  Engine engine;
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
   auto context = store.context();
 
-  WasiConfig config;
+  wasmtime::WasiConfig config;
   context.set_wasi(std::move(config)).unwrap();
   Component component = Component::compile(engine, component_text).unwrap();
 
