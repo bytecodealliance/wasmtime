@@ -149,8 +149,11 @@ public:
       wasmtime_context_set_epoch_deadline(ptr, ticks_beyond_current);
     }
 
-    /// Returns the raw context pointer for the C API.
-    wasmtime_context_t *raw_context() { return ptr; }
+    /// \brief Returns the underlying C API pointer.
+    const wasmtime_context_t *capi() const { return ptr; }
+
+    /// \brief Returns the underlying C API pointer.
+    wasmtime_context_t *capi() { return ptr; }
   };
 
   /// \brief Provides limits for a store. Used by hosts to limit resource
@@ -195,6 +198,12 @@ public:
   /// Runs a garbage collection pass in the referenced store to collect loose
   /// GC-managed objects, if any are available.
   void gc() { context().gc(); }
+
+  /// \brief Returns the underlying C API pointer.
+  const wasmtime_store_t *capi() const { return ptr.get(); }
+
+  /// \brief Returns the underlying C API pointer.
+  wasmtime_store_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime

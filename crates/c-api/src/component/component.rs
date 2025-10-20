@@ -116,6 +116,15 @@ pub unsafe extern "C" fn wasmtime_component_get_export_index(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_export_index_clone(
+    export_index: &wasmtime_component_export_index_t,
+) -> Box<wasmtime_component_export_index_t> {
+    Box::new(wasmtime_component_export_index_t {
+        export_index: export_index.export_index,
+    })
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_export_index_delete(
     _export_index: Box<wasmtime_component_export_index_t>,
 ) {
