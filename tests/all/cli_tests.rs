@@ -1631,18 +1631,28 @@ mod test_programs {
         async fn send_request(&self, req: http::Request<String>) -> Result<http::Response<String>> {
             let (mut send, conn_task) = self.start_requests().await?;
 
+            let response = Self::send_request_with(&mut send, req).await?;
+            drop(send);
+
+            conn_task.await??;
+
+            Ok(response)
+        }
+
+        async fn send_request_with(
+            send: &mut hyper::client::conn::http1::SendRequest<String>,
+            req: http::Request<String>,
+        ) -> Result<http::Response<String>> {
             let response = send
                 .send_request(req)
                 .await
                 .context("error sending request")?;
-            drop(send);
+
             let (parts, body) = response.into_parts();
 
             let body = body.collect().await.context("failed to read body")?;
             assert!(body.trailers().is_none());
             let body = std::str::from_utf8(&body.to_bytes())?.to_string();
-
-            conn_task.await??;
 
             Ok(http::Response::from_parts(parts, body))
         }
@@ -2238,44 +2248,239 @@ start a print 1234
     #[tokio::test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
     async fn p3_cli_serve_hello_world() -> Result<()> {
-        let server = WasmtimeServe::new(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+        cli_serve_hello_world(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, 1, 1, |cmd| {
             cmd.arg("-Wcomponent-model-async");
             cmd.arg("-Sp3,cli");
-        })?;
+        })
+        .await
+    }
 
-        let result = server
-            .send_request(
-                hyper::Request::builder()
-                    .uri("http://localhost/")
-                    .body(String::new())
-                    .context("failed to make request")?,
-            )
-            .await?;
+    #[tokio::test]
+    async fn p2_cli_serve_hello_world() -> Result<()> {
+        cli_serve_hello_world(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, 1, 1, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
 
-        assert!(result.status().is_success());
-        assert_eq!(result.body(), "Hello, WASI!");
+    const CONNECTION_COUNT_MANY: usize = 20;
+    const REQUESTS_PER_CONNECTION_MANY: usize = 5;
 
-        server.finish()?;
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_hello_world_many() -> Result<()> {
+        cli_serve_hello_world(
+            P3_CLI_SERVE_HELLO_WORLD_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Wcomponent-model-async");
+                cmd.arg("-Sp3,cli");
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_hello_world_many_no_reuse() -> Result<()> {
+        cli_serve_hello_world(
+            P3_CLI_SERVE_HELLO_WORLD_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Wcomponent-model-async");
+                cmd.arg("-Sp3,cli");
+                cmd.arg("--max-instance-reuse-count=1");
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_hello_world_many_no_concurrent_reuse() -> Result<()> {
+        cli_serve_hello_world(
+            P3_CLI_SERVE_HELLO_WORLD_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Wcomponent-model-async");
+                cmd.arg("-Sp3,cli");
+                cmd.arg("--max-instance-concurrent-reuse-count=1");
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_hello_world_many() -> Result<()> {
+        cli_serve_hello_world(
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Scli");
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_hello_world_many_with_reuse() -> Result<()> {
+        cli_serve_hello_world(
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Scli");
+                cmd.arg("--max-instance-reuse-count=128");
+            },
+        )
+        .await
+    }
+
+    async fn cli_serve_hello_world(
+        component: &str,
+        connection_count: usize,
+        requests_per_connection: usize,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<()> {
+        let server = std::sync::Arc::new(WasmtimeServe::new(component, configure)?);
+
+        let tasks = (0..connection_count).map({
+            let server = server.clone();
+            move |_| {
+                tokio::task::spawn({
+                    let server = server.clone();
+                    async move {
+                        let (mut send, conn_task) = server.start_requests().await?;
+
+                        for _ in 0..requests_per_connection {
+                            let result = WasmtimeServe::send_request_with(
+                                &mut send,
+                                hyper::Request::builder()
+                                    .uri("http://localhost/")
+                                    .body(String::new())
+                                    .context("failed to make request")?,
+                            )
+                            .await?;
+
+                            assert!(result.status().is_success());
+                            assert_eq!(result.body(), "Hello, WASI!");
+                        }
+
+                        drop(send);
+
+                        conn_task.await??;
+
+                        anyhow::Ok(())
+                    }
+                })
+            }
+        });
+
+        for task in tasks {
+            task.await??;
+        }
+
+        std::sync::Arc::into_inner(server).unwrap().finish()?;
         Ok(())
     }
 
     #[tokio::test]
     async fn p2_cli_serve_sleep() -> Result<()> {
-        let server = WasmtimeServe::new(P2_CLI_SERVE_SLEEP_COMPONENT, |cmd| {
-            cmd.arg("-Scli").arg("-Wtimeout=100us");
-        })?;
+        cli_serve_sleep(P2_CLI_SERVE_SLEEP_COMPONENT, 1, 1, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
 
-        let resp = server
-            .send_request(
-                hyper::Request::builder()
-                    .uri("http://localhost/")
-                    .body(String::new())
-                    .context("failed to make request")?,
-            )
-            .await?;
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_sleep() -> Result<()> {
+        cli_serve_sleep(P3_CLI_SERVE_SLEEP_COMPONENT, 1, 1, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })
+        .await
+    }
 
-        assert!(resp.status().is_server_error());
-        let (stdout, stderr) = server.finish()?;
+    #[tokio::test]
+    async fn p2_cli_serve_sleep_many() -> Result<()> {
+        cli_serve_sleep(
+            P2_CLI_SERVE_SLEEP_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Scli");
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_sleep_many() -> Result<()> {
+        cli_serve_sleep(
+            P3_CLI_SERVE_SLEEP_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Wcomponent-model-async");
+                cmd.arg("-Sp3,cli");
+            },
+        )
+        .await
+    }
+
+    async fn cli_serve_sleep(
+        component: &str,
+        connection_count: usize,
+        requests_per_connection: usize,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<()> {
+        let server = std::sync::Arc::new(WasmtimeServe::new(component, move |cmd| {
+            configure(cmd);
+            cmd.arg("-Wtimeout=100us");
+        })?);
+
+        let tasks = (0..connection_count).map({
+            let server = server.clone();
+            move |_| {
+                tokio::task::spawn({
+                    let server = server.clone();
+                    async move {
+                        let (mut send, conn_task) = server.start_requests().await?;
+
+                        for _ in 0..requests_per_connection {
+                            let result = WasmtimeServe::send_request_with(
+                                &mut send,
+                                hyper::Request::builder()
+                                    .uri("http://localhost/")
+                                    .body(String::new())
+                                    .context("failed to make request")?,
+                            )
+                            .await?;
+
+                            assert!(result.status().is_server_error());
+                        }
+
+                        drop(send);
+
+                        conn_task.await??;
+
+                        anyhow::Ok(())
+                    }
+                })
+            }
+        });
+
+        for task in tasks {
+            task.await??;
+        }
+
+        let (stdout, stderr) = std::sync::Arc::into_inner(server).unwrap().finish()?;
         assert_eq!(stdout, "");
         assert!(stderr.contains("guest timed out"), "bad stderr: {stderr}");
         Ok(())
