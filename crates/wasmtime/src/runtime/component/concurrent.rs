@@ -1550,9 +1550,7 @@ impl Instance {
         log::trace!("received callback code from {guest_thread:?}: {code} (set: {set})");
 
         let state = store.concurrent_state_mut();
-        let task = state.get_mut(guest_thread.task)?;
-
-        if !task.returned_or_cancelled() {
+        if !state.get_mut(guest_thread.task)?.returned_or_cancelled() {
             if initial_call {
                 // Notify any current or future waiters that this subtask has
                 // started.
@@ -1579,16 +1577,16 @@ impl Instance {
         match code {
             callback_code::EXIT => {
                 log::trace!("implicit thread {guest_thread:?} completed");
-                state.delete(guest_thread.thread)?;
-                let task = state.get_mut(guest_thread.task)?;
-                task.threads.remove(&guest_thread.thread);
+                self.cleanup_thread(store, guest_thread, runtime_instance)?;
+                let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
                 if task.threads.is_empty() && !task.returned_or_cancelled() {
                     bail!(Trap::NoAsyncResult);
                 }
                 match &task.caller {
                     Caller::Host { .. } => {
                         if task.ready_to_delete() {
-                            Waitable::Guest(guest_thread.task).delete_from(state)?;
+                            Waitable::Guest(guest_thread.task)
+                                .delete_from(store.concurrent_state_mut())?;
                         }
                     }
                     Caller::Guest { .. } => {
@@ -1666,6 +1664,25 @@ impl Instance {
         Ok(())
     }
 
+    fn cleanup_thread(
+        self,
+        store: &mut StoreOpaque,
+        guest_thread: QualifiedThreadId,
+        runtime_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<()> {
+        let guest_id = store
+            .concurrent_state_mut()
+            .get_mut(guest_thread.thread)?
+            .instance_rep;
+        self.id().get_mut(store).guest_tables().0[runtime_instance]
+            .guest_thread_remove(guest_id.unwrap())?;
+
+        store.concurrent_state_mut().delete(guest_thread.thread)?;
+        let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
+        task.threads.remove(&guest_thread.thread);
+        Ok(())
+    }
+
     /// Add the specified guest call to the "high priority" work item queue, to
     /// be started as soon as backpressure and/or reentrance rules allow.
     ///
@@ -1713,6 +1730,7 @@ impl Instance {
             let token = StoreToken::new(store);
             move |store: &mut dyn VMStore| {
                 let mut storage = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
+
                 store
                     .concurrent_state_mut()
                     .get_mut(guest_thread.thread)?
@@ -1772,6 +1790,14 @@ impl Instance {
             assert!(async_);
 
             Box::new(move |store: &mut dyn VMStore| {
+                let guest_id = self.id().get_mut(store).guest_tables().0[callee_instance]
+                    .guest_thread_insert(guest_thread.thread.rep())?;
+
+                store
+                    .concurrent_state_mut()
+                    .get_mut(guest_thread.thread)?
+                    .instance_rep = Some(guest_id);
+
                 let old_thread = store
                     .concurrent_state_mut()
                     .guest_thread
@@ -1815,6 +1841,13 @@ impl Instance {
         } else {
             let token = StoreToken::new(store.as_context_mut());
             Box::new(move |store: &mut dyn VMStore| {
+                let guest_id = self.id().get_mut(store).guest_tables().0[callee_instance]
+                    .guest_thread_insert(guest_thread.thread.rep())?;
+
+                store
+                    .concurrent_state_mut()
+                    .get_mut(guest_thread.thread)?
+                    .instance_rep = Some(guest_id);
                 let old_thread = store
                     .concurrent_state_mut()
                     .guest_thread
@@ -1842,11 +1875,10 @@ impl Instance {
                 let storage = call(store)?;
 
                 // This is a callback-less call, so the implicit thread has now completed
-                store.concurrent_state_mut().delete(guest_thread.thread)?;
-                let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
-                task.threads.remove(&guest_thread.thread);
+                self.cleanup_thread(store, guest_thread, callee_instance)?;
 
                 if async_ {
+                    let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
                     if task.threads.is_empty() && !task.returned_or_cancelled() {
                         bail!(Trap::NoAsyncResult);
                     }
@@ -2128,6 +2160,7 @@ impl Instance {
         let guest_thread = state.push(new_thread)?;
         state.get_mut(guest_task)?.threads.insert(guest_thread);
 
+        let state = store.0.concurrent_state_mut();
         if let Some(old_thread) = old_thread {
             if !state.may_enter(guest_task) {
                 bail!(crate::Trap::CannotEnterComponent);
@@ -2866,6 +2899,21 @@ impl Instance {
         }
     }
 
+    /// Implements the `thread.index` intrinsic.
+    pub(crate) fn thread_index(&self, store: &mut dyn VMStore) -> Result<u32> {
+        let thread_id = store
+            .concurrent_state_mut()
+            .guest_thread
+            .ok_or_else(|| anyhow!("no current thread"))?
+            .thread;
+        // The unwrap is safe because `instance_rep` must be `Some` by this point
+        Ok(store
+            .concurrent_state_mut()
+            .get_mut(thread_id)?
+            .instance_rep
+            .unwrap())
+    }
+
     /// Implements the `thread.new_indirect` intrinsic.
     pub(crate) fn thread_new_indirect(
         self,
@@ -2901,13 +2949,20 @@ impl Instance {
 
         log::trace!("new thread with id {thread_id:?} created");
 
-        Ok(thread_id.rep())
+        let guest_id = self.id().get_mut(store).guest_tables().0[caller]
+            .guest_thread_insert(thread_id.rep())?;
+        store
+            .concurrent_state_mut()
+            .get_mut(thread_id)?
+            .instance_rep = Some(guest_id);
+        Ok(guest_id)
     }
 
     fn start_thread<T: 'static>(
         self,
         store: &mut StoreContextMut<T>,
         thread: QualifiedThreadId,
+        runtime_instance: RuntimeComponentInstanceIndex,
         start_func_table_idx: RuntimeTableIndex,
         start_func_idx: u32,
         context: i32,
@@ -2939,11 +2994,10 @@ impl Instance {
 
             store.0.maybe_pop_call_context(thread.task)?;
 
-            let state = store.0.concurrent_state_mut();
-            state.delete(thread.thread)?;
-            let task = state.get_mut(thread.task)?;
-            task.threads.remove(&thread.thread);
+            self.cleanup_thread(store.0, thread, runtime_instance)?;
             log::trace!("explicit thread {thread:?} completed");
+            let state = store.0.concurrent_state_mut();
+            let task = state.get_mut(thread.task)?;
             if task.threads.is_empty() && !task.returned_or_cancelled() {
                 bail!(Trap::NoAsyncResult);
             }
@@ -2975,6 +3029,7 @@ impl Instance {
     pub(crate) fn resume_suspended_thread<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
+        runtime_instance: RuntimeComponentInstanceIndex,
         thread_id: TableId<GuestThread>,
         high_priority: bool,
     ) -> Result<()> {
@@ -2991,6 +3046,7 @@ impl Instance {
                 self.start_thread(
                     &mut store,
                     guest_thread,
+                    runtime_instance,
                     start_func_table_idx,
                     start_func_idx,
                     context,
@@ -3026,17 +3082,20 @@ impl Instance {
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         yielding: bool,
-        to_thread: Option<TableId<GuestThread>>,
+        to_thread: Option<u32>,
     ) -> Result<bool> {
         // There could be a pending cancellation from a previous uncancellable wait
         if cancellable && store.0.concurrent_state_mut().pending_cancellation() {
             return Ok(true);
         }
 
+        let to_thread = to_thread
+            .and_then(|id| GuestThread::from_instance(self.id().get_mut(store.0), caller, id).ok());
+
         self.id().get(store.0).check_may_leave(caller)?;
 
         if let Some(thread) = to_thread {
-            self.resume_suspended_thread(store.as_context_mut(), thread, true)?;
+            self.resume_suspended_thread(store.as_context_mut(), caller, thread, true)?;
         }
 
         let state = store.0.concurrent_state_mut();
@@ -3464,14 +3523,15 @@ pub trait VMComponentAsyncStore {
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         yielding: bool,
-        to_thread: Option<TableId<GuestThread>>,
+        to_thread: Option<u32>,
     ) -> Result<bool>;
 
     /// The `thread.resume-later` intrinsic.
     fn thread_resume_later(
         &mut self,
         instance: Instance,
-        thread: TableId<GuestThread>,
+        caller: RuntimeComponentInstanceIndex,
+        thread: u32,
     ) -> Result<()>;
 }
 
@@ -3775,7 +3835,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         yielding: bool,
-        to_thread: Option<TableId<GuestThread>>,
+        to_thread: Option<u32>,
     ) -> Result<bool> {
         instance.suspension_intrinsic(
             StoreContextMut(self),
@@ -3789,9 +3849,11 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
     fn thread_resume_later(
         &mut self,
         instance: Instance,
-        thread: TableId<GuestThread>,
+        caller: RuntimeComponentInstanceIndex,
+        thread: u32,
     ) -> Result<()> {
-        instance.resume_suspended_thread(StoreContextMut(self), thread, false)
+        let thread = GuestThread::from_instance(instance.id().get_mut(self), caller, thread)?;
+        instance.resume_suspended_thread(StoreContextMut(self), caller, thread, false)
     }
 }
 
@@ -3923,16 +3985,32 @@ pub struct GuestThread {
     /// If present, indicates that the thread is currently waiting on the
     /// specified set but may be cancelled and woken immediately.
     wake_on_cancel: Option<TableId<WaitableSet>>,
+    /// The execution state of this guest thread
     state: GuestThreadState,
+    /// The index of this thread in the component instance's handle table.
+    /// This must always be `Some` after initialization.
+    instance_rep: Option<u32>,
 }
 
 impl GuestThread {
+    /// Retrieve the `GuestThread` corresponding to the specified guest-visible
+    /// handle.
+    fn from_instance(
+        state: Pin<&mut ComponentInstance>,
+        caller_instance: RuntimeComponentInstanceIndex,
+        guest_thread: u32,
+    ) -> Result<TableId<Self>> {
+        let rep = state.guest_tables().0[caller_instance].guest_thread_rep(guest_thread)?;
+        Ok(TableId::new(rep))
+    }
+
     fn new_implicit(parent_task: TableId<GuestTask>) -> Self {
         Self {
             context: [0; 2],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedImplicit,
+            instance_rep: None,
         }
     }
 
@@ -3951,6 +4029,7 @@ impl GuestThread {
                 start_func_idx,
                 context,
             },
+            instance_rep: None,
         }
     }
 }
@@ -4750,15 +4829,6 @@ impl ConcurrentState {
         log::trace!("context_set {thread:?} slot {slot} val {val:#x}");
         self.get_mut(thread.thread)?.context[usize::try_from(slot).unwrap()] = val;
         Ok(())
-    }
-
-    /// Implements the `thread.index` intrinsic.
-    pub(crate) fn thread_index(&self) -> Result<u32> {
-        Ok(self
-            .guest_thread
-            .ok_or_else(|| anyhow!("no current thread"))?
-            .thread
-            .rep())
     }
 
     /// Returns whether there's a pending cancellation on the current guest thread,

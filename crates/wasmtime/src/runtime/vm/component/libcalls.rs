@@ -1,8 +1,6 @@
 //! Implementation of string transcoding required by the component model.
 
 use crate::component::Instance;
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::table::TableId;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
@@ -1372,8 +1370,8 @@ fn context_set(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_index(store: &mut dyn VMStore, _instance: Instance) -> Result<u32> {
-    store.concurrent_state_mut().thread_index()
+fn thread_index(store: &mut dyn VMStore, instance: Instance) -> Result<u32> {
+    instance.thread_index(store)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1409,7 +1407,7 @@ fn thread_switch_to(
         RuntimeComponentInstanceIndex::from_u32(caller),
         cancellable != 0,
         false,
-        Some(TableId::new(thread_idx)),
+        Some(thread_idx),
     )
 }
 
@@ -1430,10 +1428,17 @@ fn thread_suspend(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_resume_later(store: &mut dyn VMStore, instance: Instance, thread_idx: u32) -> Result<()> {
-    store
-        .component_async_store()
-        .thread_resume_later(instance, TableId::new(thread_idx))
+fn thread_resume_later(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller_instance: u32,
+    thread_idx: u32,
+) -> Result<()> {
+    store.component_async_store().thread_resume_later(
+        instance,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        thread_idx,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1449,6 +1454,6 @@ fn thread_yield_to(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         cancellable != 0,
         true,
-        Some(TableId::new(thread_idx)),
+        Some(thread_idx),
     )
 }

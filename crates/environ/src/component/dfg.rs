@@ -493,7 +493,9 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
-    ThreadResumeLater,
+    ThreadResumeLater {
+        instance: RuntimeComponentInstanceIndex,
+    },
     ThreadYieldTo {
         instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
@@ -1173,7 +1175,9 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
                 cancellable: *cancellable,
             },
-            Trampoline::ThreadResumeLater => info::Trampoline::ThreadResumeLater,
+            Trampoline::ThreadResumeLater { instance } => info::Trampoline::ThreadResumeLater {
+                instance: *instance,
+            },
             Trampoline::ThreadYieldTo {
                 instance,
                 cancellable,

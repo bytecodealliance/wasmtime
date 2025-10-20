@@ -849,12 +849,14 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadResumeLater => {
+            Trampoline::ThreadResumeLater { instance } => {
                 self.translate_libcall(
                     host::thread_resume_later,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
-                    |_, _| {},
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                    },
                 );
             }
             Trampoline::ThreadYieldTo {

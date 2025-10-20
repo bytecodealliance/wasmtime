@@ -1149,7 +1149,10 @@ pub enum Trampoline {
     },
 
     /// Intrinsic used to implement the `thread.resume-later` component model builtin.
-    ThreadResumeLater,
+    ThreadResumeLater {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
 
     /// Intrinsic used to implement the `thread.yield-to` component model builtin.
     ThreadYieldTo {
@@ -1228,7 +1231,7 @@ impl Trampoline {
             ThreadNewIndirect { .. } => format!("thread-new-indirect"),
             ThreadSwitchTo { .. } => format!("thread-switch-to"),
             ThreadSuspend { .. } => format!("thread-suspend"),
-            ThreadResumeLater => format!("thread-resume-later"),
+            ThreadResumeLater { .. } => format!("thread-resume-later"),
             ThreadYieldTo { .. } => format!("thread-yield-to"),
         }
     }

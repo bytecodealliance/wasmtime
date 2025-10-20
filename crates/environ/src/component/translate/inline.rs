@@ -1160,10 +1160,12 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ThreadResumeLater { func } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::ThreadResumeLater));
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadResumeLater {
+                        instance: frame.instance,
+                    },
+                ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ThreadYieldTo { func, cancellable } => {
