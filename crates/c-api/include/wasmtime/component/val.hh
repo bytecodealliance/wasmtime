@@ -746,10 +746,6 @@ public:
     assert(is_flags());
     return *Flags::from_capi(&raw.of.flags);
   }
-
-  void capi_transfer(wasmtime_component_val_t &capi) {
-    transfer(std::move(raw), capi);
-  }
 };
 
 #undef VAL_REPR
