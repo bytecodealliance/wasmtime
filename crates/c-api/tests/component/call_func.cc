@@ -3,7 +3,6 @@
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, call_func) {
@@ -24,8 +23,8 @@ TEST(component, call_func) {
       )END",
   };
 
-  Engine engine;
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
   auto context = store.context();
   auto component = Component::compile(engine, component_text).unwrap();
   auto f = *component.export_index(nullptr, "f");

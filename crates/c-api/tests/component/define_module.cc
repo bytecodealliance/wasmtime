@@ -3,7 +3,6 @@
 #include <wasmtime/module.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, define_module) {
@@ -29,9 +28,10 @@ TEST(component, define_module) {
       )END",
   };
 
-  Engine engine;
-  Module module = Module::compile(engine, module_wat).unwrap();
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Module module =
+      wasmtime::Module::compile(engine, module_wat).unwrap();
+  wasmtime::Store store(engine);
   auto context = store.context();
 
   Component component = Component::compile(engine, component_text).unwrap();

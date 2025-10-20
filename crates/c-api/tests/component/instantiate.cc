@@ -2,7 +2,6 @@
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, instantiate) {
@@ -14,8 +13,8 @@ TEST(component, instantiate) {
       )END",
   };
 
-  Engine engine;
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
   auto context = store.context();
   Component component = Component::compile(engine, bytes).unwrap();
   Linker linker(engine);

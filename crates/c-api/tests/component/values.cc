@@ -11,8 +11,11 @@
 #include <span>
 #include <variant>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
+using wasmtime::Engine;
+using wasmtime::Result;
+using wasmtime::Span;
+using wasmtime::Store;
 
 static std::string echo_component(std::string_view type, std::string_view func,
                                   std::string_view host_params) {
