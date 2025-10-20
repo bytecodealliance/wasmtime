@@ -26,8 +26,6 @@ namespace component {
  * `Linker` can also be used to link in WASI functions to instantiate a module.
  */
 class LinkerInstance {
-  friend class Linker;
-
   struct deleter {
     void operator()(wasmtime_component_linker_instance_t *p) const {
       wasmtime_component_linker_instance_delete(p);
@@ -36,10 +34,11 @@ class LinkerInstance {
 
   std::unique_ptr<wasmtime_component_linker_instance_t, deleter> ptr;
 
-  /// Creates a new linker which will instantiate in the given engine.
-  LinkerInstance(wasmtime_component_linker_instance_t *ptr) : ptr(ptr) {}
-
 public:
+  /// Creates a new linker instance from the given C API pointer.
+  explicit LinkerInstance(wasmtime_component_linker_instance_t *ptr)
+      : ptr(ptr) {}
+
   /// \brief Returns the underlying C API pointer.
   const wasmtime_component_linker_instance_t *capi() const { return ptr.get(); }
 
