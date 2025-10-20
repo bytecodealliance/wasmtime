@@ -49,6 +49,8 @@ For explanations of what each tier means see below.
 | WASI Proposal        | [`wasi-http`]                              |
 | WASI Proposal        | `wasi_snapshot_preview1`                   |
 | WASI Proposal        | `wasi_unstable`                            |
+| Embedding API        | Rust                                       |
+| Embedding API        | C                                          |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
 [`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
@@ -85,6 +87,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
 | WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
+| Embedding API        | C++                        | Full-time maintainer        |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
