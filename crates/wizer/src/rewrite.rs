@@ -86,39 +86,38 @@ impl Wizer {
                     )
                     .unwrap();
                     let mut globals = wasm_encoder::GlobalSection::new();
-                    let mut snapshot = snapshot.globals.iter().peekable();
-                    for ((i, glob_ty), global) in module.defined_globals().zip(original_globals) {
+                    let mut snapshot = snapshot.globals.iter();
+                    for ((_, glob_ty, export_name), global) in
+                        module.defined_globals().zip(original_globals)
+                    {
                         let global = global.unwrap();
-                        match snapshot.next_if(|(j, _)| *j == i) {
+                        if export_name.is_some() {
                             // This is a mutable global and it was present in
                             // the snapshot, so translate the snapshot value to
                             // a constant expression and insert it.
-                            Some((_, val)) => {
-                                assert!(glob_ty.mutable);
-                                let init = match val {
-                                    SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
-                                    SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
-                                    SnapshotVal::F32(x) => {
-                                        ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
-                                    }
-                                    SnapshotVal::F64(x) => {
-                                        ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
-                                    }
-                                    SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
-                                };
-                                let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
-                                globals.global(glob_ty, &init);
-                            }
-
+                            assert!(glob_ty.mutable);
+                            let (_, val) = snapshot.next().unwrap();
+                            let init = match val {
+                                SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
+                                SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
+                                SnapshotVal::F32(x) => {
+                                    ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
+                                }
+                                SnapshotVal::F64(x) => {
+                                    ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
+                                }
+                                SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
+                            };
+                            let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
+                            globals.global(glob_ty, &init);
+                        } else {
                             // This global isn't mutable so preserve its value
                             // as-is.
-                            None => {
-                                assert!(!glob_ty.mutable);
-                                RoundtripReencoder
-                                    .parse_global(&mut globals, global)
-                                    .unwrap();
-                            }
-                        }
+                            assert!(!glob_ty.mutable);
+                            RoundtripReencoder
+                                .parse_global(&mut globals, global)
+                                .unwrap();
+                        };
                     }
                     encoder.section(&globals);
                 }
@@ -129,7 +128,7 @@ impl Wizer {
                 s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports() {
-                        if (export.name == self.init_func && !self.get_keep_init_func())
+                        if (export.name == self.get_init_func() && !self.get_keep_init_func())
                             || (has_wasi_initialize && export.name == "_initialize")
                         {
                             continue;

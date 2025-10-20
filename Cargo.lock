@@ -5256,6 +5256,7 @@ dependencies = [
  "env_logger 0.11.5",
  "log",
  "rayon",
+ "tokio",
  "wasm-encoder 0.240.0",
  "wasmparser 0.240.0",
  "wasmprinter",

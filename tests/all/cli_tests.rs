@@ -2855,7 +2855,7 @@ fn wizer_no_imports_by_default() -> Result<()> {
     let result = wizen(
         &[],
         r#"(module
-            (func (export "wizer.initialize"))
+            (func (export "wizer-initialize"))
         )"#,
     )?;
     assert!(result.status.success());
@@ -2864,7 +2864,7 @@ fn wizer_no_imports_by_default() -> Result<()> {
         &[],
         r#"(module
             (import "foo" "bar" (func))
-            (func (export "wizer.initialize"))
+            (func (export "wizer-initialize"))
         )"#,
     )?;
     assert!(!result.status.success());
@@ -2873,7 +2873,7 @@ fn wizer_no_imports_by_default() -> Result<()> {
         &[],
         r#"(module
             (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
-            (func (export "wizer.initialize"))
+            (func (export "wizer-initialize"))
         )"#,
     )?;
     assert!(!result.status.success());
@@ -2882,9 +2882,52 @@ fn wizer_no_imports_by_default() -> Result<()> {
         &["-Scli"],
         r#"(module
             (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
-            (func (export "wizer.initialize"))
+            (func (export "wizer-initialize"))
         )"#,
     )?;
+    assert!(result.status.success());
+
+    Ok(())
+}
+
+#[test]
+fn wizer_components() -> Result<()> {
+    let result = wizen(
+        &[],
+        r#"
+(component
+  (core module $a
+    (global (mut i32) (i32.const 0))
+    (func (export "init")
+        i32.const 100
+        global.set 0)
+  )
+  (core instance $a (instantiate $a))
+  (func (export "wizer-initialize") (canon lift (core func $a "init")))
+)
+        "#,
+    )?;
+    assert!(result.status.success());
+
+    let component_with_wasi = r#"
+(component
+  (import "wasi:cli/environment@0.2.0" (instance
+    (export "get-arguments" (func (result (list string))))
+  ))
+  (core module $a
+    (global (mut i32) (i32.const 0))
+    (func (export "init")
+        i32.const 100
+        global.set 0)
+  )
+  (core instance $a (instantiate $a))
+  (func (export "wizer-initialize") (canon lift (core func $a "init")))
+)
+        "#;
+
+    let result = wizen(&[], component_with_wasi)?;
+    assert!(!result.status.success());
+    let result = wizen(&["-Scli"], component_with_wasi)?;
     assert!(result.status.success());
 
     Ok(())

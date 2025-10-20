@@ -88,11 +88,11 @@ impl DataSegment {
 /// defaults.
 //
 // TODO: when we support reference types, we will have to snapshot tables.
-pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snapshot {
+pub async fn snapshot(module: &ModuleContext<'_>, ctx: &mut impl InstanceState) -> Snapshot {
     log::debug!("Snapshotting the initialized state");
 
-    let globals = snapshot_globals(module, ctx);
-    let (memory_mins, data_segments) = snapshot_memories(module, ctx);
+    let globals = snapshot_globals(module, ctx).await;
+    let (memory_mins, data_segments) = snapshot_memories(module, ctx).await;
 
     Snapshot {
         globals,
@@ -102,26 +102,25 @@ pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snap
 }
 
 /// Get the initialized values of all globals.
-fn snapshot_globals(
+async fn snapshot_globals(
     module: &ModuleContext<'_>,
-    ctx: &mut dyn InstanceState,
+    ctx: &mut impl InstanceState,
 ) -> Vec<(u32, SnapshotVal)> {
     log::debug!("Snapshotting global values");
 
-    module
-        .defined_global_exports
-        .as_ref()
-        .unwrap()
-        .iter()
-        .map(|(i, name)| (*i, ctx.global_get(&name)))
-        .collect()
+    let mut ret = Vec::new();
+    for (i, name) in module.defined_global_exports.as_ref().unwrap().iter() {
+        let val = ctx.global_get(&name).await;
+        ret.push((*i, val));
+    }
+    ret
 }
 
 /// Find the initialized minimum page size of each memory, as well as all
 /// regions of non-zero memory.
-fn snapshot_memories(
+async fn snapshot_memories(
     module: &ModuleContext<'_>,
-    instance: &mut dyn InstanceState,
+    instance: &mut impl InstanceState,
 ) -> (Vec<u64>, Vec<DataSegment>) {
     log::debug!("Snapshotting memories");
 
@@ -132,7 +131,7 @@ fn snapshot_memories(
         .defined_memories()
         .zip(module.defined_memory_exports.as_ref().unwrap());
     for ((memory_index, ty), name) in iter {
-        let memory = Arc::new(instance.memory_contents(&name));
+        let memory = Arc::new(instance.memory_contents(&name).await);
         let page_size = 1 << ty.page_size_log2.unwrap_or(16);
         let num_wasm_pages = memory.len() / page_size;
         memory_mins.push(num_wasm_pages as u64);

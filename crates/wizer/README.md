@@ -66,10 +66,10 @@ which `wasm-opt` can remove.
 ## Example Usage
 
 First, make sure your Wasm module exports an initialization function named
-`wizer.initialize`. For example, in Rust you can export it like this:
+`wizer-initialize`. For example, in Rust you can export it like this:
 
 ```rust
-#[unsafe(export_name = "wizer.initialize")]
+#[unsafe(export_name = "wizer-initialize")]
 pub extern "C" fn init() {
     // Your initialization code goes here...
 }
