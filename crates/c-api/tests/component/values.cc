@@ -121,8 +121,8 @@ TEST(component, value_record) {
 
   static const auto make = [](uint64_t x, uint64_t y) -> Val {
     return Record({
-        {"x", Val(x)},
-        {"y", Val(y)},
+        std::make_pair("x", Val(x)),
+        std::make_pair("y", Val(y)),
     });
   };
 
