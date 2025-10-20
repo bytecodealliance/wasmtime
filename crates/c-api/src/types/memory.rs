@@ -1,6 +1,6 @@
-use crate::{CExternType, wasm_externtype_t, wasm_limits_t};
-use std::cell::OnceCell;
+use crate::{CExternType, handle_result, wasm_externtype_t, wasm_limits_t, wasmtime_error_t};
 use std::convert::TryFrom;
+use std::{cell::OnceCell, mem::MaybeUninit};
 use wasmtime::{MemoryType, MemoryTypeBuilder};
 
 #[repr(transparent)]
@@ -72,22 +72,27 @@ pub extern "C" fn wasmtime_memorytype_new(
     maximum: u64,
     memory64: bool,
     shared: bool,
-) -> Box<wasm_memorytype_t> {
+    page_size_log2: u8,
+    ret: &mut MaybeUninit<Box<wasm_memorytype_t>>,
+) -> Option<Box<wasmtime_error_t>> {
     let maximum = if maximum_specified {
         Some(maximum)
     } else {
         None
     };
 
-    Box::new(wasm_memorytype_t::new(
+    handle_result(
         MemoryTypeBuilder::default()
             .min(minimum)
             .max(maximum)
             .memory64(memory64)
             .shared(shared)
-            .build()
-            .unwrap(),
-    ))
+            .page_size_log2(page_size_log2)
+            .build(),
+        |ty| {
+            ret.write(Box::new(wasm_memorytype_t::new(ty)));
+        },
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -114,6 +119,16 @@ pub extern "C" fn wasmtime_memorytype_is64(mt: &wasm_memorytype_t) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memorytype_isshared(mt: &wasm_memorytype_t) -> bool {
     mt.ty().ty.is_shared()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_memorytype_page_size(mt: &wasm_memorytype_t) -> u64 {
+    mt.ty().ty.page_size()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_memorytype_page_size_log2(mt: &wasm_memorytype_t) -> u8 {
+    mt.ty().ty.page_size_log2()
 }
 
 #[unsafe(no_mangle)]
