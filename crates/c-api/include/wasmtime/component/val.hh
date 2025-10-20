@@ -589,7 +589,7 @@ public:
   bool is_s8() const { return raw.kind == WASMTIME_COMPONENT_S8; }
 
   /// \brief Returns the s8 value, only valid if `is_s8()`.
-  uint8_t get_s8() const {
+  int8_t get_s8() const {
     assert(is_s8());
     return raw.of.s8;
   }
@@ -607,7 +607,7 @@ public:
   bool is_s16() const { return raw.kind == WASMTIME_COMPONENT_S16; }
 
   /// \brief Returns the s16 value, only valid if `is_s16()`.
-  uint16_t get_s16() const {
+  int16_t get_s16() const {
     assert(is_s16());
     return raw.of.s16;
   }
@@ -625,7 +625,7 @@ public:
   bool is_s32() const { return raw.kind == WASMTIME_COMPONENT_S32; }
 
   /// \brief Returns the s32 value, only valid if `is_s32()`.
-  uint32_t get_s32() const {
+  int32_t get_s32() const {
     assert(is_s32());
     return raw.of.s32;
   }
@@ -643,7 +643,7 @@ public:
   bool is_s64() const { return raw.kind == WASMTIME_COMPONENT_S64; }
 
   /// \brief Returns the s64 value, only valid if `is_s64()`.
-  uint64_t get_s64() const {
+  int64_t get_s64() const {
     assert(is_s64());
     return raw.of.s64;
   }
