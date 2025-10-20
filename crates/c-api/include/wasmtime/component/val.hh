@@ -299,7 +299,7 @@ class WitOption {
 
 public:
   /// Constructs a new option value with the provided value.
-  WitOption(std::optional<Val> val);
+  explicit WitOption(std::optional<Val> val);
 
   /// Returns the optional payload value associated with this option.
   const Val *value() const { return detail::val_from_capi(raw); }
