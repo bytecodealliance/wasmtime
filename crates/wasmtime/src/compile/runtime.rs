@@ -7,7 +7,7 @@ use object::write::WritableBuffer;
 use std::sync::Arc;
 use wasmtime_environ::{FinishedObject, ObjectBuilder};
 
-impl<'a> CodeBuilder<'a> {
+impl<'a, 'b> CodeBuilder<'a, 'b> {
     fn compile_cached<T, S>(
         &self,
         build_artifacts: fn(
@@ -113,6 +113,13 @@ impl<'a> CodeBuilder<'a> {
             self.get_unsafe_intrinsics_import().is_none(),
             "`CodeBuilder::expose_unsafe_intrinsics` can only be used with components"
         );
+
+        #[cfg(feature = "compile-time-builtins")]
+        ensure!(
+            self.get_compile_time_builtins().is_empty(),
+            "compile-time builtins can only be used with components"
+        );
+
         let custom_alignment = self.custom_alignment();
         let (code, info_and_types) = self.compile_cached(
             |engine, wasm, dwarf, unsafe_intrinsics_import, state| {
