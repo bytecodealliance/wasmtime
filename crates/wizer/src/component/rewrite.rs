@@ -107,7 +107,11 @@ impl Reencoder<'_> {
             // indices in case the index is higher than the one that we're
             // removing.
             id if id == wasm_encoder::ComponentSectionId::Instance as u8 => {
-                self.rewrite(encoder, section.data, Self::parse_instance_section);
+                self.rewrite(
+                    encoder,
+                    section.data,
+                    Self::parse_component_instance_section,
+                );
             }
             id if id == wasm_encoder::ComponentSectionId::Alias as u8 => {
                 self.rewrite(encoder, section.data, Self::parse_component_alias_section);

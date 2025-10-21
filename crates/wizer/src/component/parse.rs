@@ -13,7 +13,7 @@ use wasmparser::{
 /// parsing phase which in theory could be lifted in the future but serve as
 /// simplifying assumptions for now:
 ///
-/// * Nested components are not supported.
+/// * Nested components with modules are not supported.
 /// * Imported modules or components are not supported.
 /// * Instantiating a module twice is not supported.
 /// * Component-level start functions are not supported.
@@ -21,21 +21,37 @@ use wasmparser::{
 /// Some of these restrictions are likely to be loosened over time, however.
 pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<'a>> {
     let mut component = ComponentContext::default();
-    let mut parser = Parser::new(0).parse_all(full_wasm);
+    let parser = Parser::new(0).parse_all(full_wasm);
+    parse_into(Some(&mut component), full_wasm, parser)?;
+    Ok(component)
+}
 
-    while let Some(payload) = parser.next() {
+fn parse_into<'a>(
+    mut cx: Option<&mut ComponentContext<'a>>,
+    full_wasm: &'a [u8],
+    mut iter: impl Iterator<Item = wasmparser::Result<Payload<'a>>>,
+) -> anyhow::Result<()> {
+    let mut stack = Vec::new();
+    while let Some(payload) = iter.next() {
         let payload = payload?;
 
         match &payload {
             // Module sections get parsed with wizer's core wasm support.
-            Payload::ModuleSection { .. } => {
-                let info = crate::parse::parse_with(&full_wasm, &mut parser)?;
-                component.push_module_section(info);
-            }
+            Payload::ModuleSection { .. } => match &mut cx {
+                Some(component) => {
+                    let info = crate::parse::parse_with(&full_wasm, &mut iter)?;
+                    component.push_module_section(info);
+                }
+                None => {
+                    bail!("nested components with modules not currently supported");
+                }
+            },
 
             // All other sections get pushed raw as-is into the component.
             _ => {
-                if let Some((id, range)) = payload.as_section() {
+                if let Some((id, range)) = payload.as_section()
+                    && let Some(component) = &mut cx
+                {
                     component.push_raw_section(wasm_encoder::RawSection {
                         id,
                         data: &full_wasm[range],
@@ -56,26 +72,38 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
             }
 
             Payload::ComponentSection { .. } => {
-                bail!("wizer does not currently support nested components");
+                stack.push(cx.take());
+            }
+
+            Payload::End(_) => {
+                if stack.len() > 0 {
+                    cx = stack.pop().unwrap();
+                }
             }
 
             Payload::InstanceSection(reader) => {
-                for instance in reader {
-                    let instance_index = component.inc_core_instances();
+                if let Some(component) = &mut cx {
+                    for instance in reader {
+                        let instance_index = component.inc_core_instances();
 
-                    if let Instance::Instantiate { module_index, .. } = instance? {
-                        match component.core_instantiations.entry(module_index) {
-                            Entry::Vacant(entry) => {
-                                entry.insert(instance_index);
+                        if let Instance::Instantiate { module_index, .. } = instance? {
+                            match component.core_instantiations.entry(module_index) {
+                                Entry::Vacant(entry) => {
+                                    entry.insert(instance_index);
+                                }
+                                Entry::Occupied(_) => {
+                                    bail!("modules may be instantiated at most once")
+                                }
                             }
-                            Entry::Occupied(_) => bail!("modules may be instantiated at most once"),
                         }
                     }
                 }
             }
             Payload::ComponentInstanceSection(reader) => {
-                for _ in reader {
-                    component.inc_instances();
+                if let Some(component) = &mut cx {
+                    for _ in reader {
+                        component.inc_instances();
+                    }
                 }
             }
 
@@ -83,16 +111,22 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
                 for alias in reader {
                     match alias? {
                         ComponentAlias::CoreInstanceExport { kind, .. } => {
-                            component.inc_core(kind);
+                            if let Some(component) = &mut cx {
+                                component.inc_core(kind);
+                            }
                         }
                         ComponentAlias::InstanceExport { kind, .. } => {
                             validate_item_kind(kind, "aliases")?;
-                            component.inc(kind);
+                            if let Some(component) = &mut cx {
+                                component.inc(kind);
+                            }
                         }
                         ComponentAlias::Outer { kind, .. } => match kind {
                             ComponentOuterAliasKind::CoreType => {}
                             ComponentOuterAliasKind::Type => {
-                                component.inc_types();
+                                if let Some(component) = &mut cx {
+                                    component.inc_types();
+                                }
                             }
                             ComponentOuterAliasKind::CoreModule => {
                                 bail!("wizer does not currently support module aliases");
@@ -109,10 +143,14 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
                 for function in reader {
                     match function? {
                         CanonicalFunction::Lift { .. } => {
-                            component.inc_funcs();
+                            if let Some(component) = &mut cx {
+                                component.inc_funcs();
+                            }
                         }
                         _ => {
-                            component.inc_core_funcs();
+                            if let Some(component) = &mut cx {
+                                component.inc_core_funcs();
+                            }
                         }
                     }
                 }
@@ -122,7 +160,9 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
                 for import in reader {
                     let kind = import?.ty.kind();
                     validate_item_kind(kind, "imports")?;
-                    component.inc(kind);
+                    if let Some(component) = &mut cx {
+                        component.inc(kind);
+                    }
                 }
             }
 
@@ -130,13 +170,17 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
                 for export in reader {
                     let kind = export?.kind;
                     validate_item_kind(kind, "exports")?;
-                    component.inc(kind);
+                    if let Some(component) = &mut cx {
+                        component.inc(kind);
+                    }
                 }
             }
 
             Payload::ComponentTypeSection(reader) => {
                 for _ in reader {
-                    component.inc_types();
+                    if let Some(component) = &mut cx {
+                        component.inc_types();
+                    }
                 }
             }
 
@@ -151,7 +195,7 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<
         }
     }
 
-    Ok(component)
+    Ok(())
 }
 
 fn validate_item_kind(kind: ComponentExternalKind, msg: &str) -> Result<()> {
