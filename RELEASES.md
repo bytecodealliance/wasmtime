@@ -1,3 +1,21 @@
+## 38.0.2
+
+Released 2025-10-21.
+
+### Changed
+
+* This repository is attempting to start out using GitHub's "Immutable Releases"
+  feature with this release, and this'll be the first release, assuming all goes
+  well, that has this enabled.
+  [#11901](https://github.com/bytecodealliance/wasmtime/pull/11901)
+
+### Fixed
+
+* Fix compatibility with the Go runtime on Windows for exceptions.
+  [#11892](https://github.com/bytecodealliance/wasmtime/pull/11892)
+
+--------------------------------------------------------------------------------
+
 ## 38.0.1
 
 Released 2025-10-20.
