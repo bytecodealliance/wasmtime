@@ -1224,6 +1224,8 @@ impl<T> Store<T> {
     ///
     /// - Will panic if this store is not configured for async
     ///   support.
+    /// - Will panic if guest-debug support was not enabled via
+    ///   [`crate::Config::guest_debug`].
     #[cfg(feature = "debug")]
     pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
     where
@@ -1232,6 +1234,10 @@ impl<T> Store<T> {
         assert!(
             self.inner.async_support(),
             "debug hooks rely on async support"
+        );
+        assert!(
+            self.engine().tunables().debug_guest,
+            "debug hooks require guest debugging to be enabled"
         );
         self.inner.debug_handler = Some(Arc::new(handler));
     }
