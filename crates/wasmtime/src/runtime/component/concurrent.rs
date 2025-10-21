@@ -4169,16 +4169,21 @@ impl GuestTask {
     fn ready_to_delete(&self) -> bool {
         let threads_completed = self.threads.is_empty();
         let has_sync_result = matches!(self.sync_result, SyncResult::Produced(_));
-        let has_event = self.common.event.is_some();
+        let pending_completion_event = matches!(
+            self.common.event,
+            Some(Event::Subtask {
+                status: Status::Returned | Status::ReturnCancelled
+            })
+        );
         let ready = threads_completed
             && !has_sync_result
-            && !has_event
+            && !pending_completion_event
             && !matches!(self.host_future_state, HostFutureState::Live);
         log::trace!(
-            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, has_event: {}, host_future_state: {:?})",
+            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, pending_completion_event: {}, host_future_state: {:?})",
             threads_completed,
             has_sync_result,
-            has_event,
+            pending_completion_event,
             self.host_future_state
         );
         ready
