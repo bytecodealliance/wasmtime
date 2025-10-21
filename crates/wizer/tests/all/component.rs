@@ -93,12 +93,12 @@ fn store() -> Result<Store<()>> {
 }
 
 async fn instantiate(store: &mut Store<()>, component: &Component) -> Result<Instance> {
-    Linker::new(store.engine())
-        .instantiate_async(store, component)
-        .await
+    let mut linker = Linker::new(store.engine());
+    linker.define_unknown_imports_as_traps(component)?;
+    linker.instantiate_async(store, component).await
 }
 
-async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
+async fn wizen(wat: &str) -> Result<Vec<u8>> {
     let _ = env_logger::try_init();
     let wasm = wat::parse_str(wat)?;
 
@@ -122,6 +122,13 @@ async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
         std::fs::write("test.wasm", &wasm).unwrap();
     }
 
+    Ok(wasm)
+}
+
+async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
+    let wasm = wizen(wat).await?;
+
+    let mut store = store()?;
     let module =
         Component::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
@@ -403,4 +410,132 @@ async fn multiple_modules() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+#[tokio::test]
+async fn export_is_removed() -> Result<()> {
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export "wizer-initialize" (func $a))
+        )"#,
+    )
+    .await?;
+
+    let names = exports(&wasm);
+    assert!(names.is_empty());
+
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export "other" (func $a))
+            (export "wizer-initialize" (func $a))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other"]);
+
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export "other1" (func $a))
+            (export "wizer-initialize" (func $a))
+            (export "other2" (func $a))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other1", "other2"]);
+
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export "other1" (func $a))
+            (export "other2" (func $a))
+            (export "wizer-initialize" (func $a))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other1", "other2"]);
+
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export "wizer-initialize" (func $a))
+            (export "other1" (func $a))
+            (export "other2" (func $a))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other1", "other2"]);
+
+    let wasm = wizen(
+        r#"(component
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export $x "other1" (func $a))
+            (export "wizer-initialize" (func $a))
+            (export "other2" (func $x))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other1", "other2"]);
+
+    let wasm = wizen(
+        r#"(component
+            (import "x" (func))
+            (core module $a
+                (func (export "init"))
+            )
+            (core instance $a (instantiate $a))
+            (func $a (canon lift (core func $a "init")))
+            (export $x "other1" (func $a))
+            (export "wizer-initialize" (func $a))
+            (export "other2" (func $x))
+        )"#,
+    )
+    .await?;
+    let names = exports(&wasm);
+    assert_eq!(names, ["other1", "other2"]);
+
+    return Ok(());
+
+    fn exports(wasm: &[u8]) -> Vec<&str> {
+        wasmparser::Parser::new(0)
+            .parse_all(&wasm)
+            .filter_map(|r| r.ok())
+            .filter_map(|payload| match payload {
+                wasmparser::Payload::ComponentExportSection(s) => Some(s),
+                _ => None,
+            })
+            .flat_map(|section| section.into_iter().map(|e| e.unwrap().name.0))
+            .collect()
+    }
 }
