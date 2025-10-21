@@ -130,10 +130,126 @@ void wasmtime_memory_image_free(struct wasmtime_memory_image *image) {
 
 #endif // WASMTIME_VIRTUAL_MEMORY
 
-// Pretend that this platform doesn't have threads where storing in a static is
-// ok.
+#ifdef WASMTIME_CUSTOM_SYNC
+
+// Multi-threaded TLS using pthread
+#include <pthread.h>
+
+static pthread_key_t wasmtime_tls_key;
+static pthread_once_t wasmtime_tls_key_once = PTHREAD_ONCE_INIT;
+
+static void make_tls_key(void) { pthread_key_create(&wasmtime_tls_key, NULL); }
+
+uint8_t *wasmtime_tls_get(void) {
+  pthread_once(&wasmtime_tls_key_once, make_tls_key);
+  return (uint8_t *)pthread_getspecific(wasmtime_tls_key);
+}
+
+void wasmtime_tls_set(uint8_t *val) {
+  pthread_once(&wasmtime_tls_key_once, make_tls_key);
+  pthread_setspecific(wasmtime_tls_key, val);
+}
+
+#else
+
+// Single-threaded TLS using a static variable
 static uint8_t *WASMTIME_TLS = NULL;
 
-uint8_t *wasmtime_tls_get() { return WASMTIME_TLS; }
+uint8_t *wasmtime_tls_get(void) { return WASMTIME_TLS; }
 
 void wasmtime_tls_set(uint8_t *val) { WASMTIME_TLS = val; }
+
+#endif
+
+#ifdef WASMTIME_CUSTOM_SYNC
+
+#include <stdlib.h>
+
+void wasmtime_sync_lock_free(uintptr_t *lock) {
+  if (*lock != 0) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)*lock;
+    pthread_mutex_destroy(mutex);
+    free(mutex);
+    *lock = 0;
+  }
+}
+
+static pthread_mutex_t *mutex_lazy_init(uintptr_t *lock) {
+  pthread_mutex_t *mutex = (pthread_mutex_t *)*lock;
+  if (mutex == NULL) {
+    pthread_mutex_t *new_mutex = malloc(sizeof(pthread_mutex_t));
+    if (new_mutex == NULL) {
+      abort();
+    }
+    pthread_mutex_init(new_mutex, NULL);
+
+    // Atomically set lock only if it's still NULL
+    if (!__sync_bool_compare_and_swap(lock, 0, (uintptr_t)new_mutex)) {
+      pthread_mutex_destroy(new_mutex);
+      free(new_mutex);
+    }
+    mutex = (pthread_mutex_t *)*lock;
+  }
+  return mutex;
+}
+
+void wasmtime_sync_lock_acquire(uintptr_t *lock) {
+  pthread_mutex_t *mutex = mutex_lazy_init(lock);
+  pthread_mutex_lock(mutex);
+}
+
+void wasmtime_sync_lock_release(uintptr_t *lock) {
+  pthread_mutex_t *mutex = mutex_lazy_init(lock);
+  pthread_mutex_unlock(mutex);
+}
+
+void wasmtime_sync_rwlock_free(uintptr_t *lock) {
+  if (*lock != 0) {
+    pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
+    pthread_rwlock_destroy(rwlock);
+    free(rwlock);
+    *lock = 0;
+  }
+}
+
+static pthread_rwlock_t *rwlock_lazy_init(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
+  if (rwlock == NULL) {
+    pthread_rwlock_t *new_rwlock = malloc(sizeof(pthread_rwlock_t));
+    if (new_rwlock == NULL) {
+      abort();
+    }
+    pthread_rwlock_init(new_rwlock, NULL);
+
+    // Atomically set lock only if it's still NULL
+    if (!__sync_bool_compare_and_swap(lock, 0, (uintptr_t)new_rwlock)) {
+      // Another thread won the race, discard our allocation
+      pthread_rwlock_destroy(new_rwlock);
+      free(new_rwlock);
+    }
+    rwlock = (pthread_rwlock_t *)*lock;
+  }
+  return rwlock;
+}
+
+void wasmtime_sync_rwlock_read(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_rdlock(rwlock);
+}
+
+void wasmtime_sync_rwlock_read_release(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_unlock(rwlock);
+}
+
+void wasmtime_sync_rwlock_write(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_wrlock(rwlock);
+}
+
+void wasmtime_sync_rwlock_write_release(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_unlock(rwlock);
+}
+
+#endif // WASMTIME_CUSTOM_SYNC

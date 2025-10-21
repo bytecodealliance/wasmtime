@@ -18,7 +18,7 @@ use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
+    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -502,22 +502,46 @@ impl Component {
 
     pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
         let wasm_call = self
-            .inner
-            .index
-            .func_loc(FuncKey::ComponentTrampoline(Abi::Wasm, index))
-            .unwrap();
+            .func(FuncKey::ComponentTrampoline(Abi::Wasm, index))
+            .unwrap()
+            .cast();
         let array_call = self
-            .inner
-            .index
-            .func_loc(FuncKey::ComponentTrampoline(Abi::Array, index))
-            .unwrap();
+            .func(FuncKey::ComponentTrampoline(Abi::Array, index))
+            .unwrap()
+            .cast();
         AllCallFuncPointers {
-            wasm_call: self.func(wasm_call).cast(),
-            array_call: self.func(array_call).cast(),
+            wasm_call,
+            array_call,
         }
     }
 
-    fn func(&self, loc: &FunctionLoc) -> NonNull<u8> {
+    pub(crate) fn unsafe_intrinsic_ptrs(
+        &self,
+        intrinsic: UnsafeIntrinsic,
+    ) -> Option<AllCallFuncPointers> {
+        let wasm_call = self
+            .func(FuncKey::UnsafeIntrinsic(Abi::Wasm, intrinsic))?
+            .cast();
+        let array_call = self
+            .func(FuncKey::UnsafeIntrinsic(Abi::Array, intrinsic))?
+            .cast();
+        Some(AllCallFuncPointers {
+            wasm_call,
+            array_call,
+        })
+    }
+
+    /// Look up a function in this component's text section by `FuncKey`.
+    fn func(&self, key: FuncKey) -> Option<NonNull<u8>> {
+        let loc = self.inner.index.func_loc(key)?;
+        Some(self.func_loc_to_pointer(loc))
+    }
+
+    /// Given a function location within this component's text section, get a
+    /// pointer to the function.
+    ///
+    /// Panics on out-of-bounds function locations.
+    fn func_loc_to_pointer(&self, loc: &FunctionLoc) -> NonNull<u8> {
         let text = self.text();
         let trampoline = &text[loc.start as usize..][..loc.length as usize];
         NonNull::from(trampoline).cast()
@@ -553,10 +577,8 @@ impl Component {
         // then this can't be called by the component, so it's ok to leave it
         // blank.
         let wasm_call = self
-            .inner
-            .index
-            .func_loc(FuncKey::ResourceDropTrampoline)
-            .map(|loc| self.func(loc).cast().into());
+            .func(FuncKey::ResourceDropTrampoline)
+            .map(|f| f.cast().into());
 
         VMFuncRef {
             wasm_call,

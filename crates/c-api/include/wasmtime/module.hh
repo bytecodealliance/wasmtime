@@ -183,6 +183,12 @@ public:
     return ret;
   }
 #endif // WASMTIME_FEATURE_COMPILER
+
+  /// \brief Returns the underlying C API pointer.
+  const wasmtime_module_t *capi() const { return ptr.get(); }
+
+  /// \brief Returns the underlying C API pointer.
+  wasmtime_module_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime

@@ -1059,6 +1059,7 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::AtomicCas, _, &[I128]),
                 (Opcode::AtomicLoad, _, &[I128]),
                 (Opcode::AtomicStore, &[I128, _], _),
+                (Opcode::SequencePoint),
             )
         })
         .filter(|(op, ..)| {
@@ -1585,8 +1586,7 @@ where
             .map(|(name, signature)| {
                 let user_func_ref = builder.func.declare_imported_user_function(name.clone());
                 let name = ExternalName::User(user_func_ref);
-                let never_colocated = false;
-                (name, signature.clone(), never_colocated)
+                (name, signature.clone())
             })
             .collect();
 
@@ -1602,24 +1602,21 @@ where
                 .unwrap();
                 let signature = libcall.signature(lib_callconv, pointer_type);
                 let name = ExternalName::LibCall(*libcall);
-                // libcalls can't be colocated to generated code because we
-                // don't know where in the address space the function will go
-                // relative to where the libcall is.
-                let never_colocated = true;
-                (name, signature, never_colocated)
+                (name, signature)
             })
             .collect();
 
-        for (name, signature, never_colocated) in usercalls.into_iter().chain(libcalls) {
+        for (name, signature) in usercalls.into_iter().chain(libcalls) {
             let sig_ref = builder.import_signature(signature.clone());
             let func_ref = builder.import_function(ExtFuncData {
                 name,
                 signature: sig_ref,
-                colocated: if never_colocated {
-                    false
-                } else {
-                    self.u.arbitrary()?
-                },
+
+                // Libcalls can't be colocated because they can be very far away
+                // from allocated memory at runtime, and additionally at this
+                // time cranelift-jit puts all functions in their own mmap so
+                // they also cannot be colocated.
+                colocated: false,
             });
 
             self.resources

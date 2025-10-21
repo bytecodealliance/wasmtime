@@ -64,8 +64,7 @@ impl ObjectBuilder {
             }
             other => {
                 return Err(ModuleError::Backend(anyhow!(
-                    "binary format {} not recognized",
-                    other
+                    "binary format {other} not recognized"
                 )));
             }
         };
@@ -77,8 +76,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::Riscv64(_) => {
                 if binary_format != object::BinaryFormat::Elf {
                     return Err(ModuleError::Backend(anyhow!(
-                        "binary format {:?} is not supported for riscv64",
-                        binary_format,
+                        "binary format {binary_format:?} is not supported for riscv64",
                     )));
                 }
 
@@ -105,8 +103,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
-                    "target architecture {:?} is unsupported",
-                    architecture,
+                    "target architecture {architecture:?} is unsupported",
                 )));
             }
         };
@@ -187,8 +184,7 @@ fn validate_symbol(name: &str) -> ModuleResult<()> {
     // crate to panic. Let's return a clean error instead.
     if name.contains("\0") {
         return Err(ModuleError::Backend(anyhow::anyhow!(
-            "Symbol {:?} has a null byte, which is disallowed",
-            name
+            "Symbol {name:?} has a null byte, which is disallowed"
         )));
     }
     Ok(())

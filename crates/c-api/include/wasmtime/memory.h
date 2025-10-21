@@ -22,9 +22,10 @@ extern "C" {
  * Note that this function is preferred over #wasm_memorytype_new for
  * compatibility with the memory64 proposal.
  */
-WASM_API_EXTERN wasm_memorytype_t *
+WASM_API_EXTERN wasmtime_error_t *
 wasmtime_memorytype_new(uint64_t min, bool max_present, uint64_t max,
-                        bool is_64, bool shared);
+                        bool is_64, bool shared, uint8_t page_size_log2,
+                        wasm_memorytype_t **ret);
 
 /**
  * \brief Returns the minimum size, in pages, of the specified memory type.
@@ -57,6 +58,18 @@ WASM_API_EXTERN bool wasmtime_memorytype_is64(const wasm_memorytype_t *ty);
  * \brief Returns whether this type of memory represents a shared memory.
  */
 WASM_API_EXTERN bool wasmtime_memorytype_isshared(const wasm_memorytype_t *ty);
+
+/**
+ * \brief Returns the page size, in bytes, of this memory type.
+ */
+WASM_API_EXTERN uint64_t
+wasmtime_memorytype_page_size(const wasm_memorytype_t *ty);
+
+/**
+ * \brief Returns the log2 of this memory type's page size, in bytes.
+ */
+WASM_API_EXTERN uint8_t
+wasmtime_memorytype_page_size_log2(const wasm_memorytype_t *ty);
 
 /**
  * \brief Creates a new WebAssembly linear memory
@@ -112,6 +125,47 @@ WASM_API_EXTERN uint64_t wasmtime_memory_size(const wasmtime_context_t *store,
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_memory_grow(wasmtime_context_t *store, const wasmtime_memory_t *memory,
                      uint64_t delta, uint64_t *prev_size);
+
+/**
+ * \brief Returns the size of a page, in bytes, for this memory.
+ *
+ * \param store the store that owns `memory`
+ * \param memory the memory to get the page size of
+ *
+ * WebAssembly memories are made up of a whole number of pages, so the byte size
+ * (as returned by #wasmtime_memory_data_size) will always be a multiple of
+ * their page size. Different Wasm memories may have different page sizes.
+ *
+ * By default this is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or `65536`)
+ * but [the custom-page-sizes proposal] allows opting into a page size of
+ * `1`. Future extensions might allow any power of two as a page size.
+ *
+ * [the custom-page-sizes proposal]:
+ * https://github.com/WebAssembly/custom-page-sizes
+ */
+WASM_API_EXTERN uint64_t wasmtime_memory_page_size(
+    wasmtime_context_t *store, const wasmtime_memory_t *memory);
+
+/**
+ * \brief Returns the log2 of this memory's page size, in bytes.
+ *
+ * \param store the store that owns `memory`
+ * \param memory the memory to get the page size of
+ *
+ * WebAssembly memories are made up of a whole number of pages, so the byte size
+ * (as returned by #wasmtime_memory_data_size) will always be a multiple of
+ * their page size. Different Wasm memories may have different page sizes.
+ *
+ * By default the page size is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or
+ * `65536`) but [the custom-page-sizes proposal] allows opting into a page
+ * size of `1`. Future extensions might allow any power of two as a page
+ * size.
+ *
+ * [the custom-page-sizes proposal]:
+ * https://github.com/WebAssembly/custom-page-sizes
+ */
+WASM_API_EXTERN uint8_t wasmtime_memory_page_size_log2(
+    wasmtime_context_t *store, const wasmtime_memory_t *memory);
 
 #ifdef __cplusplus
 } // extern "C"

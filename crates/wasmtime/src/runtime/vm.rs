@@ -129,6 +129,8 @@ pub use crate::runtime::vm::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
+#[cfg(has_custom_sync)]
+pub(crate) use sys::capi;
 
 pub use send_sync_ptr::SendSyncPtr;
 pub use wasmtime_unwinder::Unwind;

@@ -7,6 +7,9 @@
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
+#include <stdint.h>
+#include <wasm.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

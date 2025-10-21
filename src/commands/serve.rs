@@ -1,7 +1,8 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use bytes::Bytes;
 use clap::Parser;
+use futures::future::FutureExt;
 use http::{Response, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
@@ -9,22 +10,24 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
+use wasmtime::{Engine, Store, StoreContextMut, StoreLimits, UpdateDeadline};
+use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::bindings as p2;
+#[cfg(feature = "component-model-async")]
+use wasmtime_wasi_http::handler::p2::bindings as p2;
+use wasmtime_wasi_http::handler::{HandlerState, Proxy, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
@@ -37,6 +40,10 @@ use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
+
+const DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT: usize = 128;
+const DEFAULT_WASIP2_MAX_INSTANCE_REUSE_COUNT: usize = 1;
+const DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT: usize = 16;
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -106,6 +113,10 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
     8080,
 );
 
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    Duration::parse(Some(s)).map_err(|e| e.to_string())
+}
+
 /// Runs a WebAssembly module
 #[derive(Parser)]
 pub struct ServeCommand {
@@ -131,6 +142,31 @@ pub struct ServeCommand {
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
     component: PathBuf,
+
+    /// Maximum number of requests to send to a single component instance before
+    /// dropping it.
+    ///
+    /// This defaults to 1 for WASIp2 components and 128 for WASIp3 components.
+    #[arg(long)]
+    max_instance_reuse_count: Option<usize>,
+
+    /// Maximum number of concurrent requests to send to a single component
+    /// instance.
+    ///
+    /// This defaults to 1 for WASIp2 components and 16 for WASIp3 components.
+    /// Note that setting it to more than 1 will have no effect for WASIp2
+    /// components since they cannot be called concurrently.
+    #[arg(long)]
+    max_instance_concurrent_reuse_count: Option<usize>,
+
+    /// Time to hold an idle component instance for possible reuse before
+    /// dropping it.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    #[arg(long, default_value = "1s", value_parser = parse_duration)]
+    idle_instance_timeout: Duration,
 }
 
 impl ServeCommand {
@@ -171,20 +207,25 @@ impl ServeCommand {
         Ok(())
     }
 
-    fn new_store(&self, engine: &Engine, req_id: u64) -> Result<Store<Host>> {
+    fn new_store(&self, engine: &Engine, req_id: Option<u64>) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
         self.run.configure_wasip2(&mut builder)?;
 
-        builder.env("REQUEST_ID", req_id.to_string());
+        if let Some(req_id) = req_id {
+            builder.env("REQUEST_ID", req_id.to_string());
+        }
 
         let stdout_prefix: String;
         let stderr_prefix: String;
-        if self.no_logging_prefix {
-            stdout_prefix = "".to_string();
-            stderr_prefix = "".to_string();
-        } else {
-            stdout_prefix = format!("stdout [{req_id}] :: ");
-            stderr_prefix = format!("stderr [{req_id}] :: ");
+        match req_id {
+            Some(req_id) if !self.no_logging_prefix => {
+                stdout_prefix = format!("stdout [{req_id}] :: ");
+                stderr_prefix = format!("stderr [{req_id}] :: ");
+            }
+            _ => {
+                stdout_prefix = "".to_string();
+                stderr_prefix = "".to_string();
+            }
         }
         builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
         builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
@@ -449,7 +490,31 @@ impl ServeCommand {
         };
         let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
 
-        let handler = ProxyHandler::new(self, engine, instance);
+        let max_instance_reuse_count = self.max_instance_reuse_count.unwrap_or_else(|| {
+            if let ProxyPre::P3(_) = &instance {
+                DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT
+            } else {
+                DEFAULT_WASIP2_MAX_INSTANCE_REUSE_COUNT
+            }
+        });
+
+        let max_instance_concurrent_reuse_count = if let ProxyPre::P3(_) = &instance {
+            self.max_instance_concurrent_reuse_count
+                .unwrap_or(DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT)
+        } else {
+            1
+        };
+
+        let handler = ProxyHandler::new(
+            HostHandlerState {
+                cmd: self,
+                engine,
+                component,
+                max_instance_reuse_count,
+                max_instance_concurrent_reuse_count,
+            },
+            instance,
+        );
 
         loop {
             // Wait for a socket, but also "race" against shutdown to break out
@@ -459,7 +524,14 @@ impl ServeCommand {
                 _ = shutdown.requested.notified() => break,
                 v = listener.accept() => v?,
             };
-            let comp = component.clone();
+
+            // The Nagle algorithm can impose a significant latency penalty
+            // (e.g. 40ms on Linux) on guests which write small, intermittent
+            // response body chunks (e.g. SSE streams).  Here we disable that
+            // algorithm and rely on the guest to buffer if appropriate to avoid
+            // TCP fragmentation.
+            stream.set_nodelay(true)?;
+
             let stream = TokioIo::new(stream);
             let h = handler.clone();
             let shutdown_guard = shutdown.clone().increment();
@@ -469,11 +541,10 @@ impl ServeCommand {
                     .serve_connection(
                         stream,
                         hyper::service::service_fn(move |req| {
-                            let comp = comp.clone();
                             let h = h.clone();
                             async move {
                                 use http_body_util::{BodyExt, Full};
-                                match handle_request(h, req, comp).await {
+                                match handle_request(h, req).await {
                                     Ok(r) => Ok::<_, Infallible>(r),
                                     Err(e) => {
                                         eprintln!("error: {e:?}");
@@ -528,6 +599,48 @@ impl ServeCommand {
         }
 
         Ok(())
+    }
+}
+
+struct HostHandlerState {
+    cmd: ServeCommand,
+    engine: Engine,
+    component: Component,
+    max_instance_reuse_count: usize,
+    max_instance_concurrent_reuse_count: usize,
+}
+
+impl HandlerState for HostHandlerState {
+    type StoreData = Host;
+
+    fn new_store(&self, req_id: Option<u64>) -> Result<StoreBundle<Host>> {
+        let mut store = self.cmd.new_store(&self.engine, req_id)?;
+        let write_profile = setup_epoch_handler(&self.cmd, &mut store, self.component.clone())?;
+
+        Ok(StoreBundle {
+            store,
+            write_profile,
+        })
+    }
+
+    fn request_timeout(&self) -> Duration {
+        self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX)
+    }
+
+    fn idle_instance_timeout(&self) -> Duration {
+        self.cmd.idle_instance_timeout
+    }
+
+    fn max_instance_reuse_count(&self) -> usize {
+        self.max_instance_reuse_count
+    }
+
+    fn max_instance_concurrent_reuse_count(&self) -> usize {
+        self.max_instance_concurrent_reuse_count
+    }
+
+    fn handle_worker_error(&self, error: anyhow::Error) {
+        eprintln!("worker error: {error}");
     }
 }
 
@@ -618,7 +731,7 @@ impl Drop for EpochThread {
     }
 }
 
-type WriteProfile = Box<dyn FnOnce(&mut Store<Host>) + Send>;
+type WriteProfile = Box<dyn FnOnce(StoreContextMut<Host>) + Send>;
 
 fn setup_epoch_handler(
     cmd: &ServeCommand,
@@ -628,7 +741,7 @@ fn setup_epoch_handler(
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
-        return setup_guest_profiler(cmd, store, path.clone(), *interval, component.clone());
+        return setup_guest_profiler(store, path.clone(), *interval, component.clone());
         #[cfg(not(feature = "profiling"))]
         {
             let _ = (path, interval);
@@ -646,7 +759,6 @@ fn setup_epoch_handler(
 
 #[cfg(feature = "profiling")]
 fn setup_guest_profiler(
-    cmd: &ServeCommand,
     store: &mut Store<Host>,
     path: String,
     interval: Duration,
@@ -681,28 +793,17 @@ fn setup_guest_profiler(
         Ok(())
     });
 
-    let start = Instant::now();
-    let timeout = cmd.run.common.wasm.timeout;
     store.epoch_deadline_callback(move |store| {
         sample(store, |profiler, store| {
             profiler.sample(store, std::time::Duration::ZERO)
         });
-
-        // Originally epoch counting was used here; this is problematic in
-        // a lot of cases due to there being a lot of time (e.g. in hostcalls)
-        // when we are not expected to get sample hits.
-        if let Some(timeout) = timeout {
-            if start.elapsed() > timeout {
-                bail!("Timeout expired");
-            }
-        }
 
         Ok(UpdateDeadline::Continue(1))
     });
 
     store.set_epoch_deadline(1);
 
-    let write_profile = Box::new(move |store: &mut Store<Host>| {
+    let write_profile = Box::new(move |mut store: StoreContextMut<Host>| {
         let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
             .expect("profiling doesn't support threads yet");
         if let Err(e) = std::fs::File::create(&path)
@@ -720,65 +821,15 @@ fn setup_guest_profiler(
     Ok(write_profile)
 }
 
-struct ProxyHandlerInner {
-    cmd: ServeCommand,
-    engine: Engine,
-    instance_pre: ProxyPre,
-    next_id: AtomicU64,
-}
-
-enum ProxyPre {
-    P2(p2::ProxyPre<Host>),
-    #[cfg(feature = "component-model-async")]
-    P3(wasmtime_wasi_http::p3::bindings::ProxyPre<Host>),
-}
-
-impl ProxyPre {
-    async fn instantiate(&self, store: &mut Store<Host>) -> Result<Proxy> {
-        Ok(match self {
-            ProxyPre::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
-            #[cfg(feature = "component-model-async")]
-            ProxyPre::P3(pre) => Proxy::P3(pre.instantiate_async(store).await?),
-        })
-    }
-}
-
-enum Proxy {
-    P2(p2::Proxy),
-    #[cfg(feature = "component-model-async")]
-    P3(wasmtime_wasi_http::p3::bindings::Proxy),
-}
-
-impl ProxyHandlerInner {
-    fn next_req_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
-    }
-}
-
-#[derive(Clone)]
-struct ProxyHandler(Arc<ProxyHandlerInner>);
-
-impl ProxyHandler {
-    fn new(cmd: ServeCommand, engine: Engine, instance_pre: ProxyPre) -> Self {
-        Self(Arc::new(ProxyHandlerInner {
-            cmd,
-            engine,
-            instance_pre,
-            next_id: AtomicU64::from(0),
-        }))
-    }
-}
-
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_request(
-    ProxyHandler(inner): ProxyHandler,
+    handler: ProxyHandler<HostHandlerState>,
     req: Request,
-    component: Component,
 ) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
-    let (sender, receiver) = tokio::sync::oneshot::channel();
+    use tokio::sync::oneshot;
 
-    let req_id = inner.next_req_id();
+    let req_id = handler.next_req_id();
 
     log::info!(
         "Request {req_id} handling {} to {}",
@@ -786,97 +837,102 @@ async fn handle_request(
         req.uri()
     );
 
-    let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
+    // Here we must declare different channel types for p2 and p3 since p2's
+    // `WasiHttpView::new_response_outparam` expects a specific kind of sender
+    // that uses `p2::http::types::ErrorCode`, and we don't want to have to
+    // convert from the p3 `ErrorCode` to the p2 one, only to convert again to
+    // `anyhow::Error`.
 
-    let write_profile = setup_epoch_handler(&inner.cmd, &mut store, component.clone())?;
-    let timeout = inner.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
+    type P2Response = Result<
+        hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        p2::http::types::ErrorCode,
+    >;
+    type P3Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
 
-    match inner.instance_pre.instantiate(&mut store).await? {
-        Proxy::P2(proxy) => {
-            let req = store
-                .data_mut()
-                .new_incoming_request(p2::http::types::Scheme::Http, req)?;
-            let out = store.data_mut().new_response_outparam(sender)?;
-            let task = tokio::task::spawn(async move {
-                let result = tokio::time::timeout(
-                    timeout,
-                    proxy
-                        .wasi_http_incoming_handler()
-                        .call_handle(&mut store, req, out),
-                )
-                .await
-                .unwrap_or_else(|_| bail!("guest timed out"));
-                if let Err(e) = result {
-                    log::error!("[{req_id}] :: {e:?}");
-                    return Err(e);
-                }
-
-                write_profile(&mut store);
-
-                Ok(())
-            });
-
-            let result = match receiver.await {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => bail!(e),
-                Err(_) => {
-                    // An error in the receiver (`RecvError`) only indicates that the
-                    // task exited before a response was sent (i.e., the sender was
-                    // dropped); it does not describe the underlying cause of failure.
-                    // Instead we retrieve and propagate the error from inside the task
-                    // which should more clearly tell the user what went wrong. Note
-                    // that we assume the task has already exited at this point so the
-                    // `await` should resolve immediately.
-                    let e = match task.await {
-                        Ok(Ok(())) => {
-                            bail!("guest never invoked `response-outparam::set` method")
-                        }
-                        Ok(Err(e)) => e,
-                        Err(e) => e.into(),
-                    };
-                    bail!(e.context("guest never invoked `response-outparam::set` method"))
-                }
-            };
-
-            Ok(result.map(|body| body.map_err(|e| e.into()).boxed()))
-        }
-        #[cfg(feature = "component-model-async")]
-        Proxy::P3(proxy) => {
-            use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
-
-            let (tx, rx) = tokio::sync::oneshot::channel();
-
-            tokio::task::spawn(async move {
-                let guest_result = store.run_concurrent(async move |store| {
-                    let (req, body) = req.into_parts();
-                    let body = body.map_err(ErrorCode::from_hyper_request_error);
-                    let req = http::Request::from_parts(req, body);
-                    let (request, request_io_result) = Request::from_http(req);
-                    let (res, task) = proxy.handle(store, request).await??;
-                    let res =
-                        store.with(|mut store| res.into_http(&mut store, request_io_result))?;
-
-                    _ = tx.send(res);
-
-                    task.block(store).await;
-                    anyhow::Ok(())
-                });
-
-                let guest_result = tokio::time::timeout(timeout, guest_result)
-                    .await
-                    .unwrap_or_else(|_| bail!("guest timed out"))?;
-                if let Err(e) = guest_result {
-                    log::error!("[{req_id}] :: {e:?}");
-                    return Err(e);
-                }
-
-                write_profile(&mut store);
-
-                anyhow::Ok(())
-            });
-            Ok(rx.await?.map(|body| body.map_err(|err| err.into()).boxed()))
-        }
+    enum Sender {
+        P2(oneshot::Sender<P2Response>),
+        P3(oneshot::Sender<P3Response>),
     }
+
+    enum Receiver {
+        P2(oneshot::Receiver<P2Response>),
+        P3(oneshot::Receiver<P3Response>),
+    }
+
+    let (tx, rx) = match handler.instance_pre() {
+        ProxyPre::P2(_) => {
+            let (tx, rx) = oneshot::channel();
+            (Sender::P2(tx), Receiver::P2(rx))
+        }
+        ProxyPre::P3(_) => {
+            let (tx, rx) = oneshot::channel();
+            (Sender::P3(tx), Receiver::P3(rx))
+        }
+    };
+
+    handler.spawn(
+        if handler.state().max_instance_reuse_count() == 1 {
+            Some(req_id)
+        } else {
+            None
+        },
+        Box::new(move |store, proxy| {
+            Box::pin(
+                async move {
+                    match proxy {
+                        Proxy::P2(proxy) => {
+                            let Sender::P2(tx) = tx else { unreachable!() };
+                            let (req, out) = store.with(move |mut store| {
+                                let req = store
+                                    .data_mut()
+                                    .new_incoming_request(p2::http::types::Scheme::Http, req)?;
+                                let out = store.data_mut().new_response_outparam(tx)?;
+                                anyhow::Ok((req, out))
+                            })?;
+
+                            proxy
+                                .wasi_http_incoming_handler()
+                                .call_handle(store, req, out)
+                                .await
+                        }
+                        Proxy::P3(proxy) => {
+                            use wasmtime_wasi_http::p3::bindings::http::types::{
+                                ErrorCode, Request,
+                            };
+
+                            let Sender::P3(tx) = tx else { unreachable!() };
+                            let (req, body) = req.into_parts();
+                            let body = body.map_err(ErrorCode::from_hyper_request_error);
+                            let req = http::Request::from_parts(req, body);
+                            let (request, request_io_result) = Request::from_http(req);
+                            let (res, task) = proxy.handle(store, request).await??;
+                            let res = store
+                                .with(|mut store| res.into_http(&mut store, request_io_result))?;
+                            _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed()));
+
+                            // Wait for the task to finish.
+                            task.block(store).await;
+                            Ok(())
+                        }
+                    }
+                }
+                .map(move |result| {
+                    if let Err(error) = result {
+                        eprintln!("[{req_id}] :: {error:?}");
+                    }
+                }),
+            )
+        }),
+    );
+
+    Ok(match rx {
+        Receiver::P2(rx) => rx
+            .await
+            .context("guest never invoked `response-outparam::set` method")?
+            .map_err(|e| anyhow::Error::from(e))?
+            .map(|body| body.map_err(|e| e.into()).boxed()),
+        Receiver::P3(rx) => rx.await?,
+    })
 }
 
 #[derive(Clone)]

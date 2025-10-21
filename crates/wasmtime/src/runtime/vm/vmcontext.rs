@@ -1173,6 +1173,10 @@ pub struct VMStoreContext {
     /// on `VMStackChain` for details.
     pub stack_chain: UnsafeCell<VMStackChain>,
 
+    /// A pointer to the embedder's `T` inside a `Store<T>`, for use with the
+    /// `store-data-address` unsafe intrinsic.
+    pub store_data: VmPtr<()>,
+
     /// The range, in addresses, of the guard page that is currently in use.
     ///
     /// This field is used when signal handlers are run to determine whether a
@@ -1266,6 +1270,7 @@ impl Default for VMStoreContext {
             last_wasm_entry_trap_handler: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
+            store_data: VmPtr::dangling(),
         }
     }
 }
@@ -1327,7 +1332,11 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, stack_chain),
             usize::from(offsets.ptr.vmstore_context_stack_chain())
-        )
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, store_data),
+            usize::from(offsets.ptr.vmstore_context_store_data())
+        );
     }
 }
 

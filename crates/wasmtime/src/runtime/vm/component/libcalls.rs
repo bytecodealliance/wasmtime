@@ -91,6 +91,7 @@ mod trampolines {
             )*
         ) => (
             $(
+                #[allow(unused_variables, reason = "macro-generated")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMComponentContext>
                     $(,$pname : signature!(@ty $param))*

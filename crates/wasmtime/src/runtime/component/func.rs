@@ -341,6 +341,48 @@ impl Func {
     /// This returns a [`TaskExit`] representing the completion of the guest
     /// task and any transitive subtasks it might create.
     ///
+    /// # Progress
+    ///
+    /// For the wasm task being created in `call_concurrent` to make progress it
+    /// must be run within the scope of [`run_concurrent`]. If there are no
+    /// active calls to [`run_concurrent`] then the wasm task will appear as
+    /// stalled. This is typically not a concern as an [`Accessor`] is bound
+    /// by default to a scope of [`run_concurrent`].
+    ///
+    /// One situation in which this can arise, for example, is that if a
+    /// [`run_concurrent`] computation finishes its async closure before all
+    /// wasm tasks have completed, then there will be no scope of
+    /// [`run_concurrent`] anywhere. In this situation the wasm tasks that have
+    /// not yet completed will not make progress until [`run_concurrent`] is
+    /// called again.
+    ///
+    /// Embedders will need to ensure that this future is `await`'d within the
+    /// scope of [`run_concurrent`] to ensure that the value can be produced
+    /// during the `await` call.
+    ///
+    /// # Cancellation
+    ///
+    /// Cancelling an async task created via `call_concurrent`, at this time, is
+    /// only possible by dropping the store that the computation runs within.
+    /// With [#11833] implemented then it will be possible to request
+    /// cancellation of a task, but that is not yet implemented. Hard-cancelling
+    /// a task will only ever be possible by dropping the entire store and it is
+    /// not possible to remove just one task from a store.
+    ///
+    /// This async function behaves more like a "spawn" than a normal Rust async
+    /// function. When this function is invoked then metadata for the function
+    /// call is recorded in the store connected to the `accessor` argument and
+    /// the wasm invocation is from then on connected to the store. If the
+    /// future created by this function is dropped it does not cancel the
+    /// in-progress execution of the wasm task. Dropping the future
+    /// relinquishes the host's ability to learn about the result of the task
+    /// but the task will still progress and invoke callbacks and such until
+    /// completion.
+    ///
+    /// [`run_concurrent`]: crate::Store::run_concurrent
+    /// [#11833]: https://github.com/bytecodealliance/wasmtime/issues/11833
+    /// [`Accessor`]: crate::component::Accessor
+    ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own

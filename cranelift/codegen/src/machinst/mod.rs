@@ -502,7 +502,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
         return Ok(buf);
 
         fn map_caperr(err: capstone::Error) -> anyhow::Error {
-            anyhow::format_err!("{}", err)
+            anyhow::format_err!("{err}")
         }
     }
 }

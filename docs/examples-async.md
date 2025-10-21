@@ -3,7 +3,7 @@
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
 
-[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/async.cpp
+[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/async.cc
 
 This example demonstrates configuring Wasmtime for asynchronous operation and calling async host functions from wasm.
 
@@ -18,7 +18,7 @@ This example demonstrates configuring Wasmtime for asynchronous operation and ca
 <!-- langtabs-start -->
 
 ```cpp
-{{#include ../examples/async.cpp}}
+{{#include ../examples/async.cc}}
 ```
 
 <!-- langtabs-end -->

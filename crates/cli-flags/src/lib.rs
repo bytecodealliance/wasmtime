@@ -264,6 +264,8 @@ wasmtime_option_group! {
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
+        /// Enable guest debugging insrumentation.
+        pub guest_debug: Option<bool>,
         /// Configure whether compiled code can map native addresses to wasm.
         pub address_map: Option<bool>,
         /// Configure whether logging is enabled.
@@ -706,6 +708,11 @@ impl CommonOptions {
         }
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
+        }
+        match_feature! {
+            ["debug" : self.debug.guest_debug]
+            enable => config.guest_debug(enable),
+            _ => err,
         }
         if self.debug.coredump.is_some() {
             #[cfg(feature = "coredump")]

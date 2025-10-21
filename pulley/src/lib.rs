@@ -1412,7 +1412,7 @@ pub mod opcode;
 pub use opcode::*;
 
 #[cfg(any(feature = "encode", feature = "decode"))]
-pub(crate) unsafe fn unreachable_unchecked<T>() -> T {
+pub(crate) unsafe fn unreachable_unchecked() -> ! {
     #[cfg(debug_assertions)]
     unreachable!();
 

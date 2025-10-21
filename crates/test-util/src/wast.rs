@@ -151,7 +151,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 ret.hogs_memory = Some(true);
             }
         }
-        Some(proposal) => panic!("unsuported proposal {proposal:?}"),
+        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
         None => {
             ret.reference_types = Some(true);
             ret.simd = Some(true);

@@ -51,11 +51,11 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0x0, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0x0, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0x0, (%rsp)
 ;   addq $0x30000, %rsp
 ;   subq $0x30000, %rsp
 ; block0:
@@ -70,14 +70,14 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0, (%rsp)
 ;   addq $0x30000, %rsp
 ;   subq $0x30000, %rsp
-; block1: ; offset 0x30
+; block1: ; offset 0x3c
 ;   leaq (%rsp), %rax
 ;   addq $0x30000, %rsp
 ;   movq %rbp, %rsp
@@ -111,15 +111,14 @@ block0:
 ;   movq %rsp, %r11
 ;   subq $0x200000, %r11
 ;   subq $0x10000, %rsp
-;   movl %esp, (%rsp)
+;   movl $0, (%rsp)
 ;   cmpq %rsp, %r11
 ;   jne 0xe
 ;   addq $0x200000, %rsp
 ;   subq $0x200000, %rsp
-; block1: ; offset 0x2f
+; block1: ; offset 0x33
 ;   leaq (%rsp), %rax
 ;   addq $0x200000, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-

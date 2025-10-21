@@ -22,7 +22,7 @@ toolchain](https://www.rust-lang.org/tools/install) installed.
 
 From the root of the Wasmtime repository, run the following commands:
 
-```
+```shell-session
 $ cmake -S crates/c-api -B target/c-api --install-prefix "$(pwd)/artifacts"
 $ cmake --build target/c-api
 $ cmake --install target/c-api
@@ -77,8 +77,34 @@ fn main() {
 
 Running tests for the C API can be done using cmake from the root of the repo:
 
-```sh
-$ cmake -S examples -B examples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
+```shell-session
+$ cmake -S examples -B examples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 $ cmake --build examples/build --config Debug
 $ CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
+```
+
+To build and run a subset of tests by name:
+
+```shell-session
+$ cmake --build examples/build --config Debug
+$ ctest --test-dir examples/build --output-on-failure -R $MY_TEST
+```
+
+where `$MY_TEST` is the test name or glob pattern; for example,
+`MemoryType.Simple` to run that one particular test or `TypedFunc.*` to run all
+typed function tests.
+
+To run under `gdb`:
+
+```shell-session
+$ gdb --args ctest --test-dir examples/build/ --output-on-failure -R $MY_TEST
+(gdb) set follow-fork-mode child
+(gdb) run
+```
+
+To run under `rr`:
+
+```
+$ rr record ctest --test-dir examples/build/ --output-on-failure -R $MY_TEST
+$ rr replay
 ```

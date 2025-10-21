@@ -76,6 +76,8 @@ impl FuncTranslator {
         builder.switch_to_block(entry_block);
         builder.seal_block(entry_block); // Declare all predecessors known.
 
+        environ.create_state_slot(&mut builder);
+
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_block();
@@ -103,7 +105,7 @@ impl FuncTranslator {
 fn declare_wasm_parameters(
     builder: &mut FunctionBuilder,
     entry_block: Block,
-    environ: &FuncEnvironment<'_>,
+    environ: &mut FuncEnvironment<'_>,
 ) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
@@ -111,7 +113,7 @@ fn declare_wasm_parameters(
         let param_type = builder.func.signature.params[i];
         // There may be additional special-purpose parameters in addition to the normal WebAssembly
         // signature parameters. For example, a `vmctx` pointer.
-        if environ.is_wasm_parameter(&builder.func.signature, i) {
+        if let Some(wasm_type) = environ.clif_param_as_wasm_param(i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = builder.declare_var(param_type.value_type);
             debug_assert_eq!(local.index(), next_local);
@@ -123,6 +125,8 @@ fn declare_wasm_parameters(
 
             let param_value = builder.block_params(entry_block)[i];
             builder.def_var(local, param_value);
+
+            environ.add_state_slot_local(builder, wasm_type, Some(param_value));
         }
         if param_type.purpose == ir::ArgumentPurpose::VMContext {
             let param_value = builder.block_params(entry_block)[i];
@@ -221,6 +225,7 @@ fn declare_locals(
             builder.def_var(local, init);
             builder.set_val_label(init, ValueLabel::new(*next_local));
         }
+        environ.add_state_slot_local(builder, environ.convert_valtype(wasm_type)?, init);
         *next_local += 1;
     }
     Ok(())
@@ -255,8 +260,9 @@ fn parse_function_body(
 
         environ.before_translate_operator(&op, operand_types, builder, stack)?;
         translate_operator(validator, &op, operand_types, builder, stack, environ)?;
-        environ.after_translate_operator(&op, operand_types, builder, stack)?;
+        environ.after_translate_operator(&op, validator, builder, stack)?;
     }
+
     environ.after_translate_function(builder, stack)?;
     reader.finish()?;
 
@@ -276,6 +282,7 @@ fn parse_function_body(
     // Discard any remaining values on the stack. Either we just returned them,
     // or the end of the function is unreachable.
     stack.stack.clear();
+    stack.stack_shape.clear();
 
     Ok(())
 }

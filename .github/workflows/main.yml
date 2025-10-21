@@ -76,6 +76,10 @@ jobs:
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
           xargs clang-format-18 --dry-run --Werror --verbose
+    # Make sure our `clangformat.sh` helper script keeps running and stays
+    # in-sync with the previous check.
+    - run: crates/c-api/clangformat.sh
+    - run: git diff --exit-code
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -298,6 +302,7 @@ jobs:
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-fuzzing \
           --exclude wasm-spec-interpreter \
+          --exclude calculator \
           --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
@@ -382,6 +387,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
               -p wasmtime-cli --no-default-features --features objdump
+              -p wasmtime-cli --no-default-features --features wizer
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -416,6 +422,14 @@ jobs:
               -p wasmtime-wasi --no-default-features --features p1
               -p wasmtime-wasi --no-default-features --features p2
               -p wasmtime-wasi --no-default-features --features p3
+
+          - name: wasmtime-wizer
+            checks: |
+              -p wasmtime-wizer --no-default-features
+              -p wasmtime-wizer --no-default-features --features wasmtime
+              -p wasmtime-wizer --no-default-features --features wasmprinter
+              -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -623,6 +637,7 @@ jobs:
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
@@ -641,7 +656,8 @@ jobs:
           #
           # Run this on windows/mac/linux
           - os: ubuntu-24.04
-            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            # Only run the "plugins" example on Linux
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
             name: Linux
           - os: macos-15
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
@@ -670,6 +686,9 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip2
+
+    - uses: ./.github/actions/install-plugins-prerequisites
+      if: runner.os == 'Linux'
 
     - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
     # An ode to MinGW: man you're a pain to work around sometimes
@@ -968,7 +987,7 @@ jobs:
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         # Only testing release since it is more likely to expose issues with our low-level symbol handling.
-        cargo test --release --test all -- --ignored --test-threads 1 debug::
+        cargo test --release --test all -- --ignored --test-threads 1 native_debug::
       env:
         LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk
@@ -1028,7 +1047,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen --vers "^0.28" --locked
+    - run: cargo install cbindgen --vers "^0.29" --locked
     - run: rustup target add x86_64-unknown-none
     - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none

@@ -1,0 +1,18 @@
+[package]
+name = "uap-bench"
+version = "0.1.0"
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+regex = { workspace = true }
+serde_yaml = "0.9.34"

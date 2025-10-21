@@ -36,6 +36,7 @@ pub struct CodeMemory {
     address_map_data: Range<usize>,
     stack_map_data: Range<usize>,
     exception_data: Range<usize>,
+    frame_tables_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
@@ -122,6 +123,7 @@ impl CodeMemory {
         let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
         let mut exception_data = 0..0;
+        let mut frame_tables_data = 0..0;
         let mut wasm_data = 0..0;
         let mut address_map_data = 0..0;
         let mut stack_map_data = 0..0;
@@ -172,6 +174,7 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_WASMTIME_EXCEPTIONS => exception_data = range,
+                obj::ELF_WASMTIME_FRAMES => frame_tables_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
@@ -216,6 +219,7 @@ impl CodeMemory {
             address_map_data,
             stack_map_data,
             exception_data,
+            frame_tables_data,
             func_name_data,
             wasm_dwarf,
             info_data,
@@ -275,6 +279,12 @@ impl CodeMemory {
     /// `wasmtime_unwinder::ExceptionTable::parse`.
     pub fn exception_tables(&self) -> &[u8] {
         &self.mmap[self.exception_data.clone()]
+    }
+
+    /// Returns the encoded frame-tables section to pass to
+    /// `wasmtime_environ::FrameTable::parse`.
+    pub fn frame_tables(&self) -> &[u8] {
+        &self.mmap[self.frame_tables_data.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
@@ -420,7 +430,7 @@ impl CodeMemory {
         // and anything else necessary that is done in "create_gdbjit_image" right now.
         let image = self.mmap().to_vec();
         let text: &[u8] = self.text();
-        let bytes = crate::debug::create_gdbjit_image(image, (text.as_ptr(), text.len()))?;
+        let bytes = crate::native_debug::create_gdbjit_image(image, (text.as_ptr(), text.len()))?;
         let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
         self.debug_registration = Some(reg);
         Ok(())

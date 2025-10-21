@@ -39,6 +39,10 @@ pub enum FuncKeyKind {
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
     ResourceDropTrampoline = FuncKey::new_kind(0b110),
+
+    /// A Wasmtime unsafe intrinsic function.
+    #[cfg(feature = "component-model")]
+    UnsafeIntrinsic = FuncKey::new_kind(0b111),
 }
 
 impl From<FuncKeyKind> for u32 {
@@ -68,6 +72,8 @@ impl FuncKeyKind {
             x if x == Self::ComponentTrampoline.into() => Self::ComponentTrampoline,
             #[cfg(feature = "component-model")]
             x if x == Self::ResourceDropTrampoline.into() => Self::ResourceDropTrampoline,
+            #[cfg(feature = "component-model")]
+            x if x == Self::UnsafeIntrinsic.into() => Self::UnsafeIntrinsic,
 
             _ => panic!("invalid raw value passed to `FuncKind::from_raw`: {raw}"),
         }
@@ -130,6 +136,12 @@ impl FuncKeyNamespace {
             #[cfg(feature = "component-model")]
             FuncKeyKind::ResourceDropTrampoline => {
                 assert_eq!(raw & FuncKey::MODULE_MASK, 0);
+                Self(raw)
+            }
+
+            #[cfg(feature = "component-model")]
+            FuncKeyKind::UnsafeIntrinsic => {
+                let _ = Abi::from_raw(raw & FuncKey::MODULE_MASK);
                 Self(raw)
             }
         }
@@ -223,6 +235,10 @@ pub enum FuncKey {
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
     ResourceDropTrampoline,
+
+    /// A Wasmtime intrinsic function.
+    #[cfg(feature = "component-model")]
+    UnsafeIntrinsic(Abi, component::UnsafeIntrinsic),
 }
 
 impl Ord for FuncKey {
@@ -296,6 +312,14 @@ impl FuncKey {
             FuncKey::ResourceDropTrampoline => {
                 let namespace = FuncKeyKind::ResourceDropTrampoline.into_raw();
                 let index = 0;
+                (namespace, index)
+            }
+            #[cfg(feature = "component-model")]
+            FuncKey::UnsafeIntrinsic(abi, intrinsic) => {
+                let abi = abi.into_raw();
+                assert_eq!(abi & Self::KIND_MASK, 0);
+                let namespace = FuncKeyKind::UnsafeIntrinsic.into_raw() | abi;
+                let index = intrinsic.index();
                 (namespace, index)
             }
         };
@@ -389,7 +413,32 @@ impl FuncKey {
                 assert_eq!(b, 0);
                 Self::ResourceDropTrampoline
             }
+            #[cfg(feature = "component-model")]
+            FuncKeyKind::UnsafeIntrinsic => {
+                let abi = Abi::from_raw(a & Self::MODULE_MASK);
+                let intrinsic = component::UnsafeIntrinsic::from_u32(b);
+                Self::UnsafeIntrinsic(abi, intrinsic)
+            }
         }
+    }
+
+    /// Create a key from a raw packed `u64` representation.
+    ///
+    /// Should only be given a value produced by `into_raw_u64()`.
+    ///
+    /// Panics when given an invalid value.
+    pub fn from_raw_u64(value: u64) -> Self {
+        let hi = u32::try_from(value >> 32).unwrap();
+        let lo = u32::try_from(value & 0xffff_ffff).unwrap();
+        FuncKey::from_raw_parts(hi, lo)
+    }
+
+    /// Produce a packed `u64` representation of this key.
+    ///
+    /// May be used with `from_raw_64()` to reconstruct this key.
+    pub fn into_raw_u64(&self) -> u64 {
+        let (hi, lo) = self.into_raw_parts();
+        (u64::from(hi) << 32) | u64::from(lo)
     }
 
     /// Unwrap a `FuncKey::DefinedWasmFunction` or else panic.

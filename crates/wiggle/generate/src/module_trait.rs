@@ -28,7 +28,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
             quote!(#arg_name: #arg_type)
         });
 
-        let result = match f.results.len() {
+        let mut result = match f.results.len() {
             0 if f.noreturn => quote!(wiggle::anyhow::Error),
             0 => quote!(()),
             1 => {
@@ -60,11 +60,9 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
             _ => unimplemented!(),
         };
 
-        let asyncness = if settings.get_async(&m, &f).is_sync() {
-            quote!()
-        } else {
-            quote!(async)
-        };
+        if !settings.get_async(&m, &f).is_sync() {
+            result = quote!(impl std::future::Future<Output = #result> + Send);
+        }
 
         let self_ = if settings.mutable {
             quote!(&mut self)
@@ -72,7 +70,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
             quote!(&self)
         };
         quote!(
-            #asyncness fn #funcname(
+            fn #funcname(
                 #self_,
                 mem: &mut wiggle::GuestMemory<'_>,
                 #(#args),*
@@ -81,7 +79,6 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
     });
 
     quote! {
-        #[wiggle::async_trait]
         pub trait #traitname {
             #(#traitmethods)*
         }

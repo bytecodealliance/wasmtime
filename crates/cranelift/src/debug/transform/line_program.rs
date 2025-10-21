@@ -1,7 +1,8 @@
+use super::TransformError;
 use super::address_transform::AddressTransform;
-use super::{Reader, TransformError};
+use crate::debug::Reader;
 use anyhow::{Error, bail};
-use gimli::{DebugLineOffset, LineEncoding, Unit, write};
+use gimli::{DebugLineOffset, LineEncoding, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
 
 #[derive(Debug)]
@@ -35,17 +36,13 @@ enum ReadLineProgramState {
     IgnoreSequence,
 }
 
-pub(crate) fn clone_line_program<R>(
-    dwarf: &gimli::Dwarf<R>,
-    unit: &Unit<R, R::Offset>,
-    comp_name: Option<R>,
+pub(crate) fn clone_line_program(
+    unit: UnitRef<Reader<'_>>,
+    comp_name: Option<Reader<'_>>,
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     out_strings: &mut write::StringTable,
-) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>, u64), Error>
-where
-    R: Reader,
-{
+) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>, u64), Error> {
     if let Some(program) = unit.line_program.clone() {
         let header = program.header();
         let offset = header.offset();
@@ -60,7 +57,7 @@ where
         };
         let out_comp_dir = match header.directory(0) {
             Some(comp_dir) => clone_line_string(
-                dwarf.attr_string(unit, comp_dir)?,
+                unit.attr_string(comp_dir)?,
                 gimli::DW_FORM_string,
                 out_strings,
             )?,
@@ -83,7 +80,7 @@ where
         dirs.push(out_program.default_directory());
         for dir_attr in header.include_directories() {
             let dir_id = out_program.add_directory(clone_line_string(
-                dwarf.attr_string(unit, dir_attr.clone())?,
+                unit.attr_string(*dir_attr)?,
                 gimli::DW_FORM_string,
                 out_strings,
             )?);
@@ -97,7 +94,7 @@ where
             let dir_id = dirs[dir_index as usize];
             let file_id = out_program.add_file(
                 clone_line_string(
-                    dwarf.attr_string(unit, file_entry.path_name())?,
+                    unit.attr_string(file_entry.path_name())?,
                     gimli::DW_FORM_string,
                     out_strings,
                 )?,
@@ -245,21 +242,18 @@ where
     }
 }
 
-fn clone_line_string<R>(
-    value: R,
+fn clone_line_string(
+    value: Reader<'_>,
     form: gimli::DwForm,
     out_strings: &mut write::StringTable,
-) -> Result<write::LineString, Error>
-where
-    R: Reader,
-{
-    let content = value.to_string_lossy()?.into_owned();
+) -> Result<write::LineString, Error> {
+    let content = value.to_vec();
     Ok(match form {
         gimli::DW_FORM_strp => {
             let id = out_strings.add(content);
             write::LineString::StringRef(id)
         }
-        gimli::DW_FORM_string => write::LineString::String(content.into()),
+        gimli::DW_FORM_string => write::LineString::String(content),
         _ => bail!("DW_FORM_line_strp or other not supported"),
     })
 }

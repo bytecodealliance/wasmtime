@@ -40,6 +40,7 @@ pub struct CodeBuilder<'a> {
     wasm_path: Option<Cow<'a, Path>>,
     dwarf_package: Option<Cow<'a, [u8]>>,
     dwarf_package_path: Option<Cow<'a, Path>>,
+    unsafe_intrinsics_import: Option<String>,
 }
 
 /// Return value of [`CodeBuilder::hint`]
@@ -60,6 +61,7 @@ impl<'a> CodeBuilder<'a> {
             wasm_path: None,
             dwarf_package: None,
             dwarf_package_path: None,
+            unsafe_intrinsics_import: None,
         }
     }
 
@@ -181,6 +183,472 @@ impl<'a> CodeBuilder<'a> {
             .ok_or_else(|| anyhow!("no wasm bytes have been configured"))
     }
 
+    /// Expose Wasmtime's unsafe intrinsics under the given import name.
+    ///
+    /// These intrinsics provide native memory loads and stores to Wasm; they
+    /// are *extremely* unsafe! If you are not absolutely sure that you need
+    /// these unsafe intrinsics, *do not use them!* See the safety section below
+    /// for details.
+    ///
+    /// This functionality is intended to be used when implementing
+    /// "compile-time builtins"; that is, satisfying a Wasm import via
+    /// special-cased, embedder-specific code at compile time. You should never
+    /// use these intrinsics to intentionally subvert the Wasm sandbox. You
+    /// should strive to implement safe functions that encapsulate your uses of
+    /// these intrinsics such that, regardless of any value given as arguments,
+    /// your functions *cannot* result in loading from or storing to invalid
+    /// pointers, or any other kind of unsafety. See below for an example of the
+    /// intended use cases.
+    ///
+    /// Wasmtime's unsafe intrinsics can only be exposed to Wasm components, not
+    /// core modules, currently.
+    ///
+    /// # Safety
+    ///
+    /// Extreme care must be taken when using these intrinsics.
+    ///
+    /// All loads of or stores to pointers derived from `store-data-address` are
+    /// inherently tied to a particular `T` type in a `Store<T>`. It is wildly
+    /// unsafe to run a Wasm program that uses unsafe intrinsics to access the
+    /// store's `T` inside a `Store<U>`. You must only run Wasm that uses unsafe
+    /// intrinsics in a `Store<T>` where the `T` is the type expected by the
+    /// Wasm's unsafe-intrinsics usage.
+    ///
+    /// Furthermore, usage of these intrinsics is not only tied to a particular
+    /// `T` type, but also to `T`'s layout on the host platform. The size and
+    /// alignment of `T`, the offsets of its fields, and those fields' size and
+    /// alignment can all vary across not only architecture but also operating
+    /// system. With care, you can define your `T` type such that its layout is
+    /// identical across the platforms that you run Wasm on, allowing you to
+    /// reuse the same Wasm binary and its unsafe-intrinsics usage on all your
+    /// platforms. Failing that, you must only run a Wasm program that uses
+    /// unsafe intrinsics on the host platform that its unsafe-intrinsic usage
+    /// is specialized to. See the portability section and example below for
+    /// more details.
+    ///
+    /// You are *strongly* encouraged to add assertions for the layout
+    /// properties that your unsafe-intrinsic usage's safety relies upon:
+    ///
+    /// ```rust
+    /// /// This type is used as `wasmtime::Store<MyData>` and accessed by Wasm via
+    /// /// unsafe intrinsics.
+    /// #[repr(C, align(8))]
+    /// struct MyData {
+    ///     id: u64,
+    ///     counter: u32,
+    ///     buf: [u8; 4],
+    /// }
+    ///
+    /// // Assert that the layout is what our Wasm's unsafe-intrinsics usage expects.
+    /// static _MY_DATA_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(core::mem::size_of::<MyData>() == 16);
+    ///     assert!(core::mem::align_of::<MyData>() == 8);
+    ///     assert!(core::mem::offset_of!(MyData, id) == 0);
+    ///     assert!(core::mem::offset_of!(MyData, counter) == 8);
+    ///     assert!(core::mem::offset_of!(MyData, buf) == 12);
+    /// };
+    /// ```
+    ///
+    /// Finally, every pointer loaded from or stored to must:
+    ///
+    /// * Be non-null
+    ///
+    /// * Be aligned to the access type's natural alignment (e.g. 8-byte alignment
+    ///   for `u64`, 4-byte alignment for `u32`, etc...)
+    ///
+    /// * Point to a memory block that is valid to read from (for loads) or
+    ///   valid to write to (for stores) under Rust's pointer provenance rules
+    ///
+    /// * Point to a memory block that is at least as large as the access type's
+    ///   natural size (e.g. 1 byte for `u8`, 2 bytes for `u16`, etc...)
+    ///
+    /// * Point to a memory block that is not accessed concurrently by any other
+    ///   threads
+    ///
+    /// Failure to uphold any of these invariants will lead to unsafety,
+    /// undefined behavior, and/or data races.
+    ///
+    /// # Intrinsics
+    ///
+    /// | Name                 | Parameters   | Results |
+    /// |----------------------|--------------|---------|
+    /// | `u8-native-load`     | `u64`        | `u8`    |
+    /// | `u16-native-load`    | `u64`        | `u16`   |
+    /// | `u32-native-load`    | `u64`        | `u32`   |
+    /// | `u64-native-load`    | `u64`        | `u64`   |
+    /// | `u8-native-store`    | `u64`, `u8`  | -       |
+    /// | `u16-native-load`    | `u64`, `u16` | -       |
+    /// | `u32-native-load`    | `u64`, `u32` | -       |
+    /// | `u64-native-load`    | `u64`, `u64` | -       |
+    /// | `store-data-address` | -            | `u64`   |
+    ///
+    /// ## `*-native-load`
+    ///
+    /// These intrinsics perform an unsandboxed, unsynchronized load from native
+    /// memory, using the native endianness.
+    ///
+    /// ## `*-native-store`
+    ///
+    /// These intrinsics perform an unsandboxed, unsynchronized store to native
+    /// memory, using the native endianness.
+    ///
+    /// ## `store-data-address`
+    ///
+    /// This intrinsic function returns the pointer to the embedder's `T` data
+    /// inside a `Store<T>`.
+    ///
+    /// In general, all native load and store intinsics should operate on memory
+    /// addresses that are derived from a call to this intrinsic. If you want to
+    /// expose data for raw memory access by Wasm, put it inside the `T` in your
+    /// `Store<T>` and Wasm's access to that data should derive from this
+    /// intrinsic.
+    ///
+    /// # Portability
+    ///
+    /// Loads and stores are always performed using the architecture's native
+    /// endianness.
+    ///
+    /// Addresses passed to and returned from these intrinsics are always
+    /// 64-bits large. The upper half of the value is simply ignored on 32-bit
+    /// architectures.
+    ///
+    /// With care, you can design your store's `T` type such that accessing it
+    /// via these intrinsics is portable, and you can reuse a single Wasm binary
+    /// (and its set of intrinsic calls) across all of the platforms, with the
+    /// following rules of thumb:
+    ///
+    /// * Only access `u8`, `u16`, `u32`, and `u64` data via these intrinsics.
+    ///
+    /// * If you need to access other types of data, encode it into those types
+    ///   and then access the encoded data from the intrinsics.
+    ///
+    /// * Use `union`s to encode pointers and pointer-sized data as a `u64` and
+    ///   then access it via the `u64-native-{load,store}` intrinsics. See
+    ///   `ExposedPointer` in the example below.
+    ///
+    /// # Example
+    ///
+    /// The following example shows how you can use unsafe intrinsics to give
+    /// Wasm direct zero-copy access to a host buffer.
+    ///
+    /// ```rust
+    /// use std::mem;
+    /// use wasmtime::*;
+    ///
+    /// // A `*mut u8` pointer that is exposed directly to Wasm via unsafe intrinsics.
+    /// #[repr(align(8))]
+    /// union ExposedPointer {
+    ///     pointer: *mut u8,
+    ///     padding: u64,
+    /// }
+    ///
+    /// static _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(mem::size_of::<ExposedPointer>() == 8);
+    ///     assert!(mem::align_of::<ExposedPointer>() == 8);
+    /// };
+    ///
+    /// impl ExposedPointer {
+    ///     /// Wrap the given pointer into an `ExposedPointer`.
+    ///     fn new(pointer: *mut u8) -> Self {
+    ///         // NB: Zero-initialize to avoid potential footguns with accessing
+    ///         // undefined bytes.
+    ///         let mut p = Self { padding: 0 };
+    ///         p.pointer = pointer;
+    ///         p
+    ///     }
+    ///
+    ///     /// Get the wrapped pointer.
+    ///     fn get(&self) -> *mut u8 {
+    ///         unsafe { self.pointer }
+    ///     }
+    /// }
+    ///
+    /// /// This is the `T` type we will put inside our
+    /// /// `wasmtime::Store<T>`s. It contains a pointer to a heap-allocated buffer
+    /// /// in host memory, which we will give Wasm zero-copy access to via unsafe
+    /// /// intrinsics.
+    /// #[repr(C)]
+    /// struct StoreData {
+    ///     buf_ptr: ExposedPointer,
+    ///     buf_len: u64,
+    /// }
+    ///
+    /// static _STORE_DATA_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(mem::size_of::<StoreData>() == 16);
+    ///     assert!(mem::align_of::<StoreData>() == 8);
+    ///     assert!(mem::offset_of!(StoreData, buf_ptr) == 0);
+    ///     assert!(mem::offset_of!(StoreData, buf_len) == 8);
+    /// };
+    ///
+    /// impl Drop for StoreData {
+    ///     fn drop(&mut self) {
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         let ptr = std::ptr::slice_from_raw_parts_mut(self.buf_ptr.get(), len);
+    ///         unsafe {
+    ///             let _ = Box::from_raw(ptr);
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// impl StoreData {
+    ///     /// Create a new `StoreData`, allocating an inner buffer of `capacity`
+    ///     /// bytes.
+    ///     fn new(bytes: impl IntoIterator<Item = u8>) -> Self {
+    ///         let buf: Box<[u8]> = bytes.into_iter().collect();
+    ///         let ptr = Box::into_raw(buf);
+    ///         Self {
+    ///             buf_ptr: ExposedPointer::new(ptr.cast::<u8>()),
+    ///             buf_len: u64::try_from(ptr.len()).unwrap(),
+    ///         }
+    ///     }
+    ///
+    ///     /// Get the inner buffer as a shared slice.
+    ///     fn buf(&self) -> &[u8] {
+    ///         let ptr = self.buf_ptr.get().cast_const();
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         unsafe {
+    ///             std::slice::from_raw_parts(ptr, len)
+    ///         }
+    ///     }
+    ///
+    ///     /// Get the inner buffer as a mutable slice.
+    ///     fn buf_mut(&mut self) -> &mut [u8] {
+    ///         let ptr = self.buf_ptr.get();
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         unsafe {
+    ///             std::slice::from_raw_parts_mut(ptr, len)
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<()> {
+    /// // Enable function inlining during compilation. If you are using unsafe intrinsics, you
+    /// // almost assuredly want them inlined to avoid function call overheads.
+    /// let mut config = Config::new();
+    /// config.compiler_inlining(true);
+    ///
+    /// let engine = Engine::new(&config)?;
+    /// let linker = wasmtime::component::Linker::new(&engine);
+    ///
+    /// // Create a new builder for configuring a Wasm compilation.
+    /// let mut builder = CodeBuilder::new(&engine);
+    ///
+    /// // Allow the code we are building to use Wasmtime's unsafe intrinsics.
+    /// //
+    /// // SAFETY: we wrap all usage of the intrinsics in safe APIs and only instantiate the code
+    /// // within a `Store<T>` where `T = StoreData`, as the code expects.
+    /// unsafe {
+    ///     builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+    /// }
+    ///
+    /// // Provide the Wasm that we are compiling.
+    /// builder.wasm_binary_or_text(r#"
+    ///     (component
+    ///         ;; Import the unsafe intrinsics that we will use.
+    ///         (import "unsafe-intrinsics"
+    ///             (instance $intrinsics
+    ///                 (export "store-data-address" (func (result u64)))
+    ///                 (export "u64-native-load" (func (param "pointer" u64) (result u64)))
+    ///                 (export "u8-native-load" (func (param "pointer" u64) (result u8)))
+    ///                 (export "u8-native-store" (func (param "pointer" u64) (param "value" u8)))
+    ///             )
+    ///         )
+    ///
+    ///         ;; A component that encapsulates the intrinsics' unsafety, exposing a safe API
+    ///         ;; built on top of them.
+    ///         (component $safe-api
+    ///             (import "unsafe-intrinsics"
+    ///                 (instance $intrinsics
+    ///                     (export "store-data-address" (func (result u64)))
+    ///                     (export "u64-native-load" (func (param "pointer" u64) (result u64)))
+    ///                     (export "u8-native-load" (func (param "pointer" u64) (result u8)))
+    ///                     (export "u8-native-store" (func (param "pointer" u64) (param "value" u8)))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; The core Wasm module that implements the safe API.
+    ///             (core module $safe-api-impl
+    ///                 (import "" "store-data-address" (func $store-data-address (result i64)))
+    ///                 (import "" "u64-native-load" (func $u64-native-load (param i64) (result i64)))
+    ///                 (import "" "u8-native-load" (func $u8-native-load (param i64) (result i32)))
+    ///                 (import "" "u8-native-store" (func $u8-native-store (param i64 i32)))
+    ///
+    ///                 ;; Load the `StoreData::buf_ptr` field
+    ///                 (func $get-buf-ptr (result i64)
+    ///                     (call $u64-native-load (i64.add (call $store-data-address) (i64.const 0)))
+    ///                 )
+    ///
+    ///                 ;; Load the `StoreData::buf_len` field
+    ///                 (func $get-buf-len (result i64)
+    ///                     (call $u64-native-load (i64.add (call $store-data-address) (i64.const 8)))
+    ///                 )
+    ///
+    ///                 ;; Check that `$i` is within `StoreData` buffer's bounds, raising a trap
+    ///                 ;; otherwise.
+    ///                 (func $bounds-check (param $i i64)
+    ///                     (if (i64.lt_u (local.get $i) (call $get-buf-len))
+    ///                         (then (return))
+    ///                         (else (unreachable))
+    ///                     )
+    ///                 )
+    ///
+    ///                 ;; A safe function to get the `i`th byte from `StoreData`'s buffer, raising
+    ///                 ;; a trap on out-of-bounds accesses.
+    ///                 (func (export "get") (param $i i64) (result i32)
+    ///                     (call $bounds-check (local.get $i))
+    ///                     (call $u8-native-load (i64.add (call $get-buf-ptr) (local.get $i)))
+    ///                 )
+    ///
+    ///                 ;; A safe function to set the `i`th byte in `StoreData`'s buffer, raising
+    ///                 ;; a trap on out-of-bounds accesses.
+    ///                 (func (export "set") (param $i i64) (param $value i32)
+    ///                     (call $bounds-check (local.get $i))
+    ///                     (call $u8-native-store (i64.add (call $get-buf-ptr) (local.get $i))
+    ///                                            (local.get $value))
+    ///                 )
+    ///
+    ///                 ;; A safe function to get the length of the `StoreData` buffer.
+    ///                 (func (export "len") (result i64)
+    ///                     (call $get-buf-len)
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lower the imported intrinsics from component functions to core functions.
+    ///             (core func $store-data-address' (canon lower (func $intrinsics "store-data-address")))
+    ///             (core func $u64-native-load' (canon lower (func $intrinsics "u64-native-load")))
+    ///             (core func $u8-native-load' (canon lower (func $intrinsics "u8-native-load")))
+    ///             (core func $u8-native-store' (canon lower (func $intrinsics "u8-native-store")))
+    ///
+    ///             ;; Instantiate our safe API implementation, passing in the lowered unsafe
+    ///             ;; intrinsics as its imports.
+    ///             (core instance $instance
+    ///                 (instantiate $safe-api-impl
+    ///                     (with "" (instance
+    ///                         (export "store-data-address" (func $store-data-address'))
+    ///                         (export "u64-native-load" (func $u64-native-load'))
+    ///                         (export "u8-native-load" (func $u8-native-load'))
+    ///                         (export "u8-native-store" (func $u8-native-store'))
+    ///                     ))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lift the safe API's exports from core functions to component functions and
+    ///             ;; export them.
+    ///             (func (export "get") (param "i" u64) (result u8)
+    ///                 (canon lift (core func $instance "get"))
+    ///             )
+    ///             (func (export "set") (param "i" u64) (param "value" u8)
+    ///                 (canon lift (core func $instance "set"))
+    ///             )
+    ///             (func (export "len") (result u64)
+    ///                 (canon lift (core func $instance "len"))
+    ///             )
+    ///         )
+    ///
+    ///         ;; A component that uses that safe API to increment each byte in the
+    ///         ;; `StoreData` buffer.
+    ///         (component $main
+    ///             ;; Import the safe API.
+    ///             (import "safe-api"
+    ///                 (instance $safe-api
+    ///                     (export "get" (func (param "i" u64) (result u8)))
+    ///                     (export "set" (func (param "i" u64) (param "value" u8)))
+    ///                     (export "len" (func (result u64)))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Define this component's core module implementation.
+    ///             (core module $main-impl
+    ///                 (import "" "get" (func $get (param i64) (result i32)))
+    ///                 (import "" "set" (func $set (param i64 i32)))
+    ///                 (import "" "len" (func $len (result i64)))
+    ///
+    ///                 (func (export "main")
+    ///                     (local $i i64)
+    ///                     (local $n i64)
+    ///
+    ///                     (local.set $i (i64.const 0))
+    ///                     (local.set $n (call $len))
+    ///
+    ///                     (loop $loop
+    ///                         ;; When we have iterated over every byte in the
+    ///                         ;; buffer, exit.
+    ///                         (if (i64.ge_u (local.get $i) (local.get $n))
+    ///                             (then (return)))
+    ///
+    ///                         ;; Increment the `i`th byte in the buffer.
+    ///                         (call $set (local.get $i)
+    ///                                    (i32.add (call $get (local.get $i))
+    ///                                             (i32.const 1)))
+    ///
+    ///                         ;; Increment `i` and continue to the next iteration
+    ///                         ;; of the loop.
+    ///                         (local.set $i (i64.add (local.get $i) (i64.const 1)))
+    ///                         (br $loop)
+    ///                     )
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lower the imported safe APIs from component functions to core functions.
+    ///             (core func $get' (canon lower (func $safe-api "get")))
+    ///             (core func $set' (canon lower (func $safe-api "set")))
+    ///             (core func $len' (canon lower (func $safe-api "len")))
+    ///
+    ///             ;; Instantiate our module, providing the lowered safe APIs as imports.
+    ///             (core instance $instance
+    ///                 (instantiate $main-impl
+    ///                     (with "" (instance
+    ///                         (export "get" (func $get'))
+    ///                         (export "set" (func $set'))
+    ///                         (export "len" (func $len'))
+    ///                     ))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lift implementation's `main` from a core function to a component function
+    ///             ;; and export it.
+    ///             (func (export "main")
+    ///                 (canon lift (core func $instance "main"))
+    ///             )
+    ///         )
+    ///
+    ///         ;; Instantiate our safe API component and our main component that consumes
+    ///         ;; it, passing the unsafe intrinsics into the safe API, and the safe API
+    ///         ;; into the main component.
+    ///         (instance $safe-api-instance
+    ///             (instantiate $safe-api (with "unsafe-intrinsics" (instance $intrinsics))))
+    ///         (instance $main-instance
+    ///             (instantiate $main (with "safe-api" (instance $safe-api-instance))))
+    ///
+    ///         ;; Finally, re-export the `main` function!
+    ///         (export "main" (func $main-instance "main"))
+    ///     )
+    /// "#.as_bytes(), None)?;
+    ///
+    /// // Finish the builder and compile the component.
+    /// let component = builder.compile_component()?;
+    ///
+    /// // Create a new `Store<StoreData>`, wrapping a buffer of the given elements.
+    /// let mut store = Store::new(&engine, StoreData::new([0, 10, 20, 30, 40, 50]));
+    ///
+    /// // Instantiate our component into the store.
+    /// let instance = linker.instantiate(&mut store, &component)?;
+    ///
+    /// // Get the instance's exported `main` function and call it.
+    /// instance
+    ///     .get_typed_func::<(), ()>(&mut store, "main")?
+    ///     .call(&mut store, ())?;
+    ///
+    /// // Our `StoreData`'s buffer had each element incremented directly from Wasm!
+    /// assert_eq!(store.data().buf(), &[1, 11, 21, 31, 41, 51]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub unsafe fn expose_unsafe_intrinsics(&mut self, import_name: impl Into<String>) -> &mut Self {
+        self.unsafe_intrinsics_import = Some(import_name.into());
+        self
+    }
+
     /// Explicitly specify DWARF `.dwp` path.
     ///
     /// # Errors
@@ -274,7 +742,12 @@ impl<'a> CodeBuilder<'a> {
     pub fn compile_module_serialized(&self) -> Result<Vec<u8>> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
-        let (v, _) = super::build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), &())?;
+        ensure!(
+            self.unsafe_intrinsics_import.is_none(),
+            "`CodeBuilder::expose_unsafe_intrinsics` can only be used with components"
+        );
+        let (v, _) =
+            super::build_module_artifacts(self.engine, &wasm, dwarf_package.as_deref(), &())?;
         Ok(v)
     }
 
@@ -284,8 +757,18 @@ impl<'a> CodeBuilder<'a> {
     #[cfg(feature = "component-model")]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
         let bytes = self.get_wasm()?;
-        let (v, _) = super::build_component_artifacts(self.engine, &bytes, None, &())?;
+        let (v, _) = super::build_component_artifacts(
+            self.engine,
+            &bytes,
+            None,
+            self.get_unsafe_intrinsics_import(),
+            &(),
+        )?;
         Ok(v)
+    }
+
+    pub(super) fn get_unsafe_intrinsics_import(&self) -> Option<&str> {
+        self.unsafe_intrinsics_import.as_deref()
     }
 }
 

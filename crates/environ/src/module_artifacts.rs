@@ -509,7 +509,9 @@ impl CompiledFunctionsTable {
             FuncKeyKind::ArrayToWasmTrampoline | FuncKeyKind::WasmToBuiltinTrampoline => false,
 
             #[cfg(feature = "component-model")]
-            FuncKeyKind::ComponentTrampoline | FuncKeyKind::ResourceDropTrampoline => true,
+            FuncKeyKind::ComponentTrampoline
+            | FuncKeyKind::ResourceDropTrampoline
+            | FuncKeyKind::UnsafeIntrinsic => true,
         }
     }
 
@@ -522,7 +524,9 @@ impl CompiledFunctionsTable {
             | FuncKeyKind::WasmToBuiltinTrampoline
             | FuncKeyKind::PulleyHostCall => false,
             #[cfg(feature = "component-model")]
-            FuncKeyKind::ComponentTrampoline | FuncKeyKind::ResourceDropTrampoline => false,
+            FuncKeyKind::ComponentTrampoline
+            | FuncKeyKind::ResourceDropTrampoline
+            | FuncKeyKind::UnsafeIntrinsic => false,
         }
     }
 }

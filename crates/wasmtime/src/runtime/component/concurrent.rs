@@ -960,6 +960,43 @@ impl<T> StoreContextMut<'_, T> {
     /// This function can be used to invoke [`Func::call_concurrent`] for
     /// example within the async closure provided here.
     ///
+    /// # Store-blocking behavior
+    ///
+    ///
+    ///
+    /// At this time there are certain situations in which the `Future` returned
+    /// by the `AsyncFnOnce` passed to this function will not be polled for an
+    /// extended period of time, despite one or more `Waker::wake` events having
+    /// occurred for the task to which it belongs.  This can manifest as the
+    /// `Future` seeming to be "blocked" or "locked up", but is actually due to
+    /// the `Store` being held by e.g. a blocking host function, preventing the
+    /// `Future` from being polled. A canonical example of this is when the
+    /// `fun` provided to this function attempts to set a timeout for an
+    /// invocation of a wasm function. In this situation the async closure is
+    /// waiting both on (a) the wasm computation to finish, and (b) the timeout
+    /// to elapse. At this time this setup will not always work and the timeout
+    /// may not reliably fire.
+    ///
+    /// This function will not block the current thread and as such is always
+    /// suitable to run in an `async` context, but the current implementation of
+    /// Wasmtime can lead to situations where a certain wasm computation is
+    /// required to make progress the closure to make progress. This is an
+    /// artifact of Wasmtime's historical implementation of `async` functions
+    /// and is the topic of [#11869] and [#11870]. In the timeout example from
+    /// above it means that Wasmtime can get "wedged" for a bit where (a) must
+    /// progress for a readiness notification of (b) to get delivered.
+    ///
+    /// This effectively means that it's not possible to reliably perform a
+    /// "select" operation within the `fun` closure, which timeouts for example
+    /// are based on. Fixing this requires some relatively major refactoring
+    /// work within Wasmtime itself. This is a known pitfall otherwise and one
+    /// that is intended to be fixed one day. In the meantime it's recommended
+    /// to apply timeouts or such to the entire `run_concurrent` call itself
+    /// rather than internally.
+    ///
+    /// [#11869]: https://github.com/bytecodealliance/wasmtime/issues/11869
+    /// [#11870]: https://github.com/bytecodealliance/wasmtime/issues/11870
+    ///
     /// # Example
     ///
     /// ```
@@ -1080,9 +1117,9 @@ impl<T> StoreContextMut<'_, T> {
         }
 
         loop {
-            // Take `ConcurrentState::futures` out of the instance so we can
-            // poll it while also safely giving any of the futures inside access
-            // to `self`.
+            // Take `ConcurrentState::futures` out of the store so we can poll
+            // it while also safely giving any of the futures inside access to
+            // `self`.
             let futures = self.0.concurrent_state_mut().futures.get_mut().take();
             let mut reset = Reset {
                 store: self.as_context_mut(),
@@ -1173,9 +1210,9 @@ impl<T> StoreContextMut<'_, T> {
             })
             .await;
 
-            // Put the `ConcurrentState::futures` back into the instance before
-            // we return or handle any work items since one or more of those
-            // items might append more futures.
+            // Put the `ConcurrentState::futures` back into the store before we
+            // return or handle any work items since one or more of those items
+            // might append more futures.
             drop(reset);
 
             match result? {

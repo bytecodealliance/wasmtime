@@ -21,6 +21,8 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
+#[cfg(feature = "debug")]
+use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::stack_switching::VMStackChain;
@@ -136,6 +138,19 @@ impl Backtrace {
     /// If Wasm hit a trap, and we calling this from the trap handler, then the
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMStoreContext`.
+    ///
+    /// We define "current Wasm stack" here as "all activations
+    /// associated with the given store". That is: if we have a stack like
+    ///
+    /// ```plain
+    ///     host --> (Wasm functions in store A) --> host --> (Wasm functions in store B) --> host
+    ///          --> (Wasm functions in store A) --> host --> call `trace_with_trap_state` with store A
+    /// ```
+    ///
+    /// then we will see the first and third Wasm activations (those
+    /// associated with store A), but not that with store B. In
+    /// essence, activations from another store might as well be some
+    /// other opaque host code; we don't know anything about it.
     pub(crate) unsafe fn trace_with_trap_state(
         vm_store_context: *const VMStoreContext,
         unwind: &dyn Unwind,
@@ -310,5 +325,61 @@ impl Backtrace {
         &'a self,
     ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
+    }
+}
+
+/// An iterator over one Wasm activation.
+#[cfg(feature = "debug")]
+pub(crate) struct CurrentActivationBacktrace<'a, T: 'static> {
+    pub(crate) store: StoreContextMut<'a, T>,
+    inner: Box<dyn Iterator<Item = Frame>>,
+}
+
+#[cfg(feature = "debug")]
+impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
+    /// Return an iterator over the most recent Wasm activation.
+    ///
+    /// The iterator captures the store with a mutable borrow, and
+    /// then yields it back at each frame. This ensures that the stack
+    /// remains live while still providing a mutable store that may be
+    /// needed to access items in the frame (e.g., to create new roots
+    /// when reading out GC refs).
+    ///
+    /// This serves as an alternative to `Backtrace::trace()` and
+    /// friends: it allows external iteration (and e.g. lazily walking
+    /// through frames in a stack) rather than visiting via a closure.
+    ///
+    /// # Safety
+    ///
+    /// Although the iterator provides mutable store as a public
+    /// field, this *must not* be used to mutate the stack activation
+    /// itself that this iterator is visiting. While the `store`
+    /// technically owns the stack in question, the only way to do
+    /// this with the current API would be to return back into the
+    /// Wasm activation. As long as this iterator is held and used
+    /// while within host code called from that activation (which will
+    /// ordinarily be ensured if the `store`'s lifetime came from the
+    /// host entry point) then everything will be sound.
+    pub(crate) unsafe fn new(store: StoreContextMut<'a, T>) -> CurrentActivationBacktrace<'a, T> {
+        // Get the initial exit FP, exit PC, and entry FP.
+        let vm_store_context = store.0.vm_store_context();
+        let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
+        let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
+        let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
+        let unwind = store.0.unwinder();
+        // Establish the iterator.
+        let inner = Box::new(unsafe {
+            wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
+        });
+
+        CurrentActivationBacktrace { store, inner }
+    }
+}
+
+#[cfg(feature = "debug")]
+impl<'a, T: 'static> Iterator for CurrentActivationBacktrace<'a, T> {
+    type Item = Frame;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
     }
 }

@@ -18,6 +18,8 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
+#[cfg(feature = "debug")]
+use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
     TypeTrace, VMOffsets, VMSharedTypeIndex,
@@ -1128,10 +1130,17 @@ impl Module {
         Ok(images)
     }
 
+    /// Get the text offset (relative PC) for a given absolute PC in
+    /// this module.
+    #[cfg(any(feature = "gc", feature = "debug"))]
+    pub(crate) fn text_offset(&self, pc: usize) -> u32 {
+        u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap()
+    }
+
     /// Lookup the stack map at a program counter value.
     #[cfg(feature = "gc")]
     pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<wasmtime_environ::StackMap<'_>> {
-        let text_offset = u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap();
+        let text_offset = self.text_offset(pc);
         let info = self.inner.code.code_memory().stack_map_data();
         wasmtime_environ::StackMap::lookup(text_offset, info)
     }
@@ -1141,6 +1150,18 @@ impl Module {
     pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
         ExceptionTable::parse(self.inner.code.code_memory().exception_tables())
             .expect("Exception tables were validated on module load")
+    }
+
+    /// Obtain a frame-table parser on this module's frame state slot
+    /// (debug instrumentation) metadata.
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table<'a>(&'a self) -> Option<FrameTable<'a>> {
+        let data = self.inner.code.code_memory().frame_tables();
+        if data.is_empty() {
+            None
+        } else {
+            Some(FrameTable::parse(data).expect("Frame tables were validated on module load"))
+        }
     }
 }
 
