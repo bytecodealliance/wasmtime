@@ -57,7 +57,7 @@ use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
     CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
 };
-use crate::vm::{self, AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
+use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
 use anyhow::{Context as _, Result, anyhow, bail};
 use error_contexts::GlobalErrorContextRefCount;
