@@ -168,7 +168,7 @@ impl<T: 'static> Linker<T> {
             imported_resources: Default::default(),
         };
 
-        // Walk over the component's list of import names and use that to lookup
+        // Walk over the component's list of import names and use that to look up
         // the definition within this linker that it corresponds to. When found
         // perform a typecheck against the component's expected type.
         let env_component = component.env_component();
