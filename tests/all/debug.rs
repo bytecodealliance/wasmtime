@@ -241,7 +241,7 @@ macro_rules! debug_event_checker {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn exception_events() -> anyhow::Result<()> {
+async fn uncaught_exception_events() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -292,6 +292,103 @@ async fn exception_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught exception.
     assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn caught_exception_events() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+        },
+        r#"
+    (module
+      (tag $t (param i32))
+      (func (export "main")
+        (block $b (result i32)
+          (try_table (catch $t $b)
+            call 1)
+          i32.const 0)
+        drop)
+      (func
+        (local $i i32)
+        (local.set $i (i32.const 100))
+        (throw $t (i32.const 42))))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::ThrownException(e) => {
+              assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
+              let mut stack = store.debug_frames().expect("frame cursor must be available");
+              assert!(!stack.done());
+              assert_eq!(stack.num_locals(), 1);
+              assert_eq!(stack.local(0).unwrap_i32(), 100);
+              stack.move_to_parent();
+              assert!(!stack.done());
+              stack.move_to_parent();
+              assert!(stack.done());
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    func.call_async(&mut store, &[], &mut results).await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn hostcall_trap_events() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+            // Force hostcall-based traps.
+            config.signals_based_traps(false);
+        },
+        r#"
+    (module
+      (func (export "main")
+        i32.const 0
+        i32.const 0
+        i32.div_u
+        drop))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {}
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    let result = func.call_async(&mut store, &[], &mut results).await;
+    assert!(result.is_err()); // Uncaught trap.
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
 
     Ok(())
 }
