@@ -22,6 +22,8 @@ class Record;
 
 namespace detail {
 
+/// Internal helper to convert from C to `Val`, sort of a forward-declaration
+/// of `Val::from_capi` which I don't know how to otherwise forward-declare.
 inline const Val *val_from_capi(const wasmtime_component_val_t *capi) {
   return reinterpret_cast<const Val *>(capi);
 }
