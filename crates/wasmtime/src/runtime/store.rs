@@ -1204,14 +1204,10 @@ impl<T> Store<T> {
     /// VM-level values (locals and operand stack), when debugging is
     /// enabled.
     ///
-    /// This object views all activations for the current store that
-    /// are on the stack. An activation is a contiguous sequence of
-    /// Wasm frames (called functions) that were called from host code
-    /// and called back out to host code. If there are activations
-    /// from multiple stores on the stack, for example if Wasm code in
-    /// one store calls out to host code which invokes another Wasm
-    /// function in another store, then the other stores are "opaque"
-    /// to our view here in the same way that host code is.
+    /// This object views the frames from the most recent Wasm entry
+    /// onward (up to the exit that allows this host code to run). Any
+    /// Wasm stack frames upward from the most recent entry to Wasm
+    /// are not visible to this cursor.
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
@@ -1223,6 +1219,11 @@ impl<T> Store<T> {
     /// Set the debug callback on this store.
     ///
     /// See [`crate::DebugHandler`] for more documentation.
+    ///
+    /// # Panics
+    ///
+    /// - Will panic if this store is not configured for async
+    ///   support.
     #[cfg(feature = "debug")]
     pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
     where

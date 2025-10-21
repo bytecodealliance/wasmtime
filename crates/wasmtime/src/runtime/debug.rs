@@ -454,8 +454,8 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
 pub enum DebugEvent {
     /// An `anyhow::Error` was raised by a hostcall.
     HostcallError,
-    /// An exception is about to be caught by Wasm. The current state
-    /// is at the throw-point.
+    /// An exception is thrown. The current state is at the
+    /// throw-point.
     ThrownException(OwnedRooted<ExnRef>),
     /// An exception was not caught and is escaping to the host.
     UncaughtException(OwnedRooted<ExnRef>),
@@ -468,7 +468,7 @@ pub enum DebugEvent {
 /// This is an async callback that is invoked directly within the
 /// context of a debug event that occurs, i.e., with the Wasm code
 /// still on the stack. The callback can thus observe that stack, up
-/// to one activation.[^1]
+/// to the most recent entry to Wasm.[^1]
 ///
 /// Because this callback receives a `StoreContextMut`, it has full
 /// access to any state that any other hostcall has, including the
@@ -494,11 +494,11 @@ pub enum DebugEvent {
 /// this reentrancy (e.g., implications on a duplex channel protocol
 /// with an event/continue handshake) if it does so.
 ///
-/// [^1]: Providing visibility further than one activation is not
-///       directly possible because it could see into another
-///       fiber, and which fiber is polling the Wasm's future (and
-///       thus the debugger's future) could change after each
-///       suspend point.
+/// [^1]: Providing visibility further than the most recent entry to
+///       Wasm is not directly possible because it could see into
+///       another async stack, and the stack that polls the future
+///       running a particular Wasm invocation could change after each
+///       suspend point in the handler.
 pub trait DebugHandler: Send + Sync + 'static {
     /// The data expected on the store that this handler is attached
     /// to.
