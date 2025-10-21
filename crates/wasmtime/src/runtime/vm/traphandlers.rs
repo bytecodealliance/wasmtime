@@ -21,6 +21,8 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
+#[cfg(feature = "debug")]
+use crate::store::AsStoreOpaque;
 use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
@@ -823,6 +825,43 @@ impl CallThreadState {
     /// executors as `Handler::resume` will be used.
     unsafe fn unwind(&self, store: &mut dyn VMStore) {
         let unwind = self.unwind.replace(UnwindState::None);
+
+        #[cfg(feature = "debug")]
+        match &unwind {
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::Exception),
+                ..
+            } => {
+                use crate::store::AsStoreOpaque;
+                let exn = store
+                    .as_store_opaque()
+                    .pending_exception_owned_rooted()
+                    .expect("exception should be set when we are throwing");
+                store.block_on_debug_handler(crate::DebugEvent::ThrownException(exn.clone()));
+                store.block_on_debug_handler(crate::DebugEvent::UncaughtException(exn));
+            }
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
+                ..
+            } => {
+                store.block_on_debug_handler(crate::DebugEvent::Trap(*trap));
+            }
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::User(_)),
+                ..
+            } => {
+                store.block_on_debug_handler(crate::DebugEvent::HostcallError);
+            }
+            UnwindState::UnwindToWasm(_) if store.as_store_opaque().has_pending_exception() => {
+                let exn = store
+                    .as_store_opaque()
+                    .pending_exception_owned_rooted()
+                    .expect("exception should be set when we are throwing");
+                store.block_on_debug_handler(crate::DebugEvent::ThrownException(exn));
+            }
+            _ => {}
+        }
+
         match unwind {
             UnwindState::UnwindToHost { .. } => {
                 self.unwind.set(unwind);

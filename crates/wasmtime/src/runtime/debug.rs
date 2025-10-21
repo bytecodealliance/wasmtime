@@ -1,11 +1,13 @@
 //! Debugging API.
 
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, StoreContext,
-    StoreContextMut, Val,
+    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, OwnedRooted,
+    StoreContext, StoreContextMut, Val,
+    prelude::Box,
     store::{AutoAssertNoGc, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
@@ -13,7 +15,7 @@ use core::{ffi::c_void, ptr::NonNull};
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableDescriptorIndex, FrameValType, FuncKey,
+    FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -444,4 +446,68 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
         StoreContextMut(self.iter.store.0)
     }
+}
+
+/// One debug event that occurs when running Wasm code on a store with
+/// a debug handler attached.
+#[derive(Debug)]
+pub enum DebugEvent {
+    /// An `anyhow::Error` was raised by a hostcall.
+    HostcallError,
+    /// An exception is about to be caught by Wasm. The current state
+    /// is at the throw-point.
+    ThrownException(OwnedRooted<ExnRef>),
+    /// An exception was not caught and is escaping to the host.
+    UncaughtException(OwnedRooted<ExnRef>),
+    /// A Wasm trap occurred.
+    Trap(Trap),
+}
+
+/// A handler for debug events.
+///
+/// This is an async callback that is invoked directly within the
+/// context of a debug event that occurs, i.e., with the Wasm code
+/// still on the stack. The callback can thus observe that stack, up
+/// to one activation.[^1]
+///
+/// Because this callback receives a `StoreContextMut`, it has full
+/// access to any state that any other hostcall has, including the
+/// `T`. In that way, it is like an epoch-deadline callback or a
+/// call-hook callback. It also "freezes" the entire store for the
+/// duration of the debugger callback future.
+///
+/// In the future, we expect to provide an "externally async" API on
+/// the `Store` that allows receiving a stream of debug events and
+/// accessing the store mutably while frozen; that will need to
+/// integrate with [`Store::run_concurrent`] to properly timeslice and
+/// scope the mutable access to the store, and has not been built
+/// yet. In the meantime, it should be possible to build a fully
+/// functional debugger with this async-callback API by channeling
+/// debug events out, and requests to read the store back in, over
+/// message-passing channels between the callback and an external
+/// debugger main loop.
+///
+/// Note that the `handle` hook may use its mutable store access to
+/// invoke another Wasm. Debug events will also be caught and will
+/// cause further `handle` invocations during this recursive
+/// invocation. It is up to the debugger to handle any implications of
+/// this reentrancy (e.g., implications on a duplex channel protocol
+/// with an event/continue handshake) if it does so.
+///
+/// [^1]: Providing visibility further than one activation is not
+///       directly possible because it could see into another
+///       fiber, and which fiber is polling the Wasm's future (and
+///       thus the debugger's future) could change after each
+///       suspend point.
+pub trait DebugHandler: Send + Sync + 'static {
+    /// The data expected on the store that this handler is attached
+    /// to.
+    type Data;
+
+    /// Handle a debug event.
+    fn handle<'a>(
+        self: Arc<Self>,
+        store: StoreContextMut<'a, Self::Data>,
+        event: DebugEvent,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a>;
 }

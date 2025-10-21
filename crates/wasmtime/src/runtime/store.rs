@@ -76,6 +76,10 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "debug")]
+use crate::DebugHandler;
+#[cfg(all(feature = "gc", feature = "debug"))]
+use crate::OwnedRooted;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
@@ -259,6 +263,16 @@ pub struct StoreInner<T: 'static> {
     ///
     /// For comments about `ManuallyDrop`, see `Store::into_data`.
     data_no_provenance: ManuallyDrop<T>,
+
+    /// The user's debug handler, if any. See [`crate::DebugHandler`]
+    /// for more documentation.
+    ///
+    /// We need this to be an `Arc` because the handler itself takes
+    /// `&self` and also the whole Store mutably (via
+    /// `StoreContextMut`); so we need to hold a separate reference to
+    /// it while invoking it.
+    #[cfg(feature = "debug")]
+    pub(crate) debug_handler: Option<Arc<dyn DebugHandler<Data = T>>>,
 }
 
 enum ResourceLimiterInner<T> {
@@ -716,6 +730,8 @@ impl<T> Store<T> {
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
             data_no_provenance: ManuallyDrop::new(data),
+            #[cfg(feature = "debug")]
+            debug_handler: None,
         });
 
         let store_data =
@@ -1203,6 +1219,28 @@ impl<T> Store<T> {
     pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.as_context_mut().debug_frames()
     }
+
+    /// Set the debug callback on this store.
+    ///
+    /// See [`crate::DebugHandler`] for more documentation.
+    #[cfg(feature = "debug")]
+    pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
+    where
+        T: Send,
+    {
+        assert!(
+            self.inner.async_support(),
+            "debug hooks rely on async support"
+        );
+        self.inner.debug_handler = Some(Arc::new(handler));
+    }
+
+    /// Clear the debug handler on this store. If any existed, it will
+    /// be dropped.
+    #[cfg(feature = "debug")]
+    pub fn clear_debug_handler(&mut self) {
+        self.inner.debug_handler = None;
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1319,7 +1357,6 @@ impl<'a, T> StoreContextMut<'a, T> {
     }
 
     /// Tests whether there is a pending exception.
-    ///
     ///
     /// See [`Store::has_pending_exception`] for more details.
     #[cfg(feature = "gc")]
@@ -2543,11 +2580,29 @@ at https://bytecodealliance.org/security.
         self.pending_exception.take()
     }
 
+    /// Tests whether there is a pending exception.
+    #[cfg(feature = "gc")]
+    pub fn has_pending_exception(&self) -> bool {
+        self.pending_exception.is_some()
+    }
+
     #[cfg(feature = "gc")]
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.take_pending_exception()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    /// Get an owned rooted reference to the pending exception,
+    /// without taking it off the store.
+    #[cfg(all(feature = "gc", feature = "debug"))]
+    pub(crate) fn pending_exception_owned_rooted(&mut self) -> Option<OwnedRooted<ExnRef>> {
+        let mut nogc = AutoAssertNoGc::new(self);
+        nogc.pending_exception.take().map(|vmexnref| {
+            let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+            nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+            OwnedRooted::new(&mut nogc, vmexnref.into())
+        })
     }
 
     #[cfg(feature = "gc")]
@@ -2644,6 +2699,17 @@ unsafe impl<T> VMStore for StoreInner<T> {
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
+    }
+
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) {
+        if let Some(handler) = self.debug_handler.as_ref().cloned() {
+            log::trace!("about to raise debug event {event:?}");
+            // Note: we explicitly ignore the Result of this call; if
+            // the debugger future fails (e.g. because it is canceled)
+            // then we will just keep running.
+            let _ = StoreContextMut(self).block_on(|store| Pin::from(handler.handle(store, event)));
+        }
     }
 }
 

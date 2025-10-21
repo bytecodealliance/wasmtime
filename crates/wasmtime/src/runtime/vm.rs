@@ -228,6 +228,10 @@ pub unsafe trait VMStore: 'static {
     fn component_async_store(
         &mut self,
     ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
+
+    /// Invoke a debug handler, if present, at a debug event.
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent);
 }
 
 impl Deref for dyn VMStore + '_ {
