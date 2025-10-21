@@ -2,8 +2,8 @@
  * \file wasmtime/component/component.hh
  */
 
-#ifndef WASMTIME_COMPONENT_HH
-#define WASMTIME_COMPONENT_HH
+#ifndef WASMTIME_COMPONENT_COMPONENT_HH
+#define WASMTIME_COMPONENT_COMPONENT_HH
 
 #include <wasmtime/conf.h>
 
@@ -39,9 +39,10 @@ class ExportIndex {
 
   std::unique_ptr<wasmtime_component_export_index_t, deleter> ptr;
 
-  ExportIndex(wasmtime_component_export_index_t *raw) : ptr(raw) {}
-
 public:
+  /// \brief Constructs an ExportIndex from the underlying C API struct.
+  explicit ExportIndex(wasmtime_component_export_index_t *raw) : ptr(raw) {}
+
   /// Copies another index into this one.
   ExportIndex(const ExportIndex &other)
       : ptr(wasmtime_component_export_index_clone(other.ptr.get())) {}
@@ -227,4 +228,4 @@ public:
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
-#endif // WASMTIME_COMPONENT_HH
+#endif // WASMTIME_COMPONENT_COMPONENT_HH

@@ -1,11 +1,7 @@
-#include "utils.h"
-
 #include <gtest/gtest.h>
-#include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, lookup_func) {
@@ -22,8 +18,8 @@ TEST(component, lookup_func) {
       )END",
   };
 
-  Engine engine;
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
   auto context = store.context();
   Component component = Component::compile(engine, component_text).unwrap();
   auto f = component.export_index(nullptr, "ff");
@@ -34,23 +30,12 @@ TEST(component, lookup_func) {
 
   EXPECT_TRUE(f);
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
+  Linker linker(engine);
 
-  wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                                   component.capi(), &instance);
-  CHECK_ERR(err);
+  auto instance = linker.instantiate(context, component).unwrap();
 
-  wasmtime_component_func_t func = {};
-  const auto found = wasmtime_component_instance_get_func(
-      &instance, context.capi(), f->capi(), &func);
-  EXPECT_TRUE(found);
-  EXPECT_NE(func.store_id, 0);
+  *instance.get_func(context, *f);
 
-  auto f2 = wasmtime_component_instance_get_export_index(
-      &instance, context.capi(), nullptr, "f", strlen("f"));
-  EXPECT_NE(f2, nullptr);
-
-  wasmtime_component_export_index_delete(f2);
-  wasmtime_component_linker_delete(linker);
+  auto f2 = instance.get_export_index(context, nullptr, "f");
+  EXPECT_TRUE(f2);
 }

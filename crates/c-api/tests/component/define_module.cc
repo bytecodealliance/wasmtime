@@ -1,12 +1,8 @@
-#include "utils.h"
-
 #include <gtest/gtest.h>
-#include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/module.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, define_module) {
@@ -32,33 +28,20 @@ TEST(component, define_module) {
       )END",
   };
 
-  Engine engine;
-  Module module = Module::compile(engine, module_wat).unwrap();
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Module module =
+      wasmtime::Module::compile(engine, module_wat).unwrap();
+  wasmtime::Store store(engine);
   auto context = store.context();
 
   Component component = Component::compile(engine, component_text).unwrap();
+  Linker linker(engine);
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
+  {
+    auto root = linker.root();
+    auto xyz = root.add_instance("x:y/z").unwrap();
+    xyz.add_module("mod", module).unwrap();
+  }
 
-  const auto root = wasmtime_component_linker_root(linker);
-
-  wasmtime_component_linker_instance_t *x_y_z = nullptr;
-  auto err = wasmtime_component_linker_instance_add_instance(
-      root, "x:y/z", strlen("x:y/z"), &x_y_z);
-  CHECK_ERR(err);
-
-  err = wasmtime_component_linker_instance_add_module(
-      x_y_z, "mod", strlen("mod"), module.capi());
-  CHECK_ERR(err);
-
-  wasmtime_component_linker_instance_delete(x_y_z);
-  wasmtime_component_linker_instance_delete(root);
-
-  wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                              component.capi(), &instance);
-  CHECK_ERR(err);
-
-  wasmtime_component_linker_delete(linker);
+  linker.instantiate(context, component).unwrap();
 }

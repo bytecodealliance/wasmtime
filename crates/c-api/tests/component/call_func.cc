@@ -1,12 +1,8 @@
-#include "utils.h"
-
 #include <array>
 #include <gtest/gtest.h>
-#include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
-using namespace wasmtime;
 using namespace wasmtime::component;
 
 TEST(component, call_func) {
@@ -27,47 +23,28 @@ TEST(component, call_func) {
       )END",
   };
 
-  Engine engine;
-  Store store(engine);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
   auto context = store.context();
   auto component = Component::compile(engine, component_text).unwrap();
   auto f = *component.export_index(nullptr, "f");
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
+  Linker linker(engine);
 
-  wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                                   component.capi(), &instance);
-  CHECK_ERR(err);
+  auto instance = linker.instantiate(context, component).unwrap();
+  auto func = *instance.get_func(context, f);
 
-  wasmtime_component_func_t func = {};
-  const auto found = wasmtime_component_instance_get_func(
-      &instance, context.capi(), f.capi(), &func);
-  EXPECT_TRUE(found);
-
-  auto params = std::array<wasmtime_component_val_t, 2>{
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 34},
-      },
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 35},
-      },
+  auto params = std::array<Val, 2>{
+      uint32_t(34),
+      uint32_t(35),
   };
 
-  auto results = std::array<wasmtime_component_val_t, 1>{};
+  auto results = std::array<Val, 1>{false};
 
-  err = wasmtime_component_func_call(&func, context.capi(), params.data(),
-                                     params.size(), results.data(),
-                                     results.size());
-  CHECK_ERR(err);
+  func.call(context, params, results).unwrap();
 
-  err = wasmtime_component_func_post_return(&func, context.capi());
-  CHECK_ERR(err);
+  func.post_return(context).unwrap();
 
-  EXPECT_EQ(results[0].kind, WASMTIME_COMPONENT_U32);
-  EXPECT_EQ(results[0].of.u32, 69);
-
-  wasmtime_component_linker_delete(linker);
+  EXPECT_TRUE(results[0].is_u32());
+  EXPECT_EQ(results[0].get_u32(), 69);
 }
