@@ -8,44 +8,79 @@
 //! Windows runtime. This list is sort of like a `VecDeque` where you can push
 //! on either end, and then you're able to remove any pushed entry later on.
 //!
-//! # Continue Handlers
-//!
-//! Most of this is pretty standard, there's not quite as much subtlety here as
-//! compared to Unix. One perhaps surprising part though is the use of a
-//! "Vectored Continue Handler" in addition to an exception handler. Strictly
-//! this is not necessary as our exception handler will return
-//! `EXCEPTION_CONTINUE_EXECUTION` for handled exceptions. It's been seen in
-//! runtimes such as Go, for example, that continue handlers are used to dump
-//! exception information and abort the process (as opposed to using an
-//! exception handler).
-//!
 //! Windows's behavior here seems to first execute the ordered list of vectored
 //! exception handlers until one returns `EXCEPTION_CONTINUE_EXECUTION`. If this
 //! list is exhausted then it seems to go to default SEH routines which abort
-//! the process. If the exception is handled then the ordered list of vectored
-//! continue handlers is then consulted. The first one to return
-//! `EXCEPTION_CONTINUE_EXECUTION` short-circuits the rest of the list. If the
-//! list is exhausted then the program resumes.
+//! the process.
 //!
-//! Go's behavior here is to return `EXCEPTION_CONTINUE_EXECUTION` for all
-//! Go-looking exceptions. The Go runtime has one continue handler that then
-//! returns execution back to the program for what appears to be async
-//! preempts/etc. Go then has a final continue handler which aborts the process
-//! with an error message indicating what happened.
+//! Another interesting part, however, is that once an exception handler returns
+//! `EXCEPTION_CONTINUE_EXECUTION` Windows will then consult a similar deque of
+//! "continue handlers". These continue handlers have the same signature as the
+//! exception handlers and are managed with similar functions
+//! (`AddVectoredContinueHandler` instead of `AddVectoredExceptionHandler`). The
+//! difference here is that the first continue handler to return
+//! `EXCEPTION_CONTINUE_EXECUTION` will short-circuit the rest of the list. If
+//! none of them return `EXCEPTION_CONTINUE_EXECUTION` then the programs
+//! still resumes as normal.
 //!
-//! Wasmtime here is orchestrated a bit differently. We have a priority
-//! exception handler which will look for a wasm trap, and if found, returns
-//! `EXCEPTION_CONTINUE_EXECUTION`. This means that the Go continue handlers
-//! then run which eventually aborts the process, not what we want. In an
-//! attempt to short-circuit this logic Wasmtime also installs a continue
-//! handler to return `EXCEPTION_CONTINUE_EXECUTION` and skip as many continue
-//! handlers as possible.
+//! # Wasmtime's implementation
+//!
+//! Wasmtime installs both an exception handler and a continue handler. The
+//! purpose of the exception handler is to return `EXCEPTION_CONTINUE_EXECUTION`
+//! for any wasm exceptions that we want to catch (e.g. divide-by-zero, out of
+//! bounds memory accesses in wasm, `unreachable` via illegal instruction, etc).
+//! Note that this exception handler is installed at the front of the list to
+//! try to run it as soon as possible as, if we catch something, we want to
+//! bypass all other handlers.
+//!
+//! Wasmtime then also installs a continue handler, also at the front of the
+//! list, where the sole purpose of the continue handler is to also return
+//! `EXCEPTION_CONTINUE_EXECUTION` and bypass the rest of the continue handler
+//! list to get back to wasm ASAP. The reason for this is explained in the next
+//! section.
 //!
 //! To implement the continue handler in Wasmtime a thread-local variable
 //! `LAST_EXCEPTION_PC` is used here which is set during the exception handler
 //! and then tested during the continue handler. If it matches the current PC
 //! then it's assume that Wasmtime is the one that processed the exception and
 //! the `EXCEPTION_CONTINUE_EXECUTION` is returned.
+//!
+//! # Why both an exception and continue handler?
+//!
+//! All of Wasmtime's tests in this repository will pass if the continue handler
+//! is removed, so why have it? The primary reason at this time is integration
+//! with the Go runtime as discovered in the `wasmtime-go` embedding.
+//!
+//! Go's behavior for exceptions is:
+//!
+//! * An exception handler is installed at the front of the list of handlers
+//!   which looks for Go-originating exceptions. If one is found it returns
+//!   `EXCEPTION_CONTINUE_EXECUTION`, otherwise it forwards along with
+//!   `EXCEPTION_CONTINUE_SEARCH`. Wasmtime exceptions will properly go through
+//!   this handler and then hit Wasmtime's handler, so no issues yet.
+//!
+//! * Go then additionally installs *two* continue handlers. One at the front of
+//!   the list and one at the end. The continue handler at the front of the list
+//!   looks for Go-related exceptions dealing with things like
+//!   async/preemption/etc to resume execution back into Go. This means that the
+//!   handler will return `EXCEPTION_CONTINUE_EXECUTION` sometimes for
+//!   Go-specific reasons, and otherwise the handler returns
+//!   `EXCEPTION_CONTINUE_SEARCH`. As before this isn't a problem for Wasmtime
+//!   as nothing happens for non-Go-related exceptions.
+//!
+//! * The problem with Go is the second, final, continue handler. This will, by
+//!   default, abort the process for all exceptions whether or not they're Go
+//!   related. This seems to have some logic for whether or not Go was built as
+//!   a library or dylib but that seem to apply for Go-built executables (e.g.
+//!   `go test` in the wasmtime-go repository). This second handler is the
+//!   problematic one because in Wasmtime we "catch" the exception in the
+//!   exception handler function but then the process still aborts as all
+//!   continue handlers are run, including Go's abort-the-process handler.
+//!
+//! Thus the reason Wasmtime has a continue handler in addition to an exception
+//! handler. By installing a high-priority continue handler that pairs with the
+//! high-priority exception handler we can ensure that, for example, Go's
+//! fallback continue handler is never executed.
 //!
 //! This is all... a bit... roundabout. Sorry.
 
@@ -124,9 +159,15 @@ impl Drop for TrapHandler {
 }
 
 std::thread_local! {
-    pub static LAST_EXCEPTION_PC: Cell<usize> = const { Cell::new(0) };
+    static LAST_EXCEPTION_PC: Cell<usize> = const { Cell::new(0) };
 }
 
+/// Wasmtime's exception handler for Windows. See module docs for more.
+///
+/// # Safety
+///
+/// Invoked by Windows' vectored exception system; should not be called by
+/// anyone else.
 #[allow(
     clippy::cast_possible_truncation,
     reason = "too fiddly to handle and wouldn't help much anyway"
@@ -220,7 +261,12 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
     })
 }
 
-// See module docs for more information on what this is doing.
+/// See module docs for more information on what this is doing.
+///
+/// # Safety
+///
+/// Invoked by Windows' vectored exception system; should not be called by
+/// anyone else.
 unsafe extern "system" fn continue_handler(exception_info: *mut EXCEPTION_POINTERS) -> i32 {
     let context = unsafe { &(*(*exception_info).ContextRecord) };
     let last_exception_pc = LAST_EXCEPTION_PC.with(|s| s.replace(0));
