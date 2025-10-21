@@ -7,6 +7,10 @@ fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
     let _ = env_logger::try_init();
 
     let wasm = wat::parse_bytes(wasm)?;
+    log::debug!(
+        "testing wizening failure for wasm:\n{}",
+        wasmprinter::print_bytes(&wasm)?
+    );
     match Wizer::new().instrument_component(&wasm) {
         Ok(_) => bail!("expected wizening to fail"),
         Err(e) => {
@@ -29,9 +33,40 @@ fn unsupported_constructs() -> Result<()> {
     )?;
 
     fail_wizening(
-        "does not currently support nested components",
+        "nested components with modules not currently supported",
+        br#"(component
+            (component (core module))
+        )"#,
+    )?;
+    fail_wizening(
+        "nested components with modules not currently supported",
         br#"(component
             (component)
+            (component (core module))
+        )"#,
+    )?;
+    fail_wizening(
+        "wizer does not currently support module imports",
+        br#"(component
+            (component (import "x" (core module)))
+        )"#,
+    )?;
+    fail_wizening(
+        "wizer does not currently support module aliases",
+        br#"(component
+            (core module $a)
+            (component
+                (core instance (instantiate $a))
+            )
+        )"#,
+    )?;
+    fail_wizening(
+        "wizer does not currently support component aliases",
+        br#"(component
+            (component $a)
+            (component
+                (instance (instantiate $a))
+            )
         )"#,
     )?;
 
@@ -297,6 +332,29 @@ async fn snapshot_memory() -> Result<()> {
                     i32.load
                     i32.add
                 )
+            )
+            (core instance $i (instantiate $m))
+            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
+        )"#,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn nested_components() -> Result<()> {
+    wizen_and_run_wasm(
+        42,
+        r#"(component
+            (component $a)
+            (instance (instantiate $a))
+            (instance (export "hi") (instantiate $a))
+
+            (core module $m
+                (func (export "init"))
+                (func (export "run") (result i32) i32.const 42)
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
