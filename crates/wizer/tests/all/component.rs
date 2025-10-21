@@ -352,6 +352,21 @@ async fn nested_components() -> Result<()> {
             (instance (instantiate $a))
             (instance (export "hi") (instantiate $a))
 
+            (component $b
+                (type $t string)
+                (import "x" (type (eq $t)))
+                (component $a)
+                (instance (instantiate $a))
+                (instance (export "hi") (instantiate $a))
+            )
+            (type $x string)
+            (instance (instantiate $b
+                (with "x" (type $x))
+            ))
+            (instance (export "hi2") (instantiate $b
+                (with "x" (type $x))
+            ))
+
             (core module $m
                 (func (export "init"))
                 (func (export "run") (result i32) i32.const 42)
