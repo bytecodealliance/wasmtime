@@ -2906,36 +2906,6 @@ impl Instance {
         )
     }
 
-    unsafe fn read_funcref_from_table(
-        self,
-        store: &mut dyn VMStore,
-        table_idx: RuntimeTableIndex,
-        func_idx: u64,
-    ) -> Result<NonNull<VMFuncRef>> {
-        let table_import = self.id().get_mut(store).runtime_table(table_idx);
-        let vmctx = table_import.vmctx.as_non_null();
-        // SAFETY: `vmctx` is a valid pointer, and the `Instance` is
-        // located immediately before the `vmctx`. See `vm::Instance::sibling_vmctx`,
-        // which we can't call here as we don't have a `vm::Instance` to bind the lifetime to.
-        let mut instance_ptr = unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<vm::Instance>())
-                .cast::<vm::Instance>()
-        };
-        // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
-        // this call, so we don't need a lifetime to bind it to.
-        let instance = unsafe { Pin::new_unchecked(instance_ptr.as_mut()) };
-        let table = instance.get_defined_table_with_lazy_init(table_import.index, [func_idx]);
-        match table.get_func(func_idx) {
-            // SAFETY: The `VMFuncRef` is not null, properly aligned, and points to a valid
-            // `VMFuncRef` because it came from a `Table` in a `vm::Instance`.
-            // We clone it here so that we don't need to worry about its lifetime.
-            Ok(Some(func)) => Ok(func),
-            Ok(None) => Err(anyhow!("function index {func_idx} out of bounds")),
-            Err(e) => Err(anyhow!("failed to get function from table: {e}")),
-        }
-    }
-
     /// Implements the `thread.index` intrinsic.
     pub(crate) fn thread_index(&self, store: &mut dyn VMStore) -> Result<u32> {
         let thread_id = store
@@ -2966,10 +2936,10 @@ impl Instance {
         log::trace!("creating new thread");
 
         let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
-        let funcref = unsafe {
-            self.read_funcref_from_table(store, start_func_table_idx, start_func_idx as u64)
-        }?;
-        if unsafe { funcref.as_ref().type_index } != start_func_ty.type_index() {
+        let instance = self.id().get_mut(store);
+        let table = instance.runtime_table(start_func_table_idx);
+        let func = instance.index_runtime_func_table(&table, start_func_idx as u64)?;
+        if func.type_index(store) != start_func_ty.type_index() {
             bail!(
                 "start function does not match expected type (currently only `(i32) -> ()` is supported)"
             );
@@ -3006,12 +2976,11 @@ impl Instance {
         high_priority: bool,
     ) -> Result<()> {
         log::trace!("starting thread {thread:?}");
-        let callee = unsafe {
-            self.read_funcref_from_table(store.0, start_func_table_idx, start_func_idx as u64)?
-        };
+        let instance = self.id().get_mut(store.0);
+        let table = instance.runtime_table(start_func_table_idx);
+        let callee = instance.index_runtime_func_table(&table, start_func_idx as u64)?;
 
         let token = StoreToken::new(store.as_context_mut());
-        let callee = SendSyncPtr::new(callee);
         let start_func = Box::new(move |store: &mut dyn VMStore| -> Result<()> {
             let old_thread = store.concurrent_state_mut().guest_thread.replace(thread);
             log::trace!("thread start: replaced {old_thread:?} with {thread:?} as current thread");
@@ -3019,15 +2988,10 @@ impl Instance {
             store.maybe_push_call_context(thread.task)?;
 
             let mut store = token.as_context_mut(store);
-
-            let params = [ValRaw::i32(context)];
-            unsafe {
-                crate::Func::call_unchecked_raw(
-                    &mut store,
-                    callee.as_non_null(),
-                    params.as_slice().into(),
-                )?
-            }
+            let mut params = [ValRaw::i32(context)];
+            // Use call_unchecked rather than call or call_async, as we don't want to run the function
+            // on a separate fiber if we're running in an async store.
+            unsafe { callee.call_unchecked(store.as_context_mut(), &mut params)? };
 
             store.0.maybe_pop_call_context(thread.task)?;
 
