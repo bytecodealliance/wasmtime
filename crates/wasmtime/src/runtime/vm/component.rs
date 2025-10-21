@@ -16,15 +16,15 @@ use crate::runtime::vm::{
     ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
-use crate::{vm, Func};
+use crate::{Func, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
+use anyhow::{Result, anyhow};
 use core::mem;
 use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
-use anyhow::{Result, anyhow};
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(
@@ -360,21 +360,16 @@ impl ComponentInstance {
     }
 
     /// Returns the `Func` at index `func_idx` in the funcref table `table`.
-    pub fn index_runtime_func_table(
-        &self,
-        table: &VMTableImport,
-        func_idx: u64,
-    ) -> Result<Func> {
+    pub fn index_runtime_func_table(&self, table: &VMTableImport, func_idx: u64) -> Result<Func> {
         unsafe {
             let store = self.store.0.as_ref();
             let vmctx = table.vmctx.as_non_null();
             // SAFETY: `vmctx` is a valid pointer, and the `Instance` is
             // located immediately before the `vmctx`. See `vm::Instance::sibling_vmctx`,
             // which we can't call here as we don't have a `vm::Instance` to bind the lifetime to.
-            let mut instance_ptr =
-                vmctx
-                    .byte_sub(mem::size_of::<vm::Instance>())
-                    .cast::<vm::Instance>();
+            let mut instance_ptr = vmctx
+                .byte_sub(mem::size_of::<vm::Instance>())
+                .cast::<vm::Instance>();
             // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
             // this call, so we don't need a lifetime to bind it to.
             let instance = Pin::new_unchecked(instance_ptr.as_mut());
@@ -386,7 +381,7 @@ impl ComponentInstance {
                 Ok(None) => Err(anyhow!("function index {func_idx} out of bounds")),
                 Err(e) => Err(anyhow!("failed to get function from table: {e}")),
             }?;
-            
+
             Ok(Func::from_vm_func_ref(store.id(), funcref))
         }
     }
