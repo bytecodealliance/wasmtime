@@ -552,34 +552,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_request_into_http_invalid_content_length() -> Result<()> {
-        let engine = Engine::default();
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from_static("invalid"),
-        );
-
+    async fn test_request_into_http_uri_error() -> Result<()> {
         let (req, fut) = Request::new(
             Method::GET,
             Some(Scheme::HTTP),
             Some(Authority::from_static("example.com")),
-            None,
-            headers,
+            None, // <-- should fail, must be Some(_) when authority is set
+            HeaderMap::new(),
             None,
             Empty::new().map_err(|x| match x {}).boxed(),
         );
-        let mut store = Store::new(&engine, TestCtx::new());
+        let mut store = Store::new(&Engine::default(), TestCtx::new());
         let result = req.into_http(&mut store, async {
             Err(ErrorCode::InternalError(Some("uh oh".to_string())))
         });
-        assert!(matches!(result, Err(_)));
-
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err().downcast_ref::<ErrorCode>(),
+            Some(ErrorCode::HttpRequestUriInvalid)
+        ));
         let mut cx = Context::from_waker(Waker::noop());
         let result = Box::pin(fut).as_mut().poll(&mut cx);
-        // `fut` returns Ok(()), as the error in `into_http` currently drops the body before anything is sent
-        // is this desired behavior?
-        assert!(matches!(result, futures::task::Poll::Ready(Ok(()))));
+        assert!(matches!(
+            result,
+            futures::task::Poll::Ready(Err(ErrorCode::InternalError(Some(_))))
+        ));
 
         Ok(())
     }
