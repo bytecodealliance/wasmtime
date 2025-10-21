@@ -186,3 +186,17 @@ fn gc_access_during_call() -> anyhow::Result<()> {
         },
     )
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn debug_frames_on_store_with_no_wasm_activation() -> anyhow::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let frames = store
+        .debug_frames()
+        .expect("Debug frames should be available");
+    assert!(frames.done());
+    Ok(())
+}
