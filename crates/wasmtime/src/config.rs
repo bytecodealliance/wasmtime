@@ -1217,7 +1217,7 @@ impl Config {
     ///     https://github.com/WebAssembly/component-model/pull/557
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_threading(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::CM_THREADING, enable);
+        self.wasm_features(WasmFeatures::CM_THREADING, enable);
         self
     }
 
