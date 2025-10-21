@@ -725,6 +725,7 @@ impl ComponentInstance {
                 let i = RuntimeTableIndex::from_u32(i);
                 let offset = self.offsets.runtime_table(i);
                 // SAFETY: see above
+                #[allow(clippy::cast_possible_truncation, reason = "known to not overflow")]
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut::<usize>(
                         offset + offset_of!(VMTableImport, from) as u32,
