@@ -28,6 +28,9 @@ inline const Val *val_from_capi(const wasmtime_component_val_t *capi) {
 
 } // namespace detail
 
+/// Internal helper macro to define ownership-semanitcs for C++ types based on
+/// a C type as a single member where operations are defined in terms of
+/// `transfer`, `copy`, and `destroy` functions.
 #define VAL_REPR(name, raw_type)                                               \
 private:                                                                       \
   using Raw = raw_type;                                                        \
