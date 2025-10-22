@@ -340,6 +340,10 @@ criteria = "safe-to-deploy"
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.im-rc]]
+version = "15.1.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.indicatif]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
@@ -441,7 +445,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.petgraph]]
 version = "0.6.5"
-criteria = "safe-to-run"
+criteria = "safe-to-deploy"
 
 [[exemptions.ppv-lite86]]
 version = "0.2.16"
@@ -465,6 +469,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_xoshiro]]
+version = "0.6.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_xoshiro]]
@@ -525,6 +533,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.simd-adler32]]
 version = "0.3.7"
+criteria = "safe-to-deploy"
+
+[[exemptions.sized-chunks]]
+version = "0.6.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.sized-chunks]]
