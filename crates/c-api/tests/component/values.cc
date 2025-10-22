@@ -61,12 +61,31 @@ static std::string echo_component(std::string_view type, std::string_view func,
 }
 
 struct Context {
-  Engine engine;
   Store store;
   Store::Context context;
-  Component component;
   Instance instance;
   Func func;
+
+  static Context New(Engine &engine, std::string_view component_text,
+                     Linker &linker) {
+    Store store(engine);
+    const auto context = store.context();
+    Component component = Component::compile(engine, component_text).unwrap();
+
+    auto f = component.export_index(nullptr, "call");
+
+    EXPECT_TRUE(f);
+
+    auto instance = linker.instantiate(context, component).unwrap();
+    auto func = *instance.get_func(context, *f);
+
+    return Context{
+        .store = std::move(store),
+        .context = context,
+        .instance = instance,
+        .func = func,
+    };
+  }
 };
 
 typedef Result<std::monostate> (*host_func_t)(Store::Context, Span<const Val>,
@@ -74,30 +93,11 @@ typedef Result<std::monostate> (*host_func_t)(Store::Context, Span<const Val>,
 
 static Context create(std::string_view type, std::string_view body,
                       std::string_view host_params, host_func_t callback) {
-  auto component_text = echo_component(type, body, host_params);
   Engine engine;
-  Store store(engine);
-  const auto context = store.context();
-  Component component = Component::compile(engine, component_text).unwrap();
-
-  auto f = component.export_index(nullptr, "call");
-
-  EXPECT_TRUE(f);
-
   Linker linker(engine);
   linker.root().add_func("do", callback).unwrap();
-
-  auto instance = linker.instantiate(context, component).unwrap();
-  auto func = *instance.get_func(context, *f);
-
-  return Context{
-      .engine = engine,
-      .store = std::move(store),
-      .context = context,
-      .component = component,
-      .instance = instance,
-      .func = func,
-  };
+  auto component_text = echo_component(type, body, host_params);
+  return Context::New(engine, component_text, linker);
 }
 
 TEST(component, value_record) {
@@ -849,4 +849,245 @@ TEST(component, flags) {
   Flags f3 = v.get_flags();
   EXPECT_EQ(f3.size(), 3);
   EXPECT_EQ(f.size(), 3);
+}
+
+TEST(component, value_host_resource) {
+  static const uint32_t RESOURCE_TYPE = 100;
+
+  static const auto check = [](Store::Context cx, const Val &v, uint32_t rep) {
+    EXPECT_TRUE(v.is_resource());
+    const ResourceAny &f = v.get_resource();
+    EXPECT_EQ(f.type(), ResourceType(RESOURCE_TYPE));
+    ResourceHost r = f.to_host(cx).unwrap();
+    EXPECT_EQ(r.rep(), rep);
+    EXPECT_EQ(r.type(), RESOURCE_TYPE);
+  };
+
+  static const auto make = [](Store::Context cx, uint32_t rep) -> Val {
+    return ResourceHost(true, rep, RESOURCE_TYPE).to_any(cx).unwrap();
+  };
+
+  Engine engine;
+  Linker linker(engine);
+  {
+    LinkerInstance i = linker.root();
+
+    i.add_resource(
+         "r", ResourceType(RESOURCE_TYPE),
+         +[](Store::Context, uint32_t rep) -> Result<std::monostate> {
+           EXPECT_EQ(rep, 42);
+           return std::monostate();
+         })
+        .unwrap();
+
+    i.add_func(
+         "f",
+         +[](Store::Context cx, Span<const Val> args,
+             Span<Val> rets) -> Result<std::monostate> {
+           EXPECT_EQ(args.size(), 1);
+           check(cx, args[0], 42);
+
+           EXPECT_EQ(rets.size(), 1);
+           rets[0] = make(cx, 43);
+           return std::monostate();
+         })
+        .unwrap();
+  }
+
+  auto ctx = Context::New(engine,
+                          R"(
+(component
+  (import "r" (type $r (sub resource)))
+  (import "f" (func $f (param "a" (own $r)) (result (own $r))))
+  (core func $f (canon lower (func $f)))
+
+  (core module $m
+    (import "" "f" (func $f (param i32) (result i32)))
+
+    (func (export "call") (param i32) (result i32)
+      local.get 0
+      call $f)
+  )
+
+  (core instance $m (instantiate $m
+    (with "" (instance
+      (export "f" (func $f))
+    ))
+  ))
+
+  (func (export "call") (param "a" (own $r)) (result (own $r))
+    (canon lift (core func $m "call")))
+)
+)",
+                          linker);
+
+  auto arg = make(ctx.context, 42);
+  auto res = Val(false);
+
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
+  ctx.func.post_return(ctx.context).unwrap();
+
+  check(ctx.context, res, 43);
+}
+
+TEST(component, value_guest_resource) {
+  Engine engine;
+  Linker linker(engine);
+  Store store(engine);
+
+  Component c = Component::compile(engine,
+                                   R"(
+(component
+  (core module $a
+    (global $g (mut i32) (i32.const 0))
+
+    (func (export "dtor") (param i32) (global.set $g (local.get 0)))
+    (func (export "last-dtor-rep") (result i32) global.get $g)
+  )
+  (core instance $a (instantiate $a))
+  (type $r' (resource (rep i32) (dtor (func $a "dtor"))))
+  (export $r "r" (type $r'))
+
+  (core func $new (canon resource.new $r))
+  (core func $drop (canon resource.drop $r))
+
+  (core module $b
+    (import "" "new" (func $new (param i32) (result i32)))
+    (import "" "drop" (func $drop (param i32)))
+
+    (func (export "new") (param i32) (result i32)
+      local.get 0
+      call $new)
+
+    (func (export "rep") (param i32) (result i32)
+      local.get 0)
+
+    (func (export "drop") (param i32)
+      local.get 0
+      call $drop)
+  )
+  (core instance $b (instantiate $b
+    (with "" (instance
+      (export "new" (func $new))
+      (export "drop" (func $drop))
+    ))
+  ))
+
+  (func (export "new") (param "x" u32) (result (own $r))
+    (canon lift (core func $b "new")))
+  (func (export "rep") (param "x" (borrow $r)) (result u32)
+    (canon lift (core func $b "rep")))
+  (func (export "drop") (param "x" (own $r))
+    (canon lift (core func $b "drop")))
+  (func (export "last-dtor-rep") (result u32)
+    (canon lift (core func $a "last-dtor-rep")))
+
+)
+)")
+                    .unwrap();
+
+  auto instance = linker.instantiate(store, c).unwrap();
+  auto new_index = *instance.get_export_index(store, nullptr, "new");
+  auto rep_index = *instance.get_export_index(store, nullptr, "rep");
+  auto drop_index = *instance.get_export_index(store, nullptr, "drop");
+  auto last_dtor_rep_index =
+      *instance.get_export_index(store, nullptr, "last-dtor-rep");
+  auto new_func = *instance.get_func(store, new_index);
+  auto rep_func = *instance.get_func(store, rep_index);
+  auto drop_func = *instance.get_func(store, drop_index);
+  auto last_dtor_rep_func = *instance.get_func(store, last_dtor_rep_index);
+
+  auto arg1 = Val(uint32_t(100));
+  auto res1 = Val(false);
+  new_func.call(store, Span<const Val>(&arg1, 1), Span<Val>(&res1, 1)).unwrap();
+  new_func.post_return(store).unwrap();
+
+  auto arg2 = Val(uint32_t(101));
+  auto res2 = Val(false);
+  new_func.call(store, Span<const Val>(&arg2, 1), Span<Val>(&res2, 1)).unwrap();
+  new_func.post_return(store).unwrap();
+
+  {
+    EXPECT_TRUE(res1.is_resource());
+    EXPECT_TRUE(res2.is_resource());
+    const auto &resource1 = res1.get_resource();
+    const auto &resource2 = res2.get_resource();
+    EXPECT_NE(resource1.type(), ResourceType(100));
+    EXPECT_NE(resource2.type(), ResourceType(100));
+    EXPECT_EQ(resource1.type(), resource2.type());
+    EXPECT_FALSE(resource1.to_host(store));
+    EXPECT_FALSE(resource2.to_host(store));
+    EXPECT_TRUE(resource1.owned());
+    EXPECT_TRUE(resource2.owned());
+    arg1 = resource1;
+    arg2 = resource2;
+  }
+
+  rep_func.call(store, Span<const Val>(&arg1, 1), Span<Val>(&res1, 1)).unwrap();
+  rep_func.post_return(store).unwrap();
+  rep_func.call(store, Span<const Val>(&arg2, 1), Span<Val>(&res2, 1)).unwrap();
+  rep_func.post_return(store).unwrap();
+
+  EXPECT_TRUE(res1.is_u32());
+  EXPECT_TRUE(res2.is_u32());
+  EXPECT_EQ(res1.get_u32(), 100);
+  EXPECT_EQ(res2.get_u32(), 101);
+
+  Val last_rep(false);
+  last_dtor_rep_func.call(store, Span<const Val>(), Span<Val>(&last_rep, 1))
+      .unwrap();
+  last_dtor_rep_func.post_return(store).unwrap();
+  EXPECT_EQ(last_rep.get_u32(), 0);
+
+  drop_func.call(store, Span<const Val>(&arg1, 1), Span<Val>()).unwrap();
+  drop_func.post_return(store).unwrap();
+
+  last_dtor_rep_func.call(store, Span<const Val>(), Span<Val>(&last_rep, 1))
+      .unwrap();
+  last_dtor_rep_func.post_return(store).unwrap();
+  EXPECT_EQ(last_rep.get_u32(), 100);
+
+  arg2.get_resource().drop(store).unwrap();
+
+  last_dtor_rep_func.call(store, Span<const Val>(), Span<Val>(&last_rep, 1))
+      .unwrap();
+  last_dtor_rep_func.post_return(store).unwrap();
+  EXPECT_EQ(last_rep.get_u32(), 101);
+}
+
+TEST(component, resources) {
+  ResourceHost r1(true, 1, 2);
+  EXPECT_TRUE(r1.owned());
+  EXPECT_EQ(r1.rep(), 1);
+  EXPECT_EQ(r1.type(), 2);
+
+  ResourceHost r2 = r1;
+  EXPECT_TRUE(r1.owned());
+  EXPECT_EQ(r1.rep(), 1);
+  EXPECT_EQ(r1.type(), 2);
+  EXPECT_TRUE(r2.owned());
+  EXPECT_EQ(r2.rep(), 1);
+  EXPECT_EQ(r2.type(), 2);
+
+  Engine engine;
+  Store store(engine);
+  ResourceAny r3 = r2.to_any(store).unwrap();
+  EXPECT_TRUE(r3.owned());
+  ResourceType t3 = r3.type();
+  EXPECT_EQ(t3, ResourceType(2));
+
+  ResourceHost r4 = r3.to_host(store).unwrap();
+  EXPECT_TRUE(r4.owned());
+  EXPECT_EQ(r4.rep(), 1);
+  EXPECT_EQ(r4.type(), 2);
+
+  EXPECT_FALSE(r3.drop(store));
+  EXPECT_TRUE(r4.to_any(store).unwrap().drop(store));
+
+  Val v = r4.to_any(store).unwrap();
+  EXPECT_TRUE(v.is_resource());
+  const ResourceAny &r5 = v.get_resource();
+  EXPECT_TRUE(r5.owned());
+  EXPECT_EQ(r5.type(), ResourceType(2));
 }
