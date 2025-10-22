@@ -146,7 +146,7 @@ async function runOnce() {
     octokit.rest.repos.updateRelease({
         owner,
         repo,
-        release_id: release.id,
+        release_id: release.data.id,
         draft: false,
     });
   }
