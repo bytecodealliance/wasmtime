@@ -1,6 +1,7 @@
 //! Implementation of string transcoding required by the component model.
 
 use crate::component::Instance;
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
