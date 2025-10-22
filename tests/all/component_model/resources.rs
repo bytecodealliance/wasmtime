@@ -1641,3 +1641,35 @@ fn resource_dynamic_not_static() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn intrinsic_trampolines() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let c = Component::new(
+        &engine,
+        r#"
+(component
+  (type $r' (resource (rep i32)))
+  (export $r "r" (type $r'))
+
+  (core func $new (canon resource.new $r))
+  (core func $rep (canon resource.rep $r))
+
+  (func (export "new") (param "x" u32) (result (own $r))
+    (canon lift (core func $new)))
+  (func (export "rep") (param "x" (borrow $r)) (result u32)
+    (canon lift (core func $rep)))
+)
+"#,
+    )?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let new = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "new")?;
+    let rep = i.get_typed_func::<(ResourceAny,), (u32,)>(&mut store, "rep")?;
+
+    let r = new.call(&mut store, (42,))?.0;
+    new.post_return(&mut store)?;
+    assert!(rep.call(&mut store, (r,)).is_err());
+    Ok(())
+}
