@@ -812,10 +812,9 @@ fn thread_yield(
     caller_instance: u32,
     cancellable: u8,
 ) -> Result<bool> {
-    store
-        .component_async_store()
+    instance
         .suspension_intrinsic(
-            instance,
+            store,
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             cancellable != 0,
             true,
@@ -1407,10 +1406,9 @@ fn thread_switch_to(
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
-    store
-        .component_async_store()
+    instance
         .suspension_intrinsic(
-            instance,
+            store,
             RuntimeComponentInstanceIndex::from_u32(caller),
             cancellable != 0,
             false,
@@ -1426,10 +1424,9 @@ fn thread_suspend(
     caller: u32,
     cancellable: u8,
 ) -> Result<bool> {
-    store
-        .component_async_store()
+    instance
         .suspension_intrinsic(
-            instance,
+            store,
             RuntimeComponentInstanceIndex::from_u32(caller),
             cancellable != 0,
             false,
@@ -1445,10 +1442,11 @@ fn thread_resume_later(
     caller_instance: u32,
     thread_idx: u32,
 ) -> Result<()> {
-    store.component_async_store().thread_resume_later(
-        instance,
+    instance.resume_suspended_thread(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         thread_idx,
+        false,
     )
 }
 
@@ -1460,10 +1458,9 @@ fn thread_yield_to(
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
-    store
-        .component_async_store()
+    instance
         .suspension_intrinsic(
-            instance,
+            store,
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             cancellable != 0,
             true,
