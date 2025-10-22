@@ -118,6 +118,42 @@ public:
 
     return std::monostate();
   }
+
+private:
+  template <typename F>
+  static wasmtime_error_t *
+  raw_resource_destructor_callback(void *env, wasmtime_context_t *store,
+                                   uint32_t rep) {
+    F *func = reinterpret_cast<F *>(env);
+    Result<std::monostate> result = (*func)(Store::Context(store), rep);
+    if (!result) {
+      return result.err().release();
+    }
+    return nullptr;
+  }
+
+public:
+  /// \brief Defines a new resource in this linker with the provided
+  /// destructor.
+  template <typename F,
+            std::enable_if_t<std::is_invocable_r_v<Result<std::monostate>, F,
+                                                   Store::Context, uint32_t>,
+                             bool> = true>
+  Result<std::monostate> add_resource(std::string_view name,
+                                      const ResourceType &ty, F &&f) {
+    auto *error = wasmtime_component_linker_instance_add_resource(
+        ptr.get(), name.data(), name.length(), ty.capi(),
+        raw_resource_destructor_callback<std::remove_reference_t<F>>,
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
+        raw_finalize<std::remove_reference_t<F>>);
+
+    if (error != nullptr) {
+      return Error(error);
+    }
+
+    return std::monostate();
+  }
 };
 
 /**
