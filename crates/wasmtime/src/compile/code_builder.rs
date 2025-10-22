@@ -63,7 +63,7 @@ pub struct CodeBuilder<'a, 'b> {
 }
 
 #[cfg(feature = "compile-time-builtins")]
-enum BytesOrFile<'a> {
+pub(crate) enum BytesOrFile<'a> {
     Bytes(Cow<'a, [u8]>),
     File(Cow<'a, Path>),
 }
