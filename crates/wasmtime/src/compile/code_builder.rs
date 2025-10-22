@@ -5,6 +5,8 @@ use std::path::Path;
 
 #[cfg(feature = "compile-time-builtins")]
 use crate::hash_map::HashMap;
+#[cfg(not(feature = "compile-time-builtins"))]
+use core::marker::PhantomData;
 
 /// Builder-style structure used to create a [`Module`](crate::module::Module) or
 /// pre-compile a module to a serialized list of bytes.
@@ -55,6 +57,9 @@ pub struct CodeBuilder<'a, 'b> {
     // need to be reordered with the `CodeBuilder`'s construction.
     #[cfg(feature = "compile-time-builtins")]
     compile_time_builtins: HashMap<Cow<'b, str>, BytesOrFile<'b>>,
+
+    #[cfg(not(feature = "compile-time-builtins"))]
+    _use_lifetime: PhantomData<&'b ()>,
 }
 
 pub(crate) enum BytesOrFile<'a> {
@@ -83,6 +88,8 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
             unsafe_intrinsics_import: None,
             #[cfg(feature = "compile-time-builtins")]
             compile_time_builtins: HashMap::default(),
+            #[cfg(not(feature = "compile-time-builtins"))]
+            _use_lifetime: PhantomData,
         }
     }
 
