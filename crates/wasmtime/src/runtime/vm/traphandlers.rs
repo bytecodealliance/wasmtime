@@ -868,6 +868,7 @@ impl CallThreadState {
                     // JIT traps not handled yet.
                     Ok(())
                 }
+                #[cfg(all(feature = "std", panic = "unwind"))]
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Panic(_),
                     ..
