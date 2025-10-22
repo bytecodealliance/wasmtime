@@ -3085,7 +3085,7 @@ impl Instance {
         to_thread: Option<u32>,
     ) -> Result<bool> {
         // There could be a pending cancellation from a previous uncancellable wait
-        if cancellable && store.0.concurrent_state_mut().pending_cancellation() {
+        if cancellable && store.0.concurrent_state_mut().take_pending_cancellation() {
             return Ok(true);
         }
 
@@ -3112,7 +3112,7 @@ impl Instance {
 
         store.0.suspend(reason)?;
 
-        Ok(cancellable && store.0.concurrent_state_mut().pending_cancellation())
+        Ok(cancellable && store.0.concurrent_state_mut().take_pending_cancellation())
     }
 
     /// Helper function for the `waitable-set.wait` and `waitable-set.poll` intrinsics.
@@ -4209,9 +4209,7 @@ impl GuestTask {
             }
         }
 
-        for thread in self.threads {
-            state.delete(thread)?;
-        }
+        assert!(self.threads.is_empty());
 
         state.delete(self.sync_call_set)?;
 
@@ -4838,7 +4836,7 @@ impl ConcurrentState {
 
     /// Returns whether there's a pending cancellation on the current guest thread,
     /// consuming the event if so.
-    fn pending_cancellation(&mut self) -> bool {
+    fn take_pending_cancellation(&mut self) -> bool {
         let thread = self.guest_thread.unwrap();
         if let Some(event) = self.get_mut(thread.task).unwrap().event.take() {
             assert!(matches!(event, Event::Cancelled));
