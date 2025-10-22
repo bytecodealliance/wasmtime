@@ -3238,19 +3238,13 @@ impl Instance {
                 // Not yet started; cancel and remove from pending
                 let callee_instance = task.instance;
 
-                if !concurrent_state
-                    .instance_state(callee_instance)
-                    .pending
-                    .iter()
-                    .any(|(thread, _)| thread.task == guest_task)
-                {
+                let pending = &mut concurrent_state.instance_state(callee_instance).pending;
+                let pending_count = pending.len();
+                pending.retain(|thread, _| thread.task != guest_task);
+                // If there were no pending threads for this task, we're in an error state
+                if pending.len() == pending_count {
                     bail!("`subtask.cancel` called after terminal status delivered");
                 }
-                concurrent_state
-                    .instance_state(callee_instance)
-                    .pending
-                    .retain(|thread, _| thread.task != guest_task);
-
                 return Ok(Status::StartCancelled as u32);
             } else if !task.returned_or_cancelled() {
                 // Started, but not yet returned or cancelled; send the
