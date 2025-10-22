@@ -2913,8 +2913,9 @@ pub enum Strategy {
     /// code generator which generates high quality machine code.
     Cranelift,
 
-    /// A baseline compiler for WebAssembly, currently under active development and not ready for
-    /// production applications.
+    /// A low-latency baseline compiler for WebAssembly.
+    /// For more details regarding ISA support and Wasm proposals support
+    /// see https://docs.wasmtime.dev/stability-tiers.html#current-tier-status
     Winch,
 }
 
