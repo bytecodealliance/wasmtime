@@ -1555,6 +1555,15 @@ criteria = "safe-to-deploy"
 delta = "2.7.0 -> 2.9.4"
 notes = "Tweaks to the macro, nothing out of order."
 
+[[audits.bitmaps]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "2.1.0"
+notes = """
+No ambient I/O. Minimal unsafe, purely related to simd ISA extensions and
+obviously correct with only local reasoning.
+"""
+
 [[audits.block-buffer]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
