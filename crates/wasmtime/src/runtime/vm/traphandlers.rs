@@ -857,9 +857,9 @@ impl CallThreadState {
                     ..
                 } => store.block_on_debug_handler(crate::DebugEvent::Trap(*trap)),
                 UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::User(_)),
+                    reason: UnwindReason::Trap(TrapReason::User(err)),
                     ..
-                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError),
+                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
 
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::Jit { .. }),

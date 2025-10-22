@@ -272,7 +272,41 @@ pub struct StoreInner<T: 'static> {
     /// `StoreContextMut`); so we need to hold a separate reference to
     /// it while invoking it.
     #[cfg(feature = "debug")]
-    pub(crate) debug_handler: Option<Arc<dyn DebugHandler<Data = T>>>,
+    debug_handler: Option<Box<dyn StoreDebugHandler<T>>>,
+}
+
+/// Adapter around `DebugHandler` that gets monomorphized into an
+/// object-safe dyn trait to place in `store.debug_handler`.
+#[cfg(feature = "debug")]
+trait StoreDebugHandler<T: 'static>: Send + Sync {
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, T>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a>;
+}
+
+#[cfg(feature = "debug")]
+impl<D> StoreDebugHandler<D::Data> for D
+where
+    D: DebugHandler,
+    D::Data: Send,
+{
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, D::Data>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a> {
+        // Clone the underlying `DebugHandler` (the trait requires
+        // Clone as a supertrait), not the Box. The clone happens here
+        // rather than at the callsite because `Clone::clone` is not
+        // object-safe so needs to be in a monomorphized context.
+        let handler: D = (*self).clone();
+        // Since we temporarily took `self` off the store at the
+        // callsite, put it back now that we've cloned it.
+        store.0.debug_handler = Some(self);
+        Box::new(async move { handler.handle(store, event).await })
+    }
 }
 
 enum ResourceLimiterInner<T> {
@@ -1250,7 +1284,7 @@ impl<T> Store<T> {
             self.engine().tunables().debug_guest,
             "debug hooks require guest debugging to be enabled"
         );
-        self.inner.debug_handler = Some(Arc::new(handler));
+        self.inner.debug_handler = Some(Box::new(handler));
     }
 
     /// Clear the debug handler on this store. If any existed, it will
@@ -2720,10 +2754,12 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()> {
-        if let Some(handler) = self.debug_handler.as_ref().cloned() {
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
+        if let Some(handler) = self.debug_handler.take() {
             log::trace!("about to raise debug event {event:?}");
-            StoreContextMut(self).block_on(|store| Pin::from(handler.handle(store, event)))
+            StoreContextMut(self).with_blocking(|store, cx| {
+                cx.block_on(Pin::from(handler.handle(store, event)).as_mut())
+            })
         } else {
             Ok(())
         }

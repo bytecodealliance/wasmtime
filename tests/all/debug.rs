@@ -214,6 +214,7 @@ macro_rules! debug_event_checker {
      ),*)
     =>
     {
+        #[derive(Clone)]
         struct $ty(Arc<AtomicUsize>);
         impl $ty {
             fn new_and_counter() -> (Self, Arc<AtomicUsize>) {
@@ -224,15 +225,15 @@ macro_rules! debug_event_checker {
         }
         impl DebugHandler for $ty {
             type Data = ();
-            fn handle<'a>(
-                self: Arc<Self>,
+            fn handle(
+                &self,
                 #[allow(unused_variables, reason = "macro rules")]
                 #[allow(unused_mut, reason = "macro rules")]
-                mut $store: StoreContextMut<'a, ()>,
-                event: DebugEvent,
-            ) -> Box<dyn Future<Output = ()> + Send + 'a> {
+                mut $store: StoreContextMut<'_, ()>,
+                event: DebugEvent<'_>,
+            ) -> impl Future<Output = ()> + Send {
                 let step = self.0.fetch_add(1, Ordering::Relaxed);
-                Box::new(async move {
+                async move {
                     if false {}
                     $(
                         else if step == $i {
@@ -247,7 +248,7 @@ macro_rules! debug_event_checker {
                     else {
                         panic!("Too many steps");
                     }
-                })
+                }
             }
         }
     }
@@ -423,7 +424,9 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::HostcallError => {}
+          wasmtime::DebugEvent::HostcallError(e) => {
+              assert!(format!("{e:?}").contains("secret error message"));
+          }
         }
     );
 
@@ -432,7 +435,9 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
 
     let do_a_trap = Func::wrap(
         &mut store,
-        |_caller: Caller<'_, ()>| -> anyhow::Result<()> { Err(anyhow::anyhow!("error")) },
+        |_caller: Caller<'_, ()>| -> anyhow::Result<()> {
+            Err(anyhow::anyhow!("secret error message"))
+        },
     );
     let instance = Instance::new_async(&mut store, &module, &[Extern::Func(do_a_trap)]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
