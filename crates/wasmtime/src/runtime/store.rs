@@ -2709,13 +2709,12 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) {
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()> {
         if let Some(handler) = self.debug_handler.as_ref().cloned() {
             log::trace!("about to raise debug event {event:?}");
-            // Note: we explicitly ignore the Result of this call; if
-            // the debugger future fails (e.g. because it is canceled)
-            // then we will just keep running.
-            let _ = StoreContextMut(self).block_on(|store| Pin::from(handler.handle(store, event)));
+            StoreContextMut(self).block_on(|store| Pin::from(handler.handle(store, event)))
+        } else {
+            Ok(())
         }
     }
 }

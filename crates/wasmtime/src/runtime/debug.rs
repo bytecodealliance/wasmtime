@@ -454,11 +454,11 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
 pub enum DebugEvent {
     /// An `anyhow::Error` was raised by a hostcall.
     HostcallError,
-    /// An exception is thrown. The current state is at the
-    /// throw-point.
-    ThrownException(OwnedRooted<ExnRef>),
+    /// An exception is thrown and caught by Wasm. The current state
+    /// is at the throw-point.
+    CaughtExceptionThrown(OwnedRooted<ExnRef>),
     /// An exception was not caught and is escaping to the host.
-    UncaughtException(OwnedRooted<ExnRef>),
+    UncaughtExceptionThrown(OwnedRooted<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
 }

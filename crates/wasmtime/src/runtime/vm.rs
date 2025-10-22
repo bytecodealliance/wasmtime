@@ -231,7 +231,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Invoke a debug handler, if present, at a debug event.
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent);
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {

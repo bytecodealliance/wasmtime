@@ -264,7 +264,7 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::ThrownException(e) => {
+          wasmtime::DebugEvent::UncaughtExceptionThrown(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let mut stack = store.debug_frames().expect("frame cursor must be available");
               assert!(!stack.done());
@@ -274,11 +274,6 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
               assert!(!stack.done());
               stack.move_to_parent();
               assert!(stack.done());
-          }
-        },
-        { 1 ;
-          wasmtime::DebugEvent::UncaughtException(e) => {
-              assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
           }
         }
     );
@@ -291,7 +286,7 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
     let mut results = [];
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught exception.
-    assert_eq!(counter.load(Ordering::Relaxed), 2);
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
 
     Ok(())
 }
@@ -325,7 +320,7 @@ async fn caught_exception_events() -> anyhow::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::ThrownException(e) => {
+          wasmtime::DebugEvent::CaughtExceptionThrown(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let mut stack = store.debug_frames().expect("frame cursor must be available");
               assert!(!stack.done());
