@@ -363,6 +363,12 @@ async fn caught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+#[cfg(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "s390x",
+    target_arch = "riscv64"
+))]
 async fn hostcall_trap_events() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
