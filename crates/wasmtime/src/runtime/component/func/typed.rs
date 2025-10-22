@@ -205,7 +205,7 @@ where
                     // through a `SendSyncPtr<u8>` to thwart the `'static` check
                     // of rustc and the signature of `prepare_call`.
                     //
-                    // Note the use of `RemoveOnDrop` in the code that follows
+                    // Note the use of `SignalOnDrop` in the code that follows
                     // this closure, which ensures that the task will be removed
                     // from the concurrent state to which it belongs when the
                     // containing `Future` is dropped, so long as the parameters
@@ -216,12 +216,12 @@ where
                     Self::lower_args(cx, ty, dst, params)
                 })?;
 
-            struct RemoveOnDrop<'a, T: 'static> {
+            struct SignalOnDrop<'a, T: 'static> {
                 store: StoreContextMut<'a, T>,
                 task: TaskId,
             }
 
-            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+            impl<'a, T> Drop for SignalOnDrop<'a, T> {
                 fn drop(&mut self) {
                     self.task
                         .host_future_dropped(self.store.as_context_mut())
@@ -229,7 +229,7 @@ where
                 }
             }
 
-            let mut wrapper = RemoveOnDrop {
+            let mut wrapper = SignalOnDrop {
                 store,
                 task: prepared.task_id(),
             };
