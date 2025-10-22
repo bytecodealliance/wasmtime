@@ -76,6 +76,10 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "debug")]
+use crate::DebugHandler;
+#[cfg(all(feature = "gc", feature = "debug"))]
+use crate::OwnedRooted;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
@@ -259,6 +263,50 @@ pub struct StoreInner<T: 'static> {
     ///
     /// For comments about `ManuallyDrop`, see `Store::into_data`.
     data_no_provenance: ManuallyDrop<T>,
+
+    /// The user's debug handler, if any. See [`crate::DebugHandler`]
+    /// for more documentation.
+    ///
+    /// We need this to be an `Arc` because the handler itself takes
+    /// `&self` and also the whole Store mutably (via
+    /// `StoreContextMut`); so we need to hold a separate reference to
+    /// it while invoking it.
+    #[cfg(feature = "debug")]
+    debug_handler: Option<Box<dyn StoreDebugHandler<T>>>,
+}
+
+/// Adapter around `DebugHandler` that gets monomorphized into an
+/// object-safe dyn trait to place in `store.debug_handler`.
+#[cfg(feature = "debug")]
+trait StoreDebugHandler<T: 'static>: Send + Sync {
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, T>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a>;
+}
+
+#[cfg(feature = "debug")]
+impl<D> StoreDebugHandler<D::Data> for D
+where
+    D: DebugHandler,
+    D::Data: Send,
+{
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, D::Data>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a> {
+        // Clone the underlying `DebugHandler` (the trait requires
+        // Clone as a supertrait), not the Box. The clone happens here
+        // rather than at the callsite because `Clone::clone` is not
+        // object-safe so needs to be in a monomorphized context.
+        let handler: D = (*self).clone();
+        // Since we temporarily took `self` off the store at the
+        // callsite, put it back now that we've cloned it.
+        store.0.debug_handler = Some(self);
+        Box::new(async move { handler.handle(store, event).await })
+    }
 }
 
 enum ResourceLimiterInner<T> {
@@ -716,6 +764,8 @@ impl<T> Store<T> {
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
             data_no_provenance: ManuallyDrop::new(data),
+            #[cfg(feature = "debug")]
+            debug_handler: None,
         });
 
         let store_data =
@@ -1188,20 +1238,60 @@ impl<T> Store<T> {
     /// VM-level values (locals and operand stack), when debugging is
     /// enabled.
     ///
-    /// This object views all activations for the current store that
-    /// are on the stack. An activation is a contiguous sequence of
-    /// Wasm frames (called functions) that were called from host code
-    /// and called back out to host code. If there are activations
-    /// from multiple stores on the stack, for example if Wasm code in
-    /// one store calls out to host code which invokes another Wasm
-    /// function in another store, then the other stores are "opaque"
-    /// to our view here in the same way that host code is.
+    /// This object views the frames from the most recent Wasm entry
+    /// onward (up to the exit that allows this host code to run). Any
+    /// Wasm stack frames upward from the most recent entry to Wasm
+    /// are not visible to this cursor.
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
     pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.as_context_mut().debug_frames()
+    }
+
+    /// Set the debug callback on this store.
+    ///
+    /// See [`crate::DebugHandler`] for more documentation.
+    ///
+    /// # Panics
+    ///
+    /// - Will panic if this store is not configured for async
+    ///   support.
+    /// - Will panic if guest-debug support was not enabled via
+    ///   [`crate::Config::guest_debug`].
+    #[cfg(feature = "debug")]
+    pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
+    where
+        // We require `Send` here because the debug handler becomes
+        // referenced from a future: when `DebugHandler::handle` is
+        // invoked, its `self` references the `handler` with the
+        // user's state. Note that we are careful to keep this bound
+        // constrained to debug-handler-related code only and not
+        // propagate it outward to the store in general. The presence
+        // of the trait implementation serves as a witness that `T:
+        // Send`. This is required in particular because we will have
+        // a `&mut dyn VMStore` on the stack when we pause a fiber
+        // with `block_on` to run a debugger hook; that `VMStore` must
+        // be a `Store<T> where T: Send`.
+        T: Send,
+    {
+        assert!(
+            self.inner.async_support(),
+            "debug hooks rely on async support"
+        );
+        assert!(
+            self.engine().tunables().debug_guest,
+            "debug hooks require guest debugging to be enabled"
+        );
+        self.inner.debug_handler = Some(Box::new(handler));
+    }
+
+    /// Clear the debug handler on this store. If any existed, it will
+    /// be dropped.
+    #[cfg(feature = "debug")]
+    pub fn clear_debug_handler(&mut self) {
+        self.inner.debug_handler = None;
     }
 }
 
@@ -1319,7 +1409,6 @@ impl<'a, T> StoreContextMut<'a, T> {
     }
 
     /// Tests whether there is a pending exception.
-    ///
     ///
     /// See [`Store::has_pending_exception`] for more details.
     #[cfg(feature = "gc")]
@@ -2543,11 +2632,29 @@ at https://bytecodealliance.org/security.
         self.pending_exception.take()
     }
 
+    /// Tests whether there is a pending exception.
+    #[cfg(feature = "gc")]
+    pub fn has_pending_exception(&self) -> bool {
+        self.pending_exception.is_some()
+    }
+
     #[cfg(feature = "gc")]
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.take_pending_exception()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    /// Get an owned rooted reference to the pending exception,
+    /// without taking it off the store.
+    #[cfg(all(feature = "gc", feature = "debug"))]
+    pub(crate) fn pending_exception_owned_rooted(&mut self) -> Option<OwnedRooted<ExnRef>> {
+        let mut nogc = AutoAssertNoGc::new(self);
+        nogc.pending_exception.take().map(|vmexnref| {
+            let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+            nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+            OwnedRooted::new(&mut nogc, vmexnref.into())
+        })
     }
 
     #[cfg(feature = "gc")]
@@ -2644,6 +2751,18 @@ unsafe impl<T> VMStore for StoreInner<T> {
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
+    }
+
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
+        if let Some(handler) = self.debug_handler.take() {
+            log::trace!("about to raise debug event {event:?}");
+            StoreContextMut(self).with_blocking(|store, cx| {
+                cx.block_on(Pin::from(handler.handle(store, event)).as_mut())
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
