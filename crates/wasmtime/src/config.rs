@@ -3339,11 +3339,11 @@ impl PoolingAllocationConfig {
     /// How much memory, in bytes, to keep resident for async stacks allocated
     /// with the pooling allocator.
     ///
-    /// When [`PoolingAllocationConfig::async_stack_zeroing`] is enabled then
-    /// Wasmtime will reset the contents of async stacks back to zero upon
-    /// deallocation. This option can be used to perform the zeroing operation
-    /// with `memset` up to a certain threshold of bytes instead of using system
-    /// calls to reset the stack to zero.
+    /// When [`Config::async_stack_zeroing`] is enabled then Wasmtime will reset
+    /// the contents of async stacks back to zero upon deallocation. This option
+    /// can be used to perform the zeroing operation with `memset` up to a
+    /// certain threshold of bytes instead of using system calls to reset the
+    /// stack to zero.
     ///
     /// Note that when using this option the memory with async stacks will
     /// never be decommitted.
