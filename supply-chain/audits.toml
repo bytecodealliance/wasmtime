@@ -4162,6 +4162,12 @@ delta = "0.236.0 -> 0.237.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wasm-compose]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.236.0 -> 0.238.1"
+notes = "Don't know why I have to do this certification even though we have a wildcard audit for this crate because it is authored by the Bytecode Alliance..."
+
+[[audits.wasm-compose]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 delta = "0.237.0 -> 0.238.1"
