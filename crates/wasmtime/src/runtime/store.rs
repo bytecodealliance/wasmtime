@@ -1229,6 +1229,17 @@ impl<T> Store<T> {
     #[cfg(feature = "debug")]
     pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
     where
+        // We require `Send` here because the debug handler becomes
+        // referenced from a future: when `DebugHandler::handle` is
+        // invoked, its `self` references the `handler` with the
+        // user's state. Note that we are careful to keep this bound
+        // constrained to debug-handler-related code only and not
+        // propagate it outward to the store in general. The presence
+        // of the trait implementation serves as a witness that `T:
+        // Send`. This is required in particular because we will have
+        // a `&mut dyn VMStore` on the stack when we pause a fiber
+        // with `block_on` to run a debugger hook; that `VMStore` must
+        // be a `Store<T> where T: Send`.
         T: Send,
     {
         assert!(
