@@ -62,7 +62,8 @@ pub struct CodeBuilder<'a, 'b> {
     _use_lifetime: PhantomData<&'b ()>,
 }
 
-pub(crate) enum BytesOrFile<'a> {
+#[cfg(feature = "compile-time-builtins")]
+enum BytesOrFile<'a> {
     Bytes(Cow<'a, [u8]>),
     File(Cow<'a, Path>),
 }
