@@ -1452,9 +1452,8 @@ impl StoreOpaque {
         };
 
         let old_guest_thread = if let Some(task) = task {
-            let old_thread = self.concurrent_state_mut().guest_thread;
             self.maybe_pop_call_context(task)?;
-            old_thread
+            self.concurrent_state_mut().guest_thread
         } else {
             None
         };
@@ -1890,7 +1889,7 @@ impl Instance {
                     .guest_thread
                     .replace(guest_thread);
                 log::trace!(
-                    "stackful call: replaced {old_thread:?} with {guest_thread:?} as current thread",
+                    "sync/async-stackful call: replaced {old_thread:?} with {guest_thread:?} as current thread",
                 );
                 let mut flags = self.id().get(store).instance_flags(callee_instance);
 
