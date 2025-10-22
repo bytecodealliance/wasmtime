@@ -70,9 +70,10 @@ public:
     friend class Store;
     wasmtime_context_t *ptr;
 
-    Context(wasmtime_context_t *ptr) : ptr(ptr) {}
-
   public:
+    /// Creates a context from the raw C API pointer.
+    explicit Context(wasmtime_context_t *ptr) : ptr(ptr) {}
+
     /// Creates a context referencing the provided `Store`.
     Context(Store &store) : Context(wasmtime_store_context(store.ptr.get())) {}
     /// Creates a context referencing the provided `Store`.

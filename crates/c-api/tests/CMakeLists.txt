@@ -36,6 +36,7 @@ add_capi_test(tests FILES
   component/lookup_func.cc
   component/call_func.cc
   component/values.cc
+  component/linker.cc
   error.cc
   config.cc
   wat.cc

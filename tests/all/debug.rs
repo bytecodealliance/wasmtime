@@ -192,6 +192,20 @@ fn gc_access_during_call() -> anyhow::Result<()> {
     )
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn debug_frames_on_store_with_no_wasm_activation() -> anyhow::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let frames = store
+        .debug_frames()
+        .expect("Debug frames should be available");
+    assert!(frames.done());
+    Ok(())
+}
+
 macro_rules! debug_event_checker {
     ($ty:tt,
      $store:tt,
@@ -426,6 +440,5 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
-
     Ok(())
 }

@@ -255,6 +255,14 @@ WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_exceptions, bool)
 
+/**
+ * \brief Configures whether the WebAssembly custom-page-sizes proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_custom_page_sizes, bool)
+
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**

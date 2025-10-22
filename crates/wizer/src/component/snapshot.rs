@@ -115,7 +115,7 @@ where
         }
     }
 
-    async fn memory_contents(&mut self, name: &str) -> Vec<u8> {
+    async fn memory_contents(&mut self, name: &str, contents: impl FnOnce(&[u8]) + Send) {
         let Accessor::Memory {
             accessor_export_name,
             ..
@@ -124,7 +124,7 @@ where
             panic!("expected memory accessor for {name}");
         };
         self.ctx
-            .call_func_ret_list_u8(WIZER_INSTANCE, accessor_export_name)
+            .call_func_ret_list_u8(WIZER_INSTANCE, accessor_export_name, contents)
             .await
     }
 }

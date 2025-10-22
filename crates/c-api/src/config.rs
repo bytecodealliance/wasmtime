@@ -470,6 +470,11 @@ pub extern "C" fn wasmtime_config_wasm_exceptions_set(c: &mut wasm_config_t, ena
     c.config.wasm_exceptions(enable);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_custom_page_sizes_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_custom_page_sizes(enable);
+}
+
 #[repr(C)]
 #[derive(Clone)]
 #[cfg(feature = "pooling-allocator")]

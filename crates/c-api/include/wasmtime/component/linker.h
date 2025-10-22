@@ -35,6 +35,16 @@ WASM_API_EXTERN wasmtime_component_linker_t *
 wasmtime_component_linker_new(const wasm_engine_t *engine);
 
 /**
+ * \brief Configures whether this linker allows later definitions to shadow
+ * previous definitions.
+ *
+ * By default this setting is `false`.
+ */
+WASM_API_EXTERN void
+wasmtime_component_linker_allow_shadowing(wasmtime_component_linker_t *linker,
+                                          bool allow);
+
+/**
  * \brief Returns the "root instance" of this linker, used to define names into
  * the root namespace.
  *

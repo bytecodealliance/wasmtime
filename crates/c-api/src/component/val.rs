@@ -3,7 +3,7 @@ use wasmtime::component::Val;
 use crate::wasm_name_t;
 
 use std::mem;
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use std::slice;
 
@@ -315,13 +315,28 @@ impl From<&Val> for wasmtime_component_val_t {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_val_new() -> Box<wasmtime_component_val_t> {
-    Box::new(wasmtime_component_val_t::default())
+pub unsafe extern "C" fn wasmtime_component_val_new(
+    src: &mut wasmtime_component_val_t,
+) -> Box<wasmtime_component_val_t> {
+    Box::new(mem::replace(src, wasmtime_component_val_t::default()))
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_val_delete(value: *mut wasmtime_component_val_t) {
+pub unsafe extern "C" fn wasmtime_component_val_free(_dst: Option<Box<wasmtime_component_val_t>>) {}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_val_clone(
+    src: &wasmtime_component_val_t,
+    dst: &mut MaybeUninit<wasmtime_component_val_t>,
+) {
+    dst.write(src.clone());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_val_delete(
+    value: &mut ManuallyDrop<wasmtime_component_val_t>,
+) {
     unsafe {
-        std::ptr::drop_in_place(value);
+        ManuallyDrop::drop(value);
     }
 }

@@ -992,3 +992,28 @@ async fn memory_init_and_data_segments() -> Result<()> {
     let wizer = get_wizer();
     wizen_and_run_wasm(&[], 0x02010403 + 0x06050201, &wasm, wizer).await
 }
+
+#[tokio::test]
+async fn memory64() -> Result<()> {
+    let _ = env_logger::try_init();
+    let wasm = wat_to_wasm(
+        r#"
+(module
+  (memory i64 1)
+
+  (func (export "wizer-initialize")
+    i64.const 0
+    i32.const 10
+    i32.store
+  )
+
+  (func (export "run") (result i32)
+    i64.const 0
+    i32.load
+  )
+)
+        "#,
+    )?;
+    let wizer = get_wizer();
+    wizen_and_run_wasm(&[], 10, &wasm, wizer).await
+}

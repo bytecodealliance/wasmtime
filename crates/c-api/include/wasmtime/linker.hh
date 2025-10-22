@@ -180,6 +180,30 @@ public:
     }
     return Func(item);
   }
+
+  /// \brief Defines any import of `module` previously unknown to this linker
+  /// as a trap.
+  Result<std::monostate> define_unknown_imports_as_traps(Module &module) {
+    auto *error = wasmtime_linker_define_unknown_imports_as_traps(
+        ptr.get(), module.ptr.get());
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
+
+  /// \brief Defines any import of `module` previously unknown to this linker
+  /// as the "default" value for that import, for example a function that
+  /// returns zeros.
+  Result<std::monostate>
+  define_unknown_imports_as_default_values(Store::Context cx, Module &module) {
+    auto *error = wasmtime_linker_define_unknown_imports_as_default_values(
+        ptr.get(), cx.ptr, module.ptr.get());
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
 };
 
 } // namespace wasmtime
