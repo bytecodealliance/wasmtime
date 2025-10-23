@@ -208,7 +208,7 @@ impl<'a> CodeBuilder<'a> {
 
         #[cfg(not(feature = "compile-time-builtins"))]
         {
-            Ok(wasm)
+            Ok(wasm.into())
         }
 
         #[cfg(feature = "compile-time-builtins")]
