@@ -99,6 +99,7 @@ async function runOnce() {
       repo,
       tag_name: name,
       prerelease: name === 'dev',
+      draft: name !== 'dev',
     };
     if (name !== 'dev') {
       for (let x of releaseNotes.split(/^---+$/m)) {
@@ -138,6 +139,15 @@ async function runOnce() {
       headers: { 'content-length': size, 'content-type': 'application/octet-stream' },
       name,
       url: release.data.upload_url,
+    });
+  }
+
+  if (name !== 'dev') {
+    octokit.rest.repos.updateRelease({
+        owner,
+        repo,
+        release_id: release.data.id,
+        draft: false,
     });
   }
 }
