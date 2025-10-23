@@ -40,14 +40,14 @@
 ;;       ╰─╼ debug frame state (before next inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 64, slot at FP-0xb0, locals , stack 
 ;;       ldur    x2, [sp, #0x10]
 ;;       ╰─╼ debug frame state (before next inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 66, slot at FP-0xb0, locals , stack I32 @ slot+0x8
-;;       bl      #0x31c
+;;       bl      #0x328
 ;;   60: mov     x21, x2
 ;;       mov     w3, #0x4000000
 ;;       mov     w4, #2
 ;;       mov     w5, #0x28
 ;;       mov     w6, #8
 ;;       ldur    x2, [sp, #0x10]
-;;       bl      #0x2a8
+;;       bl      #0x2b0
 ;;   7c: ldur    x11, [sp, #0x10]
 ;;       ldr     x0, [x11, #8]
 ;;       ldr     x5, [x0, #0x18]
@@ -62,7 +62,7 @@
 ;;       str     w3, [x4, w2, uxtw]
 ;;       mov     x3, x2
 ;;       ldur    x2, [sp, #0x10]
-;;       bl      #0x354
+;;       bl      #0x364
 ;;       ├─╼ exception frame offset: SP = FP - 0xb0
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x10], handler=0xbc
 ;;   b8: .byte   0x1f, 0xc1, 0x00, 0x00
