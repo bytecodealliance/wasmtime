@@ -55,6 +55,7 @@ public:
     return std::monostate();
   }
 
+#ifdef WASMTIME_FEATURE_WASI
   /// Defines WASI functions within this linker.
   ///
   /// Note that `Store::Context::set_wasi` must also be used for instantiated
@@ -66,6 +67,7 @@ public:
     }
     return std::monostate();
   }
+#endif // WASMTIME_FEATURE_WASI
 
   /// Defines all exports of the `instance` provided in this linker with the
   /// given module name of `name`.
