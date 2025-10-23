@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <wasmtime/component/types/val.hh>
 #include <wasmtime/component/val.h>
 #include <wasmtime/store.hh>
 
@@ -413,27 +414,6 @@ public:
   /// \brief Returns an iterator to the end of the flags.
   const Flag *end() const {
     return reinterpret_cast<const Flag *>(raw.data + raw.size);
-  }
-};
-
-/// Class representing a component model `resource` value which is either a
-/// guest or host-defined resource.
-class ResourceType {
-  WASMTIME_CLONE_WRAPPER(ResourceType, wasmtime_component_resource_type);
-
-  /// \brief Creates a new host resource type with the specified `ty`
-  /// identifier.
-  explicit ResourceType(uint32_t ty)
-      : ptr(wasmtime_component_resource_type_new_host(ty)) {}
-
-  /// \brief Compares two resource types for equality.
-  bool operator==(const ResourceType &b) const {
-    return wasmtime_component_resource_type_equal(capi(), b.capi());
-  }
-
-  /// \brief Compares two resource types for inequality.
-  bool operator!=(const ResourceType &b) const {
-    return !wasmtime_component_resource_type_equal(capi(), b.capi());
   }
 };
 

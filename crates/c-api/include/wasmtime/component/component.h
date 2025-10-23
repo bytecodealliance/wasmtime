@@ -103,6 +103,15 @@ WASM_API_EXTERN wasmtime_component_t *
 wasmtime_component_clone(const wasmtime_component_t *component);
 
 /**
+ * \brief Returns the type of this component.
+ *
+ * The returned pointer must be deallocatd with
+ * `wasmtime_component_type_delete`.
+ */
+WASM_API_EXTERN struct wasmtime_component_type *
+wasmtime_component_type(const wasmtime_component_t *component);
+
+/**
  * \brief Deletes a #wasmtime_component_t created by #wasmtime_component_new
  *
  * \param component the component to delete

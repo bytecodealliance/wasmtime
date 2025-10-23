@@ -14,6 +14,7 @@
 #include <string_view>
 #include <vector>
 #include <wasmtime/component/component.h>
+#include <wasmtime/component/types/component.hh>
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
 #include <wasmtime/span.hh>
@@ -159,6 +160,11 @@ class Component {
     }
     return std::nullopt;
   };
+
+  /// \brief Returns the type of this component.
+  ComponentType type() const {
+    return ComponentType(wasmtime_component_type(ptr.get()));
+  }
 };
 
 } // namespace component
