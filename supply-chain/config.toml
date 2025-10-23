@@ -7,9 +7,6 @@ version = "0.10"
 [imports.embark-studios]
 url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
 
-[imports.spinframework]
-url = "https://raw.githubusercontent.com/spinframework/spin/main/supply-chain/audits.toml"
-
 [imports.google]
 url = "https://raw.githubusercontent.com/google/rust-crate-audits/main/audits.toml"
 
@@ -18,6 +15,9 @@ url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/au
 
 [imports.mozilla]
 url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
+[imports.spinframework]
+url = "https://raw.githubusercontent.com/spinframework/spin/main/supply-chain/audits.toml"
 
 [policy.cranelift]
 audit-as-crates-io = true
