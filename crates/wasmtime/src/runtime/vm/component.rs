@@ -19,7 +19,7 @@ use crate::store::InstanceId;
 use crate::{Func, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use core::mem;
 use core::mem::offset_of;
 use core::pin::Pin;
@@ -359,30 +359,27 @@ impl ComponentInstance {
         }
     }
 
-    /// Returns the `Func` at index `func_idx` in the funcref table `table`.
-    pub fn index_runtime_func_table(&self, table: &VMTableImport, func_idx: u64) -> Result<Func> {
+    /// Returns the `Func` at index `func_idx` in the funcref table at `table_idx`.
+    pub fn index_runtime_func_table(
+        &self,
+        table_idx: RuntimeTableIndex,
+        func_idx: u64,
+    ) -> Result<Option<Func>> {
         unsafe {
             let store = self.store.0.as_ref();
+            let table = self.runtime_table(table_idx);
             let vmctx = table.vmctx.as_non_null();
-            // SAFETY: `vmctx` is a valid pointer, and the `Instance` is
-            // located immediately before the `vmctx`. See `vm::Instance::sibling_vmctx`,
-            // which we can't call here as we don't have a `vm::Instance` to bind the lifetime to.
-            let mut instance_ptr = vmctx
-                .byte_sub(mem::size_of::<vm::Instance>())
-                .cast::<vm::Instance>();
+            // SAFETY: it's a contract of this function that `vmctx` is a valid
+            // allocation which can go backwards to a `ComponentInstance`.
+            let mut instance_ptr = vm::Instance::from_vmctx(vmctx);
             // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
             // this call, so we don't need a lifetime to bind it to.
             let instance = Pin::new_unchecked(instance_ptr.as_mut());
             let table = instance.get_defined_table_with_lazy_init(table.index, [func_idx]);
-            let funcref = match table.get_func(func_idx) {
-                // SAFETY: The `VMFuncRef` is not null, properly aligned, and points to a valid
-                // `VMFuncRef` because it came from a `Table` in a `vm::Instance`.
-                Ok(Some(func)) => Ok(func),
-                Ok(None) => Err(anyhow!("function index {func_idx} out of bounds")),
-                Err(e) => Err(anyhow!("failed to get function from table: {e}")),
-            }?;
-
-            Ok(Func::from_vm_func_ref(store.id(), funcref))
+            let func = table
+                .get_func(func_idx)?
+                .map(|funcref| Func::from_vm_func_ref(store.id(), funcref));
+            Ok(func)
         }
     }
 

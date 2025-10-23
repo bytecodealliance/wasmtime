@@ -2938,8 +2938,11 @@ impl Instance {
 
         let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
         let instance = self.id().get_mut(store.0);
-        let table = instance.runtime_table(start_func_table_idx);
-        let callee = instance.index_runtime_func_table(&table, start_func_idx as u64)?;
+        let callee = instance
+            .index_runtime_func_table(start_func_table_idx, start_func_idx as u64)?
+            .ok_or_else(|| {
+                anyhow!("the start function index points to an uninitialized function")
+            })?;
         if callee.type_index(store.0) != start_func_ty.type_index() {
             bail!(
                 "start function does not match expected type (currently only `(i32) -> ()` is supported)"
@@ -4337,6 +4340,7 @@ impl Waitable {
         if let Some(set) = self.common(state)?.set {
             state.get_mut(set)?.ready.remove(self);
         }
+
         Ok(event)
     }
 
