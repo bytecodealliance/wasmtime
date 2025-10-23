@@ -3,6 +3,7 @@ use std::path::Path;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn smoke() -> Result<()> {
     let engine = Engine::default();
     let linker = component::Linker::new(&engine);
@@ -90,6 +91,7 @@ fn smoke() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unused_compile_time_builtins() -> Result<()> {
     let engine = Engine::default();
     let linker = component::Linker::new(&engine);
@@ -136,6 +138,7 @@ fn unused_compile_time_builtins() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn multiple_compile_time_builtins() -> Result<()> {
     let engine = Engine::default();
     let linker = component::Linker::new(&engine);
@@ -195,6 +198,7 @@ fn multiple_compile_time_builtins() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn main_wasm_cannot_use_intrinsics() -> Result<()> {
     let engine = Engine::default();
 
@@ -225,6 +229,7 @@ fn main_wasm_cannot_use_intrinsics() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn import_erased() -> Result<()> {
     let engine = Engine::default();
 
