@@ -1671,7 +1671,8 @@ impl ValRaw {
     /// Gets the WebAssembly `funcref` value
     #[inline]
     pub fn get_funcref(&self) -> *mut c_void {
-        unsafe { self.funcref.map_addr(|i| usize::from_le(i)) }
+        let addr = unsafe { usize::from_le(self.funcref.addr()) };
+        core::ptr::with_exposed_provenance_mut(addr)
     }
 
     /// Gets the WebAssembly `externref` value
