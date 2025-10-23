@@ -1,9 +1,12 @@
-use crate::{WasmtimeStoreContextMut, handle_result, wasm_name_t, wasmtime_error_t};
+use crate::{
+    WasmtimeStoreContextMut, handle_result, wasm_name_t, wasmtime_component_resource_type_t,
+    wasmtime_error_t,
+};
 use std::mem;
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use std::slice;
-use wasmtime::component::{ResourceAny, ResourceDynamic, ResourceType, Val};
+use wasmtime::component::{ResourceAny, ResourceDynamic, Val};
 
 crate::declare_vecs! {
     (
@@ -343,41 +346,6 @@ pub unsafe extern "C" fn wasmtime_component_val_delete(
     unsafe {
         ManuallyDrop::drop(value);
     }
-}
-
-#[repr(C)]
-pub struct wasmtime_component_resource_type_t {
-    pub(crate) ty: ResourceType,
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_resource_type_new_host(
-    ty: u32,
-) -> Box<wasmtime_component_resource_type_t> {
-    Box::new(wasmtime_component_resource_type_t {
-        ty: ResourceType::host_dynamic(ty),
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_resource_type_clone(
-    ty: &wasmtime_component_resource_type_t,
-) -> Box<wasmtime_component_resource_type_t> {
-    Box::new(wasmtime_component_resource_type_t { ty: ty.ty })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_resource_type_equal(
-    a: &wasmtime_component_resource_type_t,
-    b: &wasmtime_component_resource_type_t,
-) -> bool {
-    a.ty == b.ty
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_resource_type_delete(
-    _resource: Option<Box<wasmtime_component_resource_type_t>>,
-) {
 }
 
 #[repr(C)]

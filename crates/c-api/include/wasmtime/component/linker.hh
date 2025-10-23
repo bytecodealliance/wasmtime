@@ -61,15 +61,20 @@ private:
   template <typename F>
   static wasmtime_error_t *
   raw_callback(void *env, wasmtime_context_t *store,
-               const wasmtime_component_val_t *args, size_t nargs,
+               const wasmtime_component_func_type_t *ty_const,
+               wasmtime_component_val_t *args, size_t nargs,
                wasmtime_component_val_t *results, size_t nresults) {
     static_assert(alignof(Val) == alignof(wasmtime_component_val_t));
     static_assert(sizeof(Val) == sizeof(wasmtime_component_val_t));
+    wasmtime_component_func_type_t *ty =
+        const_cast<wasmtime_component_func_type_t *>(ty_const);
     F *func = reinterpret_cast<F *>(env);
-    Span<const Val> args_span(Val::from_capi(args), nargs);
+    Span<Val> args_span(Val::from_capi(args), nargs);
     Span<Val> results_span(Val::from_capi(results), nresults);
     Result<std::monostate> result =
-        (*func)(Store::Context(store), args_span, results_span);
+        (*func)(Store::Context(store), *FuncType::from_capi(&ty), args_span,
+                results_span);
+
     if (!result) {
       return result.err().capi_release();
     }
@@ -85,7 +90,7 @@ public:
   template <typename F,
             std::enable_if_t<
                 std::is_invocable_r_v<Result<std::monostate>, F, Store::Context,
-                                      Span<const Val>, Span<Val>>,
+                                      const FuncType &, Span<Val>, Span<Val>>,
                 bool> = true>
   Result<std::monostate> add_func(std::string_view name, F &&f) {
     auto *error = wasmtime_component_linker_instance_add_func(
