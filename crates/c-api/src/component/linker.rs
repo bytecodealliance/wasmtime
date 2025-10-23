@@ -1,6 +1,6 @@
 use crate::{
-    WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_component_resource_type_t,
-    wasmtime_error_t, wasmtime_module_t,
+    WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_component_func_type_t,
+    wasmtime_component_resource_type_t, wasmtime_error_t, wasmtime_module_t,
 };
 use std::ffi::c_void;
 use wasmtime::component::{Instance, Linker, LinkerInstance, Val};
@@ -99,7 +99,8 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_module(
 pub type wasmtime_component_func_callback_t = extern "C" fn(
     *mut c_void,
     WasmtimeStoreContextMut<'_>,
-    *const wasmtime_component_val_t,
+    &wasmtime_component_func_type_t,
+    *mut wasmtime_component_val_t,
     usize,
     *mut wasmtime_component_val_t,
     usize,
@@ -123,10 +124,10 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
 
     let result = linker_instance
         .linker_instance
-        .func_new(&name, move |ctx, _ty, args, rets| {
+        .func_new(&name, move |ctx, ty, args, rets| {
             let _ = &foreign;
 
-            let args = args
+            let mut args = args
                 .iter()
                 .map(|x| wasmtime_component_val_t::from(x))
                 .collect::<Vec<_>>();
@@ -136,7 +137,8 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
             let res = callback(
                 foreign.data,
                 ctx,
-                args.as_ptr(),
+                &ty.into(),
+                args.as_mut_ptr(),
                 args.len(),
                 c_rets.as_mut_ptr(),
                 c_rets.len(),

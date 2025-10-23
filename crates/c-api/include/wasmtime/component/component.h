@@ -4,6 +4,7 @@
 #define WASMTIME_COMPONENT_COMPONENT_H
 
 #include <wasm.h>
+#include <wasmtime/component/types/component.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
@@ -101,6 +102,15 @@ wasmtime_component_deserialize_file(const wasm_engine_t *engine,
  */
 WASM_API_EXTERN wasmtime_component_t *
 wasmtime_component_clone(const wasmtime_component_t *component);
+
+/**
+ * \brief Returns the type of this component.
+ *
+ * The returned pointer must be deallocatd with
+ * `wasmtime_component_type_delete`.
+ */
+WASM_API_EXTERN wasmtime_component_type_t *
+wasmtime_component_type(const wasmtime_component_t *component);
 
 /**
  * \brief Deletes a #wasmtime_component_t created by #wasmtime_component_new
