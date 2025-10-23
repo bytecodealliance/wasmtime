@@ -7,7 +7,7 @@ use object::write::WritableBuffer;
 use std::sync::Arc;
 use wasmtime_environ::{FinishedObject, ObjectBuilder};
 
-impl<'a, 'b> CodeBuilder<'a, 'b> {
+impl<'a> CodeBuilder<'a> {
     fn compile_cached<T, S>(
         &self,
         build_artifacts: fn(

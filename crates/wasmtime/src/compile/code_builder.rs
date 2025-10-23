@@ -5,8 +5,6 @@ use std::path::Path;
 
 #[cfg(feature = "compile-time-builtins")]
 use crate::hash_map::HashMap;
-#[cfg(not(feature = "compile-time-builtins"))]
-use core::marker::PhantomData;
 
 #[cfg(feature = "compile-time-builtins")]
 mod compile_time_builtins;
@@ -42,7 +40,7 @@ mod compile_time_builtins;
 /// [`compile_module`]: CodeBuilder::compile_module
 /// [`wasm_binary`]: CodeBuilder::wasm_binary
 /// [`wasm_binary_file`]: CodeBuilder::wasm_binary_file
-pub struct CodeBuilder<'a, 'b> {
+pub struct CodeBuilder<'a> {
     pub(super) engine: &'a Engine,
     wasm: Option<Cow<'a, [u8]>>,
     wasm_path: Option<Cow<'a, Path>>,
@@ -59,10 +57,7 @@ pub struct CodeBuilder<'a, 'b> {
     // means that a bunch of the existing calls to `.wasm_bytes` and such would
     // need to be reordered with the `CodeBuilder`'s construction.
     #[cfg(feature = "compile-time-builtins")]
-    compile_time_builtins: HashMap<Cow<'b, str>, Cow<'b, [u8]>>,
-
-    #[cfg(not(feature = "compile-time-builtins"))]
-    _use_lifetime: PhantomData<&'b ()>,
+    compile_time_builtins: HashMap<Cow<'a, str>, Cow<'a, [u8]>>,
 }
 
 /// Return value of [`CodeBuilder::hint`]
@@ -73,7 +68,7 @@ pub enum CodeHint {
     Component,
 }
 
-impl<'a, 'b> CodeBuilder<'a, 'b> {
+impl<'a> CodeBuilder<'a> {
     /// Creates a new builder which will insert modules into the specified
     /// [`Engine`].
     pub fn new(engine: &'a Engine) -> Self {
@@ -86,8 +81,6 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
             unsafe_intrinsics_import: None,
             #[cfg(feature = "compile-time-builtins")]
             compile_time_builtins: HashMap::default(),
-            #[cfg(not(feature = "compile-time-builtins"))]
-            _use_lifetime: PhantomData,
         }
     }
 

@@ -1,14 +1,14 @@
 use super::*;
 
-impl<'a, 'b> CodeBuilder<'a, 'b> {
-    pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'b, str>, Cow<'b, [u8]>> {
+impl<'a> CodeBuilder<'a> {
+    pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'a, str>, Cow<'a, [u8]>> {
         &self.compile_time_builtins
     }
 
-    pub(super) fn compose_compile_time_builtins<'c>(
+    pub(super) fn compose_compile_time_builtins<'b>(
         &self,
-        main_wasm: &'c [u8],
-    ) -> Result<Cow<'c, [u8]>> {
+        main_wasm: &'b [u8],
+    ) -> Result<Cow<'b, [u8]>> {
         if self.get_compile_time_builtins().is_empty() {
             return Ok(main_wasm.into());
         }
@@ -56,10 +56,10 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     ///
     /// Returns the Wasm's top-level instance imports for `wasm-compose`
     /// configuration.
-    fn check_imports_for_compile_time_builtins<'c>(
+    fn check_imports_for_compile_time_builtins<'b>(
         &self,
-        main_wasm: &'c [u8],
-    ) -> Result<crate::hash_set::HashSet<&'c str>, Error> {
+        main_wasm: &'b [u8],
+    ) -> Result<crate::hash_set::HashSet<&'b str>, Error> {
         let intrinsics_import = self.unsafe_intrinsics_import.as_deref().ok_or_else(|| {
             anyhow!("must configure the unsafe-intrinsics import when using compile-time builtins")
         })?;
@@ -190,8 +190,8 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     /// See the example in [CodeBuilder::expose_unsafe_intrinsics].
     pub unsafe fn compile_time_builtins_binary(
         &mut self,
-        name: impl Into<Cow<'b, str>>,
-        wasm_bytes: impl Into<Cow<'b, [u8]>>,
+        name: impl Into<Cow<'a, str>>,
+        wasm_bytes: impl Into<Cow<'a, [u8]>>,
     ) -> &mut Self {
         self.compile_time_builtins
             .insert(name.into(), wasm_bytes.into());
@@ -222,8 +222,8 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     /// compile-time builtins.
     pub unsafe fn compile_time_builtins_binary_or_text(
         &mut self,
-        name: impl Into<Cow<'b, str>>,
-        wasm_bytes: impl Into<Cow<'b, [u8]>>,
+        name: impl Into<Cow<'a, str>>,
+        wasm_bytes: impl Into<Cow<'a, [u8]>>,
         wasm_path: Option<&Path>,
     ) -> Result<&mut Self> {
         let wasm_bytes = wasm_bytes.into();
@@ -256,7 +256,7 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     /// compile-time builtins.
     pub unsafe fn compile_time_builtins_binary_file(
         &mut self,
-        name: impl Into<Cow<'b, str>>,
+        name: impl Into<Cow<'a, str>>,
         file: &Path,
     ) -> Result<&mut Self> {
         let wasm_bytes = std::fs::read(file)
@@ -289,8 +289,8 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     /// compile-time builtins.
     pub unsafe fn compile_time_builtins_binary_or_text_file(
         &mut self,
-        name: impl Into<Cow<'b, str>>,
-        file: &'b Path,
+        name: impl Into<Cow<'a, str>>,
+        file: &Path,
     ) -> Result<&mut Self> {
         #[cfg(feature = "wat")]
         {
