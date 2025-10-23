@@ -175,7 +175,7 @@ impl Backtrace {
             // through the Wasm-to-host trampoline.
             None => unsafe {
                 let pc = *(*vm_store_context).last_wasm_exit_pc.get();
-                let fp = (*vm_store_context).last_wasm_exit_fp();
+                let fp = *(*vm_store_context).last_wasm_exit_fp.get();
                 (pc, fp)
             },
         };
@@ -364,7 +364,7 @@ impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
         // Get the initial exit FP, exit PC, and entry FP.
         let vm_store_context = store.0.vm_store_context();
         let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
-        let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
+        let exit_fp = unsafe { *(*vm_store_context).last_wasm_exit_fp.get() };
         let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
         log::trace!(
             "activation backtrace: exit_pc {exit_pc:x} exit_fp {exit_fp:x} entry_fp {trampoline_fp:x}"

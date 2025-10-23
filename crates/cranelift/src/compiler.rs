@@ -1620,15 +1620,17 @@ fn save_last_wasm_exit_fp_and_pc(
     ptr: &impl PtrSize,
     limits: Value,
 ) {
-    // Save the trampoline FP to the limits. Exception unwind needs
-    // this so that it can know the SP (bottom of frame) for the very
-    // last Wasm frame.
+    // Save the Wasm frame exit FP to the limits. We have the
+    // trampoline FP here; load the next FP in the chain.
     let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
+    let wasm_fp = builder
+        .ins()
+        .load(pointer_type, MemFlags::trusted(), trampoline_fp, 0);
     builder.ins().store(
         MemFlags::trusted(),
-        trampoline_fp,
+        wasm_fp,
         limits,
-        ptr.vmstore_context_last_wasm_exit_trampoline_fp(),
+        ptr.vmstore_context_last_wasm_exit_fp(),
     );
 
     // Finally save the Wasm return address to the limits.

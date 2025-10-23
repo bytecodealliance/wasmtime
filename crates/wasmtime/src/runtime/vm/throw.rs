@@ -32,7 +32,7 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
     let (exit_pc, exit_fp, entry_fp) = unsafe {
         (
             *nogc.vm_store_context().last_wasm_exit_pc.get(),
-            nogc.vm_store_context().last_wasm_exit_fp(),
+            *nogc.vm_store_context().last_wasm_exit_fp.get(),
             *nogc.vm_store_context().last_wasm_entry_fp.get(),
         )
     };

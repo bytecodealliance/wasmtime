@@ -650,18 +650,7 @@ mod call_thread_state {
         /// Requires that the saved last Wasm trampoline FP points to
         /// a valid trampoline frame, or is null.
         pub unsafe fn old_last_wasm_exit_fp(&self) -> usize {
-            // SAFETY: saved fields adhere to invariants: if
-            // `was_trap` is set, `trap_fp` is valid, otherwise
-            // `trampoline_fp` is either a valid FP from an active
-            // trampoline frame or is null.
-            unsafe {
-                if (*self.old_state).last_wasm_exit_was_trap {
-                    (*self.old_state).last_wasm_exit_trap_fp
-                } else {
-                    let trampoline_fp = (*self.old_state).last_wasm_exit_trampoline_fp;
-                    VMStoreContext::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
-                }
-            }
+            unsafe { (*self.old_state).last_wasm_exit_fp }
         }
 
         /// Get the saved PC upon exit from Wasm for the previous `CallThreadState`.
@@ -735,8 +724,8 @@ mod call_thread_state {
             unsafe {
                 let cx = self.vm_store_context.as_ref();
                 swap(
-                    &cx.last_wasm_exit_trampoline_fp,
-                    &mut (*self.old_state).last_wasm_exit_trampoline_fp,
+                    &cx.last_wasm_exit_fp,
+                    &mut (*self.old_state).last_wasm_exit_fp,
                 );
                 swap(
                     &cx.last_wasm_exit_pc,
@@ -745,10 +734,6 @@ mod call_thread_state {
                 swap(
                     &cx.last_wasm_exit_was_trap,
                     &mut (*self.old_state).last_wasm_exit_was_trap,
-                );
-                swap(
-                    &cx.last_wasm_exit_trap_fp,
-                    &mut (*self.old_state).last_wasm_exit_trap_fp,
                 );
                 swap(
                     &cx.last_wasm_entry_fp,
@@ -1040,7 +1025,7 @@ impl CallThreadState {
         unsafe {
             let cx = self.vm_store_context.as_ref();
             *cx.last_wasm_exit_pc.get() = pc;
-            *cx.last_wasm_exit_trap_fp.get() = fp;
+            *cx.last_wasm_exit_fp.get() = fp;
             *cx.last_wasm_exit_was_trap.get() = true;
         }
         let result = f(self);
