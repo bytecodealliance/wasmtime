@@ -1,7 +1,7 @@
 use super::*;
 
 impl<'a, 'b> CodeBuilder<'a, 'b> {
-    pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'b, str>, BytesOrFile<'b>> {
+    pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'b, str>, Cow<'b, [u8]>> {
         &self.compile_time_builtins
     }
 
@@ -29,7 +29,7 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
             .with_context(|| format!("failed to write to file: {}", main_wasm_path.display()))?;
 
         let mut config = wasm_compose::config::Config::default();
-        for (name, contents) in self.get_compile_time_builtins() {
+        for (name, bytes) in self.get_compile_time_builtins() {
             let name: &str = &*name;
             if !imports.contains(&name) {
                 continue;
@@ -38,21 +38,8 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
             let mut path = deps.join(Path::new(name));
             path.set_extension("wasm");
 
-            match contents {
-                BytesOrFile::File(orig_path) => {
-                    std::fs::copy(&orig_path, &path).with_context(|| {
-                        format!(
-                            "failed to copy `{}` to `{}`",
-                            orig_path.display(),
-                            path.display()
-                        )
-                    })?;
-                }
-                BytesOrFile::Bytes(bytes) => {
-                    std::fs::write(&path, &bytes)
-                        .with_context(|| format!("failed to write to file: {}", path.display()))?;
-                }
-            }
+            std::fs::write(&path, &bytes)
+                .with_context(|| format!("failed to write to file: {}", path.display()))?;
 
             config
                 .dependencies
@@ -215,7 +202,7 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
         wasm_bytes: impl Into<Cow<'b, [u8]>>,
     ) -> &mut Self {
         self.compile_time_builtins
-            .insert(name.into(), BytesOrFile::Bytes(wasm_bytes.into()));
+            .insert(name.into(), wasm_bytes.into());
         self
     }
 
@@ -278,11 +265,12 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     pub unsafe fn compile_time_builtins_binary_file(
         &mut self,
         name: impl Into<Cow<'b, str>>,
-        file: &'b Path,
-    ) -> &mut Self {
-        self.compile_time_builtins
-            .insert(name.into(), BytesOrFile::File(file.into()));
-        self
+        file: &Path,
+    ) -> Result<&mut Self> {
+        let wasm_bytes = std::fs::read(file)
+            .with_context(|| format!("failed to read file: {}", file.display()))?;
+        // SAFETY: Same as our unsafe contract.
+        Ok(unsafe { self.compile_time_builtins_binary(name, wasm_bytes) })
     }
 
     /// Equivalent of [`CodeBuilder::compile_time_builtins_binary_file`] that
@@ -314,27 +302,16 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     ) -> Result<&mut Self> {
         #[cfg(feature = "wat")]
         {
-            let wasm = std::fs::read(file)
-                .with_context(|| format!("failed to read input file: {}", file.display()))?;
-            ensure!(
-                !wasmparser::Parser::is_core_wasm(&wasm),
-                "compile-time builtins must be components, but {} is a core module",
-                file.display(),
-            );
-            if wasmparser::Parser::is_component(&wasm) {
-                // Fall through, outside of the `feature = "wat"` block.
-            } else {
-                if let Cow::Owned(wasm) = wat::parse_bytes(&wasm).map_err(|mut e| {
-                    e.set_path(file);
-                    e
-                })? {
-                    // SAFETY: Same as our unsafe contract.
-                    return Ok(unsafe { self.compile_time_builtins_binary(name, wasm) });
-                }
-            }
+            let wasm = wat::parse_file(file)
+                .with_context(|| format!("error parsing file: {}", file.display()))?;
+            // SAFETY: Same as our unsafe contract.
+            Ok(unsafe { self.compile_time_builtins_binary(name, wasm) })
         }
 
-        // SAFETY: Same as our unsafe contract.
-        Ok(unsafe { self.compile_time_builtins_binary_file(name, file) })
+        #[cfg(not(feature = "wat"))]
+        {
+            // SAFETY: Same as our unsafe contract.
+            unsafe { self.compile_time_builtins_binary_file(name, file) }
+        }
     }
 }

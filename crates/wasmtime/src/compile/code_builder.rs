@@ -59,16 +59,10 @@ pub struct CodeBuilder<'a, 'b> {
     // means that a bunch of the existing calls to `.wasm_bytes` and such would
     // need to be reordered with the `CodeBuilder`'s construction.
     #[cfg(feature = "compile-time-builtins")]
-    compile_time_builtins: HashMap<Cow<'b, str>, BytesOrFile<'b>>,
+    compile_time_builtins: HashMap<Cow<'b, str>, Cow<'b, [u8]>>,
 
     #[cfg(not(feature = "compile-time-builtins"))]
     _use_lifetime: PhantomData<&'b ()>,
-}
-
-#[cfg(feature = "compile-time-builtins")]
-pub(crate) enum BytesOrFile<'a> {
-    Bytes(Cow<'a, [u8]>),
-    File(Cow<'a, Path>),
 }
 
 /// Return value of [`CodeBuilder::hint`]
