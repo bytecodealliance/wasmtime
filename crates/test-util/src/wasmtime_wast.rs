@@ -47,6 +47,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         exceptions,
         legacy_exceptions,
         stack_switching,
+        custom_descriptors,
 
         hogs_memory: _,
         gc_types: _,
@@ -84,6 +85,9 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let simd = relaxed_simd || simd.unwrap_or(false);
 
     let exceptions = stack_switching || exceptions.unwrap_or(false);
+
+    // Not implemented in Wasmtime yet.
+    let _custom_descriptors = custom_descriptors.unwrap_or(false);
 
     config
         .wasm_multi_memory(multi_memory)

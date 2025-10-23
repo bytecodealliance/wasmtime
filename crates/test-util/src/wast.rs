@@ -104,9 +104,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.threads = Some(true);
             ret.reference_types = Some(false);
         }
-        Some("relaxed-simd") => {
-            ret.relaxed_simd = Some(true);
-        }
         Some("custom-page-sizes") => {
             ret.custom_page_sizes = Some(true);
             ret.multi_memory = Some(true);
@@ -118,10 +115,13 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 ret.hogs_memory = Some(true);
             }
         }
-        Some("annotations") => {
-            ret.simd = Some(true);
+        Some("custom-descriptors") => {
+            ret.custom_descriptors = Some(true);
         }
-        Some("wasm-3.0") => {
+        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
+        None => {
+            ret.reference_types = Some(true);
+            ret.simd = Some(true);
             ret.simd = Some(true);
             ret.relaxed_simd = Some(true);
             ret.multi_memory = Some(true);
@@ -147,14 +147,10 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test.ends_with("memory.wast")
                 || test.ends_with("table.wast")
                 || test.ends_with("memory64.wast")
+                || test.ends_with("table64.wast")
             {
                 ret.hogs_memory = Some(true);
             }
-        }
-        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
-        None => {
-            ret.reference_types = Some(true);
-            ret.simd = Some(true);
         }
     }
 
@@ -241,6 +237,7 @@ macro_rules! foreach_config_option {
             legacy_exceptions
             stack_switching
             spec_test
+            custom_descriptors
         }
     };
 }
@@ -673,6 +670,17 @@ impl WastTest {
             .iter()
             .any(|part| self.path.ends_with(part))
         {
+            return true;
+        }
+
+        // Not implemented in Wasmtime anywhere yet.
+        if self.config.custom_descriptors() {
+            let happens_to_work =
+                ["spec_testsuite/proposals/custom-descriptors/binary-leb128.wast"];
+
+            if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
+                return false;
+            }
             return true;
         }
 

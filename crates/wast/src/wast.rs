@@ -733,7 +733,7 @@ impl WastContext {
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
-                if !error_message.contains(&text[..]) {
+                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
                     bail!("assert_unlinkable: expected {text}, got {error_message}",)
                 }
             }
