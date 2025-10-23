@@ -7,16 +7,16 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
 
     pub(super) fn compose_compile_time_builtins<'c>(
         &self,
-        main_wasm: Cow<'c, [u8]>,
+        main_wasm: &'c [u8],
     ) -> Result<Cow<'c, [u8]>> {
         if self.get_compile_time_builtins().is_empty() {
-            return Ok(main_wasm);
+            return Ok(main_wasm.into());
         }
 
         let imports = self.check_imports_for_compile_time_builtins(&main_wasm)?;
         if imports.is_empty() {
             drop(imports);
-            return Ok(main_wasm);
+            return Ok(main_wasm.into());
         }
 
         let tempdir = tempfile::TempDir::new().context("failed to create a temporary directory")?;

@@ -210,7 +210,7 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
     pub(super) fn get_wasm(&self) -> Result<Cow<'_, [u8]>> {
         let wasm = self
             .wasm
-            .clone()
+            .as_deref()
             .ok_or_else(|| anyhow!("no wasm bytes have been configured"))?;
 
         #[cfg(not(feature = "compile-time-builtins"))]
