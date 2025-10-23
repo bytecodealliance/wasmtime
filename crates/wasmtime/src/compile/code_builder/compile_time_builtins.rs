@@ -70,10 +70,13 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
 
         for payload in parser.parse_all(main_wasm) {
             match payload? {
-                wasmparser::Payload::ComponentImportSection(imports) => {
-                    if level > 0 {
-                        continue;
-                    }
+                wasmparser::Payload::Version { .. } => {
+                    level += 1;
+                }
+                wasmparser::Payload::End(_) => {
+                    level -= 1;
+                }
+                wasmparser::Payload::ComponentImportSection(imports) if level == 1 => {
                     for imp in imports.into_iter() {
                         let imp = imp?;
                         // Ideally we would simply choose a new import name that
@@ -91,17 +94,6 @@ impl<'a, 'b> CodeBuilder<'a, 'b> {
                         if let wasmparser::ComponentTypeRef::Instance(_) = imp.ty {
                             instance_imports.insert(imp.name.0);
                         }
-                    }
-                }
-                wasmparser::Payload::ModuleSection { .. } => {
-                    level += 1;
-                }
-                wasmparser::Payload::ComponentSection { .. } => {
-                    level += 1;
-                }
-                wasmparser::Payload::End(_) => {
-                    if level > 0 {
-                        level -= 1;
                     }
                 }
                 _ => {}
