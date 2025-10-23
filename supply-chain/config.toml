@@ -7,20 +7,17 @@ version = "0.10"
 [imports.embark-studios]
 url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
 
-[imports.fermyon]
-url = "https://raw.githubusercontent.com/fermyon/spin/main/supply-chain/audits.toml"
-
 [imports.google]
-url = [
-    "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT",
-    "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT",
-]
+url = "https://raw.githubusercontent.com/google/rust-crate-audits/main/audits.toml"
 
 [imports.isrg]
 url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/audits.toml"
 
 [imports.mozilla]
 url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
+[imports.spinframework]
+url = "https://raw.githubusercontent.com/spinframework/spin/main/supply-chain/audits.toml"
 
 [policy.cranelift]
 audit-as-crates-io = true
