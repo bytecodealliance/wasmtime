@@ -36,6 +36,8 @@ target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
+wasm-compose = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 anyhow = { workspace = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
@@ -152,6 +154,7 @@ default = [
   'stack-switching',
   'std',
   'debug',
+  'compile-time-builtins',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -420,3 +423,5 @@ debug = [
     'async'
 ]
 
+# Enables support for defining compile-time builtins.
+compile-time-builtins = ['dep:wasm-compose', 'dep:tempfile']
