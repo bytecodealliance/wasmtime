@@ -22,7 +22,7 @@
 use crate::{
     Reachability,
     func_environ::FuncEnvironment,
-    translate::{HeapData, TargetEnvironment},
+    translate::{FuncTranslationStacks, HeapData, TargetEnvironment},
 };
 use Reachability::*;
 use cranelift_codegen::{
@@ -84,12 +84,15 @@ pub fn bounds_check_and_compute_addr(
     index: ir::Value,
     bounds_check: BoundsCheck,
     trap: ir::TrapCode,
+    stacks: &FuncTranslationStacks,
 ) -> Reachability<ir::Value> {
     match bounds_check {
         BoundsCheck::StaticOffset {
             offset,
             access_size,
-        } => bounds_check_field_access(builder, env, heap, index, offset, access_size, trap),
+        } => {
+            bounds_check_field_access(builder, env, heap, index, offset, access_size, trap, stacks)
+        }
 
         #[cfg(feature = "gc")]
         BoundsCheck::StaticObjectField {
@@ -113,6 +116,7 @@ pub fn bounds_check_and_compute_addr(
                     0,
                     object_size,
                     trap,
+                    stacks,
                 ) {
                     Reachable(v) => v,
                     u @ Unreachable => return u,
@@ -123,7 +127,7 @@ pub fn bounds_check_and_compute_addr(
             }
 
             // Otherwise, bounds check just this one field's access.
-            bounds_check_field_access(builder, env, heap, index, offset, access_size, trap)
+            bounds_check_field_access(builder, env, heap, index, offset, access_size, trap, stacks)
         }
 
         // Compute the index of the end of the object, bounds check that and get
@@ -148,6 +152,7 @@ pub fn bounds_check_and_compute_addr(
                 0,
                 0,
                 trap,
+                stacks,
             ) {
                 Reachable(v) => v,
                 u @ Unreachable => return u,
@@ -177,6 +182,7 @@ fn bounds_check_field_access(
     offset: u32,
     access_size: u8,
     trap: ir::TrapCode,
+    stacks: &FuncTranslationStacks,
 ) -> Reachability<ir::Value> {
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
@@ -298,7 +304,7 @@ fn bounds_check_field_access(
         // max_memory_size`, since we will end up being out-of-bounds regardless
         // of the given `index`.
         env.before_unconditionally_trapping_memory_access(builder);
-        env.trap(builder, trap);
+        env.trap(builder, trap, stacks);
         return Unreachable;
     }
 
@@ -308,7 +314,7 @@ fn bounds_check_field_access(
     // native pointer type anyway, so this is an unconditional trap.
     if pointer_bit_width < 64 && offset_and_size >= (1 << pointer_bit_width) {
         env.before_unconditionally_trapping_memory_access(builder);
-        env.trap(builder, trap);
+        env.trap(builder, trap, stacks);
         return Unreachable;
     }
 
@@ -430,6 +436,7 @@ fn bounds_check_field_access(
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation),
             oob,
             trap,
+            stacks,
         ));
     }
 
@@ -464,6 +471,7 @@ fn bounds_check_field_access(
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
             trap,
+            stacks,
         ));
     }
 
@@ -513,6 +521,7 @@ fn bounds_check_field_access(
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
             trap,
+            stacks,
         ));
     }
 
@@ -558,6 +567,7 @@ fn bounds_check_field_access(
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
             trap,
+            stacks,
         ));
     }
 
@@ -575,7 +585,7 @@ fn bounds_check_field_access(
         builder.func.dfg.facts[access_size_val] =
             Some(Fact::constant(pointer_bit_width, offset_and_size));
     }
-    let adjusted_index = env.uadd_overflow_trap(builder, index, access_size_val, trap);
+    let adjusted_index = env.uadd_overflow_trap(builder, index, access_size_val, trap, stacks);
     if pcc {
         builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
             pointer_bit_width,
@@ -603,6 +613,7 @@ fn bounds_check_field_access(
         AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
         oob,
         trap,
+        stacks,
     ))
 }
 
@@ -756,9 +767,10 @@ fn explicit_check_oob_condition_and_compute_addr(
     // in bounds (and therefore we can proceed).
     oob_condition: ir::Value,
     trap: ir::TrapCode,
+    stacks: &FuncTranslationStacks,
 ) -> ir::Value {
     if let OobBehavior::ExplicitTrap = oob_behavior {
-        env.trapnz(builder, oob_condition, trap);
+        env.trapnz(builder, oob_condition, trap, stacks);
     }
     let addr_ty = env.pointer_type();
 

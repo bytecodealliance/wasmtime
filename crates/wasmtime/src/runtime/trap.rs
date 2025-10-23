@@ -99,6 +99,7 @@ pub(crate) fn from_runtime_box(
         crate::runtime::vm::TrapReason::User(error) => (error, None),
         crate::runtime::vm::TrapReason::Jit {
             pc,
+            fp: _,
             faulting_addr,
             trap,
         } => {

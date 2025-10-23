@@ -2,6 +2,7 @@
 
 use super::GcCompiler;
 use crate::func_environ::{Extension, FuncEnvironment};
+use crate::translate::FuncTranslationStacks;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
@@ -24,6 +25,7 @@ pub fn translate_struct_new(
     _builder: &mut FunctionBuilder<'_>,
     _struct_type_index: TypeIndex,
     _fields: &[ir::Value],
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -32,6 +34,7 @@ pub fn translate_struct_new_default(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder<'_>,
     _struct_type_index: TypeIndex,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -43,6 +46,7 @@ pub fn translate_struct_get(
     _field_index: u32,
     _struct_ref: ir::Value,
     _extension: Option<Extension>,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -54,6 +58,7 @@ pub fn translate_struct_set(
     _field_index: u32,
     _struct_ref: ir::Value,
     _new_val: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -63,6 +68,7 @@ pub fn translate_exn_unbox(
     _builder: &mut FunctionBuilder<'_>,
     _tag_index: TagIndex,
     _exn_ref: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<SmallVec<[ir::Value; 4]>> {
     disabled()
 }
@@ -73,6 +79,7 @@ pub fn translate_exn_throw(
     _tag_index: TagIndex,
     _args: &[ir::Value],
     _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -82,6 +89,7 @@ pub fn translate_exn_throw_ref(
     _builder: &mut FunctionBuilder<'_>,
     _exnref: ir::Value,
     _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -92,6 +100,7 @@ pub fn translate_array_new(
     _array_type_index: TypeIndex,
     _elem: ir::Value,
     _len: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -101,6 +110,7 @@ pub fn translate_array_new_default(
     _builder: &mut FunctionBuilder,
     _array_type_index: TypeIndex,
     _len: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -110,6 +120,7 @@ pub fn translate_array_new_fixed(
     _builder: &mut FunctionBuilder,
     _array_type_index: TypeIndex,
     _elems: &[ir::Value],
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -122,6 +133,7 @@ pub fn translate_array_fill(
     _index: ir::Value,
     _value: ir::Value,
     _n: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -130,6 +142,7 @@ pub fn translate_array_len(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder,
     _array: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -141,6 +154,7 @@ pub fn translate_array_get(
     _array: ir::Value,
     _index: ir::Value,
     _extension: Option<Extension>,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -152,6 +166,7 @@ pub fn translate_array_set(
     _array: ir::Value,
     _index: ir::Value,
     _value: ir::Value,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -162,6 +177,7 @@ pub fn translate_ref_test(
     _test_ty: WasmRefType,
     _val: ir::Value,
     _val_ty: WasmRefType,
+    _stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     disabled()
 }

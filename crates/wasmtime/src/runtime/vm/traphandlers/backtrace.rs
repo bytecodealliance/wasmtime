@@ -366,6 +366,9 @@ impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
         let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
         let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
         let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
+        log::trace!(
+            "activation backtrace: exit_pc {exit_pc:x} exit_fp {exit_fp:x} entry_fp {trampoline_fp:x}"
+        );
         let inner: Box<dyn Iterator<Item = Frame>> = if exit_fp == 0 {
             // No activations on this Store; return an empty iterator.
             Box::new(core::iter::empty())

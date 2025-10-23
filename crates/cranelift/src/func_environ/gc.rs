@@ -5,7 +5,7 @@
 //! to have just a single `cfg(feature = "gc")` for the whole crate, which
 //! selects between these two implementations.
 
-use crate::func_environ::FuncEnvironment;
+use crate::{func_environ::FuncEnvironment, translate::FuncTranslationStacks};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{GcTypeLayouts, TagIndex, TypeIndex, WasmRefType, WasmResult};
@@ -52,6 +52,7 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
         init: ArrayInit<'_>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value>;
 
     /// Emit code to allocate a new struct.
@@ -65,6 +66,7 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder<'_>,
         struct_type_index: TypeIndex,
         fields: &[ir::Value],
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value>;
 
     /// Emit code to allocate a new exception object.
@@ -83,6 +85,7 @@ pub trait GcCompiler {
         fields: &[ir::Value],
         instance_id: ir::Value,
         tag: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value>;
 
     /// Emit a read barrier for when we are cloning a GC reference onto the Wasm
@@ -124,6 +127,7 @@ pub trait GcCompiler {
         ty: WasmRefType,
         src: ir::Value,
         flags: ir::MemFlags,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value>;
 
     /// Emit a write barrier for when we are writing a GC reference over another
@@ -166,6 +170,7 @@ pub trait GcCompiler {
         dst: ir::Value,
         new_val: ir::Value,
         flags: ir::MemFlags,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()>;
 }
 

@@ -18,7 +18,7 @@ pub use self::signals::*;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
 use crate::runtime::module::lookup_code;
-use crate::runtime::store::{ExecutorRef, StoreOpaque};
+use crate::runtime::store::ExecutorRef;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
 #[cfg(feature = "debug")]
@@ -367,6 +367,10 @@ pub enum TrapReason {
         /// the trapping address to a trap code.
         pc: usize,
 
+        /// The FP register from when this trap originated.
+        #[allow(dead_code, reason = "used in debug configuration")]
+        fp: usize,
+
         /// If the trap was a memory-related trap such as SIGSEGV then this
         /// field will contain the address of the inaccessible data.
         ///
@@ -546,6 +550,56 @@ mod call_thread_state {
         pub(crate) vm_store_context: NonNull<VMStoreContext>,
         pub(crate) unwinder: &'static dyn Unwind,
 
+        /// Raw pointer to the `*mut dyn VMStore` running in this
+        /// activation, to be used *only* when re-entering the host
+        /// during a trap.
+        ///
+        /// This is a very tricky ownership/provenance dance. When
+        /// control is in the Wasm code itself, the store is
+        /// completely owned by the Wasm. It passes ownership back
+        /// during hostcalls via mutable reborrow (as with any call
+        /// with a `&mut self` in Rust). That's all well and good for
+        /// explicit calls.
+        ///
+        /// When a trap occurs, however, we can also think of the
+        /// ownership passing as-if the trapping instruction were a
+        /// hostcall with a `&mut dyn VMStore` parameter. This works
+        /// *as long as* all possibly trapping points in compiled code
+        /// act as if they invalidate any other held borrows into the
+        /// store.
+        ///
+        /// It turns out that we generally enforce this in compiled
+        /// guest code in Cranelift: any `can_trap` opcode returns
+        /// `true` from `has_memory_fence_semantics()` (see
+        /// corresponding comment there). This is enough to ensure
+        /// that the compiler treats every trapping op as-if it were a
+        /// hostcall, which clobbers all memory state; so from the
+        /// Wasm code's point of view, it is safely reborrowing the
+        /// Store and passing it "somewhere" on every trap. The
+        /// plumbing for that "passing" goes through this field, but
+        /// that is an implementation detail. When control comes back
+        /// out of the Wasm activation, we clear this field; the
+        /// invocation itself takes a mutable borrow of the store, so
+        /// safety is preserved on the caller side as well. In other
+        /// words, the provenance is something like
+        ///
+        /// ```plain
+        ///
+        ///      host (caller side)  with `&mut dyn VMStore`
+        ///                   /               \
+        ///     (param into  /          (this field)
+        ///      entry trampoline)              \
+        ///                |                     |
+        ///               ~~~~~~~ (wasm code) ~~~~~~
+        ///                |                     |
+        ///                libcall              trap
+        ///  ```
+        ///
+        /// with only *one* of those paths dynamically taken at any
+        /// given time.
+        #[cfg(all(feature = "debug", feature = "pulley"))]
+        pub(crate) raw_store: NonNull<dyn VMStore>,
+
         pub(super) prev: Cell<tls::Ptr>,
 
         // The state of the runtime for the *previous* `CallThreadState` for
@@ -570,7 +624,7 @@ mod call_thread_state {
     impl CallThreadState {
         #[inline]
         pub(super) fn new(
-            store: &mut StoreOpaque,
+            store: &mut dyn VMStore,
             old_state: *mut EntryStoreContext,
         ) -> CallThreadState {
             CallThreadState {
@@ -582,6 +636,8 @@ mod call_thread_state {
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
                 vm_store_context: store.vm_store_context_ptr(),
+                #[cfg(all(feature = "debug", feature = "pulley"))]
+                raw_store: NonNull::from_mut(store),
                 prev: Cell::new(ptr::null()),
                 old_state,
             }
@@ -594,10 +650,18 @@ mod call_thread_state {
         /// Requires that the saved last Wasm trampoline FP points to
         /// a valid trampoline frame, or is null.
         pub unsafe fn old_last_wasm_exit_fp(&self) -> usize {
-            let trampoline_fp = unsafe { (&*self.old_state).last_wasm_exit_trampoline_fp };
-            // SAFETY: `trampoline_fp` is either a valid FP from an
-            // active trampoline frame or is null.
-            unsafe { VMStoreContext::wasm_exit_fp_from_trampoline_fp(trampoline_fp) }
+            // SAFETY: saved fields adhere to invariants: if
+            // `was_trap` is set, `trap_fp` is valid, otherwise
+            // `trampoline_fp` is either a valid FP from an active
+            // trampoline frame or is null.
+            unsafe {
+                if (*self.old_state).last_wasm_exit_was_trap {
+                    (*self.old_state).last_wasm_exit_trap_fp
+                } else {
+                    let trampoline_fp = (*self.old_state).last_wasm_exit_trampoline_fp;
+                    VMStoreContext::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
+                }
+            }
         }
 
         /// Get the saved PC upon exit from Wasm for the previous `CallThreadState`.
@@ -677,6 +741,14 @@ mod call_thread_state {
                 swap(
                     &cx.last_wasm_exit_pc,
                     &mut (*self.old_state).last_wasm_exit_pc,
+                );
+                swap(
+                    &cx.last_wasm_exit_was_trap,
+                    &mut (*self.old_state).last_wasm_exit_was_trap,
+                );
+                swap(
+                    &cx.last_wasm_exit_trap_fp,
+                    &mut (*self.old_state).last_wasm_exit_trap_fp,
                 );
                 swap(
                     &cx.last_wasm_entry_fp,
@@ -826,73 +898,7 @@ impl CallThreadState {
     unsafe fn unwind(&self, store: &mut dyn VMStore) {
         #[allow(unused_mut, reason = "only  mutated in `debug` configuration")]
         let mut unwind = self.unwind.replace(UnwindState::None);
-
-        #[cfg(feature = "debug")]
-        {
-            let result = match &unwind {
-                UnwindState::UnwindToWasm(_) => {
-                    assert!(store.as_store_opaque().has_pending_exception());
-                    let exn = store
-                        .as_store_opaque()
-                        .pending_exception_owned_rooted()
-                        .expect("exception should be set when we are throwing");
-                    store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
-                }
-
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::Exception),
-                    ..
-                } => {
-                    use crate::store::AsStoreOpaque;
-                    let exn = store
-                        .as_store_opaque()
-                        .pending_exception_owned_rooted()
-                        .expect("exception should be set when we are throwing");
-                    store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
-                        exn.clone(),
-                    ))
-                }
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
-                    ..
-                } => store.block_on_debug_handler(crate::DebugEvent::Trap(*trap)),
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::User(err)),
-                    ..
-                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
-
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::Jit { .. }),
-                    ..
-                } => {
-                    // JIT traps not handled yet.
-                    Ok(())
-                }
-                #[cfg(all(feature = "std", panic = "unwind"))]
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Panic(_),
-                    ..
-                } => {
-                    // We don't invoke any debugger hook when we're
-                    // unwinding due to a Rust (host-side) panic.
-                    Ok(())
-                }
-
-                UnwindState::None => unreachable!(),
-            };
-
-            // If the debugger invocation itself resulted in an `Err`
-            // (which can only come from the `block_on` hitting a
-            // failure mode), we need to override our unwind as-if
-            // were handling a host error.
-            if let Err(err) = result {
-                unwind = UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::User(err)),
-                    backtrace: None,
-                    coredump_stack: None,
-                };
-            }
-        }
+        self.debug_event_on_unwind(store, &mut unwind);
 
         match unwind {
             UnwindState::UnwindToHost { .. } => {
@@ -935,6 +941,114 @@ impl CallThreadState {
                 panic!("Attempting to unwind with no unwind state set.");
             }
         }
+    }
+
+    /// From the Pulley interpreter, perform a fiber suspend for a
+    /// debug event handler after setting the unwind state with
+    /// `set_jit_trap`.
+    #[cfg(all(feature = "debug", feature = "pulley"))]
+    pub(crate) fn debug_event_from_interpreter(&self) {
+        let mut unwind = self.unwind.replace(UnwindState::None);
+        // SAFETY: this is invoked only within a trapping context when
+        // we have received control back from the Wasm code. See the
+        // provenance diagram and comments on `self.raw_store` for
+        // more details.
+        let store = unsafe { self.raw_store.as_ptr().as_mut().unwrap() };
+        self.debug_event_on_unwind(store, &mut unwind);
+        self.unwind.set(unwind);
+    }
+
+    /// Suspend from the current fiber, blocking on an async debug
+    /// callback hook, if any, if the `unwind` state merits a debug
+    /// event.
+    #[cfg(feature = "debug")]
+    fn debug_event_on_unwind(&self, store: &mut dyn VMStore, unwind: &mut UnwindState) {
+        let result = match unwind {
+            UnwindState::UnwindToWasm(_) => {
+                assert!(store.as_store_opaque().has_pending_exception());
+                let exn = store
+                    .as_store_opaque()
+                    .pending_exception_owned_rooted()
+                    .expect("exception should be set when we are throwing");
+                store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
+            }
+
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::Exception),
+                ..
+            } => {
+                use crate::store::AsStoreOpaque;
+                let exn = store
+                    .as_store_opaque()
+                    .pending_exception_owned_rooted()
+                    .expect("exception should be set when we are throwing");
+                store
+                    .block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(exn.clone()))
+            }
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
+                ..
+            } => store.block_on_debug_handler(crate::DebugEvent::Trap(*trap)),
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::User(err)),
+                ..
+            } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
+
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::Jit { pc, fp, trap, .. }),
+                ..
+            } => self.with_trap_exit_state(*pc, *fp, |_| {
+                store.block_on_debug_handler(crate::DebugEvent::Trap(*trap))
+            }),
+            #[cfg(all(feature = "std", panic = "unwind"))]
+            UnwindState::UnwindToHost {
+                reason: UnwindReason::Panic(_),
+                ..
+            } => {
+                // We don't invoke any debugger hook when we're
+                // unwinding due to a Rust (host-side) panic.
+                Ok(())
+            }
+
+            UnwindState::None => unreachable!(),
+        };
+
+        // If the debugger invocation itself resulted in an `Err`
+        // (which can only come from the `block_on` hitting a
+        // failure mode), we need to override our unwind as-if
+        // were handling a host error.
+        if let Err(err) = result {
+            *unwind = UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(TrapReason::User(err)),
+                backtrace: None,
+                coredump_stack: None,
+            };
+        }
+    }
+
+    #[cfg(not(feature = "debug"))]
+    pub(crate) fn debug_event_on_unwind(
+        &self,
+        _store: &mut dyn VMStore,
+        _unwind: &mut UnwindState,
+    ) {
+    }
+
+    /// Set up our state according to a trap exit back to the host.
+    #[cfg(feature = "debug")]
+    fn with_trap_exit_state<R, F: FnOnce(&Self) -> R>(&self, pc: usize, fp: usize, f: F) -> R {
+        unsafe {
+            let cx = self.vm_store_context.as_ref();
+            *cx.last_wasm_exit_pc.get() = pc;
+            *cx.last_wasm_exit_trap_fp.get() = fp;
+            *cx.last_wasm_exit_was_trap.get() = true;
+        }
+        let result = f(self);
+        unsafe {
+            let cx = self.vm_store_context.as_ref();
+            *cx.last_wasm_exit_was_trap.get() = false;
+        }
+        result
     }
 
     pub(crate) fn entry_trap_handler(&self) -> Handler {
@@ -1053,6 +1167,7 @@ impl CallThreadState {
         self.unwind.set(UnwindState::UnwindToHost {
             reason: UnwindReason::Trap(TrapReason::Jit {
                 pc,
+                fp,
                 faulting_addr,
                 trap,
             }),

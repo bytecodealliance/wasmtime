@@ -150,6 +150,12 @@ pub fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::Debugtrap
         | Opcode::SequencePoint => true,
         Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
+        // N.B.: this is *load-bearing for borrow safety and
+        // provenance in Wasmtime*. A trapping op can potentially
+        // cause an implicit hostcall, and that hostcall implicitly
+        // mutably borrows Wasmtime's Store. So we can't allow alias
+        // anslysis to cross trapping opcodes; they are implicitly
+        // as-if they called the host.
         op if op.can_trap() => true,
         _ => false,
     }

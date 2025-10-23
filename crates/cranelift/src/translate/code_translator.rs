@@ -185,7 +185,7 @@ pub fn translate_operator(
          ***********************************************************************************/
         Operator::GlobalGet { global_index } => {
             let global_index = GlobalIndex::from_u32(*global_index);
-            let val = environ.translate_global_get(builder, global_index)?;
+            let val = environ.translate_global_get(builder, global_index, stack)?;
             stack.push1(val);
         }
         Operator::GlobalSet { global_index } => {
@@ -195,7 +195,7 @@ pub fn translate_operator(
             if builder.func.dfg.value_type(val).is_vector() {
                 val = optionally_bitcast_vector(val, I8X16, builder);
             }
-            environ.translate_global_set(builder, global_index, val)?;
+            environ.translate_global_set(builder, global_index, val, stack)?;
         }
         /********************************* Stack misc ***************************************
          *  `drop`, `nop`, `unreachable` and `select`.
@@ -230,7 +230,7 @@ pub fn translate_operator(
             // We do nothing
         }
         Operator::Unreachable => {
-            environ.trap(builder, crate::TRAP_UNREACHABLE);
+            environ.trap(builder, crate::TRAP_UNREACHABLE, stack);
             stack.reachable = false;
         }
         /***************************** Control flow blocks **********************************
@@ -622,14 +622,20 @@ pub fn translate_operator(
             let tag_index = TagIndex::from_u32(*tag_index);
             let arity = environ.tag_param_arity(tag_index);
             let args = stack.peekn(arity);
-            environ.translate_exn_throw(builder, tag_index, args, stack.handlers.handlers())?;
+            environ.translate_exn_throw(
+                builder,
+                tag_index,
+                args,
+                stack.handlers.handlers(),
+                stack,
+            )?;
             stack.popn(arity);
             stack.reachable = false;
         }
 
         Operator::ThrowRef => {
             let exnref = stack.pop1();
-            environ.translate_exn_throw_ref(builder, exnref, stack.handlers.handlers())?;
+            environ.translate_exn_throw_ref(builder, exnref, stack.handlers.handlers(), stack)?;
             stack.reachable = false;
         }
 
@@ -1083,19 +1089,19 @@ pub fn translate_operator(
         }
         Operator::I64TruncF64S | Operator::I64TruncF32S => {
             let val = stack.pop1();
-            stack.push1(environ.translate_fcvt_to_sint(builder, I64, val));
+            stack.push1(environ.translate_fcvt_to_sint(builder, I64, val, stack));
         }
         Operator::I32TruncF64S | Operator::I32TruncF32S => {
             let val = stack.pop1();
-            stack.push1(environ.translate_fcvt_to_sint(builder, I32, val));
+            stack.push1(environ.translate_fcvt_to_sint(builder, I32, val, stack));
         }
         Operator::I64TruncF64U | Operator::I64TruncF32U => {
             let val = stack.pop1();
-            stack.push1(environ.translate_fcvt_to_uint(builder, I64, val));
+            stack.push1(environ.translate_fcvt_to_uint(builder, I64, val, stack));
         }
         Operator::I32TruncF64U | Operator::I32TruncF32U => {
             let val = stack.pop1();
-            stack.push1(environ.translate_fcvt_to_uint(builder, I32, val));
+            stack.push1(environ.translate_fcvt_to_uint(builder, I32, val, stack));
         }
         Operator::I64TruncSatF64S | Operator::I64TruncSatF32S => {
             let val = stack.pop1();
@@ -1222,19 +1228,19 @@ pub fn translate_operator(
         }
         Operator::I32DivS | Operator::I64DivS => {
             let (arg1, arg2) = stack.pop2();
-            stack.push1(environ.translate_sdiv(builder, arg1, arg2));
+            stack.push1(environ.translate_sdiv(builder, arg1, arg2, stack));
         }
         Operator::I32DivU | Operator::I64DivU => {
             let (arg1, arg2) = stack.pop2();
-            stack.push1(environ.translate_udiv(builder, arg1, arg2));
+            stack.push1(environ.translate_udiv(builder, arg1, arg2, stack));
         }
         Operator::I32RemS | Operator::I64RemS => {
             let (arg1, arg2) = stack.pop2();
-            stack.push1(environ.translate_srem(builder, arg1, arg2));
+            stack.push1(environ.translate_srem(builder, arg1, arg2, stack));
         }
         Operator::I32RemU | Operator::I64RemU => {
             let (arg1, arg2) = stack.pop2();
-            stack.push1(environ.translate_urem(builder, arg1, arg2));
+            stack.push1(environ.translate_urem(builder, arg1, arg2, stack));
         }
         Operator::F32Min | Operator::F64Min => {
             let (arg1, arg2) = stack.pop2();
@@ -1325,7 +1331,13 @@ pub fn translate_operator(
             } else {
                 let index_type = environ.heaps()[heap].index_type();
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
+                environ.uadd_overflow_trap(
+                    builder,
+                    addr,
+                    offset,
+                    ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+                    stack,
+                )
             };
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -1349,7 +1361,13 @@ pub fn translate_operator(
             } else {
                 let index_type = environ.heaps()[heap].index_type();
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-                environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
+                environ.uadd_overflow_trap(
+                    builder,
+                    addr,
+                    offset,
+                    ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+                    stack,
+                )
             };
             let res = environ.translate_atomic_notify(
                 builder,
@@ -1606,13 +1624,13 @@ pub fn translate_operator(
         Operator::TableGet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
             let index = stack.pop1();
-            stack.push1(environ.translate_table_get(builder, table_index, index)?);
+            stack.push1(environ.translate_table_get(builder, table_index, index, stack)?);
         }
         Operator::TableSet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
             let value = stack.pop1();
             let index = stack.pop1();
-            environ.translate_table_set(builder, table_index, value, index)?;
+            environ.translate_table_set(builder, table_index, value, index, stack)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,
@@ -2555,7 +2573,7 @@ pub fn translate_operator(
                 unreachable!("validation")
             };
             let is_null = environ.translate_ref_is_null(builder.cursor(), r, *r_ty)?;
-            environ.trapnz(builder, is_null, crate::TRAP_NULL_REFERENCE);
+            environ.trapnz(builder, is_null, crate::TRAP_NULL_REFERENCE, stack);
             stack.push1(r);
         }
 
@@ -2566,12 +2584,12 @@ pub fn translate_operator(
         }
         Operator::I31GetS => {
             let i31ref = stack.pop1();
-            let val = environ.translate_i31_get_s(builder, i31ref)?;
+            let val = environ.translate_i31_get_s(builder, i31ref, stack)?;
             stack.push1(val);
         }
         Operator::I31GetU => {
             let i31ref = stack.pop1();
-            let val = environ.translate_i31_get_u(builder, i31ref)?;
+            let val = environ.translate_i31_get_u(builder, i31ref, stack)?;
             stack.push1(val);
         }
 
@@ -2580,13 +2598,15 @@ pub fn translate_operator(
             let arity = environ.struct_fields_len(struct_type_index)?;
             let fields: StructFieldsVec = stack.peekn(arity).iter().copied().collect();
             stack.popn(arity);
-            let struct_ref = environ.translate_struct_new(builder, struct_type_index, fields)?;
+            let struct_ref =
+                environ.translate_struct_new(builder, struct_type_index, fields, stack)?;
             stack.push1(struct_ref);
         }
 
         Operator::StructNewDefault { struct_type_index } => {
             let struct_type_index = TypeIndex::from_u32(*struct_type_index);
-            let struct_ref = environ.translate_struct_new_default(builder, struct_type_index)?;
+            let struct_ref =
+                environ.translate_struct_new_default(builder, struct_type_index, stack)?;
             stack.push1(struct_ref);
         }
 
@@ -2603,6 +2623,7 @@ pub fn translate_operator(
                 *field_index,
                 struct_ref,
                 val,
+                stack,
             )?;
         }
 
@@ -2618,6 +2639,7 @@ pub fn translate_operator(
                 *field_index,
                 struct_ref,
                 Some(Extension::Sign),
+                stack,
             )?;
             stack.push1(val);
         }
@@ -2634,6 +2656,7 @@ pub fn translate_operator(
                 *field_index,
                 struct_ref,
                 Some(Extension::Zero),
+                stack,
             )?;
             stack.push1(val);
         }
@@ -2650,6 +2673,7 @@ pub fn translate_operator(
                 *field_index,
                 struct_ref,
                 None,
+                stack,
             )?;
             stack.push1(val);
         }
@@ -2657,13 +2681,15 @@ pub fn translate_operator(
         Operator::ArrayNew { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (elem, len) = stack.pop2();
-            let array_ref = environ.translate_array_new(builder, array_type_index, elem, len)?;
+            let array_ref =
+                environ.translate_array_new(builder, array_type_index, elem, len, stack)?;
             stack.push1(array_ref);
         }
         Operator::ArrayNewDefault { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let len = stack.pop1();
-            let array_ref = environ.translate_array_new_default(builder, array_type_index, len)?;
+            let array_ref =
+                environ.translate_array_new_default(builder, array_type_index, len, stack)?;
             stack.push1(array_ref);
         }
         Operator::ArrayNewFixed {
@@ -2673,7 +2699,8 @@ pub fn translate_operator(
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let array_size = usize::try_from(*array_size).unwrap();
             let elems = stack.peekn(array_size);
-            let array_ref = environ.translate_array_new_fixed(builder, array_type_index, elems)?;
+            let array_ref =
+                environ.translate_array_new_fixed(builder, array_type_index, elems, stack)?;
             stack.popn(array_size);
             stack.push1(array_ref);
         }
@@ -2730,7 +2757,15 @@ pub fn translate_operator(
         Operator::ArrayFill { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index, val, len) = stack.pop4();
-            environ.translate_array_fill(builder, array_type_index, array, index, val, len)?;
+            environ.translate_array_fill(
+                builder,
+                array_type_index,
+                array,
+                index,
+                val,
+                len,
+                stack,
+            )?;
         }
         Operator::ArrayInitData {
             array_type_index,
@@ -2768,14 +2803,20 @@ pub fn translate_operator(
         }
         Operator::ArrayLen => {
             let array = stack.pop1();
-            let len = environ.translate_array_len(builder, array)?;
+            let len = environ.translate_array_len(builder, array, stack)?;
             stack.push1(len);
         }
         Operator::ArrayGet { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index) = stack.pop2();
-            let elem =
-                environ.translate_array_get(builder, array_type_index, array, index, None)?;
+            let elem = environ.translate_array_get(
+                builder,
+                array_type_index,
+                array,
+                index,
+                None,
+                stack,
+            )?;
             stack.push1(elem);
         }
         Operator::ArrayGetS { array_type_index } => {
@@ -2787,6 +2828,7 @@ pub fn translate_operator(
                 array,
                 index,
                 Some(Extension::Sign),
+                stack,
             )?;
             stack.push1(elem);
         }
@@ -2799,13 +2841,14 @@ pub fn translate_operator(
                 array,
                 index,
                 Some(Extension::Zero),
+                stack,
             )?;
             stack.push1(elem);
         }
         Operator::ArraySet { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index, elem) = stack.pop3();
-            environ.translate_array_set(builder, array_type_index, array, index, elem)?;
+            environ.translate_array_set(builder, array_type_index, array, index, elem, stack)?;
         }
         Operator::RefEq => {
             let (r1, r2) = stack.pop2();
@@ -2827,6 +2870,7 @@ pub fn translate_operator(
                 },
                 r,
                 *r_ty,
+                stack,
             )?;
             stack.push1(result);
         }
@@ -2844,6 +2888,7 @@ pub fn translate_operator(
                 },
                 r,
                 *r_ty,
+                stack,
             )?;
             stack.push1(result);
         }
@@ -2861,8 +2906,9 @@ pub fn translate_operator(
                 },
                 r,
                 *r_ty,
+                stack,
             )?;
-            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
+            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE, stack);
             stack.push1(r);
         }
         Operator::RefCastNullable { hty } => {
@@ -2879,8 +2925,9 @@ pub fn translate_operator(
                 },
                 r,
                 *r_ty,
+                stack,
             )?;
-            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
+            environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE, stack);
             stack.push1(r);
         }
         Operator::BrOnCast {
@@ -2894,7 +2941,7 @@ pub fn translate_operator(
             };
 
             let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
-            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty)?;
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty, stack)?;
 
             let (cast_succeeds_block, inputs) = translate_br_if_args(*relative_depth, stack);
             let cast_fails_block = builder.create_block();
@@ -2928,7 +2975,7 @@ pub fn translate_operator(
             };
 
             let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
-            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty)?;
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty, stack)?;
 
             let (cast_fails_block, inputs) = translate_br_if_args(*relative_depth, stack);
             let cast_succeeds_block = builder.create_block();
@@ -3453,6 +3500,7 @@ fn prepare_addr(
                 access_size,
             },
             ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            stack,
         ),
 
         // If the offset doesn't fit within a u32, then we can't pass it
@@ -3490,6 +3538,7 @@ fn prepare_addr(
                 index,
                 offset,
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+                stack,
             );
             bounds_check_and_compute_addr(
                 builder,
@@ -3501,6 +3550,7 @@ fn prepare_addr(
                     access_size,
                 },
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+                stack,
             )
         }
     };
@@ -3560,7 +3610,7 @@ fn align_atomic_addr(
             .ins()
             .band_imm(effective_addr, i64::from(loaded_bytes - 1));
         let f = builder.ins().icmp_imm(IntCC::NotEqual, misalignment, 0);
-        environ.trapnz(builder, f, crate::TRAP_HEAP_MISALIGNED);
+        environ.trapnz(builder, f, crate::TRAP_HEAP_MISALIGNED, stack);
     }
 }
 
@@ -4379,7 +4429,7 @@ fn create_catch_block(
 
     if let Some(tag) = tag {
         let tag = TagIndex::from_u32(tag);
-        params.extend(environ.translate_exn_unbox(builder, tag, exn_ref)?);
+        params.extend(environ.translate_exn_unbox(builder, tag, exn_ref, stacks)?);
     }
     if is_ref {
         params.push(exn_ref);

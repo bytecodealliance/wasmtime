@@ -1525,7 +1525,9 @@ pub(crate) struct EntryStoreContext {
     /// `VMStoreContext` when exiting Wasm.
     pub stack_limit: Option<usize>,
     pub last_wasm_exit_pc: usize,
+    pub last_wasm_exit_was_trap: bool,
     pub last_wasm_exit_trampoline_fp: usize,
+    pub last_wasm_exit_trap_fp: usize,
     pub last_wasm_entry_fp: usize,
     pub last_wasm_entry_sp: usize,
     pub last_wasm_entry_trap_handler: usize,
@@ -1625,6 +1627,8 @@ impl EntryStoreContext {
                 last_wasm_exit_trampoline_fp: *(*vm_store_context)
                     .last_wasm_exit_trampoline_fp
                     .get(),
+                last_wasm_exit_was_trap: *(*vm_store_context).last_wasm_exit_was_trap.get(),
+                last_wasm_exit_trap_fp: *(*vm_store_context).last_wasm_exit_trap_fp.get(),
                 last_wasm_entry_fp: *(*vm_store_context).last_wasm_entry_fp.get(),
                 last_wasm_entry_sp: *(*vm_store_context).last_wasm_entry_sp.get(),
                 last_wasm_entry_trap_handler: *(*vm_store_context)
@@ -1649,6 +1653,8 @@ impl EntryStoreContext {
 
             *(*self.vm_store_context).last_wasm_exit_trampoline_fp.get() =
                 self.last_wasm_exit_trampoline_fp;
+            *(*self.vm_store_context).last_wasm_exit_trap_fp.get() = self.last_wasm_exit_trap_fp;
+            *(*self.vm_store_context).last_wasm_exit_was_trap.get() = self.last_wasm_exit_was_trap;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
             *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
             *(*self.vm_store_context).last_wasm_entry_sp.get() = self.last_wasm_entry_sp;

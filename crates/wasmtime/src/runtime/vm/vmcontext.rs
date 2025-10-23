@@ -1188,6 +1188,25 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
+
+    /// The last Wasm exit to host was due to a trap.
+    ///
+    /// This is set whenever we update the exit state *from the host*
+    /// when handling a trap. It allows us to interpret the exit PC
+    /// correctly -- that is, either pointing *to* a trapping
+    /// instruction, or *after* a call (a single PC could be both
+    /// after a call and at a trapping instruction!).
+    ///
+    /// It is set *only* from host code, but is kept here alongside
+    /// the other last-exit state for consistency.
+    pub last_wasm_exit_was_trap: UnsafeCell<bool>,
+
+    /// The last Wasm exit to host, if via trap, had this FP in guest
+    /// code (*not* in a trampoline).
+    ///
+    /// Either this field or `last_wasm_exit_trampoline_fp` is set,
+    /// never both. This field is always set from the host.
+    pub last_wasm_exit_trap_fp: UnsafeCell<usize>,
 }
 
 impl VMStoreContext {
@@ -1210,8 +1229,12 @@ impl VMStoreContext {
         // will be writing our store when we have control), and the
         // helper function's safety condition is the same as ours.
         unsafe {
-            let trampoline_fp = *self.last_wasm_exit_trampoline_fp.get();
-            Self::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
+            if *self.last_wasm_exit_was_trap.get() {
+                *self.last_wasm_exit_trap_fp.get()
+            } else {
+                let trampoline_fp = *self.last_wasm_exit_trampoline_fp.get();
+                Self::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
+            }
         }
     }
 
@@ -1271,6 +1294,8 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            last_wasm_exit_was_trap: UnsafeCell::new(false),
+            last_wasm_exit_trap_fp: UnsafeCell::new(0),
         }
     }
 }
