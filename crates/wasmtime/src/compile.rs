@@ -848,6 +848,16 @@ the use case.
             return false;
         }
 
+        // Skip inlining into array-abi functions which are entry
+        // trampolines into wasm. ABI-wise it's required that these have a
+        // single `try_call` into the module and it doesn't work if multiple
+        // get inlined or if the `try_call` goes away. Pevent all inlining
+        // to guarantee the structure of entry trampolines.
+        if caller_key.abi() == Abi::Array {
+            log::trace!("  --> not inlining: not inlining into array-abi caller");
+            return false;
+        }
+
         // Consider whether this is an intra-module call.
         //
         // Inlining within a single core module has most often already been done
@@ -880,21 +890,6 @@ the use case.
                         }
                     }
                 }
-            }
-
-            // Skip inlining into array-abi functions which are entry
-            // trampolines into wasm. ABI-wise it's required that these have a
-            // single `try_call` into the module and it doesn't work if multiple
-            // get inlined or if the `try_call` goes away. Pevent all inlining
-            // to guarantee the structure of entry trampolines.
-            (
-                FuncKey::ArrayToWasmTrampoline(..)
-                | FuncKey::ComponentTrampoline(Abi::Array, _)
-                | FuncKey::UnsafeIntrinsic(Abi::Array, _),
-                _,
-            ) => {
-                log::trace!("  --> not inlining: not inlining into array-abi caller");
-                return false;
             }
 
             _ => {}
