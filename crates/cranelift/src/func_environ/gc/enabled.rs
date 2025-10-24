@@ -1,7 +1,7 @@
 use super::{ArrayInit, GcCompiler};
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::translate::{FuncTranslationStacks, Heap, HeapData, StructFieldsVec, TargetEnvironment};
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
@@ -106,6 +106,7 @@ fn read_field_at_addr(
     ty: WasmStorageType,
     addr: ir::Value,
     extension: Option<Extension>,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     assert_eq!(extension.is_none(), matches!(ty, WasmStorageType::Val(_)));
     assert_eq!(
@@ -128,7 +129,7 @@ fn read_field_at_addr(
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                     gc_compiler(func_env)?
-                        .translate_read_gc_reference(func_env, builder, r, addr, flags)?
+                        .translate_read_gc_reference(func_env, builder, r, addr, flags, stacks)?
                 }
                 WasmHeapTopType::Func => {
                     let expected_ty = match r.heap_type {
@@ -233,6 +234,7 @@ fn write_field_at_addr(
     field_ty: WasmStorageType,
     field_addr: ir::Value,
     new_val: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
     let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
@@ -248,8 +250,9 @@ fn write_field_at_addr(
             write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?;
         }
         WasmStorageType::Val(WasmValType::Ref(r)) => {
-            gc_compiler(func_env)?
-                .translate_write_gc_reference(func_env, builder, r, field_addr, new_val, flags)?;
+            gc_compiler(func_env)?.translate_write_gc_reference(
+                func_env, builder, r, field_addr, new_val, flags, stacks,
+            )?;
         }
         WasmStorageType::Val(_) => {
             assert_eq!(
@@ -267,8 +270,9 @@ pub fn translate_struct_new(
     builder: &mut FunctionBuilder<'_>,
     struct_type_index: TypeIndex,
     fields: &[ir::Value],
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
-    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields)
+    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields, stacks)
 }
 
 fn default_value(
@@ -304,6 +308,7 @@ pub fn translate_struct_new_default(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     struct_type_index: TypeIndex,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     let interned_ty = func_env.module.types[struct_type_index].unwrap_module_type_index();
     let struct_ty = func_env.types.unwrap_struct(interned_ty)?;
@@ -312,7 +317,7 @@ pub fn translate_struct_new_default(
         .iter()
         .map(|f| default_value(&mut builder.cursor(), func_env, &f.element_type))
         .collect::<StructFieldsVec>();
-    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields)
+    gc_compiler(func_env)?.alloc_struct(func_env, builder, struct_type_index, &fields, stacks)
 }
 
 pub fn translate_struct_get(
@@ -322,6 +327,7 @@ pub fn translate_struct_get(
     field_index: u32,
     struct_ref: ir::Value,
     extension: Option<Extension>,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!(
         "translate_struct_get({struct_type_index:?}, {field_index:?}, {struct_ref:?}, {extension:?})"
@@ -330,7 +336,7 @@ pub fn translate_struct_get(
     // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
     // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
     // type info from `wasmparser` and through to here is a bit funky.
-    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE, stacks);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -351,6 +357,7 @@ pub fn translate_struct_get(
             access_size: u8::try_from(field_size).unwrap(),
             object_size: struct_size,
         },
+        stacks,
     );
 
     let result = read_field_at_addr(
@@ -359,6 +366,7 @@ pub fn translate_struct_get(
         field_ty.element_type,
         field_addr,
         extension,
+        stacks,
     );
     log::trace!("translate_struct_get(..) -> {result:?}");
     result
@@ -371,13 +379,14 @@ pub fn translate_struct_set(
     field_index: u32,
     struct_ref: ir::Value,
     new_val: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     log::trace!(
         "translate_struct_set({struct_type_index:?}, {field_index:?}, struct_ref: {struct_ref:?}, new_val: {new_val:?})"
     );
 
     // TODO: See comment in `translate_struct_get` about the `trapz`.
-    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE, stacks);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -398,6 +407,7 @@ pub fn translate_struct_set(
             access_size: u8::try_from(field_size).unwrap(),
             object_size: struct_size,
         },
+        stacks,
     );
 
     write_field_at_addr(
@@ -406,6 +416,7 @@ pub fn translate_struct_set(
         field_ty.element_type,
         field_addr,
         new_val,
+        stacks,
     )?;
 
     log::trace!("translate_struct_set: finished");
@@ -417,6 +428,7 @@ pub fn translate_exn_unbox(
     builder: &mut FunctionBuilder<'_>,
     tag_index: TagIndex,
     exn_ref: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<SmallVec<[ir::Value; 4]>> {
     log::trace!("translate_exn_unbox({tag_index:?}, {exn_ref:?})");
 
@@ -453,9 +465,10 @@ pub fn translate_exn_unbox(
                 access_size: u8::try_from(field_size).unwrap(),
                 object_size: exn_size,
             },
+            stacks,
         );
 
-        let value = read_field_at_addr(func_env, builder, field_ty, field_addr, None)?;
+        let value = read_field_at_addr(func_env, builder, field_ty, field_addr, None, stacks)?;
         result.push(value);
     }
 
@@ -469,6 +482,7 @@ pub fn translate_exn_throw(
     tag_index: TagIndex,
     args: &[ir::Value],
     handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     let (instance_id, defined_tag_id) = func_env.get_instance_and_tag(builder, tag_index);
     let exnref = gc_compiler(func_env)?.alloc_exn(
@@ -478,8 +492,9 @@ pub fn translate_exn_throw(
         args,
         instance_id,
         defined_tag_id,
+        stacks,
     )?;
-    translate_exn_throw_ref(func_env, builder, exnref, handlers)
+    translate_exn_throw_ref(func_env, builder, exnref, handlers, stacks)
 }
 
 pub fn translate_exn_throw_ref(
@@ -487,6 +502,7 @@ pub fn translate_exn_throw_ref(
     builder: &mut FunctionBuilder<'_>,
     exnref: ir::Value,
     handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     let builtin = func_env.builtin_functions.throw_ref(builder.func);
     let sig = builder.func.dfg.ext_funcs[builtin].signature;
@@ -520,7 +536,7 @@ pub fn translate_exn_throw_ref(
 
     builder.switch_to_block(continuation);
     builder.seal_block(continuation);
-    func_env.trap(builder, crate::TRAP_UNREACHABLE);
+    func_env.trap(builder, crate::TRAP_UNREACHABLE, stacks);
 
     Ok(())
 }
@@ -531,6 +547,7 @@ pub fn translate_array_new(
     array_type_index: TypeIndex,
     elem: ir::Value,
     len: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
     let result = gc_compiler(func_env)?.alloc_array(
@@ -538,6 +555,7 @@ pub fn translate_array_new(
         builder,
         array_type_index,
         ArrayInit::Fill { elem, len },
+        stacks,
     )?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
@@ -548,6 +566,7 @@ pub fn translate_array_new_default(
     builder: &mut FunctionBuilder,
     array_type_index: TypeIndex,
     len: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
 
@@ -559,6 +578,7 @@ pub fn translate_array_new_default(
         builder,
         array_type_index,
         ArrayInit::Fill { elem, len },
+        stacks,
     )?;
     log::trace!("translate_array_new_default(..) -> {result:?}");
     Ok(result)
@@ -569,6 +589,7 @@ pub fn translate_array_new_fixed(
     builder: &mut FunctionBuilder,
     array_type_index: TypeIndex,
     elems: &[ir::Value],
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_fixed({array_type_index:?}, {elems:?})");
     let result = gc_compiler(func_env)?.alloc_array(
@@ -576,6 +597,7 @@ pub fn translate_array_new_fixed(
         builder,
         array_type_index,
         ArrayInit::Elems(elems),
+        stacks,
     )?;
     log::trace!("translate_array_new_fixed(..) -> {result:?}");
     Ok(result)
@@ -757,19 +779,26 @@ pub fn translate_array_fill(
     index: ir::Value,
     value: ir::Value,
     n: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     log::trace!(
         "translate_array_fill({array_type_index:?}, {array_ref:?}, {index:?}, {value:?}, {n:?})"
     );
 
-    let len = translate_array_len(func_env, builder, array_ref)?;
+    let len = translate_array_len(func_env, builder, array_ref, stacks)?;
 
     // Check that the full range of elements we want to fill is within bounds.
-    let end_index = func_env.uadd_overflow_trap(builder, index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    let end_index =
+        func_env.uadd_overflow_trap(builder, index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS, stacks);
     let out_of_bounds = builder
         .ins()
         .icmp(IntCC::UnsignedGreaterThan, end_index, len);
-    func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapnz(
+        builder,
+        out_of_bounds,
+        crate::TRAP_ARRAY_OUT_OF_BOUNDS,
+        stacks,
+    );
 
     // Get the address of the first element we want to fill.
     let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
@@ -787,6 +816,7 @@ pub fn translate_array_fill(
             offset: obj_offset,
             object_size: obj_size,
         },
+        stacks,
     );
 
     // Calculate the end address, just after the filled region.
@@ -809,7 +839,7 @@ pub fn translate_array_fill(
                 .unwrap_array(interned_type_index)?
                 .0
                 .element_type;
-            write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
+            write_field_at_addr(func_env, builder, elem_ty, elem_addr, value, stacks)
         },
     );
     log::trace!("translate_array_fill(..) -> {result:?}");
@@ -820,10 +850,11 @@ pub fn translate_array_len(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     array_ref: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_len({array_ref:?})");
 
-    func_env.trapz(builder, array_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, array_ref, crate::TRAP_NULL_REFERENCE, stacks);
 
     let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
     let len_field = func_env.prepare_gc_ref_access(
@@ -835,6 +866,7 @@ pub fn translate_array_len(
             offset: len_offset,
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
+        stacks,
     );
     let result = builder.ins().load(
         ir::types::I32,
@@ -915,6 +947,7 @@ fn array_elem_addr(
     array_type_index: ModuleInternedTypeIndex,
     array_ref: ir::Value,
     index: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> ir::Value {
     // First, assert that `index < array.length`.
     //
@@ -926,10 +959,10 @@ fn array_elem_addr(
     // code in `bounds_check.rs` to implement these bounds checks. That is all
     // planned, but not yet implemented.
 
-    let len = translate_array_len(func_env, builder, array_ref).unwrap();
+    let len = translate_array_len(func_env, builder, array_ref, stacks).unwrap();
 
     let in_bounds = builder.ins().icmp(IntCC::UnsignedLessThan, index, len);
-    func_env.trapz(builder, in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapz(builder, in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS, stacks);
 
     // Compute the size (in bytes) of the whole array object.
     let ArraySizeInfo {
@@ -969,6 +1002,7 @@ fn array_elem_addr(
             offset: offset_in_array,
             object_size: obj_size,
         },
+        stacks,
     )
 }
 
@@ -979,16 +1013,24 @@ pub fn translate_array_get(
     array_ref: ir::Value,
     index: ir::Value,
     extension: Option<Extension>,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_get({array_type_index:?}, {array_ref:?}, {index:?})");
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(
+        func_env,
+        builder,
+        array_type_index,
+        array_ref,
+        index,
+        stacks,
+    );
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    let result = read_field_at_addr(func_env, builder, elem_ty, elem_addr, extension)?;
+    let result = read_field_at_addr(func_env, builder, elem_ty, elem_addr, extension, stacks)?;
     log::trace!("translate_array_get(..) -> {result:?}");
     Ok(result)
 }
@@ -1000,16 +1042,24 @@ pub fn translate_array_set(
     array_ref: ir::Value,
     index: ir::Value,
     value: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<()> {
     log::trace!("translate_array_set({array_type_index:?}, {array_ref:?}, {index:?}, {value:?})");
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(
+        func_env,
+        builder,
+        array_type_index,
+        array_ref,
+        index,
+        stacks,
+    );
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)?;
+    write_field_at_addr(func_env, builder, elem_ty, elem_addr, value, stacks)?;
 
     log::trace!("translate_array_set: finished");
     Ok(())
@@ -1021,6 +1071,7 @@ pub fn translate_ref_test(
     test_ty: WasmRefType,
     val: ir::Value,
     val_ty: WasmRefType,
+    stacks: &FuncTranslationStacks,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_ref_test({test_ty:?}, {val:?})");
 
@@ -1147,6 +1198,7 @@ pub fn translate_ref_test(
                 access_size: wasmtime_environ::VM_GC_KIND_SIZE,
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
+            stacks,
         );
         let actual_kind = builder.ins().load(
             ir::types::I32,
@@ -1204,6 +1256,7 @@ pub fn translate_ref_test(
                     offset: wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET,
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
+                stacks,
             );
             let actual_shared_ty = builder.ins().load(
                 ir::types::I32,
@@ -1278,6 +1331,7 @@ fn emit_array_size(
     builder: &mut FunctionBuilder<'_>,
     array_layout: &GcArrayLayout,
     len: ir::Value,
+    stacks: &FuncTranslationStacks,
 ) -> ir::Value {
     let base_size = builder
         .ins()
@@ -1300,7 +1354,7 @@ fn emit_array_size(
         .ins()
         .imul_imm(len, i64::from(array_layout.elem_size));
     let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
-    func_env.trapnz(builder, high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
+    func_env.trapnz(builder, high_bits, crate::TRAP_ALLOCATION_TOO_LARGE, stacks);
     let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
 
     // And if adding the base size and elements size overflows, then the
@@ -1310,6 +1364,7 @@ fn emit_array_size(
         base_size,
         elems_size,
         crate::TRAP_ALLOCATION_TOO_LARGE,
+        stacks,
     );
 
     size
@@ -1486,6 +1541,7 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
         bounds_check: BoundsCheck,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         log::trace!("prepare_gc_ref_access({gc_ref:?}, {bounds_check:?})");
         assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
@@ -1499,6 +1555,7 @@ impl FuncEnvironment<'_> {
             gc_ref,
             bounds_check,
             crate::TRAP_INTERNAL_ASSERT,
+            stacks,
         ) {
             Reachability::Reachable(v) => v,
             Reachability::Unreachable => {

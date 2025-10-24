@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::func_environ::FuncEnvironment;
+use crate::translate::FuncTranslationStacks;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;
@@ -44,6 +45,7 @@ impl NullCompiler {
         ty: Option<ModuleInternedTypeIndex>,
         size: ir::Value,
         align: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> (ir::Value, ir::Value) {
         log::trace!("emit_inline_alloc(kind={kind:?}, ty={ty:?}, size={size}, align={align})");
 
@@ -64,7 +66,7 @@ impl NullCompiler {
             .ins()
             .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
         let masked = builder.ins().band(size, mask);
-        func_env.trapnz(builder, masked, crate::TRAP_ALLOCATION_TOO_LARGE);
+        func_env.trapnz(builder, masked, crate::TRAP_ALLOCATION_TOO_LARGE, stacks);
 
         // Load the bump "pointer" (it is actually an index into the GC heap,
         // not a raw pointer).
@@ -94,6 +96,7 @@ impl NullCompiler {
             next,
             align_minus_one,
             crate::TRAP_ALLOCATION_TOO_LARGE,
+            stacks,
         );
         let not_align_minus_one = builder.ins().bnot(align_minus_one);
         let aligned = builder
@@ -101,8 +104,13 @@ impl NullCompiler {
             .band(next_plus_align_minus_one, not_align_minus_one);
 
         // Check whether the allocation fits in the heap space we have left.
-        let end_of_object =
-            func_env.uadd_overflow_trap(builder, aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
+        let end_of_object = func_env.uadd_overflow_trap(
+            builder,
+            aligned,
+            size,
+            crate::TRAP_ALLOCATION_TOO_LARGE,
+            stacks,
+        );
         let uext_end_of_object = uextend_i32_to_pointer_type(builder, pointer_type, end_of_object);
         let bound = func_env.get_gc_heap_bound(builder);
         let is_in_bounds = builder.ins().icmp(
@@ -187,6 +195,7 @@ impl GcCompiler for NullCompiler {
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
         init: super::ArrayInit<'_>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[array_type_index].unwrap_module_type_index();
@@ -201,7 +210,7 @@ impl GcCompiler for NullCompiler {
         // First, compute the array's total size from its base size, element
         // size, and length.
         let len = init.len(&mut builder.cursor());
-        let size = emit_array_size(func_env, builder, &array_layout, len);
+        let size = emit_array_size(func_env, builder, &array_layout, len, stacks);
 
         // Next, allocate the array.
         assert!(align.is_power_of_two());
@@ -213,6 +222,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             size,
             align,
+            stacks,
         );
 
         // Write the array's length into its field.
@@ -237,7 +247,7 @@ impl GcCompiler for NullCompiler {
             size,
             elems_addr,
             |func_env, builder, elem_ty, elem_addr, val| {
-                write_field_at_addr(func_env, builder, elem_ty, elem_addr, val)
+                write_field_at_addr(func_env, builder, elem_ty, elem_addr, val, stacks)
             },
         )?;
 
@@ -250,6 +260,7 @@ impl GcCompiler for NullCompiler {
         builder: &mut FunctionBuilder<'_>,
         struct_type_index: TypeIndex,
         field_vals: &[ir::Value],
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -274,6 +285,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             struct_size_val,
             align,
+            stacks,
         );
 
         // Initialize the struct's fields.
@@ -288,7 +300,7 @@ impl GcCompiler for NullCompiler {
             raw_struct_pointer,
             field_vals,
             |func_env, builder, ty, field_addr, val| {
-                write_field_at_addr(func_env, builder, ty, field_addr, val)
+                write_field_at_addr(func_env, builder, ty, field_addr, val, stacks)
             },
         )?;
 
@@ -303,6 +315,7 @@ impl GcCompiler for NullCompiler {
         field_vals: &[ir::Value],
         instance_id: ir::Value,
         tag: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index = func_env.module.tags[tag_index]
             .exception
@@ -326,6 +339,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             exn_size_val,
             align,
+            stacks,
         );
 
         // Initialize the exception object's fields.
@@ -340,7 +354,7 @@ impl GcCompiler for NullCompiler {
             raw_exn_pointer,
             field_vals,
             |func_env, builder, ty, field_addr, val| {
-                write_field_at_addr(func_env, builder, ty, field_addr, val)
+                write_field_at_addr(func_env, builder, ty, field_addr, val, stacks)
             },
         )?;
 
@@ -354,6 +368,7 @@ impl GcCompiler for NullCompiler {
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
             instance_id,
+            stacks,
         )?;
         let tag_addr = builder
             .ins()
@@ -364,6 +379,7 @@ impl GcCompiler for NullCompiler {
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
             tag,
+            stacks,
         )?;
 
         Ok(exn_ref)
@@ -376,6 +392,7 @@ impl GcCompiler for NullCompiler {
         _ty: WasmRefType,
         src: ir::Value,
         flags: ir::MemFlags,
+        _stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         // NB: Don't use `unbarriered_load_gc_ref` here because we don't need to
         // mark the value as requiring inclusion in stack maps.
@@ -390,6 +407,7 @@ impl GcCompiler for NullCompiler {
         dst: ir::Value,
         new_val: ir::Value,
         flags: ir::MemFlags,
+        _stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
     }

@@ -232,6 +232,13 @@ pub unsafe trait VMStore: 'static {
     /// Invoke a debug handler, if present, at a debug event.
     #[cfg(feature = "debug")]
     fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
+
+    /// Is a debug handler registered? This allows for the hook call
+    /// above to be conditionalized, saving a little effort
+    /// constructing the event and/or doing other work (such as
+    /// injecting hostcalls on traps) if not.
+    #[cfg(feature = "debug")]
+    fn has_debug_handler(&self) -> bool;
 }
 
 impl Deref for dyn VMStore + '_ {

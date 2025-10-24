@@ -43,10 +43,11 @@ impl<'a, T> StoreContextMut<'a, T> {
         // `StoreOpaque`), which owns all active stacks in the
         // store. We do not provide any API that could mutate the
         // frames that we are walking on the `DebugFrameCursor`.
+        let is_trapping_frame = unsafe { *self.0.vm_store_context().last_wasm_exit_was_trap.get() };
         let iter = unsafe { CurrentActivationBacktrace::new(self) };
         let mut view = DebugFrameCursor {
             iter,
-            is_trapping_frame: false,
+            is_trapping_frame,
             frames: vec![],
             current: None,
         };

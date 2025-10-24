@@ -85,7 +85,7 @@
 ;;       mov     x0, x9
 ;;       mov     x1, #0
 ;;       ldur    w2, [x28]
-;;       bl      #0x3e4
+;;       bl      #0x3f0
 ;;   e0: add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]
@@ -153,7 +153,7 @@
 ;;       mov     x0, x9
 ;;       mov     x1, #0
 ;;       ldur    w2, [x28, #0xc]
-;;       bl      #0x3e4
+;;       bl      #0x3f0
 ;;  1f0: add     x28, x28, #0xc
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4

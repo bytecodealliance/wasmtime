@@ -204,6 +204,11 @@ impl Vm {
         self.state.fp
     }
 
+    /// Returns the current `sp` register value.
+    pub fn sp(&self) -> *mut u8 {
+        self.state.x_regs[XReg::sp.index()].get_ptr()
+    }
+
     /// Returns the current `lr` register value.
     pub fn lr(&self) -> *mut u8 {
         self.state.lr

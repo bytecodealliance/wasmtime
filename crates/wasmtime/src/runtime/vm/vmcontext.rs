@@ -7,6 +7,10 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
+#[cfg(all(has_native_signals, feature = "debug"))]
+use crate::vm::InjectedCallState;
+#[cfg(all(feature = "debug"))]
+use crate::vm::VMStore;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -1110,8 +1114,8 @@ pub struct VMStoreContext {
     /// The `VMMemoryDefinition` for this store's GC heap.
     pub gc_heap: VMMemoryDefinition,
 
-    /// The value of the frame pointer register in the trampoline used
-    /// to call from Wasm to the host.
+    /// The value of the frame pointer register in the Wasm frame that
+    /// called from Wasm to the host.
     ///
     /// Maintained by our Wasm-to-host trampoline, and cleared just
     /// before calling into Wasm in `catch_traps`.
@@ -1120,13 +1124,8 @@ pub struct VMStoreContext {
     /// to the host.
     ///
     /// Used to find the start of a contiguous sequence of Wasm frames
-    /// when walking the stack. Note that we record the FP of the
-    /// *trampoline*'s frame, not the last Wasm frame, because we need
-    /// to know the SP (bottom of frame) of the last Wasm frame as
-    /// well in case we need to resume to an exception handler in that
-    /// frame. The FP of the last Wasm frame can be recovered by
-    /// loading the saved FP value at this FP address.
-    pub last_wasm_exit_trampoline_fp: UnsafeCell<usize>,
+    /// when walking the stack.
+    pub last_wasm_exit_fp: UnsafeCell<usize>,
 
     /// The last Wasm program counter before we called from Wasm to the host.
     ///
@@ -1188,59 +1187,79 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
-}
 
-impl VMStoreContext {
-    /// From the current saved trampoline FP, get the FP of the last
-    /// Wasm frame. If the current saved trampoline FP is null, return
-    /// null.
+    /// The last Wasm exit to host was due to a trap.
     ///
-    /// We store only the trampoline FP, because (i) we need the
-    /// trampoline FP, so we know the size (bottom) of the last Wasm
-    /// frame; and (ii) the last Wasm frame, just above the trampoline
-    /// frame, can be recovered via the FP chain.
+    /// This is set whenever we update the exit state *from the host*
+    /// when handling a trap. It allows us to interpret the exit PC
+    /// correctly -- that is, either pointing *to* a trapping
+    /// instruction, or *after* a call (a single PC could be both
+    /// after a call and at a trapping instruction!).
     ///
-    /// # Safety
-    ///
-    /// This function requires that the `last_wasm_exit_trampoline_fp`
-    /// field either points to an active trampoline frame or is a null
-    /// pointer.
-    pub(crate) unsafe fn last_wasm_exit_fp(&self) -> usize {
-        // SAFETY: the unsafe cell is safe to load (no other threads
-        // will be writing our store when we have control), and the
-        // helper function's safety condition is the same as ours.
-        unsafe {
-            let trampoline_fp = *self.last_wasm_exit_trampoline_fp.get();
-            Self::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
-        }
-    }
+    /// It is set *only* from host code, but is kept here alongside
+    /// the other last-exit state for consistency.
+    pub last_wasm_exit_was_trap: UnsafeCell<bool>,
 
-    /// From any saved trampoline FP, get the FP of the last Wasm
-    /// frame. If the given trampoline FP is null, return null.
+    /// Register state to restore into signal frame for injected trap
+    /// hostcalls.
     ///
-    /// This differs from `last_wasm_exit_fp()` above in that it
-    /// allows accessing activations further up the stack as well,
-    /// e.g. via `CallThreadState::old_state`.
+    /// When `VMStoreContext::inject_trap_handler_hostcall()` is used
+    /// from within a signal handler to redirect execution to a
+    /// hostcall on trap, we overwrite some signal register state to
+    /// give context to the hostcall. Those overwritten register
+    /// values are saved here, and placed back into a trampoline
+    /// register-save frame so that they are restored properly if we
+    /// resume the original guest code.
+    #[cfg(all(feature = "debug", has_native_signals))]
+    pub injected_call_state: UnsafeCell<Option<InjectedCallState>>,
+
+    /// Raw pointer to the `*mut dyn VMStore` running in this
+    /// activation, to be used *only* when re-entering the host during
+    /// a trap (from native code using call injection, or from the
+    /// interpreter).
     ///
-    /// # Safety
+    /// This is a very tricky ownership/provenance dance. When control
+    /// is in the Wasm code itself, the store is completely owned by
+    /// the Wasm. It passes ownership back during hostcalls via
+    /// mutable reborrow (as with any call with a `&mut self` in
+    /// Rust). That's all well and good for explicit calls.
     ///
-    /// This function requires that the provided FP value is valid,
-    /// and points to an active trampoline frame, or is null.
+    /// When a trap occurs, however, we can also think of the
+    /// ownership passing as-if the trapping instruction were a
+    /// hostcall with a `&mut dyn VMStore` parameter. This works *as
+    /// long as* all possibly trapping points in compiled code act as
+    /// if they invalidate any other held borrows into the store.
     ///
-    /// This function depends on the invariant that on all supported
-    /// architectures, we store the previous FP value under the
-    /// current FP. This is a property of our ABI that we control and
-    /// ensure.
-    pub(crate) unsafe fn wasm_exit_fp_from_trampoline_fp(trampoline_fp: usize) -> usize {
-        if trampoline_fp != 0 {
-            // SAFETY: We require that trampoline_fp points to a valid
-            // frame, which will (by definition) contain an old FP value
-            // that we can load.
-            unsafe { *(trampoline_fp as *const usize) }
-        } else {
-            0
-        }
-    }
+    /// It turns out that we generally enforce this in compiled guest
+    /// code in Cranelift: any `can_trap` opcode returns `true` from
+    /// `has_memory_fence_semantics()` (see corresponding comment
+    /// there). This is enough to ensure that the compiler treats
+    /// every trapping op as-if it were a hostcall, which clobbers all
+    /// memory state; so from the Wasm code's point of view, it is
+    /// safely reborrowing the Store and passing it "somewhere" on
+    /// every trap. The plumbing for that "passing" goes through this
+    /// field, but that is an implementation detail. When control
+    /// comes back out of the Wasm activation, we clear this field;
+    /// the invocation itself takes a mutable borrow of the store, so
+    /// safety is preserved on the caller side as well. In other
+    /// words, the provenance is something like
+    ///
+    /// ```plain
+    ///
+    ///      host (caller side)  with `&mut dyn VMStore`
+    ///                   /               \
+    ///     (param into  /          (this field)
+    ///      entry trampoline)              \
+    ///                |                     |
+    ///               ~~~~~~~ (wasm code) ~~~~~~
+    ///                |                     |
+    ///                libcall              trap
+    ///  ```
+    ///
+    /// with only *one* of those paths dynamically taken at any given
+    /// time.
+    #[cfg(all(feature = "debug"))]
+    pub(crate) raw_store: UnsafeCell<Option<NonNull<dyn VMStore>>>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1263,7 +1282,7 @@ impl Default for VMStoreContext {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
             },
-            last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
+            last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
             last_wasm_entry_sp: UnsafeCell::new(0),
@@ -1271,6 +1290,32 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            last_wasm_exit_was_trap: UnsafeCell::new(false),
+            #[cfg(all(feature = "debug", has_native_signals))]
+            injected_call_state: UnsafeCell::new(None),
+            #[cfg(feature = "debug")]
+            raw_store: UnsafeCell::new(None),
+        }
+    }
+}
+
+impl VMStoreContext {
+    #[cfg(feature = "debug")]
+    /// Get a mutable borrow to the `dyn VMStore` from this `VMStoreContext`.
+    ///
+    /// This must *only* be used from within a trap context, where the
+    /// `VMContext`/`VMStoreContext` flow out of Wasm code but no
+    /// other live borrow of the store exists. This is a way to
+    /// recover the latter from the former in contexts where we don't
+    /// have an explicit store borrow by way of hostcall
+    /// arguments. Note that the Wasm code must expect this by acting
+    /// as if a mutable borrow of the store is possible at the point
+    /// that the trap occurs.
+    #[cfg(feature = "debug")]
+    pub(crate) unsafe fn raw_store_mut(&self) -> &mut dyn VMStore {
+        unsafe {
+            let raw = (*self.raw_store.get()).expect("Raw store pointer must be set");
+            raw.as_ptr().as_mut().expect("must be non-null")
         }
     }
 }
@@ -1310,8 +1355,8 @@ mod test_vmstore_context {
             usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
         );
         assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_exit_trampoline_fp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_trampoline_fp())
+            offset_of!(VMStoreContext, last_wasm_exit_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_fp())
         );
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_exit_pc),

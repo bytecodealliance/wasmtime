@@ -196,26 +196,26 @@ pub trait PtrSize {
     /// Return the offset of the `gc_heap.base` field within a `VMStoreContext`.
     fn vmstore_context_gc_heap_base(&self) -> u8 {
         let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_base();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
         offset
     }
 
     /// Return the offset of the `gc_heap.current_length` field within a `VMStoreContext`.
     fn vmstore_context_gc_heap_current_length(&self) -> u8 {
         let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_current_length();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
         offset
     }
 
-    /// Return the offset of the `last_wasm_exit_trampoline_fp` field
-    /// of `VMStoreContext`.
-    fn vmstore_context_last_wasm_exit_trampoline_fp(&self) -> u8 {
+    /// Return the offset of the `last_wasm_exit_fp` field of
+    /// `VMStoreContext`.
+    fn vmstore_context_last_wasm_exit_fp(&self) -> u8 {
         self.vmstore_context_gc_heap() + self.size_of_vmmemory_definition()
     }
 
     /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_exit_pc(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_trampoline_fp() + self.size()
+        self.vmstore_context_last_wasm_exit_fp() + self.size()
     }
 
     /// Return the offset of the `last_wasm_entry_sp` field of `VMStoreContext`.
