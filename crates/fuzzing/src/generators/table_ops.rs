@@ -19,9 +19,6 @@ const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 const MAX_OPS: usize = 100;
 
-const STRUCT_BASE: u32 = 5;
-const TYPED_FN_BASE: u32 = 4;
-
 /// RecGroup ID struct definition.
 #[derive(
     Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
@@ -88,6 +85,12 @@ impl Types {
         while self.rec_groups.len() > limits.max_rec_groups as usize {
             self.rec_groups.pop_last();
         }
+
+        // Drop any types whose rec-group has been trimmed out.
+        self.type_defs
+            .retain(|_, ty| self.rec_groups.contains(&ty.rec_group));
+
+        // Then enforce the max types limit.
         while self.type_defs.len() > limits.max_types as usize {
             self.type_defs.pop_last();
         }
@@ -95,7 +98,8 @@ impl Types {
         debug_assert!(
             self.type_defs
                 .values()
-                .all(|ty| self.rec_groups.contains(&ty.rec_group))
+                .all(|ty| self.rec_groups.contains(&ty.rec_group)),
+            "type_defs must only reference existing rec_groups"
         );
     }
 }
@@ -194,6 +198,7 @@ impl TableOps {
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
 
+        // 4: `take_struct`
         types.ty().function(
             vec![ValType::Ref(RefType {
                 nullable: false,
@@ -201,6 +206,8 @@ impl TableOps {
             })],
             vec![],
         );
+
+        let struct_type_base: u32 = types.len();
 
         let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = self
             .types
@@ -230,16 +237,18 @@ impl TableOps {
             }
         };
 
-        let mut struct_count: u32 = 0;
+        let mut struct_count = 0;
+
         for type_ids in rec_groups.values() {
             let members: Vec<wasm_encoder::SubType> = type_ids.iter().map(encode_ty_id).collect();
             types.ty().rec(members);
             struct_count += type_ids.len() as u32;
         }
 
-        let typed_ft_base: u32 = STRUCT_BASE + struct_count;
+        let typed_fn_type_base: u32 = struct_type_base + struct_count;
+
         for i in 0..struct_count {
-            let concrete = STRUCT_BASE + i;
+            let concrete = struct_type_base + i;
             types.ty().function(
                 vec![ValType::Ref(RefType {
                     nullable: false,
@@ -256,18 +265,14 @@ impl TableOps {
         imports.import("", "make_refs", EntityType::Function(3));
         imports.import("", "take_struct", EntityType::Function(4));
 
-        let mut typed_names: Vec<String> = Vec::new();
+        // For each of our concrete struct types, define a function
+        // import that takes an argument of that concrete type.
+        let typed_first_func_index: u32 = imports.len();
 
         for i in 0..struct_count {
-            let concrete = STRUCT_BASE + i;
-            let ty_idx = typed_ft_base + i; //
-            let name = format!("take_struct_{concrete}");
-            typed_names.push(name);
-            imports.import(
-                "",
-                typed_names.last().unwrap().as_str(),
-                EntityType::Function(ty_idx),
-            );
+            let ty_idx = typed_fn_type_base + i;
+            let name = format!("take_struct_{}", struct_type_base + i);
+            imports.import("", &name, EntityType::Function(ty_idx));
         }
 
         // Define our table.
@@ -279,7 +284,6 @@ impl TableOps {
             table64: false,
             shared: false,
         });
-
         // Define our globals.
         let mut globals = GlobalSection::new();
         for _ in 0..self.limits.num_globals {
@@ -295,19 +299,26 @@ impl TableOps {
 
         // Define the "run" function export.
         let mut functions = FunctionSection::new();
-        functions.function(1);
-
         let mut exports = ExportSection::new();
-        let imported_fn_count: u32 = 4 + struct_count;
-        exports.export("run", ExportKind::Func, imported_fn_count);
+
+        let run_defined_idx = functions.len();
+        functions.function(1);
+        let run_func_index = imports.len() + run_defined_idx;
+        exports.export("run", ExportKind::Func, run_func_index);
 
         // Give ourselves one scratch local that we can use in various `TableOp`
         // implementations.
-        let mut func = Function::new(vec![(1, ValType::EXTERNREF)]);
+        let local_decls: Vec<(u32, ValType)> = vec![(1, ValType::EXTERNREF)];
 
+        let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(&mut func, self.limits.num_params);
+            op.insert(
+                &mut func,
+                self.limits.num_params,
+                struct_type_base,
+                typed_first_func_index,
+            );
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -327,7 +338,6 @@ impl TableOps {
 
         module.finish()
     }
-
     /// Computes the abstract stack depth after executing all operations
     pub fn abstract_stack_depth(&self, index: usize) -> usize {
         debug_assert!(index <= self.ops.len());
@@ -360,7 +370,14 @@ impl TableOps {
         let mut stack = 0;
 
         for mut op in self.ops.iter().copied() {
-            if self.limits.max_types == 0 && matches!(op, TableOp::StructNew(..)) {
+            if self.limits.max_types == 0
+                && matches!(
+                    op,
+                    TableOp::StructNew(..)
+                        | TableOp::TakeStructCall(..)
+                        | TableOp::TakeTypedStructCall(..)
+                )
+            {
                 continue;
             }
             if self.limits.num_params == 0
@@ -664,7 +681,13 @@ define_table_ops! {
 }
 
 impl TableOp {
-    fn insert(self, func: &mut Function, scratch_local: u32) {
+    fn insert(
+        self,
+        func: &mut Function,
+        scratch_local: u32,
+        struct_type_base: u32,
+        typed_first_func_index: u32,
+    ) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -709,16 +732,16 @@ impl TableOp {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
             Self::StructNew(x) => {
-                func.instruction(&Instruction::StructNew(x + 5));
+                func.instruction(&Instruction::StructNew(x + struct_type_base));
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
             Self::TakeStructCall(x) => {
-                func.instruction(&Instruction::StructNew(x + 5));
+                func.instruction(&Instruction::StructNew(x + struct_type_base));
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
             Self::TakeTypedStructCall(x) => {
-                let s = STRUCT_BASE + x;
-                let f = TYPED_FN_BASE + x;
+                let s = struct_type_base + x;
+                let f = typed_first_func_index + x;
                 func.instruction(&Instruction::StructNew(s));
                 func.instruction(&Instruction::Call(f));
             }

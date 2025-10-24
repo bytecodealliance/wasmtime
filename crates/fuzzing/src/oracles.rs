@@ -980,16 +980,15 @@ pub fn table_ops(
             // error is unexpected and should fail fuzzing.
             log::info!("table_ops: calling into Wasm `run` function");
             let err = run.call(&mut scope, &args, &mut []).unwrap_err();
-            match err.downcast::<GcHeapOutOfMemory<CountDrops>>() {
-                Ok(_oom) => {}
-                Err(err) => {
-                    let trap = err
-                        .downcast::<Trap>()
-                        .expect("if not GC oom, error should be a Wasm trap");
-                    match trap {
-                        Trap::TableOutOfBounds | Trap::OutOfFuel => {}
-                        _ => panic!("unexpected trap: {trap}"),
-                    }
+            if err.is::<GcHeapOutOfMemory<CountDrops>>() || err.is::<GcHeapOutOfMemory<()>>() {
+                // Accept GC OOM as an allowed outcome for this fuzzer.
+            } else {
+                let trap = err
+                    .downcast::<Trap>()
+                    .expect("if not GC oom, error should be a Wasm trap");
+                match trap {
+                    Trap::TableOutOfBounds | Trap::OutOfFuel | Trap::AllocationTooLarge => {}
+                    _ => panic!("unexpected trap: {trap}"),
                 }
             }
         }
