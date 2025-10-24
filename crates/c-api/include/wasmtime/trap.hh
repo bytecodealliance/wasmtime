@@ -111,20 +111,8 @@ inline Trace Error::trace() const {
  * frames on the stack.
  */
 class Trap {
-  friend class Linker;
-  friend class Instance;
-  friend class Func;
-  template <typename Params, typename Results> friend class TypedFunc;
+  WASMTIME_OWN_WRAPPER(Trap, wasm_trap);
 
-  struct deleter {
-    void operator()(wasm_trap_t *p) const { wasm_trap_delete(p); }
-  };
-
-  std::unique_ptr<wasm_trap_t, deleter> ptr;
-
-  Trap(wasm_trap_t *ptr) : ptr(ptr) {}
-
-public:
   /// Creates a new host-defined trap with the specified message.
   explicit Trap(std::string_view msg)
       : Trap(wasmtime_trap_new(msg.data(), msg.size())) {}
