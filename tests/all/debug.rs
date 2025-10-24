@@ -366,46 +366,48 @@ async fn caught_exception_events() -> anyhow::Result<()> {
 async fn hostcall_trap_events() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
-    let (module, mut store) = get_module_and_store(
-        |config| {
-            config.async_support(true);
-            config.wasm_exceptions(true);
-            // Force hostcall-based traps.
-            config.signals_based_traps(false);
-        },
-        r#"
-    (module
-      (func (export "main")
-        i32.const 0
-        i32.const 0
-        i32.div_u
-        drop))
-    "#,
-    )?;
+    // Test both hostcall-based traps and native traps.
+    for signals_based_traps in [false, true] {
+        let (module, mut store) = get_module_and_store(
+            |config| {
+                config.async_support(true);
+                config.wasm_exceptions(true);
+                config.signals_based_traps(signals_based_traps);
+            },
+            r#"
+            (module
+              (func (export "main")
+                i32.const 0
+                i32.const 0
+                i32.div_u
+                drop))
+            "#,
+        )?;
 
-    debug_event_checker!(
-        D, store,
-        { 0 ;
-          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
-              let mut stack = store.debug_frames().unwrap();
-              assert!(!stack.done());
-              assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-              assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 37);
-              stack.move_to_parent();
-              assert!(stack.done());
-          }
-        }
-    );
+        debug_event_checker!(
+            D, store,
+            { 0 ;
+              wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
+                  let mut stack = store.debug_frames().unwrap();
+                  assert!(!stack.done());
+                  assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+                  assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 37);
+                  stack.move_to_parent();
+                  assert!(stack.done());
+              }
+            }
+        );
 
-    let (handler, counter) = D::new_and_counter();
-    store.set_debug_handler(handler);
+        let (handler, counter) = D::new_and_counter();
+        store.set_debug_handler(handler);
 
-    let instance = Instance::new_async(&mut store, &module, &[]).await?;
-    let func = instance.get_func(&mut store, "main").unwrap();
-    let mut results = [];
-    let result = func.call_async(&mut store, &[], &mut results).await;
-    assert!(result.is_err()); // Uncaught trap.
-    assert_eq!(counter.load(Ordering::Relaxed), 1);
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let func = instance.get_func(&mut store, "main").unwrap();
+        let mut results = [];
+        let result = func.call_async(&mut store, &[], &mut results).await;
+        assert!(result.is_err()); // Uncaught trap.
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
 
     Ok(())
 }
@@ -452,5 +454,52 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn hostcall_trap_out_of_bounds_signals() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+        },
+        r#"
+            (module
+              (memory $m 1 1)
+              (func (export "main")
+                i32.const 0x1_0000
+                i32.load $m
+                drop))
+            "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::MemoryOutOfBounds) => {
+              let mut stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+              assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 43);
+              stack.move_to_parent();
+              assert!(stack.done());
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    let result = func.call_async(&mut store, &[], &mut results).await;
+    assert!(result.is_err()); // Uncaught trap.
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
     Ok(())
 }

@@ -15,6 +15,11 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
+#[cfg(all(has_native_signals))]
+mod inject_call;
+#[cfg(all(has_native_signals))]
+pub use self::inject_call::*;
+
 #[cfg(feature = "gc")]
 use crate::ThrownException;
 use crate::runtime::module::lookup_code;
@@ -43,9 +48,29 @@ pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
+#[allow(
+    dead_code,
+    reason = "some registers not used when debug trap handling is disabled"
+)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    pub sp: usize,
+    pub arg0: usize,
+    pub arg1: usize,
+}
+
+#[allow(
+    dead_code,
+    reason = "some registers not used when debug trap handling is disabled"
+)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum TrapResumeArgs {
+    /// Exception ABI argument values.
+    Handler(usize, usize),
+    /// Ordinary call ABI argument values.
+    Call(usize, usize),
 }
 
 /// Return value from `test_if_trap`.
@@ -57,7 +82,7 @@ pub(crate) enum TrapTest {
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
-    Trap(Handler),
+    Trap(Handler, TrapResumeArgs),
 }
 
 fn lazy_per_thread_init() {
@@ -430,11 +455,25 @@ where
 {
     let caller = store.0.default_caller();
 
+    // Set the raw store pointer (`VMStoreContext::raw_store`)
+    // here, just before entry, so that it has correct
+    // provenance. See comment on that field for more detials.
+    #[cfg(feature = "debug")]
+    unsafe {
+        *store.0.vm_store_context_mut().raw_store.get() =
+            Some(NonNull::from(store.0 as &mut dyn VMStore));
+    }
+
     let result = CallThreadState::new(store.0, old_state).with(|_cx| match store.0.executor() {
         ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
         #[cfg(has_host_compiler_backend)]
         ExecutorRef::Native => closure(caller, None),
     });
+
+    #[cfg(feature = "debug")]
+    unsafe {
+        *store.0.vm_store_context_mut().raw_store.get() = None;
+    }
 
     match result {
         Ok(x) => Ok(x),
@@ -550,56 +589,6 @@ mod call_thread_state {
         pub(crate) vm_store_context: NonNull<VMStoreContext>,
         pub(crate) unwinder: &'static dyn Unwind,
 
-        /// Raw pointer to the `*mut dyn VMStore` running in this
-        /// activation, to be used *only* when re-entering the host
-        /// during a trap.
-        ///
-        /// This is a very tricky ownership/provenance dance. When
-        /// control is in the Wasm code itself, the store is
-        /// completely owned by the Wasm. It passes ownership back
-        /// during hostcalls via mutable reborrow (as with any call
-        /// with a `&mut self` in Rust). That's all well and good for
-        /// explicit calls.
-        ///
-        /// When a trap occurs, however, we can also think of the
-        /// ownership passing as-if the trapping instruction were a
-        /// hostcall with a `&mut dyn VMStore` parameter. This works
-        /// *as long as* all possibly trapping points in compiled code
-        /// act as if they invalidate any other held borrows into the
-        /// store.
-        ///
-        /// It turns out that we generally enforce this in compiled
-        /// guest code in Cranelift: any `can_trap` opcode returns
-        /// `true` from `has_memory_fence_semantics()` (see
-        /// corresponding comment there). This is enough to ensure
-        /// that the compiler treats every trapping op as-if it were a
-        /// hostcall, which clobbers all memory state; so from the
-        /// Wasm code's point of view, it is safely reborrowing the
-        /// Store and passing it "somewhere" on every trap. The
-        /// plumbing for that "passing" goes through this field, but
-        /// that is an implementation detail. When control comes back
-        /// out of the Wasm activation, we clear this field; the
-        /// invocation itself takes a mutable borrow of the store, so
-        /// safety is preserved on the caller side as well. In other
-        /// words, the provenance is something like
-        ///
-        /// ```plain
-        ///
-        ///      host (caller side)  with `&mut dyn VMStore`
-        ///                   /               \
-        ///     (param into  /          (this field)
-        ///      entry trampoline)              \
-        ///                |                     |
-        ///               ~~~~~~~ (wasm code) ~~~~~~
-        ///                |                     |
-        ///                libcall              trap
-        ///  ```
-        ///
-        /// with only *one* of those paths dynamically taken at any
-        /// given time.
-        #[cfg(all(feature = "debug", feature = "pulley"))]
-        pub(crate) raw_store: NonNull<dyn VMStore>,
-
         pub(super) prev: Cell<tls::Ptr>,
 
         // The state of the runtime for the *previous* `CallThreadState` for
@@ -636,8 +625,6 @@ mod call_thread_state {
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
                 vm_store_context: store.vm_store_context_ptr(),
-                #[cfg(all(feature = "debug", feature = "pulley"))]
-                raw_store: NonNull::from_mut(store),
                 prev: Cell::new(ptr::null()),
                 old_state,
             }
@@ -881,10 +868,9 @@ impl CallThreadState {
     /// skip all Rust destructors on the stack, if there are any, for native
     /// executors as `Handler::resume` will be used.
     unsafe fn unwind(&self, store: &mut dyn VMStore) {
-        #[allow(unused_mut, reason = "only  mutated in `debug` configuration")]
-        let mut unwind = self.unwind.replace(UnwindState::None);
-        self.debug_event_on_unwind(store, &mut unwind);
+        self.invoke_debug_event(store);
 
+        let unwind = self.unwind.replace(UnwindState::None);
         match unwind {
             UnwindState::UnwindToHost { .. } => {
                 self.unwind.set(unwind);
@@ -928,17 +914,11 @@ impl CallThreadState {
         }
     }
 
-    /// From the Pulley interpreter, perform a fiber suspend for a
-    /// debug event handler after setting the unwind state with
-    /// `set_jit_trap`.
-    #[cfg(all(feature = "debug", feature = "pulley"))]
-    pub(crate) fn debug_event_from_interpreter(&self) {
+    /// Invoke a debug event handler after setting the unwind state
+    /// with `set_jit_trap`.
+    #[cfg(all(feature = "debug"))]
+    pub(crate) fn invoke_debug_event(&self, store: &mut dyn VMStore) {
         let mut unwind = self.unwind.replace(UnwindState::None);
-        // SAFETY: this is invoked only within a trapping context when
-        // we have received control back from the Wasm code. See the
-        // provenance diagram and comments on `self.raw_store` for
-        // more details.
-        let store = unsafe { self.raw_store.as_ptr().as_mut().unwrap() };
         self.debug_event_on_unwind(store, &mut unwind);
         self.unwind.set(unwind);
     }
@@ -948,6 +928,10 @@ impl CallThreadState {
     /// event.
     #[cfg(feature = "debug")]
     fn debug_event_on_unwind(&self, store: &mut dyn VMStore, unwind: &mut UnwindState) {
+        if !store.has_debug_handler() {
+            return;
+        }
+
         let result = match unwind {
             UnwindState::UnwindToWasm(_) => {
                 assert!(store.as_store_opaque().has_pending_exception());
@@ -1134,11 +1118,44 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
-        // If all that passed then this is indeed a wasm trap, so return the
-        // `Handler` setup in the original wasm frame.
+        // If all that passed then this is indeed a wasm trap; we will
+        // handle it either directly or by injecting a call to a
+        // trap-hostcall.
+
         self.set_jit_trap(regs, faulting_addr, trap);
+
+        // If a debug session is active on the store, then we will
+        // inject a hostcall so that we can invoke the debug event
+        // handler.
+        #[cfg(all(feature = "debug", has_native_signals))]
+        {
+            // SAFETY: We are in a trapping context, without another
+            // `&mut dyn VMStore` or equivalent present anywhere. This
+            // is like a mutable reborrow of the store from the
+            // trapping code, as-if the trapping opcode were a
+            // hostcall. See provenance/safety comment on `raw_store`
+            // for more.
+            let vm_store = unsafe { self.vm_store_context.as_ref().raw_store_mut() };
+
+            if vm_store.has_debug_handler() {
+                let mut pc = regs.pc;
+                let mut arg0 = regs.arg0;
+                let mut arg1 = regs.arg1;
+                let vm_store_context = vm_store.as_store_opaque().vm_store_context_mut();
+                vm_store_context.inject_trap_handler_hostcall(&mut pc, &mut arg0, &mut arg1);
+                let handler = Handler {
+                    pc: pc,
+                    sp: regs.sp,
+                    fp: regs.fp,
+                };
+                return TrapTest::Trap(handler, TrapResumeArgs::Call(arg0, arg1));
+            }
+        }
+
+        // Otherwise: return the `Handler` setup in the original wasm
+        // frame so that the signal handler resumes to it.
         let entry_handler = self.entry_trap_handler();
-        TrapTest::Trap(entry_handler)
+        TrapTest::Trap(entry_handler, TrapResumeArgs::Handler(0, 0))
     }
 
     pub(crate) fn set_jit_trap(

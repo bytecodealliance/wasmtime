@@ -2,6 +2,7 @@ use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
     StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
 };
+use crate::vm::TrapResumeArgs;
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::ptr::NonNull;
@@ -457,8 +458,13 @@ impl InterpreterRef<'_> {
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
             fp: self.vm().fp() as usize,
+            sp: self.vm().sp() as usize,
+            // N.B.: We do not do call injection with Pulley traps, so
+            // we don't need these values.
+            arg0: 0,
+            arg1: 0,
         };
-        let handler = tls::with(|s| {
+        let (handler, args) = tls::with(|s| {
             let s = s.unwrap();
             match kind {
                 Some(kind) => {
@@ -472,8 +478,15 @@ impl InterpreterRef<'_> {
                     };
                     s.set_jit_trap(regs, None, trap);
                     log::trace!("about to invoke debug event from interpreter");
-                    s.debug_event_from_interpreter();
-                    s.entry_trap_handler()
+
+                    // SAFETY: this is invoked only within a trapping context when
+                    // we have received control back from the Wasm code. See the
+                    // provenance diagram and comments on `self.raw_store` for
+                    // more details.
+                    let store = unsafe { s.vm_store_context.as_ref().raw_store_mut() };
+                    s.invoke_debug_event(store);
+
+                    (s.entry_trap_handler(), TrapResumeArgs::Handler(0, 0))
                 }
                 None => {
                     match s.test_if_trap(regs, None, |_| false) {
@@ -489,13 +502,19 @@ impl InterpreterRef<'_> {
 
                         // Trap was handled, yay! Configure interpreter state
                         // to resume at the exception handler.
-                        TrapTest::Trap(handler) => handler,
+                        TrapTest::Trap(handler, args) => (handler, args),
                     }
                 }
             }
         });
         unsafe {
-            self.resume_to_exception_handler(&handler, 0, 0);
+            let (arg1, arg2) = match args {
+                TrapResumeArgs::Handler(arg1, arg2) => (arg1, arg2),
+                TrapResumeArgs::Call(..) => {
+                    panic!("Cannot set call registers in Pulley resume path")
+                }
+            };
+            self.resume_to_exception_handler(&handler, arg1, arg2);
         }
         self.take_resume_at_pc()
     }

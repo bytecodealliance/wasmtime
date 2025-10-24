@@ -2764,6 +2764,11 @@ unsafe impl<T> VMStore for StoreInner<T> {
             Ok(())
         }
     }
+
+    #[cfg(feature = "debug")]
+    fn has_debug_handler(&self) -> bool {
+        self.debug_handler.is_some()
+    }
 }
 
 impl<T> StoreInner<T> {

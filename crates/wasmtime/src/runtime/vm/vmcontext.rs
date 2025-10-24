@@ -7,6 +7,10 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
+#[cfg(all(has_native_signals, feature = "debug"))]
+use crate::vm::InjectedCallState;
+#[cfg(all(feature = "debug"))]
+use crate::vm::VMStore;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -1195,6 +1199,67 @@ pub struct VMStoreContext {
     /// It is set *only* from host code, but is kept here alongside
     /// the other last-exit state for consistency.
     pub last_wasm_exit_was_trap: UnsafeCell<bool>,
+
+    /// Register state to restore into signal frame for injected trap
+    /// hostcalls.
+    ///
+    /// When `VMStoreContext::inject_trap_handler_hostcall()` is used
+    /// from within a signal handler to redirect execution to a
+    /// hostcall on trap, we overwrite some signal register state to
+    /// give context to the hostcall. Those overwritten register
+    /// values are saved here, and placed back into a trampoline
+    /// register-save frame so that they are restored properly if we
+    /// resume the original guest code.
+    #[cfg(all(feature = "debug", has_native_signals))]
+    pub injected_call_state: UnsafeCell<Option<InjectedCallState>>,
+
+    /// Raw pointer to the `*mut dyn VMStore` running in this
+    /// activation, to be used *only* when re-entering the host during
+    /// a trap (from native code using call injection, or from the
+    /// interpreter).
+    ///
+    /// This is a very tricky ownership/provenance dance. When control
+    /// is in the Wasm code itself, the store is completely owned by
+    /// the Wasm. It passes ownership back during hostcalls via
+    /// mutable reborrow (as with any call with a `&mut self` in
+    /// Rust). That's all well and good for explicit calls.
+    ///
+    /// When a trap occurs, however, we can also think of the
+    /// ownership passing as-if the trapping instruction were a
+    /// hostcall with a `&mut dyn VMStore` parameter. This works *as
+    /// long as* all possibly trapping points in compiled code act as
+    /// if they invalidate any other held borrows into the store.
+    ///
+    /// It turns out that we generally enforce this in compiled guest
+    /// code in Cranelift: any `can_trap` opcode returns `true` from
+    /// `has_memory_fence_semantics()` (see corresponding comment
+    /// there). This is enough to ensure that the compiler treats
+    /// every trapping op as-if it were a hostcall, which clobbers all
+    /// memory state; so from the Wasm code's point of view, it is
+    /// safely reborrowing the Store and passing it "somewhere" on
+    /// every trap. The plumbing for that "passing" goes through this
+    /// field, but that is an implementation detail. When control
+    /// comes back out of the Wasm activation, we clear this field;
+    /// the invocation itself takes a mutable borrow of the store, so
+    /// safety is preserved on the caller side as well. In other
+    /// words, the provenance is something like
+    ///
+    /// ```plain
+    ///
+    ///      host (caller side)  with `&mut dyn VMStore`
+    ///                   /               \
+    ///     (param into  /          (this field)
+    ///      entry trampoline)              \
+    ///                |                     |
+    ///               ~~~~~~~ (wasm code) ~~~~~~
+    ///                |                     |
+    ///                libcall              trap
+    ///  ```
+    ///
+    /// with only *one* of those paths dynamically taken at any given
+    /// time.
+    #[cfg(all(feature = "debug"))]
+    pub(crate) raw_store: UnsafeCell<Option<NonNull<dyn VMStore>>>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1226,6 +1291,31 @@ impl Default for VMStoreContext {
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
             last_wasm_exit_was_trap: UnsafeCell::new(false),
+            #[cfg(all(feature = "debug", has_native_signals))]
+            injected_call_state: UnsafeCell::new(None),
+            #[cfg(feature = "debug")]
+            raw_store: UnsafeCell::new(None),
+        }
+    }
+}
+
+impl VMStoreContext {
+    #[cfg(feature = "debug")]
+    /// Get a mutable borrow to the `dyn VMStore` from this `VMStoreContext`.
+    ///
+    /// This must *only* be used from within a trap context, where the
+    /// `VMContext`/`VMStoreContext` flow out of Wasm code but no
+    /// other live borrow of the store exists. This is a way to
+    /// recover the latter from the former in contexts where we don't
+    /// have an explicit store borrow by way of hostcall
+    /// arguments. Note that the Wasm code must expect this by acting
+    /// as if a mutable borrow of the store is possible at the point
+    /// that the trap occurs.
+    #[cfg(feature = "debug")]
+    pub(crate) unsafe fn raw_store_mut(&self) -> &mut dyn VMStore {
+        unsafe {
+            let raw = (*self.raw_store.get()).expect("Raw store pointer must be set");
+            raw.as_ptr().as_mut().expect("must be non-null")
         }
     }
 }
