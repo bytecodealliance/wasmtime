@@ -363,12 +363,6 @@ async fn caught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-#[cfg(any(
-    target_arch = "x86_64",
-    target_arch = "aarch64",
-    target_arch = "s390x",
-    target_arch = "riscv64"
-))]
 async fn hostcall_trap_events() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
@@ -392,7 +386,14 @@ async fn hostcall_trap_events() -> anyhow::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {}
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
+              let mut stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+              assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 37);
+              stack.move_to_parent();
+              assert!(stack.done());
+          }
         }
     );
 

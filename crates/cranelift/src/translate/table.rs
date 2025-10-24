@@ -1,4 +1,5 @@
 use crate::func_environ::FuncEnvironment;
+use crate::translate::FuncTranslationStacks;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder, condcodes::IntCC, immediates::Imm64};
 use cranelift_codegen::isa::TargetIsa;
@@ -62,6 +63,7 @@ impl TableData {
         env: &mut FuncEnvironment<'_>,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> (ir::Value, ir::MemFlags) {
         let index_ty = pos.func.dfg.value_type(index);
         let addr_ty = env.pointer_type();
@@ -78,7 +80,7 @@ impl TableData {
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
 
         if !spectre_mitigations_enabled {
-            env.trapnz(pos, oob, crate::TRAP_TABLE_OUT_OF_BOUNDS);
+            env.trapnz(pos, oob, crate::TRAP_TABLE_OUT_OF_BOUNDS, stacks);
         }
 
         // Convert `index` to `addr_ty`.

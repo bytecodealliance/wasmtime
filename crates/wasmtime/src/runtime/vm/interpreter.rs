@@ -471,6 +471,8 @@ impl InterpreterRef<'_> {
                         TrapKind::StackOverflow => Trap::StackOverflow,
                     };
                     s.set_jit_trap(regs, None, trap);
+                    log::trace!("about to invoke debug event from interpreter");
+                    s.debug_event_from_interpreter();
                     s.entry_trap_handler()
                 }
                 None => {

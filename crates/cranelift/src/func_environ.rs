@@ -835,6 +835,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         table_index: TableIndex,
         index: ir::Value,
         cold_blocks: bool,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         let table_data = self.get_or_create_table(builder.func, table_index);
@@ -843,7 +844,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // contents, we check for a null entry here, and
         // if null, we take a slow-path that invokes a
         // libcall.
-        let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+        let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index, stacks);
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
 
         if !self.tunables.table_lazy_init {
@@ -1028,6 +1029,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder: &mut FunctionBuilder,
         trap_cond: ir::Value,
         trap: ir::TrapCode,
+        stacks: &FuncTranslationStacks,
     ) {
         assert!(!self.clif_instruction_traps_enabled());
 
@@ -1043,17 +1045,22 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(trap_block);
-        self.trap(builder, trap);
+        self.trap(builder, trap, stacks);
         builder.switch_to_block(continuation_block);
     }
 
     /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
     /// test whether the divisor is zero.
-    fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
+    fn guard_zero_divisor(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
+    ) {
         if self.clif_instruction_traps_enabled() {
             return;
         }
-        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO, stacks);
     }
 
     /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
@@ -1063,11 +1070,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         if self.clif_instruction_traps_enabled() {
             return;
         }
-        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO, stacks);
 
         let ty = builder.func.dfg.value_type(rhs);
         let minus_one = builder.ins().iconst(ty, -1);
@@ -1082,7 +1090,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         let lhs_is_int_min = builder.ins().icmp(IntCC::Equal, lhs, int_min);
         let is_integer_overflow = builder.ins().band(rhs_is_minus_one, lhs_is_int_min);
-        self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::INTEGER_OVERFLOW);
+        self.conditionally_trap(
+            builder,
+            is_integer_overflow,
+            ir::TrapCode::INTEGER_OVERFLOW,
+            stacks,
+        );
     }
 
     /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
@@ -1093,6 +1106,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         ty: ir::Type,
         val: ir::Value,
         signed: bool,
+        stacks: &FuncTranslationStacks,
     ) {
         assert!(!self.clif_instruction_traps_enabled());
         let val_ty = builder.func.dfg.value_type(val);
@@ -1102,19 +1116,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builder.ins().fpromote(F64, val)
         };
         let isnan = builder.ins().fcmp(FloatCC::NotEqual, val, val);
-        self.trapnz(builder, isnan, ir::TrapCode::BAD_CONVERSION_TO_INTEGER);
+        self.trapnz(
+            builder,
+            isnan,
+            ir::TrapCode::BAD_CONVERSION_TO_INTEGER,
+            stacks,
+        );
         let val = self.trunc_f64(builder, val);
         let (lower_bound, upper_bound) = f64_cvt_to_int_bounds(signed, ty.bits());
         let lower_bound = builder.ins().f64const(lower_bound);
         let too_small = builder
             .ins()
             .fcmp(FloatCC::LessThanOrEqual, val, lower_bound);
-        self.trapnz(builder, too_small, ir::TrapCode::INTEGER_OVERFLOW);
+        self.trapnz(builder, too_small, ir::TrapCode::INTEGER_OVERFLOW, stacks);
         let upper_bound = builder.ins().f64const(upper_bound);
         let too_large = builder
             .ins()
             .fcmp(FloatCC::GreaterThanOrEqual, val, upper_bound);
-        self.trapnz(builder, too_large, ir::TrapCode::INTEGER_OVERFLOW);
+        self.trapnz(builder, too_large, ir::TrapCode::INTEGER_OVERFLOW, stacks);
     }
 
     /// Get the `ir::Type` for a `VMSharedTypeIndex`.
@@ -2052,6 +2071,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             table_index,
             callee,
             cold_blocks,
+            self.stack,
         );
 
         // If necessary, check the signature.
@@ -2151,10 +2171,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                                 self.builder,
                                 funcref_ptr,
                                 crate::TRAP_INDIRECT_CALL_TO_NULL,
+                                self.stack,
                             );
                         }
                     }
-                    self.env.trap(self.builder, crate::TRAP_BAD_SIGNATURE);
+                    self.env
+                        .trap(self.builder, crate::TRAP_BAD_SIGNATURE, self.stack);
                     return CheckIndirectCallTypeSignature::StaticTrap;
                 }
             }
@@ -2164,7 +2186,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             WasmHeapType::NoFunc => {
                 assert!(table.ref_type.nullable);
                 self.env
-                    .trap(self.builder, crate::TRAP_INDIRECT_CALL_TO_NULL);
+                    .trap(self.builder, crate::TRAP_INDIRECT_CALL_TO_NULL, self.stack);
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
@@ -2207,8 +2229,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         if self.env.clif_memory_traps_enabled() {
             mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
         } else {
-            self.env
-                .trapz(self.builder, funcref_ptr, crate::TRAP_INDIRECT_CALL_TO_NULL);
+            self.env.trapz(
+                self.builder,
+                funcref_ptr,
+                crate::TRAP_INDIRECT_CALL_TO_NULL,
+                self.stack,
+            );
         }
         let callee_sig_id =
             self.env
@@ -2232,7 +2258,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .icmp(IntCC::Equal, callee_sig_id, caller_sig_id)
         };
         self.env
-            .trapz(self.builder, matches, crate::TRAP_BAD_SIGNATURE);
+            .trapz(self.builder, matches, crate::TRAP_BAD_SIGNATURE, self.stack);
         CheckIndirectCallTypeSignature::Runtime
     }
 
@@ -2290,7 +2316,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
         } else {
             if let Some(trap) = callee_load_trap_code {
-                self.env.trapz(self.builder, callee, trap);
+                self.env.trapz(self.builder, callee, trap, self.stack);
             }
         }
         let func_addr = self.builder.ins().load(
@@ -2587,6 +2613,7 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
         index: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let table = self.module.tables[table_index];
         let table_data = self.get_or_create_table(builder.func, table_index);
@@ -2594,24 +2621,30 @@ impl FuncEnvironment<'_> {
         match heap_ty.top() {
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                let (src, flags) = table_data.prepare_table_addr(self, builder, index);
+                let (src, flags) = table_data.prepare_table_addr(self, builder, index, stacks);
                 gc::gc_compiler(self)?.translate_read_gc_reference(
                     self,
                     builder,
                     table.ref_type,
                     src,
                     flags,
+                    stacks,
                 )
             }
 
             // Function types.
-            WasmHeapTopType::Func => {
-                Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index, false))
-            }
+            WasmHeapTopType::Func => Ok(self.get_or_init_func_ref_table_elem(
+                builder,
+                table_index,
+                index,
+                false,
+                stacks,
+            )),
 
             // Continuation types.
             WasmHeapTopType::Cont => {
-                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                let (elem_addr, flags) =
+                    table_data.prepare_table_addr(self, builder, index, stacks);
                 Ok(builder.ins().load(
                     stack_switching::fatpointer::fatpointer_type(self),
                     flags,
@@ -2628,6 +2661,7 @@ impl FuncEnvironment<'_> {
         table_index: TableIndex,
         value: ir::Value,
         index: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         let table = self.module.tables[table_index];
         let table_data = self.get_or_create_table(builder.func, table_index);
@@ -2635,7 +2669,7 @@ impl FuncEnvironment<'_> {
         match heap_ty.top() {
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
+                let (dst, flags) = table_data.prepare_table_addr(self, builder, index, stacks);
                 gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
                     builder,
@@ -2643,12 +2677,14 @@ impl FuncEnvironment<'_> {
                     dst,
                     value,
                     flags,
+                    stacks,
                 )
             }
 
             // Function types.
             WasmHeapTopType::Func => {
-                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                let (elem_addr, flags) =
+                    table_data.prepare_table_addr(self, builder, index, stacks);
                 // Set the "initialized bit". See doc-comment on
                 // `FUNCREF_INIT_BIT` in
                 // crates/environ/src/ref_bits.rs for details.
@@ -2667,7 +2703,8 @@ impl FuncEnvironment<'_> {
 
             // Continuation types.
             WasmHeapTopType::Cont => {
-                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                let (elem_addr, flags) =
+                    table_data.prepare_table_addr(self, builder, index, stacks);
                 builder.ins().store(flags, value, elem_addr, 0);
                 Ok(())
             }
@@ -2732,11 +2769,12 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         i31ref: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE);
+        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE, stacks);
         Ok(builder.ins().sshr_imm(i31ref, 1))
     }
 
@@ -2744,11 +2782,12 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         i31ref: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         // TODO: If we knew we have a `(ref i31)` here, instead of maybe a `(ref
         // null i31)`, we could omit the `trapz`. But plumbing that type info
         // from `wasmparser` and through to here is a bit funky.
-        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE);
+        self.trapz(builder, i31ref, crate::TRAP_NULL_REFERENCE, stacks);
         Ok(builder.ins().ushr_imm(i31ref, 1))
     }
 
@@ -2765,16 +2804,18 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
         fields: StructFieldsVec,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_struct_new(self, builder, struct_type_index, &fields)
+        gc::translate_struct_new(self, builder, struct_type_index, &fields, stacks)
     }
 
     pub fn translate_struct_new_default(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_struct_new_default(self, builder, struct_type_index)
+        gc::translate_struct_new_default(self, builder, struct_type_index, stacks)
     }
 
     pub fn translate_struct_get(
@@ -2784,6 +2825,7 @@ impl FuncEnvironment<'_> {
         field_index: u32,
         struct_ref: ir::Value,
         extension: Option<Extension>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         gc::translate_struct_get(
             self,
@@ -2792,6 +2834,7 @@ impl FuncEnvironment<'_> {
             field_index,
             struct_ref,
             extension,
+            stacks,
         )
     }
 
@@ -2802,6 +2845,7 @@ impl FuncEnvironment<'_> {
         field_index: u32,
         struct_ref: ir::Value,
         value: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         gc::translate_struct_set(
             self,
@@ -2810,6 +2854,7 @@ impl FuncEnvironment<'_> {
             field_index,
             struct_ref,
             value,
+            stacks,
         )
     }
 
@@ -2818,8 +2863,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         tag_index: TagIndex,
         exn_ref: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<SmallVec<[ir::Value; 4]>> {
-        gc::translate_exn_unbox(self, builder, tag_index, exn_ref)
+        gc::translate_exn_unbox(self, builder, tag_index, exn_ref, stacks)
     }
 
     pub fn translate_exn_throw(
@@ -2828,8 +2874,9 @@ impl FuncEnvironment<'_> {
         tag_index: TagIndex,
         args: &[ir::Value],
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
-        gc::translate_exn_throw(self, builder, tag_index, args, handlers)
+        gc::translate_exn_throw(self, builder, tag_index, args, handlers, stacks)
     }
 
     pub fn translate_exn_throw_ref(
@@ -2837,8 +2884,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         exnref: ir::Value,
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
-        gc::translate_exn_throw_ref(self, builder, exnref, handlers)
+        gc::translate_exn_throw_ref(self, builder, exnref, handlers, stacks)
     }
 
     pub fn translate_array_new(
@@ -2847,8 +2895,9 @@ impl FuncEnvironment<'_> {
         array_type_index: TypeIndex,
         elem: ir::Value,
         len: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new(self, builder, array_type_index, elem, len)
+        gc::translate_array_new(self, builder, array_type_index, elem, len, stacks)
     }
 
     pub fn translate_array_new_default(
@@ -2856,8 +2905,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
         len: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new_default(self, builder, array_type_index, len)
+        gc::translate_array_new_default(self, builder, array_type_index, len, stacks)
     }
 
     pub fn translate_array_new_fixed(
@@ -2865,8 +2915,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
         elems: &[ir::Value],
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new_fixed(self, builder, array_type_index, elems)
+        gc::translate_array_new_fixed(self, builder, array_type_index, elems, stacks)
     }
 
     pub fn translate_array_new_data(
@@ -2941,8 +2992,18 @@ impl FuncEnvironment<'_> {
         index: ir::Value,
         value: ir::Value,
         len: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
-        gc::translate_array_fill(self, builder, array_type_index, array, index, value, len)
+        gc::translate_array_fill(
+            self,
+            builder,
+            array_type_index,
+            array,
+            index,
+            value,
+            len,
+            stacks,
+        )
     }
 
     pub fn translate_array_init_data(
@@ -3013,8 +3074,9 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         array: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_len(self, builder, array)
+        gc::translate_array_len(self, builder, array, stacks)
     }
 
     pub fn translate_array_get(
@@ -3024,8 +3086,17 @@ impl FuncEnvironment<'_> {
         array: ir::Value,
         index: ir::Value,
         extension: Option<Extension>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_get(self, builder, array_type_index, array, index, extension)
+        gc::translate_array_get(
+            self,
+            builder,
+            array_type_index,
+            array,
+            index,
+            extension,
+            stacks,
+        )
     }
 
     pub fn translate_array_set(
@@ -3035,8 +3106,9 @@ impl FuncEnvironment<'_> {
         array: ir::Value,
         index: ir::Value,
         value: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
-        gc::translate_array_set(self, builder, array_type_index, array, index, value)
+        gc::translate_array_set(self, builder, array_type_index, array, index, value, stacks)
     }
 
     pub fn translate_ref_test(
@@ -3045,8 +3117,9 @@ impl FuncEnvironment<'_> {
         test_ty: WasmRefType,
         gc_ref: ir::Value,
         gc_ref_ty: WasmRefType,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
-        gc::translate_ref_test(self, builder, test_ty, gc_ref, gc_ref_ty)
+        gc::translate_ref_test(self, builder, test_ty, gc_ref, gc_ref_ty, stacks)
     }
 
     pub fn translate_ref_null(
@@ -3111,6 +3184,7 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         global_index: GlobalIndex,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         match self.get_or_create_global(builder.func, global_index) {
             GlobalVariable::Memory { gv, offset, ty } => {
@@ -3151,6 +3225,7 @@ impl FuncEnvironment<'_> {
                     } else {
                         ir::MemFlags::trusted().with_readonly().with_can_move()
                     },
+                    stacks,
                 )
             }
         }
@@ -3161,6 +3236,7 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         global_index: GlobalIndex,
         val: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
             GlobalVariable::Memory { gv, offset, ty } => {
@@ -3197,6 +3273,7 @@ impl FuncEnvironment<'_> {
                     src,
                     val,
                     ir::MemFlags::trusted(),
+                    stacks,
                 )?
             }
         }
@@ -3805,7 +3882,7 @@ impl FuncEnvironment<'_> {
     pub fn before_translate_function(
         &mut self,
         builder: &mut FunctionBuilder,
-        _state: &FuncTranslationStacks,
+        state: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         // If an explicit stack limit is requested, emit one here at the start
         // of the function.
@@ -3813,7 +3890,7 @@ impl FuncEnvironment<'_> {
             let limit = builder.ins().global_value(self.pointer_type(), gv);
             let sp = builder.ins().get_stack_pointer(self.pointer_type());
             let overflow = builder.ins().icmp(IntCC::UnsignedLessThan, sp, limit);
-            self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW);
+            self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW, state);
         }
 
         // Additionally we initialize `fuel_var` if it will get used.
@@ -4383,7 +4460,12 @@ impl FuncEnvironment<'_> {
         &*self.isa
     }
 
-    pub fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
+    pub fn trap(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        trap: ir::TrapCode,
+        stacks: &FuncTranslationStacks,
+    ) {
         match (
             self.clif_instruction_traps_enabled(),
             crate::clif_trap_to_env_trap(trap),
@@ -4403,31 +4485,45 @@ impl FuncEnvironment<'_> {
                 let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(libcall, &[vmctx, trap_code]);
                 let raise = self.builtin_functions.raise(&mut builder.func);
-                builder.ins().call(raise, &[vmctx]);
+                let call = builder.ins().call(raise, &[vmctx]);
+                let tags = self.debug_tags(stacks, builder.srcloc());
+                builder.func.debug_tags.set(call, tags);
                 builder.ins().trap(TRAP_INTERNAL_ASSERT);
             }
         }
     }
 
-    pub fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+    pub fn trapz(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        value: ir::Value,
+        trap: ir::TrapCode,
+        stacks: &FuncTranslationStacks,
+    ) {
         if self.clif_instruction_traps_enabled() {
             builder.ins().trapz(value, trap);
         } else {
             let ty = builder.func.dfg.value_type(value);
             let zero = builder.ins().iconst(ty, 0);
             let cmp = builder.ins().icmp(IntCC::Equal, value, zero);
-            self.conditionally_trap(builder, cmp, trap);
+            self.conditionally_trap(builder, cmp, trap, stacks);
         }
     }
 
-    pub fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+    pub fn trapnz(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        value: ir::Value,
+        trap: ir::TrapCode,
+        stacks: &FuncTranslationStacks,
+    ) {
         if self.clif_instruction_traps_enabled() {
             builder.ins().trapnz(value, trap);
         } else {
             let ty = builder.func.dfg.value_type(value);
             let zero = builder.ins().iconst(ty, 0);
             let cmp = builder.ins().icmp(IntCC::NotEqual, value, zero);
-            self.conditionally_trap(builder, cmp, trap);
+            self.conditionally_trap(builder, cmp, trap, stacks);
         }
     }
 
@@ -4437,12 +4533,13 @@ impl FuncEnvironment<'_> {
         lhs: ir::Value,
         rhs: ir::Value,
         trap: ir::TrapCode,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         if self.clif_instruction_traps_enabled() {
             builder.ins().uadd_overflow_trap(lhs, rhs, trap)
         } else {
             let (ret, overflow) = builder.ins().uadd_overflow(lhs, rhs);
-            self.conditionally_trap(builder, overflow, trap);
+            self.conditionally_trap(builder, overflow, trap, stacks);
             ret
         }
     }
@@ -4452,8 +4549,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
-        self.guard_signed_divide(builder, lhs, rhs);
+        self.guard_signed_divide(builder, lhs, rhs, stacks);
         builder.ins().sdiv(lhs, rhs)
     }
 
@@ -4462,8 +4560,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
-        self.guard_zero_divisor(builder, rhs);
+        self.guard_zero_divisor(builder, rhs, stacks);
         builder.ins().udiv(lhs, rhs)
     }
 
@@ -4472,8 +4571,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
-        self.guard_zero_divisor(builder, rhs);
+        self.guard_zero_divisor(builder, rhs, stacks);
         builder.ins().srem(lhs, rhs)
     }
 
@@ -4482,8 +4582,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
-        self.guard_zero_divisor(builder, rhs);
+        self.guard_zero_divisor(builder, rhs, stacks);
         builder.ins().urem(lhs, rhs)
     }
 
@@ -4492,11 +4593,12 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         ty: ir::Type,
         val: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(builder, ty, val, true);
+            self.guard_fcvt_to_int(builder, ty, val, true, stacks);
         }
         builder.ins().fcvt_to_sint(ty, val)
     }
@@ -4506,9 +4608,10 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         ty: ir::Type,
         val: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(builder, ty, val, false);
+            self.guard_fcvt_to_int(builder, ty, val, false, stacks);
         }
         builder.ins().fcvt_to_uint(ty, val)
     }

@@ -1110,8 +1110,8 @@ pub struct VMStoreContext {
     /// The `VMMemoryDefinition` for this store's GC heap.
     pub gc_heap: VMMemoryDefinition,
 
-    /// The value of the frame pointer register in the trampoline used
-    /// to call from Wasm to the host.
+    /// The value of the frame pointer register in the Wasm frame that
+    /// called from Wasm to the host.
     ///
     /// Maintained by our Wasm-to-host trampoline, and cleared just
     /// before calling into Wasm in `catch_traps`.
@@ -1120,13 +1120,8 @@ pub struct VMStoreContext {
     /// to the host.
     ///
     /// Used to find the start of a contiguous sequence of Wasm frames
-    /// when walking the stack. Note that we record the FP of the
-    /// *trampoline*'s frame, not the last Wasm frame, because we need
-    /// to know the SP (bottom of frame) of the last Wasm frame as
-    /// well in case we need to resume to an exception handler in that
-    /// frame. The FP of the last Wasm frame can be recovered by
-    /// loading the saved FP value at this FP address.
-    pub last_wasm_exit_trampoline_fp: UnsafeCell<usize>,
+    /// when walking the stack.
+    pub last_wasm_exit_fp: UnsafeCell<usize>,
 
     /// The last Wasm program counter before we called from Wasm to the host.
     ///
@@ -1188,59 +1183,18 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
-}
 
-impl VMStoreContext {
-    /// From the current saved trampoline FP, get the FP of the last
-    /// Wasm frame. If the current saved trampoline FP is null, return
-    /// null.
+    /// The last Wasm exit to host was due to a trap.
     ///
-    /// We store only the trampoline FP, because (i) we need the
-    /// trampoline FP, so we know the size (bottom) of the last Wasm
-    /// frame; and (ii) the last Wasm frame, just above the trampoline
-    /// frame, can be recovered via the FP chain.
+    /// This is set whenever we update the exit state *from the host*
+    /// when handling a trap. It allows us to interpret the exit PC
+    /// correctly -- that is, either pointing *to* a trapping
+    /// instruction, or *after* a call (a single PC could be both
+    /// after a call and at a trapping instruction!).
     ///
-    /// # Safety
-    ///
-    /// This function requires that the `last_wasm_exit_trampoline_fp`
-    /// field either points to an active trampoline frame or is a null
-    /// pointer.
-    pub(crate) unsafe fn last_wasm_exit_fp(&self) -> usize {
-        // SAFETY: the unsafe cell is safe to load (no other threads
-        // will be writing our store when we have control), and the
-        // helper function's safety condition is the same as ours.
-        unsafe {
-            let trampoline_fp = *self.last_wasm_exit_trampoline_fp.get();
-            Self::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
-        }
-    }
-
-    /// From any saved trampoline FP, get the FP of the last Wasm
-    /// frame. If the given trampoline FP is null, return null.
-    ///
-    /// This differs from `last_wasm_exit_fp()` above in that it
-    /// allows accessing activations further up the stack as well,
-    /// e.g. via `CallThreadState::old_state`.
-    ///
-    /// # Safety
-    ///
-    /// This function requires that the provided FP value is valid,
-    /// and points to an active trampoline frame, or is null.
-    ///
-    /// This function depends on the invariant that on all supported
-    /// architectures, we store the previous FP value under the
-    /// current FP. This is a property of our ABI that we control and
-    /// ensure.
-    pub(crate) unsafe fn wasm_exit_fp_from_trampoline_fp(trampoline_fp: usize) -> usize {
-        if trampoline_fp != 0 {
-            // SAFETY: We require that trampoline_fp points to a valid
-            // frame, which will (by definition) contain an old FP value
-            // that we can load.
-            unsafe { *(trampoline_fp as *const usize) }
-        } else {
-            0
-        }
-    }
+    /// It is set *only* from host code, but is kept here alongside
+    /// the other last-exit state for consistency.
+    pub last_wasm_exit_was_trap: UnsafeCell<bool>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1263,7 +1217,7 @@ impl Default for VMStoreContext {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
             },
-            last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
+            last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
             last_wasm_entry_sp: UnsafeCell::new(0),
@@ -1271,6 +1225,7 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            last_wasm_exit_was_trap: UnsafeCell::new(false),
         }
     }
 }
@@ -1310,8 +1265,8 @@ mod test_vmstore_context {
             usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
         );
         assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_exit_trampoline_fp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_trampoline_fp())
+            offset_of!(VMStoreContext, last_wasm_exit_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_fp())
         );
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_exit_pc),

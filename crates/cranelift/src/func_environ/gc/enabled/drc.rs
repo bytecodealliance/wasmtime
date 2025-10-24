@@ -2,7 +2,7 @@
 //! barriers.
 
 use super::*;
-use crate::translate::TargetEnvironment;
+use crate::translate::{FuncTranslationStacks, TargetEnvironment};
 use crate::{TRAP_INTERNAL_ASSERT, func_environ::FuncEnvironment};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
@@ -28,6 +28,7 @@ impl DrcCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         let offset = func_env.offsets.vm_drc_header_ref_count();
         let pointer = func_env.prepare_gc_ref_access(
@@ -37,6 +38,7 @@ impl DrcCompiler {
                 offset,
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
+            stacks,
         );
         builder
             .ins()
@@ -53,6 +55,7 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
         new_ref_count: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         let offset = func_env.offsets.vm_drc_header_ref_count();
         let pointer = func_env.prepare_gc_ref_access(
@@ -62,6 +65,7 @@ impl DrcCompiler {
                 offset,
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
+            stacks,
         );
         builder
             .ins()
@@ -80,11 +84,12 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
         delta: i64,
+        stacks: &FuncTranslationStacks,
     ) -> ir::Value {
         debug_assert!(delta == -1 || delta == 1);
-        let old_ref_count = self.load_ref_count(func_env, builder, gc_ref);
+        let old_ref_count = self.load_ref_count(func_env, builder, gc_ref, stacks);
         let new_ref_count = builder.ins().iadd_imm(old_ref_count, delta);
-        self.store_ref_count(func_env, builder, gc_ref, new_ref_count);
+        self.store_ref_count(func_env, builder, gc_ref, new_ref_count, stacks);
         new_ref_count
     }
 
@@ -99,6 +104,7 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         gc_ref: ir::Value,
         reserved: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         debug_assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
         debug_assert_eq!(builder.func.dfg.value_type(reserved), ir::types::I32);
@@ -112,11 +118,11 @@ impl DrcCompiler {
             .load(ir::types::I32, ir::MemFlags::trusted(), head, 0);
 
         // Update our object's header to point to `next` and consider itself part of the list.
-        self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
-        self.set_in_over_approximated_stack_roots_bit(func_env, builder, gc_ref, reserved);
+        self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next, stacks);
+        self.set_in_over_approximated_stack_roots_bit(func_env, builder, gc_ref, reserved, stacks);
 
         // Increment our ref count because the list is logically holding a strong reference.
-        self.mutate_ref_count(func_env, builder, gc_ref, 1);
+        self.mutate_ref_count(func_env, builder, gc_ref, 1, stacks);
 
         // Commit this object as the new head of the list.
         builder
@@ -149,6 +155,7 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         gc_ref: ir::Value,
         next: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         debug_assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
         debug_assert_eq!(builder.func.dfg.value_type(next), ir::types::I32);
@@ -161,6 +168,7 @@ impl DrcCompiler {
                     .vm_drc_header_next_over_approximated_stack_root(),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
+            stacks,
         );
         builder.ins().store(ir::MemFlags::trusted(), next, ptr, 0);
     }
@@ -173,13 +181,14 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         gc_ref: ir::Value,
         old_reserved_bits: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
         );
         let new_reserved = builder.ins().bor(old_reserved_bits, in_set_bit);
-        self.set_reserved_bits(func_env, builder, gc_ref, new_reserved);
+        self.set_reserved_bits(func_env, builder, gc_ref, new_reserved, stacks);
     }
 
     /// Update the reserved bits in a `VMDrcHeader`.
@@ -189,6 +198,7 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         gc_ref: ir::Value,
         new_reserved: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) {
         let ptr = func_env.prepare_gc_ref_access(
             builder,
@@ -197,6 +207,7 @@ impl DrcCompiler {
                 offset: func_env.offsets.vm_gc_header_reserved_bits(),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
+            stacks,
         );
         builder
             .ins()
@@ -211,6 +222,7 @@ impl DrcCompiler {
         field_addr: ir::Value,
         ty: WasmStorageType,
         val: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
         let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
@@ -222,7 +234,9 @@ impl DrcCompiler {
                 write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?;
             }
             WasmStorageType::Val(WasmValType::Ref(r)) => {
-                self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?;
+                self.translate_init_gc_reference(
+                    func_env, builder, r, field_addr, val, flags, stacks,
+                )?;
             }
             WasmStorageType::I8 => {
                 assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
@@ -259,6 +273,7 @@ impl DrcCompiler {
         dst: ir::Value,
         new_val: ir::Value,
         flags: ir::MemFlags,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
         debug_assert!(needs_stack_map);
@@ -331,7 +346,7 @@ impl DrcCompiler {
         builder.switch_to_block(inc_ref_block);
         builder.seal_block(inc_ref_block);
         log::trace!("DRC initialization barrier: increment the ref count of the initial value");
-        self.mutate_ref_count(func_env, builder, new_val, 1);
+        self.mutate_ref_count(func_env, builder, new_val, 1, stacks);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier: do the actual store
@@ -388,6 +403,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
         init: super::ArrayInit<'_>,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[array_type_index].unwrap_module_type_index();
@@ -402,7 +418,7 @@ impl GcCompiler for DrcCompiler {
         // First, compute the array's total size from its base size, element
         // size, and length.
         let len = init.len(&mut builder.cursor());
-        let size = emit_array_size(func_env, builder, &array_layout, len);
+        let size = emit_array_size(func_env, builder, &array_layout, len, stacks);
 
         // Second, now that we have the array object's total size, call the
         // `gc_alloc_raw` builtin libcall to allocate the array.
@@ -440,7 +456,7 @@ impl GcCompiler for DrcCompiler {
             size,
             elems_addr,
             |func_env, builder, elem_ty, elem_addr, val| {
-                self.init_field(func_env, builder, elem_addr, elem_ty, val)
+                self.init_field(func_env, builder, elem_addr, elem_ty, val, stacks)
             },
         )?;
         Ok(array_ref)
@@ -452,6 +468,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         struct_type_index: TypeIndex,
         field_vals: &[ir::Value],
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -489,7 +506,7 @@ impl GcCompiler for DrcCompiler {
             raw_ptr_to_struct,
             field_vals,
             |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
+                self.init_field(func_env, builder, field_addr, ty, val, stacks)
             },
         )?;
 
@@ -504,6 +521,7 @@ impl GcCompiler for DrcCompiler {
         field_vals: &[ir::Value],
         instance_id: ir::Value,
         tag: ir::Value,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         let interned_type_index = func_env.module.tags[tag_index]
             .exception
@@ -543,7 +561,7 @@ impl GcCompiler for DrcCompiler {
             raw_ptr_to_exn,
             field_vals,
             |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
+                self.init_field(func_env, builder, field_addr, ty, val, stacks)
             },
         )?;
 
@@ -557,6 +575,7 @@ impl GcCompiler for DrcCompiler {
             instance_id_addr,
             WasmStorageType::Val(WasmValType::I32),
             instance_id,
+            stacks,
         )?;
         let tag_addr = builder
             .ins()
@@ -567,6 +586,7 @@ impl GcCompiler for DrcCompiler {
             tag_addr,
             WasmStorageType::Val(WasmValType::I32),
             tag,
+            stacks,
         )?;
 
         Ok(exn_ref)
@@ -579,6 +599,7 @@ impl GcCompiler for DrcCompiler {
         ty: WasmRefType,
         src: ir::Value,
         flags: ir::MemFlags,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<ir::Value> {
         log::trace!("translate_read_gc_reference({ty:?}, {src:?}, {flags:?})");
 
@@ -695,6 +716,7 @@ impl GcCompiler for DrcCompiler {
                 offset: func_env.offsets.vm_gc_header_reserved_bits(),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
+            stacks,
         );
         let reserved = builder
             .ins()
@@ -715,7 +737,7 @@ impl GcCompiler for DrcCompiler {
         log::trace!(
             "DRC read barrier: push the object onto the over-approximated-stack-roots list"
         );
-        self.push_onto_over_approximated_stack_roots(func_env, builder, gc_ref, reserved);
+        self.push_onto_over_approximated_stack_roots(func_env, builder, gc_ref, reserved, stacks);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier.
@@ -733,6 +755,7 @@ impl GcCompiler for DrcCompiler {
         dst: ir::Value,
         new_val: ir::Value,
         flags: ir::MemFlags,
+        stacks: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         assert!(ty.is_vmgcref_type());
 
@@ -859,7 +882,7 @@ impl GcCompiler for DrcCompiler {
         builder.switch_to_block(inc_ref_block);
         log::trace!("DRC write barrier: increment new ref's ref count");
         builder.seal_block(inc_ref_block);
-        self.mutate_ref_count(func_env, builder, new_val, 1);
+        self.mutate_ref_count(func_env, builder, new_val, 1, stacks);
         builder.ins().jump(check_old_val_block, &[]);
 
         // Block to store the new value into `dst` and then check whether the
@@ -885,7 +908,7 @@ impl GcCompiler for DrcCompiler {
         log::trace!(
             "DRC write barrier: decrement old ref's ref count and check for zero ref count"
         );
-        let ref_count = self.load_ref_count(func_env, builder, old_val);
+        let ref_count = self.load_ref_count(func_env, builder, old_val, stacks);
         let new_ref_count = builder.ins().iadd_imm(ref_count, -1);
         let old_val_needs_drop = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
         builder.ins().brif(
@@ -915,7 +938,7 @@ impl GcCompiler for DrcCompiler {
         builder.switch_to_block(store_dec_ref_block);
         builder.seal_block(store_dec_ref_block);
         log::trace!("DRC write barrier: store decremented ref count into old ref");
-        self.store_ref_count(func_env, builder, old_val, new_ref_count);
+        self.store_ref_count(func_env, builder, old_val, new_ref_count, stacks);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier.
