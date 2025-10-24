@@ -11,6 +11,7 @@
 #include <wasmtime/conf.h>
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
+#include <wasmtime/helpers.hh>
 #include <wasmtime/store.h>
 #include <wasmtime/wasi.hh>
 
@@ -31,12 +32,9 @@ class Caller;
  * will be deallocated when the `Store` is deallocated.
  */
 class Store {
-  struct deleter {
-    void operator()(wasmtime_store_t *p) const { wasmtime_store_delete(p); }
-  };
+  WASMTIME_OWN_WRAPPER(Store, wasmtime_store);
 
-  std::unique_ptr<wasmtime_store_t, deleter> ptr;
-
+private:
   static void finalizer(void *ptr) {
     std::unique_ptr<std::any> _ptr(static_cast<std::any *>(ptr));
   }
@@ -44,7 +42,7 @@ class Store {
 public:
   /// Creates a new `Store` within the provided `Engine`.
   explicit Store(Engine &engine)
-      : ptr(wasmtime_store_new(engine.ptr.get(), nullptr, finalizer)) {}
+      : ptr(wasmtime_store_new(engine.capi(), nullptr, finalizer)) {}
 
   /**
    * \brief An interior pointer into a `Store`.
@@ -132,7 +130,7 @@ public:
     /// `Linker::define_wasi` because otherwise no host functions will use the
     /// WASI state.
     Result<std::monostate> set_wasi(WasiConfig config) {
-      auto *error = wasmtime_context_set_wasi(ptr, config.ptr.release());
+      auto *error = wasmtime_context_set_wasi(ptr, config.capi_release());
       if (error != nullptr) {
         return Error(error);
       }
@@ -199,12 +197,6 @@ public:
   /// Runs a garbage collection pass in the referenced store to collect loose
   /// GC-managed objects, if any are available.
   void gc() { context().gc(); }
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_store_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_store_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime
