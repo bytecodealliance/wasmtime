@@ -1,3 +1,14 @@
+## 38.0.3
+
+Released 2025-10-24.
+
+### Fixed
+
+* Fix possible host crash with host-to-wasm component intrinsics
+  [CVE-2025-62711](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-4h67-722j-5pmc)
+
+--------------------------------------------------------------------------------
+
 ## 38.0.2
 
 Released 2025-10-21.
