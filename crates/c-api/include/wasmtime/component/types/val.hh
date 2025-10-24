@@ -238,6 +238,9 @@ public:
     return wasmtime_component_valtype_equal(&ty, &other.ty);
   }
 
+  /// \brief Compares two types to see if they're different.
+  bool operator!=(const ValType &other) const { return !(*this == other); }
+
   /// Creates a bool value type.
   static ValType new_bool() {
     return ValType::new_kind(WASMTIME_COMPONENT_VALTYPE_BOOL);

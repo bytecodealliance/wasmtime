@@ -84,6 +84,11 @@ public:                                                                        \
    */                                                                          \
   bool operator==(const name &other) const {                                   \
     return capi_type##_equal(ptr.get(), other.ptr.get());                      \
-  }
+  }                                                                            \
+                                                                               \
+  /**                                                                          \
+   * \brief Compares two types for inequality.                                 \
+   */                                                                          \
+  bool operator!=(const name &other) const { return !(*this == other); }
 
 #endif // WASMTIME_HELPERS_HH
