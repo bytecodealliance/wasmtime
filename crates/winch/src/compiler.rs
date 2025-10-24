@@ -405,6 +405,7 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
         &self,
         tunables: &Tunables,
         component: &ComponentTranslation,
+        types: &wasmtime_environ::component::ComponentTypesBuilder,
         intrinsic: wasmtime_environ::component::UnsafeIntrinsic,
         abi: wasmtime_environ::Abi,
         symbol: &str,
@@ -412,7 +413,7 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
         let mut body = self
             .0
             .component_compiler()
-            .compile_intrinsic(tunables, component, intrinsic, abi, symbol)?;
+            .compile_intrinsic(tunables, component, types, intrinsic, abi, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;

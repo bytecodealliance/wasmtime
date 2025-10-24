@@ -341,6 +341,23 @@ impl FuncKey {
         self.into_parts().1
     }
 
+    /// Get ABI of the function that this key is definining.
+    pub fn abi(self) -> Abi {
+        match self {
+            FuncKey::DefinedWasmFunction(_, _) => Abi::Wasm,
+            FuncKey::ArrayToWasmTrampoline(_, _) => Abi::Array,
+            FuncKey::WasmToArrayTrampoline(_) => Abi::Wasm,
+            FuncKey::WasmToBuiltinTrampoline(_) => Abi::Wasm,
+            FuncKey::PulleyHostCall(_) => Abi::Wasm,
+            #[cfg(feature = "component-model")]
+            FuncKey::ComponentTrampoline(abi, _) => abi,
+            #[cfg(feature = "component-model")]
+            FuncKey::ResourceDropTrampoline => Abi::Wasm,
+            #[cfg(feature = "component-model")]
+            FuncKey::UnsafeIntrinsic(abi, _) => abi,
+        }
+    }
+
     /// Get the raw, underlying `(namespace, index)` representation of this
     /// compilation key.
     ///
