@@ -36,8 +36,9 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, InliningCompiler,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection, StaticModuleIndex,
-    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
+    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType,
+    WasmValType,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -354,140 +355,20 @@ impl wasmtime_environ::Compiler for Compiler {
         key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        log::trace!("compiling array-to-wasm trampoline: {key:?} = {symbol:?}");
-
         let (module_index, def_func_index) = key.unwrap_array_to_wasm_trampoline();
-        debug_assert_eq!(translation.module_index(), module_index);
-
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
             .signature
             .unwrap_module_type_index();
-        let wasm_func_ty = types[sig].unwrap_func();
-
-        let isa = &*self.isa;
-        let pointer_type = isa.pointer_type();
-        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
-        let array_call_sig = array_call_signature(isa);
-
-        let mut compiler = self.function_compiler();
-        let func = ir::Function::with_name_signature(key_to_name(key), array_call_sig);
-        let (mut builder, block0) = compiler.builder(func);
-
-        let try_call_block = builder.create_block();
-        builder.ins().jump(try_call_block, []);
-        builder.switch_to_block(try_call_block);
-
-        let (vmctx, caller_vmctx, values_vec_ptr, values_vec_len) = {
-            let params = builder.func.dfg.block_params(block0);
-            (params[0], params[1], params[2], params[3])
-        };
-
-        // First load the actual arguments out of the array.
-        let mut args = self.load_values_from_array(
-            wasm_func_ty.params(),
-            &mut builder,
-            values_vec_ptr,
-            values_vec_len,
-        );
-        args.insert(0, caller_vmctx);
-        args.insert(0, vmctx);
-
-        // Just before we enter Wasm, save our context information.
-        //
-        // Assert that we were really given a core Wasm vmctx, since that's
-        // what we are assuming with our offsets below.
-        self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
-        let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
-        let vm_store_context_offset = offsets.ptr.vmctx_store_context();
-        save_last_wasm_entry_context(
-            &mut builder,
-            pointer_type,
-            &offsets.ptr,
-            vm_store_context_offset.into(),
-            vmctx,
-            try_call_block,
-        );
-
-        // Create the invocation of wasm, which is notably done with a
-        // `try_call` with an exception handler that's used to handle traps.
-        let normal_return = builder.create_block();
-        let exceptional_return = builder.create_block();
-        let normal_return_values = wasm_call_sig
-            .returns
-            .iter()
-            .map(|ty| {
-                builder
-                    .func
-                    .dfg
-                    .append_block_param(normal_return, ty.value_type)
-            })
-            .collect::<Vec<_>>();
-
-        // Then call the Wasm function with those arguments.
-        let callee_key = FuncKey::DefinedWasmFunction(module_index, def_func_index);
-        let signature = builder.func.import_signature(wasm_call_sig.clone());
-        let callee = {
-            let (namespace, index) = callee_key.into_raw_parts();
-            let name = ir::ExternalName::User(
-                builder
-                    .func
-                    .declare_imported_user_function(ir::UserExternalName { namespace, index }),
-            );
-            builder.func.dfg.ext_funcs.push(ir::ExtFuncData {
-                name,
-                signature,
-                colocated: true,
-            })
-        };
-
-        let dfg = &mut builder.func.dfg;
-        let exception_table = dfg.exception_tables.push(ir::ExceptionTableData::new(
-            signature,
-            ir::BlockCall::new(
-                normal_return,
-                (0..wasm_call_sig.returns.len())
-                    .map(|i| ir::BlockArg::TryCallRet(i.try_into().unwrap())),
-                &mut dfg.value_lists,
-            ),
-            [ir::ExceptionTableItem::Default(ir::BlockCall::new(
-                exceptional_return,
-                None,
-                &mut dfg.value_lists,
-            ))],
-        ));
-        builder.ins().try_call(callee, &args, exception_table);
-
-        builder.seal_block(try_call_block);
-        builder.seal_block(normal_return);
-        builder.seal_block(exceptional_return);
-
-        // On the normal return path store all the results in the array we were
-        // provided and return "true" for "returned successfully".
-        builder.switch_to_block(normal_return);
-        self.store_values_to_array(
-            &mut builder,
-            wasm_func_ty.returns(),
-            &normal_return_values,
-            values_vec_ptr,
-            values_vec_len,
-        );
-        let true_return = builder.ins().iconst(ir::types::I8, 1);
-        builder.ins().return_(&[true_return]);
-
-        // On the exceptional return path just return "false" for "did not
-        // succeed". Note that register restoration is part of the `try_call`
-        // and handler implementation.
-        builder.switch_to_block(exceptional_return);
-        let false_return = builder.ins().iconst(ir::types::I8, 0);
-        builder.ins().return_(&[false_return]);
-
-        builder.finalize();
-
-        Ok(CompiledFunctionBody {
-            code: box_dyn_any_compiler_context(Some(compiler.cx)),
-            needs_gc_heap: false,
-        })
+        self.array_to_wasm_trampoline(
+            key,
+            FuncKey::DefinedWasmFunction(module_index, def_func_index),
+            types,
+            sig,
+            symbol,
+            self.isa.pointer_bytes().vmctx_store_context().into(),
+            wasmtime_environ::VMCONTEXT_MAGIC,
+        )
     }
 
     fn compile_wasm_to_array_trampoline(
@@ -1345,6 +1226,142 @@ impl Compiler {
         );
         builder.ins().trapz(is_expected_vmctx, TRAP_INTERNAL_ASSERT);
     }
+
+    fn array_to_wasm_trampoline(
+        &self,
+        trampoline_key: FuncKey,
+        callee_key: FuncKey,
+        types: &ModuleTypesBuilder,
+        callee_sig: ModuleInternedTypeIndex,
+        symbol: &str,
+        vm_store_context_offset: u32,
+        expected_vmctx_magic: u32,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling array-to-wasm trampoline: {trampoline_key:?} = {symbol:?}");
+
+        let wasm_func_ty = types[callee_sig].unwrap_func();
+
+        let isa = &*self.isa;
+        let pointer_type = isa.pointer_type();
+        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
+        let array_call_sig = array_call_signature(isa);
+
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(key_to_name(trampoline_key), array_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
+
+        let try_call_block = builder.create_block();
+        builder.ins().jump(try_call_block, []);
+        builder.switch_to_block(try_call_block);
+
+        let (vmctx, caller_vmctx, values_vec_ptr, values_vec_len) = {
+            let params = builder.func.dfg.block_params(block0);
+            (params[0], params[1], params[2], params[3])
+        };
+
+        // First load the actual arguments out of the array.
+        let mut args = self.load_values_from_array(
+            wasm_func_ty.params(),
+            &mut builder,
+            values_vec_ptr,
+            values_vec_len,
+        );
+        args.insert(0, caller_vmctx);
+        args.insert(0, vmctx);
+
+        // Just before we enter Wasm, save our context information.
+        //
+        // Assert that we were really given a core Wasm vmctx, since that's
+        // what we are assuming with our offsets below.
+        self.debug_assert_vmctx_kind(&mut builder, vmctx, expected_vmctx_magic);
+        save_last_wasm_entry_context(
+            &mut builder,
+            pointer_type,
+            &self.isa.pointer_bytes(),
+            vm_store_context_offset,
+            vmctx,
+            try_call_block,
+        );
+
+        // Create the invocation of wasm, which is notably done with a
+        // `try_call` with an exception handler that's used to handle traps.
+        let normal_return = builder.create_block();
+        let exceptional_return = builder.create_block();
+        let normal_return_values = wasm_call_sig
+            .returns
+            .iter()
+            .map(|ty| {
+                builder
+                    .func
+                    .dfg
+                    .append_block_param(normal_return, ty.value_type)
+            })
+            .collect::<Vec<_>>();
+
+        // Then call the Wasm function with those arguments.
+        let signature = builder.func.import_signature(wasm_call_sig.clone());
+        let callee = {
+            let (namespace, index) = callee_key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                builder
+                    .func
+                    .declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
+            builder.func.dfg.ext_funcs.push(ir::ExtFuncData {
+                name,
+                signature,
+                colocated: true,
+            })
+        };
+
+        let dfg = &mut builder.func.dfg;
+        let exception_table = dfg.exception_tables.push(ir::ExceptionTableData::new(
+            signature,
+            ir::BlockCall::new(
+                normal_return,
+                (0..wasm_call_sig.returns.len())
+                    .map(|i| ir::BlockArg::TryCallRet(i.try_into().unwrap())),
+                &mut dfg.value_lists,
+            ),
+            [ir::ExceptionTableItem::Default(ir::BlockCall::new(
+                exceptional_return,
+                None,
+                &mut dfg.value_lists,
+            ))],
+        ));
+        builder.ins().try_call(callee, &args, exception_table);
+
+        builder.seal_block(try_call_block);
+        builder.seal_block(normal_return);
+        builder.seal_block(exceptional_return);
+
+        // On the normal return path store all the results in the array we were
+        // provided and return "true" for "returned successfully".
+        builder.switch_to_block(normal_return);
+        self.store_values_to_array(
+            &mut builder,
+            wasm_func_ty.returns(),
+            &normal_return_values,
+            values_vec_ptr,
+            values_vec_len,
+        );
+        let true_return = builder.ins().iconst(ir::types::I8, 1);
+        builder.ins().return_(&[true_return]);
+
+        // On the exceptional return path just return "false" for "did not
+        // succeed". Note that register restoration is part of the `try_call`
+        // and handler implementation.
+        builder.switch_to_block(exceptional_return);
+        let false_return = builder.ins().iconst(ir::types::I8, 0);
+        builder.ins().return_(&[false_return]);
+
+        builder.finalize();
+
+        Ok(CompiledFunctionBody {
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: false,
+        })
+    }
 }
 
 struct FunctionCompiler<'a> {
@@ -1572,7 +1589,7 @@ fn clif_to_env_frame_tables<'a>(
 fn save_last_wasm_entry_context(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
-    ptr_size: &impl PtrSize,
+    ptr_size: &dyn PtrSize,
     vm_store_context_offset: u32,
     vmctx: Value,
     block: ir::Block,

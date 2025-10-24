@@ -1442,10 +1442,31 @@ impl ComponentCompiler for Compiler {
         key: FuncKey,
         abi: Abi,
         tunables: &Tunables,
-        _symbol: &str,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody> {
         let (abi2, trampoline_index) = key.unwrap_component_trampoline();
         debug_assert_eq!(abi, abi2);
+
+        match abi {
+            // Fall through to the trampoline compiler.
+            Abi::Wasm => {}
+
+            // Implement the array-abi trampoline in terms of calling the
+            // wasm-abi trampoline.
+            Abi::Array => {
+                let offsets =
+                    VMComponentOffsets::new(self.isa.pointer_bytes(), &component.component);
+                return Ok(self.array_to_wasm_trampoline(
+                    key,
+                    FuncKey::ComponentTrampoline(Abi::Wasm, trampoline_index),
+                    types.module_types_builder(),
+                    component.component.trampolines[trampoline_index],
+                    symbol,
+                    offsets.vm_store_context(),
+                    wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                )?);
+            }
+        }
 
         let mut compiler = self.function_compiler();
         let mut c = TrampolineCompiler::new(
