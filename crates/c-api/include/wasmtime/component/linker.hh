@@ -26,24 +26,7 @@ namespace component {
  * `Linker` can also be used to link in WASI functions to instantiate a module.
  */
 class LinkerInstance {
-  struct deleter {
-    void operator()(wasmtime_component_linker_instance_t *p) const {
-      wasmtime_component_linker_instance_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_linker_instance_t, deleter> ptr;
-
-public:
-  /// Creates a new linker instance from the given C API pointer.
-  explicit LinkerInstance(wasmtime_component_linker_instance_t *ptr)
-      : ptr(ptr) {}
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_linker_instance_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_linker_instance_t *capi() { return ptr.get(); }
+  WASMTIME_OWN_WRAPPER(LinkerInstance, wasmtime_component_linker_instance);
 
   /**
    * \brief Adds a module to this linker instance under the specified name.
@@ -88,7 +71,7 @@ private:
     Result<std::monostate> result =
         (*func)(Store::Context(store), args_span, results_span);
     if (!result) {
-      return result.err().release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -127,7 +110,7 @@ private:
     F *func = reinterpret_cast<F *>(env);
     Result<std::monostate> result = (*func)(Store::Context(store), rep);
     if (!result) {
-      return result.err().release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -160,15 +143,8 @@ public:
  * \brief Class used to instantiate a `Component` into an instance.
  */
 class Linker {
-  struct deleter {
-    void operator()(wasmtime_component_linker_t *p) const {
-      wasmtime_component_linker_delete(p);
-    }
-  };
+  WASMTIME_OWN_WRAPPER(Linker, wasmtime_component_linker);
 
-  std::unique_ptr<wasmtime_component_linker_t, deleter> ptr;
-
-public:
   /// Creates a new linker which will instantiate in the given engine.
   explicit Linker(Engine &engine)
       : ptr(wasmtime_component_linker_new(engine.capi())) {}
@@ -234,12 +210,6 @@ public:
     return std::monostate();
   }
 #endif // WASMTIME_FEATURE_WASI
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_linker_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_linker_t *capi() { return ptr.get(); }
 };
 
 } // namespace component
