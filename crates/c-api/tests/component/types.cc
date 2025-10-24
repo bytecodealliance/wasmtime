@@ -99,7 +99,7 @@ TEST(types, component_func) {
   EXPECT_EQ(ty.param_nth(0)->second, ValType::new_u32());
 
   EXPECT_TRUE(ty.result()->is_string());
-  EXPECT_EQ(ty.result(), ValType::new_string());
+  EXPECT_EQ(*ty.result(), ValType::new_string());
 }
 
 TEST(types, module_type) {
