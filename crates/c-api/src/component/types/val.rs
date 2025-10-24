@@ -3,7 +3,7 @@ use std::mem::{ManuallyDrop, MaybeUninit};
 use wasmtime::component::types::*;
 
 #[derive(Clone, PartialEq)]
-#[repr(C)]
+#[repr(C, u8)]
 pub enum wasmtime_component_valtype_t {
     Bool,
     S8,
