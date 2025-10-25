@@ -28,7 +28,7 @@ use bytes::Bytes;
 use core::ops::Deref;
 use http::HeaderName;
 use http::uri::Scheme;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 use wasmtime_wasi::TrappableError;
@@ -95,13 +95,13 @@ pub trait WasiHttpCtx: Send {
     #[cfg(feature = "default-send-request")]
     fn send_request(
         &mut self,
-        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+        request: http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
         options: Option<RequestOptions>,
         fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = HttpResult<(
-                    http::Response<BoxBody<Bytes, ErrorCode>>,
+                    http::Response<UnsyncBoxBody<Bytes, ErrorCode>>,
                     Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
                 )>,
             > + Send,
@@ -112,7 +112,7 @@ pub trait WasiHttpCtx: Send {
 
             let (res, io) = default_send_request(request, options).await?;
             Ok((
-                res.map(BodyExt::boxed),
+                res.map(BodyExt::boxed_unsync),
                 Box::new(io) as Box<dyn Future<Output = _> + Send>,
             ))
         })
@@ -137,13 +137,13 @@ pub trait WasiHttpCtx: Send {
     #[cfg(not(feature = "default-send-request"))]
     fn send_request(
         &mut self,
-        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+        request: http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
         options: Option<RequestOptions>,
         fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = HttpResult<(
-                    http::Response<BoxBody<Bytes, ErrorCode>>,
+                    http::Response<UnsyncBoxBody<Bytes, ErrorCode>>,
                     Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
                 )>,
             > + Send,
