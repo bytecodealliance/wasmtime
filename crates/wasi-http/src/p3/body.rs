@@ -8,7 +8,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use http::HeaderMap;
 use http_body::Body as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
 use std::io::Cursor;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ pub(crate) enum Body {
     /// Body constructed by the host.
     Host {
         /// The [`http_body::Body`]
-        body: BoxBody<Bytes, ErrorCode>,
+        body: UnsyncBoxBody<Bytes, ErrorCode>,
         /// Channel, on which transmission result will be written
         result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
     },
@@ -441,7 +441,7 @@ where
 
 /// [StreamProducer] implementation for bodies originating in the host.
 pub(crate) struct HostBodyStreamProducer<T> {
-    pub(crate) body: BoxBody<Bytes, ErrorCode>,
+    pub(crate) body: UnsyncBoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
     getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }

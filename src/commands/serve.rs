@@ -5,7 +5,7 @@ use clap::Parser;
 use futures::future::FutureExt;
 use http::{Response, StatusCode};
 use http_body_util::BodyExt as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -568,7 +568,7 @@ impl ServeCommand {
                                             .body(
                                                 Full::new(bytes::Bytes::from(error_html))
                                                     .map_err(|_| unreachable!())
-                                                    .boxed(),
+                                                    .boxed_unsync(),
                                             )
                                             .unwrap())
                                     }
@@ -826,7 +826,7 @@ type Request = hyper::Request<hyper::body::Incoming>;
 async fn handle_request(
     handler: ProxyHandler<HostHandlerState>,
     req: Request,
-) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
+) -> Result<hyper::Response<UnsyncBoxBody<Bytes, anyhow::Error>>> {
     use tokio::sync::oneshot;
 
     let req_id = handler.next_req_id();
@@ -847,7 +847,7 @@ async fn handle_request(
         hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
         p2::http::types::ErrorCode,
     >;
-    type P3Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
+    type P3Response = hyper::Response<UnsyncBoxBody<Bytes, anyhow::Error>>;
 
     enum Sender {
         P2(oneshot::Sender<P2Response>),
@@ -908,7 +908,7 @@ async fn handle_request(
                             let (res, task) = proxy.handle(store, request).await??;
                             let res = store
                                 .with(|mut store| res.into_http(&mut store, request_io_result))?;
-                            _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed()));
+                            _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed_unsync()));
 
                             // Wait for the task to finish.
                             task.block(store).await;
@@ -930,7 +930,7 @@ async fn handle_request(
             .await
             .context("guest never invoked `response-outparam::set` method")?
             .map_err(|e| anyhow::Error::from(e))?
-            .map(|body| body.map_err(|e| e.into()).boxed()),
+            .map(|body| body.map_err(|e| e.into()).boxed_unsync()),
         Receiver::P3(rx) => rx.await?,
     })
 }

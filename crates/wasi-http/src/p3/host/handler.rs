@@ -240,7 +240,7 @@ impl HostWithStore for WasiHttp {
                     getter,
                 )
                 .with_state(io_task_rx)
-                .boxed(),
+                .boxed_unsync(),
                 Body::Host { body, result_tx } => {
                     if let Some(limit) = content_length {
                         let (http_result_tx, http_result_rx) = oneshot::channel();
@@ -256,10 +256,10 @@ impl HostWithStore for WasiHttp {
                             ErrorCode::HttpRequestBodySize,
                         )
                         .with_state(io_task_rx)
-                        .boxed()
+                        .boxed_unsync()
                     } else {
                         _ = result_tx.send(Box::new(io_task_result(io_result_rx)));
-                        body.with_state(io_task_rx).boxed()
+                        body.with_state(io_task_rx).boxed_unsync()
                     }
                 }
             };
@@ -331,7 +331,7 @@ impl HostWithStore for WasiHttp {
                 let io = Arc::new(AbortOnDropJoinHandle(io));
                 _ = io_result_tx.send((Arc::clone(&io), rx));
                 _ = io_task_tx.send(Arc::clone(&io));
-                body.with_state(io).boxed()
+                body.with_state(io).boxed_unsync()
             }
         };
         let res = Response {

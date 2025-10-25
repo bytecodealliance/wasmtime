@@ -5,7 +5,7 @@ use core::time::Duration;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, Method};
 use http_body_util::BodyExt as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -52,7 +52,7 @@ impl Request {
         path_with_query: Option<PathAndQuery>,
         headers: impl Into<Arc<HeaderMap>>,
         options: Option<Arc<RequestOptions>>,
-        body: impl Into<BoxBody<Bytes, ErrorCode>>,
+        body: impl Into<UnsyncBoxBody<Bytes, ErrorCode>>,
     ) -> (
         Self,
         impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
@@ -91,7 +91,7 @@ impl Request {
         impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
     )
     where
-        T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        T: http_body::Body<Data = Bytes> + Send + 'static,
         T::Error: Into<ErrorCode>,
     {
         let (
@@ -116,7 +116,7 @@ impl Request {
             path_and_query,
             headers,
             None,
-            body.map_err(Into::into).boxed(),
+            body.map_err(Into::into).boxed_unsync(),
         )
     }
 }
