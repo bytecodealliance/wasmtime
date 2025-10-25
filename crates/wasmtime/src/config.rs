@@ -1208,6 +1208,19 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 🧵 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    ///
+    /// [proposal]:
+    ///     https://github.com/WebAssembly/component-model/pull/557
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_threading(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_THREADING, enable);
+        self
+    }
+
     /// This corresponds to the 📝 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_

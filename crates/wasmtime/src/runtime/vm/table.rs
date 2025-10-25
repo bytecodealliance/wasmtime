@@ -750,7 +750,8 @@ impl Table {
 
     /// Get reference to the specified element.
     ///
-    /// Returns `None` if the index is out of bounds.
+    /// Returns `Ok(None)` if the element is null or uninitialized.
+    /// Returns `Err` if the index is out of bounds.
     ///
     /// Panics if this is a table of GC references and `gc_store` is `None`.
     pub fn get_func(&self, index: u64) -> Result<Option<NonNull<VMFuncRef>>, Trap> {

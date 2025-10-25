@@ -46,6 +46,7 @@ pub enum Waitable {
     Stream,
 }
 
+#[derive(Debug)]
 enum Slot {
     Free {
         next: u32,
@@ -77,6 +78,11 @@ enum Slot {
 
     /// Represents a guest task handle.
     GuestTask {
+        rep: u32,
+    },
+
+    /// Represents a guest thread handle.
+    GuestThread {
         rep: u32,
     },
 
@@ -564,5 +570,31 @@ impl HandleTable {
             Slot::Stream { rep, .. } => Ok((*rep, Waitable::Stream)),
             _ => bail!("handle is not a waitable"),
         }
+    }
+
+    /// Inserts the guest thread `rep` into this table, returning the index it
+    /// now resides at.
+    pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
+        self.insert(Slot::GuestThread { rep })
+    }
+
+    /// Returns the `rep` of a guest thread pointed to by `idx`.
+    pub fn guest_thread_rep(&mut self, idx: u32) -> Result<u32> {
+        match self.get_mut(idx)? {
+            Slot::GuestThread { rep } => Ok(*rep),
+            _ => bail!("handle is not a guest thread"),
+        }
+    }
+
+    /// Removes the guest thread pointed to by `idx`.
+    ///
+    /// Returns the internal `rep`.
+    pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
+        let rep = match self.get_mut(idx)? {
+            Slot::GuestThread { rep } => *rep,
+            _ => bail!("handle is not a guest thread"),
+        };
+        self.remove(idx)?;
+        Ok(rep)
     }
 }

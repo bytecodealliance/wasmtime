@@ -910,6 +910,8 @@ async fn async_reentrance() -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
     config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
@@ -952,6 +954,88 @@ async fn missing_task_return_call_stackless() -> Result<()> {
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
             (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+        )"#,
+        "wasm trap: async-lifted export failed to produce a result",
+    )
+    .await
+}
+
+#[tokio::test]
+async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
+    task_return_trap(
+        r#"(component
+            (core module $libc
+                (table (export "__indirect_function_table") 1 funcref))
+            (core module $m
+                (import "" "task.return" (func $task-return))
+                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
+                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
+                (func $thread-start (param i32) (; empty ;))
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-start) 
+                (func (export "foo") (result i32)
+                    (call $thread-resume-later
+                        (call $thread-new-indirect (i32.const 0) (i32.const 0)))
+                    i32.const 0
+                )
+                (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
+            )
+            (core instance $libc (instantiate $libc))
+            (core type $start-func-ty (func (param i32)))
+            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
+            (core func $thread-new-indirect 
+                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+            (core func $thread-resume-later (canon thread.resume-later))
+            (core func $task-return (canon task.return))
+            (core instance $i (instantiate $m
+                (with "" (instance 
+                    (export "thread.new_indirect" (func $thread-new-indirect))
+                    (export "thread.resume-later" (func $thread-resume-later))
+                    (export "task.return" (func $task-return))
+                ))
+                (with "libc" (instance $libc))
+            ))
+            (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+        )"#,
+        "wasm trap: async-lifted export failed to produce a result",
+    )
+    .await
+}
+
+#[tokio::test]
+async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
+    task_return_trap(
+        r#"(component
+            (core module $libc
+                (table (export "__indirect_function_table") 1 funcref))
+            (core module $m
+                (import "" "task.return" (func $task-return))
+                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
+                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
+                (func $thread-start (param i32) (; empty ;))
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-start) 
+                (func (export "foo")
+                    (call $thread-resume-later
+                        (call $thread-new-indirect (i32.const 0) (i32.const 0)))
+                )
+            )
+            (core instance $libc (instantiate $libc))
+            (core type $start-func-ty (func (param i32)))
+            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
+            (core func $thread-new-indirect 
+                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+            (core func $thread-resume-later (canon thread.resume-later))
+            (core func $task-return (canon task.return))
+            (core instance $i (instantiate $m
+                (with "" (instance 
+                    (export "thread.new_indirect" (func $thread-new-indirect))
+                    (export "thread.resume-later" (func $thread-resume-later))
+                    (export "task.return" (func $task-return))
+                ))
+                (with "libc" (instance $libc))
+            ))
+            (func (export "foo") (canon lift (core func $i "foo") async))
         )"#,
         "wasm trap: async-lifted export failed to produce a result",
     )
@@ -1040,6 +1124,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
     config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;

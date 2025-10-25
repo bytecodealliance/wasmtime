@@ -455,7 +455,7 @@
   (instance $i (instantiate $inner))
 
   ;; the rest of this component which is a single function that invokes `drop`
-  ;; for index 1. The index 1 should be valid within the above component, but
+  ;; for index 2. The index 2 should be valid within the above component, but
   ;; it is not valid within this component
   (alias export $i "r" (type $r))
   (core func $drop (canon resource.drop $r))
@@ -464,7 +464,7 @@
      (import "" "drop" (func $drop (param i32)))
 
      (func (export "f")
-        (call $drop (i32.const 1))
+        (call $drop (i32.const 2))
      )
   )
   (core instance $i (instantiate $m
@@ -476,7 +476,7 @@
   (func (export "f") (canon lift (core func $i "f")))
 )
 
-(assert_trap (invoke "f") "unknown handle index 1")
+(assert_trap (invoke "f") "unknown handle index 2")
 
 ;; Each instantiation of a component generates a unique resource type, so
 ;; allocating in one component and deallocating in another should fail.
@@ -492,10 +492,10 @@
       (import "" "drop" (func $drop (param i32)))
 
       (func (export "alloc")
-        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 1)) (then (unreachable)))
+        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
       )
       (func (export "dealloc")
-        (call $drop (i32.const 1))
+        (call $drop (i32.const 2))
       )
     )
     (core instance $i (instantiate $m
@@ -552,10 +552,10 @@
       (import "" "drop" (func $drop (param i32)))
 
       (func (export "alloc")
-        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 1)) (then (unreachable)))
+        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
       )
       (func (export "dealloc")
-        (call $drop (i32.const 1))
+        (call $drop (i32.const 2))
       )
     )
     (core instance $i (instantiate $m
@@ -1025,8 +1025,8 @@
         (local.set $r1 (call $ctor (i32.const 100)))
         (local.set $r2 (call $ctor (i32.const 200)))
 
-        (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
-        (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
+        (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
+        (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
 
         (call $assert-borrow (local.get $r2) (i32.const 200))
         (call $assert-borrow (local.get $r1) (i32.const 100))
@@ -1086,6 +1086,6 @@
 )
 
 (component instance $C1 $C)
-(assert_trap (invoke "drop-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "drop-r1-as-r2") "handle index 2 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
 (component instance $C1 $C)
-(assert_trap (invoke "return-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "return-r1-as-r2") "handle index 2 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")

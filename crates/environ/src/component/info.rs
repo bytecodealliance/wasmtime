@@ -831,7 +831,7 @@ pub enum Trampoline {
     ThreadYield {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe receive notification
+        /// If `true`, indicates the caller instance may receive notification
         /// of task cancellation.
         cancellable: bool,
     },
@@ -1123,6 +1123,52 @@ pub enum Trampoline {
         /// Which slot to update.
         slot: u32,
     },
+
+    /// Intrinsic used to implement the `thread.index` component model builtin.
+    ThreadIndex,
+
+    /// Intrinsic used to implement the `thread.new_indirect` component model builtin.
+    ThreadNewIndirect {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The type index for the start function of the thread.
+        start_func_ty_idx: ComponentTypeIndex,
+        /// The index of the table that stores the start function.
+        start_func_table_idx: RuntimeTableIndex,
+    },
+
+    /// Intrinsic used to implement the `thread.switch-to` component model builtin.
+    ThreadSwitchTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.suspend` component model builtin.
+    ThreadSuspend {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.resume-later` component model builtin.
+    ThreadResumeLater {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// Intrinsic used to implement the `thread.yield-to` component model builtin.
+    ThreadYieldTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
 }
 
 impl Trampoline {
@@ -1188,6 +1234,12 @@ impl Trampoline {
             ErrorContextTransfer => format!("error-context-transfer"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
+            ThreadIndex => format!("thread-index"),
+            ThreadNewIndirect { .. } => format!("thread-new-indirect"),
+            ThreadSwitchTo { .. } => format!("thread-switch-to"),
+            ThreadSuspend { .. } => format!("thread-suspend"),
+            ThreadResumeLater { .. } => format!("thread-resume-later"),
+            ThreadYieldTo { .. } => format!("thread-yield-to"),
         }
     }
 }
