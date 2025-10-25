@@ -355,7 +355,7 @@ class Func {
     Result<std::monostate, Trap> result =
         (*func)(Caller(caller), args_span, results_span);
     if (!result) {
-      return result.err().ptr.release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -371,7 +371,7 @@ class Func {
     F *func = reinterpret_cast<F *>(env); // NOLINT
     auto trap = HostFunc::invoke(*func, cx, args_and_results);
     if (trap) {
-      return trap->ptr.release();
+      return trap->capi_release();
     }
     return nullptr;
   }

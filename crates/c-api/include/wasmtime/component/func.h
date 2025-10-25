@@ -7,6 +7,7 @@
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
+#include <wasmtime/component/types/val.h>
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
@@ -47,6 +48,34 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
     const wasmtime_component_func_t *func, wasmtime_context_t *context,
     const wasmtime_component_val_t *args, size_t args_size,
     wasmtime_component_val_t *results, size_t results_size);
+
+/// \brief Returns the number of parameters that \p func takes.
+WASM_API_EXTERN size_t wasmtime_component_func_params_count(
+    const wasmtime_component_func_t *func, wasmtime_context_t *context);
+
+/// \brief Retrieves the parameter types for \p func.
+///
+/// The \p out_names and \p out_types arrays must be at least \p out_size in
+/// length, which should be equal to #wasmtime_component_func_params_count.
+///
+/// The types written to `out_types` must be deallocaetd with
+/// `wasmtime_component_valtype_delete`. The names written to `out_names` must
+/// be deleted with `wasm_name_delete`.
+WASM_API_EXTERN void wasmtime_component_func_params_get(
+    const wasmtime_component_func_t *func, wasmtime_context_t *context,
+    wasm_name_t *out_names, wasmtime_component_valtype_t *out_types,
+    size_t out_size);
+
+/// \brief Returns the result, if any, of this function.
+///
+/// If the function has no result then this function returns `false` and
+/// `out` is not modified. If the function has a result then this function
+/// returns `true` and writes the result type to `out`, which must be
+/// deallocated with `wasmtime_component_valtype_delete`.
+WASM_API_EXTERN bool
+wasmtime_component_func_result(const wasmtime_component_func_t *func,
+                               wasmtime_context_t *context,
+                               wasmtime_component_valtype_t *out);
 
 /**
  * \brief Invokes the `post-return` canonical ABI option, if specified, after a

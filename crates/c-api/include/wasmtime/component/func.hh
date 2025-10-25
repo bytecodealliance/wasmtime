@@ -9,6 +9,7 @@
 
 #include <string_view>
 #include <wasmtime/component/func.h>
+#include <wasmtime/component/types/val.hh>
 #include <wasmtime/component/val.hh>
 #include <wasmtime/error.hh>
 #include <wasmtime/span.hh>
@@ -53,6 +54,39 @@ public:
       return Error(error);
     }
     return std::monostate();
+  }
+
+  /// \brief Returns the number of parameters that this function takes.
+  size_t params_count(Store::Context cx) const {
+    return wasmtime_component_func_params_count(&func, cx.capi());
+  }
+
+  /// \brief Retrieves the parameter name and types for this function.
+  std::vector<std::pair<std::string, ValType>> params(Store::Context cx) const {
+    size_t count = params_count(cx);
+    std::vector<wasm_name_t> names(count);
+    std::vector<wasmtime_component_valtype_t> types(count);
+    wasmtime_component_func_params_get(&func, cx.capi(), names.data(),
+                                       types.data(), count);
+
+    std::vector<std::pair<std::string, ValType>> result;
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      std::string name(names[i].data, names[i].size);
+      result.emplace_back(std::move(name), ValType(std::move(types[i])));
+      wasm_name_delete(&names[i]);
+    }
+    return result;
+  }
+
+  /// \brief Returns the result type of this function, if any.
+  std::optional<ValType> result(Store::Context cx) const {
+    wasmtime_component_valtype_t out;
+    bool has_result = wasmtime_component_func_result(&func, cx.capi(), &out);
+    if (!has_result) {
+      return std::nullopt;
+    }
+    return ValType(std::move(out));
   }
 };
 

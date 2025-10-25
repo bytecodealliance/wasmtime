@@ -37,6 +37,7 @@ add_capi_test(tests FILES
   component/call_func.cc
   component/values.cc
   component/linker.cc
+  component/types.cc
   error.cc
   config.cc
   wat.cc
