@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+struct wasmtime_component_item_t;
+
 /// \brief Represents the type of a component instance.
 typedef struct wasmtime_component_instance_type
     wasmtime_component_instance_type_t;
@@ -42,7 +44,7 @@ size_t wasmtime_component_instance_type_export_count(
 WASM_API_EXTERN
 bool wasmtime_component_instance_type_export_get(
     const wasmtime_component_instance_type_t *ty, const wasm_engine_t *engine,
-    const char *name, size_t name_len, struct wasmtime_component_item *ret);
+    const char *name, size_t name_len, struct wasmtime_component_item_t *ret);
 
 /// \brief Retrieves the nth export.
 ///
@@ -52,7 +54,7 @@ WASM_API_EXTERN
 bool wasmtime_component_instance_type_export_nth(
     const wasmtime_component_instance_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item *type_ret);
+    struct wasmtime_component_item_t *type_ret);
 
 #ifdef __cplusplus
 } // extern "C"

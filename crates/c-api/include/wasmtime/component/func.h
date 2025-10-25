@@ -7,6 +7,7 @@
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
+#include <wasmtime/component/types/val.h>
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
@@ -62,7 +63,7 @@ WASM_API_EXTERN size_t wasmtime_component_func_params_count(
 /// be deleted with `wasm_name_delete`.
 WASM_API_EXTERN void wasmtime_component_func_params_get(
     const wasmtime_component_func_t *func, wasmtime_context_t *context,
-    wasm_name_t *out_names, struct wasmtime_component_valtype *out_types,
+    wasm_name_t *out_names, wasmtime_component_valtype_t *out_types,
     size_t out_size);
 
 /// \brief Returns the result, if any, of this function.
@@ -74,7 +75,7 @@ WASM_API_EXTERN void wasmtime_component_func_params_get(
 WASM_API_EXTERN bool
 wasmtime_component_func_result(const wasmtime_component_func_t *func,
                                wasmtime_context_t *context,
-                               struct wasmtime_component_valtype *out);
+                               wasmtime_component_valtype_t *out);
 
 /**
  * \brief Invokes the `post-return` canonical ABI option, if specified, after a

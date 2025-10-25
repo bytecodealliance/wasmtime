@@ -65,7 +65,7 @@ public:
   std::vector<std::pair<std::string, ValType>> params(Store::Context cx) const {
     size_t count = params_count(cx);
     std::vector<wasm_name_t> names(count);
-    std::vector<wasmtime_component_valtype> types(count);
+    std::vector<wasmtime_component_valtype_t> types(count);
     wasmtime_component_func_params_get(&func, cx.capi(), names.data(),
                                        types.data(), count);
 
@@ -81,7 +81,7 @@ public:
 
   /// \brief Returns the result type of this function, if any.
   std::optional<ValType> result(Store::Context cx) const {
-    wasmtime_component_valtype out;
+    wasmtime_component_valtype_t out;
     bool has_result = wasmtime_component_func_result(&func, cx.capi(), &out);
     if (!has_result) {
       return std::nullopt;

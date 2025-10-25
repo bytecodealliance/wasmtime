@@ -50,7 +50,7 @@ class ComponentInstanceType {
 inline std::optional<wasmtime::component::ComponentItem>
 wasmtime::component::ComponentInstanceType::export_get(
     const wasmtime::Engine &engine, std::string_view name) const {
-  wasmtime_component_item item;
+  wasmtime_component_item_t item;
   bool found = wasmtime_component_instance_type_export_get(
       capi(), engine.capi(), name.data(), name.size(), &item);
   if (!found) {
@@ -63,7 +63,7 @@ inline std::optional<
     std::pair<std::string_view, wasmtime::component::ComponentItem>>
 wasmtime::component::ComponentInstanceType::export_nth(
     const wasmtime::Engine &engine, size_t nth) const {
-  wasmtime_component_item item;
+  wasmtime_component_item_t item;
   const char *name_data;
   size_t name_size;
   bool found = wasmtime_component_instance_type_export_nth(

@@ -6,5 +6,6 @@
 #include <wasmtime/component/instance.h>
 #include <wasmtime/component/linker.h>
 #include <wasmtime/component/val.h>
+#include <wasmtime/component/types.h>
 
 #endif // WASMTIME_COMPONENT_H

@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 /// \brief Represents the type of a WebAssembly component.
-typedef struct wasmtime_component_type wasmtime_component_type_t;
+typedef struct wasmtime_component_type_t wasmtime_component_type_t;
 
 /// \brief Clones a component type.
 ///
@@ -46,7 +46,7 @@ WASM_API_EXTERN
 bool wasmtime_component_type_import_get(const wasmtime_component_type_t *ty,
                                         const wasm_engine_t *engine,
                                         const char *name, size_t name_len,
-                                        struct wasmtime_component_item *ret);
+                                        struct wasmtime_component_item_t *ret);
 
 /// \brief Retrieves the nth import.
 ///
@@ -56,7 +56,7 @@ WASM_API_EXTERN
 bool wasmtime_component_type_import_nth(
     const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item *type_ret);
+    struct wasmtime_component_item_t *type_ret);
 
 /// \brief Returns the number of exports of a component type.
 WASM_API_EXTERN
@@ -71,7 +71,7 @@ WASM_API_EXTERN
 bool wasmtime_component_type_export_get(const wasmtime_component_type_t *ty,
                                         const wasm_engine_t *engine,
                                         const char *name, size_t name_len,
-                                        struct wasmtime_component_item *ret);
+                                        struct wasmtime_component_item_t *ret);
 
 /// \brief Retrieves the nth export.
 ///
@@ -81,7 +81,7 @@ WASM_API_EXTERN
 bool wasmtime_component_type_export_nth(
     const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item *type_ret);
+    struct wasmtime_component_item_t *type_ret);
 
 /// \brief Value of #wasmtime_component_item_kind_t meaning that
 /// #wasmtime_component_item_t is a component.
@@ -134,7 +134,7 @@ typedef union wasmtime_component_item_union {
 } wasmtime_component_item_union_t;
 
 /// \brief Represents a single item in a component's import or export list.
-typedef struct wasmtime_component_item {
+typedef struct wasmtime_component_item_t {
   /// The type discriminant for the `of` union.
   wasmtime_component_item_kind_t kind;
   /// The actual item.

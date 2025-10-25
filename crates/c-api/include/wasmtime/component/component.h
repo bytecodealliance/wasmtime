@@ -6,6 +6,7 @@
 #include <wasm.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
+#include <wasmtime/component/types/component.h>
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
@@ -108,7 +109,7 @@ wasmtime_component_clone(const wasmtime_component_t *component);
  * The returned pointer must be deallocatd with
  * `wasmtime_component_type_delete`.
  */
-WASM_API_EXTERN struct wasmtime_component_type *
+WASM_API_EXTERN wasmtime_component_type_t *
 wasmtime_component_type(const wasmtime_component_t *component);
 
 /**

@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+struct wasmtime_component_valtype_t;
+
 // ----------- lists -----------------------------------------------------------
 
 /// \brief Opaque type representing a component list type.
@@ -41,7 +43,7 @@ wasmtime_component_list_type_delete(wasmtime_component_list_type_t *ptr);
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN void wasmtime_component_list_type_element(
     const wasmtime_component_list_type_t *ty,
-    struct wasmtime_component_valtype *type_ret);
+    struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- records ---------------------------------------------------------
 
@@ -76,7 +78,7 @@ WASM_API_EXTERN size_t wasmtime_component_record_type_field_count(
 WASM_API_EXTERN bool wasmtime_component_record_type_field_nth(
     const wasmtime_component_record_type_t *ty, size_t nth,
     const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_valtype *type_ret);
+    struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- tuples  ---------------------------------------------------------
 
@@ -109,7 +111,7 @@ WASM_API_EXTERN size_t wasmtime_component_tuple_type_types_count(
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN bool wasmtime_component_tuple_type_types_nth(
     const wasmtime_component_tuple_type_t *ty, size_t nth,
-    struct wasmtime_component_valtype *type_ret);
+    struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- variants --------------------------------------------------------
 
@@ -144,7 +146,7 @@ WASM_API_EXTERN size_t wasmtime_component_variant_type_case_count(
 WASM_API_EXTERN bool wasmtime_component_variant_type_case_nth(
     const wasmtime_component_variant_type_t *ty, size_t nth,
     const char **name_ret, size_t *name_len_ret, bool *has_payload_ret,
-    struct wasmtime_component_valtype *payload_ret);
+    struct wasmtime_component_valtype_t *payload_ret);
 
 // ----------- enums -----------------------------------------------------------
 
@@ -205,7 +207,7 @@ wasmtime_component_option_type_delete(wasmtime_component_option_type_t *ptr);
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN void
 wasmtime_component_option_type_ty(const wasmtime_component_option_type_t *ty,
-                                  struct wasmtime_component_valtype *type_ret);
+                                  struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- results ---------------------------------------------------------
 
@@ -234,14 +236,14 @@ wasmtime_component_result_type_delete(wasmtime_component_result_type_t *ptr);
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN bool
 wasmtime_component_result_type_ok(const wasmtime_component_result_type_t *ty,
-                                  struct wasmtime_component_valtype *type_ret);
+                                  struct wasmtime_component_valtype_t *type_ret);
 
 /// \brief Returns the `err` type of a component result type.
 /// The returned type must be deallocated with
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN bool
 wasmtime_component_result_type_err(const wasmtime_component_result_type_t *ty,
-                                   struct wasmtime_component_valtype *type_ret);
+                                   struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- flags -----------------------------------------------------------
 
@@ -301,7 +303,7 @@ wasmtime_component_future_type_delete(wasmtime_component_future_type_t *ptr);
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN bool
 wasmtime_component_future_type_ty(const wasmtime_component_future_type_t *ty,
-                                  struct wasmtime_component_valtype *type_ret);
+                                  struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- streams ---------------------------------------------------------
 
@@ -331,7 +333,7 @@ wasmtime_component_stream_type_delete(wasmtime_component_stream_type_t *ptr);
 /// `wasmtime_component_valtype_delete`.
 WASM_API_EXTERN bool
 wasmtime_component_stream_type_ty(const wasmtime_component_stream_type_t *ty,
-                                  struct wasmtime_component_valtype *type_ret);
+                                  struct wasmtime_component_valtype_t *type_ret);
 
 // ----------- valtype ---------------------------------------------------------
 
@@ -458,7 +460,7 @@ typedef union wasmtime_component_valtype_union {
 } wasmtime_component_valtype_union_t;
 
 /// \brief Represents a single value type in the component model.
-typedef struct wasmtime_component_valtype {
+typedef struct wasmtime_component_valtype_t {
   /// The type discriminant for the `of` union.
   wasmtime_component_valtype_kind_t kind;
   /// The actual type.
