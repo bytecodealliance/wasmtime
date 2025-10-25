@@ -6,10 +6,7 @@ use std::ffi::{CStr, c_char};
 use wasmtime::component::{Component, ComponentExportIndex};
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_config_wasm_component_model_set(
-    c: &mut wasm_config_t,
-    enable: bool,
-) {
+pub extern "C" fn wasmtime_config_wasm_component_model_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_component_model(enable);
 }
 
@@ -35,7 +32,7 @@ pub unsafe extern "C" fn wasmtime_component_new(
 
 #[unsafe(no_mangle)]
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-pub unsafe extern "C" fn wasmtime_component_serialize(
+pub extern "C" fn wasmtime_component_serialize(
     component: &wasmtime_component_t,
     ret: &mut wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
@@ -77,21 +74,21 @@ pub unsafe extern "C" fn wasmtime_component_deserialize_file(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_type(
+pub extern "C" fn wasmtime_component_type(
     component: &wasmtime_component_t,
 ) -> Box<wasmtime_component_type_t> {
     Box::new(component.component.component_type().into())
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_clone(
+pub extern "C" fn wasmtime_component_clone(
     component: &wasmtime_component_t,
 ) -> Box<wasmtime_component_t> {
     Box::new(component.clone())
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_delete(_component: Box<wasmtime_component_t>) {}
+pub extern "C" fn wasmtime_component_delete(_component: Box<wasmtime_component_t>) {}
 
 #[repr(transparent)]
 pub struct wasmtime_component_export_index_t {
@@ -123,7 +120,7 @@ pub unsafe extern "C" fn wasmtime_component_get_export_index(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_export_index_clone(
+pub extern "C" fn wasmtime_component_export_index_clone(
     export_index: &wasmtime_component_export_index_t,
 ) -> Box<wasmtime_component_export_index_t> {
     Box::new(wasmtime_component_export_index_t {
@@ -132,7 +129,7 @@ pub unsafe extern "C" fn wasmtime_component_export_index_clone(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_export_index_delete(
+pub extern "C" fn wasmtime_component_export_index_delete(
     _export_index: Box<wasmtime_component_export_index_t>,
 ) {
 }
