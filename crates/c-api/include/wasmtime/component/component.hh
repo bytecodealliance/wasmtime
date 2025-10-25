@@ -29,76 +29,14 @@ namespace component {
  * instances.
  */
 class ExportIndex {
-  friend class Component;
-
-  struct deleter {
-    void operator()(wasmtime_component_export_index_t *p) const {
-      wasmtime_component_export_index_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_export_index_t, deleter> ptr;
-
-public:
-  /// \brief Constructs an ExportIndex from the underlying C API struct.
-  explicit ExportIndex(wasmtime_component_export_index_t *raw) : ptr(raw) {}
-
-  /// Copies another index into this one.
-  ExportIndex(const ExportIndex &other)
-      : ptr(wasmtime_component_export_index_clone(other.ptr.get())) {}
-  /// Copies another index into this one.
-  ExportIndex &operator=(const ExportIndex &other) {
-    ptr.reset(wasmtime_component_export_index_clone(other.ptr.get()));
-    return *this;
-  }
-
-  ~ExportIndex() = default;
-  /// Moves resources from another component into this one.
-  ExportIndex(ExportIndex &&other) = default;
-  /// Moves resources from another component into this one.
-  ExportIndex &operator=(ExportIndex &&other) = default;
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_export_index_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_export_index_t *capi() { return ptr.get(); }
+  WASMTIME_CLONE_WRAPPER(ExportIndex, wasmtime_component_export_index);
 };
 
 /**
  * \brief Representation of a compiled WebAssembly component.
  */
 class Component {
-  struct deleter {
-    void operator()(wasmtime_component_t *p) const {
-      wasmtime_component_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_t, deleter> ptr;
-
-  Component(wasmtime_component_t *raw) : ptr(raw) {}
-
-public:
-  /// Copies another component into this one.
-  Component(const Component &other)
-      : ptr(wasmtime_component_clone(other.ptr.get())) {}
-  /// Copies another component into this one.
-  Component &operator=(const Component &other) {
-    ptr.reset(wasmtime_component_clone(other.ptr.get()));
-    return *this;
-  }
-  ~Component() = default;
-  /// Moves resources from another component into this one.
-  Component(Component &&other) = default;
-  /// Moves resources from another component into this one.
-  Component &operator=(Component &&other) = default;
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_t *capi() { return ptr.get(); }
+  WASMTIME_CLONE_WRAPPER(Component, wasmtime_component);
 
 #ifdef WASMTIME_FEATURE_COMPILER
   /**
