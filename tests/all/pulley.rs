@@ -319,28 +319,34 @@ fn pulley_provenance_test_components() -> Result<()> {
         let mut linker = component::Linker::new(&engine);
         linker
             .root()
-            .func_new("host-empty", |_, _args, _results| Ok(()))?;
-        linker.root().func_new("host-u32", |_, args, results| {
+            .func_new("host-empty", |_, _, _args, _results| Ok(()))?;
+        linker.root().func_new("host-u32", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;
-        linker.root().func_new("host-enum", |_, args, results| {
+        linker.root().func_new("host-enum", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;
-        linker.root().func_new("host-option", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-result", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-string", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-list", |_, args, results| {
+        linker
+            .root()
+            .func_new("host-option", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker
+            .root()
+            .func_new("host-result", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker
+            .root()
+            .func_new("host-string", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker.root().func_new("host-list", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;

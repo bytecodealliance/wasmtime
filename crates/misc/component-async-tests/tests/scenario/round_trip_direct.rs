@@ -94,7 +94,7 @@ async fn test_round_trip_direct(
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         linker
             .root()
-            .func_new_concurrent("[async]foo", |_, params, results| {
+            .func_new_concurrent("[async]foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {

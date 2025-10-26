@@ -93,7 +93,7 @@ fn native_loads_and_stores() -> Result<()> {
         linker.instance("host")?.func_new("get-pointer", {
             let ptr = ptr as usize;
             let ptr = u64::try_from(ptr).unwrap();
-            move |_cx, _args, results| {
+            move |_cx, _, _args, results| {
                 results[0] = component::Val::U64(ptr);
                 Ok(())
             }
