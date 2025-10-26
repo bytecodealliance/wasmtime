@@ -1,7 +1,7 @@
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
-use crate::component::types::Type;
+use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTables};
@@ -167,7 +167,7 @@ impl Func {
         Return: ComponentNamedList + Lift,
     {
         let cx = InstanceType::new(instance.unwrap_or_else(|| self.instance.id().get(store)));
-        let ty = &cx.types[self.ty(store)];
+        let ty = &cx.types[self.ty_index(store)];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
@@ -177,34 +177,18 @@ impl Func {
         Ok(())
     }
 
-    /// Get the parameter names and types for this function.
-    pub fn params(&self, store: impl AsContext) -> Box<[(String, Type)]> {
-        let store = store.as_context();
-        let instance = self.instance.id().get(store.0);
-        let types = instance.component().types();
-        let func_ty = &types[self.ty(store.0)];
-        types[func_ty.params]
-            .types
-            .iter()
-            .zip(&func_ty.param_names)
-            .map(|(ty, name)| (name.clone(), Type::from(ty, &InstanceType::new(instance))))
-            .collect()
+    /// Get the type of this function.
+    pub fn ty(&self, store: impl AsContext) -> ComponentFunc {
+        self.ty_(store.as_context().0)
     }
 
-    /// Get the result types for this function.
-    pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let store = store.as_context();
-        let instance = self.instance.id().get(store.0);
-        let types = instance.component().types();
-        let ty = self.ty(store.0);
-        types[types[ty].results]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &InstanceType::new(instance)))
-            .collect()
+    fn ty_(&self, store: &StoreOpaque) -> ComponentFunc {
+        let cx = InstanceType::new(self.instance.id().get(store));
+        let ty = self.ty_index(store);
+        ComponentFunc::from(ty, &cx)
     }
 
-    fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
+    fn ty_index(&self, store: &StoreOpaque) -> TypeFuncIndex {
         let instance = self.instance.id().get(store);
         let (ty, _, _) = instance.component().export_lifted_function(self.index);
         ty
@@ -307,21 +291,19 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let param_tys = self.params(&store);
-        if param_tys.len() != params.len() {
+        let ty = self.ty(&store);
+        if ty.params().len() != params.len() {
             bail!(
                 "expected {} argument(s), got {}",
-                param_tys.len(),
+                ty.params().len(),
                 params.len(),
             );
         }
 
-        let result_tys = self.results(&store);
-
-        if result_tys.len() != results.len() {
+        if ty.results().len() != results.len() {
             bail!(
                 "expected {} result(s), got {}",
-                result_tys.len(),
+                ty.results().len(),
                 results.len(),
             );
         }
