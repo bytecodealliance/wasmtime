@@ -106,12 +106,15 @@ else()
     endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
-set(WASMTIME_HEADER_DST ${CMAKE_BINARY_DIR}/include)
-include(cmake/install-headers.cmake)
+target_include_directories(wasmtime
+  INTERFACE include
+  INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/include)
+configure_file(include/wasmtime/conf.h.in include/wasmtime/conf.h)
 
 include(GNUInstallDirs)
-install(DIRECTORY "${WASMTIME_HEADER_DST}/" TYPE INCLUDE)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ TYPE INCLUDE)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ TYPE INCLUDE
+        FILES_MATCHING REGEX "\\.hh?$")
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
@@ -130,15 +133,6 @@ add_custom_target(doc
     COMMAND doxygen ${DOXYGEN_CONF_OUT}
     DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_dependencies(doc headers-to-doc)
-
-file(GLOB headers "include/*.h")
-add_custom_target(headers-to-doc
-  COMMAND
-    ${CMAKE_COMMAND}
-      -DWASMTIME_HEADER_DST=${CMAKE_BINARY_DIR}/include
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
-  DEPENDS ${headers})
 
 if (NOT CMAKE_CXX_STANDARD)
   message(STATUS "Cannot detect C++ Standard. Switching to C++17 by default !!")
@@ -167,11 +161,6 @@ if (MSVC)
 else()
   target_link_libraries(wasmtime-cpp INTERFACE stdc++ pthread)
 endif()
-
-target_include_directories(
-        wasmtime-cpp
-        INTERFACE
-        ${PROJECT_SOURCE_DIR}/include)
 
 if (BUILD_TESTS)
   message(STATUS "Building tests")
