@@ -157,7 +157,7 @@
 ;; Constructs a constant value node from a 64-bit immediate, adapting it
 ;; to the specified type. For 128-bit integers, the immediate is zero-extended;
 ;; for other integer types, a direct iconst is generated; and for vector types,
-;; the constant is splatted across all lanes.
+;; only the vec128 is involved, and the constant is splatted across all lanes.
 (decl const (Type Imm64) Value)
 (rule 3 (const (ty_scalar_float ty) n) (const_scalar_float ty n))
 (rule 2 (const $I128 n) (uextend $I128 (iconst $I64 n)))
@@ -170,7 +170,7 @@
 (rule 0 (const_scalar_float $F64 n) (f64const $F64 (ieee64_from_imm64 n)))
 
 (decl const_vec128 (Type Imm64) Value)
-(rule (const_vec128 $I8X16 n) (vconst $I8X16 (splat8 (u64_uextend_imm64 $I8  n))))
+(rule (const_vec128 $I8X16 n) (vconst $I8X16 (splat8 (u64_uextend_imm64 $I8 n))))
 (rule (const_vec128 $I16X8 n) (vconst $I16X8 (splat16 (u64_uextend_imm64 $I16 n))))
 (rule (const_vec128 $I32X4 n) (vconst $I32X4 (splat32 (u64_uextend_imm64 $I32 n))))
 (rule (const_vec128 $I64X2 n) (vconst $I64X2 (splat64 (u64_uextend_imm64 $I64 n))))
