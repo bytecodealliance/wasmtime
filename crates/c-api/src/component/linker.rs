@@ -123,7 +123,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
 
     let result = linker_instance
         .linker_instance
-        .func_new(&name, move |ctx, args, rets| {
+        .func_new(&name, move |ctx, _ty, args, rets| {
             let _ = &foreign;
 
             let args = args
