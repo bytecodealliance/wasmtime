@@ -320,6 +320,7 @@ async fn drop_resource_async() -> Result<()> {
 /// 2. An explicit thread suspends indefinitely
 /// 3. An explicit thread yield loops indefinitely
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn task_deletion() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
