@@ -72,8 +72,7 @@ impl DiffEngine for WasmiEngine {
             wasmi::Module::new(&self.engine, wasm).context("unable to validate Wasm module")?;
         let mut store = wasmi::Store::new(&self.engine, ());
         let instance = wasmi::Linker::<()>::new(&self.engine)
-            .instantiate(&mut store, &module)
-            .and_then(|i| i.start(&mut store))
+            .instantiate_and_start(&mut store, &module)
             .context("unable to instantiate module in wasmi")?;
         Ok(Box::new(WasmiInstance { store, instance }))
     }
@@ -178,11 +177,11 @@ impl From<&DiffValue> for wasmi::Val {
             DiffValue::V128(n) => WasmiValue::V128(wasmi::core::V128::from(n)),
             DiffValue::FuncRef { null } => {
                 assert!(null);
-                WasmiValue::FuncRef(wasmi::FuncRef::null())
+                WasmiValue::default(wasmi::ValType::FuncRef)
             }
             DiffValue::ExternRef { null } => {
                 assert!(null);
-                WasmiValue::ExternRef(wasmi::ExternRef::null())
+                WasmiValue::default(wasmi::ValType::ExternRef)
             }
             DiffValue::AnyRef { .. } => unimplemented!(),
             DiffValue::ExnRef { .. } => unimplemented!(),
