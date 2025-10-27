@@ -1404,7 +1404,9 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
 
         state.guest_thread = old_thread;
-        old_thread.map(|t| state.get_mut(t.thread).unwrap().state = GuestThreadState::Running);
+        if let Some(ref ot) = old_thread {
+            state.get_mut(ot.thread)?.state = GuestThreadState::Running;
+        }
         log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
         if let Some(mut fiber) = fiber {
