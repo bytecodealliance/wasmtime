@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 /// A regex that matches numbers that start with "1".
 static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^1\d*$").unwrap());
 
-#[unsafe(export_name = "wizer.initialize")]
+#[unsafe(export_name = "wizer-initialize")]
 pub extern "C" fn init() {
     LazyLock::force(&REGEX);
 }

@@ -217,6 +217,7 @@ impl ScratchType for FloatScratch {
 }
 
 /// A scratch register scope.
+#[derive(Debug, Clone, Copy)]
 pub struct Scratch(Reg);
 
 impl Scratch {

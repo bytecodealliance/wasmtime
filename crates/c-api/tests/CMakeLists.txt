@@ -36,6 +36,7 @@ add_capi_test(tests FILES
   component/lookup_func.cc
   component/call_func.cc
   component/values.cc
+  component/linker.cc
   error.cc
   config.cc
   wat.cc
@@ -68,15 +69,14 @@ foreach(header IN LISTS cpp_headers)
   if(header_extension STREQUAL ".h.in")
     continue()
   endif()
-  cmake_path(GET header FILENAME header_filename)
-  cmake_path(APPEND CMAKE_CURRENT_BINARY_DIR "header-test" "${header_filename}.cc"
-    OUTPUT_VARIABLE test_filename)
-  list(APPEND header_tests ${test_filename})
-
   cmake_path(
     RELATIVE_PATH header
     BASE_DIRECTORY ${header_root}
     OUTPUT_VARIABLE rel_header)
+  cmake_path(APPEND CMAKE_CURRENT_BINARY_DIR "header-test" "${rel_header}.cc"
+    OUTPUT_VARIABLE test_filename)
+  list(APPEND header_tests ${test_filename})
+
   file(WRITE ${test_filename} "#include <${rel_header}>")
 endforeach()
 add_capi_test(standalone-headers FILES ${header_tests})

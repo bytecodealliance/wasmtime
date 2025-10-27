@@ -262,8 +262,8 @@ pub fn dwarf_codegen_optimized() -> Result<()> {
         ],
         r#"b InitializeTest
 r
-b dwarf_codegen_optimized.cpp:25
-b dwarf_codegen_optimized.cpp:26
+b dwarf_codegen_optimized.cc:25
+b dwarf_codegen_optimized.cc:26
 c
 v x
 c
@@ -297,8 +297,8 @@ pub fn dwarf_codegen_optimized_wasm_optimized() -> Result<()> {
         ],
         r#"b InitializeTest
 r
-b dwarf_codegen_optimized_wasm_optimized.cpp:23
-b dwarf_codegen_optimized_wasm_optimized.cpp:29
+b dwarf_codegen_optimized_wasm_optimized.cc:23
+b dwarf_codegen_optimized_wasm_optimized.cc:29
 c
 v b
 c

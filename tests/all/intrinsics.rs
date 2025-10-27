@@ -16,7 +16,6 @@ fn native_loads_and_stores() -> Result<()> {
         ("u32", "i32"),
         ("u64", "i64"),
     ] {
-        let mut code_builder = CodeBuilder::new(&engine);
         let path = format!("intrinsics::native_loads_and_stores::{comp_ty}");
         let path = Path::new(&path);
         let wat = format!(
@@ -66,6 +65,7 @@ fn native_loads_and_stores() -> Result<()> {
                 )
             "#
         );
+        let mut code_builder = CodeBuilder::new(&engine);
         code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
         unsafe {
             code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -163,8 +163,6 @@ fn ref_func_of_intrinsic() -> Result<()> {
     config.wasm_gc(true);
     let engine = Engine::new(&config)?;
 
-    let mut code_builder = CodeBuilder::new(&engine);
-
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
 
@@ -200,6 +198,8 @@ fn ref_func_of_intrinsic() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -223,8 +223,6 @@ fn ref_func_of_intrinsic() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn table_element_segment_with_intrinsic() -> Result<()> {
     let engine = Engine::default();
-
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -260,6 +258,8 @@ fn table_element_segment_with_intrinsic() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -283,7 +283,6 @@ fn table_element_segment_with_intrinsic() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn intrinsics_not_listed_in_imports() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -297,6 +296,8 @@ fn intrinsics_not_listed_in_imports() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -314,7 +315,6 @@ fn intrinsics_not_listed_in_imports() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn unknown_intrinsic_function() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -328,6 +328,8 @@ fn unknown_intrinsic_function() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -346,7 +348,6 @@ fn unknown_intrinsic_function() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_extra_param() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -360,6 +361,8 @@ fn bad_extra_param() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -381,7 +384,6 @@ fn bad_extra_param() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_missing_param() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -395,6 +397,8 @@ fn bad_missing_param() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -416,7 +420,6 @@ fn bad_missing_param() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_missing_return() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -430,6 +433,8 @@ fn bad_missing_return() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -451,7 +456,6 @@ fn bad_missing_return() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_extra_return() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -465,6 +469,8 @@ fn bad_extra_return() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -486,7 +492,6 @@ fn bad_extra_return() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_param_type() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -500,6 +505,8 @@ fn bad_param_type() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -521,7 +528,6 @@ fn bad_param_type() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn bad_result_type() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let path = format!("intrinsics::ref_func_of_intrinsic");
     let path = Path::new(&path);
@@ -535,6 +541,8 @@ fn bad_result_type() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), Some(path))?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -556,7 +564,6 @@ fn bad_result_type() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn store_data_address() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let wat = r#"
         (component
@@ -600,6 +607,8 @@ fn store_data_address() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), None)?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
@@ -622,7 +631,6 @@ fn store_data_address() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn other_import_name() -> Result<()> {
     let engine = Engine::default();
-    let mut code_builder = CodeBuilder::new(&engine);
 
     let wat = r#"
         (component
@@ -633,6 +641,8 @@ fn other_import_name() -> Result<()> {
             )
         )
     "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
     code_builder.wasm_binary_or_text(wat.as_bytes(), None)?;
     unsafe {
         code_builder.expose_unsafe_intrinsics("other-name");

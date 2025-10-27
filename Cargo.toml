@@ -87,6 +87,7 @@ tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "process"] }
@@ -319,12 +320,12 @@ regalloc2 = "0.13.2"
 
 # cap-std family:
 target-lexicon = "0.13.0"
-cap-std = "3.4.4"
-cap-rand = { version = "3.4.4", features = ["small_rng"] }
-cap-fs-ext = "3.4.4"
-cap-net-ext = "3.4.4"
-cap-time-ext = "3.4.4"
-cap-tempfile = "3.4.4"
+cap-std = "3.4.5"
+cap-rand = { version = "3.4.5", features = ["small_rng"] }
+cap-fs-ext = "3.4.5"
+cap-net-ext = "3.4.5"
+cap-time-ext = "3.4.5"
+cap-tempfile = "3.4.5"
 fs-set-times = "0.20.3"
 system-interface = { version = "0.27.3", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.3", default-features = false }
@@ -504,6 +505,7 @@ component-model-async = [
   "component-model",
   "wasmtime-wasi?/p3",
   "wasmtime-wasi-http?/p3",
+  "dep:futures",
 ]
 
 # This feature, when enabled, will statically compile out all logging statements
@@ -525,7 +527,8 @@ pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-a
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast?/component-model",
-  "wasmtime-cli-flags/component-model"
+  "wasmtime-cli-flags/component-model",
+  "wasmtime-wizer?/component-model",
 ]
 wat = ["dep:wat", "wasmtime/wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
@@ -549,6 +552,7 @@ debug = ["wasmtime-cli-flags/debug", "wasmtime/debug"]
 # for more information on each subcommand.
 serve = [
   "wasi-http",
+  "wasmtime-wasi-http/component-model-async",
   "component-model",
   "dep:http-body-util",
   "dep:http",
@@ -581,6 +585,7 @@ wizer = [
   "dep:wasmtime-wasi",
   "dep:wasi-common",
   "dep:tokio",
+  "wasmtime/wave",
 ]
 
 [[test]]

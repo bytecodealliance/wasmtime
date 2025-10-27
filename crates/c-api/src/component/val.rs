@@ -1,11 +1,9 @@
-use wasmtime::component::Val;
-
-use crate::wasm_name_t;
-
+use crate::{WasmtimeStoreContextMut, handle_result, wasm_name_t, wasmtime_error_t};
 use std::mem;
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use std::slice;
+use wasmtime::component::{ResourceAny, ResourceDynamic, ResourceType, Val};
 
 crate::declare_vecs! {
     (
@@ -232,6 +230,7 @@ pub enum wasmtime_component_val_t {
     Option(Option<Box<Self>>),
     Result(wasmtime_component_valresult_t),
     Flags(wasmtime_component_valflags_t),
+    Resource(Box<wasmtime_component_resource_any_t>),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -273,6 +272,7 @@ impl From<&wasmtime_component_val_t> for Val {
             }
             wasmtime_component_val_t::Result(x) => Val::Result(x.into()),
             wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
+            wasmtime_component_val_t::Resource(x) => Val::Resource(x.resource),
         }
     }
 }
@@ -306,7 +306,11 @@ impl From<&Val> for wasmtime_component_val_t {
             ),
             Val::Result(x) => wasmtime_component_val_t::Result(x.into()),
             Val::Flags(x) => wasmtime_component_val_t::Flags(x.as_slice().into()),
-            Val::Resource(_resource_any) => todo!(),
+            Val::Resource(resource_any) => {
+                wasmtime_component_val_t::Resource(Box::new(wasmtime_component_resource_any_t {
+                    resource: *resource_any,
+                }))
+            }
             Val::Future(_) => todo!(),
             Val::Stream(_) => todo!(),
             Val::ErrorContext(_) => todo!(),
@@ -315,13 +319,205 @@ impl From<&Val> for wasmtime_component_val_t {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_val_new() -> Box<wasmtime_component_val_t> {
-    Box::new(wasmtime_component_val_t::default())
+pub extern "C" fn wasmtime_component_val_new(
+    src: &mut wasmtime_component_val_t,
+) -> Box<wasmtime_component_val_t> {
+    Box::new(mem::replace(src, wasmtime_component_val_t::default()))
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_val_delete(value: *mut wasmtime_component_val_t) {
+pub extern "C" fn wasmtime_component_val_free(_dst: Option<Box<wasmtime_component_val_t>>) {}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_val_clone(
+    src: &wasmtime_component_val_t,
+    dst: &mut MaybeUninit<wasmtime_component_val_t>,
+) {
+    dst.write(src.clone());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_val_delete(
+    value: &mut ManuallyDrop<wasmtime_component_val_t>,
+) {
     unsafe {
-        std::ptr::drop_in_place(value);
+        ManuallyDrop::drop(value);
     }
+}
+
+#[repr(C)]
+pub struct wasmtime_component_resource_type_t {
+    pub(crate) ty: ResourceType,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_type_new_host(
+    ty: u32,
+) -> Box<wasmtime_component_resource_type_t> {
+    Box::new(wasmtime_component_resource_type_t {
+        ty: ResourceType::host_dynamic(ty),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_type_clone(
+    ty: &wasmtime_component_resource_type_t,
+) -> Box<wasmtime_component_resource_type_t> {
+    Box::new(wasmtime_component_resource_type_t { ty: ty.ty })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_type_equal(
+    a: &wasmtime_component_resource_type_t,
+    b: &wasmtime_component_resource_type_t,
+) -> bool {
+    a.ty == b.ty
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_type_delete(
+    _resource: Option<Box<wasmtime_component_resource_type_t>>,
+) {
+}
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct wasmtime_component_resource_any_t {
+    resource: ResourceAny,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_type(
+    resource: &wasmtime_component_resource_any_t,
+) -> Box<wasmtime_component_resource_type_t> {
+    Box::new(wasmtime_component_resource_type_t {
+        ty: resource.resource.ty(),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_clone(
+    resource: &wasmtime_component_resource_any_t,
+) -> Box<wasmtime_component_resource_any_t> {
+    Box::new(wasmtime_component_resource_any_t {
+        resource: resource.resource,
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_owned(
+    resource: &wasmtime_component_resource_any_t,
+) -> bool {
+    resource.resource.owned()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_drop(
+    store: WasmtimeStoreContextMut<'_>,
+    resource: &wasmtime_component_resource_any_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(resource.resource.resource_drop(store), |()| ())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_delete(
+    _resource: Option<Box<wasmtime_component_resource_any_t>>,
+) {
+}
+
+#[repr(C)]
+pub struct wasmtime_component_resource_host_t {
+    resource: ResourceDynamic,
+}
+
+impl wasmtime_component_resource_host_t {
+    // "poor man's clone"
+    fn resource(&self) -> ResourceDynamic {
+        let rep = self.resource.rep();
+        let ty = self.resource.ty();
+        if self.resource.owned() {
+            ResourceDynamic::new_own(rep, ty)
+        } else {
+            ResourceDynamic::new_borrow(rep, ty)
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_new(
+    owned: bool,
+    rep: u32,
+    ty: u32,
+) -> Box<wasmtime_component_resource_host_t> {
+    Box::new(wasmtime_component_resource_host_t {
+        resource: if owned {
+            ResourceDynamic::new_own(rep, ty)
+        } else {
+            ResourceDynamic::new_borrow(rep, ty)
+        },
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_clone(
+    resource: &wasmtime_component_resource_host_t,
+) -> Box<wasmtime_component_resource_host_t> {
+    Box::new(wasmtime_component_resource_host_t {
+        resource: resource.resource(),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_rep(
+    resource: &wasmtime_component_resource_host_t,
+) -> u32 {
+    resource.resource.rep()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_type(
+    resource: &wasmtime_component_resource_host_t,
+) -> u32 {
+    resource.resource.ty()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_owned(
+    resource: &wasmtime_component_resource_host_t,
+) -> bool {
+    resource.resource.owned()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_delete(
+    _resource: Option<Box<wasmtime_component_resource_host_t>>,
+) {
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_any_to_host(
+    store: WasmtimeStoreContextMut<'_>,
+    resource: &wasmtime_component_resource_any_t,
+    ret: &mut MaybeUninit<Box<wasmtime_component_resource_host_t>>,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        resource.resource.try_into_resource_dynamic(store),
+        |resource| {
+            ret.write(Box::new(wasmtime_component_resource_host_t { resource }));
+        },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_resource_host_to_any(
+    store: WasmtimeStoreContextMut<'_>,
+    resource: &wasmtime_component_resource_host_t,
+    ret: &mut MaybeUninit<Box<wasmtime_component_resource_any_t>>,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        resource.resource().try_into_resource_any(store),
+        |resource| {
+            ret.write(Box::new(wasmtime_component_resource_any_t { resource }));
+        },
+    )
 }

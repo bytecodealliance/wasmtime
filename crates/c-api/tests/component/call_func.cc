@@ -1,8 +1,9 @@
-#include "utils.h"
-
 #include <array>
 #include <gtest/gtest.h>
-#include <wasmtime.h>
+#include <wasmtime/component.hh>
+#include <wasmtime/store.hh>
+
+using namespace wasmtime::component;
 
 TEST(component, call_func) {
   static constexpr auto component_text = std::string_view{
@@ -21,65 +22,29 @@ TEST(component, call_func) {
 )
       )END",
   };
-  const auto engine = wasm_engine_new();
-  EXPECT_NE(engine, nullptr);
 
-  const auto store = wasmtime_store_new(engine, nullptr, nullptr);
-  const auto context = wasmtime_store_context(store);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
+  auto context = store.context();
+  auto component = Component::compile(engine, component_text).unwrap();
+  auto f = *component.export_index(nullptr, "f");
 
-  wasmtime_component_t *component = nullptr;
+  Linker linker(engine);
 
-  auto err = wasmtime_component_new(
-      engine, reinterpret_cast<const uint8_t *>(component_text.data()),
-      component_text.size(), &component);
+  auto instance = linker.instantiate(context, component).unwrap();
+  auto func = *instance.get_func(context, f);
 
-  CHECK_ERR(err);
-
-  const auto f =
-      wasmtime_component_get_export_index(component, nullptr, "f", 1);
-
-  EXPECT_NE(f, nullptr);
-
-  const auto linker = wasmtime_component_linker_new(engine);
-
-  wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context, component,
-                                              &instance);
-  CHECK_ERR(err);
-
-  wasmtime_component_func_t func = {};
-  const auto found =
-      wasmtime_component_instance_get_func(&instance, context, f, &func);
-  EXPECT_TRUE(found);
-
-  auto params = std::array<wasmtime_component_val_t, 2>{
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 34},
-      },
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 35},
-      },
+  auto params = std::array<Val, 2>{
+      uint32_t(34),
+      uint32_t(35),
   };
 
-  auto results = std::array<wasmtime_component_val_t, 1>{};
+  auto results = std::array<Val, 1>{false};
 
-  err =
-      wasmtime_component_func_call(&func, context, params.data(), params.size(),
-                                   results.data(), results.size());
-  CHECK_ERR(err);
+  func.call(context, params, results).unwrap();
 
-  err = wasmtime_component_func_post_return(&func, context);
-  CHECK_ERR(err);
+  func.post_return(context).unwrap();
 
-  EXPECT_EQ(results[0].kind, WASMTIME_COMPONENT_U32);
-  EXPECT_EQ(results[0].of.u32, 69);
-
-  wasmtime_component_export_index_delete(f);
-  wasmtime_component_linker_delete(linker);
-  wasmtime_component_delete(component);
-
-  wasmtime_store_delete(store);
-  wasm_engine_delete(engine);
+  EXPECT_TRUE(results[0].is_u32());
+  EXPECT_EQ(results[0].get_u32(), 69);
 }

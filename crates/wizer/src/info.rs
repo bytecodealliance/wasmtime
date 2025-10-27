@@ -163,7 +163,15 @@ impl<'a> ModuleContext<'a> {
     /// Iterate over the defined globals in this module.
     pub(crate) fn defined_globals(
         &self,
-    ) -> impl Iterator<Item = (u32, wasmparser::GlobalType)> + '_ {
+    ) -> impl Iterator<Item = (u32, wasmparser::GlobalType, Option<&str>)> + '_ {
+        let mut defined_global_exports = self
+            .defined_global_exports
+            .as_ref()
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+            .iter()
+            .peekable();
+
         self.globals
             .iter()
             .copied()
@@ -172,7 +180,13 @@ impl<'a> ModuleContext<'a> {
                 self.defined_globals_index
                     .map_or(self.globals.len(), |i| usize::try_from(i).unwrap()),
             )
-            .map(|(i, g)| (u32::try_from(i).unwrap(), g))
+            .map(move |(i, g)| {
+                let i = u32::try_from(i).unwrap();
+                let name = defined_global_exports
+                    .next_if(|(j, _)| *j == i)
+                    .map(|(_, name)| name.as_str());
+                (i, g, name)
+            })
     }
 
     /// Get a slice of this module's original raw sections.

@@ -398,6 +398,14 @@ public:
     wasmtime_config_wasm_exceptions_set(ptr.get(), enable);
   }
 
+  /// \brief Configures whether the WebAssembly custom-page-sizes proposal will
+  /// be enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_custom_page_sizes
+  void wasm_custom_page_sizes(bool enable) {
+    wasmtime_config_wasm_custom_page_sizes_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
   /// \brief Configures whether the WebAssembly component model proposal will be
   /// enabled
@@ -521,6 +529,12 @@ public:
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.macos_use_mach_ports
   void macos_use_mach_ports(bool enable) {
     wasmtime_config_macos_use_mach_ports_set(ptr.get(), enable);
+  }
+
+  /// \brief Configures Wasmtime to not use signals-based trap handlers
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.signals_based_traps
+  void signals_based_traps(bool enable) {
+    wasmtime_config_signals_based_traps_set(ptr.get(), enable);
   }
 
 #ifdef WASMTIME_FEATURE_CACHE

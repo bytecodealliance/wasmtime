@@ -366,11 +366,16 @@ impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
         let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
         let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
         let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
-        let unwind = store.0.unwinder();
-        // Establish the iterator.
-        let inner = Box::new(unsafe {
-            wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
-        });
+        let inner: Box<dyn Iterator<Item = Frame>> = if exit_fp == 0 {
+            // No activations on this Store; return an empty iterator.
+            Box::new(core::iter::empty())
+        } else {
+            let unwind = store.0.unwinder();
+            // Establish the iterator.
+            Box::new(unsafe {
+                wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
+            })
+        };
 
         CurrentActivationBacktrace { store, inner }
     }

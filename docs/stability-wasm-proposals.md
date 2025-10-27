@@ -57,7 +57,7 @@ The emoji legend is:
 | [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌    |
 | [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
 | [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
+| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`exception-handling`]      | ✅      | ✅    | ✅       | ❌     | ✅  | ❌    |
 | [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 

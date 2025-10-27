@@ -2403,58 +2403,61 @@ impl Masm for MacroAssembler {
             OperandSize::S32,
         )?;
 
-        self.with_scratch::<IntScratch, _>(|masm, tmp| {
-            masm.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
-                let move_to_tmp_xmm = |this: &mut Self| {
-                    this.asm
-                        .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
-                };
+        let move_to_tmp_xmm = |this: &mut Self, tmp_xmm: Scratch| {
+            this.asm
+                .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
+        };
 
-                // A helper for deciding between `vpsllw` and `vpsrlw` in
-                // `shift_i8x16`.
-                enum Direction {
-                    Left,
-                    Right,
+        // A helper for deciding between `vpsllw` and `vpsrlw` in
+        // `shift_i8x16`.
+        enum Direction {
+            Left,
+            Right,
+        }
+
+        let shift_i8x16 = |this: &mut Self,
+                           masks: &'static [u8],
+                           direction: Direction|
+         -> Result<()> {
+            // The case for i8x16 is a little bit trickier because x64 doesn't provide a 8bit
+            // shift instruction. Instead, we shift as 16bits, and then mask the bits in the
+            // 8bits lane, for example (with 2 8bits lanes):
+            // - Before shifting:
+            // 01001101 11101110
+            // - shifting by 2 left:
+            // 00110111 10111000
+            //       ^^_ these bits come from the previous byte, and need to be masked.
+            // - The mask:
+            // 11111100 11111111
+            // - After masking:
+            // 00110100 10111000
+            //
+            // The mask is loaded from a well known memory, depending on the shift amount.
+
+            this.with_scratch::<FloatScratch, _>(|this, tmp_xmm| {
+                this.asm
+                    .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
+
+                // Perform the 16-bit shift.
+                match direction {
+                    Direction::Left => this.asm.xmm_vpsll_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
+                        OperandSize::S16,
+                    ),
+                    Direction::Right => this.asm.xmm_vpsrl_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
+                        OperandSize::S16,
+                    ),
                 }
 
-                let shift_i8x16 = |this: &mut Self, masks: &'static [u8], direction: Direction| {
-                    // The case for i8x16 is a little bit trickier because x64 doesn't provide a 8bit
-                    // shift instruction. Instead, we shift as 16bits, and then mask the bits in the
-                    // 8bits lane, for example (with 2 8bits lanes):
-                    // - Before shifting:
-                    // 01001101 11101110
-                    // - shifting by 2 left:
-                    // 00110111 10111000
-                    //       ^^_ these bits come from the previous byte, and need to be masked.
-                    // - The mask:
-                    // 11111100 11111111
-                    // - After masking:
-                    // 00110100 10111000
-                    //
-                    // The mask is loaded from a well known memory, depending on the shift amount.
+                // Get a handle to the masks array constant.
+                let masks_addr = this.asm.add_constant(masks);
 
-                    this.asm
-                        .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
-
-                    // Perform the 16-bit shift.
-                    match direction {
-                        Direction::Left => this.asm.xmm_vpsll_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S16,
-                        ),
-                        Direction::Right => this.asm.xmm_vpsrl_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S16,
-                        ),
-                    }
-
-                    // Get a handle to the masks array constant.
-                    let masks_addr = this.asm.add_constant(masks);
-
+                this.with_scratch::<IntScratch, _>(|this, tmp| {
                     // Load the masks array effective address into the tmp register.
                     this.asm.lea(&masks_addr, tmp.writable(), OperandSize::S64);
 
@@ -2474,203 +2477,218 @@ impl Masm for MacroAssembler {
                         tmp_xmm.writable(),
                         MemFlags::trusted(),
                     );
+                });
 
-                    // Mask unwanted bits from operand.
-                    this.asm
-                        .xmm_vpand_rrr(tmp_xmm.inner(), operand, writable!(operand));
-                };
+                // Mask unwanted bits from operand.
+                this.asm
+                    .xmm_vpand_rrr(tmp_xmm.inner(), operand, writable!(operand));
+                Ok(())
+            })
+        };
 
-                let i64x2_shr_s = |this: &mut Self,
-                                   context: &mut CodeGenContext<Emission>|
-                 -> Result<()> {
-                    const SIGN_MASK: u128 = 0x8000000000000000_8000000000000000;
+        let i64x2_shr_s = |this: &mut Self, context: &mut CodeGenContext<Emission>| -> Result<()> {
+            const SIGN_MASK: u128 = 0x8000000000000000_8000000000000000;
 
-                    // AVX doesn't have an instruction for i64x2 signed right shift. Instead we use the
-                    // following formula (from hacker's delight 2-7), where x is the value and n the shift
-                    // amount, for each lane:
-                    // t = (1 << 63) >> n; ((x >> n) ^ t) - t
+            // AVX doesn't have an instruction for i64x2 signed right shift. Instead we use the
+            // following formula (from hacker's delight 2-7), where x is the value and n the shift
+            // amount, for each lane:
+            // t = (1 << 63) >> n; ((x >> n) ^ t) - t
 
-                    // We need an extra scratch register:
-                    let tmp_xmm2 = context.any_fpr(this)?;
+            // We need an extra scratch register:
+            let tmp_xmm2 = context.any_fpr(this)?;
 
-                    this.asm
-                        .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
+            this.with_scratch::<FloatScratch, _>(|this, tmp_xmm| {
+                this.asm
+                    .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
 
-                    let cst = this.asm.add_constant(&SIGN_MASK.to_le_bytes());
+                let cst = this.asm.add_constant(&SIGN_MASK.to_le_bytes());
 
-                    this.asm
-                        .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlags::trusted());
-                    this.asm.xmm_vpsrl_rrr(
-                        tmp_xmm2,
+                this.asm
+                    .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlags::trusted());
+                this.asm.xmm_vpsrl_rrr(
+                    tmp_xmm2,
+                    tmp_xmm.inner(),
+                    writable!(tmp_xmm2),
+                    OperandSize::S64,
+                );
+                this.asm.xmm_vpsrl_rrr(
+                    operand,
+                    tmp_xmm.inner(),
+                    writable!(operand),
+                    OperandSize::S64,
+                );
+            });
+            this.asm
+                .xmm_vpxor_rrr(operand, tmp_xmm2, writable!(operand));
+            this.asm
+                .xmm_vpsub_rrr(operand, tmp_xmm2, writable!(operand), OperandSize::S64);
+
+            context.free_reg(tmp_xmm2);
+
+            Ok(())
+        };
+
+        let i8x16_shr_s = |this: &mut Self, context: &mut CodeGenContext<Emission>| -> Result<()> {
+            // Since the x86 instruction set does not have an 8x16 shift instruction and the
+            // approach used for `ishl` and `ushr` cannot be easily used (the masks do not
+            // preserve the sign), we use a different approach here: separate the low and
+            // high lanes, shift them separately, and merge them into the final result.
+            //
+            // Visually, this looks like the following, where `src.i8x16 = [s0, s1, ...,
+            // s15]:
+            //
+            //   lo.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
+            //   shifted_lo.i16x8 = shift each lane of `low`
+            //   hi.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
+            //   shifted_hi.i16x8 = shift each lane of `high`
+            //   result = [s0'', s1'', ..., s15'']
+
+            // In order for `packsswb` later to only use the high byte of each
+            // 16x8 lane, we shift right an extra 8 bits, relying on `psraw` to
+            // fill in the upper bits appropriately.
+            let tmp_lo = context.any_fpr(this)?;
+            let tmp_hi = context.any_fpr(this)?;
+
+            this.with_scratch::<FloatScratch, _>(|this, tmp_xmm| {
+                this.asm
+                    .add_ir(8, writable!(shift_amount), OperandSize::S32);
+                this.asm
+                    .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
+
+                // Extract lower and upper bytes.
+                this.asm
+                    .xmm_vpunpckl_rrr(operand, operand, writable!(tmp_lo), OperandSize::S8);
+                this.asm
+                    .xmm_vpunpckh_rrr(operand, operand, writable!(tmp_hi), OperandSize::S8);
+
+                // Perform 16bit right shift of upper and lower bytes.
+                this.asm.xmm_vpsra_rrr(
+                    tmp_lo,
+                    tmp_xmm.inner(),
+                    writable!(tmp_lo),
+                    OperandSize::S16,
+                );
+                this.asm.xmm_vpsra_rrr(
+                    tmp_hi,
+                    tmp_xmm.inner(),
+                    writable!(tmp_hi),
+                    OperandSize::S16,
+                );
+            });
+
+            // Merge lower and upper bytes back.
+            this.asm
+                .xmm_vpackss_rrr(tmp_lo, tmp_hi, writable!(operand), OperandSize::S8);
+
+            context.free_reg(tmp_lo);
+            context.free_reg(tmp_hi);
+
+            Ok(())
+        };
+
+        match (lane_width, kind) {
+            // shl
+            (OperandSize::S8, ShiftKind::Shl) => {
+                shift_i8x16(self, &I8X16_ISHL_MASKS, Direction::Left)?
+            }
+            (OperandSize::S16, ShiftKind::Shl) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsll_rrr(
+                        operand,
                         tmp_xmm.inner(),
-                        writable!(tmp_xmm2),
-                        OperandSize::S64,
+                        writable!(operand),
+                        OperandSize::S16,
                     );
-                    this.asm.xmm_vpsrl_rrr(
+                })
+            }
+            (OperandSize::S32, ShiftKind::Shl) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsll_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
+                        OperandSize::S32,
+                    );
+                })
+            }
+            (OperandSize::S64, ShiftKind::Shl) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsll_rrr(
                         operand,
                         tmp_xmm.inner(),
                         writable!(operand),
                         OperandSize::S64,
                     );
-                    this.asm
-                        .xmm_vpxor_rrr(operand, tmp_xmm2, writable!(operand));
-                    this.asm
-                        .xmm_vpsub_rrr(operand, tmp_xmm2, writable!(operand), OperandSize::S64);
-
-                    context.free_reg(tmp_xmm2);
-
-                    Ok(())
-                };
-
-                let i8x16_shr_s = |this: &mut Self,
-                                   context: &mut CodeGenContext<Emission>|
-                 -> Result<()> {
-                    // Since the x86 instruction set does not have an 8x16 shift instruction and the
-                    // approach used for `ishl` and `ushr` cannot be easily used (the masks do not
-                    // preserve the sign), we use a different approach here: separate the low and
-                    // high lanes, shift them separately, and merge them into the final result.
-                    //
-                    // Visually, this looks like the following, where `src.i8x16 = [s0, s1, ...,
-                    // s15]:
-                    //
-                    //   lo.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
-                    //   shifted_lo.i16x8 = shift each lane of `low`
-                    //   hi.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
-                    //   shifted_hi.i16x8 = shift each lane of `high`
-                    //   result = [s0'', s1'', ..., s15'']
-
-                    // In order for `packsswb` later to only use the high byte of each
-                    // 16x8 lane, we shift right an extra 8 bits, relying on `psraw` to
-                    // fill in the upper bits appropriately.
-                    this.asm
-                        .add_ir(8, writable!(shift_amount), OperandSize::S32);
-                    this.asm
-                        .avx_gpr_to_xmm(shift_amount, tmp_xmm.writable(), OperandSize::S32);
-
-                    let tmp_lo = context.any_fpr(this)?;
-                    let tmp_hi = context.any_fpr(this)?;
-
-                    // Extract lower and upper bytes.
-                    this.asm
-                        .xmm_vpunpckl_rrr(operand, operand, writable!(tmp_lo), OperandSize::S8);
-                    this.asm
-                        .xmm_vpunpckh_rrr(operand, operand, writable!(tmp_hi), OperandSize::S8);
-
-                    // Perform 16bit right shift of upper and lower bytes.
-                    this.asm.xmm_vpsra_rrr(
-                        tmp_lo,
+                })
+            }
+            // shr_u
+            (OperandSize::S8, ShiftKind::ShrU) => {
+                shift_i8x16(self, &I8X16_USHR_MASKS, Direction::Right)?
+            }
+            (OperandSize::S16, ShiftKind::ShrU) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsrl_rrr(
+                        operand,
                         tmp_xmm.inner(),
-                        writable!(tmp_lo),
+                        writable!(operand),
                         OperandSize::S16,
                     );
-                    this.asm.xmm_vpsra_rrr(
-                        tmp_hi,
+                })
+            }
+            (OperandSize::S32, ShiftKind::ShrU) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsrl_rrr(
+                        operand,
                         tmp_xmm.inner(),
-                        writable!(tmp_hi),
+                        writable!(operand),
+                        OperandSize::S32,
+                    );
+                })
+            }
+            (OperandSize::S64, ShiftKind::ShrU) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsrl_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
+                        OperandSize::S64,
+                    );
+                })
+            }
+            // shr_s
+            (OperandSize::S8, ShiftKind::ShrS) => i8x16_shr_s(self, context)?,
+            (OperandSize::S16, ShiftKind::ShrS) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsra_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
                         OperandSize::S16,
                     );
+                })
+            }
+            (OperandSize::S32, ShiftKind::ShrS) => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp_xmm| {
+                    move_to_tmp_xmm(masm, tmp_xmm);
+                    masm.asm.xmm_vpsra_rrr(
+                        operand,
+                        tmp_xmm.inner(),
+                        writable!(operand),
+                        OperandSize::S32,
+                    );
+                })
+            }
+            (OperandSize::S64, ShiftKind::ShrS) => i64x2_shr_s(self, context)?,
 
-                    // Merge lower and upper bytes back.
-                    this.asm
-                        .xmm_vpackss_rrr(tmp_lo, tmp_hi, writable!(operand), OperandSize::S8);
-
-                    context.free_reg(tmp_lo);
-                    context.free_reg(tmp_hi);
-
-                    Ok(())
-                };
-
-                match (lane_width, kind) {
-                    // shl
-                    (OperandSize::S8, ShiftKind::Shl) => {
-                        shift_i8x16(masm, &I8X16_ISHL_MASKS, Direction::Left)
-                    }
-                    (OperandSize::S16, ShiftKind::Shl) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsll_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S16,
-                        );
-                    }
-                    (OperandSize::S32, ShiftKind::Shl) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsll_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S32,
-                        );
-                    }
-                    (OperandSize::S64, ShiftKind::Shl) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsll_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S64,
-                        );
-                    }
-                    // shr_u
-                    (OperandSize::S8, ShiftKind::ShrU) => {
-                        shift_i8x16(masm, &I8X16_USHR_MASKS, Direction::Right)
-                    }
-                    (OperandSize::S16, ShiftKind::ShrU) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsrl_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S16,
-                        );
-                    }
-                    (OperandSize::S32, ShiftKind::ShrU) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsrl_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S32,
-                        );
-                    }
-                    (OperandSize::S64, ShiftKind::ShrU) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsrl_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S64,
-                        );
-                    }
-                    // shr_s
-                    (OperandSize::S8, ShiftKind::ShrS) => i8x16_shr_s(masm, context)?,
-                    (OperandSize::S16, ShiftKind::ShrS) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsra_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S16,
-                        );
-                    }
-                    (OperandSize::S32, ShiftKind::ShrS) => {
-                        move_to_tmp_xmm(masm);
-                        masm.asm.xmm_vpsra_rrr(
-                            operand,
-                            tmp_xmm.inner(),
-                            writable!(operand),
-                            OperandSize::S32,
-                        );
-                    }
-                    (OperandSize::S64, ShiftKind::ShrS) => i64x2_shr_s(masm, context)?,
-
-                    _ => bail!(CodeGenError::invalid_operand_combination()),
-                }
-
-                Ok(())
-            })
-        })?;
+            _ => bail!(CodeGenError::invalid_operand_combination()),
+        }
 
         context.free_reg(shift_amount);
         context

@@ -1,7 +1,9 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::cell::LazyCell;
 use std::convert::TryFrom;
+use std::pin::pin;
 use std::process::Command;
+use std::task::{Context, Poll, Waker};
 use wasmtime_wasi::p1::WasiP1Ctx;
 
 fn run_iter(linker: &wasmtime::Linker<WasiP1Ctx>, module: &wasmtime::Module) {
@@ -65,11 +67,12 @@ fn bench_uap(c: &mut Criterion) {
     let wizer = LazyCell::new(|| {
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
         let mut store = wasmtime::Store::new(linker.engine(), wasi);
-        let wizened = wasmtime_wizer::Wizer::new()
-            .run(&mut store, &control_wasm, |store, module| {
-                linker.instantiate(store, module)
-            })
-            .unwrap();
+        let wizened = assert_ready(wasmtime_wizer::Wizer::new().run(
+            &mut store,
+            &control_wasm,
+            async |store, module| linker.instantiate(store, module),
+        ))
+        .unwrap();
         wasmtime::Module::new(&engine, &wizened).unwrap()
     });
     group.bench_function("wizer", |b| {
@@ -77,6 +80,14 @@ fn bench_uap(c: &mut Criterion) {
         b.iter(|| run_iter(&linker, &wizer));
     });
     group.finish();
+}
+
+fn assert_ready<F: Future>(f: F) -> F::Output {
+    let mut context = Context::from_waker(Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(ret) => ret,
+        Poll::Pending => panic!("future wasn't ready"),
+    }
 }
 
 criterion_group!(benches, bench_uap);

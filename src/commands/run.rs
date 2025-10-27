@@ -105,16 +105,24 @@ impl RunCommand {
     /// Executes the command.
     #[cfg(feature = "run")]
     pub fn execute(mut self) -> Result<()> {
-        self.run.common.init_logging()?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_time()
+            .enable_io()
+            .build()?;
 
-        let engine = self.new_engine()?;
-        let main = self
-            .run
-            .load_module(&engine, self.module_and_args[0].as_ref())?;
-        let (mut store, mut linker) = self.new_store_and_linker(&engine, &main)?;
+        runtime.block_on(async {
+            self.run.common.init_logging()?;
 
-        self.instantiate_and_run(&engine, &mut linker, &main, &mut store)?;
-        Ok(())
+            let engine = self.new_engine()?;
+            let main = self
+                .run
+                .load_module(&engine, self.module_and_args[0].as_ref())?;
+            let (mut store, mut linker) = self.new_store_and_linker(&engine, &main)?;
+
+            self.instantiate_and_run(&engine, &mut linker, &main, &mut store)
+                .await?;
+            Ok(())
+        })
     }
 
     /// Creates a new `Engine` with the configuration for this command.
@@ -207,80 +215,72 @@ impl RunCommand {
     /// This applies all configuration within `self`, such as timeouts and
     /// profiling, and performs the execution. The resulting instance is
     /// returned.
-    pub fn instantiate_and_run(
+    pub async fn instantiate_and_run(
         &self,
         engine: &Engine,
         linker: &mut CliLinker,
         main: &RunTarget,
         store: &mut Store<Host>,
     ) -> Result<CliInstance> {
-        // Always run the module asynchronously to ensure that the module can be
-        // interrupted, even if it is blocking on I/O or a timeout or something.
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_time()
-            .enable_io()
-            .build()?;
         let dur = self
             .run
             .common
             .wasm
             .timeout
             .unwrap_or(std::time::Duration::MAX);
-        let result = runtime.block_on(async {
-            tokio::time::timeout(dur, async {
-                let mut profiled_modules: Vec<(String, Module)> = Vec::new();
-                if let RunTarget::Core(m) = &main {
-                    profiled_modules.push(("".to_string(), m.clone()));
-                }
+        let result = tokio::time::timeout(dur, async {
+            let mut profiled_modules: Vec<(String, Module)> = Vec::new();
+            if let RunTarget::Core(m) = &main {
+                profiled_modules.push(("".to_string(), m.clone()));
+            }
 
-                // Load the preload wasm modules.
-                for (name, path) in self.preloads.modules.iter() {
-                    // Read the wasm module binary either as `*.wat` or a raw binary
-                    let preload_target = self.run.load_module(&engine, path)?;
-                    let preload_module = match preload_target {
-                        RunTarget::Core(m) => m,
-                        #[cfg(feature = "component-model")]
-                        RunTarget::Component(_) => {
-                            bail!("components cannot be loaded with `--preload`")
-                        }
-                    };
-                    profiled_modules.push((name.to_string(), preload_module.clone()));
+            // Load the preload wasm modules.
+            for (name, path) in self.preloads.modules.iter() {
+                // Read the wasm module binary either as `*.wat` or a raw binary
+                let preload_target = self.run.load_module(&engine, path)?;
+                let preload_module = match preload_target {
+                    RunTarget::Core(m) => m,
+                    #[cfg(feature = "component-model")]
+                    RunTarget::Component(_) => {
+                        bail!("components cannot be loaded with `--preload`")
+                    }
+                };
+                profiled_modules.push((name.to_string(), preload_module.clone()));
 
-                    // Add the module's functions to the linker.
-                    match linker {
-                        #[cfg(feature = "cranelift")]
-                        CliLinker::Core(linker) => {
-                            linker
-                                .module_async(&mut *store, name, &preload_module)
-                                .await
-                                .context(format!(
-                                    "failed to process preload `{}` at `{}`",
-                                    name,
-                                    path.display()
-                                ))?;
-                        }
-                        #[cfg(not(feature = "cranelift"))]
-                        CliLinker::Core(_) => {
-                            bail!("support for --preload disabled at compile time");
-                        }
-                        #[cfg(feature = "component-model")]
-                        CliLinker::Component(_) => {
-                            bail!("--preload cannot be used with components");
-                        }
+                // Add the module's functions to the linker.
+                match linker {
+                    #[cfg(feature = "cranelift")]
+                    CliLinker::Core(linker) => {
+                        linker
+                            .module_async(&mut *store, name, &preload_module)
+                            .await
+                            .context(format!(
+                                "failed to process preload `{}` at `{}`",
+                                name,
+                                path.display()
+                            ))?;
+                    }
+                    #[cfg(not(feature = "cranelift"))]
+                    CliLinker::Core(_) => {
+                        bail!("support for --preload disabled at compile time");
+                    }
+                    #[cfg(feature = "component-model")]
+                    CliLinker::Component(_) => {
+                        bail!("--preload cannot be used with components");
                     }
                 }
+            }
 
-                self.load_main_module(store, linker, &main, profiled_modules)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "failed to run main module `{}`",
-                            self.module_and_args[0].to_string_lossy()
-                        )
-                    })
-            })
-            .await
-        });
+            self.load_main_module(store, linker, &main, profiled_modules)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to run main module `{}`",
+                        self.module_and_args[0].to_string_lossy()
+                    )
+                })
+        })
+        .await;
 
         // Load the main wasm module.
         let instance = match result.unwrap_or_else(|elapsed| {
@@ -492,7 +492,7 @@ impl RunCommand {
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_default_values(
-                        store,
+                        &mut *store,
                         main_target.unwrap_core(),
                     )?;
                 }
@@ -615,6 +615,7 @@ impl RunCommand {
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
         func.call_async(&mut *store, &params, &mut results).await?;
+        func.post_return_async(&mut *store).await?;
 
         println!("{}", DisplayFuncResults(&results));
 

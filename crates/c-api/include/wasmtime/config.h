@@ -255,6 +255,14 @@ WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_exceptions, bool)
 
+/**
+ * \brief Configures whether the WebAssembly custom-page-sizes proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_custom_page_sizes, bool)
+
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**
@@ -450,6 +458,19 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t *,
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.macos_use_mach_ports
  */
 WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
+
+/**
+ * \brief Configures Wasmtime to not use signals-based trap handlers, for
+ * example disables `SIGILL` and `SIGSEGV` handler registration on Unix
+ * platforms.
+ *
+ * This option defaults to `true`: signals-based trap handlers are enabled
+ * by default.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.signals_based_traps
+ */
+WASMTIME_CONFIG_PROP(void, signals_based_traps, bool)
 
 /**
  * Return the data from a LinearMemory instance.

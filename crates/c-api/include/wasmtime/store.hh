@@ -78,9 +78,10 @@ public:
     friend class Store;
     wasmtime_context_t *ptr;
 
-    Context(wasmtime_context_t *ptr) : ptr(ptr) {}
-
   public:
+    /// Creates a context from the raw C API pointer.
+    explicit Context(wasmtime_context_t *ptr) : ptr(ptr) {}
+
     /// Creates a context referencing the provided `Store`.
     Context(Store &store) : Context(wasmtime_store_context(store.ptr.get())) {}
     /// Creates a context referencing the provided `Store`.
@@ -157,8 +158,11 @@ public:
       wasmtime_context_set_epoch_deadline(ptr, ticks_beyond_current);
     }
 
-    /// Returns the raw context pointer for the C API.
-    wasmtime_context_t *raw_context() { return ptr; }
+    /// \brief Returns the underlying C API pointer.
+    const wasmtime_context_t *capi() const { return ptr; }
+
+    /// \brief Returns the underlying C API pointer.
+    wasmtime_context_t *capi() { return ptr; }
   };
 
   /// \brief Provides limits for a store. Used by hosts to limit resource
@@ -227,8 +231,11 @@ public:
   /// GC-managed objects, if any are available.
   void gc() { context().gc(); }
 
-  /// Returns the raw store pointer for the C API.
-  wasmtime_store_t *raw_store() { return ptr.get(); }
+  /// \brief Returns the underlying C API pointer.
+  const wasmtime_store_t *capi() const { return ptr.get(); }
+
+  /// \brief Returns the underlying C API pointer.
+  wasmtime_store_t *capi() { return ptr.get(); }
 
 private:
   template <typename F>

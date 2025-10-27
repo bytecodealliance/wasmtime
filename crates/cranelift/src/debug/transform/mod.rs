@@ -2,11 +2,11 @@ use self::debug_transform_logging::dbi_log;
 use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
-use crate::debug::Compilation;
 use crate::debug::gc::build_dependencies;
+use crate::debug::{Compilation, Reader};
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{Dwarf, DwarfPackage, LittleEndian, Section, Unit, UnitSectionOffset, write};
+use gimli::{Dwarf, DwarfPackage, LittleEndian, Section, Unit, UnitRef, UnitSectionOffset, write};
 use std::{collections::HashSet, fmt::Debug};
 use synthetic::ModuleSyntheticUnit;
 use thiserror::Error;
@@ -41,13 +41,6 @@ impl<'a> Compilation<'a> {
             memory_offset: self.module_memory_offsets[module].clone(),
         }
     }
-}
-
-pub(crate) trait Reader: gimli::Reader<Offset = usize> + Send + Sync {}
-
-impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where
-    Endian: gimli::Endianity + Send + Sync
-{
 }
 
 #[derive(Error, Debug)]
@@ -202,23 +195,25 @@ pub fn transform_dwarf(
         let mut iter = di.dwarf.debug_info.units();
         while let Some(header) = iter.next().unwrap_or(None) {
             let unit = di.dwarf.unit(header)?;
+            let unit = unit.unit_ref(&di.dwarf);
 
             let mut split_unit = None;
-            let mut split_dwarf = None;
             let mut split_reachable = None;
 
             if unit.dwo_id.is_some() {
                 if let Some(dwarf_package) = &dwarf_package {
                     if let Some((fused, fused_dwarf)) =
-                        replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
+                        replace_unit_from_split_dwarf(unit, dwarf_package)
                     {
                         split_reachable =
                             Some(build_dependencies(&fused_dwarf, addr_tr)?.get_reachable());
-                        split_unit = Some(fused);
-                        split_dwarf = Some(fused_dwarf);
+                        split_unit = Some((fused, fused_dwarf));
                     }
                 }
             }
+            let split_unit = split_unit
+                .as_ref()
+                .map(|(split_unit, split_dwarf)| split_unit.unit_ref(split_dwarf));
             let context = DebugInputContext {
                 reachable: split_reachable.as_ref().unwrap_or(&reachable),
             };
@@ -226,9 +221,8 @@ pub fn transform_dwarf(
             if let Some((id, ref_map, pending_refs)) = clone_unit(
                 compilation,
                 module,
-                &unit,
-                split_unit.as_ref(),
-                split_dwarf.as_ref(),
+                unit,
+                split_unit,
                 &context,
                 &addr_tr,
                 out_encoding,
@@ -265,17 +259,13 @@ pub fn transform_dwarf(
 }
 
 fn replace_unit_from_split_dwarf<'a>(
-    unit: &'a Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
-    dwp: &DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>,
-    parent: &Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
-) -> Option<(
-    Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
-    Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
-)> {
+    unit: UnitRef<Reader<'a>>,
+    dwp: &DwarfPackage<Reader<'a>>,
+) -> Option<(Unit<Reader<'a>>, Dwarf<Reader<'a>>)> {
     let dwo_id = unit.dwo_id?;
-    let split_unit_dwarf = dwp.find_cu(dwo_id, parent).ok()??;
+    let split_unit_dwarf = dwp.find_cu(dwo_id, unit.dwarf).ok()??;
     let unit_header = split_unit_dwarf.debug_info.units().next().ok()??;
     let mut split_unit = split_unit_dwarf.unit(unit_header).ok()?;
-    split_unit.copy_relocated_attributes(unit);
+    split_unit.copy_relocated_attributes(&unit);
     Some((split_unit, split_unit_dwarf))
 }

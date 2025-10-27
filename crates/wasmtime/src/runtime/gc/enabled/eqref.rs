@@ -1,8 +1,8 @@
 //! Working with GC `eqref`s.
 
 use crate::{
-    AnyRef, ArrayRef, ArrayType, AsContext, GcRefImpl, GcRootIndex, HeapType, I31, OwnedRooted,
-    RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
+    AnyRef, ArrayRef, ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, I31,
+    OwnedRooted, RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
     prelude::*,
     runtime::vm::VMGcRef,
     store::{AutoAssertNoGc, StoreOpaque},
@@ -246,6 +246,33 @@ impl EqRef {
             let actual_ty = self._ty(store)?;
             bail!("type mismatch: expected `(ref {ty})`, found `(ref {actual_ty})`")
         }
+    }
+
+    /// Construct an `eqref` from an `i31`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn _foo() -> Result<()> {
+    /// let mut store = Store::<()>::default();
+    ///
+    /// // Create an `i31`.
+    /// let i31 = I31::wrapping_u32(999);
+    ///
+    /// // Convert it into an `eqref`.
+    /// let eqref = EqRef::from_i31(&mut store, i31);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_i31(mut store: impl AsContextMut, value: I31) -> Rooted<Self> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        Self::_from_i31(&mut store, value)
+    }
+
+    pub(crate) fn _from_i31(store: &mut AutoAssertNoGc<'_>, value: I31) -> Rooted<Self> {
+        let gc_ref = VMGcRef::from_i31(value.runtime_i31());
+        Rooted::new(store, gc_ref)
     }
 
     /// Is this `eqref` an `i31`?

@@ -2,7 +2,7 @@ use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
 use cranelift_codegen::{LabelValueLoc, ValueLabelsRanges, ir::ValueLabel, isa::TargetIsa};
 use gimli::{
-    AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
+    AttributeValue, DebuggingInformationEntry, LittleEndian, UnitOffset, UnitRef,
     UnitSectionOffset, write,
 };
 
@@ -22,11 +22,11 @@ macro_rules! dbi_log {
 pub(crate) use dbi_log;
 pub(crate) use dbi_log_enabled;
 
-pub struct CompileUnitSummary<'a> {
-    unit: &'a Unit<Reader<'a>, usize>,
+pub struct CompileUnitSummary<'a, 'r> {
+    unit: UnitRef<'a, Reader<'r>>,
 }
 
-impl<'a> fmt::Debug for CompileUnitSummary<'a> {
+impl<'a, 'r> fmt::Debug for CompileUnitSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let unit = self.unit;
         let offs = get_offset_value(unit.header.offset());
@@ -44,55 +44,52 @@ impl<'a> fmt::Debug for CompileUnitSummary<'a> {
     }
 }
 
-pub fn log_get_cu_summary<'a>(unit: &'a Unit<Reader<'a>, usize>) -> CompileUnitSummary<'a> {
+pub fn log_get_cu_summary<'a, 'r>(unit: UnitRef<'a, Reader<'r>>) -> CompileUnitSummary<'a, 'r> {
     CompileUnitSummary { unit }
 }
 
-pub struct DieRefSummary<'a> {
-    unit: &'a Unit<Reader<'a>, usize>,
+pub struct DieRefSummary<'a, 'r> {
+    unit: UnitRef<'a, Reader<'r>>,
     unit_ref: UnitOffset,
 }
 
-impl<'a> fmt::Debug for DieRefSummary<'a> {
+impl<'a, 'r> fmt::Debug for DieRefSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let section_offs = self.unit_ref.to_unit_section_offset(self.unit);
+        let section_offs = self.unit_ref.to_unit_section_offset(&self.unit);
         let offs = get_offset_value(section_offs);
         write!(f, "0x{offs:08x}")
     }
 }
 
-pub fn log_get_die_ref<'a>(
-    unit: &'a Unit<Reader<'a>, usize>,
+pub fn log_get_die_ref<'a, 'r>(
+    unit: UnitRef<'a, Reader<'r>>,
     unit_ref: UnitOffset,
-) -> DieRefSummary<'a> {
+) -> DieRefSummary<'a, 'r> {
     DieRefSummary { unit, unit_ref }
 }
 
-struct DieDetailedSummary<'a> {
-    dwarf: &'a Dwarf<Reader<'a>>,
-    unit: &'a Unit<Reader<'a>, usize>,
-    die: &'a DebuggingInformationEntry<'a, 'a, Reader<'a>>,
+struct DieDetailedSummary<'a, 'r> {
+    unit: UnitRef<'a, Reader<'r>>,
+    die: &'a DebuggingInformationEntry<'a, 'a, Reader<'r>>,
 }
 
-pub fn log_begin_input_die(
-    dwarf: &Dwarf<Reader<'_>>,
-    unit: &Unit<Reader<'_>, usize>,
-    die: &DebuggingInformationEntry<Reader<'_>>,
+pub fn log_begin_input_die<'r>(
+    unit: UnitRef<Reader<'r>>,
+    die: &DebuggingInformationEntry<Reader<'r>>,
     depth: isize,
 ) {
     dbi_log!(
         "=== Begin DIE at {:?} (depth = {}):\n{:?}",
         log_get_die_ref(unit, die.offset()),
         depth,
-        DieDetailedSummary { dwarf, unit, die }
+        DieDetailedSummary { unit, die }
     );
 }
 
-impl<'a> fmt::Debug for DieDetailedSummary<'a> {
+impl<'a, 'r> fmt::Debug for DieDetailedSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let die = self.die;
         let unit = self.unit;
-        let dwarf = self.dwarf;
         write!(f, "{}\n", die.tag())?;
 
         let mut attrs = die.attrs();
@@ -104,7 +101,7 @@ impl<'a> fmt::Debug for DieDetailedSummary<'a> {
                     write!(f, "{addr:08x}")
                 }
                 AttributeValue::DebugAddrIndex(index) => {
-                    if let Some(addr) = dwarf.address(unit, index).ok() {
+                    if let Some(addr) = unit.address(index).ok() {
                         write!(f, "{addr:08x}")
                     } else {
                         write!(f, "<error reading address at index: {}>", index.0)
@@ -123,18 +120,18 @@ impl<'a> fmt::Debug for DieDetailedSummary<'a> {
                 AttributeValue::String(_)
                 | AttributeValue::DebugStrRef(_)
                 | AttributeValue::DebugStrOffsetsIndex(_) => {
-                    if let Ok(s) = dwarf.attr_string(unit, attr_value) {
+                    if let Ok(s) = unit.attr_string(attr_value) {
                         write!(f, "\"{}\"", &s.to_string_lossy())
                     } else {
                         write!(f, "<error reading string>")
                     }
                 }
                 AttributeValue::RangeListsRef(_) | AttributeValue::DebugRngListsIndex(_) => {
-                    let _ = dwarf.attr_ranges_offset(unit, attr_value);
+                    let _ = unit.attr_ranges_offset(attr_value);
                     write!(f, "<TODO: rnglist dump>")
                 }
                 AttributeValue::LocationListsRef(_) | AttributeValue::DebugLocListsIndex(_) => {
-                    let _ = dwarf.attr_locations_offset(unit, attr_value);
+                    let _ = unit.attr_locations_offset(attr_value);
                     write!(f, "<TODO: loclist dump>")
                 }
                 AttributeValue::Exprloc(_) => {
@@ -153,7 +150,7 @@ impl<'a> fmt::Debug for DieDetailedSummary<'a> {
                 AttributeValue::Inline(value) => write!(f, "{value}"),
                 AttributeValue::Ordering(value) => write!(f, "{value}"),
                 AttributeValue::UnitRef(offset) => {
-                    let section_offset = offset.to_unit_section_offset(unit);
+                    let section_offset = offset.to_unit_section_offset(&unit);
                     write!(f, "0x{:08x}", get_offset_value(section_offset))
                 }
                 AttributeValue::DebugInfoRef(offset) => write!(f, "0x{:08x}", offset.0),
@@ -244,7 +241,7 @@ impl<'a> fmt::Debug for OutDieDetailedSummary<'a> {
 
 pub fn log_end_output_die(
     input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: &Unit<Reader<'_>, usize>,
+    input_unit: UnitRef<Reader<'_>>,
     die_id: write::UnitEntryId,
     unit: &write::Unit,
     strings: &write::StringTable,
@@ -264,7 +261,7 @@ pub fn log_end_output_die(
 
 pub fn log_end_output_die_skipped(
     input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: &Unit<Reader<'_>, usize>,
+    input_unit: UnitRef<Reader<'_>>,
     reason: &str,
     depth: isize,
 ) {

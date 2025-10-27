@@ -142,6 +142,7 @@ impl Config {
             simd,
             exceptions,
             legacy_exceptions: _,
+            custom_descriptors: _,
 
             hogs_memory: _,
             nan_canonicalization: _,

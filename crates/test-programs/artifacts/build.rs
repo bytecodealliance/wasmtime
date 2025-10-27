@@ -249,7 +249,7 @@ impl Artifacts {
             let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
             match path.extension().and_then(|s| s.to_str()) {
                 // Compile C/C++ tests with clang
-                Some("c") | Some("cpp") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
+                Some("c") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
 
                 // just a header, part of another test.
                 Some("h") => {}
