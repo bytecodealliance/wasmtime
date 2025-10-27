@@ -12,6 +12,12 @@ TEST(Store, Smoke) {
 
   store = Store(engine);
   store.limiter(-1, -1, -1, -1, -1);
+  store.epoch_deadline_callback(
+      [](wasmtime::Store::Context /* context */, uint64_t &epoch_deadline_delta)
+          -> wasmtime::Result<wasmtime::DeadlineKind> {
+        epoch_deadline_delta += 1;
+        return wasmtime::DeadlineKind::Continue;
+      });
   store.context().gc();
   store.context().get_fuel().err();
   store.context().set_fuel(1).err();
