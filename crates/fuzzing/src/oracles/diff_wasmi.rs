@@ -19,15 +19,6 @@ impl WasmiEngine {
         config.exceptions_enabled = false;
         config.gc_enabled = false;
 
-        // FIXME: once the active fuzz bug for wasmi's simd differential fuzzing
-        // has been fixed and we've updated then this should be re-enabled.
-        config.simd_enabled = false;
-        // FIXME: requires updating to a wasmi that contains
-        // wasmi-labs/wasmi#1531.
-        config.memory64_enabled = false;
-        // FIXME: until https://github.com/wasmi-labs/wasmi/issues/1544 is fixed.
-        config.wide_arithmetic_enabled = false;
-
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
             .consume_fuel(false)
@@ -81,8 +72,7 @@ impl DiffEngine for WasmiEngine {
             wasmi::Module::new(&self.engine, wasm).context("unable to validate Wasm module")?;
         let mut store = wasmi::Store::new(&self.engine, ());
         let instance = wasmi::Linker::<()>::new(&self.engine)
-            .instantiate(&mut store, &module)
-            .and_then(|i| i.start(&mut store))
+            .instantiate_and_start(&mut store, &module)
             .context("unable to instantiate module in wasmi")?;
         Ok(Box::new(WasmiInstance { store, instance }))
     }
@@ -187,11 +177,11 @@ impl From<&DiffValue> for wasmi::Val {
             DiffValue::V128(n) => WasmiValue::V128(wasmi::core::V128::from(n)),
             DiffValue::FuncRef { null } => {
                 assert!(null);
-                WasmiValue::FuncRef(wasmi::FuncRef::null())
+                WasmiValue::default(wasmi::ValType::FuncRef)
             }
             DiffValue::ExternRef { null } => {
                 assert!(null);
-                WasmiValue::ExternRef(wasmi::ExternRef::null())
+                WasmiValue::default(wasmi::ValType::ExternRef)
             }
             DiffValue::AnyRef { .. } => unimplemented!(),
             DiffValue::ExnRef { .. } => unimplemented!(),
