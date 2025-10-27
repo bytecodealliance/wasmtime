@@ -59,9 +59,7 @@ pub(crate) fn r13() -> Reg {
 }
 /// Used as a pinned register to hold
 /// the `VMContext`.
-/// Non-allocatable in Winch's default
-/// ABI, and callee-saved in SystemV and
-/// Fastcall.
+/// Non-allocatable in Winch's default ABI.
 pub(crate) fn r14() -> Reg {
     gpr(ENC_R14)
 }
