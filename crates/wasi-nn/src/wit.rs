@@ -121,14 +121,14 @@ pub(crate) mod generated_ {
         with: {
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
-            "wasi:nn/graph/graph": crate::Graph,
-            "wasi:nn/tensor/tensor": crate::Tensor,
-            "wasi:nn/inference/graph-execution-context": crate::ExecutionContext,
-            "wasi:nn/errors/error": super::Error,
+            "wasi:nn/graph.graph": crate::Graph,
+            "wasi:nn/tensor.tensor": crate::Tensor,
+            "wasi:nn/inference.graph-execution-context": crate::ExecutionContext,
+            "wasi:nn/errors.error": super::Error,
         },
         imports: { default: trappable },
         trappable_error_type: {
-            "wasi:nn/errors/error" => super::Error,
+            "wasi:nn/errors.error" => super::Error,
         },
     });
 }

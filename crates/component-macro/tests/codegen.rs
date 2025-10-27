@@ -70,10 +70,10 @@ mod with_key_and_resources {
         with: {
             "a": MyA,
             "b": MyA,
-            "foo/a": MyA,
-            "foo/b": MyA,
-            "demo:pkg/bar/a": MyA,
-            "demo:pkg/bar/b": MyA,
+            "foo.a": MyA,
+            "foo.b": MyA,
+            "demo:pkg/bar.a": MyA,
+            "demo:pkg/bar.b": MyA,
         },
     });
 
@@ -144,7 +144,7 @@ mod trappable_errors_with_versioned_and_unversioned_packages {
         ",
         path: "tests/codegen/unversioned-foo.wit",
         trappable_error_type: {
-            "foo:foo/a@0.1.0/error" => MyX,
+            "foo:foo/a@0.1.0.error" => MyX,
         },
     });
 
@@ -184,8 +184,8 @@ mod trappable_errors {
             }
         ",
         trappable_error_type: {
-            "demo:pkg/a/b" => MyX,
-            "demo:pkg/c/b" => MyX,
+            "demo:pkg/a.b" => MyX,
+            "demo:pkg/c.b" => MyX,
         },
     });
 
@@ -448,10 +448,10 @@ mod trappable_imports {
             ",
             imports: {
                 "foo": trappable | exact,
-                "i/foo": trappable,
-                "foo:foo/a/foo": trappable,
+                "i.foo": trappable,
+                "foo:foo/a.foo": trappable,
             },
-            with: { "foo:foo/a/r": R },
+            with: { "foo:foo/a.r": R },
         });
 
         struct X;
@@ -511,11 +511,11 @@ mod trappable_imports {
                 }
             ",
             imports: {
-                "foo:foo/a/[constructor]r": trappable,
-                "foo:foo/a/[method]r.foo": trappable,
-                "foo:foo/a/[static]r.bar": trappable,
+                "foo:foo/a.[constructor]r": trappable,
+                "foo:foo/a.[method]r.foo": trappable,
+                "foo:foo/a.[static]r.bar": trappable,
             },
-            with: { "foo:foo/a/r": R },
+            with: { "foo:foo/a.r": R },
         });
 
         struct X;
@@ -610,7 +610,7 @@ mod with_and_mixing_async {
                 }
             ",
             imports: {
-                "my:inline/bar/bar": async,
+                "my:inline/bar.bar": async,
             },
         });
     }
@@ -680,7 +680,7 @@ mod trappable_error_type_and_versions {
                 world foo {}
             ",
             trappable_error_type: {
-                "my:inline/i/e" => super::MyError,
+                "my:inline/i.e" => super::MyError,
             },
         });
     }
@@ -694,7 +694,7 @@ mod trappable_error_type_and_versions {
                 world foo {}
             ",
             trappable_error_type: {
-                "my:inline/i/e" => super::MyError,
+                "my:inline/i.e" => super::MyError,
             },
         });
     }
@@ -708,7 +708,7 @@ mod trappable_error_type_and_versions {
                 world foo {}
             ",
             trappable_error_type: {
-                "my:inline/i@1.0.0/e" => super::MyError,
+                "my:inline/i@1.0.0.e" => super::MyError,
             },
         });
     }

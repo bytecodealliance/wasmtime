@@ -9,7 +9,7 @@ use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-/// The concrete type behind a `wasi:http/types/request-options` resource.
+/// The concrete type behind a `wasi:http/types.request-options` resource.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct RequestOptions {
     /// How long to wait for a connection to be established.
@@ -20,7 +20,7 @@ pub struct RequestOptions {
     pub between_bytes_timeout: Option<Duration>,
 }
 
-/// The concrete type behind a `wasi:http/types/request` resource.
+/// The concrete type behind a `wasi:http/types.request` resource.
 pub struct Request {
     /// The method of the request.
     pub method: Method,

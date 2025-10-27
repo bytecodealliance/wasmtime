@@ -530,7 +530,7 @@ impl TryInto<http::Method> for types::Method {
     }
 }
 
-/// The concrete type behind a `wasi:http/types/incoming-request` resource.
+/// The concrete type behind a `wasi:http/types.incoming-request` resource.
 #[derive(Debug)]
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
@@ -566,14 +566,14 @@ impl HostIncomingRequest {
     }
 }
 
-/// The concrete type behind a `wasi:http/types/response-outparam` resource.
+/// The concrete type behind a `wasi:http/types.response-outparam` resource.
 pub struct HostResponseOutparam {
     /// The sender for sending a response.
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
 }
 
-/// The concrete type behind a `wasi:http/types/outgoing-response` resource.
+/// The concrete type behind a `wasi:http/types.outgoing-response` resource.
 pub struct HostOutgoingResponse {
     /// The status of the response.
     pub status: http::StatusCode,
@@ -606,7 +606,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
     }
 }
 
-/// The concrete type behind a `wasi:http/types/outgoing-request` resource.
+/// The concrete type behind a `wasi:http/types.outgoing-request` resource.
 #[derive(Debug)]
 pub struct HostOutgoingRequest {
     /// The method of the request.
@@ -623,7 +623,7 @@ pub struct HostOutgoingRequest {
     pub body: Option<HyperOutgoingBody>,
 }
 
-/// The concrete type behind a `wasi:http/types/request-options` resource.
+/// The concrete type behind a `wasi:http/types.request-options` resource.
 #[derive(Debug, Default)]
 pub struct HostRequestOptions {
     /// How long to wait for a connection to be established.
@@ -634,7 +634,7 @@ pub struct HostRequestOptions {
     pub between_bytes_timeout: Option<std::time::Duration>,
 }
 
-/// The concrete type behind a `wasi:http/types/incoming-response` resource.
+/// The concrete type behind a `wasi:http/types.incoming-response` resource.
 #[derive(Debug)]
 pub struct HostIncomingResponse {
     /// The response status
@@ -645,7 +645,7 @@ pub struct HostIncomingResponse {
     pub body: Option<HostIncomingBody>,
 }
 
-/// The concrete type behind a `wasi:http/types/fields` resource.
+/// The concrete type behind a `wasi:http/types.fields` resource.
 #[derive(Debug)]
 pub enum HostFields {
     /// A reference to the fields of a parent entry.
@@ -685,7 +685,7 @@ pub struct IncomingResponse {
     pub between_bytes_timeout: std::time::Duration,
 }
 
-/// The concrete type behind a `wasi:http/types/future-incoming-response` resource.
+/// The concrete type behind a `wasi:http/types.future-incoming-response` resource.
 #[derive(Debug)]
 pub enum HostFutureIncomingResponse {
     /// A pending response

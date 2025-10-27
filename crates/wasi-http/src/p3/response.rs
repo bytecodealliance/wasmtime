@@ -10,7 +10,7 @@ use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use wasmtime::AsContextMut;
 
-/// The concrete type behind a `wasi:http/types/response` resource.
+/// The concrete type behind a `wasi:http/types.response` resource.
 pub struct Response {
     /// The status of the response.
     pub status: StatusCode,
