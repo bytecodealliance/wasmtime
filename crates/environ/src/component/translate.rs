@@ -318,6 +318,29 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
         i: u32,
     },
+    ThreadIndex {
+        func: ModuleInternedTypeIndex,
+    },
+    ThreadNewIndirect {
+        func: ModuleInternedTypeIndex,
+        start_func_ty: ComponentTypeIndex,
+        start_func_table_index: TableIndex,
+    },
+    ThreadSwitchTo {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadSuspend {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadResumeLater {
+        func: ModuleInternedTypeIndex,
+    },
+    ThreadYieldTo {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
 
     // core wasm modules
     ModuleStatic(StaticModuleIndex, ComponentCoreModuleTypeId),
@@ -1121,24 +1144,42 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ContextSet { i, func }
                         }
-
                         wasmparser::CanonicalFunction::ThreadIndex => {
-                            bail!("unimplemented `thread.index`");
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadIndex { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadNewIndirect { .. } => {
-                            bail!("unimplemented `thread.new-indirect`");
+                        wasmparser::CanonicalFunction::ThreadNewIndirect {
+                            func_ty_index,
+                            table_index,
+                        } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadNewIndirect {
+                                func,
+                                start_func_ty: ComponentTypeIndex::from_u32(func_ty_index),
+                                start_func_table_index: TableIndex::from_u32(table_index),
+                            }
                         }
-                        wasmparser::CanonicalFunction::ThreadSwitchTo { .. } => {
-                            bail!("unimplemented `thread.switch-to`");
+                        wasmparser::CanonicalFunction::ThreadSwitchTo { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadSwitchTo { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspend { .. } => {
-                            bail!("unimplemented `thread.suspend`");
+                        wasmparser::CanonicalFunction::ThreadSuspend { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadSuspend { func, cancellable }
                         }
                         wasmparser::CanonicalFunction::ThreadResumeLater => {
-                            bail!("unimplemented `thread.resume-later`");
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadResumeLater { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldTo { .. } => {
-                            bail!("unimplemented `thread.yield-to`");
+                        wasmparser::CanonicalFunction::ThreadYieldTo { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadYieldTo { func, cancellable }
                         }
                     };
                     self.result.initializers.push(init);

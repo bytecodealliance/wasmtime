@@ -426,7 +426,7 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            true,
+            false,
             call_post_return_automatically,
             move |func, store, params_out| {
                 func.with_lower_context(store, call_post_return_automatically, |cx, ty| {

@@ -137,6 +137,7 @@ impl Config {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_threading,
             component_model_error_context,
             component_model_gc,
             simd,
@@ -160,6 +161,7 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
@@ -284,6 +286,7 @@ impl Config {
             Some(self.module_config.component_model_async_builtins);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_threading = Some(self.module_config.component_model_threading);
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
