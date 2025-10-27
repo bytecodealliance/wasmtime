@@ -302,7 +302,8 @@ impl WastContext {
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    let mut results = vec![component::Val::Bool(false); func.results(&store).len()];
+                    let mut results =
+                        vec![component::Val::Bool(false); func.ty(&store).results().len()];
                     let result = match &replace.rt {
                         Some(rt) => {
                             rt.block_on(func.call_async(&mut *store, &values, &mut results))

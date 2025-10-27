@@ -1109,17 +1109,16 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-    let param_tys = func.params(&store);
-    let result_tys = func.results(&store);
+    let ty = func.ty(&store);
 
     while input.arbitrary()? {
-        let params = param_tys
-            .iter()
-            .map(|(_, ty)| component_types::arbitrary_val(ty, input))
+        let params = ty
+            .params()
+            .map(|(_, ty)| component_types::arbitrary_val(&ty, input))
             .collect::<arbitrary::Result<Vec<_>>>()?;
-        let results = result_tys
-            .iter()
-            .map(|ty| component_types::arbitrary_val(ty, input))
+        let results = ty
+            .results()
+            .map(|ty| component_types::arbitrary_val(&ty, input))
             .collect::<arbitrary::Result<Vec<_>>>()?;
 
         *store.data_mut() = (params.clone(), Some(results.clone()));
