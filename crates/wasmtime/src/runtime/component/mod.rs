@@ -290,7 +290,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // to do async I/O. Note though that to WebAssembly itself the
 ///         // function will still be blocking. This requires
 ///         // `Config::async_support` to be `true` as well.
-///         "wasi:io/poll/poll": async,
+///         "wasi:io/poll.poll": async,
 ///
 ///         // The `store` flag means that the host function will have access
 ///         // to the store during its execution. By default host functions take
@@ -306,7 +306,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // > Note: this is not yet implemented for non-async functions. This
 ///         // > will result in bindgen errors right now and is intended to be
 ///         // > implemented in the near future.
-///         "wasi:clocks/monotonic-clock/now": store,
+///         "wasi:clocks/monotonic-clock.now": store,
 ///
 ///         // This is an example of combining flags where the `async` and
 ///         // `store` flags are combined. This means that the generated
@@ -316,7 +316,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // means that this is the default already applied meaning that
 ///         // specifying it here would be redundant.
 ///         //
-///         // "wasi:clocks/monotonic-clock/[async]wait-until": async | store,
+///         // "wasi:clocks/monotonic-clock.[async]wait-until": async | store,
 ///
 ///         // The `tracing` flag indicates that `tracing!` will be used to log
 ///         // entries and exits into this host API. This can assist with
@@ -324,12 +324,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///         //
 ///         // By default values are traced unless they contain lists, but
 ///         // tracing of lists can be enabled with `verbose_tracing` below.
-///         "my:local/api/foo": tracing,
+///         "my:local/api.foo": tracing,
 ///
 ///         // The `verbose_tracing` flag indicates that when combined with
 ///         // `tracing` the values of parameters/results are added to logs.
 ///         // This may include lists which may be very large.
-///         "my:local/api/other-function": tracing | verbose_tracing,
+///         "my:local/api.other-function": tracing | verbose_tracing,
 ///
 ///         // The `trappable` flag indicates that this import is allowed to
 ///         // generate a trap.
@@ -345,12 +345,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // `trappable_error_type` configuration below to avoid having a
 ///         // host function return `wasmtime::Result<Result<WitOk, WitErr>>`
 ///         // for example and instead return `Result<WitOk, RustErrorType>`.
-///         "my:local/api/fallible": trappable,
+///         "my:local/api.fallible": trappable,
 ///
 ///         // The `ignore_wit` flag discards the WIT-level defaults of a
 ///         // function. For example this `async` WIT function will be ignored
 ///         // and a synchronous function will be generated on the host.
-///         "my:local/api/[async]wait": ignore_wit,
+///         "my:local/api.[async]wait": ignore_wit,
 ///
 ///         // The `exact` flag ensures that the filter, here "f", only matches
 ///         // functions exactly. For example "f" here would only refer to
@@ -378,7 +378,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // this function should return a tuple of the result produced by the
 ///         // callee and a `TaskExit` future which will resolve when the task
 ///         // (and any transitively created subtasks) have exited.
-///         "my:local/api/[async]does-stuff-after-returning": task_exit,
+///         "my:local/api.[async]does-stuff-after-returning": task_exit,
 ///     },
 ///
 ///     // This can be used to translate WIT return values of the form
@@ -392,7 +392,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // By default this option is not specified. This option only takes
 ///     // effect when `trappable` is set for some imports.
 ///     trappable_error_type: {
-///         "wasi:io/streams/stream-error" => RustErrorType,
+///         "wasi:io/streams.stream-error" => RustErrorType,
 ///     },
 ///
 ///     // All generated bindgen types are "owned" meaning types like `String`
@@ -443,7 +443,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // import bindings of `Resource<T>`. This can be done to configure
 ///         // which typed resource shows up in generated bindings and can be
 ///         // useful when working with the typed methods of `ResourceTable`.
-///         "wasi:filesystem/types/descriptor": MyDescriptorType,
+///         "wasi:filesystem/types.descriptor": MyDescriptorType,
 ///     },
 ///
 ///     // Additional derive attributes to include on generated types (structs or enums).

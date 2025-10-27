@@ -110,8 +110,8 @@ interface types {
   /// provided.
   ///
   /// Stream operations which return
-  /// `wasi:io/stream/stream-error::last-operation-failed` have a payload of
-  /// type `wasi:io/error/error` with more information about the operation
+  /// `wasi:io/stream.stream-error.last-operation-failed` have a payload of
+  /// type `wasi:io/error.error` with more information about the operation
   /// that failed. This payload can be passed through to this function to see
   /// if there's http-related information about the error to return.
   ///

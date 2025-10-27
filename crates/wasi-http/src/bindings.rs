@@ -17,20 +17,20 @@ mod generated {
 
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
-            "wasi:http/types/outgoing-body": body::HostOutgoingBody,
-            "wasi:http/types/future-incoming-response": types::HostFutureIncomingResponse,
-            "wasi:http/types/outgoing-response": types::HostOutgoingResponse,
-            "wasi:http/types/future-trailers": body::HostFutureTrailers,
-            "wasi:http/types/incoming-body": body::HostIncomingBody,
-            "wasi:http/types/incoming-response": types::HostIncomingResponse,
-            "wasi:http/types/response-outparam": types::HostResponseOutparam,
-            "wasi:http/types/outgoing-request": types::HostOutgoingRequest,
-            "wasi:http/types/incoming-request": types::HostIncomingRequest,
-            "wasi:http/types/fields": types::HostFields,
-            "wasi:http/types/request-options": types::HostRequestOptions,
+            "wasi:http/types.outgoing-body": body::HostOutgoingBody,
+            "wasi:http/types.future-incoming-response": types::HostFutureIncomingResponse,
+            "wasi:http/types.outgoing-response": types::HostOutgoingResponse,
+            "wasi:http/types.future-trailers": body::HostFutureTrailers,
+            "wasi:http/types.incoming-body": body::HostIncomingBody,
+            "wasi:http/types.incoming-response": types::HostIncomingResponse,
+            "wasi:http/types.response-outparam": types::HostResponseOutparam,
+            "wasi:http/types.outgoing-request": types::HostOutgoingRequest,
+            "wasi:http/types.incoming-request": types::HostIncomingRequest,
+            "wasi:http/types.fields": types::HostFields,
+            "wasi:http/types.request-options": types::HostRequestOptions,
         },
         trappable_error_type: {
-            "wasi:http/types/error-code" => crate::HttpError,
+            "wasi:http/types.error-code" => crate::HttpError,
         },
     });
 }

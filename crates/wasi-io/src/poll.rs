@@ -80,7 +80,7 @@ pub trait Pollable: Send + 'static {
     async fn ready(&mut self);
 }
 
-/// Creates a `wasi:io/poll/pollable` resource which is subscribed to the provided
+/// Creates a `wasi:io/poll.pollable` resource which is subscribed to the provided
 /// `resource`.
 ///
 /// If `resource` is an owned resource then it will be deleted when the returned

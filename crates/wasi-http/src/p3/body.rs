@@ -20,7 +20,7 @@ use wasmtime::component::{
 };
 use wasmtime::{AsContextMut, StoreContextMut};
 
-/// The concrete type behind a `wasi:http/types/body` resource.
+/// The concrete type behind a `wasi:http/types.body` resource.
 pub(crate) enum Body {
     /// Body constructed by the guest
     Guest {

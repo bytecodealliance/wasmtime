@@ -662,7 +662,7 @@ impl Config {
     ///
     /// Epochs (and fuel) do not assist in handling WebAssembly code blocked in
     /// a call to the host. For example if the WebAssembly function calls
-    /// `wasi:io/poll/poll` to sleep epochs will not assist in waking this up or
+    /// `wasi:io/poll.poll` to sleep epochs will not assist in waking this up or
     /// timing it out. Epochs intentionally only affect running WebAssembly code
     /// itself and it's left to the embedder to determine how best to wake up
     /// indefinitely blocking code in the host.

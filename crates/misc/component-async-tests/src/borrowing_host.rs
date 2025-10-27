@@ -9,12 +9,12 @@ pub mod bindings {
         world: "borrowing-host",
         imports: { default: trappable },
         with: {
-            "local:local/borrowing-types/x": super::MyX,
+            "local:local/borrowing-types.x": super::MyX,
         }
     });
 }
 
-/// Used as the borrowing type (`local:local/borrowing-types/x`)
+/// Used as the borrowing type (`local:local/borrowing-types.x`)
 pub struct MyX;
 
 impl bindings::local::local::borrowing_types::HostX for &mut Ctx {
