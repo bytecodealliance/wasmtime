@@ -250,8 +250,7 @@ private:
     if (!result) {
       return result.err().release();
     }
-    *epoch_deadline_delta =
-        static_cast<wasmtime_update_deadline_kind_t>(result.ok());
+    *update_kind = static_cast<wasmtime_update_deadline_kind_t>(result.ok());
     return nullptr;
   }
 
