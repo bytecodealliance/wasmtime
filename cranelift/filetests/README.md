@@ -23,7 +23,7 @@ block0(v0: f32, v1: f32):
     v2 = band v0, v1
     return v2
 }
-; run: %band_f32(0x0.5, 0x1.0) == 0x1.5
+; run: %band_f32(0x0.5, 0x1.0) == 0x1.0p-2
 ```
 
 Since this is a run test for `band` we can put it in: `runtests/band.clif`.

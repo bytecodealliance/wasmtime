@@ -38,7 +38,7 @@ running all tests is a little non-standard. To match what CI does and run all
 tests you'll need to execute
 
 ```console
-./ci/run-tests.sh
+./ci/run-tests.py
 ```
 
 ## Testing a Specific Crate
