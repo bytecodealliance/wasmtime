@@ -4,9 +4,7 @@ use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::{
-    Block, BlockArg, ExceptionTableData, ExceptionTableItem, ExceptionTag,
-};
+use cranelift_codegen::ir::{BlockArg, ExceptionTableData, ExceptionTableItem};
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, InstBuilder, condcodes::IntCC},
@@ -468,7 +466,6 @@ pub fn translate_exn_throw(
     builder: &mut FunctionBuilder<'_>,
     tag_index: TagIndex,
     args: &[ir::Value],
-    handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
 ) -> WasmResult<()> {
     let (instance_id, defined_tag_id) = func_env.get_instance_and_tag(builder, tag_index);
     let exnref = gc_compiler(func_env)?.alloc_exn(
@@ -479,14 +476,13 @@ pub fn translate_exn_throw(
         instance_id,
         defined_tag_id,
     )?;
-    translate_exn_throw_ref(func_env, builder, exnref, handlers)
+    translate_exn_throw_ref(func_env, builder, exnref)
 }
 
 pub fn translate_exn_throw_ref(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     exnref: ir::Value,
-    handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
 ) -> WasmResult<()> {
     let builtin = func_env.builtin_functions.throw_ref(builder.func);
     let sig = builder.func.dfg.ext_funcs[builtin].signature;
@@ -503,7 +499,7 @@ pub fn translate_exn_throw_ref(
     builder.insert_block_after(continuation, current_block);
     let continuation_call = builder.func.dfg.block_call(continuation, &[]);
     let mut table_items = vec![ExceptionTableItem::Context(vmctx)];
-    for (tag, block) in handlers {
+    for (tag, block) in func_env.stacks.handlers.handlers() {
         let block_call = builder
             .func
             .dfg

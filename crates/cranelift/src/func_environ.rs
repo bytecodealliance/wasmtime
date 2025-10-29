@@ -13,7 +13,7 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
-use cranelift_codegen::ir::{Block, ExceptionTag, types::*};
+use cranelift_codegen::ir::{Block, types::*};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
@@ -104,6 +104,9 @@ pub struct FuncEnvironment<'module_environment> {
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
     needs_gc_heap: bool,
     entities: WasmEntities,
+
+    /// Translation state at the given point.
+    pub(crate) stacks: FuncTranslationStacks,
 
     #[cfg(feature = "gc")]
     ty_to_gc_layout: std::collections::HashMap<
@@ -215,6 +218,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             sig_ref_to_ty: SecondaryMap::default(),
             needs_gc_heap: false,
             entities: WasmEntities::default(),
+            stacks: FuncTranslationStacks::new(),
 
             #[cfg(feature = "gc")]
             ty_to_gc_layout: std::collections::HashMap::new(),
@@ -1229,7 +1233,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         &mut self,
         validator: &FuncValidator<impl WasmModuleResources>,
         builder: &mut FunctionBuilder,
-        stack: &mut FuncTranslationStacks,
     ) -> WasmResult<()> {
         // Take ownership of the state-slot builder temporarily rather
         // than mutably borrowing so we can invoke a method below.
@@ -1251,20 +1254,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // to the instrumentation slot; or alternately, extending
             // the debug instrumentation mechanism to be able to
             // directly refer to the user stack-slot.
-            for i in stack.stack_shape.len()..stack.stack.len() {
+            for i in self.stacks.stack_shape.len()..self.stacks.stack.len() {
                 let parent_shape = i
                     .checked_sub(1)
-                    .map(|parent_idx| stack.stack_shape[parent_idx]);
+                    .map(|parent_idx| self.stacks.stack_shape[parent_idx]);
                 if let Some(this_ty) = validator
-                    .get_operand_type(stack.stack.len() - i - 1)
+                    .get_operand_type(self.stacks.stack.len() - i - 1)
                     .expect("Index should not be out of range")
                 {
                     let wasm_ty = self.convert_valtype(this_ty)?;
                     let (this_shape, offset) =
                         b.push_stack(parent_shape, FrameValType::from(wasm_ty));
-                    stack.stack_shape.push(this_shape);
+                    self.stacks.stack_shape.push(this_shape);
 
-                    let value = stack.stack[i];
+                    let value = self.stacks.stack[i];
                     builder.ins().stack_store(value, slot, offset.offset());
                 } else {
                     // Unreachable code with unknown type -- no
@@ -1279,14 +1282,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         Ok(())
     }
 
-    pub(crate) fn debug_tags(
-        &self,
-        stack: &FuncTranslationStacks,
-        srcloc: ir::SourceLoc,
-    ) -> Vec<ir::DebugTag> {
+    pub(crate) fn debug_tags(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
         if let Some((slot, _b)) = &self.state_slot {
-            stack.assert_debug_stack_is_synced();
-            let stack_shape = stack
+            self.stacks.assert_debug_stack_is_synced();
+            let stack_shape = self
+                .stacks
                 .stack_shape
                 .last()
                 .map(|s| s.raw())
@@ -1855,9 +1855,7 @@ impl FuncEnvironment<'_> {
 struct Call<'a, 'func, 'module_env> {
     builder: &'a mut FunctionBuilder<'func>,
     env: &'a mut FuncEnvironment<'module_env>,
-    stack: &'a FuncTranslationStacks,
     srcloc: ir::SourceLoc,
-    handlers: Vec<(Option<ExceptionTag>, Block)>,
     tail: bool,
 }
 
@@ -1878,17 +1876,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn new(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
-        stack: &'a FuncTranslationStacks,
         srcloc: ir::SourceLoc,
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> Self {
-        let handlers = handlers.into_iter().collect();
         Call {
             builder,
             env,
-            stack,
             srcloc,
-            handlers,
             tail: false,
         }
     }
@@ -1897,15 +1890,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn new_tail(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
-        stack: &'a FuncTranslationStacks,
         srcloc: ir::SourceLoc,
     ) -> Self {
         Call {
             builder,
             env,
-            stack,
             srcloc,
-            handlers: vec![],
             tail: true,
         }
     }
@@ -2343,7 +2333,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         &mut self,
         sig: ir::SigRef,
     ) -> Option<(ir::ExceptionTable, Block, CallRets)> {
-        if self.handlers.len() > 0 {
+        if !self.tail && !self.env.stacks.handlers.is_empty() {
             let continuation_block = self.builder.create_block();
             let mut args = vec![];
             let mut results = smallvec![];
@@ -2364,14 +2354,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .dfg
                 .block_call(continuation_block, args.iter());
             let mut handlers = vec![ExceptionTableItem::Context(self.caller_vmctx())];
-            for (tag, block) in &self.handlers {
+            for (tag, block) in self.env.stacks.handlers.handlers() {
                 let block_call = self
                     .builder
                     .func
                     .dfg
-                    .block_call(*block, &[BlockArg::TryCallExn(0)]);
+                    .block_call(block, &[BlockArg::TryCallExn(0)]);
                 handlers.push(match tag {
-                    Some(tag) => ExceptionTableItem::Tag(*tag, block_call),
+                    Some(tag) => ExceptionTableItem::Tag(tag, block_call),
                     None => ExceptionTableItem::Default(block_call),
                 });
             }
@@ -2457,7 +2447,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     }
 
     fn attach_tags(&mut self, inst: ir::Inst) {
-        let tags = self.env.debug_tags(self.stack, self.srcloc);
+        let tags = self.env.debug_tags(self.srcloc);
         if !tags.is_empty() {
             self.builder.func.debug_tags.set(inst, tags);
         }
@@ -2827,18 +2817,16 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         tag_index: TagIndex,
         args: &[ir::Value],
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<()> {
-        gc::translate_exn_throw(self, builder, tag_index, args, handlers)
+        gc::translate_exn_throw(self, builder, tag_index, args)
     }
 
     pub fn translate_exn_throw_ref(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         exnref: ir::Value,
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<()> {
-        gc::translate_exn_throw_ref(self, builder, exnref, handlers)
+        gc::translate_exn_throw_ref(self, builder, exnref)
     }
 
     pub fn translate_array_new(
@@ -3206,7 +3194,6 @@ impl FuncEnvironment<'_> {
     pub fn translate_call_indirect<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
-        stack: &'a FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
@@ -3214,9 +3201,8 @@ impl FuncEnvironment<'_> {
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<Option<CallRets>> {
-        Call::new(builder, self, stack, srcloc, handlers).indirect_call(
+        Call::new(builder, self, srcloc).indirect_call(
             features,
             table_index,
             ty_index,
@@ -3229,54 +3215,40 @@ impl FuncEnvironment<'_> {
     pub fn translate_call<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
-        stack: &'a FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<CallRets> {
-        Call::new(builder, self, stack, srcloc, handlers).direct_call(
-            callee_index,
-            sig_ref,
-            call_args,
-        )
+        Call::new(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)
     }
 
     pub fn translate_call_ref<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
-        stack: &'a FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<CallRets> {
-        Call::new(builder, self, stack, srcloc, handlers).call_ref(sig_ref, callee, call_args)
+        Call::new(builder, self, srcloc).call_ref(sig_ref, callee, call_args)
     }
 
     pub fn translate_return_call(
         &mut self,
         builder: &mut FunctionBuilder,
-        stack: &FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self, stack, srcloc).direct_call(
-            callee_index,
-            sig_ref,
-            call_args,
-        )?;
+        Call::new_tail(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)?;
         Ok(())
     }
 
     pub fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
-        stack: &FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
@@ -3285,7 +3257,7 @@ impl FuncEnvironment<'_> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self, stack, srcloc).indirect_call(
+        Call::new_tail(builder, self, srcloc).indirect_call(
             features,
             table_index,
             ty_index,
@@ -3299,13 +3271,12 @@ impl FuncEnvironment<'_> {
     pub fn translate_return_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
-        stack: &FuncTranslationStacks,
         srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self, stack, srcloc).call_ref(sig_ref, callee, call_args)?;
+        Call::new_tail(builder, self, srcloc).call_ref(sig_ref, callee, call_args)?;
         Ok(())
     }
 
@@ -3765,14 +3736,13 @@ impl FuncEnvironment<'_> {
         op: &Operator,
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel {
-            self.fuel_before_op(op, builder, state.reachable());
+            self.fuel_before_op(op, builder, self.is_reachable());
         }
-        if state.reachable() && self.state_slot.is_some() {
+        if self.is_reachable() && self.state_slot.is_some() {
             let inst = builder.ins().sequence_point();
-            let tags = self.debug_tags(state, builder.srcloc());
+            let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }
 
@@ -3784,13 +3754,12 @@ impl FuncEnvironment<'_> {
         op: &Operator,
         validator: &FuncValidator<impl WasmModuleResources>,
         builder: &mut FunctionBuilder,
-        state: &mut FuncTranslationStacks,
     ) -> WasmResult<()> {
-        if self.tunables.consume_fuel && state.reachable() {
+        if self.tunables.consume_fuel && self.is_reachable() {
             self.fuel_after_op(op, builder);
         }
-        if state.reachable() {
-            self.update_state_slot_stack(validator, builder, state)?;
+        if self.is_reachable() {
+            self.update_state_slot_stack(validator, builder)?;
         }
         Ok(())
     }
@@ -3802,11 +3771,7 @@ impl FuncEnvironment<'_> {
         }
     }
 
-    pub fn before_translate_function(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        _state: &FuncTranslationStacks,
-    ) -> WasmResult<()> {
+    pub fn before_translate_function(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
         // If an explicit stack limit is requested, emit one here at the start
         // of the function.
         if let Some(gv) = self.stack_limit_at_function_entry {
@@ -3841,12 +3806,8 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    pub fn after_translate_function(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
-    ) -> WasmResult<()> {
-        if self.tunables.consume_fuel && state.reachable() {
+    pub fn after_translate_function(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+        if self.tunables.consume_fuel && self.is_reachable() {
             self.fuel_function_exit(builder);
         }
         self.finish_debug_metadata(builder);
@@ -4546,6 +4507,11 @@ impl FuncEnvironment<'_> {
     /// Returns whether translation is happening for Pulley bytecode.
     pub fn is_pulley(&self) -> bool {
         self.isa.triple().is_pulley()
+    }
+
+    /// Returns whether the current location is reachable.
+    pub fn is_reachable(&self) -> bool {
+        self.stacks.reachable()
     }
 }
 
