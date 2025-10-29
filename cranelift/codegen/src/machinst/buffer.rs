@@ -1608,7 +1608,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // relocation or to the veneer inserted. Additionally
         // `MachBuffer` needs the concept of a label which will never be
         // resolved, so `emit_island` doesn't trip over not actually ever
-        // knowning what some labels are. Currently the loop in
+        // knowing what some labels are. Currently the loop in
         // `finish_emission_maybe_forcing_veneers` would otherwise infinitely
         // loop.
         //

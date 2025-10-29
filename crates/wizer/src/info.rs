@@ -4,7 +4,7 @@ use std::ops::Range;
 /// Info that we keep track of on a per module-within-a-module-linking-bundle
 /// basis.
 ///
-/// These are created during during our `parse` pass and then used throughout
+/// These are created during our `parse` pass and then used throughout
 /// our later passes.
 #[derive(Default)]
 pub struct ModuleContext<'a> {

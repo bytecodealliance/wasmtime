@@ -82,7 +82,7 @@ fn main() -> Result<()> {
     //
     // Note that the embedding will need to check that these features are
     // actually available at runtime. CPU support for these features has
-    // existend since 2013 (Haswell) on Intel chips and 2012 (Piledriver) on
+    // existed since 2013 (Haswell) on Intel chips and 2012 (Piledriver) on
     // AMD chips.
     if cfg!(target_arch = "x86_64") {
         unsafe {
