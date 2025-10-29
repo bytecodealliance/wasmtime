@@ -85,7 +85,7 @@ fn config() -> Config {
         // isn't possible in no_std. For x86_64 we can use the cpuid instruction
         // bound through an external crate.
         //
-        // Note that CPU support for these features has existend since 2013
+        // Note that CPU support for these features has existed since 2013
         // (Haswell) on Intel chips and 2012 (Piledriver) on AMD chips.
         unsafe {
             config.detect_host_feature(move |feature| {

@@ -46,7 +46,7 @@ use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 /// to know how to destroy the associated state, if any, that
 /// [`ResourceDynamic`] references. The difference with [`Resource`] is that is
 /// has runtime type information instead of static type information, meaning
-/// that it's possible to mix these up at compile by by accident.
+/// that it's possible to mix these up at compile by accident.
 ///
 /// However a [`ResourceDynamic`] can be constructed dynamically at runtime with
 /// a runtime-defined type. For example an embedding that provides generic
