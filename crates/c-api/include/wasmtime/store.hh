@@ -18,6 +18,14 @@ namespace wasmtime {
 
 class Caller;
 
+/// \brief An enum for the behavior before extending the epoch deadline.
+enum class DeadlineKind {
+  /// Directly continue to updating the deadline and executing WebAssembly.
+  Continue = WASMTIME_UPDATE_DEADLINE_CONTINUE,
+  /// Yield control (via async support) then update the deadline.
+  Yield = WASMTIME_UPDATE_DEADLINE_YIELD,
+};
+
 /**
  * \brief Owner of all WebAssembly objects
  *
@@ -193,6 +201,29 @@ public:
                            tables, memories);
   }
 
+  /// \brief Configures epoch deadline callback to C function.
+  ///
+  /// This function configures a store-local callback function that will be
+  /// called when the running WebAssembly function has exceeded its epoch
+  /// deadline. That function can:
+  /// - return an error to terminate the function
+  /// - set the delta argument and return DeadlineKind::Continue to update the
+  ///   epoch deadline delta and resume function execution.
+  /// - set the delta argument, update the epoch deadline, and return
+  ///   DeadlineKind::Yield to yield (via async support) and resume function
+  ///   execution.
+  template <typename F,
+            std::enable_if_t<std::is_invocable_r_v<Result<DeadlineKind>, F,
+                                                   Context, uint64_t &>,
+                             bool> = true>
+  void epoch_deadline_callback(F &&f) {
+    wasmtime_store_epoch_deadline_callback(
+        ptr.get(), raw_epoch_callback<std::remove_reference_t<F>>,
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
+        raw_epoch_finalizer<std::remove_reference_t<F>>);
+  }
+
   /// Explicit function to acquire a `Context` from this store.
   Context context() { return this; }
 
@@ -205,6 +236,27 @@ public:
 
   /// \brief Returns the underlying C API pointer.
   wasmtime_store_t *capi() { return ptr.get(); }
+
+private:
+  template <typename F>
+  static wasmtime_error_t *
+  raw_epoch_callback(wasmtime_context_t *context, void *data,
+                     uint64_t *epoch_deadline_delta,
+                     wasmtime_update_deadline_kind_t *update_kind) {
+    auto &callback = *static_cast<F *>(data);
+    Context ctx(context);
+    auto result = callback(ctx, *epoch_deadline_delta);
+
+    if (!result) {
+      return result.err().release();
+    }
+    *update_kind = static_cast<wasmtime_update_deadline_kind_t>(result.ok());
+    return nullptr;
+  }
+
+  template <typename F> static void raw_epoch_finalizer(void *data) {
+    std::unique_ptr<F> _ptr(static_cast<F *>(data));
+  }
 };
 
 } // namespace wasmtime
