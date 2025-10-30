@@ -851,7 +851,7 @@ the use case.
         // Skip inlining into array-abi functions which are entry
         // trampolines into wasm. ABI-wise it's required that these have a
         // single `try_call` into the module and it doesn't work if multiple
-        // get inlined or if the `try_call` goes away. Pevent all inlining
+        // get inlined or if the `try_call` goes away. Prevent all inlining
         // to guarantee the structure of entry trampolines.
         if caller_key.abi() == Abi::Array {
             log::trace!("  --> not inlining: not inlining into array-abi caller");
