@@ -25,6 +25,7 @@ pub trait ComponentCompiler: Send + Sync {
         &self,
         tunables: &Tunables,
         component: &ComponentTranslation,
+        types: &ComponentTypesBuilder,
         intrinsic: UnsafeIntrinsic,
         abi: Abi,
         symbol: &str,

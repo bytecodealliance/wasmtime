@@ -32,7 +32,7 @@ use call_graph::CallGraph;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
+    Abi, BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
     CompiledFunctionsTableBuilder, CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos,
     FinishedObject, FuncKey, FunctionBodyData, InliningCompiler, IntraModuleInlining,
     ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
@@ -312,7 +312,7 @@ impl<'a> CompileInputs<'a> {
                         key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
                         function: compiler
                             .component_compiler()
-                            .compile_intrinsic(tunables, component, intrinsic, abi, &symbol)
+                            .compile_intrinsic(tunables, component, types, intrinsic, abi, &symbol)
                             .with_context(|| format!("failed to compile `{symbol}`"))?,
                         symbol,
                         start_srcloc: FilePos::default(),
@@ -848,6 +848,16 @@ the use case.
             return false;
         }
 
+        // Skip inlining into array-abi functions which are entry
+        // trampolines into wasm. ABI-wise it's required that these have a
+        // single `try_call` into the module and it doesn't work if multiple
+        // get inlined or if the `try_call` goes away. Prevent all inlining
+        // to guarantee the structure of entry trampolines.
+        if caller_key.abi() == Abi::Array {
+            log::trace!("  --> not inlining: not inlining into array-abi caller");
+            return false;
+        }
+
         // Consider whether this is an intra-module call.
         //
         // Inlining within a single core module has most often already been done
@@ -881,6 +891,7 @@ the use case.
                     }
                 }
             }
+
             _ => {}
         }
 

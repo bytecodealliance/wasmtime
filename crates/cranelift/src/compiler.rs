@@ -36,9 +36,8 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, InliningCompiler,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
-    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType,
-    WasmValType,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection, StaticModuleIndex,
+    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType, WasmValType,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -363,8 +362,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self.array_to_wasm_trampoline(
             key,
             FuncKey::DefinedWasmFunction(module_index, def_func_index),
-            types,
-            sig,
+            types[sig].unwrap_func(),
             symbol,
             self.isa.pointer_bytes().vmctx_store_context().into(),
             wasmtime_environ::VMCONTEXT_MAGIC,
@@ -1231,19 +1229,16 @@ impl Compiler {
         &self,
         trampoline_key: FuncKey,
         callee_key: FuncKey,
-        types: &ModuleTypesBuilder,
-        callee_sig: ModuleInternedTypeIndex,
+        callee_sig: &WasmFuncType,
         symbol: &str,
         vm_store_context_offset: u32,
         expected_vmctx_magic: u32,
     ) -> Result<CompiledFunctionBody, CompileError> {
         log::trace!("compiling array-to-wasm trampoline: {trampoline_key:?} = {symbol:?}");
 
-        let wasm_func_ty = types[callee_sig].unwrap_func();
-
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
-        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
+        let wasm_call_sig = wasm_call_signature(isa, callee_sig, &self.tunables);
         let array_call_sig = array_call_signature(isa);
 
         let mut compiler = self.function_compiler();
@@ -1261,7 +1256,7 @@ impl Compiler {
 
         // First load the actual arguments out of the array.
         let mut args = self.load_values_from_array(
-            wasm_func_ty.params(),
+            callee_sig.params(),
             &mut builder,
             values_vec_ptr,
             values_vec_len,
@@ -1340,7 +1335,7 @@ impl Compiler {
         builder.switch_to_block(normal_return);
         self.store_values_to_array(
             &mut builder,
-            wasm_func_ty.returns(),
+            callee_sig.returns(),
             &normal_return_values,
             values_vec_ptr,
             values_vec_len,
