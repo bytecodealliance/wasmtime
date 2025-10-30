@@ -92,7 +92,7 @@ enum Export<'a> {
 /// Whether or not to use async APIs when calling wasm during wast testing.
 ///
 /// Passed to [`WastContext::new`].
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub enum Async {
     Yes,
