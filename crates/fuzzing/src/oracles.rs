@@ -920,6 +920,38 @@ pub fn table_ops(
         });
         linker.define(&store, "", "make_refs", func).unwrap();
 
+        let func_ty = FuncType::new(
+            store.engine(),
+            vec![ValType::Ref(RefType::new(false, HeapType::Any))],
+            vec![],
+        );
+
+        let func = Func::new(&mut store, func_ty, {
+            move |_caller: Caller<'_, StoreLimits>, _params, _results| {
+                log::info!("table_ops: take_struct(<ref any>)");
+                Ok(())
+            }
+        });
+
+        linker.define(&store, "", "take_struct", func).unwrap();
+
+        for imp in module.imports() {
+            if imp.module() == "" {
+                let name = imp.name();
+                if name.starts_with("take_struct_") {
+                    if let wasmtime::ExternType::Func(ft) = imp.ty() {
+                        let imp_name = name.to_string();
+                        let func =
+                            Func::new(&mut store, ft.clone(), move |_caller, _params, _results| {
+                                log::info!("table_ops: {imp_name}(<typed structref>)");
+                                Ok(())
+                            });
+                        linker.define(&store, "", name, func).unwrap();
+                    }
+                }
+            }
+        }
+
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let run = instance.get_func(&mut store, "run").unwrap();
 
@@ -949,16 +981,15 @@ pub fn table_ops(
             // error is unexpected and should fail fuzzing.
             log::info!("table_ops: calling into Wasm `run` function");
             let err = run.call(&mut scope, &args, &mut []).unwrap_err();
-            match err.downcast::<GcHeapOutOfMemory<CountDrops>>() {
-                Ok(_oom) => {}
-                Err(err) => {
-                    let trap = err
-                        .downcast::<Trap>()
-                        .expect("if not GC oom, error should be a Wasm trap");
-                    match trap {
-                        Trap::TableOutOfBounds | Trap::OutOfFuel => {}
-                        _ => panic!("unexpected trap: {trap}"),
-                    }
+            if err.is::<GcHeapOutOfMemory<CountDrops>>() || err.is::<GcHeapOutOfMemory<()>>() {
+                // Accept GC OOM as an allowed outcome for this fuzzer.
+            } else {
+                let trap = err
+                    .downcast::<Trap>()
+                    .expect("if not GC oom, error should be a Wasm trap");
+                match trap {
+                    Trap::TableOutOfBounds | Trap::OutOfFuel | Trap::AllocationTooLarge => {}
+                    _ => panic!("unexpected trap: {trap}"),
                 }
             }
         }
