@@ -518,7 +518,7 @@ mod tests {
 
         for scheme in schemes {
             let (req, fut) = Request::new(
-                Method::GET,
+                Method::POST,
                 scheme.clone(),
                 Some(Authority::from_static("example.com")),
                 Some(PathAndQuery::from_static("/path?query=1")),
@@ -530,7 +530,7 @@ mod tests {
             );
             let mut store = Store::new(&engine, TestCtx::new());
             let http_req = req.into_http(&mut store, async { Ok(()) }).unwrap();
-            assert_eq!(http_req.method(), Method::GET);
+            assert_eq!(http_req.method(), Method::POST);
             let expected_scheme = scheme.unwrap_or(Scheme::HTTPS); // default scheme
             assert_eq!(
                 http_req.uri(),
