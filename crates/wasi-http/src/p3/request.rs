@@ -25,12 +25,7 @@ pub struct RequestOptions {
     pub between_bytes_timeout: Option<Duration>,
 }
 
-<<<<<<< HEAD
 /// The concrete type behind a `wasi:http/types.request` resource.
-=======
-/// The concrete type behind a `wasi:http/types/request` resource.
-#[derive(Debug)]
->>>>>>> b1078b2bd (Don't remember why I derived debug here...)
 pub struct Request {
     /// The method of the request.
     pub method: Method,
@@ -45,7 +40,7 @@ pub struct Request {
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
-    pub body: Body,
+    pub(crate) body: Body,
 }
 
 impl Request {
@@ -139,7 +134,7 @@ impl Request {
         self,
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
-    ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
+    ) -> wasmtime::Result<http::Request<UnsyncBoxBody<Bytes, ErrorCode>>> {
         self.into_http_with_getter(store, fut, T::http)
     }
 
@@ -149,7 +144,7 @@ impl Request {
         mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
+    ) -> wasmtime::Result<http::Request<UnsyncBoxBody<Bytes, ErrorCode>>> {
         let Request {
             method,
             scheme,
@@ -186,7 +181,7 @@ impl Request {
                 ErrorCode::HttpRequestBodySize,
                 getter,
             )
-            .boxed(),
+            .boxed_unsync(),
             Body::Host { body, result_tx } => {
                 _ = result_tx.send(Box::new(fut));
                 body
@@ -531,7 +526,7 @@ mod tests {
                 None,
                 Full::new(Bytes::from_static(b"body"))
                     .map_err(|x| match x {})
-                    .boxed(),
+                    .boxed_unsync(),
             );
             let mut store = Store::new(&engine, TestCtx::new());
             let http_req = req.into_http(&mut store, async { Ok(()) }).unwrap();
@@ -565,7 +560,7 @@ mod tests {
             None, // <-- should fail, must be Some(_) when authority is set
             HeaderMap::new(),
             None,
-            Empty::new().map_err(|x| match x {}).boxed(),
+            Empty::new().map_err(|x| match x {}).boxed_unsync(),
         );
         let mut store = Store::new(&Engine::default(), TestCtx::new());
         let result = req.into_http(&mut store, async {
