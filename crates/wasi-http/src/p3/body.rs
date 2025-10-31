@@ -8,7 +8,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use http::HeaderMap;
 use http_body::Body as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
 use std::io::Cursor;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use wasmtime::component::{
 };
 use wasmtime::{AsContextMut, StoreContextMut};
 
-/// The concrete type behind a `wasi:http/types/body` resource.
+/// The concrete type behind a `wasi:http/types.body` resource.
 pub(crate) enum Body {
     /// Body constructed by the guest
     Guest {
@@ -34,10 +34,16 @@ pub(crate) enum Body {
     /// Body constructed by the host.
     Host {
         /// The [`http_body::Body`]
-        body: BoxBody<Bytes, ErrorCode>,
+        body: UnsyncBoxBody<Bytes, ErrorCode>,
         /// Channel, on which transmission result will be written
         result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
     },
+}
+
+impl std::fmt::Debug for Body {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "Body { .. }".fmt(f)
+    }
 }
 
 /// [FutureConsumer] implementation for future passed to `consume-body`.
@@ -69,7 +75,7 @@ where
 
 impl Body {
     /// Implementation of `consume-body` shared between requests and responses
-    pub(crate) fn consume<T>(
+    pub fn consume<T>(
         self,
         mut store: Access<'_, T, WasiHttp>,
         fut: FutureReader<Result<(), ErrorCode>>,
@@ -114,7 +120,7 @@ impl Body {
     }
 
     /// Implementation of `drop` shared between requests and responses
-    pub(crate) fn drop(self, mut store: impl AsContextMut) {
+    pub fn drop(self, mut store: impl AsContextMut) {
         if let Body::Guest {
             contents_rx,
             mut trailers_rx,
@@ -256,7 +262,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
 }
 
 /// [http_body::Body] implementation for bodies originating in the guest.
-pub(crate) struct GuestBody {
+pub struct GuestBody {
     contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
     trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
     content_length: Option<u64>,
@@ -264,7 +270,7 @@ pub(crate) struct GuestBody {
 
 impl GuestBody {
     /// Construct a new [GuestBody]
-    pub(crate) fn new<T: 'static>(
+    pub fn new<T: 'static>(
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
@@ -441,7 +447,7 @@ where
 
 /// [StreamProducer] implementation for bodies originating in the host.
 pub(crate) struct HostBodyStreamProducer<T> {
-    pub(crate) body: BoxBody<Bytes, ErrorCode>,
+    pub(crate) body: UnsyncBoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
     getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }

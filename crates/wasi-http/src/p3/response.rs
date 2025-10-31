@@ -6,11 +6,11 @@ use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use wasmtime::AsContextMut;
 
-/// The concrete type behind a `wasi:http/types/response` resource.
+/// The concrete type behind a `wasi:http/types.response` resource.
 pub struct Response {
     /// The status of the response.
     pub status: StatusCode,
@@ -47,7 +47,7 @@ impl Response {
         self,
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
-    ) -> wasmtime::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
+    ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, ErrorCode>>> {
         self.into_http_with_getter(store, fut, T::http)
     }
 
@@ -58,7 +58,7 @@ impl Response {
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> wasmtime::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
+    ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, ErrorCode>>> {
         let res = http::Response::try_from(self)?;
         let (res, body) = res.into_parts();
         let body = match body {
@@ -80,7 +80,7 @@ impl Response {
                     ErrorCode::HttpResponseBodySize,
                     getter,
                 )
-                .boxed()
+                .boxed_unsync()
             }
             Body::Host { body, result_tx } => {
                 _ = result_tx.send(Box::new(fut));

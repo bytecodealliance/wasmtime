@@ -1,9 +1,9 @@
 //! Final rewrite pass.
 
-use crate::{
-    info::ModuleContext, snapshot::Snapshot, translate, FuncRenames, Wizer, DEFAULT_KEEP_INIT_FUNC,
-};
+use crate::{FuncRenames, SnapshotVal, Wizer, info::ModuleContext, snapshot::Snapshot};
+use std::cell::Cell;
 use std::convert::TryFrom;
+use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 use wasm_encoder::{ConstExpr, SectionId};
 
 impl Wizer {
@@ -12,31 +12,26 @@ impl Wizer {
     ///
     pub(crate) fn rewrite(
         &self,
-        cx: &mut ModuleContext<'_>,
-        store: &crate::Store,
+        module: &mut ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
-        has_wasi_initialize: bool,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         let mut encoder = wasm_encoder::Module::new();
-        let module = cx.root();
+        let has_wasi_initialize = module.has_wasi_initialize();
 
         // Encode the initialized data segments from the snapshot rather
         // than the original, uninitialized data segments.
-        let mut data_section = if snapshot.data_segments.is_empty() {
-            None
-        } else {
-            let mut data_section = wasm_encoder::DataSection::new();
+        let add_data_segments = |data_section: &mut wasm_encoder::DataSection| {
             for seg in &snapshot.data_segments {
-                data_section.active(
-                    seg.memory_index,
-                    &ConstExpr::i32_const(seg.offset as i32),
-                    seg.data(store).iter().copied(),
-                );
+                let offset = if seg.is64 {
+                    ConstExpr::i64_const(seg.offset.cast_signed())
+                } else {
+                    ConstExpr::i32_const(u32::try_from(seg.offset).unwrap().cast_signed())
+                };
+                data_section.active(seg.memory_index, &offset, seg.data.iter().copied());
             }
-            Some(data_section)
         };
 
         // There are multiple places were we potentially need to check whether
@@ -45,13 +40,19 @@ impl Wizer {
         // all, and so we have to potentially add it at the end of iterating
         // over the original sections. This closure encapsulates all that
         // add-it-if-we-haven't-already logic in one place.
-        let mut add_data_section = |module: &mut wasm_encoder::Module| {
-            if let Some(data_section) = data_section.take() {
-                module.section(&data_section);
+        let added_data_section = Cell::new(false);
+
+        let add_data_section = |encoder: &mut wasm_encoder::Module| {
+            if added_data_section.get() {
+                return;
             }
+            added_data_section.set(true);
+            let mut data_section = wasm_encoder::DataSection::new();
+            add_data_segments(&mut data_section);
+            encoder.section(&data_section);
         };
 
-        for section in module.raw_sections(cx) {
+        for section in module.raw_sections() {
             match section {
                 // Some tools expect the name custom section to come last, even
                 // though custom sections are allowed in any order. Therefore,
@@ -66,12 +67,12 @@ impl Wizer {
                 // memory.
                 s if s.id == u8::from(SectionId::Memory) => {
                     let mut memories = wasm_encoder::MemorySection::new();
-                    assert_eq!(module.defined_memories_len(cx), snapshot.memory_mins.len());
+                    assert_eq!(module.defined_memories_len(), snapshot.memory_mins.len());
                     for ((_, mem), new_min) in module
-                        .defined_memories(cx)
+                        .defined_memories()
                         .zip(snapshot.memory_mins.iter().copied())
                     {
-                        let mut mem = translate::memory_type(mem);
+                        let mut mem = RoundtripReencoder.memory_type(mem).unwrap();
                         mem.minimum = new_min;
                         memories.memory(mem);
                     }
@@ -81,28 +82,43 @@ impl Wizer {
                 // Encode the initialized global values from the snapshot,
                 // rather than the original values.
                 s if s.id == u8::from(SectionId::Global) => {
+                    let original_globals = wasmparser::GlobalSectionReader::new(
+                        wasmparser::BinaryReader::new(s.data, 0),
+                    )
+                    .unwrap();
                     let mut globals = wasm_encoder::GlobalSection::new();
-                    for ((_, glob_ty), val) in
-                        module.defined_globals(cx).zip(snapshot.globals.iter())
+                    let mut snapshot = snapshot.globals.iter();
+                    for ((_, glob_ty, export_name), global) in
+                        module.defined_globals().zip(original_globals)
                     {
-                        let glob_ty = translate::global_type(glob_ty);
-                        globals.global(
-                            glob_ty,
-                            &match val {
-                                wasmtime::Val::I32(x) => ConstExpr::i32_const(*x),
-                                wasmtime::Val::I64(x) => ConstExpr::i64_const(*x),
-                                wasmtime::Val::F32(x) => {
+                        let global = global.unwrap();
+                        if export_name.is_some() {
+                            // This is a mutable global and it was present in
+                            // the snapshot, so translate the snapshot value to
+                            // a constant expression and insert it.
+                            assert!(glob_ty.mutable);
+                            let (_, val) = snapshot.next().unwrap();
+                            let init = match val {
+                                SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
+                                SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
+                                SnapshotVal::F32(x) => {
                                     ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
                                 }
-                                wasmtime::Val::F64(x) => {
+                                SnapshotVal::F64(x) => {
                                     ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
                                 }
-                                wasmtime::Val::V128(x) => {
-                                    ConstExpr::v128_const(x.as_u128() as i128)
-                                }
-                                _ => unreachable!(),
-                            },
-                        );
+                                SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
+                            };
+                            let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
+                            globals.global(glob_ty, &init);
+                        } else {
+                            // This global isn't mutable so preserve its value
+                            // as-is.
+                            assert!(!glob_ty.mutable);
+                            RoundtripReencoder
+                                .parse_global(&mut globals, global)
+                                .unwrap();
+                        };
                     }
                     encoder.section(&globals);
                 }
@@ -112,9 +128,8 @@ impl Wizer {
                 // then perform any requested renames.
                 s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
-                    for export in module.exports(cx) {
-                        if (export.name == self.init_func
-                            && !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC))
+                    for export in module.exports() {
+                        if (export.name == self.get_init_func() && !self.get_keep_init_func())
                             || (has_wasi_initialize && export.name == "_initialize")
                         {
                             continue;
@@ -133,7 +148,7 @@ impl Wizer {
                             .get(export.name)
                             .map_or(export.name, |f| f.as_str());
 
-                        let kind = translate::export(export.kind);
+                        let kind = RoundtripReencoder.export_kind(export.kind).unwrap();
                         exports.export(field, kind, export.index);
                     }
                     encoder.section(&exports);
@@ -144,16 +159,44 @@ impl Wizer {
                     continue;
                 }
 
+                // Add the data segments that are being added for the snapshot
+                // to the data count section, if present.
                 s if s.id == u8::from(SectionId::DataCount) => {
+                    let mut data = wasmparser::BinaryReader::new(s.data, 0);
+                    let prev = data.read_var_u32().unwrap();
+                    assert!(data.eof());
                     encoder.section(&wasm_encoder::DataCountSection {
-                        count: u32::try_from(snapshot.data_segments.len()).unwrap(),
+                        count: prev + u32::try_from(snapshot.data_segments.len()).unwrap(),
                     });
                 }
 
                 s if s.id == u8::from(SectionId::Data) => {
-                    // TODO: supporting bulk memory will require copying over
-                    // any passive and declared segments.
-                    add_data_section(&mut encoder);
+                    let mut section = wasm_encoder::DataSection::new();
+                    let data = wasmparser::BinaryReader::new(s.data, 0);
+                    for data in wasmparser::DataSectionReader::new(data).unwrap() {
+                        let data = data.unwrap();
+                        match data.kind {
+                            // Active data segments, by definition in wasm, are
+                            // truncated after instantiation. That means that
+                            // for the snapshot all active data segments, which
+                            // are already applied, are all turned into empty
+                            // passive segments instead.
+                            wasmparser::DataKind::Active { .. } => {
+                                section.passive([]);
+                            }
+
+                            // Passive segments are plumbed through as-is.
+                            wasmparser::DataKind::Passive => {
+                                section.passive(data.data.iter().copied());
+                            }
+                        }
+                    }
+
+                    // Append all the initializer data segments before adding
+                    // the section.
+                    add_data_segments(&mut section);
+                    encoder.section(&section);
+                    added_data_section.set(true);
                 }
 
                 s => {

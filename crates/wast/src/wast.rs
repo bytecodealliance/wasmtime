@@ -92,7 +92,7 @@ enum Export<'a> {
 /// Whether or not to use async APIs when calling wasm during wast testing.
 ///
 /// Passed to [`WastContext::new`].
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub enum Async {
     Yes,
@@ -302,7 +302,8 @@ impl WastContext {
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    let mut results = vec![component::Val::Bool(false); func.results(&store).len()];
+                    let mut results =
+                        vec![component::Val::Bool(false); func.ty(&store).results().len()];
                     let result = match &replace.rt {
                         Some(rt) => {
                             rt.block_on(func.call_async(&mut *store, &values, &mut results))
@@ -733,7 +734,7 @@ impl WastContext {
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
-                if !error_message.contains(&text[..]) {
+                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
                     bail!("assert_unlinkable: expected {text}, got {error_message}",)
                 }
             }

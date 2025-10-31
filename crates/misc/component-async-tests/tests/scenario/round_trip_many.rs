@@ -341,7 +341,7 @@ async fn test_round_trip_many(
         linker
             .root()
             .instance("local:local/many")?
-            .func_new_concurrent("[async]foo", |_, params, results| {
+            .func_new_concurrent("[async]foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let mut params = params.into_iter();

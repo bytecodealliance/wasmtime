@@ -268,7 +268,8 @@ impl Metadata<'_> {
             collector,
             memory_reservation,
             memory_guard_size,
-            generate_native_debuginfo,
+            debug_native,
+            debug_guest,
             parse_wasm_debuginfo,
             consume_fuel,
             epoch_interruption,
@@ -309,10 +310,11 @@ impl Metadata<'_> {
             "memory guard size",
         )?;
         Self::check_bool(
-            generate_native_debuginfo,
-            other.generate_native_debuginfo,
-            "debug information support",
+            debug_native,
+            other.debug_native,
+            "native debug information support",
         )?;
+        Self::check_bool(debug_guest, other.debug_guest, "guest debug")?;
         Self::check_bool(
             parse_wasm_debuginfo,
             other.parse_wasm_debuginfo,

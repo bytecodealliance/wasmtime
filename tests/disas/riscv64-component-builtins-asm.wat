@@ -1,6 +1,6 @@
 ;;! target = "riscv64"
 ;;! test = 'compile'
-;;! filter = '_wasm_call'
+;;! filter = 'wasm-call'
 ;;! objdump = '--funcs all'
 
 (component
@@ -11,7 +11,7 @@
   (core instance (instantiate $m (with "" (instance (export "" (func $f))))))
 )
 
-;; component-resource-drop[0]_wasm_call:
+;; component-trampolines[0]-wasm-call-component-resource-drop[0]:
 ;;       addi    sp, sp, -0x10
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)

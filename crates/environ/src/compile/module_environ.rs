@@ -2,14 +2,15 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
 };
+use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
+    EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
     ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, WasmError,
-    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
+    StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert,
+    TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
+    WasmparserTypeConverter,
 };
-use crate::{StaticModuleIndex, prelude::*};
 use anyhow::{Result, bail};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -55,12 +56,15 @@ pub struct ModuleTranslation<'data> {
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
-    /// For each imported function, the single statically-known defined function
-    /// that satisfies that import, if any. This is used to turn what would
-    /// otherwise be indirect calls through the imports table into direct calls,
-    /// when possible.
-    pub known_imported_functions:
-        SecondaryMap<FuncIndex, Option<(StaticModuleIndex, DefinedFuncIndex)>>,
+    /// For each imported function, the single statically-known function that
+    /// always satisfies that import, if any.
+    ///
+    /// This is used to turn what would otherwise be indirect calls through the
+    /// imports table into direct calls, when possible.
+    ///
+    /// When filled in, this only ever contains
+    /// `FuncKey::DefinedWasmFunction(..)`s and `FuncKey::Intrinsic(..)`s.
+    pub known_imported_functions: SecondaryMap<FuncIndex, Option<FuncKey>>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
@@ -581,7 +585,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
 
-                if self.tunables.generate_native_debuginfo {
+                if self.tunables.debug_native {
                     let sig_index = self.result.module.functions[func_index]
                         .signature
                         .unwrap_module_type_index();
@@ -737,7 +741,7 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn dwarf_section(&mut self, name: &str, section: &CustomSectionReader<'data>) {
-        if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
+        if !self.tunables.debug_native && !self.tunables.parse_wasm_debuginfo {
             self.result.has_unparsed_debuginfo = true;
             return;
         }
@@ -865,12 +869,12 @@ and for re-adding support for interface types you can see this issue:
                 }
                 wasmparser::Name::Module { name, .. } => {
                     self.result.module.name = Some(name.to_string());
-                    if self.tunables.generate_native_debuginfo {
+                    if self.tunables.debug_native {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
                 }
                 wasmparser::Name::Local(reader) => {
-                    if !self.tunables.generate_native_debuginfo {
+                    if !self.tunables.debug_native {
                         continue;
                     }
                     for f in reader {

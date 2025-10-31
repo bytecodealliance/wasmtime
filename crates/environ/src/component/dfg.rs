@@ -31,6 +31,7 @@ use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
+use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
 use std::collections::HashMap;
@@ -54,6 +55,10 @@ pub struct ComponentDfg {
     /// compiled by Cranelift.
     pub trampolines: Intern<TrampolineIndex, (ModuleInternedTypeIndex, Trampoline)>,
 
+    /// A map from `UnsafeIntrinsic::index()` to that intrinsic's
+    /// module-interned type.
+    pub unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
+
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
     pub reallocs: Intern<ReallocId, CoreDef>,
@@ -64,8 +69,11 @@ pub struct ComponentDfg {
     /// Same as `reallocs`, but for post-return.
     pub post_returns: Intern<PostReturnId, CoreDef>,
 
-    /// Same as `reallocs`, but for post-return.
+    /// Same as `reallocs`, but for memories.
     pub memories: Intern<MemoryId, CoreExport<MemoryIndex>>,
+
+    /// Same as `reallocs`, but for tables.
+    pub tables: Intern<TableId, CoreExport<TableIndex>>,
 
     /// Metadata about identified fused adapters.
     ///
@@ -258,6 +266,8 @@ pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
+    UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
+
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -476,6 +486,27 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
     },
+    ThreadIndex,
+    ThreadNewIndirect {
+        instance: RuntimeComponentInstanceIndex,
+        start_func_ty_idx: ComponentTypeIndex,
+        start_func_table_id: TableId,
+    },
+    ThreadSwitchTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadSuspend {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadResumeLater {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    ThreadYieldTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -595,6 +626,7 @@ impl ComponentDfg {
             runtime_callbacks: Default::default(),
             runtime_instances: Default::default(),
             num_lowerings: 0,
+            unsafe_intrinsics: Default::default(),
             trampolines: Default::default(),
             trampoline_defs: Default::default(),
             trampoline_map: Default::default(),
@@ -629,6 +661,7 @@ impl ComponentDfg {
                 exports,
                 export_items,
                 initializers: linearize.initializers,
+                unsafe_intrinsics: linearize.unsafe_intrinsics,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
                 options: linearize.options,
@@ -666,6 +699,7 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
+    unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
     trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
     options: PrimaryMap<OptionsIndex, info::CanonicalOptions>,
@@ -823,6 +857,15 @@ impl LinearizeDfg<'_> {
         )
     }
 
+    fn runtime_table(&mut self, table: TableId) -> RuntimeTableIndex {
+        self.intern(
+            table,
+            |me| &mut me.runtime_tables,
+            |me, table| me.core_export(&me.dfg.tables[table]),
+            |index, export| GlobalInitializer::ExtractTable(ExtractTable { index, export }),
+        )
+    }
+
     fn runtime_realloc(&mut self, realloc: ReallocId) -> RuntimeReallocIndex {
         self.intern(
             realloc,
@@ -856,6 +899,13 @@ impl LinearizeDfg<'_> {
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
             CoreDef::Trampoline(index) => info::CoreDef::Trampoline(self.trampoline(*index)),
+            CoreDef::UnsafeIntrinsic(ty, i) => {
+                let index = usize::try_from(i.index()).unwrap();
+                if self.unsafe_intrinsics[index].is_none() {
+                    self.unsafe_intrinsics[index] = Some(*ty).into();
+                }
+                info::CoreDef::UnsafeIntrinsic(*i)
+            }
         }
     }
 
@@ -1117,6 +1167,40 @@ impl LinearizeDfg<'_> {
             Trampoline::ContextSet { instance, slot } => info::Trampoline::ContextSet {
                 instance: *instance,
                 slot: *slot,
+            },
+            Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
+            Trampoline::ThreadNewIndirect {
+                instance,
+                start_func_ty_idx,
+                start_func_table_id,
+            } => info::Trampoline::ThreadNewIndirect {
+                instance: *instance,
+                start_func_ty_idx: *start_func_ty_idx,
+                start_func_table_idx: self.runtime_table(*start_func_table_id),
+            },
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSwitchTo {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSuspend {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadResumeLater { instance } => info::Trampoline::ThreadResumeLater {
+                instance: *instance,
+            },
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadYieldTo {
+                instance: *instance,
+                cancellable: *cancellable,
             },
         };
         let i1 = self.trampolines.push(*signature);

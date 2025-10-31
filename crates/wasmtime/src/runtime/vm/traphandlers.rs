@@ -21,6 +21,8 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
+#[cfg(feature = "debug")]
+use crate::store::AsStoreOpaque;
 use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
@@ -29,6 +31,8 @@ use core::ptr::{self, NonNull};
 use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
+#[cfg(feature = "debug")]
+pub(crate) use self::backtrace::CurrentActivationBacktrace;
 #[cfg(feature = "gc")]
 pub use wasmtime_unwinder::Frame;
 
@@ -820,7 +824,76 @@ impl CallThreadState {
     /// skip all Rust destructors on the stack, if there are any, for native
     /// executors as `Handler::resume` will be used.
     unsafe fn unwind(&self, store: &mut dyn VMStore) {
-        let unwind = self.unwind.replace(UnwindState::None);
+        #[allow(unused_mut, reason = "only  mutated in `debug` configuration")]
+        let mut unwind = self.unwind.replace(UnwindState::None);
+
+        #[cfg(feature = "debug")]
+        {
+            let result = match &unwind {
+                UnwindState::UnwindToWasm(_) => {
+                    assert!(store.as_store_opaque().has_pending_exception());
+                    let exn = store
+                        .as_store_opaque()
+                        .pending_exception_owned_rooted()
+                        .expect("exception should be set when we are throwing");
+                    store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
+                }
+
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::Exception),
+                    ..
+                } => {
+                    use crate::store::AsStoreOpaque;
+                    let exn = store
+                        .as_store_opaque()
+                        .pending_exception_owned_rooted()
+                        .expect("exception should be set when we are throwing");
+                    store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
+                        exn.clone(),
+                    ))
+                }
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
+                    ..
+                } => store.block_on_debug_handler(crate::DebugEvent::Trap(*trap)),
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::User(err)),
+                    ..
+                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
+
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::Jit { .. }),
+                    ..
+                } => {
+                    // JIT traps not handled yet.
+                    Ok(())
+                }
+                #[cfg(all(feature = "std", panic = "unwind"))]
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Panic(_),
+                    ..
+                } => {
+                    // We don't invoke any debugger hook when we're
+                    // unwinding due to a Rust (host-side) panic.
+                    Ok(())
+                }
+
+                UnwindState::None => unreachable!(),
+            };
+
+            // If the debugger invocation itself resulted in an `Err`
+            // (which can only come from the `block_on` hitting a
+            // failure mode), we need to override our unwind as-if
+            // were handling a host error.
+            if let Err(err) = result {
+                unwind = UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::User(err)),
+                    backtrace: None,
+                    coredump_stack: None,
+                };
+            }
+        }
+
         match unwind {
             UnwindState::UnwindToHost { .. } => {
                 self.unwind.set(unwind);

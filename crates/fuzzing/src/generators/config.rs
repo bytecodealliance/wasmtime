@@ -137,11 +137,13 @@ impl Config {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_threading,
             component_model_error_context,
             component_model_gc,
             simd,
             exceptions,
             legacy_exceptions: _,
+            custom_descriptors: _,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -159,6 +161,7 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
@@ -283,6 +286,7 @@ impl Config {
             Some(self.module_config.component_model_async_builtins);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_threading = Some(self.module_config.component_model_threading);
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
@@ -845,7 +849,15 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
+            RegallocAlgorithm::SinglePass => {
+                // FIXME(#11850)
+                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = true;
+                if SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME {
+                    wasmtime::RegallocAlgorithm::Backtracking
+                } else {
+                    wasmtime::RegallocAlgorithm::SinglePass
+                }
+            }
         }
     }
 }

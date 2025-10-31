@@ -76,6 +76,10 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "debug")]
+use crate::DebugHandler;
+#[cfg(all(feature = "gc", feature = "debug"))]
+use crate::OwnedRooted;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
@@ -245,8 +249,64 @@ pub struct StoreInner<T: 'static> {
     #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
-    // for comments about `ManuallyDrop`, see `Store::into_data`
-    data: ManuallyDrop<T>,
+
+    /// The user's `T` data.
+    ///
+    /// Don't actually access it via this field, however! Use the
+    /// `Store{,Inner,Context,ContextMut}::data[_mut]` methods instead, to
+    /// preserve stacked borrows and provenance in the face of potential
+    /// direct-access of `T` from Wasm code (via unsafe intrinsics).
+    ///
+    /// The only exception to the above is when taking ownership of the value,
+    /// e.g. in `Store::into_data`, after which nothing can access this field
+    /// via raw pointers anymore so there is no more provenance to preserve.
+    ///
+    /// For comments about `ManuallyDrop`, see `Store::into_data`.
+    data_no_provenance: ManuallyDrop<T>,
+
+    /// The user's debug handler, if any. See [`crate::DebugHandler`]
+    /// for more documentation.
+    ///
+    /// We need this to be an `Arc` because the handler itself takes
+    /// `&self` and also the whole Store mutably (via
+    /// `StoreContextMut`); so we need to hold a separate reference to
+    /// it while invoking it.
+    #[cfg(feature = "debug")]
+    debug_handler: Option<Box<dyn StoreDebugHandler<T>>>,
+}
+
+/// Adapter around `DebugHandler` that gets monomorphized into an
+/// object-safe dyn trait to place in `store.debug_handler`.
+#[cfg(feature = "debug")]
+trait StoreDebugHandler<T: 'static>: Send + Sync {
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, T>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a>;
+}
+
+#[cfg(feature = "debug")]
+impl<D> StoreDebugHandler<D::Data> for D
+where
+    D: DebugHandler,
+    D::Data: Send,
+{
+    fn handle<'a>(
+        self: Box<Self>,
+        store: StoreContextMut<'a, D::Data>,
+        event: crate::DebugEvent<'a>,
+    ) -> Box<dyn Future<Output = ()> + Send + 'a> {
+        // Clone the underlying `DebugHandler` (the trait requires
+        // Clone as a supertrait), not the Box. The clone happens here
+        // rather than at the callsite because `Clone::clone` is not
+        // object-safe so needs to be in a monomorphized context.
+        let handler: D = (*self).clone();
+        // Since we temporarily took `self` off the store at the
+        // callsite, put it back now that we've cloned it.
+        store.0.debug_handler = Some(self);
+        Box::new(async move { handler.handle(store, event).await })
+    }
 }
 
 enum ResourceLimiterInner<T> {
@@ -703,8 +763,14 @@ impl<T> Store<T> {
             call_hook: None,
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
-            data: ManuallyDrop::new(data),
+            data_no_provenance: ManuallyDrop::new(data),
+            #[cfg(feature = "debug")]
+            debug_handler: None,
         });
+
+        let store_data =
+            <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
+        inner.inner.vm_store_context.store_data = store_data.into();
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -748,13 +814,13 @@ impl<T> Store<T> {
         }
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data(&self) -> &T {
         self.inner.data()
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
@@ -808,7 +874,7 @@ impl<T> Store<T> {
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
             core::mem::forget(self);
-            ManuallyDrop::take(&mut inner.data)
+            ManuallyDrop::take(&mut inner.data_no_provenance)
         }
     }
 
@@ -870,7 +936,7 @@ impl<T> Store<T> {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
         let (instance_limit, table_limit, memory_limit) = {
-            let l = limiter(&mut inner.data);
+            let l = limiter(inner.data_mut());
             (l.instances(), l.tables(), l.memories())
         };
         let innermost = &mut inner.inner;
@@ -1167,6 +1233,66 @@ impl<T> Store<T> {
     pub fn has_pending_exception(&self) -> bool {
         self.inner.pending_exception.is_some()
     }
+
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
+    ///
+    /// This object views the frames from the most recent Wasm entry
+    /// onward (up to the exit that allows this host code to run). Any
+    /// Wasm stack frames upward from the most recent entry to Wasm
+    /// are not visible to this cursor.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for
+    /// the engine containing this store.
+    #[cfg(feature = "debug")]
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
+        self.as_context_mut().debug_frames()
+    }
+
+    /// Set the debug callback on this store.
+    ///
+    /// See [`crate::DebugHandler`] for more documentation.
+    ///
+    /// # Panics
+    ///
+    /// - Will panic if this store is not configured for async
+    ///   support.
+    /// - Will panic if guest-debug support was not enabled via
+    ///   [`crate::Config::guest_debug`].
+    #[cfg(feature = "debug")]
+    pub fn set_debug_handler(&mut self, handler: impl DebugHandler<Data = T>)
+    where
+        // We require `Send` here because the debug handler becomes
+        // referenced from a future: when `DebugHandler::handle` is
+        // invoked, its `self` references the `handler` with the
+        // user's state. Note that we are careful to keep this bound
+        // constrained to debug-handler-related code only and not
+        // propagate it outward to the store in general. The presence
+        // of the trait implementation serves as a witness that `T:
+        // Send`. This is required in particular because we will have
+        // a `&mut dyn VMStore` on the stack when we pause a fiber
+        // with `block_on` to run a debugger hook; that `VMStore` must
+        // be a `Store<T> where T: Send`.
+        T: Send,
+    {
+        assert!(
+            self.inner.async_support(),
+            "debug hooks rely on async support"
+        );
+        assert!(
+            self.engine().tunables().debug_guest,
+            "debug hooks require guest debugging to be enabled"
+        );
+        self.inner.debug_handler = Some(Box::new(handler));
+    }
+
+    /// Clear the debug handler on this store. If any existed, it will
+    /// be dropped.
+    #[cfg(feature = "debug")]
+    pub fn clear_debug_handler(&mut self) {
+        self.inner.debug_handler = None;
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1284,7 +1410,6 @@ impl<'a, T> StoreContextMut<'a, T> {
 
     /// Tests whether there is a pending exception.
     ///
-    ///
     /// See [`Store::has_pending_exception`] for more details.
     #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
@@ -1295,12 +1420,49 @@ impl<'a, T> StoreContextMut<'a, T> {
 impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
-        &self.data
+        // We are actually just accessing `&self.data_no_provenance` but we must
+        // do so with the `VMStoreContext::store_data` pointer's provenance. If
+        // we did otherwise, i.e. directly accessed the field, we would
+        // invalidate that pointer, which would in turn invalidate any direct
+        // `T` accesses that Wasm code makes via unsafe intrinsics.
+        let data: *const ManuallyDrop<T> = &raw const self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        unsafe { &*ptr }
+    }
+
+    #[inline]
+    fn data_limiter_and_opaque(
+        &mut self,
+    ) -> (
+        &mut T,
+        Option<&mut ResourceLimiterInner<T>>,
+        &mut StoreOpaque,
+    ) {
+        // See the comments about provenance in `StoreInner::data` above.
+        let data: *mut ManuallyDrop<T> = &raw mut self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&mut self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        let data = unsafe { &mut *ptr };
+
+        let limiter = self.limiter.as_mut();
+
+        (data, limiter, &mut self.inner)
     }
 
     #[inline]
     fn data_mut(&mut self) -> &mut T {
-        &mut self.data
+        self.data_limiter_and_opaque().0
     }
 
     #[inline]
@@ -1864,9 +2026,6 @@ impl StoreOpaque {
         gc_roots_list: &mut GcRootsList,
         frame: crate::runtime::vm::Frame,
     ) {
-        use crate::runtime::vm::SendSyncPtr;
-        use core::ptr::NonNull;
-
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -1881,29 +2040,44 @@ impl StoreOpaque {
             .lookup_module_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        let stack_map = match module_info.lookup_stack_map(pc) {
-            Some(sm) => sm,
-            None => {
-                log::trace!("No stack map for this Wasm frame");
-                return;
-            }
-        };
-        log::trace!(
-            "We have a stack map that maps {} bytes in this Wasm frame",
-            stack_map.frame_size()
-        );
+        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+            log::trace!(
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
+            );
 
-        let sp = unsafe { stack_map.sp(fp) };
-        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
-            if gc_ref.is_some() {
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
-                    gc_roots_list
-                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
+            }
+        }
+
+        #[cfg(feature = "debug")]
+        if let Some(frame_table) = module_info.frame_table() {
+            let relpc = module_info.text_offset(pc);
+            for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+        use crate::runtime::vm::SendSyncPtr;
+        use core::ptr::NonNull;
+
+        let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
+        if gc_ref.is_some() {
+            unsafe {
+                gc_roots_list
+                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
             }
         }
     }
@@ -2458,11 +2632,29 @@ at https://bytecodealliance.org/security.
         self.pending_exception.take()
     }
 
+    /// Tests whether there is a pending exception.
+    #[cfg(feature = "gc")]
+    pub fn has_pending_exception(&self) -> bool {
+        self.pending_exception.is_some()
+    }
+
     #[cfg(feature = "gc")]
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.take_pending_exception()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    /// Get an owned rooted reference to the pending exception,
+    /// without taking it off the store.
+    #[cfg(all(feature = "gc", feature = "debug"))]
+    pub(crate) fn pending_exception_owned_rooted(&mut self) -> Option<OwnedRooted<ExnRef>> {
+        let mut nogc = AutoAssertNoGc::new(self);
+        nogc.pending_exception.take().map(|vmexnref| {
+            let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+            nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+            OwnedRooted::new(&mut nogc, vmexnref.into())
+        })
     }
 
     #[cfg(feature = "gc")]
@@ -2530,14 +2722,15 @@ unsafe impl<T> VMStore for StoreInner<T> {
     fn resource_limiter_and_store_opaque(
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque) {
-        (
-            self.limiter.as_mut().map(|l| match l {
-                ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(&mut self.data)),
-                #[cfg(feature = "async")]
-                ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(&mut self.data)),
-            }),
-            &mut self.inner,
-        )
+        let (data, limiter, opaque) = self.data_limiter_and_opaque();
+
+        let limiter = limiter.map(|l| match l {
+            ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(data)),
+            #[cfg(feature = "async")]
+            ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(data)),
+        });
+
+        (limiter, opaque)
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2558,6 +2751,18 @@ unsafe impl<T> VMStore for StoreInner<T> {
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
+    }
+
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
+        if let Some(handler) = self.debug_handler.take() {
+            log::trace!("about to raise debug event {event:?}");
+            StoreContextMut(self).with_blocking(|store, cx| {
+                cx.block_on(Pin::from(handler.handle(store, event)).as_mut())
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -2587,7 +2792,7 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
         let inner = &**self.inner as *const StoreInner<T>;
         f.debug_struct("Store")
             .field("inner", &inner)
-            .field("data", &self.inner.data)
+            .field("data", self.inner.data())
             .finish()
     }
 }
@@ -2596,9 +2801,9 @@ impl<T> Drop for Store<T> {
     fn drop(&mut self) {
         self.run_manual_drop_routines();
 
-        // for documentation on this `unsafe`, see `into_data`.
+        // For documentation on this `unsafe`, see `into_data`.
         unsafe {
-            ManuallyDrop::drop(&mut self.inner.data);
+            ManuallyDrop::drop(&mut self.inner.data_no_provenance);
             ManuallyDrop::drop(&mut self.inner);
         }
     }
@@ -2665,6 +2870,12 @@ impl AsStoreOpaque for dyn VMStore {
     }
 }
 
+impl<T: 'static> AsStoreOpaque for Store<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        &mut self.inner.inner
+    }
+}
+
 impl<T: 'static> AsStoreOpaque for StoreInner<T> {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
@@ -2679,8 +2890,7 @@ impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_fuel, refuel, set_fuel};
-    use std::num::NonZeroU64;
+    use super::*;
 
     struct FuelTank {
         pub consumed_fuel: i64,
@@ -2796,5 +3006,36 @@ mod tests {
         assert_eq!(tank.reserve_fuel, 3);
         assert_eq!(tank.consumed_fuel, 4);
         assert_eq!(tank.get_fuel(), 0);
+    }
+
+    #[test]
+    fn store_data_provenance() {
+        // Test that we juggle pointer provenance and all that correctly, and
+        // miri is happy with everything, while allowing both Rust code and
+        // "Wasm" to access and modify the store's `T` data. Note that this is
+        // not actually Wasm mutating the store data here because compiling Wasm
+        // under miri is way too slow.
+
+        unsafe fn run_wasm(store: &mut Store<u32>) {
+            let ptr = store
+                .inner
+                .inner
+                .vm_store_context
+                .store_data
+                .as_ptr()
+                .cast::<u32>();
+            unsafe { *ptr += 1 }
+        }
+
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, 0_u32);
+
+        assert_eq!(*store.data(), 0);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 1);
+        unsafe { run_wasm(&mut store) }
+        assert_eq!(*store.data(), 2);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 3);
     }
 }

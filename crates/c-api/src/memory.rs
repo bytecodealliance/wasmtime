@@ -130,3 +130,16 @@ pub extern "C" fn wasmtime_memory_grow(
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(mem.grow(store, delta), |prev| *prev_size = prev)
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_memory_page_size(store: WasmtimeStoreContext<'_>, mem: &Memory) -> u64 {
+    mem.page_size(store)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_memory_page_size_log2(
+    store: WasmtimeStoreContext<'_>,
+    mem: &Memory,
+) -> u8 {
+    mem.page_size_log2(store)
+}

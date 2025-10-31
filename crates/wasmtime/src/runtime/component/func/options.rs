@@ -479,7 +479,10 @@ pub struct LiftContext<'a> {
 
     calls: &'a mut CallContexts,
 
-    #[cfg_attr(not(feature = "component-model-async"), allow(unused))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        allow(unused, reason = "easier to not #[cfg] away")
+    )]
     concurrent_state: &'a mut ConcurrentState,
 }
 

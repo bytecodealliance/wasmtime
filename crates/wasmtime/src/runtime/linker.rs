@@ -279,26 +279,24 @@ impl<T> Linker<T> {
     /// ```
     pub fn define_unknown_imports_as_default_values(
         &mut self,
-        store: &mut impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         module: &Module,
     ) -> anyhow::Result<()>
     where
         T: 'static,
     {
+        let mut store = store.as_context_mut();
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 let default_extern =
-                    import_err
-                        .ty()
-                        .default_value(&mut *store)
-                        .with_context(|| {
-                            anyhow!(
-                                "no default value exists for `{}::{}` with type `{:?}`",
-                                import.module(),
-                                import.name(),
-                                import_err.ty(),
-                            )
-                        })?;
+                    import_err.ty().default_value(&mut store).with_context(|| {
+                        anyhow!(
+                            "no default value exists for `{}::{}` with type `{:?}`",
+                            import.module(),
+                            import.name(),
+                            import_err.ty(),
+                        )
+                    })?;
                 self.define(
                     store.as_context(),
                     import.module(),

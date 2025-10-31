@@ -10,10 +10,10 @@ pub mod bindings {
         path: "wit",
         world: "read-resource-stream",
         with: {
-            "local:local/resource-stream/x": super::ResourceStreamX,
+            "local:local/resource-stream.x": super::ResourceStreamX,
         },
         imports: {
-            "local:local/resource-stream/foo": async | store | trappable,
+            "local:local/resource-stream.foo": async | store | trappable,
             default: trappable,
         },
     });

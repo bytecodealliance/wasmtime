@@ -1,8 +1,8 @@
 //! The initial instrumentation pass.
 
-use crate::info::{Module, ModuleContext};
-use crate::stack_ext::StackExt;
+use crate::info::ModuleContext;
 use wasm_encoder::SectionId;
+use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 
 /// Instrument the input Wasm so that it exports its memories and globals,
 /// allowing us to inspect their state after the module is instantiated and
@@ -58,87 +58,58 @@ use wasm_encoder::SectionId;
 /// export their memories and globals individually, that would disturb the
 /// modules locally defined memoryies' and globals' indices, which would require
 /// rewriting the code section, which would break debug info offsets.
-pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
+pub(crate) fn instrument(module: &mut ModuleContext<'_>) -> Vec<u8> {
     log::debug!("Instrumenting the input Wasm");
 
-    struct StackEntry<'a> {
-        /// This entry's module.
-        module: Module,
+    let mut encoder = wasm_encoder::Module::new();
+    let mut defined_global_exports = Vec::new();
+    let mut defined_memory_exports = Vec::new();
 
-        /// The work-in-progress encoding of the new, instrumented module.
-        encoder: wasm_encoder::Module,
-
-        /// Sections in this module info that we are iterating over.
-        sections: std::slice::Iter<'a, wasm_encoder::RawSection<'a>>,
-    }
-
-    let root = cx.root();
-    let mut stack = vec![StackEntry {
-        module: root,
-        encoder: wasm_encoder::Module::new(),
-        sections: root.raw_sections(cx).iter(),
-    }];
-
-    loop {
-        assert!(!stack.is_empty());
-
-        match stack.top_mut().sections.next() {
+    for section in module.raw_sections() {
+        match section.id {
             // For the exports section, we need to transitively export internal
             // state so that we can read the initialized state after we call the
             // initialization function.
-            Some(section) if section.id == u8::from(SectionId::Export) => {
-                let entry = stack.top_mut();
+            id if id == u8::from(SectionId::Export) => {
                 let mut exports = wasm_encoder::ExportSection::new();
 
                 // First, copy over all the original exports.
-                for export in entry.module.exports(cx) {
-                    exports.export(
-                        export.name,
-                        match export.kind {
-                            wasmparser::ExternalKind::Func => wasm_encoder::ExportKind::Func,
-                            wasmparser::ExternalKind::Table => wasm_encoder::ExportKind::Table,
-                            wasmparser::ExternalKind::Memory => wasm_encoder::ExportKind::Memory,
-                            wasmparser::ExternalKind::Global => wasm_encoder::ExportKind::Global,
-                            wasmparser::ExternalKind::Tag => {
-                                unreachable!("should have been rejected in validation/parsing")
-                            }
-                        },
-                        export.index,
-                    );
+                for export in module.exports() {
+                    RoundtripReencoder
+                        .parse_export(&mut exports, *export)
+                        .unwrap();
                 }
 
                 // Now export all of this module's defined globals, memories,
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
-                for (i, (j, _)) in entry.module.defined_globals(cx).enumerate() {
-                    let name = format!("__wizer_global_{}", i);
-                    exports.export(&name, wasm_encoder::ExportKind::Global, j);
+                for (i, ty, _) in module.defined_globals() {
+                    if !ty.mutable {
+                        continue;
+                    }
+                    let name = format!("__wizer_global_{i}");
+                    exports.export(&name, wasm_encoder::ExportKind::Global, i);
+                    defined_global_exports.push((i, name));
                 }
-                for (i, (j, _)) in entry.module.defined_memories(cx).enumerate() {
-                    let name = format!("__wizer_memory_{}", i);
+                for (i, (j, _)) in module.defined_memories().enumerate() {
+                    let name = format!("__wizer_memory_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Memory, j);
+                    defined_memory_exports.push(name);
                 }
 
-                entry.encoder.section(&exports);
-            }
-
-            // End of the current module: if this is the root, return the
-            // instrumented module, otherwise add it as an entry in its parent's
-            // module section.
-            None => {
-                let entry = stack.pop().unwrap();
-
-                if entry.module.is_root() {
-                    assert!(stack.is_empty());
-                    return entry.encoder.finish();
-                }
+                encoder.section(&exports);
             }
 
             // All other sections don't need instrumentation and can be copied
             // over directly.
-            Some(section) => {
-                stack.top_mut().encoder.section(section);
+            _other => {
+                encoder.section(section);
             }
         }
     }
+
+    module.defined_global_exports = Some(defined_global_exports);
+    module.defined_memory_exports = Some(defined_memory_exports);
+
+    encoder.finish()
 }

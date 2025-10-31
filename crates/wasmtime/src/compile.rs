@@ -32,7 +32,7 @@ use call_graph::CallGraph;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
+    Abi, BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
     CompiledFunctionsTableBuilder, CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos,
     FinishedObject, FuncKey, FunctionBodyData, InliningCompiler, IntraModuleInlining,
     ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
@@ -61,7 +61,7 @@ mod runtime;
 /// Additionally compilation returns an `Option` here which is always
 /// `Some`, notably compiled metadata about the module in addition to the
 /// type information found within.
-pub(crate) fn build_artifacts<T: FinishedObject>(
+pub(crate) fn build_module_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
     dwarf_package: Option<&[u8]>,
@@ -142,6 +142,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
     _dwarf_package: Option<&[u8]>,
+    unsafe_intrinsics_import: Option<&str>,
     obj_state: &T::State,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
     use wasmtime_environ::ScopeVec;
@@ -155,10 +156,13 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     let scope = ScopeVec::new();
     let mut validator = wasmparser::Validator::new_with_features(engine.features());
     let mut types = ComponentTypesBuilder::new(&validator);
-    let (component, mut module_translations) =
-        Translator::new(tunables, &mut validator, &mut types, &scope)
-            .translate(binary)
-            .context("failed to parse WebAssembly module")?;
+    let mut translator = Translator::new(tunables, &mut validator, &mut types, &scope);
+    if let Some(name) = unsafe_intrinsics_import {
+        translator.expose_unsafe_intrinsics(name);
+    }
+    let (component, mut module_translations) = translator
+        .translate(binary)
+        .context("failed to parse WebAssembly module")?;
 
     let compile_inputs = CompileInputs::for_component(
         engine,
@@ -228,12 +232,10 @@ struct CompileOutput<'a> {
 struct InlineHeuristicParams<'a> {
     tunables: &'a Tunables,
     caller_size: u32,
-    caller_module: StaticModuleIndex,
-    caller_def_func: DefinedFuncIndex,
+    caller_key: FuncKey,
     caller_needs_gc_heap: bool,
     callee_size: u32,
-    callee_module: StaticModuleIndex,
-    callee_def_func: DefinedFuncIndex,
+    callee_key: FuncKey,
     callee_needs_gc_heap: bool,
 }
 
@@ -280,21 +282,60 @@ impl<'a> CompileInputs<'a> {
         >,
     ) -> Self {
         use wasmtime_environ::Abi;
+        use wasmtime_environ::component::UnsafeIntrinsic;
 
         let mut ret = CompileInputs { inputs: vec![] };
 
         ret.collect_inputs_in_translations(types.module_types_builder(), module_translations);
         let tunables = engine.tunables();
 
+        for i in component
+            .component
+            .unsafe_intrinsics
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ty)| if ty.is_some() { Some(i) } else { None })
+        {
+            let i = u32::try_from(i).unwrap();
+            let intrinsic = UnsafeIntrinsic::from_u32(i);
+            for abi in [Abi::Wasm, Abi::Array] {
+                ret.push_input(move |compiler| {
+                    let symbol = format!(
+                        "unsafe-intrinsics-{}-{}",
+                        match abi {
+                            Abi::Wasm => "wasm-call",
+                            Abi::Array => "array-call",
+                        },
+                        intrinsic.name(),
+                    );
+                    Ok(CompileOutput {
+                        key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
+                        function: compiler
+                            .component_compiler()
+                            .compile_intrinsic(tunables, component, types, intrinsic, abi, &symbol)
+                            .with_context(|| format!("failed to compile `{symbol}`"))?,
+                        symbol,
+                        start_srcloc: FilePos::default(),
+                        translation: None,
+                        func_body: None,
+                    })
+                });
+            }
+        }
+
         for (idx, trampoline) in component.trampolines.iter() {
             for abi in [Abi::Wasm, Abi::Array] {
                 ret.push_input(move |compiler| {
                     let key = FuncKey::ComponentTrampoline(abi, idx);
-                    let mut symbol = trampoline.symbol_name();
-                    symbol.push_str(match abi {
-                        Abi::Wasm => "_wasm_call",
-                        Abi::Array => "_array_call",
-                    });
+                    let symbol = format!(
+                        "component-trampolines[{}]-{}-{}",
+                        idx.as_u32(),
+                        match abi {
+                            Abi::Wasm => "wasm-call",
+                            Abi::Array => "array-call",
+                        },
+                        trampoline.symbol_name(),
+                    );
                     let function = compiler
                         .component_compiler()
                         .compile_trampoline(component, types, key, abi, tunables, &symbol)
@@ -521,6 +562,18 @@ the use case.
             engine.run_maybe_parallel(self.inputs, |f| f(compiler))?
         };
 
+        if cfg!(debug_assertions) {
+            let mut symbols: Vec<_> = raw_outputs.iter().map(|i| &i.symbol).collect();
+            symbols.sort();
+            for w in symbols.windows(2) {
+                assert_ne!(
+                    w[0], w[1],
+                    "should never have duplicate symbols, but found two functions with the symbol `{}`",
+                    w[0]
+                );
+            }
+        }
+
         // Now that all functions have been compiled see if any
         // wasmtime-builtin functions are necessary. If so those need to be
         // collected and then those trampolines additionally need to be
@@ -553,14 +606,46 @@ the use case.
             engine.run_maybe_parallel(self.inputs, |f| f(compiler).map(Some))?,
         );
 
-        /// Get just the output indices of the Wasm functions from our unlinked
-        /// outputs.
-        fn wasm_functions<'a>(
+        /// Whether a function (as described by the given `FuncKey`) can
+        /// participate in inlining or not (either as a candidate for being
+        /// inlined into a caller or having a callee inlined into a callsite
+        /// within itself).
+        fn is_inlining_function(key: FuncKey) -> bool {
+            match key {
+                // Wasm functions can both be inlined into other functions and
+                // have other functions inlined into them.
+                FuncKey::DefinedWasmFunction(..) => true,
+
+                // Intrinsics can be inlined into other functions.
+                #[cfg(feature = "component-model")]
+                FuncKey::UnsafeIntrinsic(..) => true,
+
+                // Trampolines cannot participate in inlining since our
+                // unwinding and exceptions infrastructure relies on them being
+                // in their own call frames.
+                FuncKey::ArrayToWasmTrampoline(..)
+                | FuncKey::WasmToArrayTrampoline(..)
+                | FuncKey::WasmToBuiltinTrampoline(..) => false,
+                #[cfg(feature = "component-model")]
+                FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
+
+                FuncKey::PulleyHostCall(_) => {
+                    unreachable!("we don't compile artifacts for Pulley host calls")
+                }
+            }
+        }
+
+        /// Get just the output indices of the functions that can participate in
+        /// inlining from our unlinked outputs.
+        fn inlining_functions<'a>(
             outputs: &'a PrimaryMap<OutputIndex, Option<CompileOutput<'_>>>,
         ) -> impl Iterator<Item = OutputIndex> + 'a {
-            outputs.iter().filter_map(|(i, o)| match o.as_ref()?.key {
-                FuncKey::DefinedWasmFunction(..) => Some(i),
-                _ => None,
+            outputs.iter().filter_map(|(index, output)| {
+                if is_inlining_function(output.as_ref().unwrap().key) {
+                    Some(index)
+                } else {
+                    None
+                }
             })
         }
 
@@ -571,16 +656,9 @@ the use case.
         // example when we know that one module's function import is always
         // satisfied with a particular `FuncKey::DefinedWasmFunction`. This map
         // enables that translation.
-        let key_to_output: HashMap<FuncKey, OutputIndex> = outputs
-            .iter()
-            .filter(|(_, output)| {
-                matches!(
-                    output.as_ref().unwrap().key,
-                    FuncKey::DefinedWasmFunction(..)
-                )
-            })
-            .map(|(output_index, output)| {
-                let output = output.as_ref().unwrap();
+        let key_to_output: HashMap<FuncKey, OutputIndex> = inlining_functions(&outputs)
+            .map(|output_index| {
+                let output = outputs[output_index].as_ref().unwrap();
                 (output.key, output_index)
             })
             .collect();
@@ -590,7 +668,7 @@ the use case.
         // We only inline Wasm functions, not trampolines, because we rely on
         // trampolines being in their own stack frame when we save the entry and
         // exit SP, FP, and PC for backtraces in trampolines.
-        let call_graph = CallGraph::<OutputIndex>::new(wasm_functions(&outputs), {
+        let call_graph = CallGraph::<OutputIndex>::new(inlining_functions(&outputs), {
             let mut func_keys = IndexSet::default();
             let outputs = &outputs;
             let key_to_output = &key_to_output;
@@ -598,7 +676,7 @@ the use case.
                 debug_assert!(calls.is_empty());
 
                 let output = outputs[output_index].as_ref().unwrap();
-                debug_assert!(matches!(output.key, FuncKey::DefinedWasmFunction(..)));
+                debug_assert!(is_inlining_function(output.key));
 
                 // Get this function's call graph edges as `FuncKey`s.
                 func_keys.clear();
@@ -612,6 +690,7 @@ the use case.
                         .copied()
                         .filter_map(|key| key_to_output.get(&key)),
                 );
+
                 log::trace!(
                     "call graph edges for {output_index:?} = {:?}: {calls:?}",
                     output.key
@@ -625,7 +704,8 @@ the use case.
         // (because they either do not call each other or are part of a
         // mutual-recursion cycle; either way we won't inline members of the
         // same layer into each other).
-        let strata = stratify::Strata::<OutputIndex>::new(wasm_functions(&outputs), &call_graph);
+        let strata =
+            stratify::Strata::<OutputIndex>::new(inlining_functions(&outputs), &call_graph);
         let mut layer_outputs = vec![];
         for layer in strata.layers() {
             // Temporarily take this layer's outputs out of our unlinked outputs
@@ -641,17 +721,17 @@ the use case.
                 &mut layer_outputs,
                 |output: &mut CompileOutput<'_>| {
                     log::trace!("processing inlining for {:?}", output.key);
-                    debug_assert!(matches!(output.key, FuncKey::DefinedWasmFunction(..)));
+                    debug_assert!(is_inlining_function(output.key));
 
-                    let caller_translation = output.translation.unwrap();
-                    let (caller_module, caller_def_func) =
-                        output.key.unwrap_defined_wasm_function();
-                    let caller_needs_gc_heap = caller_translation.module.needs_gc_heap;
+                    let caller_key = output.key;
+                    let caller_needs_gc_heap =
+                        output.translation.is_some_and(|t| t.module.needs_gc_heap);
                     let caller = &mut output.function;
 
                     let mut caller_size = inlining_compiler.size(caller);
 
                     inlining_compiler.inline(caller, &mut |callee_key: FuncKey| {
+                        log::trace!("  --> considering call to {callee_key:?}");
                         let callee_output_index: OutputIndex = key_to_output[&callee_key];
 
                         // NB: If the callee is not inside `outputs`, then it is
@@ -667,20 +747,17 @@ the use case.
                         let callee = &callee_output.function;
                         let callee_size = inlining_compiler.size(callee);
 
-                        let callee_needs_gc_heap =
-                            callee_output.translation.unwrap().module.needs_gc_heap;
+                        let callee_needs_gc_heap = callee_output
+                            .translation
+                            .is_some_and(|t| t.module.needs_gc_heap);
 
-                        let (callee_module, callee_def_func) =
-                            callee_key.unwrap_defined_wasm_function();
                         if Self::should_inline(InlineHeuristicParams {
                             tunables: engine.tunables(),
                             caller_size,
-                            caller_module,
-                            caller_def_func,
+                            caller_key,
                             caller_needs_gc_heap,
                             callee_size,
-                            callee_module,
-                            callee_def_func,
+                            callee_key,
                             callee_needs_gc_heap,
                         }) {
                             caller_size = caller_size.saturating_add(callee_size);
@@ -736,21 +813,19 @@ the use case.
         InlineHeuristicParams {
             tunables,
             caller_size,
-            caller_module,
-            caller_def_func,
+            caller_key,
             caller_needs_gc_heap,
             callee_size,
-            callee_module,
-            callee_def_func,
+            callee_key,
             callee_needs_gc_heap,
         }: InlineHeuristicParams,
     ) -> bool {
         log::trace!(
             "considering inlining:\n\
-             \tcaller = ({caller_module:?}, {caller_def_func:?})\n\
+             \tcaller = {caller_key:?}\n\
              \t\tsize = {caller_size}\n\
              \t\tneeds_gc_heap = {caller_needs_gc_heap}\n\
-             \tcallee = ({callee_module:?}, {callee_def_func:?})\n\
+             \tcallee = {callee_key:?}\n\
              \t\tsize = {callee_size}\n\
              \t\tneeds_gc_heap = {callee_needs_gc_heap}"
         );
@@ -759,10 +834,7 @@ the use case.
             tunables.inlining,
             "shouldn't even call this method if we aren't configured for inlining"
         );
-        debug_assert!(
-            caller_module != callee_module || caller_def_func != callee_def_func,
-            "we never inline recursion"
-        );
+        debug_assert_ne!(caller_key, callee_key, "we never inline recursion");
 
         // Put a limit on how large we can make a function via inlining to cap
         // code bloat.
@@ -776,6 +848,16 @@ the use case.
             return false;
         }
 
+        // Skip inlining into array-abi functions which are entry
+        // trampolines into wasm. ABI-wise it's required that these have a
+        // single `try_call` into the module and it doesn't work if multiple
+        // get inlined or if the `try_call` goes away. Prevent all inlining
+        // to guarantee the structure of entry trampolines.
+        if caller_key.abi() == Abi::Array {
+            log::trace!("  --> not inlining: not inlining into array-abi caller");
+            return false;
+        }
+
         // Consider whether this is an intra-module call.
         //
         // Inlining within a single core module has most often already been done
@@ -783,23 +865,34 @@ the use case.
         // function calls to small callees were presumably annotated with the
         // equivalent of `#[inline(never)]` or `#[cold]` but we don't have that
         // information anymore.
-        if caller_module == callee_module {
-            match tunables.inlining_intra_module {
-                IntraModuleInlining::Yes => {}
+        match (caller_key, callee_key) {
+            (
+                FuncKey::DefinedWasmFunction(caller_module, _),
+                FuncKey::DefinedWasmFunction(callee_module, _),
+            ) => {
+                if caller_module == callee_module {
+                    match tunables.inlining_intra_module {
+                        IntraModuleInlining::Yes => {}
 
-                IntraModuleInlining::WhenUsingGc
-                    if caller_needs_gc_heap || callee_needs_gc_heap => {}
+                        IntraModuleInlining::WhenUsingGc
+                            if caller_needs_gc_heap || callee_needs_gc_heap => {}
 
-                IntraModuleInlining::WhenUsingGc => {
-                    log::trace!("  --> not inlining: intra-module call that does not use GC");
-                    return false;
-                }
+                        IntraModuleInlining::WhenUsingGc => {
+                            log::trace!(
+                                "  --> not inlining: intra-module call that does not use GC"
+                            );
+                            return false;
+                        }
 
-                IntraModuleInlining::No => {
-                    log::trace!("  --> not inlining: intra-module call");
-                    return false;
+                        IntraModuleInlining::No => {
+                            log::trace!("  --> not inlining: intra-module call");
+                            return false;
+                        }
+                    }
                 }
             }
+
+            _ => {}
         }
 
         // Small callees are often worth inlining regardless of the size of the
@@ -890,7 +983,7 @@ impl UnlinkedCompileOutputs<'_> {
             needs_gc_heap |= output.function.needs_gc_heap;
 
             let index = compiled_funcs.len();
-            compiled_funcs.push((output.symbol, output.function.code));
+            compiled_funcs.push((output.symbol, output.key, output.function.code));
 
             if output.start_srcloc != FilePos::none() {
                 indices
@@ -913,9 +1006,10 @@ impl UnlinkedCompileOutputs<'_> {
 struct PreLinkOutput {
     /// Whether or not any of these functions require a GC heap
     needs_gc_heap: bool,
-    /// The flattened list of (symbol name, compiled function) pairs, as they
-    /// will be laid out in the object file.
-    compiled_funcs: Vec<(String, Box<dyn Any + Send + Sync>)>,
+    /// The flattened list of (symbol name, FuncKey, compiled
+    /// function) triples, as they will be laid out in the object
+    /// file.
+    compiled_funcs: Vec<(String, FuncKey, Box<dyn Any + Send + Sync>)>,
     /// The `FunctionIndices` mapping our function keys to indices in that flat
     /// list.
     indices: FunctionIndices,
@@ -937,7 +1031,7 @@ impl FunctionIndices {
         self,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
-        compiled_funcs: Vec<(String, Box<dyn Any + Send + Sync>)>,
+        compiled_funcs: Vec<(String, FuncKey, Box<dyn Any + Send + Sync>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
         dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
@@ -959,14 +1053,14 @@ impl FunctionIndices {
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo {
+        if tunables.debug_native {
             compiler.append_dwarf(
                 &mut obj,
                 &translations,
                 &|module, func| {
                     let i = self.indices[&FuncKey::DefinedWasmFunction(module, func)];
                     let (symbol, _) = symbol_ids_and_locs[i];
-                    let (_, compiled_func) = &compiled_funcs[i];
+                    let (_, _, compiled_func) = &compiled_funcs[i];
                     (symbol, &**compiled_func)
                 },
                 dwarf_package_bytes,

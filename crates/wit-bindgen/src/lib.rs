@@ -184,7 +184,7 @@ pub struct Opts {
 
 #[derive(Debug, Clone)]
 pub struct TrappableError {
-    /// Full path to the error, such as `wasi:io/streams/error`.
+    /// Full path to the error, such as `wasi:io/streams.error`.
     pub wit_path: String,
 
     /// The name, in Rust, of the error type to generate.
@@ -335,7 +335,7 @@ impl Wasmtime {
                 ) {
                     assert!(projection.is_empty());
 
-                    // If `wit_path` looks like `{key}/{type_name}` where
+                    // If `wit_path` looks like `{key}.{type_name}` where
                     // `type_name` is a type within `iface` then we've found a
                     // match. Otherwise continue to the next lookup key if there
                     // is one, and failing that continue to the next interface.
@@ -343,7 +343,7 @@ impl Wasmtime {
                         Some(s) => s,
                         None => continue,
                     };
-                    let suffix = match suffix.strip_prefix('/') {
+                    let suffix = match suffix.strip_prefix('.') {
                         Some(s) => s,
                         None => continue,
                     };
@@ -1149,7 +1149,7 @@ fn lookup_keys(
         // they're relatively uncommon so only lookup the precise key here.
         WorldKey::Name(key) => {
             let to_lookup = match item {
-                LookupItem::Name(item) => format!("{key}/{item}"),
+                LookupItem::Name(item) => format!("{key}.{item}"),
                 LookupItem::None | LookupItem::InterfaceNoPop => key.to_string(),
             };
             return vec![(to_lookup, Vec::new())];
@@ -1193,7 +1193,7 @@ fn lookup_keys(
         fn lookup_key(&self, resolve: &Resolve) -> String {
             let mut s = self.prefix.lookup_key(resolve);
             if let Some(item) = self.item {
-                s.push_str("/");
+                s.push_str(".");
                 s.push_str(item);
             }
             s

@@ -264,6 +264,8 @@ wasmtime_option_group! {
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
+        /// Enable guest debugging insrumentation.
+        pub guest_debug: Option<bool>,
         /// Configure whether compiled code can map native addresses to wasm.
         pub address_map: Option<bool>,
         /// Configure whether logging is enabled.
@@ -381,6 +383,9 @@ wasmtime_option_group! {
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚟 emoji in the component model specification.
         pub component_model_async_stackful: Option<bool>,
+        /// Component model support for threading: this corresponds
+        /// to the 🧵 emoji in the component model specification.
+        pub component_model_threading: Option<bool>,
         /// Component model support for `error-context`: this corresponds
         /// to the 📝 emoji in the component model specification.
         pub component_model_error_context: Option<bool>,
@@ -703,6 +708,11 @@ impl CommonOptions {
         }
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
+        }
+        match_feature! {
+            ["debug" : self.debug.guest_debug]
+            enable => config.guest_debug(enable),
+            _ => err,
         }
         if self.debug.coredump.is_some() {
             #[cfg(feature = "coredump")]
@@ -1052,6 +1062,7 @@ impl CommonOptions {
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
+            ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)

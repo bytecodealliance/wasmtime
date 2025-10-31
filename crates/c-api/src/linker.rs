@@ -211,3 +211,30 @@ pub unsafe extern "C" fn wasmtime_linker_get(
         None => false,
     }
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_linker_define_unknown_imports_as_traps(
+    linker: &mut wasmtime_linker_t,
+    module: &wasmtime_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        linker
+            .linker
+            .define_unknown_imports_as_traps(&module.module),
+        |_| (),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_linker_define_unknown_imports_as_default_values(
+    linker: &mut wasmtime_linker_t,
+    store: WasmtimeStoreContextMut<'_>,
+    module: &wasmtime_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        linker
+            .linker
+            .define_unknown_imports_as_default_values(store, &module.module),
+        |_| (),
+    )
+}

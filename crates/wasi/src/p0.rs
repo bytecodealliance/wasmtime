@@ -69,7 +69,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-#[wiggle::async_trait]
 impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
     fn args_get(
         &mut self,

@@ -7,6 +7,7 @@
 use cranelift_codegen::ir::{self, Block, ExceptionTag, Inst, Value};
 use cranelift_frontend::FunctionBuilder;
 use std::vec::Vec;
+use wasmtime_environ::FrameStackShape;
 
 /// Information about the presence of an associated `else` for an `if`, or the
 /// lack thereof.
@@ -190,14 +191,23 @@ impl ControlStackFrame {
 
     /// Pop values from the value stack so that it is left at the
     /// input-parameters to an else-block.
-    pub fn truncate_value_stack_to_else_params(&self, stack: &mut Vec<Value>) {
+    pub fn truncate_value_stack_to_else_params(
+        &self,
+        stack: &mut Vec<Value>,
+        stack_shape: &mut Vec<FrameStackShape>,
+    ) {
         debug_assert!(matches!(self, &ControlStackFrame::If { .. }));
         stack.truncate(self.original_stack_size());
+        stack_shape.truncate(self.original_stack_size());
     }
 
     /// Pop values from the value stack so that it is left at the state it was
     /// before this control-flow frame.
-    pub fn truncate_value_stack_to_original_size(&self, stack: &mut Vec<Value>) {
+    pub fn truncate_value_stack_to_original_size(
+        &self,
+        stack: &mut Vec<Value>,
+        stack_shape: &mut Vec<FrameStackShape>,
+    ) {
         // The "If" frame pushes its parameters twice, so they're available to the else block
         // (see also `FuncTranslationStacks::push_if`).
         // Yet, the original_stack_size member accounts for them only once, so that the else
@@ -212,7 +222,10 @@ impl ControlStackFrame {
             }
             _ => 0,
         };
-        stack.truncate(self.original_stack_size() - num_duplicated_params);
+
+        let new_len = self.original_stack_size() - num_duplicated_params;
+        stack.truncate(new_len);
+        stack_shape.truncate(new_len);
     }
 
     /// Restore the catch-handlers as they were outside of this block.
@@ -242,6 +255,13 @@ pub struct FuncTranslationStacks {
     /// A stack of values corresponding to the active values in the input wasm function at this
     /// point.
     pub(crate) stack: Vec<Value>,
+    /// "Shape" of stack at each index, if emitting debug instrumentation.
+    ///
+    /// When we pop `stack`, we automatically pop `stack_shape` as
+    /// well, but we never push automatically; this enables us to
+    /// determine which values are new and need to be flushed to
+    /// memory after translating an operator.
+    pub(crate) stack_shape: Vec<FrameStackShape>,
     /// A stack of active control flow operations at this point in the input wasm function.
     pub(crate) control_stack: Vec<ControlStackFrame>,
     /// Exception handler state, updated as we enter and exit
@@ -266,6 +286,7 @@ impl FuncTranslationStacks {
     pub(crate) fn new() -> Self {
         Self {
             stack: Vec::new(),
+            stack_shape: Vec::new(),
             control_stack: Vec::new(),
             handlers: HandlerState::default(),
             reachable: true,
@@ -274,6 +295,7 @@ impl FuncTranslationStacks {
 
     fn clear(&mut self) {
         debug_assert!(self.stack.is_empty());
+        debug_assert!(self.stack_shape.is_empty());
         debug_assert!(self.control_stack.is_empty());
         debug_assert!(self.handlers.is_empty());
         self.reachable = true;
@@ -313,6 +335,7 @@ impl FuncTranslationStacks {
 
     /// Pop one value.
     pub(crate) fn pop1(&mut self) -> Value {
+        self.pop_stack_shape(1);
         self.stack
             .pop()
             .expect("attempted to pop a value from an empty stack")
@@ -328,6 +351,7 @@ impl FuncTranslationStacks {
 
     /// Pop two values. Return them in the order they were pushed.
     pub(crate) fn pop2(&mut self) -> (Value, Value) {
+        self.pop_stack_shape(2);
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
         (v1, v2)
@@ -335,6 +359,7 @@ impl FuncTranslationStacks {
 
     /// Pop three values. Return them in the order they were pushed.
     pub(crate) fn pop3(&mut self) -> (Value, Value, Value) {
+        self.pop_stack_shape(3);
         let v3 = self.stack.pop().unwrap();
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
@@ -343,6 +368,7 @@ impl FuncTranslationStacks {
 
     /// Pop four values. Return them in the order they were pushed.
     pub(crate) fn pop4(&mut self) -> (Value, Value, Value, Value) {
+        self.pop_stack_shape(4);
         let v4 = self.stack.pop().unwrap();
         let v3 = self.stack.pop().unwrap();
         let v2 = self.stack.pop().unwrap();
@@ -352,6 +378,7 @@ impl FuncTranslationStacks {
 
     /// Pop five values. Return them in the order they were pushed.
     pub(crate) fn pop5(&mut self) -> (Value, Value, Value, Value, Value) {
+        self.pop_stack_shape(5);
         let v5 = self.stack.pop().unwrap();
         let v4 = self.stack.pop().unwrap();
         let v3 = self.stack.pop().unwrap();
@@ -379,6 +406,21 @@ impl FuncTranslationStacks {
         self.ensure_length_is_at_least(n);
         let new_len = self.stack.len() - n;
         self.stack.truncate(new_len);
+        self.stack_shape.truncate(new_len);
+    }
+
+    fn pop_stack_shape(&mut self, n: usize) {
+        // The `stack_shape` vec represents the *clean* slots (already
+        // flushed to memory); its length is always less than or equal
+        // to `stack`, but indices always correspond between the
+        // two. Thus a pop on `stack` may or may not pop something on
+        // `stack_shape`; but if `stack` is truncated down to a length
+        // L by some number of pops, truncating `stack_shape` to that
+        // same length L will pop exactly the right shapes and will
+        // ensure that any new pushes that are "dirty" will be
+        // correctly represented as such.
+        let new_len = self.stack.len() - n;
+        self.stack_shape.truncate(new_len);
     }
 
     /// Peek at the top `n` values on the stack in the order they were pushed.
@@ -467,6 +509,7 @@ impl FuncTranslationStacks {
         blocktype: wasmparser::BlockType,
     ) {
         debug_assert!(num_param_types <= self.stack.len());
+        self.assert_debug_stack_is_synced();
 
         // Push a second copy of our `if`'s parameters on the stack. This lets
         // us avoid saving them on the side in the `ControlStackFrame` for our
@@ -477,6 +520,15 @@ impl FuncTranslationStacks {
         for i in (self.stack.len() - num_param_types)..self.stack.len() {
             let val = self.stack[i];
             self.stack.push(val);
+            // Duplicate the stack-shape as well, if we're doing debug
+            // instrumentation. Note that we must have flushed
+            // everything before processing an `if`, so (as per the
+            // assert above) we can rely on either no shapes (if no
+            // instrumentation) or all shapes being present.
+            if !self.stack_shape.is_empty() {
+                let shape = self.stack_shape[i];
+                self.stack_shape.push(shape);
+            }
         }
 
         self.control_stack.push(ControlStackFrame::If {
@@ -490,6 +542,10 @@ impl FuncTranslationStacks {
             consequent_ends_reachable: None,
             blocktype,
         });
+    }
+
+    pub(crate) fn assert_debug_stack_is_synced(&self) {
+        debug_assert!(self.stack_shape.is_empty() || self.stack_shape.len() == self.stack.len());
     }
 }
 

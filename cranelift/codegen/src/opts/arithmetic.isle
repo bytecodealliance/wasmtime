@@ -86,6 +86,10 @@
 ;; Signed `x / d` when d is a power of two is a bit more involved...
 (rule (simplify_skeleton (sdiv x (iconst_u ty (u64_extract_power_of_two d))))
       (if-let true (u64_gt d 1))
+      ;; This rule musn't fire for the most negative number - which looks like
+      ;; a power of two (sign bit set and otherwise all zeros)
+      (if-let true (u32_lt (u64_trailing_zeros d)
+                           (u32_sub (ty_bits ty) 1)))
       (let ((k u32 (u64_trailing_zeros d))
             (t1 Value (sshr ty x (iconst_u ty (u32_sub k 1))))
             (t2 Value (ushr ty t1 (iconst_u ty (u32_sub (ty_bits ty) k))))

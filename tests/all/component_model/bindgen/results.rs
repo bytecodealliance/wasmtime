@@ -245,7 +245,7 @@ mod enum_error {
                 enum-error: func(a: f64) -> result<f64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 },
+        trappable_error_type: { "inline:inline/imports.e1" => TrappableE1 },
         imports: { default: trappable },
     });
 
@@ -427,7 +427,7 @@ mod record_error {
                 record-error: func(a: f64) -> result<f64, e2>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 },
+        trappable_error_type: { "inline:inline/imports.e2" => TrappableE2 },
         imports: { default: trappable },
     });
 
@@ -600,7 +600,7 @@ mod variant_error {
                 variant-error: func(a: f64) -> result<f64, e3>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 },
+        trappable_error_type: { "inline:inline/imports.e3" => TrappableE3 },
         imports: { default: trappable },
     });
 
@@ -797,7 +797,7 @@ mod multiple_interfaces_error {
                 enum-error: func(a: f64) -> result<f64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/types/e1" => TrappableE1 },
+        trappable_error_type: { "inline:inline/types.e1" => TrappableE1 },
         imports: { default: trappable },
     });
 

@@ -34,7 +34,7 @@ bindgen!({
     with: {
         // Specify that our host resource is going to point to the `MyLogger`
         // which is defined just below this macro.
-        "example:imported-resources/logging/logger": MyLogger,
+        "example:imported-resources/logging.logger": MyLogger,
     },
 });
 

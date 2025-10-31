@@ -1,15 +1,14 @@
 //! Compilation support for the component model.
 
 use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{
-    Abi, CompiledFunctionBody, EntityRef, FuncKey, HostCall, ModuleInternedTypeIndex, PtrSize,
-    TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
-    fact::PREPARE_CALL_FIXED_PARAMS,
+    Abi, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PtrSize, TrapSentinel, Tunables,
+    WasmFuncType, WasmValType, component::*, fact::PREPARE_CALL_FIXED_PARAMS,
 };
 
 struct TrampolineCompiler<'a> {
@@ -19,9 +18,8 @@ struct TrampolineCompiler<'a> {
     component: &'a Component,
     types: &'a ComponentTypesBuilder,
     offsets: VMComponentOffsets<u8>,
-    abi: Abi,
     block0: ir::Block,
-    signature: ModuleInternedTypeIndex,
+    signature: &'a WasmFuncType,
     tunables: &'a Tunables,
 }
 
@@ -101,19 +99,13 @@ impl<'a> TrampolineCompiler<'a> {
         func_compiler: &'a mut super::FunctionCompiler<'_>,
         component: &'a Component,
         types: &'a ComponentTypesBuilder,
-        index: TrampolineIndex,
-        abi: Abi,
+        signature: &'a WasmFuncType,
         tunables: &'a Tunables,
     ) -> TrampolineCompiler<'a> {
         let isa = &*compiler.isa;
-        let signature = component.trampolines[index];
-        let ty = types[signature].unwrap_func();
         let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
-            match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
-                Abi::Array => crate::array_call_signature(isa),
-            },
+            crate::wasm_call_signature(isa, signature, &compiler.tunables),
         );
         let (builder, block0) = func_compiler.builder(func);
         TrampolineCompiler {
@@ -123,7 +115,6 @@ impl<'a> TrampolineCompiler<'a> {
             component,
             types,
             offsets: VMComponentOffsets::new(isa.pointer_bytes(), component),
-            abi,
             block0,
             signature,
             tunables,
@@ -139,16 +130,7 @@ impl<'a> TrampolineCompiler<'a> {
                 to,
                 to64,
             } => {
-                match self.abi {
-                    Abi::Wasm => {
-                        self.translate_transcode(*op, *from, *from64, *to, *to64);
-                    }
-                    // Transcoders can only actually be called by Wasm, so let's assert
-                    // that here.
-                    Abi::Array => {
-                        self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
-                    }
-                }
+                self.translate_transcode(*op, *from, *from64, *to, *to64);
             }
             Trampoline::LowerImport {
                 index,
@@ -195,10 +177,7 @@ impl<'a> TrampolineCompiler<'a> {
             }
             Trampoline::ResourceNew { instance, ty } => {
                 // Currently this only supports resources represented by `i32`
-                assert_eq!(
-                    self.types[self.signature].unwrap_func().params()[0],
-                    WasmValType::I32
-                );
+                assert_eq!(self.signature.params()[0], WasmValType::I32);
                 self.translate_libcall(
                     host::resource_new32,
                     TrapSentinel::NegativeOne,
@@ -211,10 +190,7 @@ impl<'a> TrampolineCompiler<'a> {
             }
             Trampoline::ResourceRep { instance, ty } => {
                 // Currently this only supports resources represented by `i32`
-                assert_eq!(
-                    self.types[self.signature].unwrap_func().returns()[0],
-                    WasmValType::I32
-                );
+                assert_eq!(self.signature.returns()[0], WasmValType::I32);
                 self.translate_libcall(
                     host::resource_rep32,
                     TrapSentinel::NegativeOne,
@@ -701,11 +677,10 @@ impl<'a> TrampolineCompiler<'a> {
             }
             Trampoline::SyncStartCall { callback } => {
                 let pointer_type = self.isa.pointer_type();
-                let wasm_func_ty = &self.types[self.signature].unwrap_func();
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     &WasmFuncType::new(
                         Box::new([]),
-                        wasm_func_ty.returns().iter().copied().collect(),
+                        self.signature.returns().iter().copied().collect(),
                     ),
                     &mut self.builder,
                     &[],
@@ -789,6 +764,94 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
+            Trampoline::ThreadIndex => {
+                self.translate_libcall(
+                    host::thread_index,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ThreadNewIndirect {
+                instance,
+                start_func_table_idx,
+                start_func_ty_idx,
+            } => {
+                self.translate_libcall(
+                    host::thread_new_indirect,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(me.index_value(*start_func_table_idx));
+                        params.push(me.index_value(*start_func_ty_idx));
+                    },
+                );
+            }
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => {
+                self.translate_libcall(
+                    host::thread_switch_to,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => {
+                self.translate_libcall(
+                    host::thread_suspend,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
+            Trampoline::ThreadResumeLater { instance } => {
+                self.translate_libcall(
+                    host::thread_resume_later,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                    },
+                );
+            }
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => {
+                self.translate_libcall(
+                    host::thread_yield_to,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
         }
     }
 
@@ -827,28 +890,14 @@ impl<'a> TrampolineCompiler<'a> {
     /// a stack-allocated array.
     fn store_wasm_arguments(&mut self, args: &[Value]) -> (Value, Value) {
         let pointer_type = self.isa.pointer_type();
-        let wasm_func_ty = &self.types[self.signature].unwrap_func();
 
-        match self.abi {
-            // For the wasm ABI a stack needs to be allocated and these
-            // arguments are stored onto the stack.
-            Abi::Wasm => {
-                let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
-                    wasm_func_ty,
-                    &mut self.builder,
-                    args,
-                );
-                let len = self.builder.ins().iconst(pointer_type, i64::from(len));
-                (ptr, len)
-            }
-
-            // For the array ABI all arguments were already in a stack, so
-            // forward along that pointer/len.
-            Abi::Array => {
-                let params = self.builder.func.dfg.block_params(self.block0);
-                (params[2], params[3])
-            }
-        }
+        let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+            self.signature,
+            &mut self.builder,
+            args,
+        );
+        let len = self.builder.ins().iconst(pointer_type, i64::from(len));
+        (ptr, len)
     }
 
     /// Convenience wrapper around `translate_hostcall` to enable type inference
@@ -889,7 +938,6 @@ impl<'a> TrampolineCompiler<'a> {
         extra_host_args: impl FnOnce(&mut Self, &mut Vec<ir::Value>),
     ) {
         let pointer_type = self.isa.pointer_type();
-        let wasm_func_ty = self.types[self.signature].unwrap_func();
 
         // Load all parameters in an ABI-agnostic fashion, of which the
         // `VMComponentContext` will be the first.
@@ -921,7 +969,7 @@ impl<'a> TrampolineCompiler<'a> {
             WasmArgs::InRegistersUpTo(n) => {
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     &WasmFuncType::new(
-                        wasm_func_ty.params().iter().skip(n).copied().collect(),
+                        self.signature.params().iter().skip(n).copied().collect(),
                         Box::new([]),
                     ),
                     &mut self.builder,
@@ -970,11 +1018,11 @@ impl<'a> TrampolineCompiler<'a> {
         // Acquire the result of this function (if any) and interpret it
         // according to `host_result`.
         //
-        // NOte that all match arms here end with `abi_store_results` which
+        // Note that all match arms here end with `abi_store_results` which
         // accounts for the ABI of this function when storing results.
         let result = self.builder.func.dfg.inst_results(call).get(0).copied();
         let result_ty = result.map(|v| self.builder.func.dfg.value_type(v));
-        let expected = wasm_func_ty.returns();
+        let expected = self.signature.returns();
         match host_result.into() {
             HostResult::Sentinel(TrapSentinel::NegativeOne) => {
                 assert_eq!(expected.len(), 1);
@@ -1006,7 +1054,7 @@ impl<'a> TrampolineCompiler<'a> {
                 let len = len.or(val_raw_len).unwrap();
                 self.raise_if_host_trapped(result.unwrap());
                 let results = self.compiler.load_values_from_array(
-                    wasm_func_ty.returns(),
+                    self.signature.returns(),
                     &mut self.builder,
                     ptr,
                     len,
@@ -1184,11 +1232,7 @@ impl<'a> TrampolineCompiler<'a> {
                 i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
             );
 
-            let sig = crate::wasm_call_signature(
-                self.isa,
-                &self.types[self.signature].unwrap_func(),
-                &self.compiler.tunables,
-            );
+            let sig = crate::wasm_call_signature(self.isa, self.signature, &self.compiler.tunables);
             let sig_ref = self.builder.import_signature(sig);
 
             // NB: note that the "caller" vmctx here is the caller of this
@@ -1291,53 +1335,17 @@ impl<'a> TrampolineCompiler<'a> {
         )
     }
 
+    /// Get a function's parameters regardless of the ABI in use.
+    ///
+    /// This emits code to load the parameters from the array-call's ABI's values
+    /// vector, if necessary.
     fn abi_load_params(&mut self) -> Vec<ir::Value> {
-        let mut block0_params = self.builder.func.dfg.block_params(self.block0).to_vec();
-        match self.abi {
-            // Wasm and native ABIs pass parameters as normal function
-            // parameters.
-            Abi::Wasm => block0_params,
-
-            // The array ABI passes a pointer/length as the 3rd/4th arguments
-            // and those are used to load the actual wasm parameters.
-            Abi::Array => {
-                let results = self.compiler.load_values_from_array(
-                    self.types[self.signature].unwrap_func().params(),
-                    &mut self.builder,
-                    block0_params[2],
-                    block0_params[3],
-                );
-                block0_params.truncate(2);
-                block0_params.extend(results);
-                block0_params
-            }
-        }
+        self.builder.func.dfg.block_params(self.block0).to_vec()
     }
 
+    /// Emit code to return the given result values, regardless of the ABI in use.
     fn abi_store_results(&mut self, results: &[ir::Value]) {
-        match self.abi {
-            // Wasm/native ABIs return values as usual.
-            Abi::Wasm => {
-                self.builder.ins().return_(results);
-            }
-
-            // The array ABI stores all results in the pointer/length passed
-            // as arguments to this function, which contractually are required
-            // to have enough space for the results.
-            Abi::Array => {
-                let block0_params = self.builder.func.dfg.block_params(self.block0);
-                let (ptr, len) = (block0_params[2], block0_params[3]);
-                self.compiler.store_values_to_array(
-                    &mut self.builder,
-                    self.types[self.signature].unwrap_func().returns(),
-                    results,
-                    ptr,
-                    len,
-                );
-                let true_value = self.builder.ins().iconst(ir::types::I8, 1);
-                self.builder.ins().return_(&[true_value]);
-            }
-        }
+        self.builder.ins().return_(results);
     }
 
     fn raise_if_host_trapped(&mut self, succeeded: ir::Value) {
@@ -1390,10 +1398,31 @@ impl ComponentCompiler for Compiler {
         key: FuncKey,
         abi: Abi,
         tunables: &Tunables,
-        _symbol: &str,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody> {
         let (abi2, trampoline_index) = key.unwrap_component_trampoline();
         debug_assert_eq!(abi, abi2);
+        let sig = types[component.component.trampolines[trampoline_index]].unwrap_func();
+
+        match abi {
+            // Fall through to the trampoline compiler.
+            Abi::Wasm => {}
+
+            // Implement the array-abi trampoline in terms of calling the
+            // wasm-abi trampoline.
+            Abi::Array => {
+                let offsets =
+                    VMComponentOffsets::new(self.isa.pointer_bytes(), &component.component);
+                return Ok(self.array_to_wasm_trampoline(
+                    key,
+                    FuncKey::ComponentTrampoline(Abi::Wasm, trampoline_index),
+                    sig,
+                    symbol,
+                    offsets.vm_store_context(),
+                    wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                )?);
+            }
+        }
 
         let mut compiler = self.function_compiler();
         let mut c = TrampolineCompiler::new(
@@ -1401,8 +1430,7 @@ impl ComponentCompiler for Compiler {
             &mut compiler,
             &component.component,
             types,
-            trampoline_index,
-            abi,
+            sig,
             tunables,
         );
 
@@ -1418,20 +1446,18 @@ impl ComponentCompiler for Compiler {
             vmctx,
             wasmtime_environ::component::VMCOMPONENT_MAGIC,
         );
-        if let Abi::Wasm = abi {
-            let vm_store_context = c.builder.ins().load(
-                pointer_type,
-                MemFlags::trusted(),
-                vmctx,
-                i32::try_from(c.offsets.vm_store_context()).unwrap(),
-            );
-            super::save_last_wasm_exit_fp_and_pc(
-                &mut c.builder,
-                pointer_type,
-                &c.offsets.ptr,
-                vm_store_context,
-            );
-        }
+        let vm_store_context = c.builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            vmctx,
+            i32::try_from(c.offsets.vm_store_context()).unwrap(),
+        );
+        super::save_last_wasm_exit_fp_and_pc(
+            &mut c.builder,
+            pointer_type,
+            &c.offsets.ptr,
+            vm_store_context,
+        );
 
         c.translate(&component.trampolines[trampoline_index]);
         c.builder.finalize();
@@ -1442,7 +1468,139 @@ impl ComponentCompiler for Compiler {
             needs_gc_heap: false,
         })
     }
+
+    fn compile_intrinsic(
+        &self,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        types: &ComponentTypesBuilder,
+        intrinsic: UnsafeIntrinsic,
+        abi: Abi,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody> {
+        let wasm_func_ty = WasmFuncType::new(
+            intrinsic.core_params().into(),
+            intrinsic.core_results().into(),
+        );
+
+        match abi {
+            // Fall through to the trampoline compiler.
+            Abi::Wasm => {}
+
+            // Implement the array-abi trampoline in terms of calling the
+            // wasm-abi trampoline.
+            Abi::Array => {
+                let offsets =
+                    VMComponentOffsets::new(self.isa.pointer_bytes(), &component.component);
+                return Ok(self.array_to_wasm_trampoline(
+                    FuncKey::UnsafeIntrinsic(abi, intrinsic),
+                    FuncKey::UnsafeIntrinsic(Abi::Wasm, intrinsic),
+                    &wasm_func_ty,
+                    symbol,
+                    offsets.vm_store_context(),
+                    wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                )?);
+            }
+        }
+
+        let mut compiler = self.function_compiler();
+        let mut c = TrampolineCompiler::new(
+            self,
+            &mut compiler,
+            &component.component,
+            &types,
+            &wasm_func_ty,
+            tunables,
+        );
+
+        match intrinsic {
+            UnsafeIntrinsic::U8NativeLoad
+            | UnsafeIntrinsic::U16NativeLoad
+            | UnsafeIntrinsic::U32NativeLoad
+            | UnsafeIntrinsic::U64NativeLoad => c.translate_load_intrinsic(intrinsic)?,
+            UnsafeIntrinsic::U8NativeStore
+            | UnsafeIntrinsic::U16NativeStore
+            | UnsafeIntrinsic::U32NativeStore
+            | UnsafeIntrinsic::U64NativeStore => c.translate_store_intrinsic(intrinsic)?,
+            UnsafeIntrinsic::StoreDataAddress => {
+                let [callee_vmctx, _caller_vmctx] = *c.abi_load_params() else {
+                    unreachable!()
+                };
+                let pointer_type = self.isa.pointer_type();
+
+                // Load the `*mut VMStoreContext` out of our vmctx.
+                let store_ctx = c.builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                        .with_can_move(),
+                    callee_vmctx,
+                    i32::try_from(c.offsets.vm_store_context()).unwrap(),
+                );
+
+                // Load the `*mut T` out of the `VMStoreContext`.
+                let data_address = c.builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                        .with_can_move(),
+                    store_ctx,
+                    i32::from(c.offsets.ptr.vmstore_context_store_data()),
+                );
+
+                // Zero-extend the address if we are on a 32-bit architecture.
+                let data_address = match pointer_type.bits() {
+                    32 => c.builder.ins().uextend(ir::types::I64, data_address),
+                    64 => data_address,
+                    p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+                };
+
+                c.abi_store_results(&[data_address]);
+            }
+        }
+
+        c.builder.finalize();
+        compiler.cx.abi = Some(abi);
+
+        Ok(CompiledFunctionBody {
+            code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: false,
+        })
+    }
 }
+
+macro_rules! unsafe_intrinsic_clif_params_results {
+    (
+        $(
+            $symbol:expr => $variant:ident : $ctor:ident ( $( $param:ident : $param_ty:ident ),* ) $( -> $result_ty:ident )? ;
+        )*
+    ) => {
+        fn unsafe_intrinsic_clif_params(intrinsic: UnsafeIntrinsic) -> &'static [ir::types::Type] {
+            match intrinsic {
+                $(
+                    UnsafeIntrinsic::$variant => &[ $( unsafe_intrinsic_clif_params_results!(@clif_type $param_ty) ),* ],
+                )*
+            }
+        }
+
+        fn unsafe_intrinsic_clif_results(intrinsic: UnsafeIntrinsic) -> &'static [ir::types::Type] {
+            match intrinsic {
+                $(
+                    UnsafeIntrinsic::$variant => &[ $( unsafe_intrinsic_clif_params_results!(@clif_type $result_ty) )? ],
+                )*
+            }
+        }
+    };
+
+    (@clif_type u8) => { ir::types::I8 };
+    (@clif_type u16) => { ir::types::I16 };
+    (@clif_type u32) => { ir::types::I32 };
+    (@clif_type u64) => { ir::types::I64 };
+}
+
+wasmtime_environ::for_each_unsafe_intrinsic!(unsafe_intrinsic_clif_params_results);
 
 impl TrampolineCompiler<'_> {
     fn translate_transcode(
@@ -1626,6 +1784,86 @@ impl TrampolineCompiler<'_> {
             from_vmmemory_definition,
             i32::from(self.offsets.ptr.vmmemory_definition_base()),
         )
+    }
+
+    fn translate_load_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
+        // Emit code for a native-load intrinsic.
+        debug_assert_eq!(intrinsic.core_params(), &[WasmValType::I64]);
+        debug_assert_eq!(intrinsic.core_results().len(), 1);
+
+        let wasm_ty = intrinsic.core_results()[0];
+        let clif_ty = unsafe_intrinsic_clif_results(intrinsic)[0];
+
+        let [_callee_vmctx, _caller_vmctx, pointer] = *self.abi_load_params() else {
+            unreachable!()
+        };
+
+        // Truncate the pointer, if necessary.
+        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
+        let pointer = match self.isa.pointer_bits() {
+            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
+            64 => pointer,
+            p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+        };
+
+        // Do the load!
+        let mut value = self
+            .builder
+            .ins()
+            .load(clif_ty, ir::MemFlags::trusted(), pointer, 0);
+
+        // Extend the value, if necessary. When implementing the
+        // `u8-native-load` intrinsic, for example, we will load a Cranelift
+        // value of type `i8` but we need to extend it to an `i32` because
+        // Wasm doesn't have an `i8` core value type.
+        let wasm_clif_ty = crate::value_type(self.isa, wasm_ty);
+        if clif_ty != wasm_clif_ty {
+            assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
+            // NB: all of our unsafe intrinsics for native loads are
+            // unsigned, so we always zero-extend.
+            value = self.builder.ins().uextend(wasm_clif_ty, value);
+        }
+
+        self.abi_store_results(&[value]);
+        Ok(())
+    }
+
+    fn translate_store_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
+        debug_assert!(intrinsic.core_results().is_empty());
+        debug_assert!(matches!(intrinsic.core_params(), [WasmValType::I64, _]));
+
+        let wasm_ty = intrinsic.core_params()[1];
+        let clif_ty = unsafe_intrinsic_clif_params(intrinsic)[1];
+
+        let [_callee_vmctx, _caller_vmctx, pointer, mut value] = *self.abi_load_params() else {
+            unreachable!()
+        };
+
+        // Truncate the pointer, if necessary.
+        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
+        let pointer = match self.isa.pointer_bits() {
+            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
+            64 => pointer,
+            p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+        };
+
+        // Truncate the value, if necessary. For example, with
+        // `u8-native-store` we will be given an `i32` from Wasm (because
+        // core Wasm does not have an 8-bit integer value type) and we need
+        // to reduce that into an `i8`.
+        let wasm_ty = crate::value_type(self.isa, wasm_ty);
+        if clif_ty != wasm_ty {
+            assert!(clif_ty.bytes() < wasm_ty.bytes());
+            value = self.builder.ins().ireduce(clif_ty, value);
+        }
+
+        // Do the store!
+        self.builder
+            .ins()
+            .store(ir::MemFlags::trusted(), value, pointer, 0);
+
+        self.abi_store_results(&[]);
+        Ok(())
     }
 }
 

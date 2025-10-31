@@ -148,7 +148,7 @@ fn simple() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
         "a",
-        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
+        |mut store: StoreContextMut<'_, Option<String>>, _, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());
                 *store.data_mut() = Some(s.to_string());
@@ -249,7 +249,7 @@ fn functions_in_instances() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.instance("test:test/foo")?.func_new(
         "a",
-        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
+        |mut store: StoreContextMut<'_, Option<String>>, _, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());
                 *store.data_mut() = Some(s.to_string());
@@ -462,7 +462,7 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
         "thunk",
-        |mut store: StoreContextMut<'_, DynamicState>, _, _| {
+        |mut store: StoreContextMut<'_, DynamicState>, _, _, _| {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
             assert_eq!(
@@ -848,7 +848,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         linker
             .root()
-            .func_new_concurrent("f1", |_, args, results| {
+            .func_new_concurrent("f1", |_, _, args, results| {
                 if let Val::U32(x) = &args[0] {
                     assert_eq!(*x, 1);
                     Box::pin(async {
@@ -861,7 +861,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f2", |_, args, results| {
+            .func_new_concurrent("f2", |_, _, args, results| {
                 if let Val::Tuple(tuple) = &args[0] {
                     if let Val::String(s) = &tuple[0] {
                         assert_eq!(s.deref(), "abc");
@@ -878,7 +878,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f3", |_, args, results| {
+            .func_new_concurrent("f3", |_, _, args, results| {
                 if let Val::U32(x) = &args[0] {
                     assert_eq!(*x, 8);
                     Box::pin(async {
@@ -891,7 +891,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f4", |_, args, results| {
+            .func_new_concurrent("f4", |_, _, args, results| {
                 if let Val::Tuple(tuple) = &args[0] {
                     if let Val::String(s) = &tuple[0] {
                         assert_eq!(s.deref(), "abc");
@@ -907,7 +907,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 }
             })?;
     } else {
-        linker.root().func_new("f1", |_, args, results| {
+        linker.root().func_new("f1", |_, _, args, results| {
             if let Val::U32(x) = &args[0] {
                 assert_eq!(*x, 1);
                 results[0] = Val::U32(2);
@@ -916,7 +916,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!()
             }
         })?;
-        linker.root().func_new("f2", |_, args, results| {
+        linker.root().func_new("f2", |_, _, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
                 if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
@@ -929,7 +929,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!()
             }
         })?;
-        linker.root().func_new("f3", |_, args, results| {
+        linker.root().func_new("f3", |_, _, args, results| {
             if let Val::U32(x) = &args[0] {
                 assert_eq!(*x, 8);
                 results[0] = Val::String("xyz".into());
@@ -938,7 +938,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!();
             }
         })?;
-        linker.root().func_new("f4", |_, args, results| {
+        linker.root().func_new("f4", |_, _, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
                 if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
@@ -1126,7 +1126,7 @@ fn no_actual_wasm_code() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_new("f", |mut store: StoreContextMut<'_, u32>, _, _| {
+        .func_new("f", |mut store: StoreContextMut<'_, u32>, _, _, _| {
             *store.data_mut() += 1;
             Ok(())
         })?;

@@ -1,24 +1,24 @@
-
 [package]
 name = "wizer-fuzz"
 version = "0.0.0"
-authors = ["Automatically generated"]
 publish = false
-edition = "2018"
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
-env_logger = "0.11.3"
-libfuzzer-sys = "0.4"
-log = "0.4.21"
-wasm-smith = "0.202.0"
+env_logger = { workspace = true }
+libfuzzer-sys = { workspace = true }
+log = { workspace = true }
+wasm-smith = { workspace = true }
 wasmprinter = { workspace = true }
 wasmtime = { workspace = true }
-
-[dependencies.wizer]
-path = ".."
+wasmtime-wizer = { workspace = true, features = ["wasmtime"] }
 
 [[bin]]
 name = "same_result"

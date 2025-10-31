@@ -6,5 +6,5 @@
 
 pub mod commands;
 
-#[cfg(feature = "run")]
+#[cfg(any(feature = "run", feature = "wizer"))]
 pub(crate) mod common;

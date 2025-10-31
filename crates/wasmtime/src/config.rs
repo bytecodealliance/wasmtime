@@ -431,8 +431,9 @@ impl Config {
         self
     }
 
-    /// Configures whether DWARF debug information will be emitted during
-    /// compilation.
+    /// Configures whether DWARF debug information will be emitted
+    /// during compilation for a native debugger on the Wasmtime
+    /// process to consume.
     ///
     /// Note that the `debug-builtins` compile-time Cargo feature must also be
     /// enabled for native debuggers such as GDB or LLDB to be able to debug
@@ -441,7 +442,41 @@ impl Config {
     /// By default this option is `false`.
     /// **Note** Enabling this option is not compatible with the Winch compiler.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.generate_native_debuginfo = Some(enable);
+        self.tunables.debug_native = Some(enable);
+        self
+    }
+
+    /// Configures whether compiled guest code will be instrumented to
+    /// provide debugging at the Wasm VM level.
+    ///
+    /// This is required in order to enable a guest-level debugging
+    /// API that can precisely examine Wasm VM state and (eventually,
+    /// once it is complete) set breakpoints and watchpoints and step
+    /// through code.
+    ///
+    /// Without this enabled, debugging can only be done via a native
+    /// debugger operating on the compiled guest code (see
+    /// [`Config::debug_info`] and is "best-effort": we may be able to
+    /// recover some Wasm locals or operand stack values, but it is
+    /// not guaranteed, even when optimizations are disabled.
+    ///
+    /// When this is enabled, additional instrumentation is inserted
+    /// that directly tracks the Wasm VM state at every step. This has
+    /// some performance impact, but allows perfect debugging
+    /// fidelity.
+    ///
+    /// Breakpoints, watchpoints, and stepping are not yet supported,
+    /// but will be added in a future version of Wasmtime.
+    ///
+    /// This enables use of the [`crate::DebugFrameCursor`] API which is
+    /// provided by [`crate::Caller::debug_frames`] from within a
+    /// hostcall context.
+    ///
+    /// ***Note*** Enabling this option is not compatible with the
+    /// Winch compiler.
+    #[cfg(feature = "debug")]
+    pub fn guest_debug(&mut self, enable: bool) -> &mut Self {
+        self.tunables.debug_guest = Some(enable);
         self
     }
 
@@ -627,7 +662,7 @@ impl Config {
     ///
     /// Epochs (and fuel) do not assist in handling WebAssembly code blocked in
     /// a call to the host. For example if the WebAssembly function calls
-    /// `wasi:io/poll/poll` to sleep epochs will not assist in waking this up or
+    /// `wasi:io/poll.poll` to sleep epochs will not assist in waking this up or
     /// timing it out. Epochs intentionally only affect running WebAssembly code
     /// itself and it's left to the embedder to determine how best to wake up
     /// indefinitely blocking code in the host.
@@ -1170,6 +1205,19 @@ impl Config {
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async_stackful(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_ASYNC_STACKFUL, enable);
+        self
+    }
+
+    /// This corresponds to the 🧵 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    ///
+    /// [proposal]:
+    ///     https://github.com/WebAssembly/component-model/pull/557
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_threading(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_THREADING, enable);
         self
     }
 
@@ -2352,6 +2400,10 @@ impl Config {
             None
         };
 
+        if !cfg!(feature = "debug") && tunables.debug_guest {
+            bail!("debug instrumentation support was disabled at compile time");
+        }
+
         Ok((tunables, features))
     }
 
@@ -2874,8 +2926,9 @@ pub enum Strategy {
     /// code generator which generates high quality machine code.
     Cranelift,
 
-    /// A baseline compiler for WebAssembly, currently under active development and not ready for
-    /// production applications.
+    /// A low-latency baseline compiler for WebAssembly.
+    /// For more details regarding ISA support and Wasm proposals support
+    /// see https://docs.wasmtime.dev/stability-tiers.html#current-tier-status
     Winch,
 }
 
@@ -3061,6 +3114,12 @@ pub enum RegallocAlgorithm {
     /// cannot foresee constraints or issues that may occur further
     /// ahead in the code, so the code may have more spills and moves as
     /// a result.
+    ///
+    /// > **Note**: This algorithm is not yet production-ready and has
+    /// > historically had known problems. It is not recommended to enable this
+    /// > algorithm for security-sensitive applications and the Wasmtime project
+    /// > does not consider this configuration option for issuing security
+    /// > advisories at this time.
     SinglePass,
 }
 
@@ -3293,11 +3352,11 @@ impl PoolingAllocationConfig {
     /// How much memory, in bytes, to keep resident for async stacks allocated
     /// with the pooling allocator.
     ///
-    /// When [`PoolingAllocationConfig::async_stack_zeroing`] is enabled then
-    /// Wasmtime will reset the contents of async stacks back to zero upon
-    /// deallocation. This option can be used to perform the zeroing operation
-    /// with `memset` up to a certain threshold of bytes instead of using system
-    /// calls to reset the stack to zero.
+    /// When [`Config::async_stack_zeroing`] is enabled then Wasmtime will reset
+    /// the contents of async stacks back to zero upon deallocation. This option
+    /// can be used to perform the zeroing operation with `memset` up to a
+    /// certain threshold of bytes instead of using system calls to reset the
+    /// stack to zero.
     ///
     /// Note that when using this option the memory with async stacks will
     /// never be decommitted.

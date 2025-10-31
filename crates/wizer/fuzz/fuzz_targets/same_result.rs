@@ -19,6 +19,8 @@ use libfuzzer_sys::{
     arbitrary::{Arbitrary, Unstructured},
     fuzz_target,
 };
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
 use wasm_smith::MemoryOffsetChoices;
 use wasmtime::*;
 
@@ -35,8 +37,8 @@ fuzz_target!(|data: &[u8]| {
     // We want small memories that are quick to compare, but we also want to
     // allow memories to grow so we can shake out any memory-growth-related
     // bugs, so we choose `2` instead of `1`.
-    config.max_memory32_pages = 2;
-    config.max_memory64_pages = 2;
+    config.max_memory32_bytes = 2 * 65536;
+    config.max_memory64_bytes = 2 * 65536;
 
     // Always generate at least one function that we can hopefully use as an
     // initialization function.
@@ -58,6 +60,10 @@ fuzz_target!(|data: &[u8]| {
     config.reference_types_enabled = false;
     config.bulk_memory_enabled = false;
 
+    // Disable all imports
+    config.min_imports = 0;
+    config.max_imports = 0;
+
     let Ok(mut module) = wasm_smith::Module::new(config, &mut u) else {
         return;
     };
@@ -73,21 +79,9 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    let mut config = Config::new();
-    wasmtime::Cache::from_file(None)
-        .map(|cache| config.cache(Some(cache)))
-        .unwrap();
-    config.wasm_multi_memory(true);
-    config.wasm_multi_value(true);
-
+    let config = Config::new();
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, &wasm).unwrap();
-    if module.imports().len() > 0 {
-        // Not using the `WasmConfig` for this because we want to encourage
-        // imports/exports between modules within the bundle, just not at the
-        // top level.
-        return;
-    }
 
     let mut main_funcs = vec![];
     let mut init_funcs = vec![];
@@ -101,18 +95,21 @@ fuzz_target!(|data: &[u8]| {
     }
 
     'init_loop: for init_func in init_funcs {
-        log::debug!("Using initialization function: {:?}", init_func);
+        log::debug!("Using initialization function: {init_func:?}");
 
         // Create a wizened snapshot of the given Wasm using `init_func` as the
         // initialization routine.
-        let mut wizer = wizer::Wizer::new();
-        wizer
-            .wasm_multi_memory(true)
-            .wasm_multi_value(true)
-            .init_func(init_func);
-        let snapshot_wasm = match wizer.run(&wasm) {
-            Err(_) => continue 'init_loop,
-            Ok(s) => s,
+        let snapshot_wasm = {
+            let mut wizer = wasmtime_wizer::Wizer::new();
+            let mut store = Store::new(&engine, ());
+            wizer.init_func(init_func);
+
+            match assert_ready(wizer.run(&mut store, &wasm, async |store, module| {
+                Instance::new(store, module, &[])
+            })) {
+                Err(_) => continue 'init_loop,
+                Ok(s) => s,
+            }
         };
         let snapshot_module =
             Module::new(&engine, &snapshot_wasm).expect("snapshot should be valid wasm");
@@ -127,15 +124,18 @@ fuzz_target!(|data: &[u8]| {
                 // it as a main function.
                 continue 'main_loop;
             }
-            log::debug!("Using main function: {:?}", main_func);
+            log::debug!("Using main function: {main_func:?}");
 
             let mut store = Store::new(&engine, ());
 
             // Instantiate the snapshot and call the main function.
             let snapshot_instance = Instance::new(&mut store, &snapshot_module, &[]).unwrap();
             let snapshot_main_func = snapshot_instance.get_func(&mut store, main_func).unwrap();
-            let main_args =
-                wizer::dummy::dummy_values(snapshot_main_func.ty(&store).params()).unwrap();
+            let main_args = snapshot_main_func
+                .ty(&store)
+                .params()
+                .map(|t| t.default_value().unwrap())
+                .collect::<Vec<_>>();
             let mut snapshot_result =
                 vec![wasmtime::Val::I32(0); snapshot_main_func.ty(&store).results().len()];
             let snapshot_call_result =
@@ -169,9 +169,8 @@ fuzz_target!(|data: &[u8]| {
                 (s, r) => {
                     panic!(
                         "divergence between whether the main function traps or not!\n\n\
-                         no snapshotting result = {:?}\n\n\
-                         snapshotted result = {:?}",
-                        r, s,
+                         no snapshotting result = {r:?}\n\n\
+                         snapshotted result = {s:?}",
                     );
                 }
             }
@@ -210,6 +209,14 @@ fuzz_target!(|data: &[u8]| {
     }
 });
 
+fn assert_ready<F: Future>(f: F) -> F::Output {
+    let mut context = Context::from_waker(Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(ret) => ret,
+        Poll::Pending => panic!("future wasn't ready"),
+    }
+}
+
 fn assert_val_eq(a: &Val, b: &Val) {
     match (a, b) {
         (Val::I32(a), Val::I32(b)) => assert_eq!(a, b),
@@ -225,6 +232,6 @@ fn assert_val_eq(a: &Val, b: &Val) {
             a == b || (a.is_nan() && b.is_nan())
         }),
         (Val::V128(a), Val::V128(b)) => assert_eq!(a, b),
-        _ => panic!("{:?} != {:?}", a, b),
+        _ => panic!("{a:?} != {b:?}"),
     }
 }

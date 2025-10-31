@@ -1,10 +1,9 @@
-use std::ffi::c_void;
-
-use wasmtime::component::{Instance, Linker, LinkerInstance, Val};
-
 use crate::{
-    WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_error_t, wasmtime_module_t,
+    WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_component_resource_type_t,
+    wasmtime_error_t, wasmtime_module_t,
 };
+use std::ffi::c_void;
+use wasmtime::component::{Instance, Linker, LinkerInstance, Val};
 
 use super::{wasmtime_component_t, wasmtime_component_val_t};
 
@@ -19,7 +18,7 @@ pub struct wasmtime_component_linker_instance_t<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_new(
+pub extern "C" fn wasmtime_component_linker_new(
     engine: &wasm_engine_t,
 ) -> Box<wasmtime_component_linker_t> {
     Box::new(wasmtime_component_linker_t {
@@ -28,7 +27,15 @@ pub unsafe extern "C" fn wasmtime_component_linker_new(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_root(
+pub extern "C" fn wasmtime_component_linker_allow_shadowing(
+    linker: &mut wasmtime_component_linker_t,
+    allow: bool,
+) {
+    linker.linker.allow_shadowing(allow);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_linker_root(
     linker: &mut wasmtime_component_linker_t,
 ) -> Box<wasmtime_component_linker_instance_t<'_>> {
     Box::new(wasmtime_component_linker_instance_t {
@@ -37,7 +44,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_root(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_instantiate(
+pub extern "C" fn wasmtime_component_linker_instantiate(
     linker: &wasmtime_component_linker_t,
     context: WasmtimeStoreContextMut<'_>,
     component: &wasmtime_component_t,
@@ -48,10 +55,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instantiate(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_delete(
-    _linker: Box<wasmtime_component_linker_t>,
-) {
-}
+pub extern "C" fn wasmtime_component_linker_delete(_linker: Box<wasmtime_component_linker_t>) {}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_instance_add_instance<'a>(
@@ -119,7 +123,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
 
     let result = linker_instance
         .linker_instance
-        .func_new(&name, move |ctx, args, rets| {
+        .func_new(&name, move |ctx, _ty, args, rets| {
             let _ = &foreign;
 
             let args = args
@@ -158,6 +162,39 @@ pub unsafe extern "C" fn wasmtime_component_linker_add_wasip2(
     linker: &mut wasmtime_component_linker_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let result = wasmtime_wasi::p2::add_to_linker_sync(&mut linker.linker);
+    crate::handle_result(result, |_| ())
+}
+
+pub type wasmtime_component_resource_destructor_t =
+    extern "C" fn(*mut c_void, WasmtimeStoreContextMut<'_>, u32) -> Option<Box<wasmtime_error_t>>;
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_linker_instance_add_resource(
+    linker_instance: &mut wasmtime_component_linker_instance_t,
+    name: *const u8,
+    name_len: usize,
+    ty: &wasmtime_component_resource_type_t,
+    callback: wasmtime_component_resource_destructor_t,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
+) -> Option<Box<wasmtime_error_t>> {
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return crate::bad_utf8();
+    };
+
+    let foreign = crate::ForeignData { data, finalizer };
+
+    let result = linker_instance
+        .linker_instance
+        .resource(name, ty.ty, move |ctx, rep| {
+            let _ = &foreign;
+            if let Some(res) = callback(foreign.data, ctx, rep) {
+                return Err((*res).into());
+            }
+            Ok(())
+        });
+
     crate::handle_result(result, |_| ())
 }
 

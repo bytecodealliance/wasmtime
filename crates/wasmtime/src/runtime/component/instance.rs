@@ -489,6 +489,15 @@ pub(crate) fn lookup_vmdef(
             let id = StoreComponentInstanceId::new(store.id(), id);
             vm::Export::Global(crate::Global::from_component_flags(id, *idx))
         }
+        CoreDef::UnsafeIntrinsic(intrinsic) => {
+            let funcref = store
+                .store_data_mut()
+                .component_instance_mut(id)
+                .unsafe_intrinsic_func_ref(*intrinsic);
+            // SAFETY: as above, the `funcref` is owned by `store` and is valid
+            // within that store, so it's safe to create a `Func`.
+            vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
+        }
     }
 }
 
@@ -675,6 +684,31 @@ impl<'a> Instantiator<'a> {
                 ptrs.wasm_call,
                 ptrs.array_call,
                 signature,
+            );
+        }
+
+        // Initialize the unsafe intrinsics used by this component, if any.
+        for (i, module_ty) in env_component
+            .unsafe_intrinsics
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ty)| ty.expand().map(|ty| (i, ty)))
+        {
+            let i = u32::try_from(i).unwrap();
+            let intrinsic = UnsafeIntrinsic::from_u32(i);
+            let ptrs = self.component.unsafe_intrinsic_ptrs(intrinsic).expect(
+                "should have intrinsic pointers given that we assigned the intrinsic a type",
+            );
+            let shared_ty = self
+                .component
+                .signatures()
+                .shared_type(module_ty)
+                .expect("should have a shared type");
+            self.instance_mut(store.0).set_intrinsic(
+                intrinsic,
+                ptrs.wasm_call,
+                ptrs.array_call,
+                shared_ty,
             );
         }
 

@@ -1,7 +1,9 @@
-#include "utils.h"
-
 #include <gtest/gtest.h>
-#include <wasmtime.h>
+#include <wasmtime/component.hh>
+#include <wasmtime/module.hh>
+#include <wasmtime/store.hh>
+
+using namespace wasmtime::component;
 
 TEST(component, define_module) {
   static constexpr auto module_wat = std::string_view{
@@ -25,55 +27,21 @@ TEST(component, define_module) {
 )
       )END",
   };
-  const auto engine = wasm_engine_new();
-  EXPECT_NE(engine, nullptr);
 
-  wasm_byte_vec_t wasm;
-  auto err = wasmtime_wat2wasm(module_wat.data(), module_wat.size(), &wasm);
-  CHECK_ERR(err);
+  wasmtime::Engine engine;
+  wasmtime::Module module =
+      wasmtime::Module::compile(engine, module_wat).unwrap();
+  wasmtime::Store store(engine);
+  auto context = store.context();
 
-  wasmtime_module_t *module = nullptr;
-  err = wasmtime_module_new(
-      engine, reinterpret_cast<const uint8_t *>(wasm.data), wasm.size, &module);
-  CHECK_ERR(err);
-  wasm_byte_vec_delete(&wasm);
+  Component component = Component::compile(engine, component_text).unwrap();
+  Linker linker(engine);
 
-  const auto store = wasmtime_store_new(engine, nullptr, nullptr);
-  const auto context = wasmtime_store_context(store);
+  {
+    auto root = linker.root();
+    auto xyz = root.add_instance("x:y/z").unwrap();
+    xyz.add_module("mod", module).unwrap();
+  }
 
-  wasmtime_component_t *component = nullptr;
-
-  err = wasmtime_component_new(
-      engine, reinterpret_cast<const uint8_t *>(component_text.data()),
-      component_text.size(), &component);
-
-  CHECK_ERR(err);
-
-  const auto linker = wasmtime_component_linker_new(engine);
-
-  const auto root = wasmtime_component_linker_root(linker);
-
-  wasmtime_component_linker_instance_t *x_y_z = nullptr;
-  err = wasmtime_component_linker_instance_add_instance(
-      root, "x:y/z", strlen("x:y/z"), &x_y_z);
-  CHECK_ERR(err);
-
-  err = wasmtime_component_linker_instance_add_module(x_y_z, "mod",
-                                                      strlen("mod"), module);
-  CHECK_ERR(err);
-
-  wasmtime_component_linker_instance_delete(x_y_z);
-  wasmtime_component_linker_instance_delete(root);
-
-  wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context, component,
-                                              &instance);
-  CHECK_ERR(err);
-
-  wasmtime_component_linker_delete(linker);
-  wasmtime_component_delete(component);
-  wasmtime_module_delete(module);
-
-  wasmtime_store_delete(store);
-  wasm_engine_delete(engine);
+  linker.instantiate(context, component).unwrap();
 }

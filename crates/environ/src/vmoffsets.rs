@@ -238,6 +238,11 @@ pub trait PtrSize {
         self.vmstore_context_last_wasm_entry_trap_handler() + self.size()
     }
 
+    /// Return the offset of the `stack_chain` field of `VMStoreContext`.
+    fn vmstore_context_store_data(&self) -> u8 {
+        self.vmstore_context_stack_chain() + self.size_of_vmstack_chain()
+    }
+
     // Offsets within `VMMemoryDefinition`
 
     /// The offset of the `base` field.

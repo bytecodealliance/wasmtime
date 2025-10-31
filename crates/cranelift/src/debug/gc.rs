@@ -85,9 +85,10 @@ fn build_unit_dependencies(
     deps: &mut Dependencies,
 ) -> read::Result<()> {
     let unit = dwarf.unit(header)?;
+    let unit = unit.unit_ref(dwarf);
     let mut tree = unit.entries_tree(None)?;
     let root = tree.root()?;
-    build_die_dependencies(root, dwarf, &unit, at, deps)?;
+    build_die_dependencies(root, unit, at, deps)?;
     Ok(())
 }
 
@@ -144,20 +145,15 @@ fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> read:
 
 fn has_valid_code_range(
     die: &read::DebuggingInformationEntry<Reader<'_>>,
-    dwarf: &read::Dwarf<Reader<'_>>,
-    unit: &read::Unit<Reader<'_>>,
+    unit: read::UnitRef<Reader<'_>>,
     at: &AddressTransform,
 ) -> read::Result<bool> {
     match die.tag() {
         constants::DW_TAG_subprogram => {
             if let Some(ranges_attr) = die.attr_value(constants::DW_AT_ranges)? {
                 let offset = match ranges_attr {
-                    read::AttributeValue::RangeListsRef(val) => {
-                        dwarf.ranges_offset_from_raw(unit, val)
-                    }
-                    read::AttributeValue::DebugRngListsIndex(index) => {
-                        dwarf.ranges_offset(unit, index)?
-                    }
+                    read::AttributeValue::RangeListsRef(val) => unit.ranges_offset_from_raw(val),
+                    read::AttributeValue::DebugRngListsIndex(index) => unit.ranges_offset(index)?,
                     _ => return Ok(false),
                 };
                 let mut has_valid_base = if let Some(read::AttributeValue::Addr(low_pc)) =
@@ -167,7 +163,7 @@ fn has_valid_code_range(
                 } else {
                     None
                 };
-                let mut it = dwarf.ranges.raw_ranges(offset, unit.encoding())?;
+                let mut it = unit.raw_ranges(offset)?;
                 while let Some(range) = it.next()? {
                     // If at least one of the range addresses can be converted,
                     // declaring code range as valid.
@@ -188,7 +184,7 @@ fn has_valid_code_range(
                         }
                         read::RawRngListEntry::StartxEndx { begin, .. }
                         | read::RawRngListEntry::StartxLength { begin, .. } => {
-                            let addr = dwarf.address(unit, begin)?;
+                            let addr = unit.address(begin)?;
                             if at.can_translate_address(addr) {
                                 return Ok(true);
                             }
@@ -197,7 +193,7 @@ fn has_valid_code_range(
                             has_valid_base = Some(at.can_translate_address(addr));
                         }
                         read::RawRngListEntry::BaseAddressx { addr } => {
-                            let addr = dwarf.address(unit, addr)?;
+                            let addr = unit.address(addr)?;
                             has_valid_base = Some(at.can_translate_address(addr));
                         }
                         read::RawRngListEntry::OffsetPair { .. } => (),
@@ -208,7 +204,7 @@ fn has_valid_code_range(
                 if let read::AttributeValue::Addr(a) = low_pc {
                     return Ok(at.can_translate_address(a));
                 } else if let read::AttributeValue::DebugAddrIndex(i) = low_pc {
-                    let a = dwarf.debug_addr.get_address(4, unit.addr_base, i)?;
+                    let a = unit.address(i)?;
                     return Ok(at.can_translate_address(a));
                 }
             }
@@ -220,30 +216,29 @@ fn has_valid_code_range(
 
 fn build_die_dependencies(
     die: read::EntriesTreeNode<Reader<'_>>,
-    dwarf: &read::Dwarf<Reader<'_>>,
-    unit: &read::Unit<Reader<'_>>,
+    unit: read::UnitRef<Reader<'_>>,
     at: &AddressTransform,
     deps: &mut Dependencies,
 ) -> read::Result<()> {
     let entry = die.entry();
-    let offset = entry.offset().to_unit_section_offset(unit);
+    let offset = entry.offset().to_unit_section_offset(&unit);
     let mut attrs = entry.attrs();
     while let Some(attr) = attrs.next()? {
-        build_attr_dependencies(&attr, offset, dwarf, unit, at, deps)?;
+        build_attr_dependencies(&attr, offset, unit, at, deps)?;
     }
 
     let mut children = die.children();
     while let Some(child) = children.next()? {
         let child_entry = child.entry();
-        let child_offset = child_entry.offset().to_unit_section_offset(unit);
+        let child_offset = child_entry.offset().to_unit_section_offset(&unit);
         deps.add_edge(child_offset, offset);
         if has_die_back_edge(child_entry)? {
             deps.add_edge(offset, child_offset);
         }
-        if has_valid_code_range(child_entry, dwarf, unit, at)? {
+        if has_valid_code_range(child_entry, unit, at)? {
             deps.add_root(child_offset);
         }
-        build_die_dependencies(child, dwarf, unit, at, deps)?;
+        build_die_dependencies(child, unit, at, deps)?;
     }
     Ok(())
 }
@@ -251,14 +246,13 @@ fn build_die_dependencies(
 fn build_attr_dependencies(
     attr: &read::Attribute<Reader<'_>>,
     offset: UnitSectionOffset,
-    _dwarf: &read::Dwarf<Reader<'_>>,
-    unit: &read::Unit<Reader<'_>>,
+    unit: read::UnitRef<Reader<'_>>,
     _at: &AddressTransform,
     deps: &mut Dependencies,
 ) -> read::Result<()> {
     match attr.value() {
         read::AttributeValue::UnitRef(val) => {
-            let ref_offset = val.to_unit_section_offset(unit);
+            let ref_offset = val.to_unit_section_offset(&unit);
             deps.add_edge(offset, ref_offset);
         }
         read::AttributeValue::DebugInfoRef(val) => {

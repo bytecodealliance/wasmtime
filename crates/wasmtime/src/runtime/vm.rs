@@ -129,6 +129,8 @@ pub use crate::runtime::vm::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
+#[cfg(has_custom_sync)]
+pub(crate) use sys::capi;
 
 pub use send_sync_ptr::SendSyncPtr;
 pub use wasmtime_unwinder::Unwind;
@@ -226,6 +228,10 @@ pub unsafe trait VMStore: 'static {
     fn component_async_store(
         &mut self,
     ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
+
+    /// Invoke a debug handler, if present, at a debug event.
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {

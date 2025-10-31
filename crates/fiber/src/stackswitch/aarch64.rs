@@ -25,14 +25,10 @@ cfg_if::cfg_if! {
         macro_rules! paci1716 { () => ("pacib1716\n"); }
         macro_rules! pacisp { () => ("pacibsp\n"); }
         macro_rules! autisp { () => ("autibsp\n"); }
-        macro_rules! sym_adrp { ($s:tt) => (concat!($s, "@PAGE")); }
-        macro_rules! sym_add { ($s:tt) => (concat!($s, "@PAGEOFF")); }
     } else {
         macro_rules! paci1716 { () => ("pacia1716\n"); }
         macro_rules! pacisp { () => ("paciasp\n"); }
         macro_rules! autisp { () => ("autiasp\n"); }
-        macro_rules! sym_adrp { ($s:tt) => (concat!($s, "")); }
-        macro_rules! sym_add { ($s:tt) => (concat!(":lo12:", $s)); }
     }
 }
 
@@ -48,15 +44,15 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x
             // Save all callee-saved registers on the stack since we're
             // assuming they're clobbered as a result of the stack switch.
             stp x29, x30, [sp, -16]!
-            stp x20, x19, [sp, -16]!
-            stp x22, x21, [sp, -16]!
-            stp x24, x23, [sp, -16]!
-            stp x26, x25, [sp, -16]!
-            stp x28, x27, [sp, -16]!
-            stp d9, d8, [sp, -16]!
-            stp d11, d10, [sp, -16]!
-            stp d13, d12, [sp, -16]!
-            stp d15, d14, [sp, -16]!
+            stp x27, x28, [sp, -16]!
+            stp x25, x26, [sp, -16]!
+            stp x23, x24, [sp, -16]!
+            stp x21, x22, [sp, -16]!
+            stp x19, x20, [sp, -16]!
+            stp d14, d15, [sp, -16]!
+            stp d12, d13, [sp, -16]!
+            stp d10, d11, [sp, -16]!
+            stp d8, d9, [sp, -16]!
 
             // Load our previously saved stack pointer to resume to, and save
             // off our current stack pointer on where to come back to
@@ -68,15 +64,16 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x
             // Switch to the new stack and restore all our callee-saved
             // registers after the switch and return to our new stack.
             mov sp, x8
-            ldp d15, d14, [sp], 16
-            ldp d13, d12, [sp], 16
-            ldp d11, d10, [sp], 16
-            ldp d9, d8, [sp], 16
-            ldp x28, x27, [sp], 16
-            ldp x26, x25, [sp], 16
-            ldp x24, x23, [sp], 16
-            ldp x22, x21, [sp], 16
-            ldp x20, x19, [sp], 16
+            ldp d8, d9, [sp], 16
+            ldp d10, d11, [sp], 16
+            ldp d12, d13, [sp], 16
+            ldp d14, d15, [sp], 16
+
+            ldp x19, x20, [sp], 16
+            ldp x21, x22, [sp], 16
+            ldp x23, x24, [sp], 16
+            ldp x25, x26, [sp], 16
+            ldp x27, x28, [sp], 16
             ldp x29, x30, [sp], 16
         ",
         autisp!(),
@@ -88,54 +85,85 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x
     ));
 }
 
-// We set up the newly initialized fiber, so that it resumes execution
-// from wasmtime_fiber_start(). As a result, we need a signed address
-// of this function, so there are 2 requirements:
-// * The fiber stack pointer value that is used by the signing operation
-//   must match the value when the pointer is authenticated inside
-//   wasmtime_fiber_switch(), otherwise the latter would fault
-// * We would like to use an instruction that is executed as a no-op by
-//   processors that do not support PAuth, so that the code is
-//   backward-compatible and there is no duplication; `PACIA1716` is a
-//   suitable one, which has the following operand register
-//   conventions:
-//   * X17 contains the pointer value to sign
-//   * X16 contains the modifier value
-//
-// TODO: Use the PACGA instruction to authenticate the saved register
-// state, which avoids creating signed pointers to
-// wasmtime_fiber_start(), and provides wider coverage.
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
-    top_of_stack: *mut u8,                        // x0
-    entry_point: extern "C" fn(*mut u8, *mut u8), // x1
-    entry_arg0: *mut u8,                          // x2
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8, // x2
 ) {
-    naked_asm!(
-        concat!(
-        "
-            .cfi_startproc
-            hint #34 // bti c
-            sub x16, x0, #16
-            adrp x17, ", sym_adrp!("{fiber}"), "
-            add x17, x17, ", sym_add!("{fiber}"), "
-        ",
-        paci1716!(),
-        "
-            str x17, [x16, -0x8] // x17 => lr
-            str x0, [x16, -0x18] // x0 => x19
-            stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        d8: u64,
+        d9: u64,
+        d10: u64,
+        d11: u64,
+        d12: u64,
+        d13: u64,
+        d14: u64,
+        d15: u64,
 
-            // `wasmtime_fiber_switch` has an 0xa0 byte stack, and we add 0x10 more for
-            // the original reserved 16 bytes.
-            add x8, x0, -0xb0
-            str x8, [x0, -0x10]
-            ret
-            .cfi_endproc
-        ",
-        ),
-        fiber = sym wasmtime_fiber_start,
-    );
+        x19: *mut u8,
+        x20: *mut u8,
+        x21: *mut u8,
+        x22: *mut u8,
+        x23: *mut u8,
+        x24: *mut u8,
+        x25: *mut u8,
+        x26: *mut u8,
+        x27: *mut u8,
+        x28: *mut u8,
+
+        fp: *mut u8,
+        lr: *mut u8,
+
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
+
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            x19: top_of_stack,
+            x20: entry_point as *mut u8,
+            x21: entry_arg0,
+
+            // We set up the newly initialized fiber, so that it resumes
+            // execution from wasmtime_fiber_start(). As a result, we need a
+            // signed address of this function because `wasmtime_fiber_switch`
+            // ends with a `auti{a,b}sp` instruction. There are 2 requirements:
+            // * We would like to use an instruction that is executed as a no-op
+            //   by processors that do not support PAuth, so that the code is
+            //   backward-compatible and there is no duplication; `PACIA1716` is
+            //   a suitable one.
+            // * The fiber stack pointer value that is used by the signing
+            //   operation must match the value when the pointer is
+            //   authenticated inside wasmtime_fiber_switch(), which is 16 bytes
+            //   below the `top_of_stack` which will be `sp` at the time of the
+            //   `auti{a,b}sp`.
+            //
+            // TODO: Use the PACGA instruction to authenticate the saved register
+            // state, which avoids creating signed pointers to
+            // wasmtime_fiber_start(), and provides wider coverage.
+            lr: paci1716(wasmtime_fiber_start as *mut u8, top_of_stack.sub(16)),
+
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
+}
+
+/// Signs `r17` with the value in `r16` using either `paci{a,b}1716` depending
+/// on the platform.
+fn paci1716(mut r17: *mut u8, r16: *mut u8) -> *mut u8 {
+    unsafe {
+        core::arch::asm!(
+            paci1716!(),
+            inout("x17") r17,
+            in("x16") r16,
+        );
+        r17
+    }
 }
 
 // See the x86_64 file for more commentary on what these CFI directives are
@@ -152,18 +180,19 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
             0x6f,            /* DW_OP_reg31(%sp) */ \
             0x06,            /* DW_OP_deref */ \
             0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
-        .cfi_rel_offset x29, -0x10
         .cfi_rel_offset x30, -0x08
+        .cfi_rel_offset x29, -0x10
         .cfi_window_save
-        .cfi_rel_offset x19, -0x18
-        .cfi_rel_offset x20, -0x20
-        .cfi_rel_offset x21, -0x28
-        .cfi_rel_offset x22, -0x30
-        .cfi_rel_offset x23, -0x38
-        .cfi_rel_offset x24, -0x40
-        .cfi_rel_offset x25, -0x48
-        .cfi_rel_offset x26, -0x50
-        .cfi_rel_offset x27, -0x58
+        .cfi_rel_offset x28, -0x18
+        .cfi_rel_offset x27, -0x20
+        .cfi_rel_offset x26, -0x28
+        .cfi_rel_offset x25, -0x30
+        .cfi_rel_offset x24, -0x38
+        .cfi_rel_offset x23, -0x40
+        .cfi_rel_offset x22, -0x48
+        .cfi_rel_offset x21, -0x50
+        .cfi_rel_offset x20, -0x58
+        .cfi_rel_offset x19, -0x60
 
         // Load our two arguments from the stack, where x1 is our start
         // procedure and x0 is its first argument. This also blows away the

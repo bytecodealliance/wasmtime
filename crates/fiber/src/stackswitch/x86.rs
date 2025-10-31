@@ -40,49 +40,52 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
     )
 }
 
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
+pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
     entry_point: extern "C" fn(*mut u8, *mut u8),
     entry_arg0: *mut u8,
 ) {
-    naked_asm!(
-        "
-        mov eax, 4[esp]
+    // Our stack from top-to-bottom looks like:
+    //
+    //	  * 8 bytes of reserved space per unix.rs (two-pointers space)
+    //	  * 8 bytes of arguments (two arguments wasmtime_fiber_start forwards)
+    //	  * 4 bytes of return address
+    //	  * 16 bytes of saved registers
+    //
+    // Note that after the return address the stack is conveniently 16-byte
+    // aligned as required, so we just leave the arguments on the stack in
+    // `wasmtime_fiber_start` and immediately do the call.
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        // state that will get resumed into from a `wasmtime_fiber_switch`
+        // starting up this fiber.
+        edi: *mut u8,
+        esi: *mut u8,
+        ebx: *mut u8,
+        ebp: *mut u8,
+        return_address: *mut u8,
 
-        // move top_of_stack to the 2nd argument
-        mov -0x0c[eax], eax
+        // two arguments to `entry_point`
+        arg1: *mut u8,
+        arg2: *mut u8,
 
-        // move entry_arg0 to the 1st argument
-        mov ecx, 12[esp]
-        mov -0x10[eax], ecx
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
 
-        // Move our start function to the return address which the `ret` in
-        // `wasmtime_fiber_start` will return to.
-        lea ecx, {start}
-        mov -0x14[eax], ecx
-
-        // And move `entry_point` to get loaded into `%ebp` through the context
-        // switch. This'll get jumped to in `wasmtime_fiber_start`.
-        mov ecx, 8[esp]
-        mov -0x18[eax], ecx
-
-        // Our stack from top-to-bottom looks like:
-        //
-        //	  * 8 bytes of reserved space per unix.rs (two-pointers space)
-        //	  * 8 bytes of arguments (two arguments wasmtime_fiber_start forwards)
-        //	  * 4 bytes of return address
-        //	  * 16 bytes of saved registers
-        //
-        // Note that after the return address the stack is conveniently 16-byte
-        // aligned as required, so we just leave the arguments on the stack in
-        // `wasmtime_fiber_start` and immediately do the call.
-        lea ecx, -0x24[eax]
-        mov -0x08[eax], ecx
-        ret
-        ",
-        start = sym wasmtime_fiber_start,
-    );
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            ebp: entry_point as *mut u8,
+            return_address: wasmtime_fiber_start as *mut u8,
+            arg1: entry_arg0,
+            arg2: top_of_stack,
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
 }
 
 #[unsafe(naked)]

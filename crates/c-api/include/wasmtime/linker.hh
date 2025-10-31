@@ -55,6 +55,7 @@ public:
     return std::monostate();
   }
 
+#ifdef WASMTIME_FEATURE_WASI
   /// Defines WASI functions within this linker.
   ///
   /// Note that `Store::Context::set_wasi` must also be used for instantiated
@@ -66,6 +67,7 @@ public:
     }
     return std::monostate();
   }
+#endif // WASMTIME_FEATURE_WASI
 
   /// Defines all exports of the `instance` provided in this linker with the
   /// given module name of `name`.
@@ -179,6 +181,30 @@ public:
       return Error(error);
     }
     return Func(item);
+  }
+
+  /// \brief Defines any import of `module` previously unknown to this linker
+  /// as a trap.
+  Result<std::monostate> define_unknown_imports_as_traps(Module &module) {
+    auto *error = wasmtime_linker_define_unknown_imports_as_traps(
+        ptr.get(), module.ptr.get());
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
+
+  /// \brief Defines any import of `module` previously unknown to this linker
+  /// as the "default" value for that import, for example a function that
+  /// returns zeros.
+  Result<std::monostate>
+  define_unknown_imports_as_default_values(Store::Context cx, Module &module) {
+    auto *error = wasmtime_linker_define_unknown_imports_as_default_values(
+        ptr.get(), cx.ptr, module.ptr.get());
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
   }
 };
 

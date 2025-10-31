@@ -758,6 +758,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     } else {
         wasmtime_wast::Async::Yes
     };
+    log::debug!("async: {async_:?}");
     let engine = Engine::new(&fuzz_config.to_wasmtime()).unwrap();
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
@@ -1090,6 +1091,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         .root()
         .func_new(IMPORT_FUNCTION, {
             move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
+                  _,
                   params: &[Val],
                   results: &mut [Val]|
                   -> Result<()> {
@@ -1108,17 +1110,16 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-    let param_tys = func.params(&store);
-    let result_tys = func.results(&store);
+    let ty = func.ty(&store);
 
     while input.arbitrary()? {
-        let params = param_tys
-            .iter()
-            .map(|(_, ty)| component_types::arbitrary_val(ty, input))
+        let params = ty
+            .params()
+            .map(|(_, ty)| component_types::arbitrary_val(&ty, input))
             .collect::<arbitrary::Result<Vec<_>>>()?;
-        let results = result_tys
-            .iter()
-            .map(|ty| component_types::arbitrary_val(ty, input))
+        let results = ty
+            .results()
+            .map(|ty| component_types::arbitrary_val(&ty, input))
             .collect::<arbitrary::Result<Vec<_>>>()?;
 
         *store.data_mut() = (params.clone(), Some(results.clone()));

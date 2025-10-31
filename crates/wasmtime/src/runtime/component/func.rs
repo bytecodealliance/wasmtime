@@ -1,7 +1,7 @@
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
-use crate::component::types::Type;
+use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTables};
@@ -167,7 +167,7 @@ impl Func {
         Return: ComponentNamedList + Lift,
     {
         let cx = InstanceType::new(instance.unwrap_or_else(|| self.instance.id().get(store)));
-        let ty = &cx.types[self.ty(store)];
+        let ty = &cx.types[self.ty_index(store)];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
@@ -177,34 +177,18 @@ impl Func {
         Ok(())
     }
 
-    /// Get the parameter names and types for this function.
-    pub fn params(&self, store: impl AsContext) -> Box<[(String, Type)]> {
-        let store = store.as_context();
-        let instance = self.instance.id().get(store.0);
-        let types = instance.component().types();
-        let func_ty = &types[self.ty(store.0)];
-        types[func_ty.params]
-            .types
-            .iter()
-            .zip(&func_ty.param_names)
-            .map(|(ty, name)| (name.clone(), Type::from(ty, &InstanceType::new(instance))))
-            .collect()
+    /// Get the type of this function.
+    pub fn ty(&self, store: impl AsContext) -> ComponentFunc {
+        self.ty_(store.as_context().0)
     }
 
-    /// Get the result types for this function.
-    pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let store = store.as_context();
-        let instance = self.instance.id().get(store.0);
-        let types = instance.component().types();
-        let ty = self.ty(store.0);
-        types[types[ty].results]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &InstanceType::new(instance)))
-            .collect()
+    fn ty_(&self, store: &StoreOpaque) -> ComponentFunc {
+        let cx = InstanceType::new(self.instance.id().get(store));
+        let ty = self.ty_index(store);
+        ComponentFunc::from(ty, &cx)
     }
 
-    fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
+    fn ty_index(&self, store: &StoreOpaque) -> TypeFuncIndex {
         let instance = self.instance.id().get(store);
         let (ty, _, _) = instance.component().export_lifted_function(self.index);
         ty
@@ -307,21 +291,19 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let param_tys = self.params(&store);
-        if param_tys.len() != params.len() {
+        let ty = self.ty(&store);
+        if ty.params().len() != params.len() {
             bail!(
                 "expected {} argument(s), got {}",
-                param_tys.len(),
+                ty.params().len(),
                 params.len(),
             );
         }
 
-        let result_tys = self.results(&store);
-
-        if result_tys.len() != results.len() {
+        if ty.results().len() != results.len() {
             bail!(
                 "expected {} result(s), got {}",
-                result_tys.len(),
+                ty.results().len(),
                 results.len(),
             );
         }
@@ -340,6 +322,48 @@ impl Func {
     ///
     /// This returns a [`TaskExit`] representing the completion of the guest
     /// task and any transitive subtasks it might create.
+    ///
+    /// # Progress
+    ///
+    /// For the wasm task being created in `call_concurrent` to make progress it
+    /// must be run within the scope of [`run_concurrent`]. If there are no
+    /// active calls to [`run_concurrent`] then the wasm task will appear as
+    /// stalled. This is typically not a concern as an [`Accessor`] is bound
+    /// by default to a scope of [`run_concurrent`].
+    ///
+    /// One situation in which this can arise, for example, is that if a
+    /// [`run_concurrent`] computation finishes its async closure before all
+    /// wasm tasks have completed, then there will be no scope of
+    /// [`run_concurrent`] anywhere. In this situation the wasm tasks that have
+    /// not yet completed will not make progress until [`run_concurrent`] is
+    /// called again.
+    ///
+    /// Embedders will need to ensure that this future is `await`'d within the
+    /// scope of [`run_concurrent`] to ensure that the value can be produced
+    /// during the `await` call.
+    ///
+    /// # Cancellation
+    ///
+    /// Cancelling an async task created via `call_concurrent`, at this time, is
+    /// only possible by dropping the store that the computation runs within.
+    /// With [#11833] implemented then it will be possible to request
+    /// cancellation of a task, but that is not yet implemented. Hard-cancelling
+    /// a task will only ever be possible by dropping the entire store and it is
+    /// not possible to remove just one task from a store.
+    ///
+    /// This async function behaves more like a "spawn" than a normal Rust async
+    /// function. When this function is invoked then metadata for the function
+    /// call is recorded in the store connected to the `accessor` argument and
+    /// the wasm invocation is from then on connected to the store. If the
+    /// future created by this function is dropped it does not cancel the
+    /// in-progress execution of the wasm task. Dropping the future
+    /// relinquishes the host's ability to learn about the result of the task
+    /// but the task will still progress and invoke callbacks and such until
+    /// completion.
+    ///
+    /// [`run_concurrent`]: crate::Store::run_concurrent
+    /// [#11833]: https://github.com/bytecodealliance/wasmtime/issues/11833
+    /// [`Accessor`]: crate::component::Accessor
     ///
     /// # Panics
     ///
@@ -402,7 +426,7 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            true,
+            false,
             call_post_return_automatically,
             move |func, store, params_out| {
                 func.with_lower_context(store, call_post_return_automatically, |cx, ty| {

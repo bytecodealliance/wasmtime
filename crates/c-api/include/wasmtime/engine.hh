@@ -56,6 +56,12 @@ public:
 
   /// \brief Returns whether this engine is using Pulley for execution.
   void is_pulley() const { wasmtime_engine_is_pulley(ptr.get()); }
+
+  /// \brief Returns the underlying C API pointer.
+  const wasm_engine_t *capi() const { return ptr.get(); }
+
+  /// \brief Returns the underlying C API pointer.
+  wasm_engine_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime

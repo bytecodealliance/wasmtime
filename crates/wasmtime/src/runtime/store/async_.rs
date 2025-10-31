@@ -51,7 +51,7 @@ impl<T> Store<T> {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
         let (instance_limit, table_limit, memory_limit) = {
-            let l = limiter(&mut inner.data);
+            let l = limiter(inner.data_mut());
             (l.instances(), l.tables(), l.memories())
         };
         let innermost = &mut inner.inner;

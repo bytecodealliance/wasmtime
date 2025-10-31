@@ -797,10 +797,10 @@ mod component {
             bench_instance(group, store, &instance, "typed", is_async);
 
             let mut untyped = component::Linker::new(&engine);
-            untyped.root().func_new("nop", |_, _, _| Ok(())).unwrap();
+            untyped.root().func_new("nop", |_, _, _, _| Ok(())).unwrap();
             untyped
                 .root()
-                .func_new("nop-params-and-results", |_caller, params, results| {
+                .func_new("nop-params-and-results", |_caller, _ty, params, results| {
                     assert_eq!(params.len(), 2);
                     match params[0] {
                         component::Val::U32(0) => {}

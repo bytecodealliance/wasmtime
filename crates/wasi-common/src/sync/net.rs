@@ -76,7 +76,7 @@ impl From<Socket> for Box<dyn WasiFile> {
 
 macro_rules! wasi_listen_write_impl {
     ($ty:ty, $stream:ty) => {
-        #[wiggle::async_trait]
+        #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
@@ -169,7 +169,7 @@ wasi_listen_write_impl!(UnixListener, UnixStream);
 
 macro_rules! wasi_stream_write_impl {
     ($ty:ty, $std_ty:ty) => {
-        #[wiggle::async_trait]
+        #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self

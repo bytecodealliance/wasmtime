@@ -16,8 +16,10 @@ use crate::runtime::vm::{
     ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
+use crate::{Func, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
+use anyhow::Result;
 use core::mem;
 use core::mem::offset_of;
 use core::pin::Pin;
@@ -357,6 +359,30 @@ impl ComponentInstance {
         }
     }
 
+    /// Returns the `Func` at index `func_idx` in the funcref table at `table_idx`.
+    pub fn index_runtime_func_table(
+        &self,
+        table_idx: RuntimeTableIndex,
+        func_idx: u64,
+    ) -> Result<Option<Func>> {
+        unsafe {
+            let store = self.store.0.as_ref();
+            let table = self.runtime_table(table_idx);
+            let vmctx = table.vmctx.as_non_null();
+            // SAFETY: it's a contract of this function that `vmctx` is a valid
+            // allocation which can go backwards to a `ComponentInstance`.
+            let mut instance_ptr = vm::Instance::from_vmctx(vmctx);
+            // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
+            // this call, so we don't need a lifetime to bind it to.
+            let instance = Pin::new_unchecked(instance_ptr.as_mut());
+            let table = instance.get_defined_table_with_lazy_init(table.index, [func_idx]);
+            let func = table
+                .get_func(func_idx)?
+                .map(|funcref| Func::from_vm_func_ref(store.id(), funcref));
+            Ok(func)
+        }
+    }
+
     /// Returns the realloc pointer corresponding to the index provided.
     ///
     /// This can only be called after `idx` has been initialized at runtime
@@ -418,6 +444,20 @@ impl ComponentInstance {
     pub fn trampoline_func_ref(&self, idx: TrampolineIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let offset = self.offsets.trampoline_func_ref(idx);
+            let ret = self.vmctx_plus_offset_raw::<VMFuncRef>(offset);
+            debug_assert!(
+                mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>(ret.as_ref().wasm_call)
+                    != INVALID_PTR
+            );
+            debug_assert!(ret.as_ref().vmctx.as_ptr() as usize != INVALID_PTR);
+            ret
+        }
+    }
+
+    /// Get the core Wasm function reference for the given unsafe intrinsic.
+    pub fn unsafe_intrinsic_func_ref(&self, idx: UnsafeIntrinsic) -> NonNull<VMFuncRef> {
+        unsafe {
+            let offset = self.offsets.unsafe_intrinsic_func_ref(idx);
             let ret = self.vmctx_plus_offset_raw::<VMFuncRef>(offset);
             debug_assert!(
                 mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>(ret.as_ref().wasm_call)
@@ -543,6 +583,27 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_trampoline` but for intrinsic functions.
+    pub fn set_intrinsic(
+        self: Pin<&mut Self>,
+        intrinsic: UnsafeIntrinsic,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        array_call: NonNull<VMArrayCallFunction>,
+        type_index: VMSharedTypeIndex,
+    ) {
+        unsafe {
+            let offset = self.offsets.unsafe_intrinsic_func_ref(intrinsic);
+            debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
+            let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
+            *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
+                wasm_call: Some(wasm_call.into()),
+                array_call: array_call.into(),
+                type_index,
+                vmctx: vmctx.into(),
+            };
+        }
+    }
+
     /// Configures the destructor for a resource at the `idx` specified.
     ///
     /// This is required to be called for each resource as it's defined within a
@@ -638,6 +699,14 @@ impl ComponentInstance {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
                 }
             }
+            for i in 0..self.offsets.num_unsafe_intrinsics {
+                let i = UnsafeIntrinsic::from_u32(i);
+                let offset = self.offsets.unsafe_intrinsic_func_ref(i);
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
+            }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
                 let offset = self.offsets.runtime_memory(i);
@@ -682,8 +751,14 @@ impl ComponentInstance {
                 let i = RuntimeTableIndex::from_u32(i);
                 let offset = self.offsets.runtime_table(i);
                 // SAFETY: see above
+                #[allow(clippy::cast_possible_truncation, reason = "known to not overflow")]
                 unsafe {
-                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                    *self.as_mut().vmctx_plus_offset_mut::<usize>(
+                        offset + offset_of!(VMTableImport, from) as u32,
+                    ) = INVALID_PTR;
+                    *self.as_mut().vmctx_plus_offset_mut::<usize>(
+                        offset + offset_of!(VMTableImport, vmctx) as u32,
+                    ) = INVALID_PTR;
                 }
             }
         }

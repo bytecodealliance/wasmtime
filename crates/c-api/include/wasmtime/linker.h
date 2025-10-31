@@ -69,6 +69,24 @@ WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t *linker,
                                                      bool allow_shadowing);
 
 /**
+ * \brief Ensures that `module` can be instantiated with this linker by defining
+ * all functions otherwise missing from this linker to trap.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_linker_define_unknown_imports_as_traps(wasmtime_linker_t *linker,
+                                                wasmtime_module_t *module);
+
+/**
+ * \brief Ensures that `module` can be instantiated with this linker by defining
+ * all functions otherwise missing from this linker to return the 'default' for
+ * what that import is.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_linker_define_unknown_imports_as_default_values(
+    wasmtime_linker_t *linker, wasmtime_context_t *store,
+    wasmtime_module_t *module);
+
+/**
  * \brief Defines a new item in this linker.
  *
  * \param linker the linker the name is being defined in.

@@ -8,13 +8,13 @@ use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tracing::debug;
 use wasmtime::AsContextMut;
 
-/// The concrete type behind a `wasi:http/types/request-options` resource.
+/// The concrete type behind a `wasi:http/types.request-options` resource.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct RequestOptions {
     /// How long to wait for a connection to be established.
@@ -25,7 +25,12 @@ pub struct RequestOptions {
     pub between_bytes_timeout: Option<Duration>,
 }
 
+<<<<<<< HEAD
+/// The concrete type behind a `wasi:http/types.request` resource.
+=======
 /// The concrete type behind a `wasi:http/types/request` resource.
+#[derive(Debug)]
+>>>>>>> b1078b2bd (Don't remember why I derived debug here...)
 pub struct Request {
     /// The method of the request.
     pub method: Method,
@@ -40,7 +45,7 @@ pub struct Request {
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
-    pub(crate) body: Body,
+    pub body: Body,
 }
 
 impl Request {
@@ -57,7 +62,7 @@ impl Request {
         path_with_query: Option<PathAndQuery>,
         headers: impl Into<Arc<HeaderMap>>,
         options: Option<Arc<RequestOptions>>,
-        body: impl Into<BoxBody<Bytes, ErrorCode>>,
+        body: impl Into<UnsyncBoxBody<Bytes, ErrorCode>>,
     ) -> (
         Self,
         impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
@@ -96,7 +101,7 @@ impl Request {
         impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
     )
     where
-        T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        T: http_body::Body<Data = Bytes> + Send + 'static,
         T::Error: Into<ErrorCode>,
     {
         let (
@@ -121,7 +126,7 @@ impl Request {
             path_and_query,
             headers,
             None,
-            body.map_err(Into::into).boxed(),
+            body.map_err(Into::into).boxed_unsync(),
         )
     }
 

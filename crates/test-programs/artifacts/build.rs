@@ -73,11 +73,11 @@ impl Artifacts {
             // Bucket, based on the name of the test, into a "kind" which
             // generates a `foreach_*` macro below.
             let kind = match test.name.as_str() {
-                s if s.starts_with("http_") => "http",
-                s if s.starts_with("preview1_") => "preview1",
-                s if s.starts_with("preview2_") => "preview2",
-                s if s.starts_with("cli_") => "cli",
-                s if s.starts_with("api_") => "api",
+                s if s.starts_with("p1_") => "p1",
+                s if s.starts_with("p2_http_") => "p2_http",
+                s if s.starts_with("p2_cli_") => "p2_cli",
+                s if s.starts_with("p2_api_") => "p2_api",
+                s if s.starts_with("p2_") => "p2",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",
                 s if s.starts_with("dwarf_") => "dwarf",
@@ -111,7 +111,7 @@ impl Artifacts {
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
                 s if s.starts_with("p3_") => &reactor_adapter,
-                s if s.starts_with("api_proxy") => &proxy_adapter,
+                s if s.starts_with("p2_api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
             let path = match &test.core_wasm {
@@ -249,7 +249,7 @@ impl Artifacts {
             let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
             match path.extension().and_then(|s| s.to_str()) {
                 // Compile C/C++ tests with clang
-                Some("c") | Some("cpp") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
+                Some("c") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
 
                 // just a header, part of another test.
                 Some("h") => {}

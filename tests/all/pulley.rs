@@ -85,8 +85,9 @@ fn provenance_test_config() -> Config {
     config.memory_guard_size(0);
     config.signals_based_traps(false);
     config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
     config
 }
@@ -319,28 +320,34 @@ fn pulley_provenance_test_components() -> Result<()> {
         let mut linker = component::Linker::new(&engine);
         linker
             .root()
-            .func_new("host-empty", |_, _args, _results| Ok(()))?;
-        linker.root().func_new("host-u32", |_, args, results| {
+            .func_new("host-empty", |_, _, _args, _results| Ok(()))?;
+        linker.root().func_new("host-u32", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;
-        linker.root().func_new("host-enum", |_, args, results| {
+        linker.root().func_new("host-enum", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;
-        linker.root().func_new("host-option", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-result", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-string", |_, args, results| {
-            results[0] = args[0].clone();
-            Ok(())
-        })?;
-        linker.root().func_new("host-list", |_, args, results| {
+        linker
+            .root()
+            .func_new("host-option", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker
+            .root()
+            .func_new("host-result", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker
+            .root()
+            .func_new("host-string", |_, _, args, results| {
+                results[0] = args[0].clone();
+                Ok(())
+            })?;
+        linker.root().func_new("host-list", |_, _, args, results| {
             results[0] = args[0].clone();
             Ok(())
         })?;

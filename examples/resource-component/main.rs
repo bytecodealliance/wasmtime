@@ -53,7 +53,7 @@ bindgen!({
     imports: { default: async | trappable },
     exports: { default: async },
     with: {
-        "example:kv-store/kvdb/connection": Connection
+        "example:kv-store/kvdb.connection": Connection
     },
 });
 
