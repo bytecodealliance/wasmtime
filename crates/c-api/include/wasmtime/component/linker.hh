@@ -187,6 +187,18 @@ public:
     return LinkerInstance(instance_capi);
   }
 
+  /**
+   * \brief Defines all unknown imports of `component` as trapping functions.
+   */
+  Result<std::monostate>
+  define_unknown_imports_as_traps(const Component &component) {
+    auto err = wasmtime_component_linker_define_unknown_imports_as_traps(
+        ptr.get(), component.capi());
+    if (err)
+      return Error(err);
+    return std::monostate();
+  }
+
   /// Configures whether shadowing previous names is allowed or not.
   ///
   /// By default shadowing is not allowed.

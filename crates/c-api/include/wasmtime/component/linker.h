@@ -76,6 +76,13 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instantiate(
     wasmtime_component_instance_t *instance_out);
 
 /**
+ * \brief Defines all unknown imports of `component` as trapping functions.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_define_unknown_imports_as_traps(
+    wasmtime_component_linker_t *linker, const wasmtime_component_t *component);
+
+/**
  * \brief Deletes a #wasmtime_component_linker_t created by
  * #wasmtime_component_linker_new
  *
