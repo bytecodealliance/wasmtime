@@ -9,6 +9,7 @@
 
 #include <string_view>
 #include <wasmtime/component/func.h>
+#include <wasmtime/component/types/func.hh>
 #include <wasmtime/component/val.hh>
 #include <wasmtime/error.hh>
 #include <wasmtime/span.hh>
@@ -53,6 +54,11 @@ public:
       return Error(error);
     }
     return std::monostate();
+  }
+
+  /// \brief Returns the type of this function.
+  FuncType type(Store::Context cx) const {
+    return FuncType(wasmtime_component_func_type(&func, cx.capi()));
   }
 };
 

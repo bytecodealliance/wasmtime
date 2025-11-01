@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <wasmtime/component/types/val.hh>
 #include <wasmtime/component/val.h>
 #include <wasmtime/store.hh>
 
@@ -414,57 +415,6 @@ public:
   const Flag *end() const {
     return reinterpret_cast<const Flag *>(raw.data + raw.size);
   }
-};
-
-/// Class representing a component model `resource` value which is either a
-/// guest or host-defined resource.
-class ResourceType {
-  struct deleter {
-    void operator()(wasmtime_component_resource_type_t *p) const {
-      wasmtime_component_resource_type_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_resource_type_t, deleter> ptr;
-
-public:
-  /// \brief Takes ownership of `raw` and wraps it with this class.
-  explicit ResourceType(wasmtime_component_resource_type_t *raw) : ptr(raw) {}
-
-  /// \brief Creates a new host resource type with the specified `ty`
-  /// identifier.
-  explicit ResourceType(uint32_t ty)
-      : ptr(wasmtime_component_resource_type_new_host(ty)) {}
-
-  /// Copies another resource into this one.
-  ResourceType(const ResourceType &other)
-      : ptr(wasmtime_component_resource_type_clone(other.ptr.get())) {}
-  /// Copies another resource into this one.
-  ResourceType &operator=(const ResourceType &other) {
-    ptr.reset(wasmtime_component_resource_type_clone(other.ptr.get()));
-    return *this;
-  }
-  ~ResourceType() = default;
-  /// Moves resources from another resource into this one.
-  ResourceType(ResourceType &&other) = default;
-  /// Moves resources from another resource into this one.
-  ResourceType &operator=(ResourceType &&other) = default;
-
-  /// \brief Compares two resource types for equality.
-  bool operator==(const ResourceType &b) const {
-    return wasmtime_component_resource_type_equal(capi(), b.capi());
-  }
-
-  /// \brief Compares two resource types for inequality.
-  bool operator!=(const ResourceType &b) const {
-    return !wasmtime_component_resource_type_equal(capi(), b.capi());
-  }
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_resource_type_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_resource_type_t *capi() { return ptr.get(); }
 };
 
 class ResourceHost;
