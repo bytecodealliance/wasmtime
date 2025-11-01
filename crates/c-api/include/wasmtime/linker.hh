@@ -8,6 +8,7 @@
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
 #include <wasmtime/extern.hh>
+#include <wasmtime/helpers.hh>
 #include <wasmtime/instance.hh>
 #include <wasmtime/linker.h>
 #include <wasmtime/store.hh>
@@ -23,16 +24,10 @@ namespace wasmtime {
  * `Linker` can also be used to link in WASI functions to instantiate a module.
  */
 class Linker {
-  struct deleter {
-    void operator()(wasmtime_linker_t *p) const { wasmtime_linker_delete(p); }
-  };
+  WASMTIME_OWN_WRAPPER(Linker, wasmtime_linker);
 
-  std::unique_ptr<wasmtime_linker_t, deleter> ptr;
-
-public:
   /// Creates a new linker which will instantiate in the given engine.
-  explicit Linker(Engine &engine)
-      : ptr(wasmtime_linker_new(engine.ptr.get())) {}
+  explicit Linker(Engine &engine) : ptr(wasmtime_linker_new(engine.capi())) {}
 
   /// Configures whether shadowing previous names is allowed or not.
   ///
@@ -86,7 +81,7 @@ public:
   TrapResult<Instance> instantiate(Store::Context cx, const Module &m) {
     wasmtime_instance_t instance;
     wasm_trap_t *trap = nullptr;
-    auto *error = wasmtime_linker_instantiate(ptr.get(), cx.ptr, m.ptr.get(),
+    auto *error = wasmtime_linker_instantiate(ptr.get(), cx.ptr, m.capi(),
                                               &instance, &trap);
     if (error != nullptr) {
       return TrapError(Error(error));
@@ -102,7 +97,7 @@ public:
   Result<std::monostate> module(Store::Context cx, std::string_view name,
                                 const Module &m) {
     auto *error = wasmtime_linker_module(ptr.get(), cx.ptr, name.data(),
-                                         name.size(), m.ptr.get());
+                                         name.size(), m.capi());
     if (error != nullptr) {
       return Error(error);
     }
@@ -187,7 +182,7 @@ public:
   /// as a trap.
   Result<std::monostate> define_unknown_imports_as_traps(Module &module) {
     auto *error = wasmtime_linker_define_unknown_imports_as_traps(
-        ptr.get(), module.ptr.get());
+        ptr.get(), module.capi());
     if (error != nullptr) {
       return Error(error);
     }
@@ -200,7 +195,7 @@ public:
   Result<std::monostate>
   define_unknown_imports_as_default_values(Store::Context cx, Module &module) {
     auto *error = wasmtime_linker_define_unknown_imports_as_default_values(
-        ptr.get(), cx.ptr, module.ptr.get());
+        ptr.get(), cx.ptr, module.capi());
     if (error != nullptr) {
       return Error(error);
     }

@@ -419,36 +419,12 @@ public:
 /// Class representing a component model `resource` value which is either a
 /// guest or host-defined resource.
 class ResourceType {
-  struct deleter {
-    void operator()(wasmtime_component_resource_type_t *p) const {
-      wasmtime_component_resource_type_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_resource_type_t, deleter> ptr;
-
-public:
-  /// \brief Takes ownership of `raw` and wraps it with this class.
-  explicit ResourceType(wasmtime_component_resource_type_t *raw) : ptr(raw) {}
+  WASMTIME_CLONE_WRAPPER(ResourceType, wasmtime_component_resource_type);
 
   /// \brief Creates a new host resource type with the specified `ty`
   /// identifier.
   explicit ResourceType(uint32_t ty)
       : ptr(wasmtime_component_resource_type_new_host(ty)) {}
-
-  /// Copies another resource into this one.
-  ResourceType(const ResourceType &other)
-      : ptr(wasmtime_component_resource_type_clone(other.ptr.get())) {}
-  /// Copies another resource into this one.
-  ResourceType &operator=(const ResourceType &other) {
-    ptr.reset(wasmtime_component_resource_type_clone(other.ptr.get()));
-    return *this;
-  }
-  ~ResourceType() = default;
-  /// Moves resources from another resource into this one.
-  ResourceType(ResourceType &&other) = default;
-  /// Moves resources from another resource into this one.
-  ResourceType &operator=(ResourceType &&other) = default;
 
   /// \brief Compares two resource types for equality.
   bool operator==(const ResourceType &b) const {
@@ -459,12 +435,6 @@ public:
   bool operator!=(const ResourceType &b) const {
     return !wasmtime_component_resource_type_equal(capi(), b.capi());
   }
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_resource_type_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_resource_type_t *capi() { return ptr.get(); }
 };
 
 class ResourceHost;
@@ -472,40 +442,7 @@ class ResourceHost;
 /// Class representing a component model `resource` value which is either a
 /// guest or host-defined resource.
 class ResourceAny {
-  struct deleter {
-    void operator()(wasmtime_component_resource_any_t *p) const {
-      wasmtime_component_resource_any_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_resource_any_t, deleter> ptr;
-
-public:
-  /// \brief Takes ownership of `raw` and wraps it with this class.
-  explicit ResourceAny(wasmtime_component_resource_any_t *raw) : ptr(raw) {}
-
-  /// Copies another resource into this one.
-  ResourceAny(const ResourceAny &other)
-      : ptr(wasmtime_component_resource_any_clone(other.ptr.get())) {}
-  /// Copies another resource into this one.
-  ResourceAny &operator=(const ResourceAny &other) {
-    ptr.reset(wasmtime_component_resource_any_clone(other.ptr.get()));
-    return *this;
-  }
-  ~ResourceAny() = default;
-  /// Moves resources from another resource into this one.
-  ResourceAny(ResourceAny &&other) = default;
-  /// Moves resources from another resource into this one.
-  ResourceAny &operator=(ResourceAny &&other) = default;
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_resource_any_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_resource_any_t *capi() { return ptr.get(); }
-
-  /// \brief Gives up ownership of the underlying C pointer to the caller.
-  wasmtime_component_resource_any_t *capi_release() { return ptr.release(); }
+  WASMTIME_CLONE_WRAPPER(ResourceAny, wasmtime_component_resource_any);
 
   /// \brief Returns whether this resource is owned.
   bool owned() const { return wasmtime_component_resource_any_owned(capi()); }
@@ -529,51 +466,12 @@ public:
 
   /// \brief Attempts to convert this resource to a host-defined resource.
   Result<ResourceHost> to_host(Store::Context cx) const;
-
-  /**
-   * Converts the raw C API representation to this class without taking
-   * ownership.
-   */
-  static const ResourceAny *
-  from_capi(wasmtime_component_resource_any_t *const *capi) {
-    return reinterpret_cast<const ResourceAny *>(capi);
-  }
 };
 
 /// Class representing a component model `resource` value which is a host-owned
 /// resource.
 class ResourceHost {
-  struct deleter {
-    void operator()(wasmtime_component_resource_host_t *p) const {
-      wasmtime_component_resource_host_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_resource_host_t, deleter> ptr;
-
-public:
-  /// \brief Takes ownership of `raw` and wraps it with this class.
-  explicit ResourceHost(wasmtime_component_resource_host_t *raw) : ptr(raw) {}
-
-  /// Copies another resource into this one.
-  ResourceHost(const ResourceHost &other)
-      : ptr(wasmtime_component_resource_host_clone(other.ptr.get())) {}
-  /// Copies another resource into this one.
-  ResourceHost &operator=(const ResourceHost &other) {
-    ptr.reset(wasmtime_component_resource_host_clone(other.ptr.get()));
-    return *this;
-  }
-  ~ResourceHost() = default;
-  /// Moves resources from another resource into this one.
-  ResourceHost(ResourceHost &&other) = default;
-  /// Moves resources from another resource into this one.
-  ResourceHost &operator=(ResourceHost &&other) = default;
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_resource_host_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_resource_host_t *capi() { return ptr.get(); }
+  WASMTIME_CLONE_WRAPPER(ResourceHost, wasmtime_component_resource_host);
 
   /// \brief Creates a new host-defined resource with the specified `owned`,
   /// `rep`, and `ty` identifiers.
