@@ -72,7 +72,6 @@ pub fn translate_exn_throw(
     _builder: &mut FunctionBuilder<'_>,
     _tag_index: TagIndex,
     _args: &[ir::Value],
-    _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
 ) -> WasmResult<()> {
     disabled()
 }
@@ -81,7 +80,6 @@ pub fn translate_exn_throw_ref(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder<'_>,
     _exnref: ir::Value,
-    _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
 ) -> WasmResult<()> {
     disabled()
 }
