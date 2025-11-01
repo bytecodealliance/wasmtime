@@ -146,6 +146,68 @@ impl AsyncWrite for MemoryOutputPipe {
     }
 }
 
+pub trait SimpleCustomOutputWriter: Send + Sync + 'static {
+    fn write(&self, buf: &[u8]);
+}
+
+pub struct SimpleCustomOutputStream<T: SimpleCustomOutputWriter> {
+    writer: Arc<Mutex<T>>,
+}
+
+impl<T: SimpleCustomOutputWriter> SimpleCustomOutputStream<T> {
+    pub fn new(x: T) -> Self {
+        Self {
+            writer: Arc::new(Mutex::new(x)),
+        }
+    }
+}
+
+impl<T: SimpleCustomOutputWriter> Clone for SimpleCustomOutputStream<T> {
+    fn clone(&self) -> Self {
+        Self {
+            writer: self.writer.clone(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: SimpleCustomOutputWriter> Pollable for SimpleCustomOutputStream<T> {
+    async fn ready(&mut self) {}
+}
+
+#[async_trait::async_trait]
+impl<T: SimpleCustomOutputWriter> OutputStream for SimpleCustomOutputStream<T> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        self.writer.lock().unwrap().write(&bytes);
+        // Always ready for writing
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), StreamError> {
+        // This stream is always flushed
+        Ok(())
+    }
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        Ok(8192)
+    }
+}
+
+impl<T: SimpleCustomOutputWriter> AsyncWrite for SimpleCustomOutputStream<T> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        self.writer.lock().unwrap().write(buf);
+        Poll::Ready(Ok(buf.len()))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 /// Provides a [`InputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream {
     closed: bool,

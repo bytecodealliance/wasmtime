@@ -146,6 +146,19 @@ WASI_API_EXTERN bool wasi_config_set_stdout_file(wasi_config_t *config,
 WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t *config);
 
 /**
+ * \brief Configures standard output to be directed to \p callback
+ *
+ * \param callback The callback that will get called for each write with the
+ * buffer
+ * \param data An optional user provided data that will be passed to \p callback
+ * \param finalizer An optional callback to be called to destroy \p data
+ */
+WASI_API_EXTERN void wasi_config_set_stdout_custom(
+    wasi_config_t *config,
+    void (*callback)(void *, const unsigned char *, size_t), void *data,
+    void (*finalizer)(void *));
+
+/**
  * \brief Configures standard output to be written to the specified file.
  *
  * By default WASI programs have no stderr, but this configures the specified
@@ -162,6 +175,19 @@ WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t *config,
  * this WASI configuration.
  */
 WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
+
+/**
+ * \brief Configures standard error output to be directed to \p callback
+ *
+ * \param callback The callback that will get called for each write with the
+ * buffer
+ * \param data An optional user provided data that will be passed to \p callback
+ * \param finalizer An optional callback to be called to destroy \p data
+ */
+WASI_API_EXTERN void wasi_config_set_stderr_custom(
+    wasi_config_t *config,
+    void (*callback)(void *, const unsigned char *, size_t), void *data,
+    void (*finalizer)(void *));
 
 /**
  * \brief The permissions granted for a directory when preopening it.
