@@ -2,7 +2,7 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
 use std::path::Path;
 use std::slice;
@@ -149,6 +149,34 @@ pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
     config.builder.inherit_stdout();
 }
 
+struct CustomOutputStream {
+    foreign_data: crate::ForeignData,
+    callback: extern "C" fn(*mut c_void, *const u8, usize),
+}
+
+impl wasmtime_wasi::p2::pipe::SimpleCustomOutputWriter for CustomOutputStream {
+    fn write(&self, buf: &[u8]) {
+        (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasi_config_set_stdout_custom(
+    config: &mut wasi_config_t,
+    callback: Option<extern "C" fn(*mut c_void, *const u8, usize)>,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
+) {
+    config
+        .builder
+        .stdout(wasmtime_wasi::p2::pipe::SimpleCustomOutputStream::new(
+            CustomOutputStream {
+                foreign_data: crate::ForeignData { data, finalizer },
+                callback: callback.expect("Callback must be provided"),
+            },
+        ));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config: &mut wasi_config_t,
@@ -169,6 +197,23 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
     config.builder.inherit_stderr();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasi_config_set_stderr_custom(
+    config: &mut wasi_config_t,
+    callback: Option<extern "C" fn(*mut c_void, *const u8, usize)>,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
+) {
+    config
+        .builder
+        .stderr(wasmtime_wasi::p2::pipe::SimpleCustomOutputStream::new(
+            CustomOutputStream {
+                foreign_data: crate::ForeignData { data, finalizer },
+                callback: callback.expect("Callback must be provided"),
+            },
+        ));
 }
 
 #[unsafe(no_mangle)]

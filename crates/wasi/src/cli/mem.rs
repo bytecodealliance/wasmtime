@@ -32,3 +32,16 @@ impl StdoutStream for p2::pipe::MemoryOutputPipe {
         Box::new(self.clone())
     }
 }
+
+// Implementation for p2::pipe::SimpleCustomOutputStream
+impl<T: p2::pipe::SimpleCustomOutputWriter> IsTerminal for p2::pipe::SimpleCustomOutputStream<T> {
+    fn is_terminal(&self) -> bool {
+        false
+    }
+}
+
+impl<T: p2::pipe::SimpleCustomOutputWriter> StdoutStream for p2::pipe::SimpleCustomOutputStream<T> {
+    fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
+        Box::new(Clone::clone(self))
+    }
+}
