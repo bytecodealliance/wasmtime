@@ -7,8 +7,13 @@
 
 use core::arch::naked_asm;
 
+#[inline(never)] // FIXME(rust-lang/rust#148307)
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
+    unsafe { wasmtime_fiber_switch_(top_of_stack) }
+}
+
 #[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* rdi */) {
+unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* rdi */) {
     naked_asm!(
         "
         // We're switching to arbitrary code somewhere else, so pessimistically
