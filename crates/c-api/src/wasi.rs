@@ -2,12 +2,17 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
+use bytes::Bytes;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
 use std::path::Path;
+use std::pin::Pin;
 use std::slice;
+use std::task::{Context, Poll};
+use tokio::io::{self, AsyncWrite};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
+use wasmtime_wasi_io::streams::StreamError;
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
@@ -149,14 +154,90 @@ pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
     config.builder.inherit_stdout();
 }
 
-struct CustomOutputStream {
+struct CustomOutputStreamInner {
     foreign_data: crate::ForeignData,
     callback: extern "C" fn(*mut c_void, *const u8, usize),
 }
 
-impl wasmtime_wasi::p2::pipe::SimpleCustomOutputWriter for CustomOutputStream {
-    fn write(&self, buf: &[u8]) {
+impl CustomOutputStreamInner {
+    pub fn write(&self, buf: &[u8]) {
         (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len());
+    }
+}
+
+pub struct CustomOutputStream {
+    inner: std::sync::Arc<CustomOutputStreamInner>,
+}
+
+impl CustomOutputStream {
+    pub fn new(
+        foreign_data: crate::ForeignData,
+        callback: extern "C" fn(*mut c_void, *const u8, usize),
+    ) -> Self {
+        Self {
+            inner: std::sync::Arc::new(CustomOutputStreamInner {
+                foreign_data,
+                callback,
+            }),
+        }
+    }
+}
+
+impl Clone for CustomOutputStream {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
+    async fn ready(&mut self) {}
+}
+
+#[async_trait::async_trait]
+impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        self.inner.write(&bytes);
+        // Always ready for writing
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), StreamError> {
+        // This stream is always flushed
+        Ok(())
+    }
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        Ok(8192)
+    }
+}
+
+impl AsyncWrite for CustomOutputStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        self.inner.write(buf);
+        Poll::Ready(Ok(buf.len()))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl wasmtime_wasi::cli::IsTerminal for CustomOutputStream {
+    fn is_terminal(&self) -> bool {
+        false
+    }
+}
+
+impl wasmtime_wasi::cli::StdoutStream for CustomOutputStream {
+    fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
+        Box::new(self.clone())
     }
 }
 
@@ -167,14 +248,10 @@ pub extern "C" fn wasi_config_set_stdout_custom(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    config
-        .builder
-        .stdout(wasmtime_wasi::p2::pipe::SimpleCustomOutputStream::new(
-            CustomOutputStream {
-                foreign_data: crate::ForeignData { data, finalizer },
-                callback: callback.expect("Callback must be provided"),
-            },
-        ));
+    config.builder.stdout(CustomOutputStream::new(
+        crate::ForeignData { data, finalizer },
+        callback.expect("Callback must be provided"),
+    ));
 }
 
 #[unsafe(no_mangle)]
@@ -206,14 +283,10 @@ pub extern "C" fn wasi_config_set_stderr_custom(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    config
-        .builder
-        .stderr(wasmtime_wasi::p2::pipe::SimpleCustomOutputStream::new(
-            CustomOutputStream {
-                foreign_data: crate::ForeignData { data, finalizer },
-                callback: callback.expect("Callback must be provided"),
-            },
-        ));
+    config.builder.stderr(CustomOutputStream::new(
+        crate::ForeignData { data, finalizer },
+        callback.expect("Callback must be provided"),
+    ));
 }
 
 #[unsafe(no_mangle)]
