@@ -968,7 +968,7 @@ async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
                 (table (export "__indirect_function_table") 1 funcref))
             (core module $m
                 (import "" "task.return" (func $task-return))
-                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
                 (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
                 (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
                 (func $thread-start (param i32) (; empty ;))
@@ -984,12 +984,12 @@ async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
             (core type $start-func-ty (func (param i32)))
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
             (core func $thread-new-indirect 
-                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
             (core func $thread-resume-later (canon thread.resume-later))
             (core func $task-return (canon task.return))
             (core instance $i (instantiate $m
                 (with "" (instance 
-                    (export "thread.new_indirect" (func $thread-new-indirect))
+                    (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.resume-later" (func $thread-resume-later))
                     (export "task.return" (func $task-return))
                 ))
@@ -1010,7 +1010,7 @@ async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
                 (table (export "__indirect_function_table") 1 funcref))
             (core module $m
                 (import "" "task.return" (func $task-return))
-                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
                 (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
                 (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
                 (func $thread-start (param i32) (; empty ;))
@@ -1024,12 +1024,12 @@ async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
             (core type $start-func-ty (func (param i32)))
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
             (core func $thread-new-indirect 
-                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
             (core func $thread-resume-later (canon thread.resume-later))
             (core func $task-return (canon task.return))
             (core instance $i (instantiate $m
                 (with "" (instance 
-                    (export "thread.new_indirect" (func $thread-new-indirect))
+                    (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.resume-later" (func $thread-resume-later))
                     (export "task.return" (func $task-return))
                 ))
