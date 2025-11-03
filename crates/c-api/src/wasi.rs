@@ -156,12 +156,12 @@ pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
 
 struct CustomOutputStreamInner {
     foreign_data: crate::ForeignData,
-    callback: extern "C" fn(*mut c_void, *const u8, usize),
+    callback: extern "C" fn(*mut c_void, *const u8, usize) -> isize,
 }
 
 impl CustomOutputStreamInner {
-    pub fn write(&self, buf: &[u8]) {
-        (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len());
+    pub fn write(&self, buf: &[u8]) -> isize {
+        (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len())
     }
 }
 
@@ -172,7 +172,7 @@ pub struct CustomOutputStream {
 impl CustomOutputStream {
     pub fn new(
         foreign_data: crate::ForeignData,
-        callback: extern "C" fn(*mut c_void, *const u8, usize),
+        callback: extern "C" fn(*mut c_void, *const u8, usize) -> isize,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(CustomOutputStreamInner {
@@ -199,16 +199,28 @@ impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
-        self.inner.write(&bytes);
-        // Always ready for writing
+        let wrote = self.inner.write(&bytes);
+
+        if wrote < 0 {
+            return Err(StreamError::Trap(anyhow::anyhow!(
+                "Custom write function failed with error code '{}'",
+                wrote.abs()
+            )));
+        }
+
+        if wrote as usize != bytes.len() {
+            return Err(StreamError::Trap(anyhow::anyhow!(
+                "Partial writes in wasip2 implementation are not allowed"
+            )));
+        }
+
         Ok(())
     }
     fn flush(&mut self) -> Result<(), StreamError> {
-        // This stream is always flushed
         Ok(())
     }
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        Ok(8192)
+        Ok(usize::MAX)
     }
 }
 
@@ -218,8 +230,18 @@ impl AsyncWrite for CustomOutputStream {
         _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        self.inner.write(buf);
-        Poll::Ready(Ok(buf.len()))
+        let wrote = self.inner.write(buf);
+        Poll::Ready(if wrote >= 0 {
+            Ok(wrote as _)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Custom write function failed with error code '{}'",
+                    wrote.abs()
+                ),
+            ))
+        })
     }
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
@@ -244,13 +266,13 @@ impl wasmtime_wasi::cli::StdoutStream for CustomOutputStream {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_set_stdout_custom(
     config: &mut wasi_config_t,
-    callback: Option<extern "C" fn(*mut c_void, *const u8, usize)>,
+    callback: extern "C" fn(*mut c_void, *const u8, usize) -> isize,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
     config.builder.stdout(CustomOutputStream::new(
         crate::ForeignData { data, finalizer },
-        callback.expect("Callback must be provided"),
+        callback,
     ));
 }
 
@@ -279,13 +301,13 @@ pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_set_stderr_custom(
     config: &mut wasi_config_t,
-    callback: Option<extern "C" fn(*mut c_void, *const u8, usize)>,
+    callback: extern "C" fn(*mut c_void, *const u8, usize) -> isize,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
     config.builder.stderr(CustomOutputStream::new(
         crate::ForeignData { data, finalizer },
-        callback.expect("Callback must be provided"),
+        callback,
     ));
 }
 

@@ -149,13 +149,14 @@ WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t *config);
  * \brief Configures standard output to be directed to \p callback
  *
  * \param callback The callback that will get called for each write with the
- * buffer
+ * buffer. A positive return value indicates the amount of bytes written.
+ * Negative return values indicate that an error has occured.
  * \param data An optional user provided data that will be passed to \p callback
  * \param finalizer An optional callback to be called to destroy \p data
  */
 WASI_API_EXTERN void wasi_config_set_stdout_custom(
     wasi_config_t *config,
-    void (*callback)(void *, const unsigned char *, size_t), void *data,
+    ptrdiff_t (*callback)(void *, const unsigned char *, size_t), void *data,
     void (*finalizer)(void *));
 
 /**
@@ -180,13 +181,14 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
  * \brief Configures standard error output to be directed to \p callback
  *
  * \param callback The callback that will get called for each write with the
- * buffer
+ * buffer. A positive return value indicates the amount of bytes written.
+ * Negative return values indicate that an error has occured.
  * \param data An optional user provided data that will be passed to \p callback
  * \param finalizer An optional callback to be called to destroy \p data
  */
 WASI_API_EXTERN void wasi_config_set_stderr_custom(
     wasi_config_t *config,
-    void (*callback)(void *, const unsigned char *, size_t), void *data,
+    ptrdiff_t (*callback)(void *, const unsigned char *, size_t), void *data,
     void (*finalizer)(void *));
 
 /**
