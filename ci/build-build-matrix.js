@@ -48,7 +48,7 @@ const array = [
     // unable to link stack-switching related symbols using #[naked] and such.
     // Looks to be solved on beta, and once Rust 1.91 is stable this can be
     // removed.
-    "rust": "beta",
+    "rust": "beta-2025-10-26",
   },
   {
     "build": "aarch64-macos",
