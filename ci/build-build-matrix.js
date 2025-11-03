@@ -44,11 +44,6 @@ const array = [
     // On OSX all we need to do is configure our deployment target as old as
     // possible. For now 10.12 is the limit.
     "env": { "MACOSX_DEPLOYMENT_TARGET": "10.12" },
-    // FIXME(#11783) we saw weird build errors with Rust 1.90 related to being
-    // unable to link stack-switching related symbols using #[naked] and such.
-    // Looks to be solved on beta, and once Rust 1.91 is stable this can be
-    // removed.
-    "rust": "beta",
   },
   {
     "build": "aarch64-macos",
