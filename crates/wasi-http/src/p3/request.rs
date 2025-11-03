@@ -125,7 +125,7 @@ impl Request {
         )
     }
 
-    /// Convert this [`Request`] into an [`http::Request<BoxBody<Bytes, ErrorCode>>`].
+    /// Convert this [`Request`] into an [`http::Request<UnsyncBoxBody<Bytes, ErrorCode>>`].
     ///
     /// The specified future `fut` can be used to communicate a request processing
     /// error, if any, back to the caller (e.g., if this request was constructed
