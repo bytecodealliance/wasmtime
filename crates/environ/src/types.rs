@@ -2152,7 +2152,7 @@ impl Memory {
     pub fn can_elide_bounds_check(&self, tunables: &Tunables, host_page_size_log2: u8) -> bool {
         self.can_use_virtual_memory(tunables, host_page_size_log2)
             && self.idx_type == IndexType::I32
-            && tunables.memory_reservation >= (1 << 32)
+            && tunables.memory_reservation + tunables.memory_guard_size >= (1 << 32)
     }
 
     /// Returns the static size of this heap in bytes at runtime, if available.
