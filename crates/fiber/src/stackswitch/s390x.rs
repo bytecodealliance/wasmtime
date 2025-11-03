@@ -7,8 +7,13 @@
 
 use core::arch::naked_asm;
 
+#[inline(never)] // FIXME(rust-lang/rust#148307)
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
+    unsafe { wasmtime_fiber_switch_(top_of_stack) }
+}
+
 #[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x0 */) {
+unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
     naked_asm!(
         "
         // Save all callee-saved registers on the stack since we're assuming
