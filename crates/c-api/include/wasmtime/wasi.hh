@@ -102,6 +102,9 @@ public:
     return wasi_config_preopen_dir(ptr.get(), path.c_str(), guest_path.c_str(),
                                    dir_perms, file_perms);
   }
+
+  /// \brief Returns the underlying C API pointer.
+  [[nodiscard]] wasi_config_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime
