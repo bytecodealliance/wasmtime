@@ -342,7 +342,7 @@ async fn task_deletion() -> Result<()> {
             (import "" "mem" (memory 1))
             (import "" "task.return" (func $task-return (param i32)))
             (import "" "task.cancel" (func $task-cancel))
-            (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+            (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
             (import "" "thread.suspend" (func $thread-suspend (result i32)))
             (import "" "thread.suspend-cancellable" (func $thread-suspend-cancellable (result i32)))
             (import "" "thread.yield-to" (func $thread-yield-to (param i32) (result i32)))
@@ -419,7 +419,7 @@ async fn task_deletion() -> Result<()> {
                 (i32.const 0 (; EXIT ;)))
             
 
-            ;; Initialize the function table that will be used by thread.new_indirect
+            ;; Initialize the function table that will be used by thread.new-indirect
             (elem (table $indirect-function-table) (i32.const 0 (; call-return-ftbl-idx ;)) func $call-return)
             (elem (table $indirect-function-table) (i32.const 1 (; suspend-ftbl-idx ;)) func $suspend)
             (elem (table $indirect-function-table) (i32.const 2 (; yield-loop-ftbl-idx ;)) func $yield-loop)
@@ -427,14 +427,14 @@ async fn task_deletion() -> Result<()> {
 
         ;; Instantiate the libc module to get the table
         (core instance $libc (instantiate $libc))
-        ;; Get access to `thread.new_indirect` that uses the table from libc
+        ;; Get access to `thread.new-indirect` that uses the table from libc
         (core type $start-func-ty (func (param i32)))
         (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
         (core func $task-return (canon task.return (result u32)))
         (core func $task-cancel (canon task.cancel))
         (core func $thread-new-indirect 
-            (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+            (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
         (core func $thread-index (canon thread.index))
@@ -456,7 +456,7 @@ async fn task_deletion() -> Result<()> {
                     (export "mem" (memory $memory "mem"))
                     (export "task.return" (func $task-return))
                     (export "task.cancel" (func $task-cancel))
-                    (export "thread.new_indirect" (func $thread-new-indirect))
+                    (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.index" (func $thread-index))
                     (export "thread.yield-to" (func $thread-yield-to))
                     (export "thread.yield-to-cancellable" (func $thread-yield-to-cancellable))

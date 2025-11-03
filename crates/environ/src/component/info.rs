@@ -291,7 +291,7 @@ pub enum GlobalInitializer {
     /// from its `export` and stored into the `VMComponentContext` at the
     /// `index` specified. During this extraction, we will also capture the
     /// table's containing instance pointer to access the table at runtime. This
-    /// extraction is useful for `thread.spawn_indirect`.
+    /// extraction is useful for `thread.spawn-indirect`.
     ExtractTable(ExtractTable),
 
     /// Declares a new defined resource within this component.
@@ -1127,7 +1127,7 @@ pub enum Trampoline {
     /// Intrinsic used to implement the `thread.index` component model builtin.
     ThreadIndex,
 
-    /// Intrinsic used to implement the `thread.new_indirect` component model builtin.
+    /// Intrinsic used to implement the `thread.new-indirect` component model builtin.
     ThreadNewIndirect {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,

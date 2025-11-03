@@ -8,10 +8,10 @@
     ;; Defines the table for the thread start function
     (core module $libc
         (table (export "__indirect_function_table") 1 funcref))
-    ;; Defines the thread start function and a function that calls thread.new_indirect
+    ;; Defines the thread start function and a function that calls thread.new-indirect
     (core module $m
         ;; Import the threading builtins and the table from libc
-        (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+        (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
         (import "" "thread.suspend" (func $thread-suspend (result i32)))
         (import "" "thread.yield-to" (func $thread-yield-to (param i32) (result i32)))
         (import "" "thread.switch-to" (func $thread-switch-to (param i32) (result i32)))
@@ -43,7 +43,7 @@
         (export "thread-start" (func $thread-start))
 
         ;; Initialize the function table with our thread-start function; this will be
-        ;; used by thread.new_indirect
+        ;; used by thread.new-indirect
         (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
 
         ;; The main entry point, which spawns a new thread to run `thread-start`, passing 42
@@ -70,12 +70,12 @@
     
     ;; Instantiate the libc module to get the table
     (core instance $libc (instantiate $libc))
-    ;; Get access to `thread.new_indirect` that uses the table from libc
+    ;; Get access to `thread.new-indirect` that uses the table from libc
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
     (core func $thread-new-indirect 
-        (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
     (core func $thread-yield-to (canon thread.yield-to))
@@ -87,7 +87,7 @@
     (core instance $i (
         instantiate $m 
             (with "" (instance  
-                (export "thread.new_indirect" (func $thread-new-indirect))
+                (export "thread.new-indirect" (func $thread-new-indirect))
                 (export "thread.index" (func $thread-index))
                 (export "thread.yield-to" (func $thread-yield-to))
                 (export "thread.yield" (func $thread-yield))
