@@ -541,3 +541,149 @@ where
         }
     }
 }
+
+/// A wrapper around [http_body::Body], which allows attaching arbitrary state to it
+pub(crate) struct BodyWithState<T, U> {
+    body: T,
+    _state: U,
+}
+
+impl<T, U> http_body::Body for BodyWithState<T, U>
+where
+    T: http_body::Body + Unpin,
+    U: Unpin,
+{
+    type Data = T::Data;
+    type Error = T::Error;
+
+    #[inline]
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        Pin::new(&mut self.get_mut().body).poll_frame(cx)
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.body.size_hint()
+    }
+}
+
+/// A wrapper around [http_body::Body], which validates `Content-Length`
+pub(crate) struct BodyWithContentLength<T, E> {
+    body: T,
+    error_tx: Option<oneshot::Sender<E>>,
+    make_error: fn(Option<u64>) -> E,
+    /// Limit of bytes to be sent
+    limit: u64,
+    /// Number of bytes sent
+    sent: u64,
+}
+
+impl<T, E> BodyWithContentLength<T, E> {
+    /// Sends the error constructed by [Self::make_error] on [Self::error_tx].
+    /// Does nothing if an error has already been sent on [Self::error_tx].
+    fn send_error<V>(&mut self, sent: Option<u64>) -> Poll<Option<Result<V, E>>> {
+        if let Some(error_tx) = self.error_tx.take() {
+            _ = error_tx.send((self.make_error)(sent));
+        }
+        Poll::Ready(Some(Err((self.make_error)(sent))))
+    }
+}
+
+impl<T, E> http_body::Body for BodyWithContentLength<T, E>
+where
+    T: http_body::Body<Data = Bytes, Error = E> + Unpin,
+{
+    type Data = T::Data;
+    type Error = T::Error;
+
+    #[inline]
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        match ready!(Pin::new(&mut self.as_mut().body).poll_frame(cx)) {
+            Some(Ok(frame)) => {
+                let Some(data) = frame.data_ref() else {
+                    return Poll::Ready(Some(Ok(frame)));
+                };
+                let Ok(sent) = data.len().try_into() else {
+                    return self.send_error(None);
+                };
+                let Some(sent) = self.sent.checked_add(sent) else {
+                    return self.send_error(None);
+                };
+                if sent > self.limit {
+                    return self.send_error(Some(sent));
+                }
+                self.sent = sent;
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Some(Err(err)) => Poll::Ready(Some(Err(err))),
+            None if self.limit != self.sent => {
+                // short write
+                let sent = self.sent;
+                self.send_error(Some(sent))
+            }
+            None => Poll::Ready(None),
+        }
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> http_body::SizeHint {
+        let n = self.limit.saturating_sub(self.sent);
+        let mut hint = self.body.size_hint();
+        if hint.lower() >= n {
+            hint.set_exact(n)
+        } else if let Some(max) = hint.upper() {
+            hint.set_upper(n.min(max))
+        } else {
+            hint.set_upper(n)
+        }
+        hint
+    }
+}
+
+pub(crate) trait BodyExt {
+    fn with_state<T>(self, state: T) -> BodyWithState<Self, T>
+    where
+        Self: Sized,
+    {
+        BodyWithState {
+            body: self,
+            _state: state,
+        }
+    }
+
+    fn with_content_length<E>(
+        self,
+        limit: u64,
+        error_tx: oneshot::Sender<E>,
+        make_error: fn(Option<u64>) -> E,
+    ) -> BodyWithContentLength<Self, E>
+    where
+        Self: Sized,
+    {
+        BodyWithContentLength {
+            body: self,
+            error_tx: Some(error_tx),
+            make_error,
+            limit,
+            sent: 0,
+        }
+    }
+}
+
+impl<T> BodyExt for T {}
