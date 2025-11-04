@@ -136,8 +136,7 @@ impl<'a> Arbitrary<'a> for MemoryConfig {
             // Allow up to 4GiB guard page reservations to be made.
             memory_guard_size: interesting_virtual_memory_size(u, 32)?,
 
-            // Allow up up to 1GiB extra memory to grow into for dynamic
-            // memories.
+            // Allow up to 1GiB extra memory to grow into for dynamic memories.
             memory_reservation_for_growth: interesting_virtual_memory_size(u, 30)?,
 
             guard_before_linear_memory: u.arbitrary()?,
