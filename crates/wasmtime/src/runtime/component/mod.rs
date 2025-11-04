@@ -151,8 +151,8 @@ pub use wasm_wave;
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
-        lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
+        ComponentVariant, LiftContext, LowerContext, bad_type_info, format_flags, lower_payload,
+        typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
     };
     pub use super::matching::InstanceType;
     pub use crate::MaybeUninitExt;
