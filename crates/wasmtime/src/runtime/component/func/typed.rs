@@ -1,5 +1,5 @@
 use crate::component::Instance;
-use crate::component::func::{Func, LiftContext, LowerContext, Options};
+use crate::component::func::{Func, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
@@ -11,7 +11,8 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, StringEncoding, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
+    StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -995,12 +996,16 @@ macro_rules! forward_string_lifts {
         unsafe impl Lift for $a {
             #[inline]
             fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                Ok(<WasmStr as Lift>::linear_lift_from_flat(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
+                let s = <WasmStr as Lift>::linear_lift_from_flat(cx, ty, src)?;
+                let encoding = cx.options().string_encoding;
+                Ok(s.to_str_from_memory(encoding, cx.memory())?.into())
             }
 
             #[inline]
             fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                Ok(<WasmStr as Lift>::linear_lift_from_memory(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
+                let s = <WasmStr as Lift>::linear_lift_from_memory(cx, ty, bytes)?;
+                let encoding = cx.options().string_encoding;
+                Ok(s.to_str_from_memory(encoding, cx.memory())?.into())
             }
         }
     )*)
@@ -1481,7 +1486,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
     // to simd-accelerated helpers in the `encoding_rs` crate. This is ok though
     // because we can fake that the host string was already stored in latin1
     // format and follow that copy pattern instead.
-    match cx.options.string_encoding() {
+    match cx.options().string_encoding {
         // This corresponds to `store_string_copy` in the canonical ABI where
         // the host's representation is utf-8 and the wasm module wants utf-8 so
         // a copy is all that's needed (and the `realloc` can be precise for the
@@ -1614,12 +1619,13 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
 pub struct WasmStr {
     ptr: usize,
     len: usize,
-    options: Options,
+    options: OptionsIndex,
+    instance: Instance,
 }
 
 impl WasmStr {
     pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
-        let byte_len = match cx.options.string_encoding() {
+        let byte_len = match cx.options().string_encoding {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
             StringEncoding::CompactUtf16 => {
@@ -1637,7 +1643,8 @@ impl WasmStr {
         Ok(WasmStr {
             ptr,
             len,
-            options: *cx.options,
+            options: cx.options_index(),
+            instance: cx.instance_handle(),
         })
     }
 
@@ -1667,12 +1674,17 @@ impl WasmStr {
         store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Cow<'a, str>> {
         let store = store.into().0;
-        let memory = self.options.memory(store);
-        self.to_str_from_memory(memory)
+        let memory = self.instance.options_memory(store, self.options);
+        let encoding = self.instance.options(store, self.options).string_encoding;
+        self.to_str_from_memory(encoding, memory)
     }
 
-    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
-        match self.options.string_encoding() {
+    pub(crate) fn to_str_from_memory<'a>(
+        &self,
+        encoding: StringEncoding,
+        memory: &'a [u8],
+    ) -> Result<Cow<'a, str>> {
+        match encoding {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
             StringEncoding::CompactUtf16 => {
@@ -1866,7 +1878,7 @@ where
 pub struct WasmList<T> {
     ptr: usize,
     len: usize,
-    options: Options,
+    options: OptionsIndex,
     elem: InterfaceType,
     instance: Instance,
     _marker: marker::PhantomData<T>,
@@ -1892,7 +1904,7 @@ impl<T: Lift> WasmList<T> {
         Ok(WasmList {
             ptr,
             len,
-            options: *cx.options,
+            options: cx.options_index(),
             elem,
             instance: cx.instance_handle(),
             _marker: marker::PhantomData,
@@ -1921,8 +1933,7 @@ impl<T: Lift> WasmList<T> {
     // consumers should be validating through the iterator.
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
-        self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, self.instance);
+        let mut cx = LiftContext::new(store, self.options, self.instance);
         self.get_from_store(&mut cx, index)
     }
 
@@ -1949,8 +1960,7 @@ impl<T: Lift> WasmList<T> {
         store: impl Into<StoreContextMut<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
-        self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, self.instance);
+        let mut cx = LiftContext::new(store, self.options, self.instance);
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }
@@ -1976,7 +1986,7 @@ macro_rules! raw_wasm_list_accessors {
             /// Panics if the `store` provided is not the one from which this
             /// slice originated.
             pub fn as_le_slice<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [$i] {
-                let memory = self.options.memory(store.into().0);
+                let memory = self.instance.options_memory(store.into().0, self.options);
                 self._as_le_slice(memory)
             }
 

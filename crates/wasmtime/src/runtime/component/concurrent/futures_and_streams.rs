@@ -1,10 +1,10 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
 use crate::component::concurrent::{ConcurrentState, WorkItem, tls};
-use crate::component::func::{self, LiftContext, LowerContext, Options};
+use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
-use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
+use crate::component::{AsAccessor, Instance, Lift, Lower, Val, WasmList};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
@@ -23,7 +23,7 @@ use futures::{FutureExt as _, stream};
 use std::any::{Any, TypeId};
 use std::boxed::Box;
 use std::io::Cursor;
-use std::string::{String, ToString};
+use std::string::String;
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 use wasmtime_environ::component::{
@@ -135,7 +135,7 @@ fn get_mut_by_index_from(
 fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
-    options: &Options,
+    options: OptionsIndex,
     ty: TransmitIndex,
     address: usize,
     count: usize,
@@ -347,6 +347,7 @@ impl<D: 'static> DirectDestination<'_, D> {
                 address,
                 count,
                 options,
+                instance,
                 ..
             } = &transmit.read
             else {
@@ -357,8 +358,8 @@ impl<D: 'static> DirectDestination<'_, D> {
                 unreachable!()
             };
 
-            options
-                .memory_mut(self.store.0)
+            instance
+                .options_memory_mut(self.store.0, options)
                 .get_mut((address + guest_offset)..)
                 .and_then(|b| b.get_mut(..(count - guest_offset)))
                 .unwrap()
@@ -696,7 +697,7 @@ impl<'a, T> Source<'a, T> {
             };
 
             let cx =
-                &mut LiftContext::new(store.0.store_opaque_mut(), &options, self.instance.unwrap());
+                &mut LiftContext::new(store.0.store_opaque_mut(), options, self.instance.unwrap());
             let ty = payload(ty, cx.types);
             let old_remaining = buffer.remaining_capacity();
             lift::<T, B, S::Data>(
@@ -783,6 +784,7 @@ impl<D: 'static> DirectSource<'_, D> {
                 address,
                 count,
                 options,
+                instance,
                 ..
             } = &transmit.write
             else {
@@ -793,8 +795,8 @@ impl<D: 'static> DirectSource<'_, D> {
                 unreachable!()
             };
 
-            options
-                .memory(self.store.0)
+            instance
+                .options_memory(self.store.0, options)
                 .get((address + guest_offset)..)
                 .and_then(|b| b.get(..(count - guest_offset)))
                 .unwrap()
@@ -1852,7 +1854,7 @@ enum WriteState {
         instance: Instance,
         ty: TransmitIndex,
         flat_abi: Option<FlatAbi>,
-        options: Options,
+        options: OptionsIndex,
         address: usize,
         count: usize,
         handle: u32,
@@ -1888,7 +1890,8 @@ enum ReadState {
     GuestReady {
         ty: TransmitIndex,
         flat_abi: Option<FlatAbi>,
-        options: Options,
+        instance: Instance,
+        options: OptionsIndex,
         address: usize,
         count: usize,
         handle: u32,
@@ -2215,7 +2218,7 @@ impl<T> StoreContextMut<'_, T> {
         let mut dropped = false;
         let produce = Box::new({
             let producer = producer.clone();
-            move |instance| {
+            move |_instance| {
                 let producer = producer.clone();
                 async move {
                     let (mut mine, mut buffer) = producer.lock().unwrap().take().unwrap();
@@ -2343,7 +2346,7 @@ impl<T> StoreContextMut<'_, T> {
                     *producer.lock().unwrap() = Some((mine, buffer));
 
                     if write_buffer {
-                        write(instance, token, id, producer.clone(), kind).await?;
+                        write( token, id, producer.clone(), kind).await?;
                     }
 
                     Ok(if dropped {
@@ -2577,7 +2580,6 @@ impl<T> StoreContextMut<'_, T> {
 }
 
 async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: WriteBuffer<T>>(
-    instance: Option<Instance>,
     token: StoreToken<D>,
     id: TableId<TransmitState>,
     pair: Arc<Mutex<Option<(P, B)>>>,
@@ -2606,6 +2608,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             address,
             count,
             handle,
+            instance,
         } => {
             let guest_offset = guest_offset.unwrap();
 
@@ -2622,8 +2625,8 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                 move |mut store: StoreContextMut<D>| {
                     lower::<T, B, D>(
                         store.as_context_mut(),
-                        instance.unwrap(),
-                        &options,
+                        instance,
+                        options,
                         ty,
                         address + (T::SIZE32 * guest_offset),
                         count - guest_offset,
@@ -2679,6 +2682,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     address,
                     count,
                     handle,
+                    instance,
                 };
 
                 anyhow::Ok(())
@@ -2850,10 +2854,10 @@ impl Instance {
         mut store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
         write_ty: TransmitIndex,
-        write_options: &Options,
+        write_options: OptionsIndex,
         write_address: usize,
         read_ty: TransmitIndex,
-        read_options: &Options,
+        read_options: OptionsIndex,
         read_address: usize,
         count: usize,
         rep: u32,
@@ -2913,16 +2917,16 @@ impl Instance {
                         let store_opaque = store.0.store_opaque_mut();
 
                         {
-                            let src = write_options
-                                .memory(store_opaque)
+                            let src = self
+                                .options_memory(store_opaque, write_options)
                                 .get(write_address..)
                                 .and_then(|b| b.get(..length_in_bytes))
                                 .ok_or_else(|| {
                                     anyhow::anyhow!("write pointer out of bounds of memory")
                                 })?
                                 .as_ptr();
-                            let dst = read_options
-                                .memory_mut(store_opaque)
+                            let dst = self
+                                .options_memory_mut(store_opaque, read_options)
                                 .get_mut(read_address..)
                                 .and_then(|b| b.get_mut(..length_in_bytes))
                                 .ok_or_else(|| {
@@ -2985,7 +2989,7 @@ impl Instance {
     fn check_bounds(
         self,
         store: &StoreOpaque,
-        options: &Options,
+        options: OptionsIndex,
         ty: TransmitIndex,
         address: usize,
         count: usize,
@@ -3005,8 +3009,7 @@ impl Instance {
         .unwrap();
 
         if count > 0 && size > 0 {
-            options
-                .memory(store)
+            self.options_memory(store, options)
                 .get(address..)
                 .and_then(|b| b.get(..(size * count)))
                 .map(drop)
@@ -3029,8 +3032,7 @@ impl Instance {
     ) -> Result<ReturnCode> {
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
-        let options = Options::new_index(store.0, self, options);
-        self.check_bounds(store.0, &options, ty, address, count)?;
+        self.check_bounds(store.0, options, ty, address, count)?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(
@@ -3090,6 +3092,7 @@ impl Instance {
                 address: read_address,
                 count: read_count,
                 handle: read_handle,
+                instance: read_instance,
             } => {
                 assert_eq!(flat_abi, read_flat_abi);
 
@@ -3130,10 +3133,10 @@ impl Instance {
                     store.as_context_mut(),
                     flat_abi,
                     ty,
-                    &options,
+                    options,
                     address,
                     read_ty,
-                    &read_options,
+                    read_options,
                     read_address,
                     count,
                     rep,
@@ -3171,6 +3174,7 @@ impl Instance {
                         address: read_address + (count * item_size),
                         count: read_count - count,
                         handle: read_handle,
+                        instance: read_instance,
                     };
                 }
 
@@ -3216,7 +3220,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !options.async_() {
+        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
             result = self.wait_for_write(store.0, transmit_handle)?;
         }
 
@@ -3250,8 +3254,7 @@ impl Instance {
     ) -> Result<ReturnCode> {
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
-        let options = Options::new_index(store.0, self, options);
-        self.check_bounds(store.0, &options, ty, address, count)?;
+        self.check_bounds(store.0, options, ty, address, count)?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!("invalid handle {handle}; expected `Read`; got {:?}", *state);
@@ -3295,6 +3298,7 @@ impl Instance {
                 address,
                 count,
                 handle,
+                instance: self,
             };
             Ok::<_, crate::Error>(())
         };
@@ -3331,10 +3335,10 @@ impl Instance {
                     store.as_context_mut(),
                     flat_abi,
                     write_ty,
-                    &write_options,
+                    write_options,
                     write_address,
                     ty,
-                    &options,
+                    options,
                     address,
                     count,
                     rep,
@@ -3418,7 +3422,7 @@ impl Instance {
             WriteState::Dropped => ReturnCode::Dropped(0),
         };
 
-        if result == ReturnCode::Blocked && !options.async_() {
+        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
             result = self.wait_for_read(store.0, transmit_handle)?;
         }
 
@@ -3711,24 +3715,15 @@ impl Instance {
         debug_msg_len: u32,
     ) -> Result<u32> {
         self.id().get(store).check_may_leave(caller)?;
-        let options = Options::new_index(store, self, options);
-        let lift_ctx = &mut LiftContext::new(store, &options, self);
-        //  Read string from guest memory
-        let address = usize::try_from(debug_msg_address)?;
-        let len = usize::try_from(debug_msg_len)?;
-        lift_ctx
-            .memory()
-            .get(address..)
-            .and_then(|b| b.get(..len))
-            .ok_or_else(|| anyhow::anyhow!("invalid debug message pointer: out of bounds"))?;
-        let message = WasmStr::new(address, len, lift_ctx)?;
+        let lift_ctx = &mut LiftContext::new(store, options, self);
+        let debug_msg = String::linear_lift_from_flat(
+            lift_ctx,
+            InterfaceType::String,
+            &[ValRaw::u32(debug_msg_address), ValRaw::u32(debug_msg_len)],
+        )?;
 
         // Create a new ErrorContext that is tracked along with other concurrent state
-        let err_ctx = ErrorContextState {
-            debug_msg: message
-                .to_str_from_memory(options.memory(store))?
-                .to_string(),
-        };
+        let err_ctx = ErrorContextState { debug_msg };
         let state = store.concurrent_state_mut();
         let table_id = state.push(err_ctx)?;
         let global_ref_count_idx =
@@ -3776,9 +3771,8 @@ impl Instance {
             state.get_mut(TableId::<ErrorContextState>::new(handle_table_id_rep))?;
         let debug_msg = debug_msg.clone();
 
-        let options = Options::new_index(store.0, self, options);
         let types = self.id().get(store.0).component().types().clone();
-        let lower_cx = &mut LowerContext::new(store, &options, &types, self);
+        let lower_cx = &mut LowerContext::new(store, options, &types, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
         // Lower the string into the component's memory
         let offset = lower_cx

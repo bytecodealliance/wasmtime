@@ -465,6 +465,68 @@ impl Instance {
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
         lookup_vmdef(store, self.id.instance(), def)
     }
+
+    pub(crate) fn options<'a>(
+        &self,
+        store: &'a StoreOpaque,
+        options: OptionsIndex,
+    ) -> &'a CanonicalOptions {
+        &self.id.get(store).component().env_component().options[options]
+    }
+
+    fn options_memory_raw(
+        &self,
+        store: &StoreOpaque,
+        options: OptionsIndex,
+    ) -> Option<NonNull<vm::VMMemoryDefinition>> {
+        let instance = self.id.get(store);
+        let options = &instance.component().env_component().options[options];
+        let memory = match options.data_model {
+            CanonicalOptionsDataModel::Gc { .. } => return None,
+            CanonicalOptionsDataModel::LinearMemory(o) => match o.memory {
+                Some(m) => m,
+                None => return None,
+            },
+        };
+
+        Some(instance.runtime_memory(memory))
+    }
+
+    pub(crate) fn options_memory<'a>(
+        &self,
+        store: &'a StoreOpaque,
+        options: OptionsIndex,
+    ) -> &'a [u8] {
+        let memory = match self.options_memory_raw(store, options) {
+            Some(m) => m,
+            None => return &[],
+        };
+        // SAFETY: we're borrowing the entire `StoreOpaque` which owns the
+        // memory allocation to return the result of memory. That means that the
+        // lifetime connection here should be safe and the actual ptr/length are
+        // trusted parts of the runtime here.
+        unsafe {
+            let memory = memory.as_ref();
+            core::slice::from_raw_parts(memory.base.as_ptr(), memory.current_length())
+        }
+    }
+
+    pub(crate) fn options_memory_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+        options: OptionsIndex,
+    ) -> &'a mut [u8] {
+        let memory = match self.options_memory_raw(store, options) {
+            Some(m) => m,
+            None => return &mut [],
+        };
+        // SAFETY: See `options_memory` comment above, and note that this is
+        // taking `&mut StoreOpaque` to thread the lifetime through instead.
+        unsafe {
+            let memory = memory.as_ref();
+            core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
+        }
+    }
 }
 
 /// Translates a `CoreDef`, a definition of a core wasm item, to an

@@ -540,6 +540,16 @@ pub struct CanonicalOptions {
     pub data_model: CanonicalOptionsDataModel,
 }
 
+impl CanonicalOptions {
+    /// Returns the memory referred to by these options, if any.
+    pub fn memory(&self) -> Option<RuntimeMemoryIndex> {
+        match self.data_model {
+            CanonicalOptionsDataModel::Gc {} => None,
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts.memory,
+        }
+    }
+}
+
 /// Possible encodings of strings within the component model.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[expect(missing_docs, reason = "self-describing variants")]
