@@ -258,3 +258,33 @@ fn multiple_globals_memories_and_instances() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn core_dump_with_shared_memory() -> Result<()> {
+    let mut config = Config::new();
+    config.coredump_on_trap(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let wat = r#"(module
+        (memory 1 1 shared)
+        (func (export "foo") unreachable)
+        (data (i32.const 0) "a")
+    )"#;
+    let module = Module::new(&engine, wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+    let err = foo.call(&mut store, ()).unwrap_err();
+    let coredump = err.downcast_ref::<WasmCoreDump>().unwrap();
+    assert!(coredump.memories().is_empty());
+
+    let bytes = coredump.serialize(&mut store, "howdy");
+    for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
+        let payload = payload?;
+        if let wasmparser::Payload::DataSection(s) = payload {
+            assert_eq!(s.count(), 0);
+        }
+    }
+
+    Ok(())
+}

@@ -1,3 +1,14 @@
+## 24.0.5
+
+Released 2025-11-11.
+
+### Fixed
+
+* Prevent using shared memories with `Memory`.
+  [CVE-2025-64345](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hc7m-r6v8-hg9q)
+
+--------------------------------------------------------------------------------
+
 ## 24.0.4
 
 Released 2025-07-18.
@@ -9,6 +20,8 @@ Released 2025-07-18.
 
 * Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
   [#11277](https://github.com/bytecodealliance/wasmtime/pull/11277)
+
+--------------------------------------------------------------------------------
 
 ## 24.0.3
 
