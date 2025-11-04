@@ -8,6 +8,7 @@
 #include <memory>
 #include <string_view>
 #include <wasmtime/engine.hh>
+#include <wasmtime/helpers.hh>
 #include <wasmtime/module.h>
 #include <wasmtime/span.hh>
 #include <wasmtime/types/export.hh>
@@ -25,31 +26,7 @@ namespace wasmtime {
  * argument to other APIs to instantiate it.
  */
 class Module {
-  friend class Store;
-  friend class Instance;
-  friend class Linker;
-
-  struct deleter {
-    void operator()(wasmtime_module_t *p) const { wasmtime_module_delete(p); }
-  };
-
-  std::unique_ptr<wasmtime_module_t, deleter> ptr;
-
-  Module(wasmtime_module_t *raw) : ptr(raw) {}
-
-public:
-  /// Copies another module into this one.
-  Module(const Module &other) : ptr(wasmtime_module_clone(other.ptr.get())) {}
-  /// Copies another module into this one.
-  Module &operator=(const Module &other) {
-    ptr.reset(wasmtime_module_clone(other.ptr.get()));
-    return *this;
-  }
-  ~Module() = default;
-  /// Moves resources from another module into this one.
-  Module(Module &&other) = default;
-  /// Moves resources from another module into this one.
-  Module &operator=(Module &&other) = default;
+  WASMTIME_CLONE_WRAPPER(Module, wasmtime_module);
 
 #ifdef WASMTIME_FEATURE_COMPILER
   /**
@@ -80,7 +57,7 @@ public:
   static Result<Module> compile(Engine &engine, Span<uint8_t> wasm) {
     wasmtime_module_t *ret = nullptr;
     auto *error =
-        wasmtime_module_new(engine.ptr.get(), wasm.data(), wasm.size(), &ret);
+        wasmtime_module_new(engine.capi(), wasm.data(), wasm.size(), &ret);
     if (error != nullptr) {
       return Error(error);
     }
@@ -95,7 +72,7 @@ public:
    */
   static Result<std::monostate> validate(Engine &engine, Span<uint8_t> wasm) {
     auto *error =
-        wasmtime_module_validate(engine.ptr.get(), wasm.data(), wasm.size());
+        wasmtime_module_validate(engine.capi(), wasm.data(), wasm.size());
     if (error != nullptr) {
       return Error(error);
     }
@@ -117,7 +94,7 @@ public:
    */
   static Result<Module> deserialize(Engine &engine, Span<uint8_t> wasm) {
     wasmtime_module_t *ret = nullptr;
-    auto *error = wasmtime_module_deserialize(engine.ptr.get(), wasm.data(),
+    auto *error = wasmtime_module_deserialize(engine.capi(), wasm.data(),
                                               wasm.size(), &ret);
     if (error != nullptr) {
       return Error(error);
@@ -141,7 +118,7 @@ public:
                                          const std::string &path) {
     wasmtime_module_t *ret = nullptr;
     auto *error =
-        wasmtime_module_deserialize_file(engine.ptr.get(), path.c_str(), &ret);
+        wasmtime_module_deserialize_file(engine.capi(), path.c_str(), &ret);
     if (error != nullptr) {
       return Error(error);
     }
@@ -183,12 +160,6 @@ public:
     return ret;
   }
 #endif // WASMTIME_FEATURE_COMPILER
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_module_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_module_t *capi() { return ptr.get(); }
 };
 
 } // namespace wasmtime
