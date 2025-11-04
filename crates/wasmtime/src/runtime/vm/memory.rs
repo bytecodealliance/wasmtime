@@ -747,7 +747,7 @@ pub fn validate_atomic_addr(
     }
 
     let length = u64::try_from(def.current_length()).unwrap();
-    if !(addr.saturating_add(access_size) < length) {
+    if !(addr.saturating_add(access_size) <= length) {
         return Err(Trap::MemoryOutOfBounds);
     }
 
