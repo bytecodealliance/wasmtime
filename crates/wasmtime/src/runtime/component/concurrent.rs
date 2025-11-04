@@ -54,9 +54,7 @@ use crate::component::func::{self, Func, Options};
 use crate::component::{HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError};
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
-use crate::vm::component::{
-    CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
-};
+use crate::vm::component::{CallContext, ComponentInstance, InstanceFlags, ResourceTables};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
 use anyhow::{Context as _, Result, anyhow, bail};
