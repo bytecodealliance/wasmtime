@@ -17,14 +17,15 @@ use wasmtime_environ::component::{
     TypeResourceTableIndex,
 };
 
-/// Testing this.
+/// Cache component types.
+///
+/// ComponentTypes is immutable metadata owned by the instance;
+/// we only ever read through this pointer, and the instance outlives
+/// all uses while in the same Store. It is safe to move this pointer
+/// between threads.
 #[derive(Copy, Clone)]
 pub struct TypesPtr(NonNull<ComponentTypes>);
 
-// SAFETY: ComponentTypes is immutable metadata owned by the instance;
-// we only ever read through this pointer, and the instance outlives
-// all uses while in the same Store. It is safe to move this pointer
-// between threads.
 unsafe impl Send for TypesPtr {}
 unsafe impl Sync for TypesPtr {}
 
