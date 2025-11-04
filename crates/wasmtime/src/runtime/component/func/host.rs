@@ -259,7 +259,7 @@ where
         return Err(anyhow!(crate::Trap::CannotLeaveComponent));
     }
 
-    let types = vminstance.component().types().clone();
+    let types: &ComponentTypes = unsafe { options.types_ref() };
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -294,13 +294,16 @@ where
 
             let host_result = closure(store.as_context_mut(), params);
 
+            let options_copy = options;
+            let types_ptr_copy = options.types_ptr;
+
             let mut lower_result = {
-                let types = types.clone();
                 move |store: StoreContextMut<T>, ret: Return| {
                     unsafe {
                         flags.set_may_leave(false);
                     }
-                    let mut lower = LowerContext::new(store, &options, &types, instance);
+                    let types_inside: &ComponentTypes = unsafe { types_ptr_copy.as_ref() };
+                    let mut lower = LowerContext::new(store, &options_copy, types_inside, instance);
                     ret.linear_lower_to_memory(&mut lower, result_tys, retptr)?;
                     unsafe {
                         flags.set_may_leave(true);

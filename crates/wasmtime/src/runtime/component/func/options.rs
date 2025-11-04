@@ -17,6 +17,24 @@ use wasmtime_environ::component::{
     TypeResourceTableIndex,
 };
 
+/// Testing this.
+#[derive(Copy, Clone)]
+pub struct TypesPtr(NonNull<ComponentTypes>);
+
+// SAFETY: ComponentTypes is immutable metadata owned by the instance;
+// we only ever read through this pointer, and the instance outlives
+// all uses while in the same Store. It is safe to move this pointer
+// between threads.
+unsafe impl Send for TypesPtr {}
+unsafe impl Sync for TypesPtr {}
+
+impl TypesPtr {
+    #[inline]
+    pub unsafe fn as_ref(&self) -> &ComponentTypes {
+        unsafe { self.0.as_ref() }
+    }
+}
+
 /// Runtime representation of canonical ABI options in the component model.
 ///
 /// This structure packages up the runtime representation of each option from
@@ -51,6 +69,9 @@ pub struct Options {
 
     /// Whether or not this the async option was set when lowering.
     async_: bool,
+
+    /// Cache ComponentTypes for use in the hot path.
+    pub types_ptr: TypesPtr,
 
     #[cfg(feature = "component-model-async")]
     callback: Option<NonNull<VMFuncRef>>,
@@ -88,6 +109,8 @@ impl Options {
         let memory = memory.map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
         let realloc = realloc.map(|i| instance.runtime_realloc(i));
         let callback = callback.map(|i| instance.runtime_callback(i));
+        let types_arc: &Arc<ComponentTypes> = instance.component().types();
+        let types_ptr: TypesPtr = TypesPtr(NonNull::from(Arc::as_ref(types_arc)));
         let _ = callback;
 
         Options {
@@ -96,6 +119,7 @@ impl Options {
             realloc,
             string_encoding,
             async_,
+            types_ptr,
             #[cfg(feature = "component-model-async")]
             callback,
         }
@@ -189,6 +213,12 @@ impl Options {
     /// Returns whether this lifting or lowering uses the async ABI.
     pub fn async_(&self) -> bool {
         self.async_
+    }
+
+    /// Returns cached component types.
+    #[inline]
+    pub(crate) unsafe fn types_ref(&self) -> &ComponentTypes {
+        return unsafe { self.types_ptr.as_ref() };
     }
 
     #[cfg(feature = "component-model-async")]
