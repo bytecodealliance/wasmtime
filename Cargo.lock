@@ -4617,6 +4617,8 @@ name = "wasmtime-c-api-impl"
 version = "39.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "bytes",
  "cap-std",
  "env_logger 0.11.5",
  "futures",
@@ -4626,6 +4628,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-internal-c-api-macros",
  "wasmtime-wasi",
+ "wasmtime-wasi-io",
  "wat",
 ]
 

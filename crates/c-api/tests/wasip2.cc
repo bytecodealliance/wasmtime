@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <string_view>
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
@@ -20,6 +21,22 @@ TEST(wasip2, smoke) {
   auto context = store.context();
 
   wasmtime::WasiConfig config;
+
+  wasi_config_set_stdout_custom(
+      config.capi(),
+      [](void *, const unsigned char *buf, size_t len) -> ptrdiff_t {
+        std::cout << std::string_view{(const char *)(buf), len};
+        return len;
+      },
+      nullptr, nullptr);
+  wasi_config_set_stderr_custom(
+      config.capi(),
+      [](void *, const unsigned char *buf, size_t len) -> ptrdiff_t {
+        std::cerr << std::string_view{(const char *)(buf), len};
+        return len;
+      },
+      nullptr, nullptr);
+
   context.set_wasi(std::move(config)).unwrap();
   Component component = Component::compile(engine, component_text).unwrap();
 
