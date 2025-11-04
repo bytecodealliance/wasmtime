@@ -3053,7 +3053,11 @@ impl Instance {
 
         let set_guest_ready = |me: &mut ConcurrentState| {
             let transmit = me.get_mut(transmit_id)?;
-            assert!(matches!(&transmit.write, WriteState::Open));
+            assert!(
+                matches!(&transmit.write, WriteState::Open),
+                "expected `WriteState::Open`; got `{:?}`",
+                transmit.write
+            );
             transmit.write = WriteState::GuestReady {
                 instance: self,
                 ty,
@@ -3267,7 +3271,11 @@ impl Instance {
 
         let set_guest_ready = |me: &mut ConcurrentState| {
             let transmit = me.get_mut(transmit_id)?;
-            assert!(matches!(&transmit.read, ReadState::Open));
+            assert!(
+                matches!(&transmit.read, ReadState::Open),
+                "expected `ReadState::Open`; got `{:?}`",
+                transmit.read
+            );
             transmit.read = ReadState::GuestReady {
                 ty,
                 flat_abi,
@@ -3430,7 +3438,7 @@ impl Instance {
         if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
             event
         {
-            waitable.on_delivery(self.id().get_mut(store), event);
+            waitable.on_delivery(store, self, event);
             Ok(code)
         } else {
             unreachable!()
@@ -3515,7 +3523,7 @@ impl Instance {
         if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
             event
         {
-            waitable.on_delivery(self.id().get_mut(store), event);
+            waitable.on_delivery(store, self, event);
             Ok(code)
         } else {
             unreachable!()
@@ -4216,6 +4224,72 @@ impl ConcurrentState {
 pub(crate) struct ResourcePair {
     pub(crate) write: u32,
     pub(crate) read: u32,
+}
+
+impl Waitable {
+    /// Handle the imminent delivery of the specified event, e.g. by updating
+    /// the state of the stream or future.
+    pub(super) fn on_delivery(&self, store: &mut StoreOpaque, instance: Instance, event: Event) {
+        match event {
+            Event::FutureRead {
+                pending: Some((ty, handle)),
+                ..
+            }
+            | Event::FutureWrite {
+                pending: Some((ty, handle)),
+                ..
+            } => {
+                let instance = instance.id().get_mut(store);
+                let runtime_instance = instance.component().types()[ty].instance;
+                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                    .future_rep(ty, handle)
+                    .unwrap();
+                assert_eq!(rep, self.rep());
+                assert_eq!(*state, TransmitLocalState::Busy);
+                *state = match event {
+                    Event::FutureRead { .. } => TransmitLocalState::Read { done: false },
+                    Event::FutureWrite { .. } => TransmitLocalState::Write { done: false },
+                    _ => unreachable!(),
+                };
+            }
+            Event::StreamRead {
+                pending: Some((ty, handle)),
+                code,
+            }
+            | Event::StreamWrite {
+                pending: Some((ty, handle)),
+                code,
+            } => {
+                let instance = instance.id().get_mut(store);
+                let runtime_instance = instance.component().types()[ty].instance;
+                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                    .stream_rep(ty, handle)
+                    .unwrap();
+                assert_eq!(rep, self.rep());
+                assert_eq!(*state, TransmitLocalState::Busy);
+                let done = matches!(code, ReturnCode::Dropped(_));
+                *state = match event {
+                    Event::StreamRead { .. } => TransmitLocalState::Read { done },
+                    Event::StreamWrite { .. } => TransmitLocalState::Write { done },
+                    _ => unreachable!(),
+                };
+
+                let transmit_handle = TableId::<TransmitHandle>::new(rep);
+                let state = store.concurrent_state_mut();
+                let transmit_id = state.get_mut(transmit_handle).unwrap().state;
+                let transmit = state.get_mut(transmit_id).unwrap();
+
+                match event {
+                    Event::StreamRead { .. } => {
+                        transmit.read = ReadState::Open;
+                    }
+                    Event::StreamWrite { .. } => transmit.write = WriteState::Open,
+                    _ => unreachable!(),
+                };
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
