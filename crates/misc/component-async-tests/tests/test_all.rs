@@ -30,7 +30,7 @@ use scenario::round_trip_many::{
     async_round_trip_many_stackful, async_round_trip_many_stackless,
     async_round_trip_many_synchronous, async_round_trip_many_wait,
 };
-use scenario::streams::{async_closed_stream, async_closed_streams};
+use scenario::streams::{async_closed_stream, async_closed_streams, async_short_reads};
 use scenario::transmit::{
     async_cancel_callee, async_cancel_caller, async_cancel_transmit, async_intertask_communication,
     async_poll_stackless, async_poll_synchronous, async_readiness, async_synchronous_transmit,

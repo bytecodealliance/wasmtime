@@ -6,20 +6,23 @@ use {
         util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
     },
     futures::{
-        Sink, SinkExt, Stream, StreamExt,
+        FutureExt, Sink, SinkExt, Stream, StreamExt,
         channel::{mpsc, oneshot},
         future,
     },
     std::{
+        mem,
+        ops::DerefMut,
         pin::Pin,
         sync::{Arc, Mutex},
-        task::{Context, Poll},
+        task::{self, Context, Poll},
+        time::Duration,
     },
     wasmtime::{
         Engine, Store, StoreContextMut,
         component::{
-            Destination, FutureReader, Linker, ResourceTable, Source, StreamConsumer,
-            StreamProducer, StreamReader, StreamResult,
+            Destination, FutureReader, Lift, Linker, ResourceTable, Source, StreamConsumer,
+            StreamProducer, StreamReader, StreamResult, VecBuffer,
         },
     },
     wasmtime_wasi::WasiCtxBuilder,
@@ -293,6 +296,175 @@ pub async fn async_closed_stream() -> Result<()> {
             assert!(rx.next().await.is_none());
 
             Ok(())
+        })
+        .await?
+}
+
+struct VecProducer<T> {
+    source: Vec<T>,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<T> VecProducer<T> {
+    fn new(source: Vec<T>, delay: bool) -> Self {
+        Self {
+            source,
+            sleep: if delay {
+                tokio::time::sleep(Duration::from_millis(10)).boxed()
+            } else {
+                async {}.boxed()
+            },
+        }
+    }
+}
+
+impl<D, T: Lift + Unpin + 'static> StreamProducer<D> for VecProducer<T> {
+    type Item = T;
+    type Buffer = VecBuffer<T>;
+
+    fn poll_produce(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        mut destination: Destination<Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let sleep = &mut self.as_mut().get_mut().sleep;
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        destination.set_buffer(mem::take(&mut self.get_mut().source).into());
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+struct OneAtATime<T> {
+    destination: Arc<Mutex<Vec<T>>>,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<T> OneAtATime<T> {
+    fn new(destination: Arc<Mutex<Vec<T>>>, delay: bool) -> Self {
+        Self {
+            destination,
+            sleep: if delay {
+                tokio::time::sleep(Duration::from_millis(10)).boxed()
+            } else {
+                async {}.boxed()
+            },
+        }
+    }
+}
+
+impl<D, T: Lift + 'static> StreamConsumer<D> for OneAtATime<T> {
+    type Item = T;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        mut source: Source<Self::Item>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let sleep = &mut self.as_mut().get_mut().sleep;
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        let value = &mut None;
+        source.read(store, value)?;
+        self.destination.lock().unwrap().push(value.take().unwrap());
+        Poll::Ready(Ok(StreamResult::Completed))
+    }
+}
+
+mod short_reads {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "short-reads-guest",
+        exports: { default: async | task_exit },
+    });
+}
+
+#[tokio::test]
+pub async fn async_short_reads() -> Result<()> {
+    test_async_short_reads(false).await
+}
+
+#[tokio::test]
+async fn async_short_reads_with_delay() -> Result<()> {
+    test_async_short_reads(true).await
+}
+
+async fn test_async_short_reads(delay: bool) -> Result<()> {
+    use short_reads::exports::local::local::short_reads::Thing;
+
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_SHORT_READS_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
+
+    let guest =
+        short_reads::ShortReadsGuest::instantiate_async(&mut store, &component, &linker).await?;
+    let thing = guest.local_local_short_reads().thing();
+
+    let strings = ["a", "b", "c", "d", "e"];
+    let mut things = Vec::with_capacity(strings.len());
+    for string in strings {
+        things.push(thing.call_constructor(&mut store, string).await?);
+    }
+
+    store
+        .run_concurrent(async |store| {
+            let count = things.len();
+            let stream =
+                store.with(|store| StreamReader::new(store, VecProducer::new(things, delay)));
+
+            let (stream, task) = guest
+                .local_local_short_reads()
+                .call_short_reads(store, stream)
+                .await?;
+
+            let received_things = Arc::new(Mutex::new(Vec::<Thing>::with_capacity(count)));
+            // Read just one item at a time from the guest, forcing it to
+            // re-take ownership of any unwritten items.
+            store.with(|store| stream.pipe(store, OneAtATime::new(received_things.clone(), delay)));
+
+            task.block(store).await;
+
+            assert_eq!(count, received_things.lock().unwrap().len());
+
+            let mut received_strings = Vec::with_capacity(strings.len());
+            let received_things = mem::take(received_things.lock().unwrap().deref_mut());
+            for it in received_things {
+                received_strings.push(thing.call_get(store, it).await?.0);
+            }
+
+            assert_eq!(
+                &strings[..],
+                &received_strings
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+            );
+
+            anyhow::Ok(())
         })
         .await?
 }
