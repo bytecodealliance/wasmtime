@@ -54,9 +54,7 @@ use crate::component::func::{self, Func, Options};
 use crate::component::{HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError};
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
-use crate::vm::component::{
-    CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
-};
+use crate::vm::component::{CallContext, ComponentInstance, InstanceFlags, ResourceTables};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
 use anyhow::{Context as _, Result, anyhow, bail};
@@ -1568,7 +1566,7 @@ impl Instance {
                     "deliver event {event:?} to {guest_task:?} for {waitable:?} (handle {handle}); set {set:?}"
                 );
 
-                waitable.on_delivery(self.id().get_mut(store), event);
+                waitable.on_delivery(store, self, event);
 
                 Some((event, Some((waitable, handle))))
             } else {
@@ -4354,55 +4352,6 @@ impl Waitable {
             }
         }
         Ok(())
-    }
-
-    /// Handle the imminent delivery of the specified event, e.g. by updating
-    /// the state of the stream or future.
-    fn on_delivery(&self, instance: Pin<&mut ComponentInstance>, event: Event) {
-        match event {
-            Event::FutureRead {
-                pending: Some((ty, handle)),
-                ..
-            }
-            | Event::FutureWrite {
-                pending: Some((ty, handle)),
-                ..
-            } => {
-                let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, state) = instance.guest_tables().0[runtime_instance]
-                    .future_rep(ty, handle)
-                    .unwrap();
-                assert_eq!(rep, self.rep());
-                assert_eq!(*state, TransmitLocalState::Busy);
-                *state = match event {
-                    Event::FutureRead { .. } => TransmitLocalState::Read { done: false },
-                    Event::FutureWrite { .. } => TransmitLocalState::Write { done: false },
-                    _ => unreachable!(),
-                };
-            }
-            Event::StreamRead {
-                pending: Some((ty, handle)),
-                code,
-            }
-            | Event::StreamWrite {
-                pending: Some((ty, handle)),
-                code,
-            } => {
-                let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, state) = instance.guest_tables().0[runtime_instance]
-                    .stream_rep(ty, handle)
-                    .unwrap();
-                assert_eq!(rep, self.rep());
-                assert_eq!(*state, TransmitLocalState::Busy);
-                let done = matches!(code, ReturnCode::Dropped(_));
-                *state = match event {
-                    Event::StreamRead { .. } => TransmitLocalState::Read { done },
-                    Event::StreamWrite { .. } => TransmitLocalState::Write { done },
-                    _ => unreachable!(),
-                };
-            }
-            _ => {}
-        }
     }
 
     /// Remove this waitable from the instance's rep table.

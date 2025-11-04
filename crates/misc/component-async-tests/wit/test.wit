@@ -180,6 +180,15 @@ interface closed-stream {
   get: func() -> stream<u8>;
 }
 
+interface short-reads {
+  resource thing {
+    constructor(s: string);
+    get: async func() -> string;
+  }
+
+  short-reads: async func(s: stream<thing>) -> stream<thing>;
+}
+
 world yield-caller {
   import continue;
   import ready;
@@ -347,4 +356,8 @@ world sleep-post-return-caller {
 
 world closed-stream-guest {
   export closed-stream;
+}
+
+world short-reads-guest {
+  export short-reads;
 }
