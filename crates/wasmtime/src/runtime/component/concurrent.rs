@@ -845,7 +845,7 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
 
             store.maybe_pop_call_context(call.thread.task)?;
 
-            instance.handle_callback_code(store, call.thread, runtime_instance, code, false)?;
+            instance.handle_callback_code(store, call.thread, runtime_instance, code)?;
 
             store.concurrent_state_mut().guest_thread = old_thread;
             log::trace!("GuestCallKind::DeliverEvent: restored {old_thread:?} as current thread");
@@ -1579,34 +1579,18 @@ impl Instance {
 
     /// Handle the `CallbackCode` returned from an async-lifted export or its
     /// callback.
-    ///
-    /// If `initial_call` is `true`, then the code was received from the
-    /// async-lifted export; otherwise, it was received from its callback.
     fn handle_callback_code(
         self,
         store: &mut StoreOpaque,
         guest_thread: QualifiedThreadId,
         runtime_instance: RuntimeComponentInstanceIndex,
         code: u32,
-        initial_call: bool,
     ) -> Result<()> {
         let (code, set) = unpack_callback_code(code);
 
         log::trace!("received callback code from {guest_thread:?}: {code} (set: {set})");
 
         let state = store.concurrent_state_mut();
-        if !state.get_mut(guest_thread.task)?.returned_or_cancelled() {
-            if initial_call {
-                // Notify any current or future waiters that this subtask has
-                // started.
-                Waitable::Guest(guest_thread.task).set_event(
-                    state,
-                    Some(Event::Subtask {
-                        status: Status::Started,
-                    }),
-                )?;
-            }
-        }
 
         let get_set = |store, handle| {
             if handle == 0 {
@@ -1876,7 +1860,7 @@ impl Instance {
                 // function returns a `i32` result.
                 let code = unsafe { storage[0].assume_init() }.get_i32() as u32;
 
-                self.handle_callback_code(store, guest_thread, callee_instance, code, true)?;
+                self.handle_callback_code(store, guest_thread, callee_instance, code)?;
 
                 Ok(())
             }) as Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync>

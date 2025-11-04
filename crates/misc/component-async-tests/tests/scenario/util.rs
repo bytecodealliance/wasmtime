@@ -98,12 +98,18 @@ pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Comp
     }
 
     async fn compile(engine: &Engine, components: &[&str]) -> Result<Vec<u8>> {
-        match components {
-            [component] => engine.precompile_component(&fs::read(component).await?),
-            [a, b] => engine
-                .precompile_component(&compose(&fs::read(a).await?, &fs::read(b).await?).await?),
-            _ => Err(anyhow!("expected one or two paths")),
+        let mut composed = None::<Vec<u8>>;
+        for component in components {
+            let component = fs::read(component).await?;
+            if let Some(other) = composed.take() {
+                composed = Some(compose(&other, &component).await?);
+            } else {
+                composed = Some(component);
+            }
         }
+        engine.precompile_component(
+            &composed.ok_or_else(|| anyhow!("expected at least one component"))?,
+        )
     }
 
     async fn load(engine: &Engine, components: &[&str]) -> Result<Vec<u8>> {

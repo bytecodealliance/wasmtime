@@ -43,6 +43,16 @@ pub async fn async_round_trip_stackless_plus_stackless() -> Result<()> {
 }
 
 #[tokio::test]
+pub async fn async_round_trip_stackless_plus_stackless_plus_stackless() -> Result<()> {
+    test_round_trip_composed_more(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+    )
+    .await
+}
+
+#[tokio::test]
 async fn async_round_trip_synchronous_plus_stackless() -> Result<()> {
     test_round_trip_composed(
         test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
@@ -473,6 +483,30 @@ pub async fn test_round_trip_composed(a: &str, b: &str) -> Result<()> {
                 "hi y'all!",
                 "hi y'all! - entered guest - entered guest - entered host \
                  - exited host - exited guest - exited guest",
+            ),
+        ],
+    )
+    .await
+}
+
+pub async fn test_round_trip_composed_more(a: &str, b: &str, c: &str) -> Result<()> {
+    test_round_trip(
+        &[a, b, c],
+        &[
+            (
+                "hello, world!",
+                "hello, world! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
+            ),
+            (
+                "¡hola, mundo!",
+                "¡hola, mundo! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
+            ),
+            (
+                "hi y'all!",
+                "hi y'all! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
             ),
         ],
     )
