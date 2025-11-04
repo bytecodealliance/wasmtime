@@ -1,6 +1,6 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::{self, VMStore};
+use crate::runtime::vm::{self, ExportMemory, VMStore};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
@@ -285,7 +285,13 @@ impl Memory {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         ty: MemoryType,
     ) -> Result<Memory> {
-        generate_memory_export(store, limiter, &ty, None).await
+        if ty.is_shared() {
+            bail!("shared memories must be created through `SharedMemory`")
+        }
+        Ok(generate_memory_export(store, limiter, &ty, None)
+            .await?
+            .unshared()
+            .unwrap())
     }
 
     /// Returns the underlying type of this memory.
@@ -638,7 +644,14 @@ impl Memory {
         }
     }
 
-    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
+    /// Creates a new memory from its raw component parts.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the memory pointed to by `instance` and
+    /// `index` is not a shared memory. For that `SharedMemory` must be used
+    /// instead.
+    pub(crate) unsafe fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
         Memory { instance, index }
     }
 
@@ -649,12 +662,7 @@ impl Memory {
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let instance = &store[self.instance];
-        crate::runtime::vm::VMMemoryImport {
-            from: instance.memory_ptr(self.index).into(),
-            vmctx: instance.vmctx().into(),
-            index: self.index,
-        }
+        store[self.instance].get_defined_memory_vmimport(self.index)
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
@@ -804,7 +812,6 @@ pub unsafe trait MemoryCreator: Send + Sync {
 pub struct SharedMemory {
     vm: crate::runtime::vm::SharedMemory,
     engine: Engine,
-    page_size_log2: u8,
 }
 
 impl SharedMemory {
@@ -820,13 +827,11 @@ impl SharedMemory {
 
         let tunables = engine.tunables();
         let ty = ty.wasmtime_memory();
-        let page_size_log2 = ty.page_size_log2;
         let memory = crate::runtime::vm::SharedMemory::new(ty, tunables)?;
 
         Ok(Self {
             vm: memory,
             engine: engine.clone(),
-            page_size_log2,
         })
     }
 
@@ -849,9 +854,8 @@ impl SharedMemory {
     /// `1`. Future extensions might allow any power of two as a page size.
     ///
     /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
-    pub fn page_size(&self) -> u32 {
-        debug_assert!(self.page_size_log2 == 0 || self.page_size_log2 == 16);
-        1 << self.page_size_log2
+    pub fn page_size(&self) -> u64 {
+        self.ty().page_size()
     }
 
     /// Returns the byte length of this memory.
@@ -1010,41 +1014,22 @@ impl SharedMemory {
         // Note `vm::assert_ready` shouldn't panic here because this isn't
         // actually allocating any new memory (also no limiter), so resource
         // limiting shouldn't kick in.
-        vm::assert_ready(generate_memory_export(
+        let memory = vm::assert_ready(generate_memory_export(
             store,
             None,
             &self.ty(),
             Some(&self.vm),
         ))
-        .unwrap()
-        .vmimport(store)
+        .unwrap();
+        match memory {
+            ExportMemory::Unshared(_) => unreachable!(),
+            ExportMemory::Shared(_shared, vmimport) => vmimport,
+        }
     }
 
-    /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
-    /// function is available to handle the case in which a Wasm module exports
-    /// shared memory and the user wants host-side access to it.
-    pub(crate) fn from_memory(mem: Memory, store: &StoreOpaque) -> Self {
-        #![cfg_attr(
-            not(feature = "threads"),
-            expect(
-                unused_variables,
-                unreachable_code,
-                reason = "definitions cfg'd to dummy",
-            )
-        )]
-
-        let instance = mem.instance.get(store);
-        let memory = instance.get_defined_memory(mem.index);
-        let module = instance.env_module();
-        let page_size_log2 = module.memories[module.memory_index(mem.index)].page_size_log2;
-        match memory.as_shared_memory() {
-            Some(mem) => Self {
-                vm: mem.clone(),
-                engine: store.engine().clone(),
-                page_size_log2,
-            },
-            None => panic!("unable to convert from a shared memory"),
-        }
+    /// Creates a [`SharedMemory`] from its constituent parts.
+    pub(crate) fn from_raw(vm: crate::runtime::vm::SharedMemory, engine: Engine) -> Self {
+        SharedMemory { vm, engine }
     }
 }
 

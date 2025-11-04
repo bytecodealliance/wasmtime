@@ -97,15 +97,16 @@ use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore, VMStoreContext,
+    self, ExportMemory, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    SendSyncPtr, SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
-use crate::{Global, Instance, Memory, Table, Uninhabited};
+use crate::{Global, Instance, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
@@ -1728,7 +1729,7 @@ impl StoreOpaque {
     }
 
     /// Get all memories (host- or Wasm-defined) within this store.
-    pub fn all_memories<'a>(&'a self) -> impl Iterator<Item = Memory> + 'a {
+    pub fn all_memories<'a>(&'a self) -> impl Iterator<Item = ExportMemory> + 'a {
         // NB: Host-created memories have dummy instances. Therefore, we can get
         // all memories in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.

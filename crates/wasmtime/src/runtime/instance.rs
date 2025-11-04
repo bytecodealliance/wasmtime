@@ -480,7 +480,7 @@ impl Instance {
         // SAFETY: the store `id` owns this instance and all exports contained
         // within.
         let export = unsafe { self.id.get_mut(store).get_export_by_index_mut(id, entity) };
-        unsafe { Extern::from_wasmtime_export(export, store) }
+        Extern::from_wasmtime_export(export, store)
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -623,7 +623,7 @@ impl Instance {
     pub(crate) fn all_memories<'a>(
         &'a self,
         store: &'a StoreOpaque,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, Memory)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, vm::ExportMemory)> + 'a {
         let store_id = store.id();
         store[self.id].all_memories(store_id)
     }
@@ -716,8 +716,11 @@ impl OwnedImports {
             crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(t.vmimport(store));
             }
-            crate::runtime::vm::Export::Memory { memory, .. } => {
-                self.memories.push(memory.vmimport(store));
+            crate::runtime::vm::Export::Memory(m) => {
+                self.memories.push(m.vmimport(store));
+            }
+            crate::runtime::vm::Export::SharedMemory(_, vmimport) => {
+                self.memories.push(*vmimport);
             }
             crate::runtime::vm::Export::Tag(t) => {
                 self.tags.push(t.vmimport(store));
