@@ -204,7 +204,7 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
             .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
 
         if wrote != bytes.len() {
-            return Err(StreamError::Trap(anyhow::anyhow!(
+            return Err(StreamError::LastOperationFailed(anyhow::anyhow!(
                 "Partial writes in wasip2 implementation are not allowed"
             )));
         }
