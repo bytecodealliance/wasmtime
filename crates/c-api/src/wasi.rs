@@ -160,11 +160,18 @@ struct CustomOutputStreamInner {
 }
 
 impl CustomOutputStreamInner {
-    pub fn write(&self, buf: &[u8]) -> isize {
-        (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len())
+    pub fn raw_write(&self, buf: &[u8]) -> io::Result<usize> {
+        let wrote = (self.callback)(self.foreign_data.data, buf.as_ptr(), buf.len());
+
+        if wrote >= 0 {
+            Ok(wrote as _)
+        } else {
+            Err(io::Error::from_raw_os_error(wrote.abs() as _))
+        }
     }
 }
 
+#[derive(Clone)]
 pub struct CustomOutputStream {
     inner: std::sync::Arc<CustomOutputStreamInner>,
 }
@@ -183,14 +190,6 @@ impl CustomOutputStream {
     }
 }
 
-impl Clone for CustomOutputStream {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
     async fn ready(&mut self) {}
@@ -199,15 +198,12 @@ impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
-        let wrote = self.inner.write(&bytes);
+        let wrote = self
+            .inner
+            .raw_write(&bytes)
+            .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
 
-        if wrote < 0 {
-            return Err(StreamError::Trap(
-                io::Error::from_raw_os_error(wrote.abs() as _).into(),
-            ));
-        }
-
-        if wrote as usize != bytes.len() {
+        if wrote != bytes.len() {
             return Err(StreamError::Trap(anyhow::anyhow!(
                 "Partial writes in wasip2 implementation are not allowed"
             )));
@@ -229,12 +225,7 @@ impl AsyncWrite for CustomOutputStream {
         _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let wrote = self.inner.write(buf);
-        Poll::Ready(if wrote >= 0 {
-            Ok(wrote as _)
-        } else {
-            Err(io::Error::from_raw_os_error(wrote.abs() as _))
-        })
+        Poll::Ready(self.inner.raw_write(buf))
     }
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
