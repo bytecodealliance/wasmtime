@@ -202,10 +202,9 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
         let wrote = self.inner.write(&bytes);
 
         if wrote < 0 {
-            return Err(StreamError::Trap(anyhow::anyhow!(
-                "Custom write function failed with error code '{}'",
-                wrote.abs()
-            )));
+            return Err(StreamError::Trap(
+                io::Error::from_raw_os_error(wrote.abs() as _).into(),
+            ));
         }
 
         if wrote as usize != bytes.len() {
@@ -234,13 +233,7 @@ impl AsyncWrite for CustomOutputStream {
         Poll::Ready(if wrote >= 0 {
             Ok(wrote as _)
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "Custom write function failed with error code '{}'",
-                    wrote.abs()
-                ),
-            ))
+            Err(io::Error::from_raw_os_error(wrote.abs() as _))
         })
     }
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {

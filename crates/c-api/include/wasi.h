@@ -148,9 +148,9 @@ WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t *config);
 /**
  * \brief Configures standard output to be directed to \p callback
  *
- * \param callback The callback that will get called for each write with the
- * buffer. A positive return value indicates the amount of bytes written.
- * Negative return values indicate that an error has occured.
+ * \param callback A non-null callback must be provided, that will get called
+ * for each write with the buffer. A positive return value indicates the amount
+ * of bytes written. Negative return values are treated as OS error codes.
  * \param data An optional user provided data that will be passed to \p callback
  * \param finalizer An optional callback to be called to destroy \p data
  */
@@ -180,9 +180,9 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
 /**
  * \brief Configures standard error output to be directed to \p callback
  *
- * \param callback The callback that will get called for each write with the
- * buffer. A positive return value indicates the amount of bytes written.
- * Negative return values indicate that an error has occured.
+ * \param callback A non-null callback must be provided, that will get called
+ * for each write with the buffer. A positive return value indicates the amount
+ * of bytes written. Negative return values are treated as OS error codes.
  * \param data An optional user provided data that will be passed to \p callback
  * \param finalizer An optional callback to be called to destroy \p data
  */
