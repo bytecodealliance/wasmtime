@@ -597,7 +597,11 @@ impl<T> Store<T> {
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
-            vm_store_context: Default::default(),
+            vm_store_context: if engine.tunables().epoch_interruption_via_mmu {
+                VMStoreContext::with_interrupt_page()
+            } else {
+                VMStoreContext::default()
+            },
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: PrimaryMap::new(),
@@ -2519,6 +2523,9 @@ impl Drop for StoreOpaque {
                 }
             }
         }
+        // VMStoreContext is pod-type, so we dispose of the interrupt page on it
+        // here instead, if allocated.
+        self.vm_store_context.unmap_interrupt_page();
     }
 }
 

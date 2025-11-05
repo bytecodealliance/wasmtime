@@ -1100,7 +1100,7 @@ pub struct VMStoreContext {
     /// When it is time to switch, the host uses mprotect() to forbid reads. The
     /// fault soon caused by guest code then lands in the signal handler, which
     /// effects a switch and resets the page permissions.
-    pub epoch_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
+    epoch_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
 
     /// Current stack limit of the wasm module.
     ///
@@ -1184,23 +1184,7 @@ impl Default for VMStoreContext {
         VMStoreContext {
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
-            // TODO: Allocate this only when epoch_interruption_via_mmu is on.
-            // Probably set it to None here and allocate it elsewhere.
-            epoch_interrupt_page_ptr: unsafe {
-                let page_ptr = mmap_anonymous(
-                    ptr::null_mut(), // Let the kernel pick location.
-                    page_size(),
-                    ProtFlags::READ,
-                    // Privacy doesn't matter, as we never write to the
-                    // interrupt page. However, private is the safer choice in
-                    // case someone starts doing so.
-                    MapFlags::PRIVATE,
-                )
-                .expect("an interrupt page should be allocable");
-                let non_null_page_ptr = NonNull::new(page_ptr)
-                    .expect("if mmap returns successfully, its result should not be null");
-                Some(non_null_page_ptr.into())
-            },
+            epoch_interrupt_page_ptr: None,
             stack_limit: UnsafeCell::new(usize::max_value()),
             gc_heap: VMMemoryDefinition {
                 base: NonNull::dangling().into(),
@@ -1215,16 +1199,50 @@ impl Default for VMStoreContext {
     }
 }
 
-// TODO: Kill this and find somewhere else to munmap it, because VMStoreContext
-// is documented as being pod-type above.
-// impl Drop for VMStoreContext {
-//     fn drop(&mut self) {
-//         unsafe {
-//             munmap(self.epoch_interrupt_page_ptr, page_size())
-//                 .expect("should be able to unmap interrupt page");
-//         }
-//     }
-// }
+impl VMStoreContext {
+    /// Returns a new instance that has a page of memory allocated for use with
+    /// epoch_interruption_via_mmu.
+    ///
+    /// The caller is responsible for calling
+    /// [`VMStoreContext::unmap_interrupt_page()`], since this has no
+    /// destructor.
+    pub fn with_interrupt_page() -> Self {
+        let mut ret = Self::default();
+        ret.epoch_interrupt_page_ptr = unsafe {
+            // mmap_anonymous() is unsafe.
+            let page_ptr = mmap_anonymous(
+                ptr::null_mut(), // Let the kernel pick location.
+                page_size(),
+                ProtFlags::READ,
+                // Privacy doesn't matter, as we never write to the
+                // interrupt page. However, private is the safer choice in
+                // case someone starts doing so.
+                MapFlags::PRIVATE,
+            )
+            .expect("an interrupt page should be allocable");
+            let non_null_page_ptr = NonNull::new(page_ptr)
+                .expect("if mmap returns successfully, its result should not be null");
+            Some(non_null_page_ptr.into())
+        };
+        ret
+    }
+
+    /// Disposes of any allocated epoch interrupt page. This must be called if
+    /// [`VMStoreContext::with_interrupt_page()`] was used to construct this
+    /// instance, lest we leak a page.
+    pub fn unmap_interrupt_page(&mut self) {
+        if let Some(interrupt_page) = self.epoch_interrupt_page_ptr {
+            // SAFETY: The only origin of the interrupt_page ptr is
+            // with_interrupt_page(), which panics unless it succeeds and is
+            // non-null.
+            unsafe {
+                munmap(interrupt_page.as_ptr(), page_size())
+                    .expect("should be able to unmap interrupt page");
+            }
+        }
+        self.epoch_interrupt_page_ptr = None
+    }
+}
 
 #[cfg(test)]
 mod test_vmstore_context {
