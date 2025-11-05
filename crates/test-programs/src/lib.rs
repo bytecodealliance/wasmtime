@@ -13,7 +13,7 @@ wit_bindgen::generate!({
         world test {
             include wasi:cli/imports@0.2.6;
             include wasi:http/imports@0.2.6;
-            include wasi:config/imports@0.2.0-draft;
+            include wasi:config/imports@0.2.0-rc.1;
             include wasi:keyvalue/imports@0.2.0-draft;
             include wasi:tls/imports@0.2.0-draft;
         }
