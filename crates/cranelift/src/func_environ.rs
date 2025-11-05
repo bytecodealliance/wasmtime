@@ -4488,11 +4488,14 @@ impl FuncEnvironment<'_> {
     /// Returns whether it's acceptable to have CLIF instructions natively trap,
     /// such as division-by-zero.
     ///
-    /// This enabled if `signals_based_traps` is `true` or on Pulley
-    /// unconditionally since Pulley doesn't use hardware-based traps in its
-    /// runtime.
+    /// This is enabled if `signals_based_traps` is `true` or on
+    /// Pulley unconditionally since Pulley doesn't use hardware-based
+    /// traps in its runtime. However, if guest debugging is enabled,
+    /// then we cannot rely on Pulley traps and still need a libcall
+    /// to gain proper ownership of the store in the runtime's
+    /// debugger hooks.
     pub fn clif_instruction_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps || self.is_pulley()
+        self.tunables.signals_based_traps || (self.is_pulley() && !self.tunables.debug_guest)
     }
 
     /// Returns whether loads from the null address are allowed as signals of

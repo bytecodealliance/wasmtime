@@ -1341,6 +1341,18 @@
 (rule (lower (has_type $I64 (uadd_overflow_trap a b tc)))
   (pulley_xadd64_uoverflow_trap a b tc))
 
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (uadd_overflow a b)))
+      (let ((sum XReg (pulley_xadd32 a b))
+            (is_overflow XReg (pulley_xult32 sum a)))
+        (output_pair sum is_overflow)))
+
+(rule (lower (has_type $I64 (uadd_overflow a b)))
+      (let ((sum XReg (pulley_xadd64 a b))
+            (is_overflow XReg (pulley_xult64 sum a)))
+        (output_pair  sum is_overflow)))
+
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (select c a b)))
