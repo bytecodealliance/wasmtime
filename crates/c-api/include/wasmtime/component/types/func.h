@@ -17,7 +17,7 @@ extern "C" {
 /// \brief Opaque type representing a component function type.
 typedef struct wasmtime_component_func_type_t wasmtime_component_func_type_t;
 
-/// \brief Clones a componentfunc type.
+/// \brief Clones a component function type.
 ///
 /// The pointer returned from this function must be deallocated with
 /// `wasmtime_component_func_type_delete`.
