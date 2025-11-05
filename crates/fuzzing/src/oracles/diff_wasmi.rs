@@ -54,6 +54,9 @@ impl WasmiEngine {
             wasmi::errors::ErrorKind::Memory(wasmi::errors::MemoryError::OutOfBoundsAccess) => {
                 Some(wasmi::core::TrapCode::MemoryOutOfBounds)
             }
+            wasmi::errors::ErrorKind::Table(wasmi::errors::TableError::CopyOutOfBounds) => {
+                Some(wasmi::core::TrapCode::TableOutOfBounds)
+            }
             _ => {
                 log::trace!("unknown wasmi error: {:?}", err.kind());
                 None
