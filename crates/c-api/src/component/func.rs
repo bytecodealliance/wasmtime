@@ -1,8 +1,6 @@
-use wasmtime::component::{Func, Val};
-
-use crate::{WasmtimeStoreContextMut, wasmtime_error_t};
-
 use super::wasmtime_component_val_t;
+use crate::{WasmtimeStoreContextMut, wasmtime_component_func_type_t, wasmtime_error_t};
+use wasmtime::component::{Func, Val};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_func_call(
@@ -36,4 +34,12 @@ pub unsafe extern "C" fn wasmtime_component_func_post_return(
     let result = func.post_return(&mut context);
 
     crate::handle_result(result, |_| {})
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_func_type(
+    func: &Func,
+    context: WasmtimeStoreContextMut<'_>,
+) -> Box<wasmtime_component_func_type_t> {
+    Box::new(func.ty(context).into())
 }
