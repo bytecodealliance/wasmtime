@@ -76,4 +76,19 @@ public:                                                                        \
     return *this;                                                              \
   }
 
+#define WASMTIME_CLONE_EQUAL_WRAPPER(name, capi_type)                          \
+  WASMTIME_CLONE_WRAPPER(name, capi_type)                                      \
+                                                                               \
+  /**                                                                          \
+   * \brief Compares two types for equality.                                   \
+   */                                                                          \
+  bool operator==(const name &other) const {                                   \
+    return capi_type##_equal(ptr.get(), other.ptr.get());                      \
+  }                                                                            \
+                                                                               \
+  /**                                                                          \
+   * \brief Compares two types for inequality.                                 \
+   */                                                                          \
+  bool operator!=(const name &other) const { return !(*this == other); }
+
 #endif // WASMTIME_HELPERS_HH
