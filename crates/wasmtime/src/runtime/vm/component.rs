@@ -77,6 +77,12 @@ pub struct ComponentInstance {
     // Otherwise the full guts of this component should only ever be used during
     // the instantiation of this instance, meaning that after instantiation much
     // of the component can be thrown away (theoretically).
+    //
+    // SAFETY: this field cannot be overwritten after an instance is created. It
+    // must contain this exact same value for the entire lifetime of this
+    // instance. This enables borrowing the component and this instance at the
+    // same time (instance mutably, component not). Additionally it enables
+    // borrowing a store mutably at the same time as a contained instance.
     component: Component,
 
     /// State of handles (e.g. resources, waitables, etc.) for this component.

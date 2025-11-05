@@ -233,7 +233,7 @@ where
 /// must be upheld. Generally that's done by ensuring this is only called from
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
-    mut store: StoreContextMut<'_, T>,
+    store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
     options: OptionsIndex,
@@ -245,6 +245,8 @@ where
     Params: Lift,
     Return: Lower + 'static,
 {
+    let (component, store) = instance.component_and_store_mut(store.0);
+    let mut store = StoreContextMut(store);
     let vminstance = instance.id().get(store.0);
     let opts = &vminstance.component().env_component().options[options];
     let async_ = opts.async_;
@@ -258,7 +260,7 @@ where
         return Err(anyhow!(crate::Trap::CannotLeaveComponent));
     }
 
-    let types = vminstance.component().types().clone();
+    let types = component.types();
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -277,8 +279,7 @@ where
             // Load the return pointer, if present.
             let retptr = match storage.async_retptr() {
                 Some(ptr) => {
-                    let mut lower =
-                        LowerContext::new(store.as_context_mut(), options, &types, instance);
+                    let mut lower = LowerContext::new(store.as_context_mut(), options, instance);
                     validate_inbounds::<Return>(lower.as_slice_mut(), ptr)?
                 }
                 // If there's no return pointer then `Return` should have an
@@ -294,12 +295,11 @@ where
             let host_result = closure(store.as_context_mut(), params);
 
             let mut lower_result = {
-                let types = types.clone();
                 move |store: StoreContextMut<T>, ret: Return| {
                     unsafe {
                         flags.set_may_leave(false);
                     }
-                    let mut lower = LowerContext::new(store, options, &types, instance);
+                    let mut lower = LowerContext::new(store, options, instance);
                     ret.linear_lower_to_memory(&mut lower, result_tys, retptr)?;
                     unsafe {
                         flags.set_may_leave(true);
@@ -328,7 +328,7 @@ where
                 Status::Returned.pack(None)
             };
 
-            let mut lower = LowerContext::new(store, options, &types, instance);
+            let mut lower = LowerContext::new(store, options, instance);
             storage.lower_results(&mut lower, InterfaceType::U32, status)?;
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -356,7 +356,7 @@ where
         unsafe {
             flags.set_may_leave(false);
         }
-        let mut lower = LowerContext::new(store, options, &types, instance);
+        let mut lower = LowerContext::new(store, options, instance);
         storage.lower_results(&mut lower, result_tys, ret)?;
         unsafe {
             flags.set_may_leave(true);
@@ -699,7 +699,7 @@ where
 }
 
 unsafe fn call_host_dynamic<T, F>(
-    mut store: StoreContextMut<'_, T>,
+    store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
     options: OptionsIndex,
@@ -718,8 +718,10 @@ where
         + 'static,
     T: 'static,
 {
+    let (component, store) = instance.component_and_store_mut(store.0);
+    let mut store = StoreContextMut(store);
     let vminstance = instance.id().get(store.0);
-    let opts = &vminstance.component().env_component().options[options];
+    let opts = &component.env_component().options[options];
     let async_ = opts.async_;
     let caller_instance = opts.instance;
     let mut flags = vminstance.instance_flags(caller_instance);
@@ -731,7 +733,7 @@ where
         return Err(anyhow!(crate::Trap::CannotLeaveComponent));
     }
 
-    let types = instance.id().get(store.0).component().types().clone();
+    let types = component.types();
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
@@ -749,7 +751,7 @@ where
     let ret_index = unsafe {
         dynamic_params_load(
             &mut lift,
-            &types,
+            types,
             storage,
             param_tys,
             &mut params_and_results,
@@ -768,29 +770,26 @@ where
                 0
             } else {
                 let retptr = unsafe { storage[ret_index].assume_init() };
-                let mut lower =
-                    LowerContext::new(store.as_context_mut(), options, &types, instance);
+                let mut lower = LowerContext::new(store.as_context_mut(), options, instance);
                 validate_inbounds_dynamic(&result_tys.abi, lower.as_slice_mut(), &retptr)?
             };
 
             let future = closure(store.as_context_mut(), ty, params_and_results, result_start);
 
             let task = instance.first_poll(store, future, caller_instance, {
-                let types = types.clone();
                 let result_tys = func_ty.results;
                 move |store: StoreContextMut<T>, result_vals: Vec<Val>| {
-                    let result_tys = &types[result_tys];
-                    let result_vals = &result_vals[result_start..];
-                    assert_eq!(result_vals.len(), result_tys.types.len());
-
                     unsafe {
                         flags.set_may_leave(false);
                     }
 
-                    let mut lower = LowerContext::new(store, options, &types, instance);
+                    let mut lower = LowerContext::new(store, options, instance);
+                    let result_tys = &lower.types[result_tys];
+                    let result_vals = &result_vals[result_start..];
+                    assert_eq!(result_vals.len(), result_tys.types.len());
                     let mut ptr = retptr;
                     for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-                        let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
+                        let offset = lower.types.canonical_abi(ty).next_field32_size(&mut ptr);
                         val.store(&mut lower, *ty, offset)?;
                     }
 
@@ -828,7 +827,7 @@ where
             flags.set_may_leave(false);
         }
 
-        let mut cx = LowerContext::new(store, options, &types, instance);
+        let mut cx = LowerContext::new(store, options, instance);
         if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
             let mut dst = storage[..cnt].iter_mut();
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {

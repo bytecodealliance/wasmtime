@@ -913,8 +913,6 @@ impl Func {
         may_enter: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let instance = self.instance.id().get(store.0);
-        let types = instance.component().types().clone();
         let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
         let async_ = options.async_;
 
@@ -938,8 +936,9 @@ impl Func {
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
         }
-        let mut cx = LowerContext::new(store.as_context_mut(), options_idx, &types, self.instance);
-        let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
+        let mut cx = LowerContext::new(store.as_context_mut(), options_idx, self.instance);
+        let param_ty = InterfaceType::Tuple(cx.types[ty].params);
+        let result = lower(&mut cx, param_ty);
         unsafe { flags.set_may_leave(true) };
         result?;
 

@@ -112,7 +112,7 @@ impl TransmitIndex {
 
 /// Retrieve the payload type of the specified stream or future, or `None` if it
 /// has no payload type.
-fn payload(ty: TransmitIndex, types: &Arc<ComponentTypes>) -> Option<InterfaceType> {
+fn payload(ty: TransmitIndex, types: &ComponentTypes) -> Option<InterfaceType> {
     match ty {
         TransmitIndex::Future(ty) => types[types[ty].ty].payload,
         TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
@@ -141,14 +141,13 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     count: usize,
     buffer: &mut B,
 ) -> Result<()> {
-    let types = instance.id().get(store.0).component().types().clone();
     let count = buffer.remaining().len().min(count);
 
     let lower = &mut if T::MAY_REQUIRE_REALLOC {
         LowerContext::new
     } else {
         LowerContext::new_without_realloc
-    }(store.as_context_mut(), options, &types, instance);
+    }(store.as_context_mut(), options, instance);
 
     if address % usize::try_from(T::ALIGN32)? != 0 {
         bail!("read pointer not aligned");
@@ -159,7 +158,7 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
         .and_then(|b| b.get_mut(..T::SIZE32 * count))
         .ok_or_else(|| anyhow::anyhow!("read pointer out of bounds of memory"))?;
 
-    if let Some(ty) = payload(ty, &types) {
+    if let Some(ty) = payload(ty, lower.types) {
         T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
     }
 
@@ -2862,7 +2861,7 @@ impl Instance {
         count: usize,
         rep: u32,
     ) -> Result<()> {
-        let types = self.id().get(store.0).component().types().clone();
+        let types = self.id().get(store.0).component().types();
         match (write_ty, read_ty) {
             (TransmitIndex::Future(write_ty), TransmitIndex::Future(read_ty)) => {
                 assert_eq!(count, 1);
@@ -2870,14 +2869,15 @@ impl Instance {
                 let val = types[types[write_ty].ty]
                     .payload
                     .map(|ty| {
-                        let abi = types.canonical_abi(&ty);
+                        let lift =
+                            &mut LiftContext::new(store.0.store_opaque_mut(), write_options, self);
+
+                        let abi = lift.types.canonical_abi(&ty);
                         // FIXME: needs to read an i64 for memory64
                         if write_address % usize::try_from(abi.align32)? != 0 {
                             bail!("write pointer not aligned");
                         }
 
-                        let lift =
-                            &mut LiftContext::new(store.0.store_opaque_mut(), write_options, self);
                         let bytes = lift
                             .memory()
                             .get(write_address..)
@@ -2891,8 +2891,8 @@ impl Instance {
                     .transpose()?;
 
                 if let Some(val) = val {
-                    let lower =
-                        &mut LowerContext::new(store.as_context_mut(), read_options, &types, self);
+                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let types = lower.types;
                     let ty = types[types[read_ty].ty].payload.unwrap();
                     let ptr = func::validate_inbounds_dynamic(
                         types.canonical_abi(&ty),
@@ -2941,7 +2941,7 @@ impl Instance {
                 } else {
                     let store_opaque = store.0.store_opaque_mut();
                     let lift = &mut LiftContext::new(store_opaque, write_options, self);
-                    let ty = types[types[write_ty].ty].payload.unwrap();
+                    let ty = lift.types[lift.types[write_ty].ty].payload.unwrap();
                     let abi = lift.types.canonical_abi(&ty);
                     let size = usize::try_from(abi.size32).unwrap();
                     if write_address % usize::try_from(abi.align32)? != 0 {
@@ -2960,9 +2960,8 @@ impl Instance {
                     let id = TableId::<TransmitHandle>::new(rep);
                     log::trace!("copy values {values:?} for {id:?}");
 
-                    let lower =
-                        &mut LowerContext::new(store.as_context_mut(), read_options, &types, self);
-                    let ty = types[types[read_ty].ty].payload.unwrap();
+                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let ty = lower.types[lower.types[read_ty].ty].payload.unwrap();
                     let abi = lower.types.canonical_abi(&ty);
                     if read_address % usize::try_from(abi.align32)? != 0 {
                         bail!("read pointer not aligned");
@@ -2994,7 +2993,7 @@ impl Instance {
         address: usize,
         count: usize,
     ) -> Result<()> {
-        let types = self.id().get(store).component().types().clone();
+        let types = self.id().get(store).component().types();
         let size = usize::try_from(
             match ty {
                 TransmitIndex::Future(ty) => types[types[ty].ty]
@@ -3771,8 +3770,7 @@ impl Instance {
             state.get_mut(TableId::<ErrorContextState>::new(handle_table_id_rep))?;
         let debug_msg = debug_msg.clone();
 
-        let types = self.id().get(store.0).component().types().clone();
-        let lower_cx = &mut LowerContext::new(store, options, &types, self);
+        let lower_cx = &mut LowerContext::new(store, options, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
         // Lower the string into the component's memory
         let offset = lower_cx

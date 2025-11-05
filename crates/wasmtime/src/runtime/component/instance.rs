@@ -12,7 +12,7 @@ use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
 use crate::runtime::vm::{self, VMFuncRef};
-use crate::store::StoreOpaque;
+use crate::store::{AsStoreOpaque, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
@@ -525,6 +525,60 @@ impl Instance {
         unsafe {
             let memory = memory.as_ref();
             core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
+        }
+    }
+
+    /// Helper function to simultaneously get a borrow to this instance's
+    /// component as well as the store that this component is contained within.
+    ///
+    /// Note that this function signature is not possible with safe Rust, so
+    /// this is using `unsafe` internally.
+    pub(crate) fn component_and_store_mut<'a, S>(
+        &self,
+        store: &'a mut S,
+    ) -> (&'a Component, &'a mut S)
+    where
+        S: AsStoreOpaque,
+    {
+        let store_opaque = store.as_store_opaque();
+        let instance = self.id.get_mut(store_opaque);
+        let component = instance.component();
+
+        // SAFETY: the goal of this function is to derive a pointer from
+        // `&mut S`, here `&Component`, and then return both so they can both be
+        // used at the same time. In general this is not safe operation since
+        // the original mutable pointer could be mutated or overwritten which
+        // would invalidate the derived pointer.
+        //
+        // In this case though we have a few guarantees which should make this
+        // safe:
+        //
+        // * Embedders never have the ability to overwrite a `StoreOpaque`. For
+        //   example the closest thing of `StoreContextMut` wraps up the
+        //   reference internally so it's inaccessible to the outside world.
+        //   This means that while mutations can still happen it's not possible
+        //   to overwrite a `StoreOpaque` directly.
+        //
+        // * Components are referred to by `vm::ComponentInstance` which holds a
+        //   strong reference. All `ComponentInstance` structures are allocated
+        //   within the store and unconditionally live as long as the entire
+        //   store itself. This means that there's no worry of the rooting
+        //   container going away or otherwise getting deallocated.
+        //
+        // * The `ComponentInstance` container has an invariant that after
+        //   creation the component used to create it cannot be changed. This is
+        //   enforced through `Pin<&mut ComponentInstance>` which disallows
+        //   mutable access to the `component` field, instead only allowing
+        //   read-only access.
+        //
+        // Putting all of this together it's not possible for a component,
+        // within a component instance, within a store, to get deallocated while
+        // a store is in use. Consequently it should be safe to simultaneously
+        // have a borrow to both at the same time, even if the store has a
+        // mutable borrow itself.
+        unsafe {
+            let component: *const Component = component;
+            (&*component, store)
         }
     }
 }

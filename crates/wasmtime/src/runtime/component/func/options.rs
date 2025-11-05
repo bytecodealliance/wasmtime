@@ -57,7 +57,6 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     pub fn new(
         store: StoreContextMut<'a, T>,
         options: OptionsIndex,
-        types: &'a ComponentTypes,
         instance: Instance,
     ) -> LowerContext<'a, T> {
         #[cfg(all(debug_assertions, feature = "component-model-async"))]
@@ -66,10 +65,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             // case we call the guest's realloc function.
             store.0.with_blocking(|_, _| {});
         }
+        let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
-            store,
+            store: StoreContextMut(store),
             options,
-            types,
+            types: component.types(),
             instance,
             allow_realloc: true,
         }
@@ -87,13 +87,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     pub(crate) fn new_without_realloc(
         store: StoreContextMut<'a, T>,
         options: OptionsIndex,
-        types: &'a ComponentTypes,
         instance: Instance,
     ) -> LowerContext<'a, T> {
+        let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
-            store,
+            store: StoreContextMut(store),
             options,
-            types,
+            types: component.types(),
             instance,
             allow_realloc: false,
         }
@@ -140,10 +140,10 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ) -> Result<usize> {
         assert!(self.allow_realloc);
 
-        let instance = self.instance();
-        let component = instance.component();
+        let (component, store) = self.instance.component_and_store_mut(self.store.0);
+        let instance = self.instance.id().get(store);
         let options = &component.env_component().options[self.options];
-        let realloc_ty = Arc::clone(component.realloc_func_ty());
+        let realloc_ty = component.realloc_func_ty();
         let realloc = match options.data_model {
             CanonicalOptionsDataModel::Gc {} => unreachable!(),
             CanonicalOptionsDataModel::LinearMemory(m) => m.realloc.unwrap(),
@@ -161,8 +161,9 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
-        let result =
-            unsafe { ReallocFunc::call_raw(&mut self.store, &realloc_ty, realloc, params)? };
+        let result = unsafe {
+            ReallocFunc::call_raw(&mut StoreContextMut(store), &realloc_ty, realloc, params)?
+        };
 
         if result % old_align != 0 {
             bail!("realloc return: result not aligned");
