@@ -21,6 +21,7 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
+use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use arbitrary::Arbitrary;
@@ -33,7 +34,6 @@ use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
-use crate::generators::GcOps;
 
 #[cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))]
 mod diff_v8;
@@ -780,10 +780,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 ///
 /// Returns the number of `gc` operations which occurred throughout the test
 /// case -- used to test below that gc happens reasonably soon and eventually.
-pub fn gc_ops(
-    mut fuzz_config: generators::Config,
-    mut ops: GcOps,
-) -> Result<usize> {
+pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usize> {
     let expected_drops = Arc::new(AtomicUsize::new(0));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
