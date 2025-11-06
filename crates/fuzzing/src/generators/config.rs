@@ -448,6 +448,15 @@ impl Config {
             self.wasmtime.async_config.configure(&mut cfg);
         }
 
+        // Fuzzing on macOS with mach ports seems to sometimes bypass the mach
+        // port handling thread entirely and go straight to asan's or fuzzing's
+        // signal handler. No idea why and for me at least it's just easier to
+        // disable mach ports when fuzzing because there's no need to use that
+        // over signal handlers.
+        if cfg!(target_vendor = "apple") {
+            cfg.macos_use_mach_ports(false);
+        }
+
         return cfg;
     }
 
