@@ -88,8 +88,8 @@ struct Context {
   }
 };
 
-typedef Result<std::monostate> (*host_func_t)(Store::Context, Span<const Val>,
-                                              Span<Val>);
+typedef Result<std::monostate> (*host_func_t)(Store::Context, const FuncType &,
+                                              Span<const Val>, Span<Val>);
 
 static Context create(std::string_view type, std::string_view body,
                       std::string_view host_params, host_func_t callback) {
@@ -144,7 +144,7 @@ call $do
 local.get $res
 	  )",
       "(param i64 i64 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &_ty, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], 1, 2);
@@ -193,7 +193,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], "hello from A!");
@@ -249,7 +249,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], {1, 2, 3});
@@ -306,7 +306,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], {1, 2, 3});
@@ -380,7 +380,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check_aa(args[0], 123);
@@ -419,7 +419,7 @@ local.get $x
 call $do
 	  )",
       "(param i32) (result i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], "aa");
@@ -478,7 +478,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], 123);
@@ -535,7 +535,7 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], true, 123);
@@ -579,7 +579,7 @@ local.get $x
 call $do
 	  )",
       "(param i32) (result i32)",
-      +[](Store::Context, Span<const Val> args,
+      +[](Store::Context, const FuncType &, Span<const Val> args,
           Span<Val> rets) -> Result<std::monostate> {
         EXPECT_EQ(args.size(), 1);
         check(args[0], {"aa"});
@@ -882,7 +882,7 @@ TEST(component, value_host_resource) {
 
     i.add_func(
          "f",
-         +[](Store::Context cx, Span<const Val> args,
+         +[](Store::Context cx, const FuncType &_ty, Span<const Val> args,
              Span<Val> rets) -> Result<std::monostate> {
            EXPECT_EQ(args.size(), 1);
            check(cx, args[0], 42);

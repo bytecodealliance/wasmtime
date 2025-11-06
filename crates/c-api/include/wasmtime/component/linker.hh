@@ -26,24 +26,7 @@ namespace component {
  * `Linker` can also be used to link in WASI functions to instantiate a module.
  */
 class LinkerInstance {
-  struct deleter {
-    void operator()(wasmtime_component_linker_instance_t *p) const {
-      wasmtime_component_linker_instance_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_component_linker_instance_t, deleter> ptr;
-
-public:
-  /// Creates a new linker instance from the given C API pointer.
-  explicit LinkerInstance(wasmtime_component_linker_instance_t *ptr)
-      : ptr(ptr) {}
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_linker_instance_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_linker_instance_t *capi() { return ptr.get(); }
+  WASMTIME_OWN_WRAPPER(LinkerInstance, wasmtime_component_linker_instance);
 
   /**
    * \brief Adds a module to this linker instance under the specified name.
@@ -78,17 +61,22 @@ private:
   template <typename F>
   static wasmtime_error_t *
   raw_callback(void *env, wasmtime_context_t *store,
-               const wasmtime_component_val_t *args, size_t nargs,
+               const wasmtime_component_func_type_t *ty_const,
+               wasmtime_component_val_t *args, size_t nargs,
                wasmtime_component_val_t *results, size_t nresults) {
     static_assert(alignof(Val) == alignof(wasmtime_component_val_t));
     static_assert(sizeof(Val) == sizeof(wasmtime_component_val_t));
+    wasmtime_component_func_type_t *ty =
+        const_cast<wasmtime_component_func_type_t *>(ty_const);
     F *func = reinterpret_cast<F *>(env);
-    Span<const Val> args_span(Val::from_capi(args), nargs);
+    Span<Val> args_span(Val::from_capi(args), nargs);
     Span<Val> results_span(Val::from_capi(results), nresults);
     Result<std::monostate> result =
-        (*func)(Store::Context(store), args_span, results_span);
+        (*func)(Store::Context(store), *FuncType::from_capi(&ty), args_span,
+                results_span);
+
     if (!result) {
-      return result.err().release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -102,7 +90,7 @@ public:
   template <typename F,
             std::enable_if_t<
                 std::is_invocable_r_v<Result<std::monostate>, F, Store::Context,
-                                      Span<const Val>, Span<Val>>,
+                                      const FuncType &, Span<Val>, Span<Val>>,
                 bool> = true>
   Result<std::monostate> add_func(std::string_view name, F &&f) {
     auto *error = wasmtime_component_linker_instance_add_func(
@@ -127,7 +115,7 @@ private:
     F *func = reinterpret_cast<F *>(env);
     Result<std::monostate> result = (*func)(Store::Context(store), rep);
     if (!result) {
-      return result.err().release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -160,15 +148,8 @@ public:
  * \brief Class used to instantiate a `Component` into an instance.
  */
 class Linker {
-  struct deleter {
-    void operator()(wasmtime_component_linker_t *p) const {
-      wasmtime_component_linker_delete(p);
-    }
-  };
+  WASMTIME_OWN_WRAPPER(Linker, wasmtime_component_linker);
 
-  std::unique_ptr<wasmtime_component_linker_t, deleter> ptr;
-
-public:
   /// Creates a new linker which will instantiate in the given engine.
   explicit Linker(Engine &engine)
       : ptr(wasmtime_component_linker_new(engine.capi())) {}
@@ -234,12 +215,6 @@ public:
     return std::monostate();
   }
 #endif // WASMTIME_FEATURE_WASI
-
-  /// \brief Returns the underlying C API pointer.
-  const wasmtime_component_linker_t *capi() const { return ptr.get(); }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_linker_t *capi() { return ptr.get(); }
 };
 
 } // namespace component

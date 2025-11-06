@@ -6,6 +6,7 @@
 #include <wasm.h>
 #include <wasmtime/component/component.h>
 #include <wasmtime/component/instance.h>
+#include <wasmtime/component/types/func.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 #include <wasmtime/module.h>
@@ -134,8 +135,8 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
 
 /// Type of the callback used in #wasmtime_component_linker_instance_add_func
 typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
-    void *, wasmtime_context_t *, const wasmtime_component_val_t *, size_t,
-    wasmtime_component_val_t *, size_t);
+    void *, wasmtime_context_t *, const wasmtime_component_func_type_t *,
+    wasmtime_component_val_t *, size_t, wasmtime_component_val_t *, size_t);
 
 /**
  * \brief Define a function within this instance.
