@@ -280,3 +280,34 @@ block0(v0: i64, v1: i64):
 ;     v7 = icmp ugt v0, v1
 ;     return v7
 ; }
+
+;; (bxor ty (slt cty x y) (sgt cty x y)) -> (ne cty x y)
+function %test_bxor_slt_sgt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = icmp sgt v0, v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; function %test_bxor_slt_sgt(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; (bxor ty (ult cty x y) (ugt cty x y)) -> (ne cty x y)
+function %test_bxor_ult_ugt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = icmp ugt v0, v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; function %test_bxor_ult_ugt(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
