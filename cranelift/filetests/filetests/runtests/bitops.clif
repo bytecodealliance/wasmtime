@@ -222,3 +222,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %fold_or_and_not(0, 0) == 0xffffffff
 
+function %test_bxor_band_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1  
+    v4 = band v0, v2 
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %test_bxor_band_band(2, 1, 1) == 0
+
