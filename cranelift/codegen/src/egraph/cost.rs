@@ -131,18 +131,35 @@ impl Cost {
             | Opcode::Ushr
             | Opcode::Sshr => Cost::new(3, 0),
 
+            // "Expensive" arithmetic.
+            Opcode::Imul => Cost::new(10, 0),
+
+            // Selects cannot be speculated through on some of our targets
+            // (e.g. x64) so strongly prefer not choosing them.
+            //
+            // TODO(#12005): Use target-specific cost functions so that `select`
+            // isn't avoided if the target can speculate through it or doesn't
+            // do speculation.
+            Opcode::Select => Cost::new(50, 0),
+
             // Everything else.
             _ => {
+                // By default, be slightly more expensive than "simple"
+                // arithmetic.
                 let mut c = Cost::new(4, 0);
+
+                // And then get more expensive as the opcode does more side
+                // effects.
                 if op.can_trap() || op.other_side_effects() {
-                    c = c + Cost::new(5, 0);
-                }
-                if op.can_load() {
                     c = c + Cost::new(10, 0);
                 }
-                if op.can_store() {
+                if op.can_load() {
                     c = c + Cost::new(20, 0);
                 }
+                if op.can_store() {
+                    c = c + Cost::new(50, 0);
+                }
+
                 c
             }
         }
