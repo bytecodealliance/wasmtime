@@ -158,10 +158,7 @@ impl ResourceAny {
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores
     /// to execute the destructor asynchronously.
     #[cfg(feature = "async")]
-    pub async fn resource_drop_async<T>(
-        self,
-        mut store: impl AsContextMut<Data: Send>,
-    ) -> Result<()> {
+    pub async fn resource_drop_async(self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
