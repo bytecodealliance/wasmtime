@@ -193,3 +193,12 @@
 (rule (simplify (select ty x (eq ty z y) (eq ty y (iconst_u cty p)))) (eq ty y (select cty x z (iconst_u cty p))))
 (rule (simplify (select ty x (eq ty y z) (eq ty (iconst_u cty p) y))) (eq ty y (select cty x z (iconst_u cty p))))
 (rule (simplify (select ty x (eq ty y z) (eq ty y (iconst_u cty p)))) (eq ty y (select cty x z (iconst_u cty p))))
+
+;; (n < m) → ((if c then m else x) < (if c then n else x)) = false
+(rule
+  (simplify (slt cty
+              (select ty c (iconst_s ty z) x)
+              (select ty c (iconst_s ty y) x)))
+  (if-let true (i64_lt y z))
+  (iconst_u cty 0))
+
