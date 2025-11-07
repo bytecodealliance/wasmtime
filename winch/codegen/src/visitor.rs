@@ -778,7 +778,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f32::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.floor_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -791,7 +791,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f64::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.floor_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -804,7 +804,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f32::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.ceil_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -817,7 +817,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f64::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.ceil_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -830,7 +830,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f32::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.nearest_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -843,7 +843,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f64::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.nearest_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -856,7 +856,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f32::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.trunc_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -869,7 +869,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f64::<M::ABI, M::Ptr>()?;
+                let builtin = env.builtins.trunc_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -1662,7 +1662,7 @@ where
             .stack
             .insert_many(at, &[table.try_into()?, elem.try_into()?]);
 
-        let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.table_init::<M::ABI>()?;
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
@@ -1678,7 +1678,7 @@ where
             .stack
             .insert_many(at, &[dst.try_into()?, src.try_into()?]);
 
-        let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.table_copy::<M::ABI>()?;
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
@@ -1703,7 +1703,7 @@ where
         let table_index = TableIndex::from_u32(table);
         let table_ty = self.env.table(table_index);
         let builtin = match table_ty.ref_type.heap_type {
-            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>()?,
+            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI>()?,
             _ => bail!(CodeGenError::unsupported_wasm_type()),
         };
 
@@ -1741,7 +1741,7 @@ where
             CodeGenError::unsupported_wasm_type()
         );
 
-        let builtin = self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.table_fill_func_ref::<M::ABI>()?;
 
         let at = self.context.stack.ensure_index_at(3)?;
 
@@ -1791,7 +1791,7 @@ where
     }
 
     fn visit_elem_drop(&mut self, index: u32) -> Self::Output {
-        let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>()?;
+        let elem_drop = self.env.builtins.elem_drop::<M::ABI>()?;
         self.context.stack.extend([index.try_into()?]);
         FnCall::emit::<M>(
             &mut self.env,
@@ -1807,7 +1807,7 @@ where
         self.context
             .stack
             .insert_many(at, &[mem.try_into()?, data_index.try_into()?]);
-        let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_init::<M::ABI>()?;
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
@@ -1831,7 +1831,7 @@ where
         let at = self.context.stack.ensure_index_at(4)?;
         self.context.stack.insert_many(at, &[dst_mem.try_into()?]);
 
-        let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_copy::<M::ABI>()?;
 
         FnCall::emit::<M>(
             &mut self.env,
@@ -1846,7 +1846,7 @@ where
         let at = self.context.stack.ensure_index_at(3)?;
         let mem = MemoryIndex::from_u32(mem);
 
-        let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_fill::<M::ABI>()?;
         let builtin = self.prepare_builtin_defined_memory_arg(mem, at, builtin)?;
 
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
@@ -1864,7 +1864,7 @@ where
         // The stack at this point contains: [ delta ]
         // The desired state is
         //   [ vmctx, delta, index ]
-        let builtin = self.env.builtins.memory_grow::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_grow::<M::ABI>()?;
         let builtin = self.prepare_builtin_defined_memory_arg(mem, at + 1, builtin)?;
 
         let heap = self.env.resolve_heap(mem);
@@ -1890,7 +1890,7 @@ where
     fn visit_data_drop(&mut self, data_index: u32) -> Self::Output {
         self.context.stack.extend([data_index.try_into()?]);
 
-        let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.data_drop::<M::ABI>()?;
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
