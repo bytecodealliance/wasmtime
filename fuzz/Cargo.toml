@@ -110,8 +110,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "table_ops"
-path = "fuzz_targets/table_ops.rs"
+name = "gc_ops"
+path = "fuzz_targets/gc_ops.rs"
 test = false
 doc = false
 bench = false

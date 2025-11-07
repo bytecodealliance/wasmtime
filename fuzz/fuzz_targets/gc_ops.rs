@@ -5,11 +5,11 @@ use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use mutatis::Session;
 use postcard::{from_bytes, to_slice};
 use rand::{Rng, SeedableRng};
-use wasmtime_fuzzing::generators::table_ops::TableOps;
-use wasmtime_fuzzing::oracles::table_ops;
+use wasmtime_fuzzing::generators::GcOps;
+use wasmtime_fuzzing::oracles::gc_ops;
 
 fuzz_target!(|data: &[u8]| {
-    let Ok((seed, ops)) = postcard::from_bytes::<(u64, TableOps)>(data) else {
+    let Ok((seed, ops)) = postcard::from_bytes::<(u64, GcOps)>(data) else {
         return;
     };
 
@@ -22,7 +22,7 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
 
-    let _ = table_ops(config, ops);
+    let _ = gc_ops(config, ops);
 });
 
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
@@ -34,7 +34,7 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
     }
 
     // Try to decode using postcard; fallback to default input on failure
-    let mut tuple: (u64, TableOps) = from_bytes(&data[..size]).ok().unwrap_or_default();
+    let mut tuple: (u64, GcOps) = from_bytes(&data[..size]).ok().unwrap_or_default();
 
     let mut session = Session::new().seed(seed.into()).shrink(max_size < size);
 
