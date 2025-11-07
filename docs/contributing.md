@@ -68,12 +68,18 @@ Also, we encourage people to just look around and find things they're
 interested in. This a good time to get involved, as there aren't a lot of
 things set in stone yet.
 
-### Documentation typo fixes
+### Avoiding Trivial Pull Requests
 
-We all make typos, and in comments and documentation, rustc doesn't catch them
-for us. We appreciate receiving PRs to fix them. However, we request that new
-contributors (those who have not had any substantive code PRs merged) only
-submit one PR per week dedicated to fixing typos.
+Merging a Pull Request comes at a fundamental cost, from adding to the volume
+of notifications maintainers receive, to at least one maintainer having to
+review the proposed changes, to the many hours of machine time our CI consumes
+before greenlighting a PR.
+
+As such, we request that contributors don't open Pull Requests with trivial
+changes, such as typo fixes in documentation. Instead, those changes should be
+included, as separate commits, in more substantive Pull Requests. Wasmtime
+maintainers will close Pull Requests containing only trivial changes with a
+reference to this section of the docs.
 
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
 [E-easy]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-easy
