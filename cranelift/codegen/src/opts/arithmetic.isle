@@ -347,7 +347,7 @@
 ;; (x - y) - x => -y
 (rule (simplify (isub ty (isub ty x y) x))(ineg ty y))
 
-;; (x * y) (==/!=) z --> x (==/!=) (y / z) when y is odd and divides z
+;; (x * C) (==/!=) D --> x (==/!=) (D / C) when C is odd and divides D
 (rule (simplify 
 	(ne cty (imul ty x (iconst_u ty y)) (iconst_u ty z)))
 		(if-let 0 (u64_rem z y))
