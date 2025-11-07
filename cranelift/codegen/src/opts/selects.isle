@@ -102,3 +102,9 @@
 (rule (simplify (select ty d a (select ty d _ y))) (select ty d a y))
 (rule (simplify (select ty d (select ty d x _) a)) (select ty d x a))
 
+
+(rule (simplify (sgt cty (smin _ x y) x)) (iconst_u cty 0))
+(rule (simplify (sgt cty (smin _ x y) y)) (iconst_u cty 0))
+(rule (simplify (ugt cty (umin _ x y) x)) (iconst_u cty 0))
+(rule (simplify (ugt cty (umin _ x y) y)) (iconst_u cty 0))
+
