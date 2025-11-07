@@ -344,3 +344,29 @@
   (if-let true (i64_lt x 0))
   (iconst_u ty 0))
 
+;; (x < y) & (x ≠ -1) = (x < y)
+(rule
+  (simplify (band ty (ne ty x (iconst_s _ -1)) (ugt ty y x)))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ne ty x (iconst_s _ -1)) (ult ty x z)))
+   (ult ty x z))
+(rule
+  (simplify (band ty (ne ty (iconst_s _ -1) x) (ugt ty y x)))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ne ty (iconst_s _ -1) x) (ult ty x z)))
+   (ult ty x z))
+(rule
+  (simplify (band ty (ugt ty x y) (ne ty y (iconst_s _ -1))))
+   (ult ty y x))
+(rule
+  (simplify (band ty (ugt ty x y) (ne ty (iconst_s _ -1) y)))
+   (ult ty y x))
+(rule
+  (simplify (band ty (ult ty x y) (ne ty x (iconst_s _ -1))))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ult ty x y) (ne ty (iconst_s _ -1) x)))
+   (ult ty x y))
+
