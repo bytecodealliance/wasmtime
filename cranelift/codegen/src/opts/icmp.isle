@@ -302,8 +302,27 @@
 (rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
 (rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
 
-
 ;; a < b ^^ a > b => (a ≠ b)
 (rule (simplify (bxor ty (slt cty x y) (sgt cty x y))) (ne cty x y))
 (rule (simplify (bxor ty (ult cty x y) (ugt cty x y))) (ne cty x y))
+
+;; a < b && a > b = false
+(rule (simplify (band ty (slt cty x y) (sgt cty x y))) (iconst_u cty 0))
+(rule (simplify (band ty (ult cty x y) (ugt cty x y))) (iconst_u cty 0))
+(rule
+  (simplify (band ty (slt cty x (iconst_s _ y)) (ugt cty x (iconst_s _ y))))
+  (if-let true (i64_lt y 0))
+  (iconst_u cty 0))
+(rule
+  (simplify (band ty (slt cty (iconst_s _ x) y) (ugt cty (iconst_s _ x) y)))
+  (if-let true (i64_gt_eq x 0))
+  (iconst_u cty 0))
+(rule
+  (simplify (band ty (ult cty x (iconst_s _ y)) (sgt cty x (iconst_s _ y))))
+  (if-let true (i64_gt_eq y 0))
+  (iconst_u cty 0))
+(rule
+  (simplify (band ty (ult cty (iconst_s _ x) y) (sgt cty (iconst_s _ x) y)))
+  (if-let true (i64_lt x 0))
+  (iconst_u cty 0))
 
