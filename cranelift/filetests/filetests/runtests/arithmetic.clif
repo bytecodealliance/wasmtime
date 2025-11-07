@@ -598,3 +598,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %fold_add_sub3(0xdead0000, 0x0000beef) == 0xdead0000
 
+;; (x - y) - x => -y
+function %simplify_sub_sub_self(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1  ; x - y
+    v3 = isub v2, v0  ; (x - y) - x
+    return v3
+}
+
+; run: %simplify_sub_sub_self(42, 5) == -5
+
