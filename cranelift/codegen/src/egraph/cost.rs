@@ -134,14 +134,6 @@ impl Cost {
             // "Expensive" arithmetic.
             Opcode::Imul => Cost::new(10, 0),
 
-            // Selects cannot be speculated through on some of our targets
-            // (e.g. x64) so strongly prefer not choosing them.
-            //
-            // TODO(#12005): Use target-specific cost functions so that `select`
-            // isn't avoided if the target can speculate through it or doesn't
-            // do speculation.
-            Opcode::Select => Cost::new(50, 0),
-
             // Everything else.
             _ => {
                 // By default, be slightly more expensive than "simple"
