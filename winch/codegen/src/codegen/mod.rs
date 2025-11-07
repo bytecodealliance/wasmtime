@@ -569,10 +569,7 @@ where
         assert!(self.tunables.table_lazy_init, "unsupported eager init");
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
-        let builtin = self
-            .env
-            .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.table_get_lazy_init_func_ref::<M::ABI>()?;
 
         // Request the builtin's  result register and use it to hold the table
         // element value. We preemptively spill and request this register to
@@ -1116,7 +1113,7 @@ where
         }
 
         self.emit_fuel_increment()?;
-        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>()?;
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI>()?;
         let fuel_reg = self.context.without::<Result<Reg>, M, _>(
             &out_of_fuel.sig().regs,
             self.masm,
@@ -1185,7 +1182,7 @@ where
         // The continuation branch if the current epoch hasn't reached the
         // configured deadline.
         let cont = self.masm.get_label()?;
-        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>()?;
+        let new_epoch = self.env.builtins.new_epoch::<M::ABI>()?;
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
         // require inserting arbitrary function calls and control flow.
@@ -1478,8 +1475,8 @@ where
         // Put the target memory index as the first argument.
         let stack_len = self.context.stack.len();
         let builtin = match kind {
-            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
-            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
+            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI>()?,
+            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI>()?,
         };
         let builtin = self.prepare_builtin_defined_memory_arg(
             MemoryIndex::from_u32(arg.memory),
@@ -1529,7 +1526,7 @@ where
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
         // Put the target memory index as the first argument.
-        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI>()?;
         let stack_len = self.context.stack.len();
         let builtin = self.prepare_builtin_defined_memory_arg(
             MemoryIndex::from_u32(arg.memory),

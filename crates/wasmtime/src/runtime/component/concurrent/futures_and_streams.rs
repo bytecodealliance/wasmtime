@@ -168,7 +168,7 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     Ok(())
 }
 
-fn lift<T: func::Lift + Send + 'static, B: ReadBuffer<T>, U>(
+fn lift<T: func::Lift + Send + 'static, B: ReadBuffer<T>>(
     lift: &mut LiftContext<'_>,
     ty: Option<InterfaceType>,
     buffer: &mut B,
@@ -699,7 +699,7 @@ impl<'a, T> Source<'a, T> {
                 &mut LiftContext::new(store.0.store_opaque_mut(), &options, self.instance.unwrap());
             let ty = payload(ty, cx.types);
             let old_remaining = buffer.remaining_capacity();
-            lift::<T, B, S::Data>(
+            lift::<T, B>(
                 cx,
                 ty,
                 buffer,
