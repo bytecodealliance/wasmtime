@@ -50,7 +50,7 @@
 //! store.  This is equivalent to `StoreContextMut::spawn` but more convenient to use
 //! in host functions.
 
-use crate::component::func::{self, Func, Options};
+use crate::component::func::{self, Func};
 use crate::component::{HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError};
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
@@ -2603,7 +2603,7 @@ impl Instance {
                     Some(memory) => {
                         let expected = lift.memory.map(|v| v.as_ptr()).unwrap_or(ptr::null_mut());
                         let actual = self.id().get(store).runtime_memory(memory);
-                        expected != actual
+                        expected != actual.as_ptr()
                     }
                     // Memory not specified, meaning it didn't need to be
                     // specified per validation, so not invalid.
@@ -3159,13 +3159,11 @@ impl Instance {
                         (ordinal, 0, result)
                     }
                 };
-                let options = Options::new_index(store, self, params.options);
-                let ptr = func::validate_inbounds::<(u32, u32)>(
-                    options.memory_mut(store),
-                    &ValRaw::u32(params.payload),
-                )?;
-                options.memory_mut(store)[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
-                options.memory_mut(store)[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
+                let memory = self.options_memory_mut(store, params.options);
+                let ptr =
+                    func::validate_inbounds::<(u32, u32)>(memory, &ValRaw::u32(params.payload))?;
+                memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
+                memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
                 Ok(ordinal)
             }
         };
@@ -4902,11 +4900,15 @@ pub(crate) fn prepare_call<T, R>(
     let (options, _flags, ty, raw_options) = handle.abi_info(store.0);
 
     let instance = handle.instance().id().get(store.0);
+    let options = &instance.component().env_component().options[options];
     let task_return_type = instance.component().types()[ty].results;
     let component_instance = raw_options.instance;
-    let callback = options.callback();
-    let memory = options.memory_raw().map(SendSyncPtr::new);
-    let string_encoding = options.string_encoding();
+    let callback = options.callback.map(|i| instance.runtime_callback(i));
+    let memory = options
+        .memory()
+        .map(|i| instance.runtime_memory(i))
+        .map(SendSyncPtr::new);
+    let string_encoding = options.string_encoding;
     let token = StoreToken::new(store.as_context_mut());
     let state = store.0.concurrent_state_mut();
 
@@ -5012,12 +5014,16 @@ fn queue_call0<T: 'static>(
     guest_thread: QualifiedThreadId,
     param_count: usize,
 ) -> Result<()> {
-    let (options, flags, _ty, raw_options) = handle.abi_info(store.0);
+    let (_options, flags, _ty, raw_options) = handle.abi_info(store.0);
     let is_concurrent = raw_options.async_;
+    let callback = raw_options.callback;
     let instance = handle.instance();
     let callee = handle.lifted_core_func(store.0);
-    let callback = options.callback();
     let post_return = handle.post_return_core_func(store.0);
+    let callback = callback.map(|i| {
+        let instance = instance.id().get(store.0);
+        SendSyncPtr::new(instance.runtime_callback(i))
+    });
 
     log::trace!("queueing call {guest_thread:?}");
 
@@ -5039,7 +5045,7 @@ fn queue_call0<T: 'static>(
             1,
             instance_flags,
             is_concurrent,
-            callback.map(SendSyncPtr::new),
+            callback,
             post_return.map(SendSyncPtr::new),
         )
     }

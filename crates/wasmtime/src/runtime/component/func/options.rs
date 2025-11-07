@@ -1,206 +1,21 @@
+use crate::StoreContextMut;
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::{Instance, ResourceType};
 use crate::prelude::*;
+use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
 };
-use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
-use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ComponentTypes, OptionsIndex, StringEncoding,
+    CanonicalOptions, CanonicalOptionsDataModel, ComponentTypes, OptionsIndex,
     TypeResourceTableIndex,
 };
-
-/// Runtime representation of canonical ABI options in the component model.
-///
-/// This structure packages up the runtime representation of each option from
-/// memories to reallocs to string encodings. Note that this is a "standalone"
-/// structure which has raw pointers internally. This allows it to be created
-/// out of thin air for a host function import, for example. The `store_id`
-/// field, however, is what is used to pair this set of options with a store
-/// reference to actually use the pointers.
-#[derive(Copy, Clone)]
-pub struct Options {
-    /// The store from which this options originated.
-    store_id: StoreId,
-
-    /// An optional pointer for the memory that this set of options is referring
-    /// to. This option is not required to be specified in the canonical ABI
-    /// hence the `Option`.
-    ///
-    /// Note that this pointer cannot be safely dereferenced unless a store,
-    /// verified with `self.store_id`, has the appropriate borrow available.
-    memory: Option<NonNull<VMMemoryDefinition>>,
-
-    /// Similar to `memory` but corresponds to the `canonical_abi_realloc`
-    /// function.
-    ///
-    /// Safely using this pointer has the same restrictions as `memory` above.
-    realloc: Option<NonNull<VMFuncRef>>,
-
-    /// The encoding used for strings, if found.
-    ///
-    /// This defaults to utf-8 but can be changed if necessary.
-    string_encoding: StringEncoding,
-
-    /// Whether or not this the async option was set when lowering.
-    async_: bool,
-
-    #[cfg(feature = "component-model-async")]
-    callback: Option<NonNull<VMFuncRef>>,
-}
-
-// The `Options` structure stores raw pointers but they're never used unless a
-// `Store` is available so this should be threadsafe and largely inherit the
-// thread-safety story of `Store<T>` itself.
-unsafe impl Send for Options {}
-unsafe impl Sync for Options {}
-
-impl Options {
-    // FIXME(#4311): prevent a ctor where the memory is memory64
-
-    /// Creates a new [`Options`] from the given [`OptionsIndex`] belonging to
-    /// the specified [`Instance`]
-    ///
-    /// # Panics
-    ///
-    /// Panics if `instance` is not owned by `store` or if `index` is not valid
-    /// for `instance`'s component.
-    pub fn new_index(store: &StoreOpaque, instance: Instance, index: OptionsIndex) -> Options {
-        let instance = instance.id().get(store);
-        let CanonicalOptions {
-            string_encoding,
-            async_,
-            callback,
-            ref data_model,
-            ..
-        } = instance.component().env_component().options[index];
-        let (memory, realloc) = match data_model {
-            CanonicalOptionsDataModel::Gc { .. } => (None, None),
-            CanonicalOptionsDataModel::LinearMemory(o) => (o.memory, o.realloc),
-        };
-        let memory = memory.map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
-        let realloc = realloc.map(|i| instance.runtime_realloc(i));
-        let callback = callback.map(|i| instance.runtime_callback(i));
-        let _ = callback;
-
-        Options {
-            store_id: store.id(),
-            memory,
-            realloc,
-            string_encoding,
-            async_,
-            #[cfg(feature = "component-model-async")]
-            callback,
-        }
-    }
-
-    fn realloc<'a, T>(
-        &self,
-        store: &'a mut StoreContextMut<'_, T>,
-        realloc_ty: &FuncType,
-        old: usize,
-        old_size: usize,
-        old_align: u32,
-        new_size: usize,
-    ) -> Result<(&'a mut [u8], usize)> {
-        self.store_id.assert_belongs_to(store.0.id());
-
-        let realloc = self.realloc.unwrap();
-
-        let params = (
-            u32::try_from(old)?,
-            u32::try_from(old_size)?,
-            old_align,
-            u32::try_from(new_size)?,
-        );
-
-        type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
-
-        // Invoke the wasm malloc function using its raw and statically known
-        // signature.
-        let result = unsafe { ReallocFunc::call_raw(store, realloc_ty, realloc, params)? };
-
-        if result % old_align != 0 {
-            bail!("realloc return: result not aligned");
-        }
-        let result = usize::try_from(result)?;
-
-        let memory = self.memory_mut(store.0);
-
-        let result_slice = match memory.get_mut(result..).and_then(|s| s.get_mut(..new_size)) {
-            Some(end) => end,
-            None => bail!("realloc return: beyond end of memory"),
-        };
-
-        Ok((result_slice, result))
-    }
-
-    /// Asserts that this function has an associated memory attached to it and
-    /// then returns the slice of memory tied to the lifetime of the provided
-    /// store.
-    pub fn memory<'a>(&self, store: &'a StoreOpaque) -> &'a [u8] {
-        self.store_id.assert_belongs_to(store.id());
-
-        // The unsafety here is intended to be encapsulated by the two
-        // preceding assertions. Namely we assert that the `store` is the same
-        // as the original store of this `Options`, meaning that we safely have
-        // either a shared reference or a mutable reference (as below) which
-        // means it's safe to view the memory (aka it's not a different store
-        // where our original store is on some other thread or something like
-        // that).
-        //
-        // Additionally the memory itself is asserted to be present as memory
-        // is an optional configuration in canonical ABI options.
-        unsafe {
-            let memory = self.memory.unwrap().as_ref();
-            core::slice::from_raw_parts(memory.base.as_ptr(), memory.current_length())
-        }
-    }
-
-    /// Same as above, just `_mut`
-    pub fn memory_mut<'a>(&self, store: &'a mut StoreOpaque) -> &'a mut [u8] {
-        self.store_id.assert_belongs_to(store.id());
-
-        // See comments in `memory` about the unsafety
-        unsafe {
-            let memory = self.memory.unwrap().as_ref();
-            core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
-        }
-    }
-
-    /// Returns the underlying encoding used for strings in this
-    /// lifting/lowering.
-    pub fn string_encoding(&self) -> StringEncoding {
-        self.string_encoding
-    }
-
-    /// Returns the id of the store that this `Options` is connected to.
-    pub fn store_id(&self) -> StoreId {
-        self.store_id
-    }
-
-    /// Returns whether this lifting or lowering uses the async ABI.
-    pub fn async_(&self) -> bool {
-        self.async_
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn callback(&self) -> Option<NonNull<VMFuncRef>> {
-        self.callback
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn memory_raw(&self) -> Option<NonNull<VMMemoryDefinition>> {
-        self.memory
-    }
-}
 
 /// A helper structure which is a "package" of the context used during lowering
 /// values into a component (or storing them into memory).
@@ -221,7 +36,7 @@ pub struct LowerContext<'a, T: 'static> {
     /// canonical ABI. For example details like string encoding are contained
     /// here along with which memory pointers are relative to or what the memory
     /// allocation function is.
-    pub options: &'a Options,
+    options: OptionsIndex,
 
     /// Lowering happens within the context of a component instance and this
     /// field stores the type information of that component instance. This is
@@ -241,8 +56,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// Creates a new lowering context from the specified parameters.
     pub fn new(
         store: StoreContextMut<'a, T>,
-        options: &'a Options,
-        types: &'a ComponentTypes,
+        options: OptionsIndex,
         instance: Instance,
     ) -> LowerContext<'a, T> {
         #[cfg(all(debug_assertions, feature = "component-model-async"))]
@@ -251,10 +65,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             // case we call the guest's realloc function.
             store.0.with_blocking(|_, _| {});
         }
+        let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
-            store,
+            store: StoreContextMut(store),
             options,
-            types,
+            types: component.types(),
             instance,
             allow_realloc: true,
         }
@@ -271,14 +86,14 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn new_without_realloc(
         store: StoreContextMut<'a, T>,
-        options: &'a Options,
-        types: &'a ComponentTypes,
+        options: OptionsIndex,
         instance: Instance,
     ) -> LowerContext<'a, T> {
+        let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
-            store,
+            store: StoreContextMut(store),
             options,
-            types,
+            types: component.types(),
             instance,
             allow_realloc: false,
         }
@@ -294,6 +109,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         self.instance.id().get_mut(self.store.0)
     }
 
+    /// Returns the canonical options that are being used during lifting.
+    pub fn options(&self) -> &CanonicalOptions {
+        &self.instance().component().env_component().options[self.options]
+    }
+
     /// Returns a view into memory as a mutable slice of bytes.
     ///
     /// # Panics
@@ -301,7 +121,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// This will panic if memory has not been configured for this lowering
     /// (e.g. it wasn't present during the specification of canonical options).
     pub fn as_slice_mut(&mut self) -> &mut [u8] {
-        self.options.memory_mut(self.store.0)
+        self.instance.options_memory_mut(self.store.0, self.options)
     }
 
     /// Invokes the memory allocation function (which is style after `realloc`)
@@ -320,17 +140,46 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ) -> Result<usize> {
         assert!(self.allow_realloc);
 
-        let realloc_func_ty = Arc::clone(self.instance().component().realloc_func_ty());
-        self.options
-            .realloc(
-                &mut self.store,
-                &realloc_func_ty,
-                old,
-                old_size,
-                old_align,
-                new_size,
-            )
-            .map(|(_, ptr)| ptr)
+        let (component, store) = self.instance.component_and_store_mut(self.store.0);
+        let instance = self.instance.id().get(store);
+        let options = &component.env_component().options[self.options];
+        let realloc_ty = component.realloc_func_ty();
+        let realloc = match options.data_model {
+            CanonicalOptionsDataModel::Gc {} => unreachable!(),
+            CanonicalOptionsDataModel::LinearMemory(m) => m.realloc.unwrap(),
+        };
+        let realloc = instance.runtime_realloc(realloc);
+
+        let params = (
+            u32::try_from(old)?,
+            u32::try_from(old_size)?,
+            old_align,
+            u32::try_from(new_size)?,
+        );
+
+        type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
+
+        // Invoke the wasm malloc function using its raw and statically known
+        // signature.
+        let result = unsafe {
+            ReallocFunc::call_raw(&mut StoreContextMut(store), &realloc_ty, realloc, params)?
+        };
+
+        if result % old_align != 0 {
+            bail!("realloc return: result not aligned");
+        }
+        let result = usize::try_from(result)?;
+
+        if self
+            .as_slice_mut()
+            .get_mut(result..)
+            .and_then(|s| s.get_mut(..new_size))
+            .is_none()
+        {
+            bail!("realloc return: beyond end of memory")
+        }
+
+        Ok(result)
     }
 
     /// Returns a fixed mutable slice of memory `N` bytes large starting at
@@ -463,13 +312,14 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 /// operations (or loading from memory).
 #[doc(hidden)]
 pub struct LiftContext<'a> {
+    store_id: StoreId,
     /// Like lowering, lifting always has options configured.
-    pub options: &'a Options,
+    options: OptionsIndex,
 
     /// Instance type information, like with lowering.
     pub types: &'a Arc<ComponentTypes>,
 
-    memory: Option<&'a [u8]>,
+    memory: &'a [u8],
 
     instance: Pin<&'a mut ComponentInstance>,
     instance_handle: Instance,
@@ -492,23 +342,24 @@ impl<'a> LiftContext<'a> {
     #[inline]
     pub fn new(
         store: &'a mut StoreOpaque,
-        options: &'a Options,
+        options: OptionsIndex,
         instance_handle: Instance,
     ) -> LiftContext<'a> {
+        let store_id = store.id();
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.
-        let memory = options
-            .memory
-            .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
+        let memory =
+            instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
         let (calls, host_table, host_resource_data, instance, concurrent_state) =
             store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
         let (component, instance) = instance.component_and_self();
 
         LiftContext {
+            store_id,
             memory,
             options,
             types: component.types(),
@@ -521,6 +372,16 @@ impl<'a> LiftContext<'a> {
         }
     }
 
+    /// Returns the canonical options that are being used during lifting.
+    pub fn options(&self) -> &CanonicalOptions {
+        &self.instance.component().env_component().options[self.options]
+    }
+
+    /// Returns the `OptionsIndex` being used during lifting.
+    pub fn options_index(&self) -> OptionsIndex {
+        self.options
+    }
+
     /// Returns the entire contents of linear memory for this set of lifting
     /// options.
     ///
@@ -529,13 +390,13 @@ impl<'a> LiftContext<'a> {
     /// This will panic if memory has not been configured for this lifting
     /// operation.
     pub fn memory(&self) -> &'a [u8] {
-        self.memory.unwrap()
+        self.memory
     }
 
     /// Returns an identifier for the store from which this `LiftContext` was
     /// created.
     pub fn store_id(&self) -> StoreId {
-        self.options.store_id
+        self.store_id
     }
 
     /// Returns the component instance that is being lifted from.

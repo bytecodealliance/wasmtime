@@ -12,8 +12,8 @@ use anyhow::Context as _;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex,
-    TypeTuple,
+    CanonicalOptions, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
+    TypeFuncIndex, TypeTuple,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -533,14 +533,18 @@ impl Func {
     pub(crate) fn abi_info<'a>(
         &self,
         store: &'a StoreOpaque,
-    ) -> (Options, InstanceFlags, TypeFuncIndex, &'a CanonicalOptions) {
+    ) -> (
+        OptionsIndex,
+        InstanceFlags,
+        TypeFuncIndex,
+        &'a CanonicalOptions,
+    ) {
         let vminstance = self.instance.id().get(store);
         let component = vminstance.component();
         let (ty, _def, options_index) = component.export_lifted_function(self.index);
         let raw_options = &component.env_component().options[options_index];
-        let options = Options::new_index(store, self.instance, options_index);
         (
-            options,
+            options_index,
             vminstance.instance_flags(raw_options.instance),
             ty,
             raw_options,
@@ -909,8 +913,8 @@ impl Func {
         may_enter: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let types = self.instance.id().get(store.0).component().types().clone();
-        let (options, mut flags, ty, _) = self.abi_info(store.0);
+        let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
+        let async_ = options.async_;
 
         // Test the "may enter" flag which is a "lock" on this instance.
         // This is immediately set to `false` afterwards and note that
@@ -932,8 +936,9 @@ impl Func {
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
         }
-        let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, self.instance);
-        let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
+        let mut cx = LowerContext::new(store.as_context_mut(), options_idx, self.instance);
+        let param_ty = InterfaceType::Tuple(cx.types[ty].params);
+        let result = lower(&mut cx, param_ty);
         unsafe { flags.set_may_leave(true) };
         result?;
 
@@ -942,7 +947,7 @@ impl Func {
         // post-return call being required as we're about to enter wasm and
         // afterwards need a post-return.
         unsafe {
-            if may_enter && options.async_() {
+            if may_enter && async_ {
                 flags.set_may_enter(true);
             } else {
                 flags.set_needs_post_return(true);
@@ -963,7 +968,7 @@ impl Func {
         lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
     ) -> Result<R> {
         let (options, _flags, ty, _) = self.abi_info(store);
-        let mut cx = LiftContext::new(store, &options, self.instance);
+        let mut cx = LiftContext::new(store, options, self.instance);
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
     }
