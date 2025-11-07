@@ -302,3 +302,8 @@
 (rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
 (rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
 
+
+;; a < b ^^ a > b => (a ≠ b)
+(rule (simplify (bxor ty (slt cty x y) (sgt cty x y))) (ne cty x y))
+(rule (simplify (bxor ty (ult cty x y) (ugt cty x y))) (ne cty x y))
+
