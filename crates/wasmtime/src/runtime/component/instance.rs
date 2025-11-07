@@ -572,7 +572,7 @@ impl Instance {
         //   read-only access.
         //
         // Putting all of this together it's not possible for a component,
-        // within a component instance, within a store, to get deallocated while
+        // within a component instance, within a store, to be deallocated or mutated while
         // a store is in use. Consequently it should be safe to simultaneously
         // have a borrow to both at the same time, even if the store has a
         // mutable borrow itself.
