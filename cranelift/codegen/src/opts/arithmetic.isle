@@ -350,14 +350,12 @@
 ;; (x * y) (==/!=) z --> x (==/!=) (y / z) when z is odd and divides y
 (rule (simplify 
 	(ne cty (imul ty x (iconst_u ty y)) (iconst_u ty z)))
-		(if-let true (u64_ne y 0))
 		(if-let 0 (u64_rem z y))
 		(if-let 1 (u64_rem y 2))
 	(ne cty x (iconst ty (imm64 (u64_div z y)))))
 
 (rule (simplify 
 	(eq cty (imul ty x (iconst_u ty y)) (iconst_u ty z)))
-		(if-let true (u64_ne y 0))
 		(if-let 0 (u64_rem z y))
 		(if-let 1 (u64_rem y 2))
 	(eq cty x (iconst ty (imm64 (u64_div z y)))))
