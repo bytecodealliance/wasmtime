@@ -441,3 +441,15 @@ block0(v0: i64, v1: i64):
 ; run: %simplify_select_ult_ne_i64(7, 9) == 0
 ; run: %simplify_select_ult_ne_i64(3, 1) == 1
 ; run: %simplify_select_ult_ne_i64(-1, 42) == 1
+
+function %test_slt_select_consts(i8, i32) -> i8 fast {
+block0(v0: i8, v1: i32):
+    v2 = iconst.i32 20
+    v3 = iconst.i32 10
+    v4 = select v0, v2, v1
+    v5 = select v0, v3, v1
+    v6 = icmp slt v4, v5
+    return v6
+}
+
+; run: %test_slt_select_consts(3, 42) == 0

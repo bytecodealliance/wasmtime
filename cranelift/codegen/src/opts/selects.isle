@@ -102,3 +102,11 @@
 (rule (simplify (select ty d a (select ty d _ y))) (select ty d a y))
 (rule (simplify (select ty d (select ty d x _) a)) (select ty d x a))
 
+;; (n < m) → ((if c then m else x) < (if c then n else x)) = false
+(rule
+  (simplify (slt cty
+              (select ty c (iconst_s ty z) x)
+              (select ty c (iconst_s ty y) x)))
+  (if-let true (i64_lt y z))
+  (iconst_u cty 0))
+
