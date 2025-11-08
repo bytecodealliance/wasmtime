@@ -404,7 +404,6 @@ block0(v0: i32, v1: i32):
     ; check: return v5
 }
 
-
 ;; (x - y) - x => -y
 function %simplify_sub_sub_self(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -413,5 +412,30 @@ block0(v0: i32, v1: i32):
     return v3
     ; check: v4 = ineg v1
     ; check: return v4
+}
+
+;; (x * y) (==/!=) z --> x (==/!=) (y / z) when z is odd and divides y
+function %eq_mul_odd(i32) -> i8 {
+block0(v0: i32):
+	v1 = iconst.i32 7
+	v2 = iconst.i32 42
+  v3 = imul v0, v1
+  v4 = icmp eq v3, v2
+  return v4
+  ; check: v5 = iconst.i32 6
+  ; check: v6 = icmp eq v0, v5
+  ; return v6
+}
+
+function %ne_mul_odd(i32) -> i8 {
+block0(v0: i32):
+	v1 = iconst.i32 7
+	v2 = iconst.i32 42
+  v3 = imul v0, v1
+  v4 = icmp ne v3, v2
+  return v4
+  ; check: v5 = iconst.i32 6
+  ; check: v6 = icmp ne v0, v5
+  ; return v6
 }
 
