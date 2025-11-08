@@ -412,6 +412,7 @@ block0(v0: i32, v1: i32):
     return v3
     ; check: v4 = ineg v1
     ; check: return v4
+}
 
 ;; (x * y) (==/!=) z --> x (==/!=) (y / z) when z is odd and divides y
 function %eq_mul_odd(i32) -> i8 {
