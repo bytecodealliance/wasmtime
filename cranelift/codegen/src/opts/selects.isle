@@ -102,9 +102,22 @@
 (rule (simplify (select ty d a (select ty d _ y))) (select ty d a y))
 (rule (simplify (select ty d (select ty d x _) a)) (select ty d x a))
 
+(rule (simplify (sgt ty (smin _ x y) x)) (iconst_u ty 0))
+(rule (simplify (sgt ty (smin _ x y) y)) (iconst_u ty 0))
+(rule (simplify (sgt ty (smin _ y x) x)) (iconst_u ty 0))
+(rule (simplify (sgt ty (smin _ y x) y)) (iconst_u ty 0))
+(rule (simplify (slt ty x (smin _ x y))) (iconst_u ty 0))
+(rule (simplify (slt ty x (smin _ y x))) (iconst_u ty 0))
+(rule (simplify (slt ty y (smin _ x y))) (iconst_u ty 0))
+(rule (simplify (slt ty y (smin _ y x))) (iconst_u ty 0))
+(rule (simplify (ugt ty (umin _ x y) x)) (iconst_u ty 0))
+(rule (simplify (ugt ty (umin _ x y) y)) (iconst_u ty 0))
+(rule (simplify (ugt ty (umin _ y x) x)) (iconst_u ty 0))
+(rule (simplify (ugt ty (umin _ y x) y)) (iconst_u ty 0))
+(rule (simplify (ult ty x (umin _ x y))) (iconst_u ty 0))
+(rule (simplify (ult ty x (umin _ y x))) (iconst_u ty 0))
+(rule (simplify (ult ty y (umin _ x y))) (iconst_u ty 0))
+(rule (simplify (ult ty y (umin _ y x))) (iconst_u ty 0))
 
-(rule (simplify (sgt cty (smin _ x y) x)) (iconst_u cty 0))
-(rule (simplify (sgt cty (smin _ x y) y)) (iconst_u cty 0))
-(rule (simplify (ugt cty (umin _ x y) x)) (iconst_u cty 0))
-(rule (simplify (ugt cty (umin _ x y) y)) (iconst_u cty 0))
+
 
