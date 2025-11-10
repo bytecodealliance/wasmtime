@@ -350,45 +350,43 @@
 ;; (x * C) (==/!=) D --> x (==/!=) (D / C) when C is odd and divides D
 (rule
   (simplify (ne ty (iconst_u ty1 x) (imul ty1 y (iconst_u ty1 z))))
-  (if-let 0 (u64_rem x z))
+  (if-let 0 (u64_checked_rem x z))
   (if-let 1 (u64_rem z 2))
   (ne ty y (iconst ty1 (imm64 (u64_div x z)))))
 (rule
   (simplify (ne ty (iconst_u ty1 x) (imul ty1 (iconst_u ty1 y) z)))
-  (if-let 0 (u64_rem x y))
+  (if-let 0 (u64_checked_rem x y))
   (if-let 1 (u64_rem y 2))
   (ne ty z (iconst ty1 (imm64 (u64_div x y)))))
 (rule
   (simplify (ne ty (imul ty1 x (iconst_u ty1 y)) (iconst_u ty1 z)))
-  (if-let 0 (u64_rem z y))
+  (if-let 0 (u64_checked_rem z y))
   (if-let 1 (u64_rem y 2))
   (ne ty x (iconst ty1 (imm64 (u64_div z y)))))
 (rule
   (simplify (ne ty (imul ty1 (iconst_u ty1 x) y) (iconst_u ty1 z)))
-  (if-let 0 (u64_rem z x))
+  (if-let 0 (u64_checked_rem z x))
   (if-let 1 (u64_rem x 2))
   (ne ty y (iconst ty1 (imm64 (u64_div z x)))))
 
 
 (rule
   (simplify (eq ty (iconst_u ty1 x) (imul ty1 y (iconst_u ty1 z))))
-  (if-let 0 (u64_rem x z))
+  (if-let 0 (u64_checked_rem x z))
   (if-let 1 (u64_rem z 2))
   (eq ty y (iconst ty1 (imm64 (u64_div x z)))))
 (rule
   (simplify (eq ty (iconst_u ty1 x) (imul ty1 (iconst_u ty1 y) z)))
-  (if-let 0 (u64_rem x y))
+  (if-let 0 (u64_checked_rem x y))
   (if-let 1 (u64_rem y 2))
   (eq ty z (iconst ty1 (imm64 (u64_div x y)))))
 (rule
   (simplify (eq ty (imul ty1 x (iconst_u ty1 y)) (iconst_u ty1 z)))
-  (if-let 0 (u64_rem z y))
+  (if-let 0 (u64_checked_rem z y))
   (if-let 1 (u64_rem y 2))
   (eq ty x (iconst ty1 (imm64 (u64_div z y)))))
 (rule
   (simplify (eq ty (imul ty1 (iconst_u ty1 x) y) (iconst_u ty1 z)))
-  (if-let 0 (u64_rem z x))
+  (if-let 0 (u64_checked_rem z x))
   (if-let 1 (u64_rem x 2))
   (eq ty y (iconst ty1 (imm64 (u64_div z x)))))
-
-
