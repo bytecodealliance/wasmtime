@@ -125,7 +125,7 @@ fn pulley_emit<P>(
     P: PulleyTargetKind,
 {
     match inst {
-        // Pseduo-instructions that don't actually encode to anything.
+        // Pseudo-instructions that don't actually encode to anything.
         Inst::Args { .. } | Inst::Rets { .. } | Inst::DummyUse { .. } => {}
 
         Inst::TrapIf { cond, code } => {

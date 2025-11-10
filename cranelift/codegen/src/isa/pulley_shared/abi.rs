@@ -166,7 +166,7 @@ where
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
         let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianess to avoid
+        // Stack loads/stores of vectors always use little-endianness to avoid
         // implementing a byte-swap of vectors on big-endian platforms.
         if ty.is_vector() {
             flags.set_endianness(ir::Endianness::Little);
@@ -176,7 +176,7 @@ where
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
         let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianess to avoid
+        // Stack loads/stores of vectors always use little-endianness to avoid
         // implementing a byte-swap of vectors on big-endian platforms.
         if ty.is_vector() {
             flags.set_endianness(ir::Endianness::Little);

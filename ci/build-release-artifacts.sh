@@ -58,7 +58,7 @@ if [[ "$build" = *-min ]]; then
   cmake_flags="$cmake_flags -DWASMTIME_FEATURE_DISABLE_LOGGING=ON"
   cmake_flags="$cmake_flags -DWASMTIME_USER_CARGO_BUILD_OPTIONS:LIST=$build_std;$build_std_features"
 else
-  # For release builds the CLI is built a bit more feature-ful than the Cargo
+  # For release builds the CLI is built a bit more feature-full than the Cargo
   # defaults to provide artifacts that can do as much as possible.
   bin_flags="--features all-arch,component-model"
 fi
