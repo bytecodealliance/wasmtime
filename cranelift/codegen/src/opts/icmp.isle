@@ -303,8 +303,14 @@
 (rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
 
 ;; a < b ^^ a > b => (a ≠ b)
-(rule (simplify (bxor ty (slt cty x y) (sgt cty x y))) (ne cty x y))
-(rule (simplify (bxor ty (ult cty x y) (ugt cty x y))) (ne cty x y))
+(rule (simplify (bxor ty (sgt ty x y) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (sgt ty x y) (slt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (slt ty x y) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (slt ty x y) (slt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (ugt ty x y) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (ugt ty x y) (ult ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (ult ty x y) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
 (rule (simplify (band ty (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
