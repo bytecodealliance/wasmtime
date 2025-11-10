@@ -3059,6 +3059,7 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
 
         let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        let reg2 = writable!(context.any_fpr(self)?);
 
         // This works by using a lookup table to determine the count of bits
         // set in the upper 4 bits and lower 4 bits separately and then adding
@@ -3103,7 +3104,6 @@ impl Masm for MacroAssembler {
             let address = masm.asm.add_constant(&[
                 0x0, 0x1, 0x1, 0x2, 0x1, 0x2, 0x2, 0x3, 0x1, 0x2, 0x2, 0x3, 0x2, 0x3, 0x3, 0x4,
             ]);
-            let reg2 = writable!(context.any_fpr(masm)?);
             masm.asm
                 .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlags::trusted());
             // Use the upper 4 bits as an index into the lookup table.
