@@ -652,7 +652,6 @@ impl<D> StreamProducer<D> for bytes::BytesMut {
 
 /// Represents the buffer for a host- or guest-initiated stream write.
 pub struct Source<'a, T> {
-    instance: Option<Instance>,
     id: TableId<TransmitState>,
     host_buffer: Option<&'a mut dyn WriteBuffer<T>>,
 }
@@ -661,7 +660,6 @@ impl<'a, T> Source<'a, T> {
     /// Reborrow `self` so it can be used again later.
     pub fn reborrow(&mut self) -> Source<'_, T> {
         Source {
-            instance: self.instance,
             id: self.id,
             host_buffer: self.host_buffer.as_deref_mut(),
         }
@@ -689,14 +687,14 @@ impl<'a, T> Source<'a, T> {
                 address,
                 count,
                 options,
+                instance,
                 ..
             } = &transmit.write
             else {
                 unreachable!()
             };
 
-            let cx =
-                &mut LiftContext::new(store.0.store_opaque_mut(), options, self.instance.unwrap());
+            let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance);
             let ty = payload(ty, cx.types);
             let old_remaining = buffer.remaining_capacity();
             lift::<T, B>(
@@ -1837,9 +1835,7 @@ impl TableDebug for TransmitState {
 }
 
 type PollStream = Box<
-    dyn Fn(Option<Instance>) -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
-        + Send
-        + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>> + Send + Sync,
 >;
 
 type TryInto = Box<dyn Fn(TypeId) -> Option<Box<dyn Any>> + Send + Sync>;
@@ -2217,7 +2213,7 @@ impl<T> StoreContextMut<'_, T> {
         let mut dropped = false;
         let produce = Box::new({
             let producer = producer.clone();
-            move |_instance| {
+            move || {
                 let producer = producer.clone();
                 async move {
                     let (mut mine, mut buffer) = producer.lock().unwrap().take().unwrap();
@@ -2395,7 +2391,7 @@ impl<T> StoreContextMut<'_, T> {
         let consumer = Arc::new(Mutex::new(Some(Box::pin(consumer))));
         let consume_with_buffer = {
             let consumer = consumer.clone();
-            async move |instance, mut host_buffer: Option<&mut dyn WriteBuffer<C::Item>>| {
+            async move |mut host_buffer: Option<&mut dyn WriteBuffer<C::Item>>| {
                 let mut mine = consumer.lock().unwrap().take().unwrap();
 
                 let host_buffer_remaining_before =
@@ -2413,7 +2409,6 @@ impl<T> StoreContextMut<'_, T> {
                             cx,
                             token.as_context_mut(store),
                             Source {
-                                instance,
                                 id,
                                 host_buffer: host_buffer.as_deref_mut(),
                             },
@@ -2494,9 +2489,9 @@ impl<T> StoreContextMut<'_, T> {
         };
         let consume = {
             let consume = consume_with_buffer.clone();
-            Box::new(move |instance| {
+            Box::new(move || {
                 let consume = consume.clone();
-                async move { consume(instance, None).await }.boxed()
+                async move { consume(None).await }.boxed()
             })
         };
 
@@ -2509,8 +2504,8 @@ impl<T> StoreContextMut<'_, T> {
                     cancel_waker: None,
                 };
             }
-            &WriteState::GuestReady { instance, .. } => {
-                let future = consume(Some(instance));
+            &WriteState::GuestReady { .. } => {
+                let future = consume();
                 transmit.read = ReadState::HostReady {
                     consume,
                     guest_offset: 0,
@@ -2523,7 +2518,7 @@ impl<T> StoreContextMut<'_, T> {
                 let WriteState::HostReady { produce, .. } = mem::replace(
                     &mut transmit.write,
                     WriteState::HostReady {
-                        produce: Box::new(|_| unreachable!()),
+                        produce: Box::new(|| unreachable!()),
                         try_into: Box::new(|_| unreachable!()),
                         guest_offset: 0,
                         cancel: false,
@@ -2536,7 +2531,7 @@ impl<T> StoreContextMut<'_, T> {
                 transmit.read = ReadState::HostToHost {
                     accept: Box::new(move |input| {
                         let consume = consume_with_buffer.clone();
-                        async move { consume(None, Some(input.get_mut::<C::Item>())).await }.boxed()
+                        async move { consume(Some(input.get_mut::<C::Item>())).await }.boxed()
                     }),
                     buffer: Vec::new(),
                     limit: 0,
@@ -2553,7 +2548,7 @@ impl<T> StoreContextMut<'_, T> {
                             break Ok(());
                         }
 
-                        match produce(None).await? {
+                        match produce().await? {
                             StreamResult::Completed | StreamResult::Cancelled => {}
                             StreamResult::Dropped => break Ok(()),
                         }
@@ -2745,7 +2740,7 @@ impl Instance {
         guest_offset: usize,
         cancel: bool,
     ) -> Result<ReturnCode> {
-        let mut future = consume(Some(self));
+        let mut future = consume();
         store.concurrent_state_mut().get_mut(transmit_id)?.read = ReadState::HostReady {
             consume,
             guest_offset,
@@ -2787,7 +2782,7 @@ impl Instance {
         guest_offset: usize,
         cancel: bool,
     ) -> Result<ReturnCode> {
-        let mut future = produce(Some(self));
+        let mut future = produce();
         store.concurrent_state_mut().get_mut(transmit_id)?.write = WriteState::HostReady {
             produce,
             try_into,
