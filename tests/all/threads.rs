@@ -295,3 +295,11 @@ fn test_memory_size_accessibility() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn create_shared_memory_through_memory() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    assert!(Memory::new(&mut store, MemoryType::shared(1, 1)).is_err());
+    Ok(())
+}

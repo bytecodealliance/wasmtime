@@ -285,6 +285,9 @@ impl Memory {
 
     /// Helper function for attaching the memory to a "frankenstein" instance
     fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
+        if ty.is_shared() {
+            bail!("shared memories must be created through `SharedMemory`")
+        }
         generate_memory_export(store, &ty, None)
     }
 
