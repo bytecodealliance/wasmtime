@@ -114,7 +114,7 @@ impl StackType {
                 // Anything can accept any type - just pop if available
                 // If stack is empty, synthesize null (anyref compatible)
                 if stack.pop().is_none() {
-                    // Create a null externref (will be converted if needed)
+                    // Create a null externref
                     Self::emit(GcOp::Null(), stack, out, num_types);
                     stack.pop(); // consume just-synthesized externref
                 }
