@@ -250,7 +250,7 @@ fn test_wat_string() -> mutatis::Result<()> {
       global.set 0
       global.get 0
       struct.new 5
-      call 3
+      drop
       drop
       drop
       drop

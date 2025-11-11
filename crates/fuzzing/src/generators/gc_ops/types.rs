@@ -1,6 +1,7 @@
 //! Types for the `gc` operations.
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
+use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -86,5 +87,82 @@ impl Types {
                 .all(|ty| self.rec_groups.contains(&ty.rec_group)),
             "type_defs must only reference existing rec_groups"
         );
+    }
+}
+
+/// This is used to track the requirements for the operands of an operation.
+#[derive(Copy, Clone, Debug)]
+pub enum StackType {
+    /// Any value is used for reauested operand not a type left on stack (only for Drop and specially handled ops)
+    Anything,
+    /// `externref`
+    ExternRef,
+    /// None = any non-null `(ref $*)`; Some(t) = exact `(ref $t)`
+    Struct(Option<u32>),
+}
+
+impl StackType {
+    /// Fixes the stack type to match the given requirement.
+    pub fn fixup_stack_type(
+        req: StackType,
+        stack: &mut Vec<StackType>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+    ) {
+        match req {
+            Self::Anything => {
+                // Anything can accept any type - just pop if available
+                // If stack is empty, synthesize null (anyref compatible)
+                if stack.pop().is_none() {
+                    // Create a null externref (will be converted if needed)
+                    Self::emit(GcOp::Null(), stack, out, num_types);
+                    stack.pop(); // consume just-synthesized externref
+                }
+            }
+            Self::ExternRef => match stack.last() {
+                Some(Self::ExternRef) => {
+                    stack.pop();
+                }
+                _ => {
+                    Self::emit(GcOp::Null(), stack, out, num_types);
+                    stack.pop(); // consume just-synthesized externref
+                }
+            },
+            Self::Struct(wanted) => {
+                let ok = match (wanted, stack.last()) {
+                    (Some(wanted), Some(Self::Struct(Some(s)))) => *s == wanted,
+                    (None, Some(Self::Struct(_))) => true,
+                    _ => false,
+                };
+
+                if ok {
+                    stack.pop();
+                } else {
+                    // Ensure there *is* a struct to consume.
+                    let t = match wanted {
+                        Some(t) => Self::clamp(t, num_types),
+                        None => Self::clamp(0, num_types),
+                    };
+                    Self::emit(GcOp::StructNew(t), stack, out, num_types);
+                    stack.pop(); // consume the synthesized struct
+                }
+            }
+        }
+    }
+
+    pub(crate) fn emit(op: GcOp, stack: &mut Vec<Self>, out: &mut Vec<GcOp>, num_types: u32) {
+        out.push(op);
+        op.result_types().iter().for_each(|ty| {
+            // Clamp struct type indices when pushing to stack
+            let clamped_ty = match ty {
+                Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
+                other => *other,
+            };
+            stack.push(clamped_ty);
+        });
+    }
+
+    fn clamp(t: u32, n: u32) -> u32 {
+        if n == 0 { 0 } else { t % n }
     }
 }
