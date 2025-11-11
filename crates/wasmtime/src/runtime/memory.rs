@@ -285,6 +285,9 @@ impl Memory {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         ty: MemoryType,
     ) -> Result<Memory> {
+        if ty.is_shared() {
+            bail!("shared memories must be created through `SharedMemory`")
+        }
         generate_memory_export(store, limiter, &ty, None).await
     }
 
