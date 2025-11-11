@@ -263,6 +263,9 @@ fn multiple_globals_memories_and_instances() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn core_dump_with_shared_memory() -> Result<()> {
+    if super::threads::engine().is_none() {
+        return Ok(());
+    }
     let mut config = Config::new();
     config.coredump_on_trap(true);
     let engine = Engine::new(&config)?;
