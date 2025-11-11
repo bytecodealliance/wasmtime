@@ -365,7 +365,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     // Verify the sequence validates correctly
     let wasm = ops.to_wasm_binary();
     let wat = wasmprinter::print_bytes(&wasm).unwrap();
-    log::debug!("wat:\n{}", wat);
+    log::debug!("{wat}");
     let feats = wasmparser::WasmFeatures::default();
     feats.reference_types();
     feats.gc();
