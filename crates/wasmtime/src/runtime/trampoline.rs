@@ -14,7 +14,7 @@ use self::memory::create_memory;
 use self::table::create_table;
 use self::tag::create_tag;
 use crate::prelude::*;
-use crate::runtime::vm::SharedMemory;
+use crate::runtime::vm::{ExportMemory, SharedMemory};
 use crate::store::{StoreOpaque, StoreResourceLimiter};
 use crate::{MemoryType, TableType, TagType};
 use wasmtime_environ::{MemoryIndex, TableIndex, TagIndex};
@@ -24,7 +24,7 @@ pub async fn generate_memory_export(
     limiter: Option<&mut StoreResourceLimiter<'_>>,
     m: &MemoryType,
     preallocation: Option<&SharedMemory>,
-) -> Result<crate::Memory> {
+) -> Result<ExportMemory> {
     let id = store.id();
     let instance = create_memory(store, limiter, m, preallocation).await?;
     Ok(store

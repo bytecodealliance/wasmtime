@@ -5,7 +5,7 @@
 use crate::OpaqueRootScope;
 use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
-use crate::runtime::vm::export::Export;
+use crate::runtime::vm::export::{Export, ExportMemory};
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
@@ -586,19 +586,48 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out-of-bounds for this instance.
-    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> crate::Memory {
-        let (id, def_index) = if let Some(def_index) = self.env_module().defined_memory_index(index)
-        {
-            (self.id, def_index)
+    #[cfg_attr(
+        not(feature = "threads"),
+        expect(unused_variables, reason = "definitions cfg'd to dummy",)
+    )]
+    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> ExportMemory {
+        let module = self.env_module();
+        if module.memories[index].shared {
+            let (memory, import) =
+                if let Some(def_index) = self.env_module().defined_memory_index(index) {
+                    (
+                        self.get_defined_memory(def_index),
+                        self.get_defined_memory_vmimport(def_index),
+                    )
+                } else {
+                    let import = self.imported_memory(index);
+                    // SAFETY: validity of this `Instance` guarantees validity of
+                    // the `vmctx` pointer being read here to find the transitive
+                    // `InstanceId` that the import is associated with.
+                    let instance = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()) };
+                    (instance.get_defined_memory(import.index), *import)
+                };
+
+            let vm = memory.as_shared_memory().unwrap().clone();
+            ExportMemory::Shared(vm, import)
         } else {
-            let import = self.imported_memory(index);
-            // SAFETY: validity of this `Instance` guarantees validity of the
-            // `vmctx` pointer being read here to find the transitive
-            // `InstanceId` that the import is associated with.
-            let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
-            (id, import.index)
-        };
-        crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
+            let (id, def_index) =
+                if let Some(def_index) = self.env_module().defined_memory_index(index) {
+                    (self.id, def_index)
+                } else {
+                    let import = self.imported_memory(index);
+                    // SAFETY: validity of this `Instance` guarantees validity of the
+                    // `vmctx` pointer being read here to find the transitive
+                    // `InstanceId` that the import is associated with.
+                    let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
+                    (id, import.index)
+                };
+
+            // SAFETY: `from_raw` requires that the memory is not shared, which
+            // was tested above in this if/else.
+            let store_id = StoreInstanceId::new(store, id);
+            ExportMemory::Unshared(unsafe { crate::Memory::from_raw(store_id, def_index) })
+        }
     }
 
     /// Lookup a global by index.
@@ -996,6 +1025,14 @@ impl Instance {
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&self, index: DefinedMemoryIndex) -> &Memory {
         &self.memories[index].1
+    }
+
+    pub fn get_defined_memory_vmimport(&self, index: DefinedMemoryIndex) -> VMMemoryImport {
+        crate::runtime::vm::VMMemoryImport {
+            from: self.memory_ptr(index).into(),
+            vmctx: self.vmctx().into(),
+            index,
+        }
     }
 
     /// Do a `memory.copy`
@@ -1462,7 +1499,7 @@ impl Instance {
     pub fn all_memories(
         &self,
         store: StoreId,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + '_ {
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + '_ {
         self.env_module()
             .memories
             .iter()
@@ -1473,7 +1510,7 @@ impl Instance {
     pub fn defined_memories<'a>(
         &'a self,
         store: StoreId,
-    ) -> impl ExactSizeIterator<Item = crate::Memory> + 'a {
+    ) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
         let num_imported = self.env_module().num_imported_memories;
         self.all_memories(store)
             .skip(num_imported)
@@ -1503,9 +1540,9 @@ impl Instance {
             }
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
-            EntityIndex::Memory(i) => Export::Memory {
-                memory: self.get_exported_memory(store, i),
-                shared: self.env_module().memories[i].shared,
+            EntityIndex::Memory(i) => match self.get_exported_memory(store, i) {
+                ExportMemory::Unshared(m) => Export::Memory(m),
+                ExportMemory::Shared(m, i) => Export::SharedMemory(m, i),
             },
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
         }
