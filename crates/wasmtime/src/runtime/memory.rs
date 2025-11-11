@@ -843,7 +843,7 @@ impl SharedMemory {
     /// Returns the size, in WebAssembly pages, of this wasm memory.
     pub fn size(&self) -> u64 {
         let byte_size = u64::try_from(self.data_size()).unwrap();
-        let page_size = u64::from(self.page_size());
+        let page_size = self.page_size();
         byte_size / page_size
     }
 
@@ -916,7 +916,7 @@ impl SharedMemory {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
                 // the locked region.
-                Ok(u64::try_from(old_size).unwrap() / u64::from(self.page_size()))
+                Ok(u64::try_from(old_size).unwrap() / self.page_size())
             }
             None => bail!("failed to grow memory by `{delta}`"),
         }
