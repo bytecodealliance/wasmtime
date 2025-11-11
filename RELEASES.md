@@ -1,3 +1,14 @@
+## 37.0.3
+
+Released 2025-11-11.
+
+### Fixed
+
+* Prevent using shared memories with `Memory`.
+  [CVE-2025-64345](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hc7m-r6v8-hg9q)
+
+--------------------------------------------------------------------------------
+
 ## 37.0.2
 
 Released 2025-10-07.
