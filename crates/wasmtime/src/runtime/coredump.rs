@@ -41,7 +41,8 @@ impl WasmCoreDump {
     pub(crate) fn new(store: &mut StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
         let modules: Vec<_> = store.modules().all_modules().cloned().collect();
         let instances: Vec<Instance> = store.all_instances().collect();
-        let store_memories: Vec<Memory> = store.all_memories().collect();
+        let mut store_memories: Vec<Memory> = store.all_memories().collect();
+        store_memories.retain(|m| !m.wasmtime_ty(store).shared);
 
         let mut store_globals: Vec<Global> = vec![];
         store.for_each_global(|_store, global| store_globals.push(global));
@@ -268,7 +269,12 @@ impl WasmCoreDump {
                     .all_memories(store.0)
                     .collect::<Vec<_>>()
                     .into_iter()
-                    .map(|(_i, memory)| memory_to_idx[&memory.hash_key(&store.0)])
+                    .map(|(_i, memory)| {
+                        memory_to_idx
+                            .get(&memory.hash_key(&store.0))
+                            .copied()
+                            .unwrap_or(u32::MAX)
+                    })
                     .collect::<Vec<_>>();
 
                 let globals = instance
