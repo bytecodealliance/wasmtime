@@ -132,6 +132,8 @@ pub use self::func::{
 pub use self::has_data::*;
 pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
+#[cfg(feature = "caller")]
+pub use self::linker::CallerInstance;
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny, ResourceDynamic};
 pub use self::types::{ResourceType, Type};

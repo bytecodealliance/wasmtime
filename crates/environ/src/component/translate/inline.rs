@@ -45,10 +45,13 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
+use crate::component::dfg::{CoreInstanceStructure, RuntimeComponentInstanceStructure, Source};
 use crate::component::translate::*;
 use crate::{EntityType, IndexType};
 use core::str::FromStr;
+use sha2::{Digest, Sha256};
 use std::borrow::Cow;
+use std::ops::Index;
 use wasmparser::component_types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
 
 pub(super) fn run(
@@ -63,6 +66,7 @@ pub(super) fn run(
         result: Default::default(),
         import_path_interner: Default::default(),
         runtime_instances: PrimaryMap::default(),
+        core_def_to_sources: Default::default(),
     };
 
     let index = RuntimeComponentInstanceIndex::from_u32(0);
@@ -124,7 +128,17 @@ pub(super) fn run(
     // the root frame which are then used for recording the exports of the
     // component.
     inliner.result.num_runtime_component_instances += 1;
-    let frame = InlinerFrame::new(index, result, ComponentClosure::default(), args, None);
+    let mut instance_structure: RuntimeComponentInstanceStructure = Default::default();
+    // Root is always 0
+    instance_structure.path = "0".to_string();
+    let frame = InlinerFrame::new(
+        index,
+        result,
+        ComponentClosure::default(),
+        args,
+        None,
+        instance_structure,
+    );
     let resources_snapshot = types.resources_mut().clone();
     let mut frames = vec![(frame, resources_snapshot)];
     let exports = inliner.run(types, &mut frames)?;
@@ -169,6 +183,8 @@ struct Inliner<'a> {
 
     /// Origin information about where each runtime instance came from
     runtime_instances: PrimaryMap<dfg::InstanceId, InstanceModule>,
+
+    core_def_to_sources: HashMap<dfg::CoreDef, Source>,
 }
 
 /// A "stack frame" as part of the inlining process, or the progress through
@@ -221,6 +237,8 @@ struct InlinerFrame<'a> {
     ///
     /// This is `Some` for all subcomponents and `None` for the root component.
     instance_ty: Option<ComponentInstanceTypeId>,
+
+    instance_structure: RuntimeComponentInstanceStructure,
 }
 
 /// "Closure state" for a component which is resolved from the `ClosedOverVars`
@@ -354,6 +372,44 @@ struct ComponentDef<'a> {
     closure: ComponentClosure<'a>,
 }
 
+fn record_core_def_from_export(
+    name: &str,
+    def: ComponentItemDef,
+    types: &ComponentTypesBuilder,
+    map: &mut HashMap<String, dfg::CoreDef>,
+) -> Result<()> {
+    match &def {
+        ComponentItemDef::Instance(instance) => match instance {
+            ComponentInstanceDef::Import(path, ty) => {
+                for (name, ty) in types[*ty].exports.iter() {
+                    let path = path.push(name);
+                    let def = ComponentItemDef::from_import(path, *ty)?;
+                    record_core_def_from_export(name, def, types, map)?;
+                }
+            }
+
+            ComponentInstanceDef::Items(imap, _) => {
+                for (name, def) in imap {
+                    record_core_def_from_export(name, def.clone(), types, map)?;
+                }
+            }
+            _ => {}
+        },
+        _ => {}
+    };
+    match def {
+        ComponentItemDef::Func(func) => match func {
+            // If Lifted function, return the original core function
+            ComponentFuncDef::Lifted { func, .. } => {
+                map.insert(name.to_string(), func);
+            }
+            _ => {}
+        },
+        _ => {}
+    };
+    Ok(())
+}
+
 impl<'a> Inliner<'a> {
     /// Symbolically instantiates a component using the type information and
     /// `frames` provided.
@@ -407,7 +463,21 @@ impl<'a> Inliner<'a> {
                         .map(|(name, item)| Ok((*name, frame.item(*item, types)?)))
                         .collect::<Result<_>>()?;
                     let instance_ty = frame.instance_ty;
-                    let (_, snapshot) = frames.pop().unwrap();
+                    let (mut fr, snapshot) = frames.pop().unwrap();
+
+                    // When we have finished processing a frame, we add the corresponding
+                    // instance structure to the instantiation graph.
+                    // We only track components that instantiate core modules.
+                    if fr.instance_structure.core_instances.len() != 0 {
+                        self.add_component_exports(types, &exports, &mut fr)?;
+
+                        // Add a new runtime instance structure corresponding to the current RuntimeComponentInstanceIndex
+                        self.result
+                            .instantiation_graph
+                            .runtime_instances_mut()
+                            .insert(fr.instance_structure.path.clone(), fr.instance_structure);
+                    }
+
                     *types.resources_mut() = snapshot;
                     match frames.last_mut() {
                         Some((parent, _)) => {
@@ -418,6 +488,28 @@ impl<'a> Inliner<'a> {
                 }
             }
         }
+    }
+
+    //TODO: Add some docs here
+    fn add_component_exports(
+        &mut self,
+        types: &mut ComponentTypesBuilder,
+        exports: &IndexMap<&str, ComponentItemDef>,
+        fr: &mut InlinerFrame,
+    ) -> Result<()> {
+        let mut comp_exports: HashMap<String, dfg::CoreDef> = HashMap::new();
+        for (name, item) in exports.iter() {
+            record_core_def_from_export(name, item.clone(), types, &mut comp_exports)?;
+        }
+        let mut count = 0;
+        for (_, func) in comp_exports {
+            let source = self.core_def_to_sources.get(&func).unwrap_or(&Source::host()).clone();
+            fr.instance_structure
+                .component_exports
+                .insert(count, source);
+            count += 1;
+        }
+        Ok(())
     }
 
     fn initializer(
@@ -1212,14 +1304,44 @@ impl<'a> Inliner<'a> {
             // and an initializer is recorded to indicate that it's being
             // instantiated.
             ModuleInstantiate(module, args) => {
+                let mut core_imports: HashMap<u32, String> = Default::default();
+                let mut sources: HashMap<u32, Source> = Default::default();
+
                 let (instance_module, init) = match &frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
                         let mut defs = Vec::new();
+                        let mut count = 0;
                         for (module, name, _ty) in self.nested_modules[*idx].module.imports() {
                             let instance = args[module];
-                            defs.push(
-                                self.core_def_of_module_instance_export(frame, instance, name),
+                            let core_def =
+                                self.core_def_of_module_instance_export(frame, instance, name);
+                            defs.push(core_def.clone());
+
+                            // If the core definition is an adapter function, map it to the initial core definition that's being adapted
+                            let core_def = match core_def {
+                                dfg::CoreDef::Adapter(adapter_id) => {
+                                    self.result.adapters.index(adapter_id).func.clone()
+                                }
+                                _ => core_def,
+                            };
+
+                            let name = match _ty {
+                                EntityType::Function(_) => module.to_owned() + "#" + name,
+                                EntityType::Memory(_) => module.to_owned() + " " + name,
+                                EntityType::Table(_) => name.to_string(),
+                                _ => module.to_string(),
+                            };
+
+                            //TODO: Docs here
+                            core_imports.insert(count, name.clone());
+                            sources.insert(
+                                count,
+                                self.core_def_to_sources
+                                    .get(&core_def)
+                                    .unwrap_or(&Source::host())
+                                    .clone(),
                             );
+                            count += 1;
                         }
                         (
                             InstanceModule::Static(*idx),
@@ -1248,6 +1370,49 @@ impl<'a> Inliner<'a> {
                 let instance2 = self.runtime_instances.push(instance_module);
                 assert_eq!(instance, instance2);
 
+                // Create the module instance in the current component instance representation.
+                // We only consider static module instantiation for now.
+                // The module is populated with the imports which point to their sources and the
+                // exports map (global to the inliner) is updated with the exports of the current module
+                match &frame.modules[*module] {
+                    ModuleDef::Static(midx, _ty) => {
+                        let core_instance = frame.module_instances.len() as u32;
+                        let mut core_exports: HashMap<u32, String> = HashMap::new();
+                        let mut count = 0;
+                        for (name, &entity) in self.nested_modules[*midx].module.exports.iter() {
+                            core_exports.insert(count, name.to_string());
+                            let item = ExportItem::Index(entity);
+                            let core_def: dfg::CoreDef = dfg::CoreExport { instance, item }.into();
+                            self.core_def_to_sources.insert(
+                                core_def.clone(),
+                                Source {
+                                    path: frame.instance_structure.path.clone(),
+                                    core_instance,
+                                    export: count,
+                                },
+                            );
+                            count += 1;
+                        }
+
+                        // compute the binary digest of this core module code
+                        let data = self.nested_modules[*midx].wasm;
+                        let mut hasher = Sha256::new();
+                        hasher.update(data);
+                        let module_code_digest = hex::encode(hasher.finalize());
+
+                        // On module instantiation, add a new module instance entry in the current component runtime instance
+                        frame.instance_structure.core_instances.insert(
+                            core_instance,
+                            CoreInstanceStructure {
+                                module_code_digest,
+                                core_exports,
+                                core_imports,
+                                sources,
+                            },
+                        );
+                    }
+                    _ => {}
+                }
                 self.result
                     .side_effects
                     .push(dfg::SideEffect::Instance(instance));
@@ -1301,6 +1466,17 @@ impl<'a> Inliner<'a> {
                     self.result.num_runtime_component_instances,
                 );
                 self.result.num_runtime_component_instances += 1;
+                // Create a new component instance structure for this RuntimeComponentInstanceIndex
+                let mut instance_structure: RuntimeComponentInstanceStructure = Default::default();
+                instance_structure.path = format!(
+                    "{}.{}",
+                    frame.instance_structure.path.clone(),
+                    frame.component_instances.len()
+                );
+                self.result
+                    .instantiation_graph
+                    .table_mut()
+                    .insert(index.as_u32(), instance_structure.path.clone());
                 let frame = InlinerFrame::new(
                     index,
                     &self.nested_components[component.index],
@@ -1309,6 +1485,7 @@ impl<'a> Inliner<'a> {
                         .map(|(name, item)| Ok((*name, frame.item(*item, types)?)))
                         .collect::<Result<_>>()?,
                     Some(*ty),
+                    instance_structure,
                 );
                 return Ok(Some(frame));
             }
@@ -1739,6 +1916,7 @@ impl<'a> InlinerFrame<'a> {
         closure: ComponentClosure<'a>,
         args: HashMap<&'a str, ComponentItemDef<'a>>,
         instance_ty: Option<ComponentInstanceTypeId>,
+        instance_structure: RuntimeComponentInstanceStructure,
     ) -> Self {
         // FIXME: should iterate over the initializers of `translation` and
         // calculate the size of each index space to use `with_capacity` for
@@ -1763,6 +1941,8 @@ impl<'a> InlinerFrame<'a> {
             module_instances: Default::default(),
             components: Default::default(),
             modules: Default::default(),
+
+            instance_structure,
         }
     }
 

@@ -425,3 +425,6 @@ debug = [
 
 # Enables support for defining compile-time builtins.
 compile-time-builtins = ['dep:wasm-compose', 'dep:tempfile']
+
+# For attestation/performance/debugging purposes. Make the caller_instance runtime index available to the host call
+caller = []
