@@ -317,7 +317,7 @@ component-async-tests = { path = "crates/misc/component-async-tests" }
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.13.2"
+regalloc2 = "0.13.3"
 
 # cap-std family:
 target-lexicon = "0.13.0"
