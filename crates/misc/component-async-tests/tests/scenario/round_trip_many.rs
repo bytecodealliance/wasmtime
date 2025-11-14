@@ -341,7 +341,7 @@ async fn test_round_trip_many(
         linker
             .root()
             .instance("local:local/many")?
-            .func_new_concurrent("[async]foo", |_, _, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let mut params = params.into_iter();
@@ -364,7 +364,7 @@ async fn test_round_trip_many(
             .get_export_index(&mut store, None, "local:local/many")
             .ok_or_else(|| anyhow!("can't find `local:local/many` in instance"))?;
         let foo_function = instance
-            .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
+            .get_export_index(&mut store, Some(&baz_instance), "foo")
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)

@@ -18,7 +18,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/run")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]run"]
+    #[link_name = "[task-return]run"]
     fn task_return_run();
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -36,7 +36,7 @@ fn async_when_ready() -> u32 {
     {
         #[link(wasm_import_module = "local:local/ready")]
         unsafe extern "C" {
-            #[link_name = "[async-lower][async]when-ready"]
+            #[link_name = "[async-lower]when-ready"]
             fn call_when_ready() -> u32;
         }
         unsafe { call_when_ready() }
@@ -52,13 +52,13 @@ enum State {
     S5 { set: u32 },
 }
 
-#[unsafe(export_name = "[async-lift]local:local/run#[async]run")]
+#[unsafe(export_name = "[async-lift]local:local/run#run")]
 unsafe extern "C" fn export_run() -> u32 {
     context_set(u32::try_from(Box::into_raw(Box::new(State::S0)) as usize).unwrap());
     callback_run(EVENT_NONE, 0, 0)
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/run#[async]run")]
+#[unsafe(export_name = "[callback][async-lift]local:local/run#run")]
 unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 {
     let state = &mut *(usize::try_from(context_get()).unwrap() as *mut State);
     match state {

@@ -2906,7 +2906,7 @@ impl Instance {
             .unwrap())
     }
 
-    /// Implements the `thread.new_indirect` intrinsic.
+    /// Implements the `thread.new-indirect` intrinsic.
     pub(crate) fn thread_new_indirect<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
@@ -3475,7 +3475,7 @@ pub trait VMComponentAsyncStore {
         debug_msg_address: u32,
     ) -> Result<()>;
 
-    /// The `thread.new_indirect` intrinsic
+    /// The `thread.new-indirect` intrinsic
     fn thread_new_indirect(
         &mut self,
         instance: Instance,

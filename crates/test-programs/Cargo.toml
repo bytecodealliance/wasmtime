@@ -13,9 +13,9 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true, features = ['std'] }
 wasi-nn = "0.6.0"
-wit-bindgen = { workspace = true, features = ['default'] }
+wit-bindgen = { workspace = true, features = ['default', 'async-spawn'] }
 libc = { workspace = true }
-futures = { workspace = true, default-features = false, features = ['alloc'] }
+futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = { workspace = true }

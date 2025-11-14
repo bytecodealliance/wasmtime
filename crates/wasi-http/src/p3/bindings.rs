@@ -6,7 +6,7 @@ mod generated {
         path: "src/p3/wit",
         world: "wasi:http/proxy",
         imports: {
-            "wasi:http/handler.[async]handle": async | store | trappable | tracing,
+            "wasi:http/handler.handle": async | store | trappable | tracing,
             "wasi:http/types.[drop]request": store | trappable | tracing,
             "wasi:http/types.[drop]response": store | trappable | tracing,
             "wasi:http/types.[static]request.consume-body": async | store | trappable | tracing,

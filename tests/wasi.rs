@@ -91,6 +91,11 @@ const KNOWN_FAILURES: &[&str] = &[
     "symlink_loop",
     #[cfg(windows)]
     "unlink_file_trailing_slashes",
+    // Once cm-async changes have percolated this can be removed.
+    "filesystem-flags-and-type",
+    "multi-clock-wait",
+    "monotonic-clock",
+    "filesystem-advise",
 ];
 
 fn main() -> Result<()> {

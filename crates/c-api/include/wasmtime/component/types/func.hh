@@ -26,6 +26,9 @@ class FuncType {
     return wasmtime_component_func_type_param_count(ptr.get());
   }
 
+  /// Returns whether this is an async function.
+  bool async() const { return wasmtime_component_func_type_async(ptr.get()); }
+
   /// Retrieves the nth parameter.
   std::optional<std::pair<std::string_view, ValType>>
   param_nth(size_t nth) const {

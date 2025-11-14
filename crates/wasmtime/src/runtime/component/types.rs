@@ -815,6 +815,11 @@ impl ComponentFunc {
         Self(Handle::new(index, ty))
     }
 
+    /// Returns whether this is an async function
+    pub fn async_(&self) -> bool {
+        self.0.types[self.0.index].async_
+    }
+
     /// Iterates over types of function parameters and names.
     pub fn params(&self) -> impl ExactSizeIterator<Item = (&str, Type)> + '_ {
         let ty = &self.0.types[self.0.index];

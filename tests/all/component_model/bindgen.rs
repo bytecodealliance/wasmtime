@@ -109,11 +109,11 @@ mod no_imports_concurrent {
                         (with "" (instance (export "task.return" (func $task-return))))
                     ))
 
-                    (func $f (export "[async]bar")
+                    (func $f (export "bar")
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "[async]foo" (func $f)))
+                    (instance $i (export "foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
@@ -229,7 +229,7 @@ mod one_import_concurrent {
             r#"
                 (component
                     (import "foo" (instance $foo-instance
-                        (export "[async]foo" (func))
+                        (export "foo" (func))
                     ))
                     (core module $libc
                         (memory (export "memory") 1)
@@ -246,7 +246,7 @@ mod one_import_concurrent {
                         )
                         (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
                     )
-                    (core func $foo (canon lower (func $foo-instance "[async]foo") async (memory $libc-instance "memory")))
+                    (core func $foo (canon lower (func $foo-instance "foo") async (memory $libc-instance "memory")))
                     (core func $task-return (canon task.return))
                     (core instance $i (instantiate $m
                         (with "" (instance
@@ -255,11 +255,11 @@ mod one_import_concurrent {
                         ))
                     ))
 
-                    (func $f (export "[async]bar")
+                    (func $f (export "bar")
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "[async]foo" (func $f)))
+                    (instance $i (export "foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
