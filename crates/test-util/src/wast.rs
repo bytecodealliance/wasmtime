@@ -174,6 +174,10 @@ fn component_test_config(test: &Path) -> TestConfig {
             ret.exceptions = Some(true);
             ret.gc = Some(true);
         }
+        if parent.ends_with("wasmtime") {
+            ret.exceptions = Some(true);
+            ret.gc = Some(true);
+        }
     }
 
     ret
