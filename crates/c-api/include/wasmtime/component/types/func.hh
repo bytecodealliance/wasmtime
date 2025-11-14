@@ -27,9 +27,7 @@ class FuncType {
   }
 
   /// Returns whether this is an async function.
-  bool async() const {
-    return wasmtime_component_func_type_async(ptr.get());
-  }
+  bool async() const { return wasmtime_component_func_type_async(ptr.get()); }
 
   /// Retrieves the nth parameter.
   std::optional<std::pair<std::string_view, ValType>>
