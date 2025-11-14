@@ -1903,7 +1903,7 @@ fn emit_return_call_common_sequence<T>(
     }
 }
 
-/// Conveniene trait to have an `emit` method on all `asm::inst::*` variants.
+/// Convenience trait to have an `emit` method on all `asm::inst::*` variants.
 trait ExternalEmit {
     fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState);
 }

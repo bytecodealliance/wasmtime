@@ -341,7 +341,7 @@ impl FuncKey {
         self.into_parts().1
     }
 
-    /// Get ABI of the function that this key is definining.
+    /// Get ABI of the function that this key is defining.
     pub fn abi(self) -> Abi {
         match self {
             FuncKey::DefinedWasmFunction(_, _) => Abi::Wasm,

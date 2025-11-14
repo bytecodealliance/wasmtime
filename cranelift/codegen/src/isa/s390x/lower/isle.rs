@@ -105,7 +105,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     // Adjust the stack before performing a tail call.  The actual stack
-    // adjustment is defered to the call instruction itself, but we create
+    // adjustment is deferred to the call instruction itself, but we create
     // a temporary backchain copy in the proper place here, if necessary
     // for unwinding.
     fn abi_emit_return_call_adjust_stack(&mut self, abi: Sig) -> Unit {

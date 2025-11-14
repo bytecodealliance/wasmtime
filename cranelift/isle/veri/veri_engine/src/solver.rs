@@ -1180,7 +1180,7 @@ impl SolverCtx {
                     load_ret
                 } else {
                     if self.rhs_load_args.is_some() {
-                        panic!("Only one load on the RHS currently supported, found miltiple.")
+                        panic!("Only one load on the RHS currently supported, found multiple.")
                     }
                     self.rhs_load_args = Some(vec![ex, ey, ez]);
                     self.load_return.unwrap()
@@ -1781,7 +1781,7 @@ fn resolve_dynamic_widths(
             }
 
             // Otherwise, try again, but adding the assertion that some width is
-            // different than our current assigment
+            // different than our current assignment
             let not_equals = width_resolutions.iter().map(|(s, w)| {
                 ctx.smt.not(
                     ctx.smt

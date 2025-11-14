@@ -371,10 +371,10 @@ where
                     // new task from the queue.
                     //
                     // Note the the order of operations here is important.  By
-                    // polling `next_future` first, we'll disover any tasks that
+                    // polling `next_future` first, we'll discover any tasks that
                     // may have timed out, at which point we'll stop accepting
                     // new tasks altogether (see below for details).  This is
-                    // especially imporant in the case where the task was
+                    // especially important in the case where the task was
                     // blocked on a synchronous call to a host function which
                     // has exclusive access to the `Store`; once that call
                     // finishes, the first think we need to do is time out the

@@ -18,7 +18,7 @@ pub struct CodegenOptions {
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
 
-    /// Prefixes to remove when printing file names in generaed files. This
+    /// Prefixes to remove when printing file names in generated files. This
     /// helps keep codegen deterministic.
     pub prefixes: Vec<Prefix>,
 }

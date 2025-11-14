@@ -77,7 +77,7 @@ impl Wizer {
     }
 }
 
-/// Impementation of [`InstanceState`] backed by Wasmtime.
+/// Implementation of [`InstanceState`] backed by Wasmtime.
 pub struct WasmtimeWizerComponent<'a, T: 'static> {
     /// The Wasmtime-based store that owns the `instance` field.
     pub store: &'a mut Store<T>,

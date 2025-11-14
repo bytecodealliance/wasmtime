@@ -1643,7 +1643,7 @@ pub struct OwnedVMContext<T> {
     /// The long version of why this field exists is that the rules that MIRI
     /// uses to ensure pointers are used correctly have various conditions on
     /// them depend on how pointers are used. More specifically if `*mut T` is
-    /// derived from `&mut T`, then that invalidates all prior pointers drived
+    /// derived from `&mut T`, then that invalidates all prior pointers derived
     /// from the `&mut T`. This means that while we liberally want to re-acquire
     /// a `*mut VMContext` throughout the implementation of `Instance` the
     /// trivial way, a function `fn vmctx(Pin<&mut Instance>) -> *mut VMContext`

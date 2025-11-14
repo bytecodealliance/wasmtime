@@ -1812,7 +1812,7 @@ struct TransmitState {
     write: WriteState,
     /// See `ReadState`
     read: ReadState,
-    /// Whether futher values may be transmitted via this stream or future.
+    /// Whether further values may be transmitted via this stream or future.
     done: bool,
 }
 

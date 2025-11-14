@@ -1830,7 +1830,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         &self.user_stack_maps
     }
 
-    /// Take this buffer's user strack map metadata.
+    /// Take this buffer's user stack map metadata.
     pub fn take_user_stack_maps(&mut self) -> SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]> {
         mem::take(&mut self.user_stack_maps)
     }
