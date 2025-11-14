@@ -550,6 +550,8 @@ pub struct TypeComponentInstance {
 /// A component function type in the component model.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
+    /// Whether or not this is an async function.
+    pub async_: bool,
     /// Names of parameters.
     pub param_names: Vec<String>,
     /// Parameters to the function represented as a tuple.

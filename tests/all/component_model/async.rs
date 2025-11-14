@@ -370,8 +370,8 @@ async fn task_deletion() -> Result<()> {
                 (drop (call $thread-suspend)))
 
             (func $yield-loop (param i32)
-                (loop $top 
-                    (drop (call $thread-yield)) 
+                (loop $top
+                    (drop (call $thread-yield))
                     (br $top)))
 
             (func (export "explicit-thread-calls-return-stackful")
@@ -385,7 +385,7 @@ async fn task_deletion() -> Result<()> {
 
             (func (export "cb") (param i32 i32 i32) (result i32)
                 (unreachable))
-            
+
             (func (export "explicit-thread-suspends-sync") (result i32)
                 (call $thread-resume-later
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
@@ -417,13 +417,12 @@ async fn task_deletion() -> Result<()> {
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
                 (call $task-return (i32.const 42))
                 (i32.const 0 (; EXIT ;)))
-            
 
             ;; Initialize the function table that will be used by thread.new-indirect
             (elem (table $indirect-function-table) (i32.const 0 (; call-return-ftbl-idx ;)) func $call-return)
             (elem (table $indirect-function-table) (i32.const 1 (; suspend-ftbl-idx ;)) func $suspend)
             (elem (table $indirect-function-table) (i32.const 2 (; yield-loop-ftbl-idx ;)) func $yield-loop)
-        ) 
+        )
 
         ;; Instantiate the libc module to get the table
         (core instance $libc (instantiate $libc))
@@ -433,7 +432,7 @@ async fn task_deletion() -> Result<()> {
 
         (core func $task-return (canon task.return (result u32)))
         (core func $task-cancel (canon task.cancel))
-        (core func $thread-new-indirect 
+        (core func $thread-new-indirect
             (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
@@ -472,25 +471,25 @@ async fn task_deletion() -> Result<()> {
                     (export "waitable-set.new" (func $waitable-set.new))))
                 (with "libc" (instance $libc))))
 
-        (func (export "explicit-thread-calls-return-stackful") (result u32) 
+        (func (export "explicit-thread-calls-return-stackful") (result u32)
             (canon lift (core func $cm "explicit-thread-calls-return-stackful") async))
-        (func (export "explicit-thread-calls-return-stackless") (result u32) 
+        (func (export "explicit-thread-calls-return-stackless") (result u32)
             (canon lift (core func $cm "explicit-thread-calls-return-stackless") async (callback (func $cm "cb"))))
-        (func (export "explicit-thread-suspends-sync") (result u32) 
+        (func (export "explicit-thread-suspends-sync") (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-sync")))
-        (func (export "explicit-thread-suspends-stackful") (result u32) 
+        (func (export "explicit-thread-suspends-stackful") (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-stackful") async))
-        (func (export "explicit-thread-suspends-stackless") (result u32) 
+        (func (export "explicit-thread-suspends-stackless") (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-stackless") async (callback (func $cm "cb"))))
-        (func (export "explicit-thread-yield-loops-sync") (result u32) 
+        (func (export "explicit-thread-yield-loops-sync") (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-sync")))
-        (func (export "explicit-thread-yield-loops-stackful") (result u32) 
+        (func (export "explicit-thread-yield-loops-stackful") (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-stackful") async))
-        (func (export "explicit-thread-yield-loops-stackless") (result u32) 
+        (func (export "explicit-thread-yield-loops-stackless") (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-stackless") async (callback (func $cm "cb"))))
     )
 
-    (component $D 
+    (component $D
         (import "explicit-thread-calls-return-stackful" (func $explicit-thread-calls-return-stackful (result u32)))
         (import "explicit-thread-calls-return-stackless" (func $explicit-thread-calls-return-stackless (result u32)))
         (import "explicit-thread-suspends-sync" (func $explicit-thread-suspends-sync (result u32)))
@@ -541,7 +540,7 @@ async fn task_deletion() -> Result<()> {
 
                 (if (i32.eq (i32.and (local.get 0) (i32.const 0xF)) (i32.const 2 (; RETURNED ;)))
                     (then (call $check (i32.load (local.get $retp))))
-                    (else 
+                    (else
                         (call $waitable.join (i32.shr_u (local.get 0) (i32.const 4)) (local.get $ws))
                         (drop (call $waitable-set.wait (local.get $ws) (local.get $ws-retp)))
                         (call $check (i32.load (local.get $retp)))))
@@ -558,7 +557,7 @@ async fn task_deletion() -> Result<()> {
                 (call $check (call $explicit-thread-yield-loops-sync))
                 (call $check (call $explicit-thread-yield-loops-stackful))
                 (call $check (call $explicit-thread-yield-loops-stackless))
-                
+
                 (call $check-async (call $explicit-thread-calls-return-stackless-async (local.get $retp)))
                 (call $check-async (call $explicit-thread-calls-return-stackful-async (local.get $retp)))
                 (call $check-async (call $explicit-thread-suspends-sync-async (local.get $retp)))

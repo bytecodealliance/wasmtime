@@ -710,8 +710,7 @@ impl RunCommand {
                     return None;
                 };
                 let func_name = names.last().expect("at least one name");
-                let base_func_name = func_name.strip_prefix("[async]").unwrap_or(func_name);
-                (base_func_name == name).then_some((names, func))
+                (func_name == name).then_some((names, func))
             })
             .collect()
     }

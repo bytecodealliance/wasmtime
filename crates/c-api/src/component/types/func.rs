@@ -12,6 +12,11 @@ type_wrapper! {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_func_type_async(ty: &wasmtime_component_func_type_t) -> bool {
+    ty.ty.async_()
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_component_func_type_param_count(
     ty: &wasmtime_component_func_type_t,
 ) -> usize {

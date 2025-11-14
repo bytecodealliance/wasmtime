@@ -44,7 +44,7 @@ mod sleep {
     #[cfg(target_arch = "wasm32")]
     #[link(wasm_import_module = "local:local/sleep")]
     unsafe extern "C" {
-        #[link_name = "[async-lower][async]sleep-millis"]
+        #[link_name = "[async-lower]sleep-millis"]
         pub fn sleep_millis(_: u64) -> u32;
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -57,7 +57,7 @@ mod sleep_with_options {
     #[cfg(target_arch = "wasm32")]
     #[link(wasm_import_module = "local:local/sleep-with-options")]
     unsafe extern "C" {
-        #[link_name = "[async-lower][async]sleep-millis"]
+        #[link_name = "[async-lower]sleep-millis"]
         pub fn sleep_millis(_: *mut u8) -> u32;
     }
     #[cfg(not(target_arch = "wasm32"))]

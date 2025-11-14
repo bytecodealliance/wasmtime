@@ -5,7 +5,7 @@
 ;;! reference_types = true
 
 ;; Tests that cancellation works with the async threading intrinsics.
-;; Consists of two components, C and D. C implements functions that mix cancellable and uncancellable yields and suspensions. 
+;; Consists of two components, C and D. C implements functions that mix cancellable and uncancellable yields and suspensions.
 ;; D calls these functions and cancels the resulting subtasks, ensuring that cancellation is only seen when expected.
 
 ;; -- Component C --
@@ -138,7 +138,7 @@
 
                 ;; Spawn a new thread that will wake us up from our uncancellable suspend and schedule
                 ;; it to resume after we suspend.
-                (call $thread-resume-later 
+                (call $thread-resume-later
                     (call $thread-new-indirect (global.get $wake-from-suspend-ftbl-idx) (local.get $wake-from-suspend-argp)))
 
                 ;; Request suspension. We will not be woken up by cancellation, because this is an uncancellable
@@ -164,8 +164,8 @@
                 (local.set $thread-index
                     (call $thread-new-indirect (global.get $wake-from-suspend-ftbl-idx) (local.get $wake-from-suspend-argp)))
 
-                ;; Request suspension by switching to the spawned thread. 
-                ;; We will not be woken up by cancellation, because this is an uncancellable suspend. 
+                ;; Request suspension by switching to the spawned thread.
+                ;; We will not be woken up by cancellation, because this is an uncancellable suspend.
                 ;; We will be woken up by the other thread we spawned above, which will be resumed after
                 ;; the supertask cancels our subtask.
                 (if (i32.ne (call $thread-switch-to (local.get $thread-index)) (i32.const 0)) (then unreachable))
@@ -173,7 +173,7 @@
                 (if (i32.ne (call $thread-switch-to-cancellable (local.get $thread-index)) (i32.const 1)) (then unreachable))
                 (call $task-cancel)
             )
-        ) 
+        )
 
         ;; Instantiate the libc module to get the table
         (core instance $libc (instantiate $libc))
@@ -182,7 +182,7 @@
         (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
         (core func $task-cancel (canon task.cancel))
-        (core func $thread-new-indirect 
+        (core func $thread-new-indirect
             (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
@@ -228,7 +228,7 @@
         (func (export "run-switch-to") (param "fut" $FT) (result u32) (canon lift (core func $cm "run-switch-to") async))
     )
 
-    (component $D 
+    (component $D
         (type $FT (future))
         (import "run-yield" (func $run-yield (result u32)))
         (import "run-yield-to" (func $run-yield-to (param "fut" $FT) (result u32)))
@@ -250,7 +250,7 @@
             (import "" "future.new" (func $future.new (result i64)))
             (import "" "future.write" (func $future.write (param i32 i32) (result i32)))
             (import "" "thread.yield" (func $thread-yield (result i32)))
-            
+
             (func $run-test (param $test-id i32) (result i32)
                 (local $ret i32) (local $subtask i32)
                 (local $ws i32) (local $event_code i32)
@@ -297,12 +297,12 @@
 
                 ;; If we're not testing run-yield, the subtask is expecting a write to our future, so write to it
                 (if (i32.ne (local.get $test-id) (i32.const 0))
-                    (then 
+                    (then
                         (local.set $ret (call $future.write (local.get $futw) (i32.const 0xdeadbeef)))
                         ;; The write should succeed
                         (if (i32.ne (i32.const 0 (; COMPLETED ;)) (local.get $ret))
                             (then unreachable))))
-                
+
                 ;; Wait on the subtask, which will eventually progress to a cancellable yield/suspend and acknowledge the cancellation
                 (local.set $ws (call $waitable-set.new))
                 (call $waitable.join (local.get $subtask) (local.get $ws))
@@ -314,7 +314,7 @@
                 (if (i32.ne (local.get $subtask) (i32.load (local.get $wait-retp)))
                   (then unreachable))
                 ;; Ensure the subtask was cancelled before it returned
-                (if (i32.ne (i32.const 4 (; CANCELLED_BEFORE_RETURNED=4 | (0<<4) ;)) 
+                (if (i32.ne (i32.const 4 (; CANCELLED_BEFORE_RETURNED=4 | (0<<4) ;))
                             (i32.load offset=4 (local.get $wait-retp)))
                   (then unreachable))
 

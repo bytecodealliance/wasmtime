@@ -52,8 +52,8 @@
             ;; Store the main thread's index for the spawned thread to yield to
             (global.set $main-thread-index (call $thread-index))
             ;; Create a new thread, which starts suspended, and switch to it
-            (drop 
-                (call $thread-switch-to 
+            (drop
+                (call $thread-switch-to
                     (call $thread-new-indirect (i32.const 0) (i32.const 42))))
             ;; After the thread yields back to us, check that the global was set to 42
             (if (i32.ne (global.get $g) (i32.const 42)) (then unreachable))
@@ -67,14 +67,14 @@
             (if (i32.ne (global.get $g) (i32.const 44)) (then unreachable))
             ;; Return success
             (i32.const 42)))
-    
+
     ;; Instantiate the libc module to get the table
     (core instance $libc (instantiate $libc))
     ;; Get access to `thread.new-indirect` that uses the table from libc
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
-    (core func $thread-new-indirect 
+    (core func $thread-new-indirect
         (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
@@ -85,8 +85,8 @@
 
     ;; Instantiate the main module
     (core instance $i (
-        instantiate $m 
-            (with "" (instance  
+        instantiate $m
+            (with "" (instance
                 (export "thread.new-indirect" (func $thread-new-indirect))
                 (export "thread.index" (func $thread-index))
                 (export "thread.yield-to" (func $thread-yield-to))

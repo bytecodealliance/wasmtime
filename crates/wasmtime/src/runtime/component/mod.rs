@@ -316,7 +316,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // means that this is the default already applied meaning that
 ///         // specifying it here would be redundant.
 ///         //
-///         // "wasi:clocks/monotonic-clock.[async]wait-until": async | store,
+///         // "wasi:clocks/monotonic-clock.wait-until": async | store,
 ///
 ///         // The `tracing` flag indicates that `tracing!` will be used to log
 ///         // entries and exits into this host API. This can assist with
@@ -350,7 +350,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // The `ignore_wit` flag discards the WIT-level defaults of a
 ///         // function. For example this `async` WIT function will be ignored
 ///         // and a synchronous function will be generated on the host.
-///         "my:local/api.[async]wait": ignore_wit,
+///         "my:local/api.wait": ignore_wit,
 ///
 ///         // The `exact` flag ensures that the filter, here "f", only matches
 ///         // functions exactly. For example "f" here would only refer to
@@ -378,7 +378,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // this function should return a tuple of the result produced by the
 ///         // callee and a `TaskExit` future which will resolve when the task
 ///         // (and any transitively created subtasks) have exited.
-///         "my:local/api.[async]does-stuff-after-returning": task_exit,
+///         "my:local/api.does-stuff-after-returning": task_exit,
 ///     },
 ///
 ///     // This can be used to translate WIT return values of the form

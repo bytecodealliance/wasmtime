@@ -362,7 +362,7 @@ pub async fn test_round_trip(
         linker
             .root()
             .instance("local:local/baz")?
-            .func_new_concurrent("[async]foo", |_, _, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
@@ -380,11 +380,11 @@ pub async fn test_round_trip(
             .get_export_index(&mut store, None, "local:local/baz")
             .ok_or_else(|| anyhow!("can't find `local:local/baz` in instance"))?;
         let foo_function = instance
-            .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
-            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
+            .get_export_index(&mut store, Some(&baz_instance), "foo")
+            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
+            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
             store

@@ -254,6 +254,7 @@ impl ComponentTypesBuilder {
         let params = self.new_tuple_type(params);
         let results = self.new_tuple_type(results);
         let ty = TypeFunc {
+            async_: ty.async_,
             param_names,
             params,
             results,
