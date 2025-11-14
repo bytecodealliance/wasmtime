@@ -59,7 +59,11 @@ mod tests {
     fn dummy_memory_import() {
         let mut store = store();
         let memory_type = MemoryType::new(1, None);
-        let memory = memory_type.default_value(&mut store).unwrap();
+        let memory = memory_type
+            .default_value(&mut store)
+            .unwrap()
+            .into_memory()
+            .unwrap();
         assert_eq!(memory.size(&store), 1);
     }
 
