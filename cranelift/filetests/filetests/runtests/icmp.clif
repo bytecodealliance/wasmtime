@@ -159,3 +159,14 @@ block0(v0: i32):
 
 ; run: %test_ult_sgt_neg_const_x(42) == 0
 
+;; (x <u y) & (x != -1) => (x <_u y)
+function %test_ult_ne_minus_one(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = iconst.i32 -1
+    v4 = icmp ne v0, v3
+    v5 = band v2, v4
+    return v5
+}
+; run: %test_ult_ne_minus_one(3, 5) == 1
+; run: %test_ult_ne_minus_one(-1, 1) == 0
