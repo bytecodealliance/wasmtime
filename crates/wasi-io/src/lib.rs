@@ -108,7 +108,7 @@ impl<T: ?Sized + IoView> IoView for Box<T> {
 /// [async]: wasmtime::Config::async_support
 /// [`Linker`]: wasmtime::component::Linker
 /// [`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
-/// [`add_to_linker_sync`]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/fn.add_to_linker_sync.html
+/// [`add_to_linker_sync`]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/p2/fn.add_to_linker_sync.html
 ///
 ///
 /// # Example
