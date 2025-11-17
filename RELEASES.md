@@ -23,7 +23,7 @@ Unreleased.
   a new `wasmtime wizer` CLI subcommand and `wasmtime-wizer` crate. This is
   mostly a drop-in replacement for both with a minor caveat that the
   initialization function is now called `wizer-initialize` instead of
-  `wizer.initialized` to be compatible with components.
+  `wizer.initialize` to be compatible with components.
   [#11805](https://github.com/bytecodealliance/wasmtime/pull/11805)
   [#11851](https://github.com/bytecodealliance/wasmtime/pull/11851)
   [#11853](https://github.com/bytecodealliance/wasmtime/pull/11853)
