@@ -58,7 +58,7 @@ The emoji legend is:
 | [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
 | [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`exception-handling`]      | ✅      | ✅    | ✅       | ❌     | ✅  | ❌    |
+| [`exception-handling`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
 [^6]: There is also a [tracking

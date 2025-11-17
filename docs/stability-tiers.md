@@ -85,7 +85,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`gc`]                     | production quality          |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
-| WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
+| WebAssembly Proposal | [`exception-handling`]     | dependence on GC            |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 | Embedding API        | C++                        | Full-time maintainer        |
 
