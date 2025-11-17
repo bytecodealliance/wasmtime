@@ -563,7 +563,7 @@ fn run_threads() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "-Wthreads",
+        "-Wthreads,shared-memory",
         "-Sthreads",
         "-Ccache=n",
         wasm.path().to_str().unwrap(),

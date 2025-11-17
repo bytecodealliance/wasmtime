@@ -164,6 +164,7 @@ pub struct Config {
     pub(crate) macos_use_mach_ports: bool,
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
     pub(crate) x86_float_abi_ok: Option<bool>,
+    pub(crate) shared_memory: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -273,6 +274,7 @@ impl Config {
             #[cfg(not(feature = "std"))]
             detect_host_feature: None,
             x86_float_abi_ok: None,
+            shared_memory: false,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -2883,6 +2885,27 @@ impl Config {
     ///   enabled to avoid float-related hostcalls.
     pub unsafe fn x86_float_abi_ok(&mut self, enable: bool) -> &mut Self {
         self.x86_float_abi_ok = Some(enable);
+        self
+    }
+
+    /// Enable or disable the ability to create a
+    /// [`SharedMemory`](crate::SharedMemory).
+    ///
+    /// The WebAssembly threads proposal, configured by [`Config::wasm_threads`]
+    /// is on-by-default but there are enough deficiencies in Wasmtime's
+    /// implementation and API integration that creation of a shared memory is
+    /// disabled by default. This cofiguration knob can be used to enable this.
+    ///
+    /// When enabling this method be aware that wasm threads are, at this time,
+    /// a [tier 2
+    /// feature](https://docs.wasmtime.dev/stability-tiers.html#tier-2) in
+    /// Wasmtime meaning that it will not receive security updates or fixes to
+    /// historical releases. Additionally security CVEs will not be issued for
+    /// bugs in the implementation.
+    ///
+    /// This option is `false` by default.
+    pub fn shared_memory(&mut self, enable: bool) -> &mut Self {
+        self.shared_memory = enable;
         self
     }
 }

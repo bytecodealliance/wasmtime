@@ -825,9 +825,8 @@ impl SharedMemory {
         }
         debug_assert!(ty.maximum().is_some());
 
-        let tunables = engine.tunables();
         let ty = ty.wasmtime_memory();
-        let memory = crate::runtime::vm::SharedMemory::new(ty, tunables)?;
+        let memory = crate::runtime::vm::SharedMemory::new(engine, ty)?;
 
         Ok(Self {
             vm: memory,
