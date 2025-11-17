@@ -263,12 +263,16 @@ impl<'a, T, B> Destination<'a, T, B> {
     /// This will return `Some(_)` if the reader is a guest; it will return
     /// `None` if the reader is the host.
     ///
-    /// Note that, if this returns `None(0)`, the producer must still attempt to
-    /// produce at least one item if the value of `finish` passed to
-    /// `StreamProducer::poll_produce` is false.  In that case, the reader is
-    /// effectively asking when the producer will be able to produce items
-    /// without blocking (or reach a terminal state such as end-of-stream),
-    /// meaning the next non-zero read must complete without blocking.
+    /// Note that this can return `Some(0)`. This means that the guest is
+    /// attempting to perform a zero-length read which typically means that it's
+    /// trying to wait for this stream to be ready-to-read but is not actually
+    /// ready to receive the items yet. The host in this case is allowed to
+    /// either block waiting for readiness or immediately complete the
+    /// operation. The guest is expected to handle both cases. Some more
+    /// discussion about this case can be found in the discussion of ["Stream
+    /// Readiness" in the component-model repo][docs].
+    ///
+    /// [docs]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md#stream-readiness
     pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
         let transmit = store
             .as_context_mut()
@@ -437,6 +441,21 @@ pub trait StreamProducer<D>: Send + 'static {
     ///
     /// This will be called whenever the reader starts a read.
     ///
+    /// # Arguments
+    ///
+    /// * `self` - a `Pin`'d version of self to perform Rust-level
+    ///   future-related operations on.
+    /// * `cx` - a Rust-related [`Context`] which is passed to other
+    ///   future-related operations or used to acquire a waker.
+    /// * `store` - the Wasmtime store that this operation is happening within.
+    ///   Used, for example, to consult the state `D` associated with the store.
+    /// * `destination` - the location that items are to be written to.
+    /// * `finish` - a flag indicating whether the host should strive to
+    ///   immediately complete/cancel any pending operation. See below for more
+    ///   details.
+    ///
+    /// # Behavior
+    ///
     /// If the implementation is able to produce one or more items immediately,
     /// it should write them to `destination` and return either
     /// `Poll::Ready(Ok(StreamResult::Completed))` if it expects to produce more
@@ -449,59 +468,109 @@ pub trait StreamProducer<D>: Send + 'static {
     /// anything to `destination`.  Later, it should alert the waker when either
     /// the items arrive, the stream has ended, or an error occurs.
     ///
-    /// If the implementation is unable to produce any items immediately, but
-    /// expects to do so later, and `finish` is _true_, it should, if possible,
-    /// return `Poll::Ready(Ok(StreamResult::Cancelled))` immediately without
-    /// writing anything to `destination`.  However, that might not be possible
-    /// if an earlier call to `poll_produce` kicked off an asynchronous
-    /// operation which needs to be completed (and possibly interrupted)
-    /// gracefully, in which case the implementation may return `Poll::Pending`
-    /// and later alert the waker as described above.  In other words, when
-    /// `finish` is true, the implementation should prioritize returning a
-    /// result to the reader (even if no items can be produced) rather than wait
-    /// indefinitely for at least one item to arrive.
-    ///
-    /// In all of the above cases, the implementation may alternatively choose
-    /// to return `Err(_)` to indicate an unrecoverable error.  This will cause
-    /// the guest (if any) to trap and render the component instance (if any)
-    /// unusable.  The implementation should report errors that _are_
-    /// recoverable by other means (e.g. by writing to a `future`) and return
-    /// `Poll::Ready(Ok(StreamResult::Dropped))`.
-    ///
-    /// Note that the implementation should never return `Poll::Pending` after
-    /// writing one or more items to `destination`; if it does, the caller will
-    /// trap as if `Err(_)` was returned.  Conversely, it should only return
-    /// `Poll::Ready(Ok(StreamResult::Cancelled))` without writing any items to
-    /// `destination` if called with `finish` set to true.  If it does so when
-    /// `finish` is false, the caller will trap.  Additionally, it should only
-    /// return `Poll::Ready(Ok(StreamResult::Completed))` after writing at least
-    /// one item to `destination` if it has capacity to accept that item;
-    /// otherwise, the caller will trap.
-    ///
     /// If more items are written to `destination` than the reader has immediate
     /// capacity to accept, they will be retained in memory by the caller and
     /// used to satisfy future reads, in which case `poll_produce` will only be
     /// called again once all those items have been delivered.
     ///
-    /// If this function is called with zero capacity
-    /// (i.e. `Destination::remaining` returns `Some(0)`), the implementation
-    /// should either:
+    /// # Zero-length reads
+    ///
+    /// This function may be called with a zero-length capacity buffer
+    /// (i.e. `Destination::remaining` returns `Some(0)`). This indicates that
+    /// the guest wants to wait to see if an item is ready without actually
+    /// reading the item. For example think of a UNIX `poll` function run on a
+    /// TCP stream, seeing if it's readable without actually reading it.
+    ///
+    /// In this situation the host is allowed to either return immediately or
+    /// wait for readiness. Note that waiting for readiness is not always
+    /// possible. For example it's impossible to test if a Rust-native `Future`
+    /// is ready without actually reading the item. Stream-specific
+    /// optimizations, such as testing if a TCP stream is readable, may be
+    /// possible however.
+    ///
+    /// For a zero-length read, the host is allowed to:
     ///
     /// - Return `Poll::Ready(Ok(StreamResult::Completed))` without writing
-    /// anything if it expects to be able to produce items immediately
-    /// (i.e. without first returning `Poll::Pending`) the next time
-    /// `poll_produce` is called with non-zero capacity _or_ if that cannot be
-    /// reliably determined.
+    ///   anything if it expects to be able to produce items immediately (i.e.
+    ///   without first returning `Poll::Pending`) the next time `poll_produce`
+    ///   is called with non-zero capacity. This is the best-case scenario of
+    ///   fulfilling the guest's desire -- items aren't read/buffered but the
+    ///   host is saying it's ready when the guest is.
     ///
-    /// - Return `Poll::Pending` if the next call to `poll_produce` with
-    /// non-zero capacity is likely to also return `Poll::Pending`.
+    /// - Return `Poll::Ready(Ok(StreamResult::Completed))` without actually
+    ///   testing for readiness. The guest doesn't know this yet, but the guest
+    ///   will realize that zero-length reads won't work on this stream when a
+    ///   subsequent nonzero read attempt is made which returns `Poll::Pending`
+    ///   here.
+    ///
+    /// - Return `Poll::Pending` if the host has performed necessary async work
+    ///   to wait for this stream to be readable without actually reading
+    ///   anything. This is also a best-case scenario where the host is letting
+    ///   the guest know that nothing is ready yet. Later the zero-length read
+    ///   will complete and then the guest will attempt a nonzero-length read to
+    ///   actually read some bytes.
     ///
     /// - Return `Poll::Ready(Ok(StreamResult::Completed))` after calling
-    /// `Destination::set_buffer` with one more more items.  Note, however, that
-    /// this creates the hazard that the items will never be received by the
-    /// guest if it decides not to do another non-zero-length read before
-    /// closing the stream.  Moreover, if `Self::Item` is e.g. a `Resource<_>`,
-    /// they may end up leaking in that scenario.
+    ///   `Destination::set_buffer` with one more more items. Note, however,
+    ///   that this creates the hazard that the items will never be received by
+    ///   the guest if it decides not to do another non-zero-length read before
+    ///   closing the stream.  Moreover, if `Self::Item` is e.g. a
+    ///   `Resource<_>`, they may end up leaking in that scenario. It is not
+    ///   recommended to do this and it's better to return
+    ///   `StreamResult::Completed` without buffering anything instead.
+    ///
+    /// For more discussion on zero-length reads see the [documentation in the
+    /// component-model repo itself][docs].
+    ///
+    /// [docs]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md#stream-readiness
+    ///
+    /// # Return
+    ///
+    /// This function can return a number of possible cases from this function:
+    ///
+    /// * `Poll::Pending` - this operation cannot complete at this time. The
+    ///   Rust-level `Future::poll` contract applies here where a waker should
+    ///   be stored from the `cx` argument and be arranged to receive a
+    ///   notification when this implementation can make progress. For example
+    ///   if you call `Future::poll` on a sub-future, that's enough. If items
+    ///   were written to `destination` then a trap in the guest will be raised.
+    ///
+    ///   Note that implementations should strive to avoid this return value
+    ///   when `finish` is `true`. In such a situation the guest is attempting
+    ///   to, for example, cancel a previous operation. By returning
+    ///   `Poll::Pending` the guest will be blocked during the cancellation
+    ///   request. If `finish` is `true` then `StreamResult::Cancelled` is
+    ///   favored to indicate that no items were read. If a short read happened,
+    ///   however, it's ok to return `StreamResult::Completed` indicating some
+    ///   items were read.
+    ///
+    /// * `Poll::Ok(StreamResult::Completed)` - items, if applicable, were
+    ///   written to the `destination`.
+    ///
+    /// * `Poll::Ok(StreamResult::Cancelled)` - used when `finish` is `true` and
+    ///   the implementation was able to successfully cancel any async work that
+    ///   a previous read kicked off, if any. The host should not buffer values
+    ///   received after returning `Cancelled` because the guest will not be
+    ///   aware of these values and the guest could close the stream after
+    ///   cancelling a read. Hosts should only return `Cancelled` when there are
+    ///   no more async operations in flight for a previous read.
+    ///
+    ///   If items were written to `destination` then a trap in the guest will
+    ///   be raised. If `finish` is `false` then this return value will raise a
+    ///   trap in the guest.
+    ///
+    /// * `Poll::Ok(StreamResult::Dropped)` - end-of-stream marker, indicating
+    ///   that this producer should not be polled again. Note that items may
+    ///   still be written to `destination`.
+    ///
+    /// # Errors
+    ///
+    /// The implementation may alternatively choose to return `Err(_)` to
+    /// indicate an unrecoverable error. This will cause the guest (if any) to
+    /// trap and render the component instance (if any) unusable. The
+    /// implementation should report errors that _are_ recoverable by other
+    /// means (e.g. by writing to a `future`) and return
+    /// `Poll::Ready(Ok(StreamResult::Dropped))`.
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
