@@ -2030,6 +2030,12 @@ criteria = "safe-to-deploy"
 delta = "0.15.0 -> 0.15.8"
 notes = "Lots of internal refactorings for new features and such, nothing major out of place."
 
+[[audits.console]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.15.8 -> 0.16.1"
+notes = "Nothing out of the ordinary. Minor `unsafe` code to work with libc and raw system APIs, otherwise as expected."
+
 [[audits.constant_time_eq]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2193,6 +2199,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.0 -> 0.6.1"
 notes = "Major updates, but almost all safe code. Lots of pruning/deletions, nothing out of the ordrinary."
+
+[[audits.encode_unicode]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.6 -> 1.0.0"
+notes = "Lots of updates, small edits to `unsafe` code, but all as expected."
 
 [[audits.errno]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -3163,6 +3175,12 @@ criteria = "safe-to-deploy"
 delta = "0.8.6 -> 0.8.8"
 notes = "Mostly OS portability updates along with some minor bugfixes."
 
+[[audits.mio]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.3 -> 1.1.0"
+notes = "Minor updates, refactors, Rust updates, portability, etc. Some minor `unsafe` code changes, but nothing out of the ordinary for mio."
+
 [[audits.native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3186,6 +3204,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.50.1"
 notes = "Lots of stylistic/rust-related chanegs, plus new features, but nothing out of the ordrinary."
+
+[[audits.nu-ansi-term]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.50.1 -> 0.50.3"
+notes = "CI changes, Rust changes, nothing out of the ordinary."
 
 [[audits.num-traits]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -3678,6 +3702,12 @@ criteria = "safe-to-deploy"
 version = "0.3.3"
 notes = "No unsafe, just a serialization library for tensors."
 
+[[audits.schannel]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.27 -> 0.1.28"
+notes = "Rust/CI/dependency updates, nothing out of the ordinary."
+
 [[audits.sct]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3786,6 +3816,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.5.7 -> 0.6.0"
 notes = "Lots of cfg changes and such but nothing out of the ordinary."
+
+[[audits.socket2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.0 -> 0.6.1"
+notes = "Minor new changes and windows updates, all looks reasonable."
 
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3984,6 +4020,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.7.0 -> 2.1.0"
 notes = "A number of updates to parsed syntax and such but nothing unexpected and entirely what one would expect a Rust procedural macro to do."
+
+[[audits.tokio-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.5.0 -> 2.6.0"
+notes = "Rust-related changes as well as minor new features, all reasonable."
 
 [[audits.tokio-native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -5493,7 +5535,7 @@ end = "2026-04-16"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-03-08"
-end = "2025-09-20"
+end = "2026-11-17"
 
 [[trusted.anyhow]]
 criteria = "safe-to-deploy"
@@ -5775,7 +5817,7 @@ end = "2026-01-08"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-11-09"
-end = "2024-07-14"
+end = "2026-11-17"
 
 [[trusted.io-lifetimes]]
 criteria = "safe-to-deploy"
@@ -6273,7 +6315,7 @@ end = "2026-10-08"
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-11-15"
-end = "2025-09-20"
+end = "2026-11-17"
 
 [[trusted.windows-targets]]
 criteria = "safe-to-deploy"
@@ -6339,7 +6381,7 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
-end = "2024-07-14"
+end = "2026-11-17"
 
 [[trusted.wit-component]]
 criteria = "safe-to-deploy"
