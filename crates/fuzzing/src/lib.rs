@@ -29,3 +29,44 @@ pub fn init_fuzzing() {
         let _ = env_logger::try_init();
     });
 }
+
+#[cfg(test)]
+mod test {
+    use arbitrary::{Arbitrary, Unstructured};
+    use rand::prelude::*;
+
+    pub fn gen_until_pass<T: for<'a> Arbitrary<'a>>(
+        mut f: impl FnMut(T, &mut Unstructured<'_>) -> anyhow::Result<bool>,
+    ) -> bool {
+        let mut rng = SmallRng::seed_from_u64(0);
+        let mut buf = vec![0; 2048];
+        let n = 3000;
+        for _ in 0..n {
+            rng.fill_bytes(&mut buf);
+            let mut u = Unstructured::new(&buf);
+
+            if let Ok(config) = u.arbitrary() {
+                if f(config, &mut u).unwrap() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Runs `f` with random data until it returns `Ok(())` `iters` times.
+    pub fn test_n_times<T: for<'a> Arbitrary<'a>>(
+        iters: u32,
+        mut f: impl FnMut(T, &mut Unstructured<'_>) -> arbitrary::Result<()>,
+    ) {
+        let mut to_test = 0..iters;
+        let ok = gen_until_pass(|a, b| {
+            if f(a, b).is_ok() {
+                Ok(to_test.next().is_none())
+            } else {
+                Ok(false)
+            }
+        });
+        assert!(ok);
+    }
+}
