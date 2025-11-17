@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+use std::task::{Context, Poll, Waker};
+
 pub use wasm_mutate;
 pub use wasm_smith;
 pub mod generators;
@@ -28,6 +30,17 @@ pub fn init_fuzzing() {
     INIT.call_once(|| {
         let _ = env_logger::try_init();
     });
+}
+
+fn block_on<F: Future>(future: F) -> F::Output {
+    let mut f = Box::pin(future);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => break val,
+            Poll::Pending => {}
+        }
+    }
 }
 
 #[cfg(test)]
