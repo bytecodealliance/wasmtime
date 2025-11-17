@@ -52,14 +52,14 @@ The emoji legend is:
 
 ## Off-by-default proposals
 
-|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
-|-----------------------------|---------|-------|----------|--------|-----|-------|
-| [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌    |
-| [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
-| [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`exception-handling`]      | ✅      | ✅    | ✅       | ❌     | ✅  | ❌    |
-| [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
+|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
+|-----------------------------|---------|-------|----------|--------|-----|--------|
+| [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
+| [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌     |
+| [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
+| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
+| [`exception-handling`]      | ✅      | ✅    | ✅       | 🚧[^11]| ✅  | 🚧[^12]|
+| [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌     |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -75,6 +75,12 @@ The emoji legend is:
 [^10]: The stack-switching proposal is a work-in-progress being tracked
     at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
     Currently the implementation is only for x86\_64 Linux.
+[^11]: The exception-handling proposal is fuzzed by our whole-module fuzzer,
+       but we do not have an exception-specific fuzzer that attempts to create
+       interesting throw/catch patterns or payloads.
+[^12]: The exception-handling proposal can be enabled for exceptions in the guest
+       via the C API, but exception objects have no C API to examine, clone,
+       rethrow, or drop exceptions that propagate to the host.
 
 ## Unimplemented proposals
 
