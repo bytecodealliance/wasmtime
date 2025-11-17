@@ -369,6 +369,8 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure the ability to create a `shared` memory.
+        pub shared_memory: Option<bool>,
         /// Configure support for the shared-everything-threads proposal.
         pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
@@ -1002,6 +1004,10 @@ impl CommonOptions {
 
         if let Some(enable) = self.wasm.gc_support {
             config.gc_support(enable);
+        }
+
+        if let Some(enable) = self.wasm.shared_memory {
+            config.shared_memory(enable);
         }
 
         Ok(config)

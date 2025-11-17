@@ -147,12 +147,18 @@ WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
  * \brief Configures whether the WebAssembly threading proposal is enabled.
  *
  * This setting is `false` by default.
- *
- * Note that threads are largely unimplemented in Wasmtime at this time.
  */
 WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
 
 #endif // WASMTIME_FEATURE_THREADS
+
+/**
+ * \brief Configures whether shared memories can be created.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, shared_memory, bool)
+
 
 /**
  * \brief Configures whether the WebAssembly tail call proposal is enabled.

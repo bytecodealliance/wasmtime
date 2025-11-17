@@ -10,6 +10,7 @@ use wasmtime::*;
 pub fn engine() -> Option<Engine> {
     let mut config = Config::new();
     config.wasm_threads(true);
+    config.shared_memory(true);
     match Engine::new(&config) {
         Ok(engine) => {
             assert!(cfg!(target_pointer_width = "64"));
