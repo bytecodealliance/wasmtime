@@ -15,7 +15,7 @@ use std::io::{self, Cursor};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
+    Access, Accessor, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
     StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut as _, StoreContextMut};
@@ -193,27 +193,25 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
 }
 
 impl stdin::HostWithStore for WasiCli {
-    async fn read_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn read_via_stream<U>(
+        mut store: Access<U, Self>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut store| {
-            let rx = store.get().ctx.stdin.async_stream();
-            let (result_tx, result_rx) = oneshot::channel();
-            let stream = StreamReader::new(
-                &mut store,
-                InputStreamProducer {
-                    rx: Box::into_pin(rx),
-                    result_tx: Some(result_tx),
-                },
-            );
-            let future = FutureReader::new(&mut store, async {
-                anyhow::Ok(match result_rx.await {
-                    Ok(err) => Err(err),
-                    Err(_) => Ok(()),
-                })
-            });
-            Ok((stream, future))
-        })
+        let rx = store.get().ctx.stdin.async_stream();
+        let (result_tx, result_rx) = oneshot::channel();
+        let stream = StreamReader::new(
+            &mut store,
+            InputStreamProducer {
+                rx: Box::into_pin(rx),
+                result_tx: Some(result_tx),
+            },
+        );
+        let future = FutureReader::new(&mut store, async {
+            anyhow::Ok(match result_rx.await {
+                Ok(err) => Err(err),
+                Err(_) => Ok(()),
+            })
+        });
+        Ok((stream, future))
     }
 }
 

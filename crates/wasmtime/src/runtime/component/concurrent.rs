@@ -243,6 +243,12 @@ where
             .as_context_mut()
             .spawn_with_accessor(accessor, task)
     }
+
+    /// Returns the getter this accessor is using to project from `T` into
+    /// `D::Data`.
+    pub fn getter(&self) -> fn(&mut T) -> D::Data<'_> {
+        self.get_data
+    }
 }
 
 impl<'a, T, D> AsContext for Access<'a, T, D>
