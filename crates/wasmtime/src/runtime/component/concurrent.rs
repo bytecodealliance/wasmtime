@@ -2859,11 +2859,12 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
+
         if !self.options(store, options).async_ {
             store.concurrent_state_mut().check_blocking()?;
         }
 
-        self.id().get(store).check_may_leave(caller)?;
         let &CanonicalOptions {
             cancellable,
             instance: caller_instance,
@@ -2892,11 +2893,12 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
+
         if !self.options(store, options).async_ {
             store.concurrent_state_mut().check_blocking()?;
         }
 
-        self.id().get(store).check_may_leave(caller)?;
         let &CanonicalOptions {
             cancellable,
             instance: caller_instance,
@@ -3075,6 +3077,8 @@ impl Instance {
         yielding: bool,
         to_thread: Option<u32>,
     ) -> Result<WaitResult> {
+        self.id().get(store).check_may_leave(caller)?;
+
         if to_thread.is_none() && !yielding {
             // This is a `thread.suspend` call
             store.concurrent_state_mut().check_blocking()?;
@@ -3084,8 +3088,6 @@ impl Instance {
         if cancellable && store.concurrent_state_mut().take_pending_cancellation() {
             return Ok(WaitResult::Cancelled);
         }
-
-        self.id().get(store).check_may_leave(caller)?;
 
         if let Some(thread) = to_thread {
             self.resume_suspended_thread(store, caller, thread, true)?;
@@ -3209,11 +3211,12 @@ impl Instance {
         async_: bool,
         task_id: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller_instance)?;
+
         if !async_ {
             store.concurrent_state_mut().check_blocking()?;
         }
 
-        self.id().get(store).check_may_leave(caller_instance)?;
         let (rep, is_host) =
             self.id().get_mut(store).guest_tables().0[caller_instance].subtask_rep(task_id)?;
         let (waitable, expected_caller_instance) = if is_host {
