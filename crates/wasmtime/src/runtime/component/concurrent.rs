@@ -705,6 +705,12 @@ pub(crate) enum WaitResult {
     Completed,
 }
 
+/// Raise a trap if the calling task is synchronous and trying to block prior to
+/// returning a value.
+pub(crate) fn check_blocking(store: &mut dyn VMStore) -> Result<()> {
+    store.concurrent_state_mut().check_blocking()
+}
+
 /// Poll the specified future until it completes on behalf of a guest->host call
 /// using a sync-lowered import.
 ///
@@ -1643,6 +1649,8 @@ impl Instance {
                 }));
             }
             callback_code::WAIT | callback_code::POLL => {
+                state.check_blocking_for(guest_thread.task)?;
+
                 let set = get_set(store, set)?;
                 let state = store.concurrent_state_mut();
 
@@ -2038,6 +2046,7 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         callee_instance: RuntimeComponentInstanceIndex,
         task_return_type: TypeTupleIndex,
+        callee_async: bool,
         memory: *mut VMMemoryDefinition,
         string_encoding: u8,
         caller_info: CallerInfo,
@@ -2182,6 +2191,7 @@ impl Instance {
             },
             None,
             callee_instance,
+            callee_async,
         )?;
 
         let guest_task = state.push(new_task)?;
@@ -2849,6 +2859,10 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
+        if !self.options(store, options).async_ {
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         self.id().get(store).check_may_leave(caller)?;
         let &CanonicalOptions {
             cancellable,
@@ -2878,6 +2892,10 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
+        if !self.options(store, options).async_ {
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         self.id().get(store).check_may_leave(caller)?;
         let &CanonicalOptions {
             cancellable,
@@ -3057,6 +3075,11 @@ impl Instance {
         yielding: bool,
         to_thread: Option<u32>,
     ) -> Result<WaitResult> {
+        if to_thread.is_none() && !yielding {
+            // This is a `thread.suspend` call
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         // There could be a pending cancellation from a previous uncancellable wait
         if cancellable && store.concurrent_state_mut().take_pending_cancellation() {
             return Ok(WaitResult::Cancelled);
@@ -3186,6 +3209,10 @@ impl Instance {
         async_: bool,
         task_id: u32,
     ) -> Result<u32> {
+        if !async_ {
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         self.id().get(store).check_may_leave(caller_instance)?;
         let (rep, is_host) =
             self.id().get_mut(store).guest_tables().0[caller_instance].subtask_rep(task_id)?;
@@ -3346,6 +3373,7 @@ pub trait VMComponentAsyncStore {
         caller_instance: RuntimeComponentInstanceIndex,
         callee_instance: RuntimeComponentInstanceIndex,
         task_return_type: TypeTupleIndex,
+        callee_async: bool,
         string_encoding: u8,
         result_count: u32,
         storage: *mut ValRaw,
@@ -3505,6 +3533,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         caller_instance: RuntimeComponentInstanceIndex,
         callee_instance: RuntimeComponentInstanceIndex,
         task_return_type: TypeTupleIndex,
+        callee_async: bool,
         string_encoding: u8,
         result_count_or_max_if_async: u32,
         storage: *mut ValRaw,
@@ -3523,6 +3552,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                 caller_instance,
                 callee_instance,
                 task_return_type,
+                callee_async,
                 memory,
                 string_encoding,
                 match result_count_or_max_if_async {
@@ -4063,6 +4093,9 @@ pub(crate) struct GuestTask {
     /// The state of the host future that represents an async task, which must
     /// be dropped before we can delete the task.
     host_future_state: HostFutureState,
+    /// Indicates whether this task was created for a call to an async-lifted
+    /// export.
+    async_function: bool,
 }
 
 impl GuestTask {
@@ -4103,6 +4136,7 @@ impl GuestTask {
         caller: Caller,
         callback: Option<CallbackFn>,
         component_instance: RuntimeComponentInstanceIndex,
+        async_function: bool,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         let host_future_state = match &caller {
@@ -4137,6 +4171,7 @@ impl GuestTask {
             exited: false,
             threads: HashSet::new(),
             host_future_state,
+            async_function,
         })
     }
 
@@ -4750,6 +4785,20 @@ impl ConcurrentState {
             false
         }
     }
+
+    fn check_blocking(&mut self) -> Result<()> {
+        let task = self.guest_thread.unwrap().task;
+        self.check_blocking_for(task)
+    }
+
+    fn check_blocking_for(&mut self, task: TableId<GuestTask>) -> Result<()> {
+        let task = self.get_mut(task).unwrap();
+        if !(task.async_function || task.returned_or_cancelled()) {
+            Err(Trap::CannotBlockSyncTask.into())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Provide a type hint to compiler about the shape of a parameter lower
@@ -4908,7 +4957,9 @@ pub(crate) fn prepare_call<T, R>(
 
     let instance = handle.instance().id().get(store.0);
     let options = &instance.component().env_component().options[options];
-    let task_return_type = instance.component().types()[ty].results;
+    let ty = &instance.component().types()[ty];
+    let async_function = ty.async_;
+    let task_return_type = ty.results;
     let component_instance = raw_options.instance;
     let callback = options.callback.map(|i| instance.runtime_callback(i));
     let memory = options
@@ -4965,6 +5016,7 @@ pub(crate) fn prepare_call<T, R>(
             ) as CallbackFn
         }),
         component_instance,
+        async_function,
     )?;
     task.function_index = Some(handle.index());
 

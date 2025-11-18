@@ -544,6 +544,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(
             i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
         ));
+        self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
+            1
+        } else {
+            0
+        }));
         self.instruction(I32Const(i32::from(
             adapter.lift.options.string_encoding as u8,
         )));
