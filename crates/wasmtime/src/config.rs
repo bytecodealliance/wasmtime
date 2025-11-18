@@ -1176,7 +1176,7 @@ impl Config {
     /// incomplete.
     ///
     /// [proposal]:
-    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_ASYNC, enable);
@@ -1189,7 +1189,7 @@ impl Config {
     /// incomplete.
     ///
     /// [proposal]:
-    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async_builtins(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_ASYNC_BUILTINS, enable);
@@ -1201,7 +1201,7 @@ impl Config {
     /// Please note that Wasmtime's support for this feature is _very_
     /// incomplete.
     ///
-    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async_stackful(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_ASYNC_STACKFUL, enable);
@@ -1226,7 +1226,7 @@ impl Config {
     /// Please note that Wasmtime's support for this feature is _very_
     /// incomplete.
     ///
-    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_error_context(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_ERROR_CONTEXT, enable);
