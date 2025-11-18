@@ -17,11 +17,11 @@
     )
 
     (core instance $a (instantiate $a))
-    (func (export "run")
+    (func (export "run") async
       (canon lift (core func $a "run") async (callback (func $a "run-cb"))))
   )
   (component $B
-    (import "a" (instance $a (export "run" (func))))
+    (import "a" (instance $a (export "run" (func async))))
 
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
@@ -71,7 +71,7 @@
         (export "wait" (func $wait))
       ))
     ))
-    (func (export "run")
+    (func (export "run") async
       (canon lift (core func $b "run")))
   )
 

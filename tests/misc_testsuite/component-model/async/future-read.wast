@@ -49,7 +49,7 @@
     ))
   ))
 
-  (func (export "run")
+  (func (export "run") async
     (canon lift (core func $i "run")))
 )
 
@@ -134,7 +134,7 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run") async (callback (func $i "cb"))))
   )
   (instance $child (instantiate $child))
@@ -158,7 +158,7 @@
     ))
   ))
 
-  (func (export "run")
+  (func (export "run") async
     (canon lift (core func $i "run")))
 )
 
@@ -219,7 +219,7 @@
     ))
   ))
 
-  (func (export "run")
+  (func (export "run") async
     (canon lift (core func $i "run")))
 )
 
