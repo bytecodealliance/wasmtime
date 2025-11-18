@@ -14,7 +14,7 @@ use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Access, Accessor, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
+    Access, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
 
@@ -312,57 +312,55 @@ impl HostFields for WasiHttpCtxView<'_> {
 }
 
 impl HostRequestWithStore for WasiHttp {
-    async fn new<T>(
-        store: &Accessor<T, Self>,
+    fn new<T>(
+        mut store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut store| {
-            let (result_tx, result_rx) = oneshot::channel();
-            let body = match contents
-                .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
-            {
-                Some(Ok(mut producer)) => Body::Host {
-                    body: mem::take(&mut producer.body),
-                    result_tx,
-                },
-                Some(Err(rx)) => Body::Guest {
-                    contents_rx: Some(rx),
-                    trailers_rx: trailers,
-                    result_tx,
-                },
-                None => Body::Guest {
-                    contents_rx: None,
-                    trailers_rx: trailers,
-                    result_tx,
-                },
-            };
-            let WasiHttpCtxView { table, .. } = store.get();
-            let headers = delete_fields(table, headers)?;
-            let options = options
-                .map(|options| delete_request_options(table, options))
-                .transpose()?;
-            let req = Request {
-                method: http::Method::GET,
-                scheme: None,
-                authority: None,
-                path_with_query: None,
-                headers: headers.into(),
-                options: options.map(Into::into),
-                body,
-            };
-            let req = table.push(req).context("failed to push request to table")?;
-            Ok((
-                req,
-                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
-            ))
-        })
+        let (result_tx, result_rx) = oneshot::channel();
+        let body = match contents
+            .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
+        {
+            Some(Ok(mut producer)) => Body::Host {
+                body: mem::take(&mut producer.body),
+                result_tx,
+            },
+            Some(Err(rx)) => Body::Guest {
+                contents_rx: Some(rx),
+                trailers_rx: trailers,
+                result_tx,
+            },
+            None => Body::Guest {
+                contents_rx: None,
+                trailers_rx: trailers,
+                result_tx,
+            },
+        };
+        let WasiHttpCtxView { table, .. } = store.get();
+        let headers = delete_fields(table, headers)?;
+        let options = options
+            .map(|options| delete_request_options(table, options))
+            .transpose()?;
+        let req = Request {
+            method: http::Method::GET,
+            scheme: None,
+            authority: None,
+            path_with_query: None,
+            headers: headers.into(),
+            options: options.map(Into::into),
+            body,
+        };
+        let req = table.push(req).context("failed to push request to table")?;
+        Ok((
+            req,
+            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
+        ))
     }
 
-    async fn consume_body<T>(
-        store: &Accessor<T, Self>,
+    fn consume_body<T>(
+        mut store: Access<T, Self>,
         req: Resource<Request>,
         fut: FutureReader<Result<(), ErrorCode>>,
     ) -> wasmtime::Result<(
@@ -370,14 +368,12 @@ impl HostRequestWithStore for WasiHttp {
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     )> {
         let getter = store.getter();
-        store.with(|mut store| {
-            let Request { body, .. } = store
-                .get()
-                .table
-                .delete(req)
-                .context("failed to delete request from table")?;
-            Ok(body.consume(store, fut, getter))
-        })
+        let Request { body, .. } = store
+            .get()
+            .table
+            .delete(req)
+            .context("failed to delete request from table")?;
+        Ok(body.consume(store, fut, getter))
     }
 
     fn drop<T>(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
@@ -602,51 +598,49 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 }
 
 impl HostResponseWithStore for WasiHttp {
-    async fn new<T>(
-        store: &Accessor<T, Self>,
+    fn new<T>(
+        mut store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut store| {
-            let (result_tx, result_rx) = oneshot::channel();
-            let body = match contents
-                .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
-            {
-                Some(Ok(mut producer)) => Body::Host {
-                    body: mem::take(&mut producer.body),
-                    result_tx,
-                },
-                Some(Err(rx)) => Body::Guest {
-                    contents_rx: Some(rx),
-                    trailers_rx: trailers,
-                    result_tx,
-                },
-                None => Body::Guest {
-                    contents_rx: None,
-                    trailers_rx: trailers,
-                    result_tx,
-                },
-            };
-            let WasiHttpCtxView { table, .. } = store.get();
-            let headers = delete_fields(table, headers)?;
-            let res = Response {
-                status: http::StatusCode::OK,
-                headers: headers.into(),
-                body,
-            };
-            let res = table
-                .push(res)
-                .context("failed to push response to table")?;
-            Ok((
-                res,
-                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
-            ))
-        })
+        let (result_tx, result_rx) = oneshot::channel();
+        let body = match contents
+            .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
+        {
+            Some(Ok(mut producer)) => Body::Host {
+                body: mem::take(&mut producer.body),
+                result_tx,
+            },
+            Some(Err(rx)) => Body::Guest {
+                contents_rx: Some(rx),
+                trailers_rx: trailers,
+                result_tx,
+            },
+            None => Body::Guest {
+                contents_rx: None,
+                trailers_rx: trailers,
+                result_tx,
+            },
+        };
+        let WasiHttpCtxView { table, .. } = store.get();
+        let headers = delete_fields(table, headers)?;
+        let res = Response {
+            status: http::StatusCode::OK,
+            headers: headers.into(),
+            body,
+        };
+        let res = table
+            .push(res)
+            .context("failed to push response to table")?;
+        Ok((
+            res,
+            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
+        ))
     }
 
-    async fn consume_body<T>(
-        store: &Accessor<T, Self>,
+    fn consume_body<T>(
+        mut store: Access<T, Self>,
         res: Resource<Response>,
         fut: FutureReader<Result<(), ErrorCode>>,
     ) -> wasmtime::Result<(
@@ -654,14 +648,12 @@ impl HostResponseWithStore for WasiHttp {
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     )> {
         let getter = store.getter();
-        store.with(|mut store| {
-            let Response { body, .. } = store
-                .get()
-                .table
-                .delete(res)
-                .context("failed to delete response from table")?;
-            Ok(body.consume(store, fut, getter))
-        })
+        let Response { body, .. } = store
+            .get()
+            .table
+            .delete(res)
+            .context("failed to delete response from table")?;
+        Ok(body.consume(store, fut, getter))
     }
 
     fn drop<T>(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
