@@ -187,3 +187,25 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::test_n_times;
+    use wasmtime_test_util::component_fuzz::{TestCase, Type};
+
+    #[test]
+    fn static_api_smoke_test() {
+        test_n_times(10, |(), u| {
+            let case = TestCase {
+                params: vec![&Type::S32, &Type::Bool, &Type::String],
+                result: Some(&Type::String),
+                encoding1: u.arbitrary()?,
+                encoding2: u.arbitrary()?,
+            };
+
+            let declarations = case.declarations();
+            static_api_test::<(i32, bool, String), (String,)>(u, &declarations)
+        });
+    }
+}

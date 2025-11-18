@@ -1369,44 +1369,8 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arbitrary::Unstructured;
-    use rand::prelude::*;
+    use crate::test::{gen_until_pass, test_n_times};
     use wasmparser::{Validator, WasmFeatures};
-
-    fn gen_until_pass<T: for<'a> Arbitrary<'a>>(
-        mut f: impl FnMut(T, &mut Unstructured<'_>) -> Result<bool>,
-    ) -> bool {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 2048];
-        let n = 3000;
-        for _ in 0..n {
-            rng.fill_bytes(&mut buf);
-            let mut u = Unstructured::new(&buf);
-
-            if let Ok(config) = u.arbitrary() {
-                if f(config, &mut u).unwrap() {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    /// Runs `f` with random data until it returns `Ok(())` `iters` times.
-    fn test_n_times<T: for<'a> Arbitrary<'a>>(
-        iters: u32,
-        mut f: impl FnMut(T, &mut Unstructured<'_>) -> arbitrary::Result<()>,
-    ) {
-        let mut to_test = 0..iters;
-        let ok = gen_until_pass(|a, b| {
-            if f(a, b).is_ok() {
-                Ok(to_test.next().is_none())
-            } else {
-                Ok(false)
-            }
-        });
-        assert!(ok);
-    }
 
     // Test that the `gc_ops` fuzzer eventually runs the gc function in the host.
     // We've historically had issues where this fuzzer accidentally wasn't fuzzing
@@ -1500,5 +1464,10 @@ mod tests {
     #[test]
     fn wast_smoke_test() {
         test_n_times(50, |(), u| super::wast_test(u));
+    }
+
+    #[test]
+    fn dynamic_component_api_smoke_test() {
+        test_n_times(50, |(), u| super::dynamic_component_api_target(u));
     }
 }
