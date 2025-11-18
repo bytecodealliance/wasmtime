@@ -881,9 +881,8 @@ impl Component {
         }
     }
 
-    //TODO: rename?
-    /// Returns the Component Structure needed for Remote Attestation.
-    pub fn component_structure(&self) -> &dfg::RootComponentInstanceStructure {
+    /// Returns the Instantiation Graph.
+    pub fn instantiation_graph(&self) -> &dfg::RootComponentInstanceStructure {
         &self.inner.info.component.instantiation_graph
     }
 }

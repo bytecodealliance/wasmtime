@@ -177,13 +177,14 @@ struct Inliner<'a> {
     /// inliner.
     result: dfg::ComponentDfg,
 
-    // Maps used to "intern" various runtime items to only save them once at
-    // runtime instead of multiple times.
+    /// Maps used to "intern" various runtime items to only save them once at
+    /// runtime instead of multiple times.
     import_path_interner: HashMap<ImportPath<'a>, RuntimeImportIndex>,
 
     /// Origin information about where each runtime instance came from
     runtime_instances: PrimaryMap<dfg::InstanceId, InstanceModule>,
 
+    /// Origin informatino about where each core definition came from.
     core_def_to_sources: HashMap<dfg::CoreDef, Source>,
 }
 
@@ -490,7 +491,11 @@ impl<'a> Inliner<'a> {
         }
     }
 
-    //TODO: Add some docs here
+    /// Records the runtime sources for each component export, 
+    /// so the instantiation graph later knows which 
+    /// core definitions they depend on.
+    /// Here internal component exports are recorded in addition to the 
+    /// exports recoreded for the top level component.
     fn add_component_exports(
         &mut self,
         types: &mut ComponentTypesBuilder,
@@ -1332,7 +1337,7 @@ impl<'a> Inliner<'a> {
                                 _ => module.to_string(),
                             };
 
-                            //TODO: Docs here
+                            // CoreDef which is hashable is used as key to retrieve the source
                             core_imports.insert(count, name.clone());
                             sources.insert(
                                 count,
