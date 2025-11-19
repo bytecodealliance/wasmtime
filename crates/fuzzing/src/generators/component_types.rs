@@ -6,12 +6,13 @@
 //! parameters to the imported one and forwards the result back to the caller.  This serves to exercise Wasmtime's
 //! lifting and lowering code and verify the values remain intact during both processes.
 
+use crate::block_on;
 use arbitrary::{Arbitrary, Unstructured};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{self, Component, ComponentNamedList, Lift, Linker, Lower, Val};
-use wasmtime::{Config, Engine, Store, StoreContextMut};
+use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut};
 use wasmtime_test_util::component_fuzz::{Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION};
 
 /// Minimum length of an arbitrary list value generated for a test case
@@ -147,6 +148,9 @@ where
 
     let mut config = Config::new();
     config.wasm_component_model(true);
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_stackful(true);
+    config.async_support(true);
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let wat = declarations.make_component();
@@ -154,38 +158,72 @@ where
     crate::oracles::log_wasm(wat);
     let component = Component::new(&engine, wat).unwrap();
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap(
-            IMPORT_FUNCTION,
-            |cx: StoreContextMut<'_, Box<dyn Any + Send>>, params: P| {
-                log::trace!("received parameters {params:?}");
-                let data: &(P, R) = cx.data().downcast_ref().unwrap();
-                let (expected_params, result) = data;
-                assert_eq!(params, *expected_params);
-                log::trace!("returning result {result:?}");
-                Ok(result.clone())
-            },
-        )
-        .unwrap();
-    let mut store: Store<Box<dyn Any + Send>> = Store::new(&engine, Box::new(()));
-    let instance = linker.instantiate(&mut store, &component).unwrap();
-    let func = instance
-        .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
-        .unwrap();
 
-    while input.arbitrary()? {
-        let params = input.arbitrary::<P>()?;
-        let result = input.arbitrary::<R>()?;
-        *store.data_mut() = Box::new((params.clone(), result.clone()));
-        log::trace!("passing in parameters {params:?}");
-        let actual = func.call(&mut store, params).unwrap();
-        log::trace!("got result {actual:?}");
-        assert_eq!(actual, result);
-        func.post_return(&mut store).unwrap();
+    fn host_function<P, R>(
+        cx: StoreContextMut<'_, Box<dyn Any + Send>>,
+        params: P,
+    ) -> anyhow::Result<R>
+    where
+        P: Debug + PartialEq + 'static,
+        R: Debug + Clone + 'static,
+    {
+        log::trace!("received parameters {params:?}");
+        let data: &(P, R) = cx.data().downcast_ref().unwrap();
+        let (expected_params, result) = data;
+        assert_eq!(params, *expected_params);
+        log::trace!("returning result {result:?}");
+        Ok(result.clone())
     }
 
-    Ok(())
+    if declarations.options.host_async {
+        linker
+            .root()
+            .func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
+                Box::pin(async move {
+                    a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params))
+                })
+            })
+            .unwrap();
+    } else {
+        linker
+            .root()
+            .func_wrap(IMPORT_FUNCTION, |cx, params| {
+                host_function::<P, R>(cx, params)
+            })
+            .unwrap();
+    }
+    let mut store: Store<Box<dyn Any + Send>> = Store::new(&engine, Box::new(()));
+
+    block_on(async {
+        let instance = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .unwrap();
+        let func = instance
+            .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
+            .unwrap();
+
+        while input.arbitrary()? {
+            let params = input.arbitrary::<P>()?;
+            let result = input.arbitrary::<R>()?;
+            *store.data_mut() = Box::new((params.clone(), result.clone()));
+            log::trace!("passing in parameters {params:?}");
+            let actual = if declarations.options.guest_caller_async {
+                store
+                    .run_concurrent(async |a| func.call_concurrent(a, params).await.unwrap().0)
+                    .await
+                    .unwrap()
+            } else {
+                let result = func.call_async(&mut store, params).await.unwrap();
+                func.post_return_async(&mut store).await.unwrap();
+                result
+            };
+            log::trace!("got result {actual:?}");
+            assert_eq!(actual, result);
+        }
+
+        Ok(())
+    })
 }
 
 #[cfg(test)]
@@ -197,12 +235,9 @@ mod tests {
     #[test]
     fn static_api_smoke_test() {
         test_n_times(10, |(), u| {
-            let case = TestCase {
-                params: vec![&Type::S32, &Type::Bool, &Type::String],
-                result: Some(&Type::String),
-                encoding1: u.arbitrary()?,
-                encoding2: u.arbitrary()?,
-            };
+            let mut case = TestCase::generate(&[], u)?;
+            case.params = vec![&Type::S32, &Type::Bool, &Type::String];
+            case.result = Some(&Type::String);
 
             let declarations = case.declarations();
             static_api_test::<(i32, bool, String), (String,)>(u, &declarations)

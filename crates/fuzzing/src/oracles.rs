@@ -21,6 +21,7 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
+use crate::block_on;
 use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
@@ -30,8 +31,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+use wasmtime::component::Accessor;
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
@@ -59,7 +61,10 @@ pub fn log_wasm(wasm: &[u8]) {
         // If wasmprinter failed remove a `*.wat` file, if any, to avoid
         // confusing a preexisting one with this wasm which failed to get
         // printed.
-        Err(_) => drop(std::fs::remove_file(&wat)),
+        Err(e) => {
+            log::debug!("failed to print to wat: {e}");
+            drop(std::fs::remove_file(&wat))
+        }
     }
 }
 
@@ -1077,7 +1082,6 @@ impl Drop for HelperThread {
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
     use wasmtime::component::{Component, Linker, Val};
-    use wasmtime_test_util::component::FuncExt;
     use wasmtime_test_util::component_fuzz::{
         EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type,
     };
@@ -1090,23 +1094,13 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     for _ in 0..5 {
         types.push(Type::generate(input, MAX_TYPE_DEPTH, &mut type_fuel)?);
     }
-    let params = (0..input.int_in_range(0..=5)?)
-        .map(|_| input.choose(&types))
-        .collect::<arbitrary::Result<Vec<_>>>()?;
-    let result = if input.arbitrary()? {
-        Some(input.choose(&types)?)
-    } else {
-        None
-    };
 
-    let case = TestCase {
-        params,
-        result,
-        encoding1: input.arbitrary()?,
-        encoding2: input.arbitrary()?,
-    };
+    let case = TestCase::generate(&types, input)?;
 
     let mut config = wasmtime_test_util::component::config();
+    config.async_support(true);
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_stackful(true);
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, (Vec::new(), None));
@@ -1116,52 +1110,82 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     let component = Component::new(&engine, wat).unwrap();
     let mut linker = Linker::new(&engine);
 
-    linker
-        .root()
-        .func_new(IMPORT_FUNCTION, {
-            move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
-                  _,
-                  params: &[Val],
-                  results: &mut [Val]|
-                  -> Result<()> {
-                log::trace!("received params {params:?}");
-                let (expected_args, expected_results) = cx.data_mut();
-                assert_eq!(params.len(), expected_args.len());
-                for (expected, actual) in expected_args.iter().zip(params) {
-                    assert_eq!(expected, actual);
-                }
-                results.clone_from_slice(&expected_results.take().unwrap());
-                log::trace!("returning results {results:?}");
-                Ok(())
-            }
-        })
-        .unwrap();
-
-    let instance = linker.instantiate(&mut store, &component).unwrap();
-    let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-    let ty = func.ty(&store);
-
-    while input.arbitrary()? {
-        let params = ty
-            .params()
-            .map(|(_, ty)| component_types::arbitrary_val(&ty, input))
-            .collect::<arbitrary::Result<Vec<_>>>()?;
-        let results = ty
-            .results()
-            .map(|ty| component_types::arbitrary_val(&ty, input))
-            .collect::<arbitrary::Result<Vec<_>>>()?;
-
-        *store.data_mut() = (params.clone(), Some(results.clone()));
-
-        log::trace!("passing params {params:?}");
-        let mut actual = vec![Val::Bool(false); results.len()];
-        func.call_and_post_return(&mut store, &params, &mut actual)
-            .unwrap();
-        log::trace!("received results {actual:?}");
-        assert_eq!(actual, results);
+    fn host_function(
+        mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        log::trace!("received params {params:?}");
+        let (expected_args, expected_results) = cx.data_mut();
+        assert_eq!(params.len(), expected_args.len());
+        for (expected, actual) in expected_args.iter().zip(params) {
+            assert_eq!(expected, actual);
+        }
+        results.clone_from_slice(&expected_results.take().unwrap());
+        log::trace!("returning results {results:?}");
+        Ok(())
     }
 
-    Ok(())
+    if case.options.host_async {
+        linker
+            .root()
+            .func_new_concurrent(IMPORT_FUNCTION, {
+                move |cx: &Accessor<_, _>, _, params: &[Val], results: &mut [Val]| {
+                    Box::pin(async move {
+                        cx.with(|mut store| host_function(store.as_context_mut(), params, results))
+                    })
+                }
+            })
+            .unwrap();
+    } else {
+        linker
+            .root()
+            .func_new(IMPORT_FUNCTION, {
+                move |cx, _, params, results| host_function(cx, params, results)
+            })
+            .unwrap();
+    }
+
+    block_on(async {
+        let instance = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .unwrap();
+        let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
+        let ty = func.ty(&store);
+
+        while input.arbitrary()? {
+            let params = ty
+                .params()
+                .map(|(_, ty)| component_types::arbitrary_val(&ty, input))
+                .collect::<arbitrary::Result<Vec<_>>>()?;
+            let results = ty
+                .results()
+                .map(|ty| component_types::arbitrary_val(&ty, input))
+                .collect::<arbitrary::Result<Vec<_>>>()?;
+
+            *store.data_mut() = (params.clone(), Some(results.clone()));
+
+            log::trace!("passing params {params:?}");
+            let mut actual = vec![Val::Bool(false); results.len()];
+            if case.options.guest_caller_async {
+                store
+                    .run_concurrent(async |a| {
+                        func.call_concurrent(a, &params, &mut actual).await.unwrap();
+                    })
+                    .await
+                    .unwrap();
+            } else {
+                func.call_async(&mut store, &params, &mut actual)
+                    .await
+                    .unwrap();
+                func.post_return_async(&mut store).await.unwrap();
+            }
+            log::trace!("received results {actual:?}");
+            assert_eq!(actual, results);
+        }
+        Ok(())
+    })
 }
 
 /// Instantiates a wasm module and runs its exports with dummy values, all in
@@ -1221,7 +1245,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
     // Run the instantiation process, asynchronously, and if everything
     // succeeds then pull out the instance.
     // log::info!("starting instantiation");
-    let instance = run(Timeout {
+    let instance = block_on(Timeout {
         future: Instance::new_async(&mut store, &module, &imports),
         polls: take_poll_amt(&mut poll_amts),
         end: Instant::now() + Duration::from_millis(2_000),
@@ -1267,7 +1291,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
 
         log::info!("invoking export {name:?}");
         let future = func.call_async(&mut store, &params, &mut results);
-        match run(Timeout {
+        match block_on(Timeout {
             future,
             polls: take_poll_amt(&mut poll_amts),
             end: Instant::now() + Duration::from_millis(2_000),
@@ -1350,17 +1374,6 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
                     *polls -= 1;
                     Poll::Pending
                 }
-            }
-        }
-    }
-
-    fn run<F: Future>(future: F) -> F::Output {
-        let mut f = Box::pin(future);
-        let mut cx = Context::from_waker(Waker::noop());
-        loop {
-            match f.as_mut().poll(&mut cx) {
-                Poll::Ready(val) => break val,
-                Poll::Pending => {}
             }
         }
     }
