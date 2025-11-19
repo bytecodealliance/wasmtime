@@ -121,7 +121,7 @@ mod component {
                 options,
             } = case.declarations();
 
-            let test = quote!(#index => component_types::static_api_test::<(#rust_params), (#rust_results)>(
+            let test = quote!(#index => component_api::static_api_test::<(#rust_params), (#rust_results)>(
                 input,
                 {
                     static DECLS: Declarations = Declarations {
@@ -150,7 +150,7 @@ mod component {
                 use std::borrow::Cow;
                 use std::sync::{Arc, Once};
                 use wasmtime::component::{ComponentType, Lift, Lower};
-                use wasmtime_fuzzing::generators::component_types;
+                use wasmtime_fuzzing::oracles::component_api;
 
                 const SEED: u64 = #seed;
 
