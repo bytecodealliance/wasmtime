@@ -2376,6 +2376,15 @@ impl Config {
             }
         }
 
+        // If guest-debugging is enabled, we must disable
+        // signals-based traps. Do this before we process the user's
+        // provided tunables settings so we can detect a conflict with
+        // an explicit request to use signals-based traps.
+        #[cfg(feature = "debug")]
+        if self.tunables.debug_guest == Some(true) {
+            tunables.signals_based_traps = false;
+        }
+
         self.tunables.configure(&mut tunables);
 
         // If we're going to compile with winch, we must use the winch calling convention.
@@ -2400,15 +2409,13 @@ impl Config {
             None
         };
 
-        if !cfg!(feature = "debug") && tunables.debug_guest {
-            bail!("debug instrumentation support was disabled at compile time");
-        }
-
-        // If guest-debugging is enabled, we must disable
-        // signals-based traps.
-        #[cfg(feature = "debug")]
         if tunables.debug_guest {
-            tunables.signals_based_traps = false;
+            if !cfg!(feature = "debug") {
+                bail!("debug instrumentation support was disabled at compile time");
+            }
+            if tunables.signals_based_traps {
+                bail!("cannot use signals-based traps with guest debugging enabled");
+            }
         }
 
         Ok((tunables, features))

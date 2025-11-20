@@ -7,6 +7,14 @@ use wasmtime::{
     Store, StoreContextMut,
 };
 
+#[test]
+fn debugging_does_not_work_with_signal_based_traps() {
+    let mut config = Config::default();
+    config.guest_debug(true).signals_based_traps(true);
+    let err = Engine::new(&config).expect_err("invalid config should produce an error");
+    assert!(format!("{err:?}").contains("cannot use signals-based traps"));
+}
+
 fn get_module_and_store<C: Fn(&mut Config)>(
     c: C,
     wat: &str,
