@@ -2085,7 +2085,8 @@ impl Instance {
             Box::new(move |store, dst| {
                 let mut store = token.as_context_mut(store);
                 assert!(dst.len() <= MAX_FLAT_PARAMS);
-                let mut src = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
+                // The `+ 1` here accounts for the return pointer, if any:
+                let mut src = [MaybeUninit::uninit(); MAX_FLAT_PARAMS + 1];
                 let count = match caller_info {
                     // Async callers, if they have a result, use the last
                     // parameter as a return pointer so chop that off if
