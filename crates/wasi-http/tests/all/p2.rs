@@ -285,7 +285,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                     Ok(IncomingResponse {
                         resp: resp.map(|body| {
                             body.map_err(wasmtime_wasi_http::hyper_response_error)
-                                .boxed()
+                                .boxed_unsync()
                         }),
                         worker: None,
                         between_bytes_timeout,

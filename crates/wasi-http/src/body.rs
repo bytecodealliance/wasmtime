@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::future::Future;
 use std::mem;
 use std::task::{Context, Poll};
@@ -15,10 +15,10 @@ use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
 use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
 
 /// Common type for incoming bodies.
-pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
+pub type HyperIncomingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
 
 /// Common type for outgoing bodies.
-pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
+pub type HyperOutgoingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
 
 /// The concrete type behind a `was:http/types.incoming-body` resource.
 #[derive(Debug)]
@@ -481,7 +481,7 @@ impl HostOutgoingBody {
             body_receiver,
             finish_receiver: Some(finish_receiver),
         }
-        .boxed();
+        .boxed_unsync();
 
         let output_stream = BodyWriteStream::new(context, chunk_size, body_sender, written.clone());
 
