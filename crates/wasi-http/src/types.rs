@@ -92,11 +92,11 @@ pub trait WasiHttpView {
         req: hyper::Request<B>,
     ) -> wasmtime::Result<Resource<HostIncomingRequest>>
     where
-        B: Body<Data = Bytes, Error = hyper::Error> + Send + Sync + 'static,
+        B: Body<Data = Bytes, Error = hyper::Error> + Send + 'static,
         Self: Sized,
     {
         let (parts, body) = req.into_parts();
-        let body = body.map_err(crate::hyper_response_error).boxed();
+        let body = body.map_err(crate::hyper_response_error).boxed_unsync();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
@@ -476,7 +476,7 @@ pub async fn default_send_request_handler(
         .await
         .map_err(|_| types::ErrorCode::ConnectionReadTimeout)?
         .map_err(hyper_request_error)?
-        .map(|body| body.map_err(hyper_request_error).boxed());
+        .map(|body| body.map_err(hyper_request_error).boxed_unsync());
 
     Ok(IncomingResponse {
         resp,
@@ -600,7 +600,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
             None => builder.body(
                 Empty::<bytes::Bytes>::new()
                     .map_err(|_| unreachable!("Infallible error"))
-                    .boxed(),
+                    .boxed_unsync(),
             ),
         }
     }
