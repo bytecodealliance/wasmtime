@@ -3948,6 +3948,15 @@
         (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x))
         (trap_if_impl (mask_as_cond 3) tc)))
 
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_32_or_64 ty) (uadd_overflow x y)))
+      (let ((sum Reg (add_reg ty x y))
+            (overflow Reg
+              (lower_bool $I8
+                          (bool (icmpu_reg ty sum x) (intcc_as_cond (IntCC.UnsignedLessThan))))))
+        (output_pair sum overflow)))
+
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
