@@ -2404,6 +2404,13 @@ impl Config {
             bail!("debug instrumentation support was disabled at compile time");
         }
 
+        // If guest-debugging is enabled, we must disable
+        // signals-based traps.
+        #[cfg(feature = "debug")]
+        if tunables.debug_guest {
+            tunables.signals_based_traps = false;
+        }
+
         Ok((tunables, features))
     }
 

@@ -370,8 +370,6 @@ async fn hostcall_trap_events() -> anyhow::Result<()> {
         |config| {
             config.async_support(true);
             config.wasm_exceptions(true);
-            // Force hostcall-based traps.
-            config.signals_based_traps(false);
         },
         r#"
     (module
