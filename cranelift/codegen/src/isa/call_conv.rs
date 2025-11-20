@@ -45,6 +45,26 @@ pub enum CallConv {
     /// defines no callee-save registers, and restricts the number of return
     /// registers to one integer, and one floating point.
     Winch,
+    /// Calling convention for patchable-call instructions.
+    ///
+    /// This is designed for a very specific need: we want a *single*
+    /// call instruction at our callsite, with no other setup, and we
+    /// don't want any registers clobbered. This allows patchable
+    /// callsites to be as unobtrusive as possible.
+    ///
+    /// The ABI is based on the native register-argument ABI on each
+    /// respective platform, but puts severe restrictions on allowable
+    /// signatures: only up to four arguments of integer type, and no
+    /// return values. It does not support tail-calls, and disallows
+    /// any extension modes on arguments.
+    ///
+    /// The ABI specifies that *no* registers, not even argument
+    /// registers, are clobbered. This is pretty unique: it means that
+    /// the call instruction will constrain regalloc to have any args
+    /// in the right registers, but those registers will be preserved,
+    /// so multiple patchable callsites can reuse those values. This
+    /// further reduces the cost of the callsites.
+    Patchable,
 }
 
 impl CallConv {
@@ -123,6 +143,7 @@ impl fmt::Display for CallConv {
             Self::AppleAarch64 => "apple_aarch64",
             Self::Probestack => "probestack",
             Self::Winch => "winch",
+            Self::Patchable => "patchable",
         })
     }
 }
@@ -139,6 +160,7 @@ impl str::FromStr for CallConv {
             "apple_aarch64" => Ok(Self::AppleAarch64),
             "probestack" => Ok(Self::Probestack),
             "winch" => Ok(Self::Winch),
+            "patchable" => Ok(Self::Patchable),
             _ => Err(()),
         }
     }

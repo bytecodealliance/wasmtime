@@ -891,6 +891,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             (isa::CallConv::Winch, _) => ALL_CLOBBERS,
             (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
             (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
+            (isa::CallConv::Patchable, _) => NO_CLOBBERS,
             (_, false) => SYSV_CLOBBERS,
             (call_conv, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
@@ -931,6 +932,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
+            // The `patchable` calling convention makes every reg a callee-save reg.
+            CallConv::Patchable => regs.iter().cloned().collect(),
             CallConv::Probestack => todo!("probestack?"),
             CallConv::AppleAarch64 => unreachable!(),
         };
@@ -1085,6 +1088,8 @@ fn get_intreg_for_retval(
         },
 
         CallConv::Winch => is_last.then(|| regs::rax()),
+        // The patchable ABI does not support any return values.
+        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1113,6 +1118,8 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
+        // The patchable ABI does not support any return values.
+        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1174,6 +1181,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
 pub(crate) const ALL_CLOBBERS: PRegSet = all_clobbers();
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 const fn windows_clobbers() -> PRegSet {
     use asm::gpr::enc::*;

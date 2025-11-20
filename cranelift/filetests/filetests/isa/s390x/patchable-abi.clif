@@ -1,0 +1,195 @@
+test compile precise-output
+target s390x
+
+function %call_patchable_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) patchable
+block0(v0: i64):
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   basr %r14, %r5
+;   basr %r14, %r5
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   basr %r14, %r5
+;   basr %r14, %r5
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %patchable_abi_trampoline(i64) patchable {
+    fn0 = %libcall(i64) system_v
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   stmg %r0, %r15, 0(%r15)
+;   aghi %r15, -416
+;   std %f0, 160(%r15)
+;   std %f1, 168(%r15)
+;   std %f2, 176(%r15)
+;   std %f3, 184(%r15)
+;   std %f4, 192(%r15)
+;   std %f5, 200(%r15)
+;   std %f6, 208(%r15)
+;   std %f7, 216(%r15)
+;   std %f8, 224(%r15)
+;   std %f9, 232(%r15)
+;   std %f10, 240(%r15)
+;   std %f11, 248(%r15)
+;   std %f12, 256(%r15)
+;   std %f13, 264(%r15)
+;   std %f14, 272(%r15)
+;   std %f15, 280(%r15)
+;   vsteg %v16, 288(%r15), 0
+;   vsteg %v17, 296(%r15), 0
+;   vsteg %v18, 304(%r15), 0
+;   vsteg %v19, 312(%r15), 0
+;   vsteg %v20, 320(%r15), 0
+;   vsteg %v21, 328(%r15), 0
+;   vsteg %v22, 336(%r15), 0
+;   vsteg %v23, 344(%r15), 0
+;   vsteg %v24, 352(%r15), 0
+;   vsteg %v25, 360(%r15), 0
+;   vsteg %v26, 368(%r15), 0
+;   vsteg %v27, 376(%r15), 0
+;   vsteg %v28, 384(%r15), 0
+;   vsteg %v29, 392(%r15), 0
+;   vsteg %v30, 400(%r15), 0
+;   vsteg %v31, 408(%r15), 0
+; block0:
+;   bras %r1, 12 ; data %libcall + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   ld %f0, 160(%r15)
+;   ld %f1, 168(%r15)
+;   ld %f2, 176(%r15)
+;   ld %f3, 184(%r15)
+;   ld %f4, 192(%r15)
+;   ld %f5, 200(%r15)
+;   ld %f6, 208(%r15)
+;   ld %f7, 216(%r15)
+;   ld %f8, 224(%r15)
+;   ld %f9, 232(%r15)
+;   ld %f10, 240(%r15)
+;   ld %f11, 248(%r15)
+;   ld %f12, 256(%r15)
+;   ld %f13, 264(%r15)
+;   ld %f14, 272(%r15)
+;   ld %f15, 280(%r15)
+;   vleg %v16, 288(%r15), 0
+;   vleg %v17, 296(%r15), 0
+;   vleg %v18, 304(%r15), 0
+;   vleg %v19, 312(%r15), 0
+;   vleg %v20, 320(%r15), 0
+;   vleg %v21, 328(%r15), 0
+;   vleg %v22, 336(%r15), 0
+;   vleg %v23, 344(%r15), 0
+;   vleg %v24, 352(%r15), 0
+;   vleg %v25, 360(%r15), 0
+;   vleg %v26, 368(%r15), 0
+;   vleg %v27, 376(%r15), 0
+;   vleg %v28, 384(%r15), 0
+;   vleg %v29, 392(%r15), 0
+;   vleg %v30, 400(%r15), 0
+;   vleg %v31, 408(%r15), 0
+;   lmg %r0, %r15, 416(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r0, %r15, 0(%r15)
+;   aghi %r15, -0x1a0
+;   std %f0, 0xa0(%r15)
+;   std %f1, 0xa8(%r15)
+;   std %f2, 0xb0(%r15)
+;   std %f3, 0xb8(%r15)
+;   std %f4, 0xc0(%r15)
+;   std %f5, 0xc8(%r15)
+;   std %f6, 0xd0(%r15)
+;   std %f7, 0xd8(%r15)
+;   std %f8, 0xe0(%r15)
+;   std %f9, 0xe8(%r15)
+;   std %f10, 0xf0(%r15)
+;   std %f11, 0xf8(%r15)
+;   std %f12, 0x100(%r15)
+;   std %f13, 0x108(%r15)
+;   std %f14, 0x110(%r15)
+;   std %f15, 0x118(%r15)
+;   vsteg %v16, 0x120(%r15), 0
+;   vsteg %v17, 0x128(%r15), 0
+;   vsteg %v18, 0x130(%r15), 0
+;   vsteg %v19, 0x138(%r15), 0
+;   vsteg %v20, 0x140(%r15), 0
+;   vsteg %v21, 0x148(%r15), 0
+;   vsteg %v22, 0x150(%r15), 0
+;   vsteg %v23, 0x158(%r15), 0
+;   vsteg %v24, 0x160(%r15), 0
+;   vsteg %v25, 0x168(%r15), 0
+;   vsteg %v26, 0x170(%r15), 0
+;   vsteg %v27, 0x178(%r15), 0
+;   vsteg %v28, 0x180(%r15), 0
+;   vsteg %v29, 0x188(%r15), 0
+;   vsteg %v30, 0x190(%r15), 0
+;   vsteg %v31, 0x198(%r15), 0
+; block1: ; offset 0xaa
+;   bras %r1, 0xb6
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %libcall 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   ld %f0, 0xa0(%r15)
+;   ld %f1, 0xa8(%r15)
+;   ld %f2, 0xb0(%r15)
+;   ld %f3, 0xb8(%r15)
+;   ld %f4, 0xc0(%r15)
+;   ld %f5, 0xc8(%r15)
+;   ld %f6, 0xd0(%r15)
+;   ld %f7, 0xd8(%r15)
+;   ld %f8, 0xe0(%r15)
+;   ld %f9, 0xe8(%r15)
+;   ld %f10, 0xf0(%r15)
+;   ld %f11, 0xf8(%r15)
+;   ld %f12, 0x100(%r15)
+;   ld %f13, 0x108(%r15)
+;   ld %f14, 0x110(%r15)
+;   ld %f15, 0x118(%r15)
+;   vleg %v16, 0x120(%r15), 0
+;   vleg %v17, 0x128(%r15), 0
+;   vleg %v18, 0x130(%r15), 0
+;   vleg %v19, 0x138(%r15), 0
+;   vleg %v20, 0x140(%r15), 0
+;   vleg %v21, 0x148(%r15), 0
+;   vleg %v22, 0x150(%r15), 0
+;   vleg %v23, 0x158(%r15), 0
+;   vleg %v24, 0x160(%r15), 0
+;   vleg %v25, 0x168(%r15), 0
+;   vleg %v26, 0x170(%r15), 0
+;   vleg %v27, 0x178(%r15), 0
+;   vleg %v28, 0x180(%r15), 0
+;   vleg %v29, 0x188(%r15), 0
+;   vleg %v30, 0x190(%r15), 0
+;   vleg %v31, 0x198(%r15), 0
+;   lmg %r0, %r15, 0x1a0(%r15)
+;   br %r14
+

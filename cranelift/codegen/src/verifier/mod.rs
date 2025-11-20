@@ -67,7 +67,6 @@ use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::ExceptionTableItem;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
@@ -76,7 +75,8 @@ use crate::ir::{
     JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
     ValueList, types,
 };
-use crate::isa::TargetIsa;
+use crate::ir::{ExceptionTableItem, Signature};
+use crate::isa::{CallConv, TargetIsa};
 use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
@@ -1974,6 +1974,8 @@ impl<'a> Verifier<'a> {
             }
         }
 
+        self.verify_signature(AnyEntity::Function, &self.func.signature, errors)?;
+
         if errors.has_error() { Err(()) } else { Ok(()) }
     }
 
@@ -2040,12 +2042,64 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn verify_signature(
+        &self,
+        loc: impl Into<AnyEntity>,
+        data: &Signature,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        if data.call_conv == CallConv::Patchable {
+            if data.params.len() > 4 {
+                return errors.fatal((
+                    loc,
+                    "signature with patchable ABI does not allow more than four arguments"
+                        .to_string(),
+                ));
+            }
+            if data.returns.len() > 0 {
+                return errors.fatal((
+                    loc,
+                    "signature with patchable ABI does not allow any returns".to_string(),
+                ));
+            }
+            for param in &data.params {
+                if param.value_type != crate::ir::types::I32
+                    && param.value_type != crate::ir::types::I64
+                {
+                    return errors.fatal((
+                        loc,
+                        "signature with patchable ABI does not allow non-I32/I64 arguments"
+                            .to_string(),
+                    ));
+                }
+                if param.extension != ArgumentExtension::None {
+                    return errors.fatal((
+                        loc,
+                        "signature with patchable ABI does not allow sign/zero-extended arguments"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_signatures(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
+        // Check that "patchable" ABI signatures have no returns and
+        // only up to four integer-typed args.
+        for (sigref, data) in &self.func.dfg.signatures {
+            self.verify_signature(sigref, data, errors)?;
+        }
+        Ok(())
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
         self.verify_memory_types(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
+        self.verify_signatures(errors)?;
 
         for block in self.func.layout.blocks() {
             if self.func.layout.first_inst(block).is_none() {

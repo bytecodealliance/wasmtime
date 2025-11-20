@@ -880,6 +880,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         match call_conv_of_callee {
             isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
             isa::CallConv::Tail => TAIL_CLOBBERS,
+            isa::CallConv::Patchable => NO_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
     }
@@ -1103,6 +1104,7 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
             // r8 - r14 inclusive are callee-saves.
             r.hw_enc() >= 8 && r.hw_enc() <= 14
         }
+        (isa::CallConv::Patchable, _) => true,
         (_, RegClass::Int) => {
             // r6 - r15 inclusive are callee-saves.
             r.hw_enc() >= 6 && r.hw_enc() <= 15
@@ -1380,7 +1382,10 @@ const fn all_clobbers() -> PRegSet {
         .with(vr_preg(30))
         .with(vr_preg(31))
 }
+
 const ALL_CLOBBERS: PRegSet = all_clobbers();
+
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 fn sysv_create_machine_env() -> MachineEnv {
     MachineEnv {

@@ -1102,6 +1102,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             (isa::CallConv::Winch, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, false) => WINCH_CLOBBERS,
             (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            (isa::CallConv::Patchable, _) => NO_CLOBBERS,
             (_, false) => DEFAULT_AAPCS_CLOBBERS,
             (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
@@ -1265,11 +1266,15 @@ impl AArch64MachineDeps {
 /// Is the given register saved in the prologue if clobbered, i.e., is it a
 /// callee-save?
 fn is_reg_saved_in_prologue(
-    _call_conv: isa::CallConv,
+    call_conv: isa::CallConv,
     enable_pinned_reg: bool,
     sig: &Signature,
     r: RealReg,
 ) -> bool {
+    if call_conv == isa::CallConv::Patchable {
+        return true;
+    }
+
     // FIXME: We need to inspect whether a function is returning Z or P regs too.
     let save_z_regs = sig
         .params
@@ -1518,6 +1523,7 @@ const fn all_clobbers() -> PRegSet {
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 const WINCH_CLOBBERS: PRegSet = winch_clobbers();
 const ALL_CLOBBERS: PRegSet = all_clobbers();
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
     fn preg(r: Reg) -> PReg {
