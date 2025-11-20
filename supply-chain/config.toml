@@ -205,6 +205,9 @@ audit-as-crates-io = true
 [policy.wasmtime-wast]
 audit-as-crates-io = true
 
+[policy.wasmtime-wizer]
+audit-as-crates-io = true
+
 [policy.wiggle]
 audit-as-crates-io = true
 
