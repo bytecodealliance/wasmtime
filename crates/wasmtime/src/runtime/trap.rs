@@ -440,7 +440,10 @@ impl FrameInfo {
         let index = compiled_module.func_by_text_offset(text_offset)?;
         let func_start = compiled_module.func_start_srcloc(index);
         let instr = wasmtime_environ::lookup_file_pos(
-            compiled_module.code_memory().address_map_data(),
+            module
+                .compiled_module()
+                .default_code_memory()
+                .address_map_data(),
             text_offset,
         );
         let index = compiled_module.module().func_index(index);

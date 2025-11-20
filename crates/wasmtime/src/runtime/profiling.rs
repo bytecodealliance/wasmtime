@@ -126,9 +126,18 @@ impl GuestProfiler {
                     // Assumption: within text, the code for a given module is packed linearly and
                     // is non-overlapping; if this is violated, it should be safe but might result
                     // in incorrect profiling results.
-                    let start =
-                        compiled.finished_functions().next()?.1.as_ptr_range().start as usize;
-                    let end = compiled.finished_functions().last()?.1.as_ptr_range().end as usize;
+                    let start = compiled
+                        .finished_functions(compiled.default_code_memory())
+                        .next()?
+                        .1
+                        .as_ptr_range()
+                        .start as usize;
+                    let end = compiled
+                        .finished_functions(compiled.default_code_memory())
+                        .last()?
+                        .1
+                        .as_ptr_range()
+                        .end as usize;
                     start..end
                 };
 
@@ -249,22 +258,26 @@ impl GuestProfiler {
 }
 
 fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo> {
-    let symbols = Vec::from_iter(compiled.finished_functions().map(|(defined_idx, _)| {
-        let loc = compiled.func_loc(defined_idx);
-        let func_idx = compiled.module().func_index(defined_idx);
-        let mut name = String::new();
-        demangle_function_name_or_index(
-            &mut name,
-            compiled.func_name(func_idx),
-            defined_idx.as_u32() as usize,
-        )
-        .unwrap();
-        Symbol {
-            address: loc.start,
-            size: Some(loc.length),
-            name,
-        }
-    }));
+    let symbols = Vec::from_iter(
+        compiled
+            .finished_functions(compiled.default_code_memory())
+            .map(|(defined_idx, _)| {
+                let loc = compiled.func_loc(defined_idx);
+                let func_idx = compiled.module().func_index(defined_idx);
+                let mut name = String::new();
+                demangle_function_name_or_index(
+                    &mut name,
+                    compiled.func_name(func_idx),
+                    defined_idx.as_u32() as usize,
+                )
+                .unwrap();
+                Symbol {
+                    address: loc.start,
+                    size: Some(loc.length),
+                    name,
+                }
+            }),
+    );
     if symbols.is_empty() {
         return None;
     }

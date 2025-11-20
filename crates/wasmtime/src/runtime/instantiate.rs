@@ -88,17 +88,11 @@ impl CompiledModule {
         self.code_memory.mmap()
     }
 
-    /// Returns the underlying owned mmap of this compiled image.
-    pub fn code_memory(&self) -> &Arc<CodeMemory> {
+    /// Returns the underlying owned mmap of this compiled image. This
+    /// is the "default CodeMemory": the one that has not been cloned
+    /// per-store (if that is required by our settings).
+    pub fn default_code_memory(&self) -> &Arc<CodeMemory> {
         &self.code_memory
-    }
-
-    /// Returns the text section of the ELF image for this compiled module.
-    ///
-    /// This memory should have the read/execute permissions.
-    #[inline]
-    pub fn text(&self) -> &[u8] {
-        self.code_memory.text()
     }
 
     /// Return a reference-counting pointer to a module.
@@ -121,26 +115,31 @@ impl CompiledModule {
         // `from_utf8_unchecked` if we really wanted since this section is
         // guaranteed to only have valid utf-8 data. Until it's a problem it's
         // probably best to double-check this though.
-        let data = self.code_memory().func_name_data();
+        let data = self.default_code_memory().func_name_data();
         Some(str::from_utf8(&data[name.offset as usize..][..name.len as usize]).unwrap())
     }
 
     /// Returns an iterator over all functions defined within this module with
     /// their index and their body in memory.
     #[inline]
-    pub fn finished_functions(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
+    pub fn finished_functions<'a>(
+        &'a self,
+        code_memory: &'a CodeMemory,
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &'a [u8])> + 'a {
         self.module
             .defined_func_indices()
-            .map(|i| (i, self.finished_function(i)))
+            .map(|i| (i, self.finished_function(i, code_memory)))
     }
 
     /// Returns the body of the function that `index` points to.
     #[inline]
-    pub fn finished_function(&self, def_func_index: DefinedFuncIndex) -> &[u8] {
+    pub fn finished_function<'a>(
+        &self,
+        def_func_index: DefinedFuncIndex,
+        code_memory: &'a CodeMemory,
+    ) -> &'a [u8] {
         let loc = self.func_loc(def_func_index);
-        &self.text()[loc.start as usize..][..loc.length as usize]
+        &code_memory.text()[loc.start as usize..][..loc.length as usize]
     }
 
     /// Get the array-to-Wasm trampoline for the function `index` points to.
@@ -150,11 +149,15 @@ impl CompiledModule {
     ///
     /// These trampolines are used for array callers (e.g. `Func::new`)
     /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline(&self, def_func_index: DefinedFuncIndex) -> Option<&[u8]> {
+    pub fn array_to_wasm_trampoline<'a>(
+        &self,
+        def_func_index: DefinedFuncIndex,
+        code_memory: &'a CodeMemory,
+    ) -> Option<&'a [u8]> {
         assert!(def_func_index.index() < self.module.num_defined_funcs());
         let key = FuncKey::ArrayToWasmTrampoline(self.module_index(), def_func_index);
         let loc = self.index.func_loc(key)?;
-        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+        Some(&code_memory.text()[loc.start as usize..][..loc.length as usize])
     }
 
     /// Get the Wasm-to-array trampoline for the given signature.
@@ -162,10 +165,14 @@ impl CompiledModule {
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> Option<&[u8]> {
+    pub fn wasm_to_array_trampoline<'a>(
+        &self,
+        signature: ModuleInternedTypeIndex,
+        code_memory: &'a CodeMemory,
+    ) -> Option<&'a [u8]> {
         let key = FuncKey::WasmToArrayTrampoline(signature);
         let loc = self.index.func_loc(key)?;
-        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+        Some(&code_memory.text()[loc.start as usize..][..loc.length as usize])
     }
 
     /// Lookups a defined function by a program counter value.
@@ -229,7 +236,7 @@ impl CompiledModule {
                     let (_, range) = &self.meta.dwarf[i];
                     let start = range.start.try_into().ok()?;
                     let end = range.end.try_into().ok()?;
-                    self.code_memory().wasm_dwarf().get(start..end)
+                    self.default_code_memory().wasm_dwarf().get(start..end)
                 })
                 .unwrap_or(&[]);
             Ok(EndianSlice::new(data, gimli::LittleEndian))

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, Func, Instance, Module,
-    Store, StoreContextMut,
+    Store, StoreContextMut, component::Component, component::Linker,
 };
 
 fn get_module_and_store<C: Fn(&mut Config)>(
@@ -18,6 +18,20 @@ fn get_module_and_store<C: Fn(&mut Config)>(
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wat)?;
     Ok((module, Store::new(&engine, ())))
+}
+
+fn get_component_and_store<C: Fn(&mut Config)>(
+    c: C,
+    wat: &str,
+) -> anyhow::Result<(Component, Store<()>)> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_exceptions(true);
+    config.wasm_component_model(true);
+    c(&mut config);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    Ok((component, Store::new(&engine, ())))
 }
 
 fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
@@ -445,5 +459,64 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_events() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (component, mut store) = get_component_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+        },
+        r#"
+  (component
+    (core module $m
+      (tag $t (param i32))
+      (func (export "main")
+        (block $b (result i32)
+          (try_table (catch $t $b)
+            call 1)
+          i32.const 0)
+        drop)
+      (func
+        (local $i i32)
+        (local.set $i (i32.const 100))
+        (throw $t (i32.const 42))))
+    (core instance $i (instantiate $m))
+    (func (export "main") (canon lift (core func $i "main"))))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::CaughtExceptionThrown(e) => {
+              assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
+              let mut stack = store.debug_frames().expect("frame cursor must be available");
+              assert!(!stack.done());
+              assert_eq!(stack.num_locals(), 1);
+              assert_eq!(stack.local(0).unwrap_i32(), 100);
+              stack.move_to_parent();
+              assert!(!stack.done());
+              stack.move_to_parent();
+              assert!(stack.done());
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    let linker = Linker::new(store.engine());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    func.call_async(&mut store, &[], &mut results).await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
     Ok(())
 }

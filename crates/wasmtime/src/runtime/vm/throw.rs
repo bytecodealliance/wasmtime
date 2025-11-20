@@ -54,8 +54,8 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
             frame.fp(),
             frame.pc()
         );
-        let module = nogc.modules().lookup_module_by_pc(frame.pc())?;
-        let base = module.code_object().code_memory().text().as_ptr() as usize;
+        let (module, code_memory) = nogc.modules().lookup_module_by_pc(frame.pc())?;
+        let base = code_memory.text().as_ptr() as usize;
         let rel_pc = u32::try_from(frame.pc().wrapping_sub(base)).expect("Module larger than 4GiB");
         let et = module.exception_table();
         let (frame_offset, handlers) = et.lookup_pc(rel_pc);
