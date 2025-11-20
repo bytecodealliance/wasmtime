@@ -3,7 +3,7 @@
 //! This module and its submodules provide host runtime support for Component
 //! Model Async features such as async-lifted exports, async-lowered imports,
 //! streams, futures, and related intrinsics.  See [the Async
-//! Explainer](https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md)
+//! Explainer](https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md)
 //! for a high-level overview.
 //!
 //! At the core of this support is an event loop which schedules and switches
