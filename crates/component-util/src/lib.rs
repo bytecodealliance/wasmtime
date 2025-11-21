@@ -25,7 +25,7 @@ impl DiscriminantSize {
             Some(Self::Size1)
         } else if count <= 1 << 16 {
             Some(Self::Size2)
-        } else if count <= 1 << 32 {
+        } else if count as u64 <= 1 << 32 {
             Some(Self::Size4)
         } else {
             None
