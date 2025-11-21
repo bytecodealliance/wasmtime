@@ -10,6 +10,7 @@
 //! When an oracle finds a bug, it should report it to the fuzzing engine by
 //! panicking.
 
+pub mod component_api;
 #[cfg(feature = "fuzz-spec-interpreter")]
 pub mod diff_spec;
 pub mod diff_wasmi;
@@ -33,7 +34,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use wasmtime::component::Accessor;
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
@@ -1077,117 +1077,6 @@ impl Drop for HelperThread {
     }
 }
 
-/// Generate and execute a `crate::generators::component_types::TestCase` using the specified `input` to create
-/// arbitrary types and values.
-pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
-    use crate::generators::component_types;
-    use wasmtime::component::{Component, Linker, Val};
-    use wasmtime_test_util::component_fuzz::{
-        EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type,
-    };
-
-    crate::init_fuzzing();
-
-    let mut types = Vec::new();
-    let mut type_fuel = 500;
-
-    for _ in 0..5 {
-        types.push(Type::generate(input, MAX_TYPE_DEPTH, &mut type_fuel)?);
-    }
-
-    let case = TestCase::generate(&types, input)?;
-
-    let mut config = wasmtime_test_util::component::config();
-    config.async_support(true);
-    config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
-    config.debug_adapter_modules(input.arbitrary()?);
-    let engine = Engine::new(&config).unwrap();
-    let mut store = Store::new(&engine, (Vec::new(), None));
-    let wat = case.declarations().make_component();
-    let wat = wat.as_bytes();
-    log_wasm(wat);
-    let component = Component::new(&engine, wat).unwrap();
-    let mut linker = Linker::new(&engine);
-
-    fn host_function(
-        mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
-        params: &[Val],
-        results: &mut [Val],
-    ) -> Result<()> {
-        log::trace!("received params {params:?}");
-        let (expected_args, expected_results) = cx.data_mut();
-        assert_eq!(params.len(), expected_args.len());
-        for (expected, actual) in expected_args.iter().zip(params) {
-            assert_eq!(expected, actual);
-        }
-        results.clone_from_slice(&expected_results.take().unwrap());
-        log::trace!("returning results {results:?}");
-        Ok(())
-    }
-
-    if case.options.host_async {
-        linker
-            .root()
-            .func_new_concurrent(IMPORT_FUNCTION, {
-                move |cx: &Accessor<_, _>, _, params: &[Val], results: &mut [Val]| {
-                    Box::pin(async move {
-                        cx.with(|mut store| host_function(store.as_context_mut(), params, results))
-                    })
-                }
-            })
-            .unwrap();
-    } else {
-        linker
-            .root()
-            .func_new(IMPORT_FUNCTION, {
-                move |cx, _, params, results| host_function(cx, params, results)
-            })
-            .unwrap();
-    }
-
-    block_on(async {
-        let instance = linker
-            .instantiate_async(&mut store, &component)
-            .await
-            .unwrap();
-        let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-        let ty = func.ty(&store);
-
-        while input.arbitrary()? {
-            let params = ty
-                .params()
-                .map(|(_, ty)| component_types::arbitrary_val(&ty, input))
-                .collect::<arbitrary::Result<Vec<_>>>()?;
-            let results = ty
-                .results()
-                .map(|ty| component_types::arbitrary_val(&ty, input))
-                .collect::<arbitrary::Result<Vec<_>>>()?;
-
-            *store.data_mut() = (params.clone(), Some(results.clone()));
-
-            log::trace!("passing params {params:?}");
-            let mut actual = vec![Val::Bool(false); results.len()];
-            if case.options.guest_caller_async {
-                store
-                    .run_concurrent(async |a| {
-                        func.call_concurrent(a, &params, &mut actual).await.unwrap();
-                    })
-                    .await
-                    .unwrap();
-            } else {
-                func.call_async(&mut store, &params, &mut actual)
-                    .await
-                    .unwrap();
-                func.post_return_async(&mut store).await.unwrap();
-            }
-            log::trace!("received results {actual:?}");
-            assert_eq!(actual, results);
-        }
-        Ok(())
-    })
-}
-
 /// Instantiates a wasm module and runs its exports with dummy values, all in
 /// an async fashion.
 ///
@@ -1477,10 +1366,5 @@ mod tests {
     #[test]
     fn wast_smoke_test() {
         test_n_times(50, |(), u| super::wast_test(u));
-    }
-
-    #[test]
-    fn dynamic_component_api_smoke_test() {
-        test_n_times(50, |(), u| super::dynamic_component_api_target(u));
     }
 }

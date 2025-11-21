@@ -11,7 +11,6 @@
 pub mod api;
 mod async_config;
 mod codegen_settings;
-pub mod component_types;
 mod config;
 pub mod gc_ops;
 mod instance_allocation_strategy;
