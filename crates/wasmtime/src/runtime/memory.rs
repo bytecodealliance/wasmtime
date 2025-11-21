@@ -777,8 +777,9 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// used concurrently by multiple agents. Because these agents may execute in
 /// different threads, [`SharedMemory`] must be thread-safe.
 ///
-/// When the threads proposal is enabled, there are multiple ways to construct
-/// shared memory:
+/// When the [threads proposal is enabled](crate::Config::wasm_threads) and the
+/// [the creation of shared memories is enabled](crate::Config::shared_memory),
+/// there are multiple ways to construct shared memory:
 ///  1. for imported shared memory, e.g., `(import "env" "memory" (memory 1 1
 ///     shared))`, the user must supply a [`SharedMemory`] with the
 ///     externally-created memory as an import to the instance--e.g.,
@@ -797,6 +798,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # fn main() -> anyhow::Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
+/// config.shared_memory(true);
 /// # if Engine::new(&config).is_err() { return Ok(()); }
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
