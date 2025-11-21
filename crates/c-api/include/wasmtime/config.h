@@ -159,7 +159,6 @@ WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
  */
 WASMTIME_CONFIG_PROP(void, shared_memory, bool)
 
-
 /**
  * \brief Configures whether the WebAssembly tail call proposal is enabled.
  *
