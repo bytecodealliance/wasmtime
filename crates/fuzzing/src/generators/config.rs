@@ -308,6 +308,7 @@ impl Config {
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
+        cfg.wasm.shared_memory = Some(self.module_config.shared_memory);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }
