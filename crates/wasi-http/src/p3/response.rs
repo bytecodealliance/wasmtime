@@ -89,4 +89,82 @@ impl Response {
         };
         Ok(http::Response::from_parts(res, body))
     }
+
+    /// Convert [http::Response] into [Response].
+    pub fn from_http<T>(
+        res: http::Response<T>,
+    ) -> (
+        Self,
+        impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+    )
+    where
+        T: http_body::Body<Data = Bytes> + Send + 'static,
+        T::Error: Into<ErrorCode>,
+    {
+        let (parts, body) = res.into_parts();
+        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+
+        let wasi_response = Response {
+            status: parts.status,
+            headers: Arc::new(parts.headers),
+            body: Body::Host {
+                body: body.map_err(Into::into).boxed_unsync(),
+                result_tx,
+            },
+        };
+
+        let io_future = async {
+            let Ok(fut) = result_rx.await else {
+                return Ok(());
+            };
+            Box::into_pin(fut).await
+        };
+
+        (wasi_response, io_future)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::future::Future;
+    use core::pin::pin;
+    use core::task::{Context, Poll, Waker};
+    use http_body_util::Full;
+
+    #[tokio::test]
+    async fn test_response_from_http() {
+        let http_response = http::Response::builder()
+            .status(StatusCode::OK)
+            .header("x-custom-header", "value123")
+            .body(Full::new(Bytes::from_static(b"hello wasm")))
+            .unwrap();
+
+        // Call the function
+        let (wasi_resp, io_future) = Response::from_http(http_response);
+
+        // Status code matches
+        assert_eq!(wasi_resp.status, StatusCode::OK);
+
+        // Headers match
+        assert_eq!(
+            wasi_resp.headers.get("x-custom-header").unwrap(),
+            "value123"
+        );
+
+        match wasi_resp.body {
+            Body::Host { body, .. } => {
+                let collected = body.collect().await;
+                assert!(collected.is_ok(), "Body stream failed unexpectedly");
+                let chunks = collected.unwrap().to_bytes();
+                assert_eq!(chunks, &b"hello wasm"[..]);
+            }
+            _ => panic!("Response body should be of type Host"),
+        }
+
+        // <---- Make sure all uses of 'body' are done, and it is dropped here
+        let mut cx = Context::from_waker(Waker::noop());
+        let result = pin!(io_future).poll(&mut cx);
+        assert!(matches!(result, Poll::Ready(Ok(_))));
+    }
 }
