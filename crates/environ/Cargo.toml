@@ -39,7 +39,7 @@ semver = { workspace = true, optional = true, features = ['serde'] }
 smallvec = { workspace = true, features = ['serde'] }
 # Needed for the binary digest of modules in the instantiation graph
 hex = "0.4.3"
-sha2 = "0.10.9"
+sha2 = "0.10.2"
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }
