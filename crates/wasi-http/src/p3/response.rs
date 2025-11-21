@@ -147,11 +147,12 @@ mod tests {
             "value123"
         );
         match wasi_resp.body {
-            Body::Host { body, .. } => {
+            Body::Host { body, result_tx } => {
                 let collected = body.collect().await;
                 assert!(collected.is_ok(), "Body stream failed unexpectedly");
                 let chunks = collected.unwrap().to_bytes();
                 assert_eq!(chunks, &b"hello wasm"[..]);
+                _ = result_tx.send(Box::new(async { Ok(()) }));
             }
             _ => panic!("Response body should be of type Host"),
         }
