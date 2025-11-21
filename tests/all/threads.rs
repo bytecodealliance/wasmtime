@@ -25,6 +25,23 @@ pub fn engine() -> Option<Engine> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn shared_memory_failed_creation() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_threads(true);
+    config.shared_memory(false);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 1)).is_err());
+    let wat = r#"(module (memory 1 1 shared))"#;
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn test_instantiate_shared_memory() -> Result<()> {
     let wat = r#"(module (memory 1 1 shared))"#;
     let Some(engine) = engine() else {
