@@ -51,7 +51,7 @@ use crate::prelude::*;
 use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use cranelift_entity::packed_option::PackedOption;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use wasmparser::collections::Map;
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {
@@ -66,26 +66,24 @@ pub struct ComponentTranslation {
 /// The elements within [`Self::instances`] correspond to the runtime component
 /// instances which directly instantiate core modules. Each element should contain the information
 /// needed to identify the source of their imports. Specific information about how that is
-/// implemented is available in [`dfg::RuntimeComponentInstanceStructure`]
+/// implemented is available in [`info::RuntimeComponentInstanceStructure`]
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct RootComponentInstanceStructure {
     /// Subcomponent instances that instantiate core modules directly. The keys are the [`RuntimeComponentInstanceStructure.path`]
-    pub instances: HashMap<String, RuntimeComponentInstanceStructure>,
+    pub instances: Map<String, RuntimeComponentInstanceStructure>,
 
     /// Re-mapping table from the [`RuntimeComponentInstanceIndex`] to [`RuntimeComponentInstanceStructure.path`]
-    pub table: HashMap<u32, String>,
+    pub table: Map<u32, String>,
 }
 
 impl RootComponentInstanceStructure {
     /// todo:
-    pub fn runtime_instances_mut(
-        &mut self,
-    ) -> &mut HashMap<String, RuntimeComponentInstanceStructure> {
+    pub fn runtime_instances_mut(&mut self) -> &mut Map<String, RuntimeComponentInstanceStructure> {
         &mut self.instances
     }
 
     /// todo:
-    pub fn table_mut(&mut self) -> &mut HashMap<u32, String> {
+    pub fn table_mut(&mut self) -> &mut Map<u32, String> {
         &mut self.table
     }
 }
@@ -96,11 +94,11 @@ pub struct CoreInstanceStructure {
     /// Hex encoded sha256 digest of the core module binary.
     pub module_code_digest: String,
     /// Exported items from this core instance
-    pub core_exports: HashMap<u32, String>,
+    pub core_exports: Map<u32, String>,
     /// Imported items by this core instance
-    pub core_imports: HashMap<u32, String>,
+    pub core_imports: Map<u32, String>,
     /// The sources of the imported items
-    pub sources: HashMap<u32, Source>,
+    pub sources: Map<u32, Source>,
 }
 
 /// Represents a core export definition in the instantiation graph, used to track the source of
@@ -141,11 +139,11 @@ pub struct RuntimeComponentInstanceStructure {
     pub path: String,
 
     /// Maps to the core definitions that are being exported by this component.
-    pub component_exports: HashMap<u32, Source>,
+    pub component_exports: Map<u32, Source>,
 
     /// Map of the core instances associated with this component instance.
     /// The index represents the core instance index within the index space of this component.
-    pub core_instances: HashMap<u32, CoreInstanceStructure>,
+    pub core_instances: Map<u32, CoreInstanceStructure>,
 }
 
 /// Run-time-type-information about a `Component`, its structure, and how to

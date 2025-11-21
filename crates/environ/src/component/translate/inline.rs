@@ -52,6 +52,7 @@ use core::str::FromStr;
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::ops::Index;
+use wasmparser::collections::Map;
 use wasmparser::component_types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
 
 pub(super) fn run(
@@ -377,7 +378,7 @@ fn record_core_def_from_export(
     name: &str,
     def: ComponentItemDef,
     types: &ComponentTypesBuilder,
-    map: &mut HashMap<String, dfg::CoreDef>,
+    map: &mut Map<String, dfg::CoreDef>,
 ) -> Result<()> {
     match &def {
         ComponentItemDef::Instance(instance) => match instance {
@@ -502,7 +503,7 @@ impl<'a> Inliner<'a> {
         exports: &IndexMap<&str, ComponentItemDef>,
         fr: &mut InlinerFrame,
     ) -> Result<()> {
-        let mut comp_exports: HashMap<String, dfg::CoreDef> = HashMap::new();
+        let mut comp_exports: Map<String, dfg::CoreDef> = Map::new();
         for (name, item) in exports.iter() {
             record_core_def_from_export(name, item.clone(), types, &mut comp_exports)?;
         }
@@ -1313,8 +1314,8 @@ impl<'a> Inliner<'a> {
             // and an initializer is recorded to indicate that it's being
             // instantiated.
             ModuleInstantiate(module, args) => {
-                let mut core_imports: HashMap<u32, String> = Default::default();
-                let mut sources: HashMap<u32, Source> = Default::default();
+                let mut core_imports: Map<u32, String> = Default::default();
+                let mut sources: Map<u32, Source> = Default::default();
 
                 let (instance_module, init) = match &frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
@@ -1386,7 +1387,7 @@ impl<'a> Inliner<'a> {
                 match &frame.modules[*module] {
                     ModuleDef::Static(midx, _ty) => {
                         let core_instance = frame.module_instances.len() as u32;
-                        let mut core_exports: HashMap<u32, String> = HashMap::new();
+                        let mut core_exports: Map<u32, String> = Map::new();
                         let mut count = 0;
                         for (name, &entity) in self.nested_modules[*midx].module.exports.iter() {
                             core_exports.insert(count, name.to_string());
