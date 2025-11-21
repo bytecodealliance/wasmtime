@@ -1,3 +1,4 @@
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::memory::LocalMemory;
 use crate::runtime::vm::{VMMemoryDefinition, WaitResult};
@@ -10,7 +11,7 @@ use wasmtime_environ::Trap;
 pub enum SharedMemory {}
 
 impl SharedMemory {
-    pub fn wrap(_ty: &wasmtime_environ::Memory, _memory: LocalMemory) -> Result<Self> {
+    pub fn wrap(_: &Engine, _ty: &wasmtime_environ::Memory, _memory: LocalMemory) -> Result<Self> {
         bail!("support for shared memories was disabled at compile time");
     }
 
