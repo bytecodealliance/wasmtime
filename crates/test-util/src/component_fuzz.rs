@@ -1234,10 +1234,10 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
                 .collect::<TokenStream>();
 
             let name = make_rust_name(name_counter);
-            let repr = match count.ilog2() {
-                0..=7 => quote!(u8),
-                8..=15 => quote!(u16),
-                _ => quote!(u32),
+            let repr = match DiscriminantSize::from_count(*count as usize).unwrap() {
+                DiscriminantSize::Size1 => quote!(u8),
+                DiscriminantSize::Size2 => quote!(u16),
+                DiscriminantSize::Size4 => quote!(u32),
             };
 
             declarations.extend(quote! {

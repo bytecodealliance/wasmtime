@@ -1,3 +1,5 @@
+;;! component_model_async = true
+
 ;; bare bones "intrinsics work"
 (component
   (type $r (resource (rep i32)))
