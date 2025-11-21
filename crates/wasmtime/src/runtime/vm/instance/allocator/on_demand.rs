@@ -129,7 +129,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let allocation_index = MemoryAllocationIndex::default();
         let memory = Memory::new_dynamic(
             ty,
-            request.store.engine().tunables(),
+            request.store.engine(),
             creator,
             image,
             request.limiter.as_deref_mut(),

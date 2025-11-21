@@ -74,6 +74,7 @@
 //! FIXME: don't have both RuntimeMemoryCreator and wasmtime::MemoryCreator,
 //! they should be merged together.
 
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
@@ -233,17 +234,18 @@ impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
     pub async fn new_dynamic(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        engine: &Engine,
         creator: &dyn RuntimeMemoryCreator,
         memory_image: Option<&Arc<MemoryImage>>,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
+        let tunables = engine.tunables();
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
 
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
         Ok(if ty.shared {
-            Memory::Shared(SharedMemory::wrap(ty, memory)?)
+            Memory::Shared(SharedMemory::wrap(engine, ty, memory)?)
         } else {
             Memory::Local(memory)
         })
