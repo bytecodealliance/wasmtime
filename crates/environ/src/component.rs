@@ -52,7 +52,9 @@ pub const PREPARE_ASYNC_WITH_RESULT: u32 = u32::MAX - 1;
 pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
 mod artifacts;
-mod info;
+/// todo:
+pub mod info;
+
 mod intrinsic;
 mod names;
 mod types;

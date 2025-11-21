@@ -508,7 +508,11 @@ impl<'a> Inliner<'a> {
         }
         let mut count = 0;
         for (_, func) in comp_exports {
-            let source = self.core_def_to_sources.get(&func).unwrap_or(&Source::host()).clone();
+            let source = self
+                .core_def_to_sources
+                .get(&func)
+                .unwrap_or(&Source::host())
+                .clone();
             fr.instance_structure
                 .component_exports
                 .insert(count, source);
