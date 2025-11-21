@@ -709,6 +709,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     crate::init_fuzzing();
 
     let mut fuzz_config: generators::Config = u.arbitrary()?;
+    fuzz_config.module_config.shared_memory = true;
     let test: generators::WastTest = u.arbitrary()?;
 
     let test = &test.test;
@@ -1421,7 +1422,6 @@ mod tests {
             | WasmFeatures::SIMD
             | WasmFeatures::MULTI_MEMORY
             | WasmFeatures::RELAXED_SIMD
-            | WasmFeatures::THREADS
             | WasmFeatures::TAIL_CALL
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::MEMORY64
