@@ -45,7 +45,7 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
-use crate::component::dfg::{CoreInstanceStructure, RuntimeComponentInstanceStructure, Source};
+pub use self::info::*;
 use crate::component::translate::*;
 use crate::{EntityType, IndexType};
 use core::str::FromStr;
@@ -491,11 +491,11 @@ impl<'a> Inliner<'a> {
         }
     }
 
-    /// Records the runtime sources for each component export, 
-    /// so the instantiation graph later knows which 
+    /// Records the runtime sources for each component export,
+    /// so the instantiation graph later knows which
     /// core definitions they depend on.
-    /// Here internal component exports are recorded in addition to the 
-    /// exports recoreded for the top level component.
+    /// Here internal component exports are recorded in addition to the
+    /// exports recorded for the top level component.
     fn add_component_exports(
         &mut self,
         types: &mut ComponentTypesBuilder,

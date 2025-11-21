@@ -77,15 +77,13 @@ pub struct RootComponentInstanceStructure {
 }
 
 impl RootComponentInstanceStructure {
-    /// todo:
-    pub fn runtime_instances_mut(
+    pub(crate) fn runtime_instances_mut(
         &mut self,
     ) -> &mut HashMap<String, RuntimeComponentInstanceStructure> {
         &mut self.instances
     }
 
-    /// todo:
-    pub fn table_mut(&mut self) -> &mut HashMap<u32, String> {
+    pub(crate) fn table_mut(&mut self) -> &mut HashMap<u32, String> {
         &mut self.table
     }
 }
