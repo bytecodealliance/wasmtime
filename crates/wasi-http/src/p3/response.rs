@@ -140,18 +140,12 @@ mod tests {
             .body(Full::new(Bytes::from_static(b"hello wasm")))
             .unwrap();
 
-        // Call the function
         let (wasi_resp, io_future) = Response::from_http(http_response);
-
-        // Status code matches
         assert_eq!(wasi_resp.status, StatusCode::OK);
-
-        // Headers match
         assert_eq!(
             wasi_resp.headers.get("x-custom-header").unwrap(),
             "value123"
         );
-
         match wasi_resp.body {
             Body::Host { body, .. } => {
                 let collected = body.collect().await;
@@ -162,7 +156,6 @@ mod tests {
             _ => panic!("Response body should be of type Host"),
         }
 
-        // <---- Make sure all uses of 'body' are done, and it is dropped here
         let mut cx = Context::from_waker(Waker::noop());
         let result = pin!(io_future).poll(&mut cx);
         assert!(matches!(result, Poll::Ready(Ok(_))));
