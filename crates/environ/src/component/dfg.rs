@@ -150,6 +150,9 @@ pub struct ComponentDfg {
     /// Interned map of id-to-`CanonicalOptions`, or all sets-of-options used by
     /// this component.
     pub options: Intern<OptionsId, CanonicalOptions>,
+
+    /// Structure describing the component internal layout, useful for debugging, attestation, etc...
+    pub instantiation_graph: info::RootComponentInstanceStructure,
 }
 
 /// Possible side effects that are possible with instantiating this component.
@@ -658,6 +661,7 @@ impl ComponentDfg {
         Ok(ComponentTranslation {
             trampolines: linearize.trampoline_defs,
             component: Component {
+                instantiation_graph: linearize.dfg.instantiation_graph.clone(),
                 exports,
                 export_items,
                 initializers: linearize.initializers,
