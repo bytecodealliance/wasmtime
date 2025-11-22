@@ -44,7 +44,7 @@ See the API docs for
 [`wasmtime::Config::signals_based_traps`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.signals_based_traps),
 [`wasmtime::Config::memory_reservation`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.memory_reservation),
 and
-[`wasmtime::Config::memory_reservation`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.memory_guard_size)
+[`wasmtime::Config::memory_guard_size`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.memory_guard_size)
 for more details.
 
 ## Force-Enable ISA Extensions
