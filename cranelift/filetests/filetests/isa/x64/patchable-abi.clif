@@ -1,0 +1,170 @@
+test compile precise-output
+target x86_64
+
+function %call_patchable_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) patchable
+block0(v0: i64):
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rcx
+;   movq %rcx, %rdx
+;   movq %rcx, %rsi
+;   call    *%rcx
+;   call    *%rcx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rcx
+;   movq %rcx, %rdx
+;   movq %rcx, %rsi
+;   callq *%rcx
+;   callq *%rcx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %patchable_abi_trampoline(i64) patchable {
+    fn0 = %libcall(i64) system_v
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x150, %rsp
+;   movq %rax, (%rsp)
+;   movq %rcx, 8(%rsp)
+;   movq %rdx, 0x10(%rsp)
+;   movq %rsi, 0x18(%rsp)
+;   movq %rdi, 0x20(%rsp)
+;   movq %r8, 0x28(%rsp)
+;   movq %r9, 0x30(%rsp)
+;   movq %r10, 0x38(%rsp)
+;   movq %r11, 0x40(%rsp)
+;   movdqu %xmm0, 0x50(%rsp)
+;   movdqu %xmm1, 0x60(%rsp)
+;   movdqu %xmm2, 0x70(%rsp)
+;   movdqu %xmm3, 0x80(%rsp)
+;   movdqu %xmm4, 0x90(%rsp)
+;   movdqu %xmm5, 0xa0(%rsp)
+;   movdqu %xmm6, 0xb0(%rsp)
+;   movdqu %xmm7, 0xc0(%rsp)
+;   movdqu %xmm8, 0xd0(%rsp)
+;   movdqu %xmm9, 0xe0(%rsp)
+;   movdqu %xmm10, 0xf0(%rsp)
+;   movdqu %xmm11, 0x100(%rsp)
+;   movdqu %xmm12, 0x110(%rsp)
+;   movdqu %xmm13, 0x120(%rsp)
+;   movdqu %xmm14, 0x130(%rsp)
+;   movdqu %xmm15, 0x140(%rsp)
+; block0:
+;   load_ext_name %libcall+0, %rax
+;   call    *%rax
+;   movq (%rsp), %rax
+;   movq 8(%rsp), %rcx
+;   movq 0x10(%rsp), %rdx
+;   movq 0x18(%rsp), %rsi
+;   movq 0x20(%rsp), %rdi
+;   movq 0x28(%rsp), %r8
+;   movq 0x30(%rsp), %r9
+;   movq 0x38(%rsp), %r10
+;   movq 0x40(%rsp), %r11
+;   movdqu 0x50(%rsp), %xmm0
+;   movdqu 0x60(%rsp), %xmm1
+;   movdqu 0x70(%rsp), %xmm2
+;   movdqu 0x80(%rsp), %xmm3
+;   movdqu 0x90(%rsp), %xmm4
+;   movdqu 0xa0(%rsp), %xmm5
+;   movdqu 0xb0(%rsp), %xmm6
+;   movdqu 0xc0(%rsp), %xmm7
+;   movdqu 0xd0(%rsp), %xmm8
+;   movdqu 0xe0(%rsp), %xmm9
+;   movdqu 0xf0(%rsp), %xmm10
+;   movdqu 0x100(%rsp), %xmm11
+;   movdqu 0x110(%rsp), %xmm12
+;   movdqu 0x120(%rsp), %xmm13
+;   movdqu 0x130(%rsp), %xmm14
+;   movdqu 0x140(%rsp), %xmm15
+;   addq $0x150, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x150, %rsp
+;   movq %rax, (%rsp)
+;   movq %rcx, 8(%rsp)
+;   movq %rdx, 0x10(%rsp)
+;   movq %rsi, 0x18(%rsp)
+;   movq %rdi, 0x20(%rsp)
+;   movq %r8, 0x28(%rsp)
+;   movq %r9, 0x30(%rsp)
+;   movq %r10, 0x38(%rsp)
+;   movq %r11, 0x40(%rsp)
+;   movdqu %xmm0, 0x50(%rsp)
+;   movdqu %xmm1, 0x60(%rsp)
+;   movdqu %xmm2, 0x70(%rsp)
+;   movdqu %xmm3, 0x80(%rsp)
+;   movdqu %xmm4, 0x90(%rsp)
+;   movdqu %xmm5, 0xa0(%rsp)
+;   movdqu %xmm6, 0xb0(%rsp)
+;   movdqu %xmm7, 0xc0(%rsp)
+;   movdqu %xmm8, 0xd0(%rsp)
+;   movdqu %xmm9, 0xe0(%rsp)
+;   movdqu %xmm10, 0xf0(%rsp)
+;   movdqu %xmm11, 0x100(%rsp)
+;   movdqu %xmm12, 0x110(%rsp)
+;   movdqu %xmm13, 0x120(%rsp)
+;   movdqu %xmm14, 0x130(%rsp)
+;   movdqu %xmm15, 0x140(%rsp)
+; block1: ; offset 0xc6
+;   movabsq $0, %rax ; reloc_external Abs8 %libcall 0
+;   callq *%rax
+;   movq (%rsp), %rax
+;   movq 8(%rsp), %rcx
+;   movq 0x10(%rsp), %rdx
+;   movq 0x18(%rsp), %rsi
+;   movq 0x20(%rsp), %rdi
+;   movq 0x28(%rsp), %r8
+;   movq 0x30(%rsp), %r9
+;   movq 0x38(%rsp), %r10
+;   movq 0x40(%rsp), %r11
+;   movdqu 0x50(%rsp), %xmm0
+;   movdqu 0x60(%rsp), %xmm1
+;   movdqu 0x70(%rsp), %xmm2
+;   movdqu 0x80(%rsp), %xmm3
+;   movdqu 0x90(%rsp), %xmm4
+;   movdqu 0xa0(%rsp), %xmm5
+;   movdqu 0xb0(%rsp), %xmm6
+;   movdqu 0xc0(%rsp), %xmm7
+;   movdqu 0xd0(%rsp), %xmm8
+;   movdqu 0xe0(%rsp), %xmm9
+;   movdqu 0xf0(%rsp), %xmm10
+;   movdqu 0x100(%rsp), %xmm11
+;   movdqu 0x110(%rsp), %xmm12
+;   movdqu 0x120(%rsp), %xmm13
+;   movdqu 0x130(%rsp), %xmm14
+;   movdqu 0x140(%rsp), %xmm15
+;   addq $0x150, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

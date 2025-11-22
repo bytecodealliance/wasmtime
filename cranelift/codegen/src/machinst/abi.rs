@@ -1222,7 +1222,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::Cold
                 || call_conv == isa::CallConv::WindowsFastcall
                 || call_conv == isa::CallConv::AppleAarch64
-                || call_conv == isa::CallConv::Winch,
+                || call_conv == isa::CallConv::Winch
+                || call_conv == isa::CallConv::Patchable,
             "Unsupported calling convention: {call_conv:?}"
         );
 
@@ -2490,10 +2491,14 @@ impl<T> CallInfo<T> {
         }
 
         let temp = M::retval_temp_reg(self.callee_conv);
-        // The temporary must be noted as clobbered.
+        // The temporary must be noted as clobbered unless there are
+        // no returns (hence it isn't needed). The latter can only be
+        // the case statically for an ABI when the ABI doesn't allow
+        // any returns at all (e.g., patchable-call ABI).
         debug_assert!(
-            M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())
-                .contains(PReg::from(temp.to_reg().to_real_reg().unwrap()))
+            self.defs.is_empty()
+                || M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())
+                    .contains(PReg::from(temp.to_reg().to_real_reg().unwrap()))
         );
 
         for CallRetPair { vreg, location } in &self.defs {
