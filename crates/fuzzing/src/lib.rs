@@ -8,6 +8,7 @@ pub use wasm_mutate;
 pub use wasm_smith;
 pub mod generators;
 pub mod mutators;
+pub mod oom;
 pub mod oracles;
 pub mod single_module_fuzzer;
 
