@@ -26,14 +26,14 @@
       (export "mem" (memory $memory "mem"))
       (export "waitable-set.new" (func $waitable-set.new))
     ))))
-    (func (export "f") (result u32) (canon lift
+    (func (export "f") async (result u32) (canon lift
       (core func $cm "f")
       async (memory $memory "mem") (callback (func $cm "cb"))
     ))
   )
 
   (component $D
-    (import "f" (func $f (result u32)))
+    (import "f" (func $f async (result u32)))
 
     (core module $Memory (memory (export "mem") 1))
     (core instance $memory (instantiate $Memory))
@@ -65,7 +65,7 @@
       (export "waitable-set.wait" (func $waitable-set.wait))
       (export "f" (func $f'))
     ))))
-    (func (export "f") (result u32) (canon lift (core func $dm "g")))
+    (func (export "f") async (result u32) (canon lift (core func $dm "g")))
   )
 
   (instance $c (instantiate $C))

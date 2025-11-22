@@ -234,7 +234,7 @@
       (export "stream.drop-writable" (func $stream.drop-writable))
       (export "transform" (func $transform'))
     ))))
-    (func (export "run") (result u32) (canon lift (core func $dm "run")))
+    (func (export "run") async (result u32) (canon lift (core func $dm "run")))
   )
 
   (instance $c (instantiate $C))

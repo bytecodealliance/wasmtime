@@ -47,6 +47,7 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
     ValType::I32,     // caller_instance
     ValType::I32,     // callee_instance
     ValType::I32,     // task_return_type
+    ValType::I32,     // callee_async
     ValType::I32,     // string_encoding
     ValType::I32,     // result_count_or_max_if_async
 ];
