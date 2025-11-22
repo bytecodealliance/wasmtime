@@ -1,11 +1,13 @@
 //! Implements a registry of modules for a store.
 
+use crate::Engine;
 use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
+use crate::vm::CompiledModuleId;
 use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
@@ -30,12 +32,16 @@ pub struct ModuleRegistry {
 
     // Preserved for keeping data segments alive or similar
     modules_without_code: Vec<Module>,
+
+    // Private clones of code memory, when the store requires private
+    // copies of code for patching (e.g. debugging support).
+    private_code: BTreeMap<CompiledModuleId, Arc<CodeObject>>,
 }
 
 struct LoadedCode {
     /// Kept alive here in the store to have a strong reference to keep the
     /// relevant code mapped while the store is alive.
-    _code: Arc<CodeObject>,
+    code_object: Arc<CodeObject>,
 
     /// Modules found within `self.code`, keyed by start address here of the
     /// address of the first function in the module.
@@ -63,7 +69,7 @@ impl ModuleRegistry {
         match id {
             RegisteredModuleId::WithoutCode(idx) => self.modules_without_code.get(idx),
             RegisteredModuleId::LoadedCode(pc) => {
-                let (module, _) = self.module_and_offset(pc)?;
+                let (module, _, _) = self.module_and_offset(pc)?;
                 Some(module)
             }
         }
@@ -71,9 +77,9 @@ impl ModuleRegistry {
 
     /// Fetches a registered module given a program counter value.
     #[cfg(any(feature = "gc", feature = "debug"))]
-    pub fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
-        let (module, _) = self.module_and_offset(pc)?;
-        Some(module)
+    pub fn lookup_module_by_pc(&self, pc: usize) -> Option<(&Module, &CodeMemory)> {
+        let (module, code_memory, _) = self.module_and_offset(pc)?;
+        Some((module, code_memory))
     }
 
     fn code(&self, pc: usize) -> Option<(&LoadedCode, usize)> {
@@ -84,9 +90,9 @@ impl ModuleRegistry {
         Some((code, pc - *start))
     }
 
-    fn module_and_offset(&self, pc: usize) -> Option<(&Module, usize)> {
+    fn module_and_offset(&self, pc: usize) -> Option<(&Module, &CodeMemory, usize)> {
         let (code, offset) = self.code(pc)?;
-        Some((code.module(pc)?, offset))
+        Some((code.module(pc)?, code.code_object.code_memory(), offset))
     }
 
     /// Gets an iterator over all modules in the registry.
@@ -99,42 +105,74 @@ impl ModuleRegistry {
     }
 
     /// Registers a new module with the registry.
-    pub fn register_module(&mut self, module: &Module) -> RegisteredModuleId {
-        self.register(module.code_object(), Some(module)).unwrap()
+    ///
+    /// Ensures that the module's code object is duplicated, if
+    /// required by our configuration. Returns the CodeMemory specific
+    /// to this store for this module.
+    pub fn register_module(
+        &mut self,
+        module: &Module,
+        engine: &Engine,
+    ) -> Result<(RegisteredModuleId, Arc<CodeMemory>)> {
+        Ok(self
+            .register(module.id(), module.code_object(), engine, Some(module))?
+            .unwrap())
     }
 
     #[cfg(feature = "component-model")]
-    pub fn register_component(&mut self, component: &Component) {
-        self.register(component.code_object(), None);
+    pub fn register_component(&mut self, component: &Component, engine: &Engine) -> Result<()> {
+        self.register(component.id(), component.code_object(), engine, None)?;
+        Ok(())
     }
 
     /// Registers a new module with the registry.
     fn register(
         &mut self,
-        code: &Arc<CodeObject>,
+        compiled_module_id: CompiledModuleId,
+        code_object: &Arc<CodeObject>,
+        engine: &Engine,
         module: Option<&Module>,
-    ) -> Option<RegisteredModuleId> {
-        let text = code.code_memory().text();
-
+    ) -> Result<Option<(RegisteredModuleId, Arc<CodeMemory>)>> {
         // If there's not actually any functions in this module then we may
         // still need to preserve it for its data segments. Instances of this
         // module will hold a pointer to the data stored in the module itself,
         // and for schemes that perform lazy initialization which could use the
         // module in the future. For that reason we continue to register empty
         // modules and retain them.
-        if text.is_empty() {
-            return module.map(|module| {
+        if code_object.code_memory().text().is_empty() {
+            return Ok(module.map(|module| {
                 let id = RegisteredModuleId::WithoutCode(self.modules_without_code.len());
                 self.modules_without_code.push(module.clone());
-                id
-            });
+                (id, code_object.code_memory().clone())
+            }));
         }
+
+        // Get the code memory object, cloning if needed.
+        let code_object = if engine.tunables().debug_guest {
+            match self.private_code.entry(compiled_module_id) {
+                Entry::Occupied(o) => o.into_mut(),
+                Entry::Vacant(v) => {
+                    let mut memory = code_object.code_memory().deep_clone(engine)?;
+                    memory.publish()?;
+                    let object = code_object.with_private_code(Arc::new(memory));
+                    v.insert(Arc::new(object))
+                }
+            }
+        } else {
+            code_object
+        };
 
         // The module code range is exclusive for end, so make it inclusive as
         // it may be a valid PC value
+        let text = code_object.code_memory().text();
         let start_addr = text.as_ptr() as usize;
         let end_addr = start_addr + text.len() - 1;
-        let id = module.map(|_| RegisteredModuleId::LoadedCode(start_addr));
+        let id = module.map(|_| {
+            (
+                RegisteredModuleId::LoadedCode(start_addr),
+                code_object.code_memory().clone(),
+            )
+        });
 
         // If this module is already present in the registry then that means
         // it's either an overlapping image, for example for two modules
@@ -143,9 +181,9 @@ impl ModuleRegistry {
         if let Some((other_start, prev)) = self.loaded_code.get_mut(&end_addr) {
             assert_eq!(*other_start, start_addr);
             if let Some(module) = module {
-                prev.push_module(module);
+                prev.push_module(module, code_object.code_memory());
             }
-            return id;
+            return Ok(id);
         }
 
         // Assert that this module's code doesn't collide with any other
@@ -158,16 +196,16 @@ impl ModuleRegistry {
         }
 
         let mut item = LoadedCode {
-            _code: code.clone(),
+            code_object: code_object.clone(),
             modules: Default::default(),
             modules_with_only_trampolines: Vec::new(),
         };
         if let Some(module) = module {
-            item.push_module(module);
+            item.push_module(module, code_object.code_memory());
         }
         let prev = self.loaded_code.insert(end_addr, (start_addr, item));
         assert!(prev.is_none());
-        id
+        Ok(id)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -179,7 +217,7 @@ impl ModuleRegistry {
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
     pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, &Module)> {
-        let (module, offset) = self.module_and_offset(pc)?;
+        let (module, _code_memory, offset) = self.module_and_offset(pc)?;
         let info = FrameInfo::new(module.clone(), offset)?;
         Some((info, module))
     }
@@ -201,7 +239,9 @@ impl ModuleRegistry {
                 .values()
                 .chain(&code.modules_with_only_trampolines)
             {
-                if let Some(trampoline) = module.wasm_to_array_trampoline(sig) {
+                if let Some(trampoline) =
+                    module.wasm_to_array_trampoline(sig, code.code_object.code_memory())
+                {
                     return Some(trampoline);
                 }
             }
@@ -211,8 +251,12 @@ impl ModuleRegistry {
 }
 
 impl LoadedCode {
-    fn push_module(&mut self, module: &Module) {
-        let func = match module.compiled_module().finished_functions().next() {
+    fn push_module(&mut self, module: &Module, code_memory: &CodeMemory) {
+        let func = match module
+            .compiled_module()
+            .finished_functions(code_memory)
+            .next()
+        {
             Some((_, func)) => func,
             // There are no compiled functions in this module so there's no
             // need to push onto `self.modules` which is only used for frame
@@ -332,7 +376,10 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     // Create an instance to ensure the frame information is registered.
     Instance::new(&mut store, &module, &[])?;
 
-    for (i, alloc) in module.compiled_module().finished_functions() {
+    for (i, alloc) in module
+        .compiled_module()
+        .finished_functions(module.compiled_module().default_code_memory())
+    {
         let (start, end) = {
             let ptr = alloc.as_ptr();
             let len = alloc.len();

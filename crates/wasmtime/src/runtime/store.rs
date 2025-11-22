@@ -2036,12 +2036,12 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let module_info = self
+        let (module_info, code_memory) = self
             .modules()
             .lookup_module_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+        if let Some(stack_map) = module_info.lookup_stack_map(pc, code_memory) {
             log::trace!(
                 "We have a stack map that maps {} bytes in this Wasm frame",
                 stack_map.frame_size()
@@ -2057,7 +2057,7 @@ impl StoreOpaque {
 
         #[cfg(feature = "debug")]
         if let Some(frame_table) = module_info.frame_table() {
-            let relpc = module_info.text_offset(pc);
+            let relpc = module_info.text_offset(pc, code_memory);
             for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);

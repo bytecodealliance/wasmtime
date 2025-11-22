@@ -1052,6 +1052,10 @@ impl Module {
 
     /// Get this module's code object's `.text` section, containing its compiled
     /// executable code.
+    ///
+    /// Note that this is not guaranteed to be the actual location in
+    /// memory where the code is executed from; it is only a view to
+    /// the contents of the `.text` section.
     pub fn text(&self) -> &[u8] {
         self.code_object().code_memory().text()
     }
@@ -1062,16 +1066,18 @@ impl Module {
     /// Results are yielded in a ModuleFunction struct.
     pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
         let module = self.compiled_module();
-        module.finished_functions().map(|(idx, _)| {
-            let loc = module.func_loc(idx);
-            let idx = module.module().func_index(idx);
-            ModuleFunction {
-                index: idx,
-                name: module.func_name(idx).map(|n| n.to_string()),
-                offset: loc.start as usize,
-                len: loc.length as usize,
-            }
-        })
+        module
+            .finished_functions(module.default_code_memory())
+            .map(|(idx, _)| {
+                let loc = module.func_loc(idx);
+                let idx = module.module().func_index(idx);
+                ModuleFunction {
+                    index: idx,
+                    name: module.func_name(idx).map(|n| n.to_string()),
+                    offset: loc.start as usize,
+                    len: loc.length as usize,
+                }
+            })
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -1084,9 +1090,13 @@ impl Module {
 
     /// Return the address, in memory, of the trampoline that allows Wasm to
     /// call a array function of the given signature.
+    ///
+    /// The specific code memory copy for the instance in question
+    /// must be provided.
     pub(crate) fn wasm_to_array_trampoline(
         &self,
         signature: VMSharedTypeIndex,
+        code_memory: &CodeMemory,
     ) -> Option<NonNull<VMWasmCallFunction>> {
         log::trace!("Looking up trampoline for {signature:?}");
         let trampoline_shared_ty = self.inner.engine.signatures().trampoline_type(signature);
@@ -1113,7 +1123,7 @@ impl Module {
 
         let ptr = self
             .compiled_module()
-            .wasm_to_array_trampoline(trampoline_module_ty)
+            .wasm_to_array_trampoline(trampoline_module_ty, code_memory)
             .expect("always have a trampoline for the trampoline type")
             .as_ptr()
             .cast::<VMWasmCallFunction>()
@@ -1133,14 +1143,18 @@ impl Module {
     /// Get the text offset (relative PC) for a given absolute PC in
     /// this module.
     #[cfg(any(feature = "gc", feature = "debug"))]
-    pub(crate) fn text_offset(&self, pc: usize) -> u32 {
-        u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap()
+    pub(crate) fn text_offset(&self, pc: usize, code_memory: &CodeMemory) -> u32 {
+        u32::try_from(pc - code_memory.text().as_ptr() as usize).unwrap()
     }
 
     /// Lookup the stack map at a program counter value.
     #[cfg(feature = "gc")]
-    pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<wasmtime_environ::StackMap<'_>> {
-        let text_offset = self.text_offset(pc);
+    pub(crate) fn lookup_stack_map(
+        &self,
+        pc: usize,
+        code_memory: &CodeMemory,
+    ) -> Option<wasmtime_environ::StackMap<'_>> {
+        let text_offset = self.text_offset(pc, code_memory);
         let info = self.inner.code.code_memory().stack_map_data();
         wasmtime_environ::StackMap::lookup(text_offset, info)
     }

@@ -349,7 +349,7 @@ impl Instance {
     #[cfg(any(feature = "gc", feature = "debug"))]
     pub(crate) fn runtime_module(&self) -> Option<&crate::Module> {
         match &self.runtime_info {
-            ModuleRuntimeInfo::Module(m) => Some(m),
+            ModuleRuntimeInfo::Module(m, _) => Some(m),
             ModuleRuntimeInfo::Bare(_) => None,
         }
     }

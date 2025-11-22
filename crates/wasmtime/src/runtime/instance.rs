@@ -231,7 +231,8 @@ impl Instance {
         // Note that under normal operation this shouldn't do much as the list
         // of funcs-with-holes should generally be empty. As a result the
         // process of filling this out is not super optimized at this point.
-        store.modules_mut().register_module(module);
+        let engine = store.engine().clone();
+        store.modules_mut().register_module(module, &engine)?;
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
@@ -308,7 +309,8 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        let module_id = store.modules_mut().register_module(module);
+        let engine = store.engine().clone();
+        let (module_id, code_memory) = store.modules_mut().register_module(module, &engine)?;
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -321,7 +323,7 @@ impl Instance {
                 .allocate_instance(
                     limiter.as_deref_mut(),
                     AllocateInstanceKind::Module(module_id),
-                    &ModuleRuntimeInfo::Module(module.clone()),
+                    &ModuleRuntimeInfo::Module(module.clone(), code_memory),
                     imports,
                 )
                 .await?
@@ -818,7 +820,14 @@ impl<T: 'static> InstancePre<T> {
                         debug_assert!(matches!(f.host_ctx(), crate::HostContext::Array(_)));
                         func_refs.push(VMFuncRef {
                             wasm_call: module
-                                .wasm_to_array_trampoline(f.sig_index())
+                                .wasm_to_array_trampoline(
+                                    f.sig_index(),
+                                    // It's OK to use the default
+                                    // CodeMemory: we are only getting
+                                    // a trampoline for a host
+                                    // function.
+                                    module.compiled_module().default_code_memory(),
+                                )
                                 .map(|f| f.into()),
                             ..*f.func_ref()
                         });
@@ -922,7 +931,8 @@ fn pre_instantiate_raw(
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
-    store.modules_mut().register_module(module);
+    let engine = store.engine().clone();
+    store.modules_mut().register_module(module, &engine)?;
     let (funcrefs, modules) = store.func_refs_and_modules();
     funcrefs.fill(modules);
 

@@ -441,6 +441,13 @@ impl CodeMemory {
     pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
         lookup_trap_code(self.trap_data(), text_offset)
     }
+
+    /// Create a "deep clone": a separate CodeMemory for the same code
+    /// that can be patched or mutated independently.
+    pub fn deep_clone(&self, engine: &Engine) -> Result<CodeMemory> {
+        let mmap = self.mmap.deep_clone()?;
+        Self::new(engine, mmap)
+    }
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the

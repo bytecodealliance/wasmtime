@@ -33,6 +33,7 @@ pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
 #[derive(Copy, Clone)]
 pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 
+use crate::CodeMemory;
 use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::store::{StoreInner, StoreOpaque, StoreResourceLimiter};
@@ -299,7 +300,17 @@ unsafe impl Sync for VMStoreRawPtr {}
 /// allocation request.
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
-    Module(crate::Module),
+    /// A normal module, with a particular code memory for this
+    /// instance of the module.
+    ///
+    /// Note that different instances of a module can use different
+    /// (possibly patched or modified for debugging) variants of
+    /// compiled code. For uniform implementation, we do not make this
+    /// a special case; rather, every instance carries this reference
+    /// to the `CodeMemory`, and every accessor on the mdule that
+    /// requires a code memory takes a reference. The module provides
+    /// its "default" code memory via a separate accessor.
+    Module(crate::Module, Arc<CodeMemory>),
     Bare(Box<BareModuleInfo>),
 }
 
@@ -333,7 +344,7 @@ impl ModuleRuntimeInfo {
     /// The underlying Module.
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.env_module(),
+            ModuleRuntimeInfo::Module(m, _) => m.env_module(),
             ModuleRuntimeInfo::Bare(b) => &b.module,
         }
     }
@@ -343,7 +354,7 @@ impl ModuleRuntimeInfo {
     #[cfg(feature = "gc")]
     fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         match self {
-            ModuleRuntimeInfo::Module(m) => m
+            ModuleRuntimeInfo::Module(m, _) => m
                 .code_object()
                 .signatures()
                 .shared_type(module_index)
@@ -354,13 +365,13 @@ impl ModuleRuntimeInfo {
 
     /// Returns the address, in memory, that the function `index` resides at.
     fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        let module = match self {
-            ModuleRuntimeInfo::Module(m) => m,
+        let (module, code_memory) = match self {
+            ModuleRuntimeInfo::Module(m, code_memory) => (m, code_memory),
             ModuleRuntimeInfo::Bare(_) => unreachable!(),
         };
         let ptr = module
             .compiled_module()
-            .finished_function(index)
+            .finished_function(index, code_memory)
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();
@@ -376,11 +387,14 @@ impl ModuleRuntimeInfo {
         &self,
         index: DefinedFuncIndex,
     ) -> Option<NonNull<VMArrayCallFunction>> {
-        let m = match self {
-            ModuleRuntimeInfo::Module(m) => m,
+        let (m, code_memory) = match self {
+            ModuleRuntimeInfo::Module(m, code_memory) => (m, code_memory),
             ModuleRuntimeInfo::Bare(_) => unreachable!(),
         };
-        let ptr = NonNull::from(m.compiled_module().array_to_wasm_trampoline(index)?);
+        let ptr = NonNull::from(
+            m.compiled_module()
+                .array_to_wasm_trampoline(index, code_memory)?,
+        );
         Some(ptr.cast())
     }
 
@@ -391,7 +405,7 @@ impl ModuleRuntimeInfo {
         memory: DefinedMemoryIndex,
     ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
         match self {
-            ModuleRuntimeInfo::Module(m) => {
+            ModuleRuntimeInfo::Module(m, _) => {
                 let images = m.memory_images()?;
                 Ok(images.and_then(|images| images.get_memory_image(memory)))
             }
@@ -405,7 +419,7 @@ impl ModuleRuntimeInfo {
     #[cfg(feature = "pooling-allocator")]
     fn unique_id(&self) -> Option<CompiledModuleId> {
         match self {
-            ModuleRuntimeInfo::Module(m) => Some(m.id()),
+            ModuleRuntimeInfo::Module(m, _) => Some(m.id()),
             ModuleRuntimeInfo::Bare(_) => None,
         }
     }
@@ -413,7 +427,9 @@ impl ModuleRuntimeInfo {
     /// A slice pointing to all data that is referenced by this instance.
     fn wasm_data(&self) -> &[u8] {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.compiled_module().code_memory().wasm_data(),
+            ModuleRuntimeInfo::Module(m, _) => {
+                m.compiled_module().default_code_memory().wasm_data()
+            }
             ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
@@ -422,7 +438,7 @@ impl ModuleRuntimeInfo {
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match self {
-            ModuleRuntimeInfo::Module(m) => m
+            ModuleRuntimeInfo::Module(m, _) => m
                 .code_object()
                 .signatures()
                 .as_module_map()
@@ -435,7 +451,7 @@ impl ModuleRuntimeInfo {
     /// Offset information for the current host.
     pub(crate) fn offsets(&self) -> &VMOffsets<HostPtr> {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.offsets(),
+            ModuleRuntimeInfo::Module(m, _) => m.offsets(),
             ModuleRuntimeInfo::Bare(b) => &b.offsets,
         }
     }

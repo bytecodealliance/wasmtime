@@ -26,13 +26,13 @@ pub struct CodeObject {
     /// Note that this type has a significant destructor which unregisters
     /// signatures within the `Engine` it was originally tied to, and this ends
     /// up corresponding to the lifetime of a `Component` or `Module`.
-    signatures: TypeCollection,
+    signatures: Arc<TypeCollection>,
 
     /// Type information for the loaded object.
     ///
     /// This is either a `ModuleTypes` or a `ComponentTypes` depending on the
     /// top-level creator of this code.
-    types: Types,
+    types: Arc<Types>,
 }
 
 impl CodeObject {
@@ -43,8 +43,17 @@ impl CodeObject {
 
         CodeObject {
             mmap,
-            signatures,
-            types,
+            signatures: Arc::new(signatures),
+            types: Arc::new(types),
+        }
+    }
+
+    pub fn with_private_code(&self, mmap: Arc<CodeMemory>) -> CodeObject {
+        crate::module::register_code(&mmap);
+        CodeObject {
+            mmap,
+            signatures: self.signatures.clone(),
+            types: self.types.clone(),
         }
     }
 
