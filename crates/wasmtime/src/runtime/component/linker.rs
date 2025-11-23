@@ -400,6 +400,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// types that will come from wasm and `Return` is a value coming from the
     /// host going back to wasm.
     ///
+    /// When defining functions that belong to a specific module instance
+    /// (rather than the root linker), you must first create the appropriate instance
+    /// using the [`instance`](LinkerInstance::instance) method and then call `func_wrap`
+    /// on the returned [`LinkerInstance`]. This is necessary to match the nested
+    /// instance structure expected by WebAssembly components.
+    /// 
     /// Additionally the `func` takes a
     /// [`StoreContextMut`](crate::StoreContextMut) as its first parameter.
     ///
