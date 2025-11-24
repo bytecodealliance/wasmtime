@@ -713,7 +713,9 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let test = &test.test;
 
-    if test.config.component_model_async() || u.arbitrary()? {
+    // FIXME(#11954) async is unconditional for now due to preexisting tests not
+    // playing well with/without async when combined with coop multithreading.
+    if true || test.config.component_model_async() || u.arbitrary()? {
         fuzz_config.enable_async(u)?;
     }
 
