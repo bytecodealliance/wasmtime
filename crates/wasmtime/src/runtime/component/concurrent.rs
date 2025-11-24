@@ -4796,10 +4796,10 @@ impl ConcurrentState {
 
     fn check_blocking_for(&mut self, task: TableId<GuestTask>) -> Result<()> {
         let task = self.get_mut(task).unwrap();
-        if !(task.async_function || task.returned_or_cancelled()) {
-            Err(Trap::CannotBlockSyncTask.into())
-        } else {
+        if task.async_function || task.returned_or_cancelled() {
             Ok(())
+        } else {
+            Err(Trap::CannotBlockSyncTask.into())
         }
     }
 }
