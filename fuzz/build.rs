@@ -38,6 +38,7 @@ mod component {
     }
 
     fn write_static_api_tests(out: &mut String) -> Result<()> {
+        println!("cargo:rerun-if-env-changed=WASMTIME_FUZZ_SEED");
         let seed = if let Ok(seed) = env::var("WASMTIME_FUZZ_SEED") {
             seed.parse::<u64>()
                 .with_context(|| anyhow!("expected u64 in WASMTIME_FUZZ_SEED"))?
