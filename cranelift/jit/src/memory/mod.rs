@@ -76,7 +76,7 @@ pub(crate) fn set_readable_and_executable(
         }
     }
 
-    // ARM64 macOS: Switch to execute mode for W^X compliance.
+    // ARM64 macOS: Switch to execute mode (W^X: disable writing, enable execution).
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     {
         unsafe extern "C" {

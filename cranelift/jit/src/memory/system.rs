@@ -53,7 +53,7 @@ impl PtrLen {
         })
     }
 
-    /// macOS ARM64: Use mmap with MAP_JIT for W^X policy compliance.
+    // macOS ARM64: Use mmap with MAP_JIT for W^X policy compliance.
     #[cfg(all(
         target_arch = "aarch64",
         target_os = "macos",
@@ -63,30 +63,36 @@ impl PtrLen {
         assert_ne!(size, 0);
         let alloc_size = region::page::ceil(size as *const ()) as usize;
 
-        const MAP_JIT: libc::c_int = 0x0800;
-
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
                 alloc_size,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANON | MAP_JIT,
+                libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_JIT,
                 -1,
                 0,
             )
         };
 
         if ptr == libc::MAP_FAILED {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(Self {
-                ptr: ptr as *mut u8,
-                len: alloc_size,
-            })
+            return Err(io::Error::last_os_error());
         }
+
+        // Enable writing to MAP_JIT memory (W^X: start in write mode)
+        unsafe extern "C" {
+            fn pthread_jit_write_protect_np(enabled: libc::c_int);
+        }
+        unsafe {
+            pthread_jit_write_protect_np(0);
+        }
+
+        Ok(Self {
+            ptr: ptr as *mut u8,
+            len: alloc_size,
+        })
     }
 
-    /// Non-macOS ARM64: Use standard allocator
+    // Non-macOS ARM64: Use standard allocator.
     #[cfg(all(
         not(target_os = "windows"),
         not(feature = "selinux-fix"),
@@ -138,7 +144,7 @@ impl PtrLen {
 
 // `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
 
-/// macOS ARM64: Free MAP_JIT memory with munmap.
+// macOS ARM64: Free MAP_JIT memory with munmap.
 #[cfg(all(
     target_arch = "aarch64",
     target_os = "macos",
@@ -155,7 +161,7 @@ impl Drop for PtrLen {
     }
 }
 
-/// Other Unix platforms: Use standard allocator dealloc.
+// Other Unix platforms: Use standard allocator dealloc.
 #[cfg(all(
     not(target_os = "windows"),
     not(feature = "selinux-fix"),

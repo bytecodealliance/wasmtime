@@ -150,6 +150,13 @@ unsafe extern "C" {
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
 #[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
+    // TODO: On AArch64 we currently rely on the `mprotect` call that switches the memory from W+R
+    // to R+X to do this for us, however that is an implementation detail and should not be relied
+    // upon.
+    // We should call some implementation of `clear_cache` here.
+    //
+    // See: https://github.com/bytecodealliance/wasmtime/issues/3310
+
     // macOS ARM64: Use sys_icache_invalidate for icache coherence.
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     unsafe {
