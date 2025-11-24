@@ -1132,7 +1132,7 @@ impl Module {
 
     /// Get the text offset (relative PC) for a given absolute PC in
     /// this module.
-    #[cfg(any(feature = "gc", feature = "debug"))]
+    #[cfg(feature = "gc")]
     pub(crate) fn text_offset(&self, pc: usize) -> u32 {
         u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap()
     }
