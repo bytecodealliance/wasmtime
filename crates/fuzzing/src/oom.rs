@@ -5,7 +5,7 @@
 
 use anyhow::bail;
 use backtrace::Backtrace;
-use std::{alloc::GlobalAlloc, cell::Cell, ptr, time};
+use std::{alloc::GlobalAlloc, cell::Cell, mem, ptr, time};
 use wasmtime::{Error, Result};
 
 /// An allocator for use with `OomTest`.
@@ -19,7 +19,7 @@ impl OomTestAllocator {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 enum OomState {
     /// We are in code that is not part of an OOM test.
     #[default]
@@ -40,6 +40,33 @@ thread_local! {
 /// Set the new OOM state, returning the old state.
 fn set_oom_state(state: OomState) -> OomState {
     OOM_STATE.with(|s| s.replace(state))
+}
+
+/// RAII helper to set the OOM state within a block of code and reset it upon
+/// exiting that block (even if exiting via panic unwinding).
+struct ScopedOomState {
+    prev_state: OomState,
+}
+
+impl ScopedOomState {
+    fn new(state: OomState) -> Self {
+        ScopedOomState {
+            prev_state: set_oom_state(state),
+        }
+    }
+
+    /// Finish this OOM state scope early, resetting the OOM state to what it
+    /// was before this scope was created, and returning the previous state that
+    /// was just overwritten by the reset.
+    fn finish(&self) -> OomState {
+        set_oom_state(self.prev_state.clone())
+    }
+}
+
+impl Drop for ScopedOomState {
+    fn drop(&mut self) {
+        set_oom_state(mem::take(&mut self.prev_state));
+    }
 }
 
 unsafe impl GlobalAlloc for OomTestAllocator {
@@ -148,6 +175,9 @@ impl OomTest {
     /// Repeatedly run the given test function, injecting OOMs at different
     /// times and checking that it correctly handles them.
     ///
+    /// The test function should not use threads, or else allocations may not be
+    /// tracked correctly and OOM injection may be incorrect.
+    ///
     /// The test function should return an `Err(_)` if and only if it encounters
     /// an OOM.
     ///
@@ -164,11 +194,14 @@ impl OomTest {
             }
 
             log::trace!("=== Injecting OOM after {i} allocations ===");
-            let old_state = set_oom_state(OomState::OomOnAlloc(i));
-            assert_eq!(old_state, OomState::OutsideOomTest);
+            let (result, old_state) = {
+                let guard = ScopedOomState::new(OomState::OomOnAlloc(i));
+                assert_eq!(guard.prev_state, OomState::OutsideOomTest);
 
-            let result = test_func();
-            let old_state = set_oom_state(OomState::OutsideOomTest);
+                let result = test_func();
+
+                (result, guard.finish())
+            };
 
             match (result, old_state) {
                 (_, OomState::OutsideOomTest) => unreachable!(),
