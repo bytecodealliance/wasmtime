@@ -2508,7 +2508,11 @@ impl<'a> InterfaceGenerator<'a> {
             } else {
                 uwriteln!(
                     self.src,
-                    "let host = {wt}::component::Access::new(caller, host_getter);"
+                    "let access_cx = {wt}::AsContextMut::as_context_mut(&mut caller);"
+                );
+                uwriteln!(
+                    self.src,
+                    "let host = {wt}::component::Access::new(access_cx, host_getter);"
                 );
             }
         } else {
@@ -2581,9 +2585,9 @@ impl<'a> InterfaceGenerator<'a> {
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if flags.contains(FunctionFlags::STORE) {
                 if flags.contains(FunctionFlags::ASYNC) {
-                    format!("host.with(|mut host| {convert}(&mut host.get(), e))?")
+                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))?")
                 } else {
-                    format!("{convert}(&mut host.get(), e)?")
+                    format!("{convert}(&mut host_getter(caller.data_mut()), e)?")
                 }
             } else {
                 format!("{convert}(host, e)?")
