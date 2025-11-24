@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut as _, StoreContextMut};
@@ -236,23 +236,6 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
 }
 
 impl HostTcpSocketWithStore for WasiSockets {
-    async fn bind<T>(
-        store: &Accessor<T, Self>,
-        socket: Resource<TcpSocket>,
-        local_address: IpSocketAddress,
-    ) -> SocketResult<()> {
-        let local_address = SocketAddr::from(local_address);
-        if !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
-        store.with(|mut store| {
-            let socket = get_socket_mut(store.get().table, &socket)?;
-            socket.start_bind(local_address)?;
-            socket.finish_bind()?;
-            Ok(())
-        })
-    }
-
     async fn connect<T>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
@@ -278,28 +261,26 @@ impl HostTcpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn listen<T: 'static>(
-        store: &Accessor<T, Self>,
+    fn listen<T: 'static>(
+        mut store: Access<'_, T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
         let getter = store.getter();
-        store.with(|mut store| {
-            let socket = get_socket_mut(store.get().table, &socket)?;
-            socket.start_listen()?;
-            socket.finish_listen()?;
-            let listener = socket.tcp_listener_arc().unwrap().clone();
-            let family = socket.address_family();
-            let options = socket.non_inherited_options().clone();
-            Ok(StreamReader::new(
-                &mut store,
-                ListenStreamProducer {
-                    listener,
-                    family,
-                    options,
-                    getter,
-                },
-            ))
-        })
+        let socket = get_socket_mut(store.get().table, &socket)?;
+        socket.start_listen()?;
+        socket.finish_listen()?;
+        let listener = socket.tcp_listener_arc().unwrap().clone();
+        let family = socket.address_family();
+        let options = socket.non_inherited_options().clone();
+        Ok(StreamReader::new(
+            &mut store,
+            ListenStreamProducer {
+                listener,
+                family,
+                options,
+                getter,
+            },
+        ))
     }
 
     async fn send<T: 'static>(
@@ -328,39 +309,52 @@ impl HostTcpSocketWithStore for WasiSockets {
         Ok(())
     }
 
-    async fn receive<T: 'static>(
-        store: &Accessor<T, Self>,
+    fn receive<T: 'static>(
+        mut store: Access<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut store| {
-            let socket = get_socket_mut(store.get().table, &socket)?;
-            match socket.start_receive() {
-                Some(stream) => {
-                    let stream = Arc::clone(stream);
-                    let (result_tx, result_rx) = oneshot::channel();
-                    Ok((
-                        StreamReader::new(
-                            &mut store,
-                            ReceiveStreamProducer {
-                                stream,
-                                result: Some(result_tx),
-                            },
-                        ),
-                        FutureReader::new(&mut store, result_rx),
-                    ))
-                }
-                None => Ok((
-                    StreamReader::new(&mut store, iter::empty()),
-                    FutureReader::new(&mut store, async {
-                        anyhow::Ok(Err(ErrorCode::InvalidState))
-                    }),
-                )),
+        let socket = get_socket_mut(store.get().table, &socket)?;
+        match socket.start_receive() {
+            Some(stream) => {
+                let stream = Arc::clone(stream);
+                let (result_tx, result_rx) = oneshot::channel();
+                Ok((
+                    StreamReader::new(
+                        &mut store,
+                        ReceiveStreamProducer {
+                            stream,
+                            result: Some(result_tx),
+                        },
+                    ),
+                    FutureReader::new(&mut store, result_rx),
+                ))
             }
-        })
+            None => Ok((
+                StreamReader::new(&mut store, iter::empty()),
+                FutureReader::new(&mut store, async {
+                    anyhow::Ok(Err(ErrorCode::InvalidState))
+                }),
+            )),
+        }
     }
 }
 
 impl HostTcpSocket for WasiSocketsCtxView<'_> {
+    async fn bind(
+        &mut self,
+        socket: Resource<TcpSocket>,
+        local_address: IpSocketAddress,
+    ) -> SocketResult<()> {
+        let local_address = SocketAddr::from(local_address);
+        if !(self.ctx.socket_addr_check)(local_address, SocketAddrUse::TcpBind).await {
+            return Err(ErrorCode::AccessDenied.into());
+        }
+        let socket = get_socket_mut(self.table, &socket)?;
+        socket.start_bind(local_address)?;
+        socket.finish_bind()?;
+        Ok(())
+    }
+
     fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<TcpSocket>> {
         let family = address_family.into();
         let socket = TcpSocket::new(self.ctx, family)?;
