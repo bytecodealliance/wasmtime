@@ -158,8 +158,10 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
         set_min(&mut p.total_component_instances, 5);
         set_min(&mut p.total_core_instances, 5);
         set_min(&mut p.total_memories, 2);
+        set_min(&mut p.total_stacks, 4);
         set_min(&mut p.max_memories_per_component, 2);
         set_min(&mut p.max_memories_per_module, 2);
+        set_min(&mut p.component_instance_size, 64 << 10);
         p.memory_protection_keys = Enabled::No;
         p.max_memory_size = 10 << 20; // 10 MiB
     }
