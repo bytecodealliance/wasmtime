@@ -1,3 +1,14 @@
+## 39.0.1
+
+Released 2025-11-24.
+
+### Fixed
+
+* Compiling the `debug` feature without the `gc` feature enabled has been fixed.
+  [#12074](https://github.com/bytecodealliance/wasmtime/pull/12074)
+
+--------------------------------------------------------------------------------
+
 ## 39.0.0
 
 Released 2025-11-20.
