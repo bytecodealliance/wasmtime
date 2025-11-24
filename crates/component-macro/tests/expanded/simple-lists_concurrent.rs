@@ -310,6 +310,7 @@ pub mod exports {
             pub mod simple_lists {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
+                #[derive(Clone)]
                 pub struct Guest {
                     simple_list1: wasmtime::component::Func,
                     simple_list2: wasmtime::component::Func,

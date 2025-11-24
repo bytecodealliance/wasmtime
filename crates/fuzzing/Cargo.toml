@@ -32,12 +32,16 @@ wasmtime = { workspace = true, features = ['default', 'winch'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
+wasm-compose = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = { version = "0.51.1", default-features = false, features = ["std", "simd"] }
-futures = { workspace = true }
+futures = { workspace = true, features = ['async-await'] }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 serde_json = { workspace = true }
 serde = { workspace = true }
+test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true }
+indexmap = { workspace = true }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true

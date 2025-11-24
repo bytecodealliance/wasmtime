@@ -724,6 +724,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     tuple_arg: wasmtime::component::Func,
                     tuple_result: wasmtime::component::Func,

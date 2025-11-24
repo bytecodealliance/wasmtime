@@ -300,6 +300,7 @@ pub mod exports {
             pub mod floats {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
+                #[derive(Clone)]
                 pub struct Guest {
                     f32_param: wasmtime::component::Func,
                     f64_param: wasmtime::component::Func,

@@ -14,7 +14,9 @@ macro_rules! run_fuzzers {
     ($($fuzzer:ident)*) => {
         static ENABLED: OnceLock<u32> = OnceLock::new();
 
-        fuzz_target!(|bytes: &[u8]| {
+        fuzz_target!(
+        init: wasmtime_fuzzing::misc_init(),
+        |bytes: &[u8]| {
             // Use the first byte of input as a discriminant of which fuzzer to
             // select.
             let Some((which_fuzzer, bytes)) = bytes.split_first() else {
@@ -26,7 +28,6 @@ macro_rules! run_fuzzers {
             // inside of `ENABLED` of enabled fuzzers, returned here as
             // `enabled`.
             let enabled = *ENABLED.get_or_init(|| {
-                env_logger::init();
                 let configured = std::env::var("FUZZER").ok();
                 let configured = configured.as_deref();
                 let mut enabled = 0;
@@ -67,6 +68,7 @@ run_fuzzers! {
     stacks
     api_calls
     dominator_tree
+    component_async
 }
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
@@ -177,5 +179,10 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn component_async(u: Unstructured<'_>) -> Result<()> {
+    wasmtime_fuzzing::oracles::component_async::run(Arbitrary::arbitrary_take_rest(u)?);
     Ok(())
 }
