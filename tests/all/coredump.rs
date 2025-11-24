@@ -268,6 +268,7 @@ fn core_dump_with_shared_memory() -> Result<()> {
     }
     let mut config = Config::new();
     config.coredump_on_trap(true);
+    config.shared_memory(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let wat = r#"(module

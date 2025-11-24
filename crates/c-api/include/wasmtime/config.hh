@@ -289,6 +289,13 @@ class Config {
   }
 #endif // WASMTIME_FEATURE_THREADS
 
+  /// \brief Configures whether wasm shared memories can be created.
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.shared_memory
+  void shared_memory(bool enable) {
+    wasmtime_config_shared_memory_set(ptr.get(), enable);
+  }
+
   /// \brief Configures whether the WebAssembly tail call proposal is enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_tail_call

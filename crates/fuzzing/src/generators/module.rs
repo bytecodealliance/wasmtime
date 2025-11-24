@@ -23,6 +23,7 @@ pub struct ModuleConfig {
     pub component_model_error_context: bool,
     pub component_model_gc: bool,
     pub legacy_exceptions: bool,
+    pub shared_memory: bool,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
@@ -53,7 +54,11 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
         config.memory64_enabled = u.ratio(1, 20)?;
-        config.threads_enabled = u.ratio(1, 20)?;
+        // Fuzzing threads is an open question. Even without actual parallel
+        // threads `SharedMemory` still poses a problem where it isn't hooked
+        // into resource limits the same way `Memory` is. Overall not clear what
+        // to do so it's disabled for now.
+        config.threads_enabled = false;
         // Allow multi-memory but make it unlikely
         if u.ratio(1, 20)? {
             config.max_memories = config.max_memories.max(2);
@@ -75,6 +80,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_error_context: false,
             component_model_gc: false,
             legacy_exceptions: false,
+            shared_memory: false,
             function_references_enabled: config.gc_enabled,
             config,
         })
