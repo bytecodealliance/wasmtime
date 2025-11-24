@@ -526,6 +526,7 @@ pub mod exports {
                         4 == < BigStruct as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     many_args: wasmtime::component::Func,
                     big_argument: wasmtime::component::Func,

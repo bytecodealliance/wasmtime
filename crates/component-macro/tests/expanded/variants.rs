@@ -1245,6 +1245,7 @@ pub mod exports {
                         4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     e1_arg: wasmtime::component::Func,
                     e1_result: wasmtime::component::Func,

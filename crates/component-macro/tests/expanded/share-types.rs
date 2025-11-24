@@ -315,6 +315,7 @@ pub mod exports {
             assert!(8 == < Response as wasmtime::component::ComponentType >::SIZE32);
             assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
         };
+        #[derive(Clone)]
         pub struct Guest {
             handle_request: wasmtime::component::Func,
         }

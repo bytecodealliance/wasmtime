@@ -585,6 +585,7 @@ pub mod exports {
                         4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     roundtrip_flag1: wasmtime::component::Func,
                     roundtrip_flag2: wasmtime::component::Func,
