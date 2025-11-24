@@ -51,8 +51,10 @@ impl FunctionStyle for SyncStyle {
     const ASYNC: bool = false;
 }
 
+#[cfg(feature = "component-model-async")]
 struct AsyncStyle;
 
+#[cfg(feature = "component-model-async")]
 impl FunctionStyle for AsyncStyle {
     const ASYNC: bool = true;
 }
