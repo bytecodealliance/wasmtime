@@ -213,6 +213,10 @@ audited_as = "37.0.2"
 version = "39.0.0"
 audited_as = "37.0.2"
 
+[[unpublished.wasmtime-wizer]]
+version = "40.0.0"
+audited_as = "39.0.0"
+
 [[unpublished.wiggle]]
 version = "39.0.0"
 audited_as = "37.0.2"
@@ -1441,6 +1445,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wast]]
 version = "37.0.2"
 when = "2025-10-07"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wizer]]
+version = "39.0.0"
+when = "2025-11-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
