@@ -141,16 +141,23 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
 
 pub(crate) use details::*;
 
+// macOS ARM64: Use sys_icache_invalidate for icache coherence.
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+unsafe extern "C" {
+    fn sys_icache_invalidate(start: *const c_void, len: usize);
+}
+
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
 #[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
-    // TODO: On AArch64 we currently rely on the `mprotect` call that switches the memory from W+R
-    // to R+X to do this for us, however that is an implementation detail and should not be relied
-    // upon.
-    // We should call some implementation of `clear_cache` here.
-    //
-    // See: https://github.com/bytecodealliance/wasmtime/issues/3310
+    // macOS ARM64: Use sys_icache_invalidate for icache coherence.
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    unsafe {
+        sys_icache_invalidate(_ptr, _len);
+    }
+
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     riscv_flush_icache(_ptr as u64, (_ptr as u64) + (_len as u64))?;
+
     Ok(())
 }

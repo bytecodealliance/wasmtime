@@ -3,7 +3,11 @@ use cranelift_module::{ModuleError, ModuleResult};
 #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
 use memmap2::MmapMut;
 
-#[cfg(not(any(feature = "selinux-fix", windows)))]
+#[cfg(not(any(
+    feature = "selinux-fix",
+    windows,
+    all(target_arch = "aarch64", target_os = "macos")
+)))]
 use std::alloc;
 use std::io;
 use std::mem;
@@ -49,7 +53,45 @@ impl PtrLen {
         })
     }
 
-    #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
+    /// macOS ARM64: Use mmap with MAP_JIT for W^X policy compliance.
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_os = "macos",
+        not(feature = "selinux-fix")
+    ))]
+    fn with_size(size: usize) -> io::Result<Self> {
+        assert_ne!(size, 0);
+        let alloc_size = region::page::ceil(size as *const ()) as usize;
+
+        const MAP_JIT: libc::c_int = 0x0800;
+
+        let ptr = unsafe {
+            libc::mmap(
+                ptr::null_mut(),
+                alloc_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANON | MAP_JIT,
+                -1,
+                0,
+            )
+        };
+
+        if ptr == libc::MAP_FAILED {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(Self {
+                ptr: ptr as *mut u8,
+                len: alloc_size,
+            })
+        }
+    }
+
+    /// Non-macOS ARM64: Use standard allocator
+    #[cfg(all(
+        not(target_os = "windows"),
+        not(feature = "selinux-fix"),
+        not(all(target_arch = "aarch64", target_os = "macos"))
+    ))]
     fn with_size(size: usize) -> io::Result<Self> {
         assert_ne!(size, 0);
         let page_size = region::page::size();
@@ -95,7 +137,30 @@ impl PtrLen {
 }
 
 // `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
-#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
+
+/// macOS ARM64: Free MAP_JIT memory with munmap.
+#[cfg(all(
+    target_arch = "aarch64",
+    target_os = "macos",
+    not(feature = "selinux-fix")
+))]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                let _ = region::protect(self.ptr, self.len, region::Protection::READ_WRITE);
+                libc::munmap(self.ptr as *mut libc::c_void, self.len);
+            }
+        }
+    }
+}
+
+/// Other Unix platforms: Use standard allocator dealloc.
+#[cfg(all(
+    not(target_os = "windows"),
+    not(feature = "selinux-fix"),
+    not(all(target_arch = "aarch64", target_os = "macos"))
+))]
 impl Drop for PtrLen {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
