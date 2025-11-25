@@ -102,7 +102,7 @@ impl TrapHandler {
             // overflowed when a host overflows its fiber stack.
             let mut handler: libc::sigaction = mem::zeroed();
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
-            handler.sa_sigaction = sigbus_handler as usize;
+            handler.sa_sigaction = (sigbus_handler as *const ()).addr();
             libc::sigemptyset(&mut handler.sa_mask);
             if libc::sigaction(libc::SIGBUS, &handler, &raw mut PREV_SIGBUS) != 0 {
                 panic!(
@@ -383,7 +383,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__x[2] = fault1 as u64;
                 state.__x[3] = fault2 as u64;
                 state.__x[4] = trap as u64;
-                state.__pc = unwind as u64;
+                state.__pc = (unwind as *const()).addr() as u64;
             };
             let mut thread_state = unsafe { mem::zeroed::<ThreadState>() };
         } else {
