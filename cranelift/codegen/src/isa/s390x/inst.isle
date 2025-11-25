@@ -600,6 +600,13 @@
       (rm Reg)
       (ra Reg))
 
+    ;; Vector merge instruction.
+    (VecBlend
+      (rd WritableReg)
+      (rn Reg)
+      (rm Reg)
+      (ra Reg))
+
     ;; Vector permute instruction.
     (VecPermute
       (rd WritableReg)
@@ -2491,6 +2498,13 @@
 (rule (vec_permute ty src1 src2 src3)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.VecPermute dst src1 src2 src3))))
+        dst))
+
+;; Helper for emitting `MInst.VecBlend` instructions.
+(decl vec_blend (Type Reg Reg Reg) Reg)
+(rule (vec_blend ty src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecBlend dst src1 src2 src3))))
         dst))
 
 ;; Helper for emitting `MInst.VecEvaluate` instructions.

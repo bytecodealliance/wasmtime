@@ -10594,6 +10594,16 @@ fn test_s390x_binemit() {
         "veval %v12, %v20, %v21, %v22, 2",
     ));
     insns.push((
+        Inst::VecBlend {
+            rd: writable_vr(12),
+            rn: vr(20),
+            rm: vr(21),
+            ra: vr(22),
+        },
+        "E7C450006789",
+        "vblend %v12, %v20, %v21, %v22",
+    ));
+    insns.push((
         Inst::VecInt128SCmpHi {
             tmp: writable_vr(20),
             rn: vr(8),

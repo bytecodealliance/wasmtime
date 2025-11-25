@@ -2604,6 +2604,11 @@
 (rule (lower (shuffle x y (shuffle_mask (imm8x16 24 25 26 27 28 29 30 31 16 17 18 19 20 21 22 23) 65535)))
       (vec_permute_dw_imm $I8X16 y 1 y 0))
 
+;;;; Rules for `blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (has_type (and (ty_vec128 ty) (vxrs_ext3_enabled)) (x86_blendv p x y)))
+  (vec_blend ty p x y))
+
 
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
