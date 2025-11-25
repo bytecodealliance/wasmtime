@@ -13,6 +13,7 @@ mod coredump;
 mod custom_code_memory;
 mod debug;
 mod defaults;
+mod engine;
 mod epoch_interruption;
 mod eqref;
 mod exceptions;
