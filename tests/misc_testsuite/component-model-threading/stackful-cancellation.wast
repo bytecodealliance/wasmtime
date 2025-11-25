@@ -222,7 +222,7 @@
                     (export "waitable-set.new" (func $waitable-set.new))))
                 (with "libc" (instance $libc))))
 
-        (func (export "run-yield") (result u32) (canon lift (core func $cm "run-yield") async))
+        (func (export "run-yield") async (result u32) (canon lift (core func $cm "run-yield") async))
         (func (export "run-yield-to") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-yield-to") async))
         (func (export "run-suspend") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend") async))
         (func (export "run-switch-to") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-switch-to") async))
@@ -230,7 +230,7 @@
 
     (component $D
         (type $FT (future))
-        (import "run-yield" (func $run-yield (result u32)))
+        (import "run-yield" (func $run-yield async (result u32)))
         (import "run-yield-to" (func $run-yield-to async (param "fut" $FT) (result u32)))
         (import "run-suspend" (func $run-suspend async (param "fut" $FT) (result u32)))
         (import "run-switch-to" (func $run-switch-to async (param "fut" $FT) (result u32)))
