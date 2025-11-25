@@ -292,7 +292,7 @@ impl TestFileCompiler {
                         let ext_func = &cursor.func.dfg.ext_funcs[*func_ref];
                         let hostcall_addr = match &ext_func.name {
                             ExternalName::TestCase(tc) if tc.raw() == b"__cranelift_throw" => {
-                                Some(__cranelift_throw as usize)
+                                Some((__cranelift_throw as *const ()).addr())
                             }
                             _ => None,
                         };
