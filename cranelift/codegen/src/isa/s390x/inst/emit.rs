@@ -1176,6 +1176,33 @@ fn enc_vrr_c(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> 
     enc
 }
 
+/// VRRd-type instructions.
+///
+///   47      39 35 31 27 23 19 15 11  7
+///   opcode1 v1 v2 v3 m5 m6 -  v4 rxb opcode2
+///        40 36 32 28 24 20 16 12   8       0
+///
+fn enc_vrr_d(opcode: u16, v1: Reg, v2: Reg, v3: Reg, v4: Reg, m5: u8, m6: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), Some(v4));
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let v4 = machreg_to_vr(v4) & 0x0f;
+    let m5 = m5 & 0x0f;
+    let m6 = m6 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = v3 << 4 | m5;
+    enc[3] = m6 << 4;
+    enc[4] = v4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
 /// VRRe-type instructions.
 ///
 ///   47      39 35 31 27 23 19 15 11  7
@@ -2909,6 +2936,10 @@ impl Inst {
             &Inst::VecPermute { rd, rn, rm, ra } => {
                 let opcode = 0xe78c; // VPERM
                 put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
+            }
+            &Inst::VecBlend { rd, rn, rm, ra } => {
+                let opcode = 0xe789; // VBLEND
+                put(sink, &enc_vrr_d(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
             }
             &Inst::VecEvaluate {
                 imm,

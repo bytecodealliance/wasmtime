@@ -241,3 +241,20 @@ block0(v0: i128, v1: i128):
 ;   lochihe %r2, 1
 ;   br %r14
 
+function %f4(i8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i8x16):
+   v3 = x86_blendv v0, v1, v2
+   return v3
+}
+
+; VCode:
+; block0:
+;   vblend %v24, %v24, %v25, %v26
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r0, 0xf89(%r10)
+;   br %r14
+
