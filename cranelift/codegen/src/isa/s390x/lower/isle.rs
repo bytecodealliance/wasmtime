@@ -230,6 +230,24 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn mie4_enabled(&mut self, _: Type) -> Option<()> {
+        if self.backend.isa_flags.has_mie4() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn mie4_disabled(&mut self, _: Type) -> Option<()> {
+        if !self.backend.isa_flags.has_mie4() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn vxrs_ext2_enabled(&mut self, _: Type) -> Option<()> {
         if self.backend.isa_flags.has_vxrs_ext2() {
             Some(())
@@ -241,6 +259,24 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn vxrs_ext2_disabled(&mut self, _: Type) -> Option<()> {
         if !self.backend.isa_flags.has_vxrs_ext2() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn vxrs_ext3_enabled(&mut self, _: Type) -> Option<()> {
+        if self.backend.isa_flags.has_vxrs_ext3() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn vxrs_ext3_disabled(&mut self, _: Type) -> Option<()> {
+        if !self.backend.isa_flags.has_vxrs_ext3() {
             Some(())
         } else {
             None
