@@ -607,6 +607,14 @@
       (rm Reg)
       (ra Reg))
 
+    ;; Vector evaluate instruction.
+    (VecEvaluate
+      (imm u8)
+      (rd WritableReg)
+      (rn Reg)
+      (rm Reg)
+      (ra Reg))
+
     ;; Vector permute doubleword immediate instruction.
     (VecPermuteDWImm
       (rd WritableReg)
@@ -642,6 +650,13 @@
     (VecFloatCmpS
       (op VecFloatCmpOp)
       (rd WritableReg)
+      (rn Reg)
+      (rm Reg))
+
+    ;; Vector integer element comparison with two registers sources,
+    ;; setting the condition code.
+    (VecIntEltCmp
+      (op VecIntEltCmpOp)
       (rn Reg)
       (rm Reg))
 
@@ -1117,6 +1132,8 @@
     (PopcntReg)
     (BSwap32)
     (BSwap64)
+    (Clz64)
+    (Ctz64)
 ))
 
 ;; A shift operation.
@@ -1170,53 +1187,82 @@
     (Sub32x4)
     (Sub64x2)
     (Sub128)
-    ;; Multiplication (64-bit not supported)
+    ;; Multiplication
     (Mul8x16)
     (Mul16x8)
     (Mul32x4)
+    (Mul64x2)
+    (Mul128)
     (UMulHi8x16)
     (UMulHi16x8)
     (UMulHi32x4)
+    (UMulHi64x2)
+    (UMulHi128)
     (SMulHi8x16)
     (SMulHi16x8)
     (SMulHi32x4)
+    (SMulHi64x2)
+    (SMulHi128)
     (UMulEven8x16)
     (UMulEven16x8)
     (UMulEven32x4)
+    (UMulEven64x2)
     (SMulEven8x16)
     (SMulEven16x8)
     (SMulEven32x4)
+    (SMulEven64x2)
     (UMulOdd8x16)
     (UMulOdd16x8)
     (UMulOdd32x4)
+    (UMulOdd64x2)
     (SMulOdd8x16)
     (SMulOdd16x8)
     (SMulOdd32x4)
+    (SMulOdd64x2)
+    ;; Division and remainder
+    (UDiv32x4)
+    (UDiv64x2)
+    (UDiv128)
+    (URem32x4)
+    (URem64x2)
+    (URem128)
+    (SDiv32x4)
+    (SDiv64x2)
+    (SDiv128)
+    (SRem32x4)
+    (SRem64x2)
+    (SRem128)
     ;; Minimum, maximum, and average
     (UMax8x16)
     (UMax16x8)
     (UMax32x4)
     (UMax64x2)
+    (UMax128)
     (SMax8x16)
     (SMax16x8)
     (SMax32x4)
     (SMax64x2)
+    (SMax128)
     (UMin8x16)
     (UMin16x8)
     (UMin32x4)
     (UMin64x2)
+    (UMin128)
     (SMin8x16)
     (SMin16x8)
     (SMin32x4)
     (SMin64x2)
+    (SMin128)
     (UAvg8x16)
     (UAvg16x8)
     (UAvg32x4)
     (UAvg64x2)
+    (UAvg128)
     (SAvg8x16)
     (SAvg16x8)
     (SAvg32x4)
     (SAvg64x2)
+    (SAvg128)
     ;; Bitwise operations
     (And128)
     (Orr128)
@@ -1266,10 +1312,12 @@
     (Abs16x8)
     (Abs32x4)
     (Abs64x2)
+    (Abs128)
     (Neg8x16)
     (Neg16x8)
     (Neg32x4)
     (Neg64x2)
+    (Neg128)
     ;; Population count
     (Popcnt8x16)
     (Popcnt16x8)
@@ -1280,23 +1328,29 @@
     (Clz16x8)
     (Clz32x4)
     (Clz64x2)
+    (Clz128)
     (Ctz8x16)
     (Ctz16x8)
     (Ctz32x4)
     (Ctz64x2)
+    (Ctz128)
     ;; Unpack
     (UnpackULow8x16)
     (UnpackULow16x8)
     (UnpackULow32x4)
+    (UnpackULow64x2)
     (UnpackUHigh8x16)
     (UnpackUHigh16x8)
     (UnpackUHigh32x4)
+    (UnpackUHigh64x2)
     (UnpackSLow8x16)
     (UnpackSLow16x8)
     (UnpackSLow32x4)
+    (UnpackSLow64x2)
     (UnpackSHigh8x16)
     (UnpackSHigh16x8)
     (UnpackSHigh32x4)
+    (UnpackSHigh64x2)
 ))
 
 ;; A vector shift operation.
@@ -1327,15 +1381,25 @@
     (CmpEq16x8)
     (CmpEq32x4)
     (CmpEq64x2)
+    (CmpEq128)
     (SCmpHi8x16)
     (SCmpHi16x8)
     (SCmpHi32x4)
     (SCmpHi64x2)
+    (SCmpHi128)
     (UCmpHi8x16)
     (UCmpHi16x8)
     (UCmpHi32x4)
     (UCmpHi64x2)
+    (UCmpHi128)
 ))
+
+;; An integer vector element comparion operation.
+(type VecIntEltCmpOp
+  (enum
+    (SCmp128)
+    (UCmp128)
+));
 
 ;; A floatint-point vector comparison operation.
 (type VecFloatCmpOp
@@ -1493,11 +1557,19 @@
 (extern extractor mie3_enabled mie3_enabled)
 (decl mie3_disabled () Type)
 (extern extractor mie3_disabled mie3_disabled)
+(decl mie4_enabled () Type)
+(extern extractor mie4_enabled mie4_enabled)
+(decl mie4_disabled () Type)
+(extern extractor mie4_disabled mie4_disabled)
 
 (decl vxrs_ext2_enabled () Type)
 (extern extractor vxrs_ext2_enabled vxrs_ext2_enabled)
 (decl vxrs_ext2_disabled () Type)
 (extern extractor vxrs_ext2_disabled vxrs_ext2_disabled)
+(decl vxrs_ext3_enabled () Type)
+(extern extractor vxrs_ext3_enabled vxrs_ext3_enabled)
+(decl vxrs_ext3_disabled () Type)
+(extern extractor vxrs_ext3_disabled vxrs_ext3_disabled)
 
 ;; Helpers for SIMD lane number operations ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2421,6 +2493,13 @@
             (_ Unit (emit (MInst.VecPermute dst src1 src2 src3))))
         dst))
 
+;; Helper for emitting `MInst.VecEvaluate` instructions.
+(decl vec_eval (Type u8 Reg Reg Reg) Reg)
+(rule (vec_eval ty op src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecEvaluate op dst src1 src2 src3))))
+        dst))
+
 ;; Helper for emitting `MInst.VecPermuteDWImm` instructions.
 (decl vec_permute_dw_imm (Type Reg u8 Reg u8) Reg)
 (rule (vec_permute_dw_imm ty src1 idx1 src2 idx2)
@@ -2453,6 +2532,11 @@
 (rule (vec_float_cmps ty op src1 src2)
       (let ((tmp WritableReg (temp_writable_reg ty)))
         (ProducesFlags.ProducesFlagsSideEffect (MInst.VecFloatCmpS op tmp src1 src2))))
+
+;; Helper for emitting `MInst.VecIntEltCmp` instructions.
+(decl vec_int_elt_cmp (VecIntEltCmpOp Reg Reg) ProducesFlags)
+(rule (vec_int_elt_cmp op src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.VecIntEltCmp op src1 src2)))
 
 ;; Helper for emitting `MInst.VecInt128SCmpHi` instructions.
 (decl vec_int128_scmphi (Reg Reg) ProducesBool)
@@ -3618,21 +3702,29 @@
 
 ;; Helpers for generating `clz` and `ctz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Count leading zeroes.  For a zero input, return the specified value.
-(decl clz_reg (i16 Reg) Reg)
+;; Count leading zeroes via FLOGR.  For a zero input, return the specified value.
+(decl clz_flogr_reg (i16 Reg) Reg)
 
 ;; The flogr instruction returns 64 for zero input by default.
-(rule (clz_reg 64 x)
+(rule (clz_flogr_reg 64 x)
       (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.Flogr dst x))))
         (regpair_hi dst)))
 
 ;; If another zero return value was requested, we need to override the flogr result.
-(rule -1 (clz_reg zeroval x)
+(rule -1 (clz_flogr_reg zeroval x)
       (let ((tmp WritableRegPair (temp_writable_regpair $I64)))
         (with_flags_reg
           (ProducesFlags.ProducesFlagsSideEffect (MInst.Flogr tmp x))
           (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) zeroval (regpair_hi tmp)))))
+
+;; Count leading zeros (z17 instruction).
+(decl clz_reg (Reg) Reg)
+(rule (clz_reg x) (unary_rr $I64 (UnaryOp.Clz64) x))
+
+;; Count trailing zeros (z17 instruction).
+(decl ctz_reg (Reg) Reg)
+(rule (ctz_reg x) (unary_rr $I64 (UnaryOp.Ctz64) x))
 
 ;; Vector count leading zeros.
 (decl vecop_clz (Type) VecUnaryOp)
@@ -3640,6 +3732,7 @@
 (rule (vecop_clz $I16X8) (VecUnaryOp.Clz16x8))
 (rule (vecop_clz $I32X4) (VecUnaryOp.Clz32x4))
 (rule (vecop_clz $I64X2) (VecUnaryOp.Clz64x2))
+(rule (vecop_clz $I128) (VecUnaryOp.Clz128))
 
 (decl vec_clz (Type Reg) Reg)
 (rule (vec_clz ty x) (vec_rr ty (vecop_clz ty) x))
@@ -3650,6 +3743,7 @@
 (rule (vecop_ctz $I16X8) (VecUnaryOp.Ctz16x8))
 (rule (vecop_ctz $I32X4) (VecUnaryOp.Ctz32x4))
 (rule (vecop_ctz $I64X2) (VecUnaryOp.Ctz64x2))
+(rule (vecop_ctz $I128) (VecUnaryOp.Ctz128))
 
 (decl vec_ctz (Type Reg) Reg)
 (rule (vec_ctz ty x) (vec_rr ty (vecop_ctz ty) x))
@@ -3900,7 +3994,8 @@
 (rule (vecop_mul $I8X16) (VecBinaryOp.Mul8x16))
 (rule (vecop_mul $I16X8) (VecBinaryOp.Mul16x8))
 (rule (vecop_mul $I32X4) (VecBinaryOp.Mul32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_mul $I64X2) (VecBinaryOp.Mul64x2))
+(rule (vecop_mul $I128) (VecBinaryOp.Mul128))
 
 (decl vec_mul (Type Reg Reg) Reg)
 (rule (vec_mul ty x y) (vec_rrr ty (vecop_mul ty) x y))
@@ -3909,7 +4004,8 @@
 (rule (vecop_umulhi $I8X16) (VecBinaryOp.UMulHi8x16))
 (rule (vecop_umulhi $I16X8) (VecBinaryOp.UMulHi16x8))
 (rule (vecop_umulhi $I32X4) (VecBinaryOp.UMulHi32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_umulhi $I64X2) (VecBinaryOp.UMulHi64x2))
+(rule (vecop_umulhi $I128) (VecBinaryOp.UMulHi128))
 
 (decl vec_umulhi (Type Reg Reg) Reg)
 (rule (vec_umulhi ty x y) (vec_rrr ty (vecop_umulhi ty) x y))
@@ -3918,7 +4014,8 @@
 (rule (vecop_smulhi $I8X16) (VecBinaryOp.SMulHi8x16))
 (rule (vecop_smulhi $I16X8) (VecBinaryOp.SMulHi16x8))
 (rule (vecop_smulhi $I32X4) (VecBinaryOp.SMulHi32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_smulhi $I64X2) (VecBinaryOp.SMulHi64x2))
+(rule (vecop_smulhi $I128) (VecBinaryOp.SMulHi128))
 
 (decl vec_smulhi (Type Reg Reg) Reg)
 (rule (vec_smulhi ty x y) (vec_rrr ty (vecop_smulhi ty) x y))
@@ -3927,7 +4024,7 @@
 (rule (vecop_umul_even $I8X16) (VecBinaryOp.UMulEven8x16))
 (rule (vecop_umul_even $I16X8) (VecBinaryOp.UMulEven16x8))
 (rule (vecop_umul_even $I32X4) (VecBinaryOp.UMulEven32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_umul_even $I64X2) (VecBinaryOp.UMulEven64x2))
 
 (decl vec_umul_even (Type Reg Reg) Reg)
 (rule (vec_umul_even ty x y) (vec_rrr ty (vecop_umul_even ty) x y))
@@ -3936,7 +4033,7 @@
 (rule (vecop_smul_even $I8X16) (VecBinaryOp.SMulEven8x16))
 (rule (vecop_smul_even $I16X8) (VecBinaryOp.SMulEven16x8))
 (rule (vecop_smul_even $I32X4) (VecBinaryOp.SMulEven32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_smul_even $I64X2) (VecBinaryOp.SMulEven64x2))
 
 (decl vec_smul_even (Type Reg Reg) Reg)
 (rule (vec_smul_even ty x y) (vec_rrr ty (vecop_smul_even ty) x y))
@@ -3945,7 +4042,7 @@
 (rule (vecop_umul_odd $I8X16) (VecBinaryOp.UMulOdd8x16))
 (rule (vecop_umul_odd $I16X8) (VecBinaryOp.UMulOdd16x8))
 (rule (vecop_umul_odd $I32X4) (VecBinaryOp.UMulOdd32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_umul_odd $I64X2) (VecBinaryOp.UMulOdd64x2))
 
 (decl vec_umul_odd (Type Reg Reg) Reg)
 (rule (vec_umul_odd ty x y) (vec_rrr ty (vecop_umul_odd ty) x y))
@@ -3954,10 +4051,45 @@
 (rule (vecop_smul_odd $I8X16) (VecBinaryOp.SMulOdd8x16))
 (rule (vecop_smul_odd $I16X8) (VecBinaryOp.SMulOdd16x8))
 (rule (vecop_smul_odd $I32X4) (VecBinaryOp.SMulOdd32x4))
-;; No support for $I64X2 multiplication.
+(rule (vecop_smul_odd $I64X2) (VecBinaryOp.SMulOdd64x2))
 
 (decl vec_smul_odd (Type Reg Reg) Reg)
 (rule (vec_smul_odd ty x y) (vec_rrr ty (vecop_smul_odd ty) x y))
+
+
+;; Helpers for generating vector divide instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl vecop_sdiv (Type) VecBinaryOp)
+(rule (vecop_sdiv $I32X4) (VecBinaryOp.SDiv32x4))
+(rule (vecop_sdiv $I64X2) (VecBinaryOp.SDiv64x2))
+(rule (vecop_sdiv $I128) (VecBinaryOp.SDiv128))
+
+(decl vec_sdiv (Type Reg Reg) Reg)
+(rule (vec_sdiv ty x y) (vec_rrr ty (vecop_sdiv ty) x y))
+
+(decl vecop_udiv (Type) VecBinaryOp)
+(rule (vecop_udiv $I32X4) (VecBinaryOp.UDiv32x4))
+(rule (vecop_udiv $I64X2) (VecBinaryOp.UDiv64x2))
+(rule (vecop_udiv $I128) (VecBinaryOp.UDiv128))
+
+(decl vec_udiv (Type Reg Reg) Reg)
+(rule (vec_udiv ty x y) (vec_rrr ty (vecop_udiv ty) x y))
+
+(decl vecop_srem (Type) VecBinaryOp)
+(rule (vecop_srem $I32X4) (VecBinaryOp.SRem32x4))
+(rule (vecop_srem $I64X2) (VecBinaryOp.SRem64x2))
+(rule (vecop_srem $I128) (VecBinaryOp.SRem128))
+
+(decl vec_srem (Type Reg Reg) Reg)
+(rule (vec_srem ty x y) (vec_rrr ty (vecop_srem ty) x y))
+
+(decl vecop_urem (Type) VecBinaryOp)
+(rule (vecop_urem $I32X4) (VecBinaryOp.URem32x4))
+(rule (vecop_urem $I64X2) (VecBinaryOp.URem64x2))
+(rule (vecop_urem $I128) (VecBinaryOp.URem128))
+
+(decl vec_urem (Type Reg Reg) Reg)
+(rule (vec_urem ty x y) (vec_rrr ty (vecop_urem ty) x y))
 
 
 ;; Helpers for generating `udivmod` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3981,6 +4113,7 @@
 (rule (vecop_umax $I16X8) (VecBinaryOp.UMax16x8))
 (rule (vecop_umax $I32X4) (VecBinaryOp.UMax32x4))
 (rule (vecop_umax $I64X2) (VecBinaryOp.UMax64x2))
+(rule (vecop_umax $I128) (VecBinaryOp.UMax128))
 
 (decl vec_umax (Type Reg Reg) Reg)
 (rule (vec_umax ty x y) (vec_rrr ty (vecop_umax ty) x y))
@@ -3993,6 +4126,7 @@
 (rule (vecop_smax $I16X8) (VecBinaryOp.SMax16x8))
 (rule (vecop_smax $I32X4) (VecBinaryOp.SMax32x4))
 (rule (vecop_smax $I64X2) (VecBinaryOp.SMax64x2))
+(rule (vecop_smax $I128) (VecBinaryOp.SMax128))
 
 (decl vec_smax (Type Reg Reg) Reg)
 (rule (vec_smax ty x y) (vec_rrr ty (vecop_smax ty) x y))
@@ -4005,6 +4139,7 @@
 (rule (vecop_umin $I16X8) (VecBinaryOp.UMin16x8))
 (rule (vecop_umin $I32X4) (VecBinaryOp.UMin32x4))
 (rule (vecop_umin $I64X2) (VecBinaryOp.UMin64x2))
+(rule (vecop_umin $I128) (VecBinaryOp.UMin128))
 
 (decl vec_umin (Type Reg Reg) Reg)
 (rule (vec_umin ty x y) (vec_rrr ty (vecop_umin ty) x y))
@@ -4017,6 +4152,7 @@
 (rule (vecop_smin $I16X8) (VecBinaryOp.SMin16x8))
 (rule (vecop_smin $I32X4) (VecBinaryOp.SMin32x4))
 (rule (vecop_smin $I64X2) (VecBinaryOp.SMin64x2))
+(rule (vecop_smin $I128) (VecBinaryOp.SMin128))
 
 (decl vec_smin (Type Reg Reg) Reg)
 (rule (vec_smin ty x y) (vec_rrr ty (vecop_smin ty) x y))
@@ -4213,6 +4349,7 @@
 (rule (vecop_abs $I16X8) (VecUnaryOp.Abs16x8))
 (rule (vecop_abs $I32X4) (VecUnaryOp.Abs32x4))
 (rule (vecop_abs $I64X2) (VecUnaryOp.Abs64x2))
+(rule (vecop_abs $I128) (VecUnaryOp.Abs128))
 
 (decl vec_abs (Type Reg) Reg)
 (rule (vec_abs ty x) (vec_rr ty (vecop_abs ty) x))
@@ -4240,6 +4377,7 @@
 (rule (vecop_neg $I16X8) (VecUnaryOp.Neg16x8))
 (rule (vecop_neg $I32X4) (VecUnaryOp.Neg32x4))
 (rule (vecop_neg $I64X2) (VecUnaryOp.Neg64x2))
+(rule (vecop_neg $I128) (VecUnaryOp.Neg128))
 
 (decl vec_neg (Type Reg) Reg)
 (rule (vec_neg ty x) (vec_rr ty (vecop_neg ty) x))
@@ -4871,9 +5009,9 @@
 (rule (vecop_int_cmpeq (multi_lane 64 2)) (VecIntCmpOp.CmpEq64x2))
 
 (decl vec_cmpeq (Type Reg Reg) Reg)
-(rule (vec_cmpeq (ty_vec128 ty) x y) (vec_int_cmp ty (vecop_int_cmpeq ty) x y))
+(rule (vec_cmpeq (vr128_ty ty) x y) (vec_int_cmp ty (vecop_int_cmpeq ty) x y))
 (decl vec_cmpeqs (Type Reg Reg) ProducesFlags)
-(rule (vec_cmpeqs (ty_vec128 ty) x y) (vec_int_cmps ty (vecop_int_cmpeq ty) x y))
+(rule (vec_cmpeqs (vr128_ty ty) x y) (vec_int_cmps ty (vecop_int_cmpeq ty) x y))
 
 (decl vecop_int_cmph (Type) VecIntCmpOp)
 (rule (vecop_int_cmph (multi_lane 8 16)) (VecIntCmpOp.SCmpHi8x16))
@@ -4882,9 +5020,9 @@
 (rule (vecop_int_cmph (multi_lane 64 2)) (VecIntCmpOp.SCmpHi64x2))
 
 (decl vec_cmph (Type Reg Reg) Reg)
-(rule (vec_cmph (ty_vec128 ty) x y) (vec_int_cmp ty (vecop_int_cmph ty) x y))
+(rule (vec_cmph (vr128_ty ty) x y) (vec_int_cmp ty (vecop_int_cmph ty) x y))
 (decl vec_cmphs (Type Reg Reg) ProducesFlags)
-(rule (vec_cmphs (ty_vec128 ty) x y) (vec_int_cmps ty (vecop_int_cmph ty) x y))
+(rule (vec_cmphs (vr128_ty ty) x y) (vec_int_cmps ty (vecop_int_cmph ty) x y))
 
 (decl vecop_int_cmphl (Type) VecIntCmpOp)
 (rule (vecop_int_cmphl (multi_lane 8 16)) (VecIntCmpOp.UCmpHi8x16))
@@ -4893,9 +5031,15 @@
 (rule (vecop_int_cmphl (multi_lane 64 2)) (VecIntCmpOp.UCmpHi64x2))
 
 (decl vec_cmphl (Type Reg Reg) Reg)
-(rule (vec_cmphl (ty_vec128 ty) x y) (vec_int_cmp ty (vecop_int_cmphl ty) x y))
+(rule (vec_cmphl (vr128_ty ty) x y) (vec_int_cmp ty (vecop_int_cmphl ty) x y))
 (decl vec_cmphls (Type Reg Reg) ProducesFlags)
-(rule (vec_cmphls (ty_vec128 ty) x y) (vec_int_cmps ty (vecop_int_cmphl ty) x y))
+(rule (vec_cmphls (vr128_ty ty) x y) (vec_int_cmps ty (vecop_int_cmphl ty) x y))
+
+(decl vec_elt_icmps (Reg Reg) ProducesFlags)
+(rule (vec_elt_icmps x y) (vec_int_elt_cmp (VecIntEltCmpOp.SCmp128) x y))
+
+(decl vec_elt_icmpu (Reg Reg) ProducesFlags)
+(rule (vec_elt_icmpu x y) (vec_int_elt_cmp (VecIntEltCmpOp.UCmp128) x y))
 
 
 ;; Helpers for generating `fcmp` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
