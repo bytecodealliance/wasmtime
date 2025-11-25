@@ -319,7 +319,7 @@ impl Inst {
             | Inst::VecLoadLaneRevUndef { .. }
             | Inst::VecStoreLaneRev { .. } => InstructionSet::VXRS_EXT2,
 
-            Inst::VecEvaluate { .. } => InstructionSet::VXRS_EXT3,
+            Inst::VecBlend { .. } | Inst::VecEvaluate { .. } => InstructionSet::VXRS_EXT3,
 
             Inst::DummyUse { .. } => InstructionSet::Base,
 
@@ -741,6 +741,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(shift_reg);
         }
         Inst::VecSelect { rd, rn, rm, ra, .. }
+        | Inst::VecBlend { rd, rn, rm, ra, .. }
         | Inst::VecPermute { rd, rn, rm, ra, .. }
         | Inst::VecEvaluate { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
@@ -2713,6 +2714,13 @@ impl Inst {
                 let rm = pretty_print_reg(rm);
                 let ra = pretty_print_reg(ra);
                 format!("vsel {rd}, {rn}, {rm}, {ra}")
+            }
+            &Inst::VecBlend { rd, rn, rm, ra } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                let rn = pretty_print_reg(rn);
+                let rm = pretty_print_reg(rm);
+                let ra = pretty_print_reg(ra);
+                format!("vblend {rd}, {rn}, {rm}, {ra}")
             }
             &Inst::VecPermute { rd, rn, rm, ra } => {
                 let rd = pretty_print_reg(rd.to_reg());
