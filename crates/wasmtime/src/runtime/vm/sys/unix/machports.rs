@@ -351,7 +351,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                         *(state.__rsp as *mut u64) = state.__rip;
                     }
                 }
-                state.__rip = unwind as u64;
+                state.__rip = (unwind as *const ()).addr() as u64;
                 state.__rdi = pc as u64;
                 state.__rsi = fp as u64;
                 state.__rdx = fault1 as u64;
@@ -383,7 +383,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__x[2] = fault1 as u64;
                 state.__x[3] = fault2 as u64;
                 state.__x[4] = trap as u64;
-                state.__pc = (unwind as *const()).addr() as u64;
+                state.__pc = (unwind as *const ()).addr() as u64;
             };
             let mut thread_state = unsafe { mem::zeroed::<ThreadState>() };
         } else {
