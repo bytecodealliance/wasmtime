@@ -1431,7 +1431,9 @@ pub unsafe extern "C" fn fd_readdir(
                 )
             };
             let dirent_bytes_to_copy = buf.len().min(bytes.len());
-            buf[..dirent_bytes_to_copy].copy_from_slice(&bytes[..dirent_bytes_to_copy]);
+            unsafe {
+                ptr::copy_nonoverlapping(bytes.as_ptr(), buf.as_mut_ptr(), dirent_bytes_to_copy);
+            }
             buf = &mut buf[dirent_bytes_to_copy..];
 
             // Copy the name bytes into the output `buf`, truncating it if it

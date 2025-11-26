@@ -49,7 +49,7 @@ impl TrapHandler {
             // crash while handling the signal, and fall through to the
             // Breakpad handler by testing handlingSegFault.
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
-            handler.sa_sigaction = trap_handler as usize;
+            handler.sa_sigaction = (trap_handler as *const ()).addr();
             unsafe {
                 libc::sigemptyset(&mut handler.sa_mask);
                 if libc::sigaction(signal, &handler, slot) != 0 {
@@ -111,7 +111,7 @@ impl Drop for TrapHandler {
                 // signal handler state and don't know how to remove ourselves
                 // from the signal handling state. Inform the user of this and
                 // abort the process.
-                if prev.sa_sigaction != trap_handler as usize {
+                if prev.sa_sigaction != (trap_handler as *const ()).addr() {
                     eprintln!(
                         "
 Wasmtime's signal handler was not the last signal handler to be installed
