@@ -109,6 +109,8 @@ impl GcOps {
                             fields: Box::new([]),
                         }),
                         shared: false,
+                        describes: None,
+                        descriptor: None,
                     },
                 },
             }
