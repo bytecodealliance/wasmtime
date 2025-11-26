@@ -1,5 +1,7 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
 use anyhow::Result;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use wasmtime::{AsContextMut, Config, component::*};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 use wasmtime_component_util::REALLOC_AND_FREE;
@@ -669,4 +671,99 @@ async fn task_deletion() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_host_future() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (core module $m
+    (import "" "future.read" (func $future.read (param i32 i32) (result i32)))
+    (import "" "future.cancel-read" (func $future.cancel-read (param i32) (result i32)))
+    (memory (export "memory") 1)
+
+    (func (export "run") (param i32)
+      ;; read/cancel attempt 1
+      (call $future.read (local.get 0) (i32.const 100))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+
+      (call $future.cancel-read (local.get 0))
+      i32.const 2 ;; CANCELLED
+      i32.ne
+      if unreachable end
+
+      ;; read/cancel attempt 2
+      (call $future.read (local.get 0) (i32.const 100))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+
+      (call $future.cancel-read (local.get 0))
+      i32.const 2 ;; CANCELLED
+      i32.ne
+      if unreachable end
+    )
+  )
+
+  (type $f (future u32))
+  (core func $future.read (canon future.read $f async (memory $libc "memory")))
+  (core func $future.cancel-read (canon future.cancel-read $f))
+
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "future.read" (func $future.read))
+      (export "future.cancel-read" (func $future.cancel-read))
+    ))
+  ))
+
+  (func (export "run") (param "f" $f)
+    (canon lift
+      (core func $i "run")
+      (memory $libc "memory")
+    )
+  )
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let func = instance.get_typed_func::<(FutureReader<u32>,), ()>(&mut store, "run")?;
+    let reader = FutureReader::new(&mut store, MyFutureReader);
+    func.call_async(&mut store, (reader,)).await?;
+
+    return Ok(());
+
+    struct MyFutureReader;
+
+    impl FutureProducer<()> for MyFutureReader {
+        type Item = u32;
+
+        fn poll_produce(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<()>,
+            finish: bool,
+        ) -> Poll<Result<Option<Self::Item>>> {
+            if finish {
+                Poll::Ready(Ok(None))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
 }

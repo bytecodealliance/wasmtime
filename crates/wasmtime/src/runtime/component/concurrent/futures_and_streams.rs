@@ -3468,13 +3468,16 @@ impl Instance {
                 assert!(!cancel);
                 assert_eq!(0, guest_offset);
 
-                if let TransmitIndex::Future(_) = ty {
-                    transmit.done = true;
-                }
-
                 set_guest_ready(concurrent_state)?;
 
-                self.produce(store.0, ty.kind(), transmit_id, produce, try_into, 0, false)?
+                let code =
+                    self.produce(store.0, ty.kind(), transmit_id, produce, try_into, 0, false)?;
+
+                if let (TransmitIndex::Future(_), ReturnCode::Completed(_)) = (ty, code) {
+                    store.0.concurrent_state_mut().get_mut(transmit_id)?.done = true;
+                }
+
+                code
             }
 
             WriteState::Open => {
