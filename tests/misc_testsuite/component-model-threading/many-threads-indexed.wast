@@ -121,6 +121,6 @@
             (with "libc" (instance $libc))))
 
     ;; Export the main entry point
-    (func (export "run") (result u32) (canon lift (core func $i "run"))))
+    (func (export "run") async (result u32) (canon lift (core func $i "run"))))
 
 (assert_return (invoke "run") (u32.const 42))

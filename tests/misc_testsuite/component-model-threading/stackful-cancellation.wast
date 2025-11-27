@@ -222,18 +222,18 @@
                     (export "waitable-set.new" (func $waitable-set.new))))
                 (with "libc" (instance $libc))))
 
-        (func (export "run-yield") (result u32) (canon lift (core func $cm "run-yield") async))
-        (func (export "run-yield-to") (param "fut" $FT) (result u32) (canon lift (core func $cm "run-yield-to") async))
-        (func (export "run-suspend") (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend") async))
-        (func (export "run-switch-to") (param "fut" $FT) (result u32) (canon lift (core func $cm "run-switch-to") async))
+        (func (export "run-yield") async (result u32) (canon lift (core func $cm "run-yield") async))
+        (func (export "run-yield-to") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-yield-to") async))
+        (func (export "run-suspend") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend") async))
+        (func (export "run-switch-to") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-switch-to") async))
     )
 
     (component $D
         (type $FT (future))
-        (import "run-yield" (func $run-yield (result u32)))
-        (import "run-yield-to" (func $run-yield-to (param "fut" $FT) (result u32)))
-        (import "run-suspend" (func $run-suspend (param "fut" $FT) (result u32)))
-        (import "run-switch-to" (func $run-switch-to (param "fut" $FT) (result u32)))
+        (import "run-yield" (func $run-yield async (result u32)))
+        (import "run-yield-to" (func $run-yield-to async (param "fut" $FT) (result u32)))
+        (import "run-suspend" (func $run-suspend async (param "fut" $FT) (result u32)))
+        (import "run-switch-to" (func $run-switch-to async (param "fut" $FT) (result u32)))
 
         (core module $Memory (memory (export "mem") 1))
         (core instance $memory (instantiate $Memory))
@@ -369,7 +369,7 @@
             (export "future.write" (func $future.write))
             (export "thread.yield" (func $thread.yield))
         ))))
-        (func (export "run") (result u32) (canon lift (core func $dm "run")))
+        (func (export "run") async (result u32) (canon lift (core func $dm "run")))
     )
 
     (instance $c (instantiate $C))
