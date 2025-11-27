@@ -51,7 +51,7 @@ struct EngineInner {
     features: WasmFeatures,
     tunables: Tunables,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compiler: Box<dyn wasmtime_environ::Compiler>,
+    compiler: Option<Box<dyn wasmtime_environ::Compiler>>,
     #[cfg(feature = "runtime")]
     allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
@@ -113,7 +113,12 @@ impl Engine {
         }
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+        let (config, compiler) = if config.has_compiler() {
+            let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+            (config, Some(compiler))
+        } else {
+            (config.clone(), None)
+        };
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
@@ -335,13 +340,14 @@ impl Engine {
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
-            let compiler = self.compiler();
-            // Also double-check all compiler settings
-            for (key, value) in compiler.flags().iter() {
-                self.check_compatible_with_shared_flag(key, value)?;
-            }
-            for (key, value) in compiler.isa_flags().iter() {
-                self.check_compatible_with_isa_flag(key, value)?;
+            if let Some(compiler) = self.compiler() {
+                // Also double-check all compiler settings
+                for (key, value) in compiler.flags().iter() {
+                    self.check_compatible_with_shared_flag(key, value)?;
+                }
+                for (key, value) in compiler.isa_flags().iter() {
+                    self.check_compatible_with_isa_flag(key, value)?;
+                }
             }
         }
 
@@ -625,8 +631,13 @@ information about this check\
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl Engine {
-    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
-        &*self.inner.compiler
+    pub(crate) fn compiler(&self) -> Option<&dyn wasmtime_environ::Compiler> {
+        self.inner.compiler.as_deref()
+    }
+
+    pub(crate) fn try_compiler(&self) -> Result<&dyn wasmtime_environ::Compiler> {
+        self.compiler()
+            .ok_or_else(|| anyhow!("Engine was not configured with a compiler"))
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.
@@ -672,8 +683,9 @@ impl Engine {
     ///
     /// The blob of bytes is inserted into the object file specified to become part
     /// of the final compiled artifact.
-    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
-        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) -> Result<()> {
+        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self)?);
+        Ok(())
     }
 
     #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -683,7 +695,10 @@ impl Engine {
             wasmtime_environ::obj::ELF_WASM_BTI.as_bytes().to_vec(),
             object::SectionKind::ReadOnlyData,
         );
-        let contents = if self.compiler().is_branch_protection_enabled() {
+        let contents = if self
+            .compiler()
+            .is_some_and(|c| c.is_branch_protection_enabled())
+        {
             1
         } else {
             0

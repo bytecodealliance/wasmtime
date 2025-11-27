@@ -179,14 +179,15 @@ pub struct Metadata<'a> {
 
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub fn new(engine: &Engine) -> Metadata<'static> {
-        Metadata {
-            target: engine.compiler().triple().to_string(),
-            shared_flags: engine.compiler().flags(),
-            isa_flags: engine.compiler().isa_flags(),
+    pub fn new(engine: &Engine) -> Result<Metadata<'static>> {
+        let compiler = engine.try_compiler()?;
+        Ok(Metadata {
+            target: compiler.triple().to_string(),
+            shared_flags: compiler.flags(),
+            isa_flags: compiler.isa_flags(),
             tunables: engine.tunables().clone(),
             features: engine.features().bits(),
-        }
+        })
     }
 
     fn check_compatible(mut self, engine: &Engine) -> Result<()> {
@@ -441,7 +442,7 @@ mod test {
     #[test]
     fn test_architecture_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.target = "unknown-generic-linux".to_string();
 
         match metadata.check_compatible(&engine) {
@@ -460,7 +461,7 @@ mod test {
     #[cfg(all(target_arch = "x86_64", not(miri)))]
     fn test_os_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata.target = format!(
             "{}-generic-unknown",
@@ -481,7 +482,7 @@ mod test {
     #[test]
     fn test_cranelift_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata
             .shared_flags
@@ -504,7 +505,7 @@ Caused by:
     #[test]
     fn test_isa_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata
             .isa_flags
@@ -532,7 +533,7 @@ Caused by:
     #[cfg(target_pointer_width = "64")] // different defaults on 32-bit platforms
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata.tunables.memory_guard_size = 0;
 
@@ -553,7 +554,7 @@ Caused by:
         config.epoch_interruption(true);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.tunables.epoch_interruption = false;
 
         match metadata.check_compatible(&engine) {
@@ -568,7 +569,7 @@ Caused by:
         config.epoch_interruption(false);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.tunables.epoch_interruption = true;
 
         match metadata.check_compatible(&engine) {
@@ -590,7 +591,7 @@ Caused by:
         config.wasm_threads(true);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.features &= !wasmparser::WasmFeatures::THREADS.bits();
 
         // If a feature is disabled in the module and enabled in the host,
@@ -601,7 +602,7 @@ Caused by:
         config.wasm_threads(false);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.features |= wasmparser::WasmFeatures::THREADS.bits();
 
         match metadata.check_compatible(&engine) {
