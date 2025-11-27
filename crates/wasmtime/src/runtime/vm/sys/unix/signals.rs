@@ -383,6 +383,13 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
             cx.uc_mcontext.mc_rsp = handler.sp as _;
             cx.uc_mcontext.mc_rax = 0;
             cx.uc_mcontext.mc_rdx = 0;
+        } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
+            let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
+            cx.sc_rip = handler.pc as _;
+            cx.sc_rbp = handler.fp as _;
+            cx.sc_rsp = handler.sp as _;
+            cx.sc_rax = 0;
+            cx.sc_rdx = 0;
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.__gregs[libc::REG_PC] = handler.pc as _;
