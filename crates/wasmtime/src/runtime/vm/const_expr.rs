@@ -54,9 +54,8 @@ impl ConstEvalContext {
         // SAFETY: `id` is the correct store-owner of the function being looked
         // up
         let func = unsafe {
-            store
-                .instance_mut(self.instance)
-                .get_exported_func(id, index)
+            let (instance, registry) = store.instance_and_module_registry_mut(self.instance);
+            instance.get_exported_func(registry, id, index)
         };
         Ok(func.into())
     }

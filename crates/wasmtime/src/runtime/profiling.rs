@@ -1,6 +1,5 @@
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::instantiate::CompiledModule;
 use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{AsContext, CallHook, Module};
@@ -126,13 +125,23 @@ impl GuestProfiler {
                     // Assumption: within text, the code for a given module is packed linearly and
                     // is non-overlapping; if this is violated, it should be safe but might result
                     // in incorrect profiling results.
-                    let start =
-                        compiled.finished_functions().next()?.1.as_ptr_range().start as usize;
-                    let end = compiled.finished_functions().last()?.1.as_ptr_range().end as usize;
+                    //
+                    // Assumption: there is no code cloning going on
+                    // when profiling, so the EngineCode is the same
+                    // as the StoreCode. This is a hack and we should
+                    // have a better API (e.g.,
+                    // `.text_range_for_store_code_if_invariant()`
+                    // that returns a Result and errors if config is
+                    // wrong).
+                    let start = compiled.finished_function_ranges().next()?.1.start;
+                    let end = compiled.finished_function_ranges().last()?.1.end;
+
+                    let start = (module.engine_code().text_range().start + start).raw();
+                    let end = (module.engine_code().text_range().start + end).raw();
                     start..end
                 };
 
-                module_symbols(name, compiled).map(|lib| {
+                module_symbols(name, &module).map(|lib| {
                     let libhandle = profile.add_lib(lib);
                     ProfiledModule {
                         module,
@@ -248,23 +257,29 @@ impl GuestProfiler {
     }
 }
 
-fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo> {
-    let symbols = Vec::from_iter(compiled.finished_functions().map(|(defined_idx, _)| {
-        let loc = compiled.func_loc(defined_idx);
-        let func_idx = compiled.module().func_index(defined_idx);
-        let mut name = String::new();
-        demangle_function_name_or_index(
-            &mut name,
-            compiled.func_name(func_idx),
-            defined_idx.as_u32() as usize,
-        )
-        .unwrap();
-        Symbol {
-            address: loc.start,
-            size: Some(loc.length),
-            name,
-        }
-    }));
+fn module_symbols(name: String, module: &Module) -> Option<LibraryInfo> {
+    let compiled = module.compiled_module();
+    let symbols = Vec::from_iter(
+        module
+            .env_module()
+            .defined_func_indices()
+            .map(|defined_idx| {
+                let loc = compiled.func_loc(defined_idx);
+                let func_idx = compiled.module().func_index(defined_idx);
+                let mut name = String::new();
+                demangle_function_name_or_index(
+                    &mut name,
+                    compiled.func_name(func_idx),
+                    defined_idx.as_u32() as usize,
+                )
+                .unwrap();
+                Symbol {
+                    address: loc.start,
+                    size: Some(loc.length),
+                    name,
+                }
+            }),
+    );
     if symbols.is_empty() {
         return None;
     }

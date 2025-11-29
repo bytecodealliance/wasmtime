@@ -441,6 +441,22 @@ impl CodeMemory {
     pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
         lookup_trap_code(self.trap_data(), text_offset)
     }
+
+    /// Get the raw address range of this CodeMemory.
+    pub(crate) fn raw_addr_range(&self) -> Range<usize> {
+        let start = self.text().as_ptr().addr();
+        let end = start + self.text().len();
+        start..end
+    }
+
+    /// Create a "deep clone": a separate CodeMemory for the same code
+    /// that can be patched or mutated independently. Also returns a
+    /// "metadata and location" handle that can be registered with the
+    /// global module registry and used for trap metadata lookups.
+    pub(crate) fn deep_clone(self: &Arc<Self>, engine: &Engine) -> Result<CodeMemory> {
+        let mmap = self.mmap.deep_clone()?;
+        Self::new(engine, mmap)
+    }
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the
