@@ -1,173 +1,198 @@
 //! Implements a registry of modules for a store.
 
-use crate::code::CodeObject;
+use crate::code::{EngineCode, EngineCodePC, ModuleWithCode, StoreCode, StoreCodePC};
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
+use crate::vm::CompiledModuleId;
+use crate::{Engine, prelude::*};
 use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
+use core::ops::Range;
 use core::ptr::NonNull;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// Used for registering modules with a store.
 ///
-/// Note that the primary reason for this registry is to ensure that everything
-/// in `Module` is kept alive for the duration of a `Store`. At this time we
-/// need "basically everything" within a `Module` to stay alive once it's
-/// instantiated within a store. While there's some smaller portions that could
-/// theoretically be omitted as they're not needed by the store they're
-/// currently small enough to not worry much about.
+/// There are two basic purposes that this registry serves:
+///
+/// - It keeps all modules and their metadata alive as long as the
+///   store exists.
+/// - It owns the [`StoreCode`], i.e. possibly-private-copy of machine
+///   code, for all modules that execute in this store.
+///
+/// The registry allows for translation of EngineCode to StoreCode,
+/// deduplicating by the start address of the EngineCode; and allows
+/// for looking up modules by "registered module ID", and looking up
+/// StoreCode and Modules by PC.
+///
+/// Note that multiple modules may be backed by a single
+/// `StoreCode`. This is specifically the case for components in
+/// general. When a component is first instantiated, the component
+/// itself is registered (which loads the StoreCode into the
+/// registry), then each individual module within that component is
+/// registered and added to the data structures.
+///
+/// A brief overview of the kinds of compiled object and their
+/// relationships:
+///
+/// - `Module` is a Wasm module. It owns a `CompiledModule`.
+/// - `CompiledModule` contains metadata about the module (e.g., a map
+///   from Wasm function indices to locations in the machine code),
+///   and also owns an `EngineCode`.
+/// - `EngineCode` holds an `Arc` to a `CodeMemory` with the canonical
+///   copy of machine code, as well as some lower-level metadata
+///   (signatures and types). It is instantiated by this registry into
+///   `StoreCode`.
+/// - `StoreCode` owns either another `Arc` to the same `CodeMemory`
+///   as `EngineCode`, or if guest debugging is enabled and causes us
+///   to clone private copies of code for patching per store, owns its
+///   own private `CodeMemory` at a different address.
+/// - Instances hold a `RegisteredModuleId` to be able to look up their modules.
 #[derive(Default)]
 pub struct ModuleRegistry {
-    // Keyed by the end address of a `CodeObject`.
-    //
-    // The value here is the start address and the information about what's
-    // loaded at that address.
-    loaded_code: BTreeMap<usize, (usize, LoadedCode)>,
+    /// StoreCode and Modules associated with it.
+    ///
+    /// Keyed by the start address of the `StoreCode`. We maintain the
+    /// invariant of no overlaps on insertion. We use a range query to
+    /// find the StoreCode for a given PC: take the range `0..=pc`,
+    /// then take the last element of the range. That picks the
+    /// highest start address <= the query, and we can check whether
+    /// it contains the address.
+    loaded_code: BTreeMap<StoreCodePC, LoadedCode>,
 
-    // Preserved for keeping data segments alive or similar
-    modules_without_code: Vec<Module>,
+    /// Map from EngineCodePC start to StoreCodePC start. We use this
+    /// to memoize the store-code creation process: each EngineCode is
+    /// instantiated to a StoreCode only once per store.
+    store_code: BTreeMap<EngineCodePC, StoreCodePC>,
+
+    /// Modules instantiated in this registry.
+    ///
+    /// Every module is placed in this map, but not every module will
+    /// be in a LoadedCode entry, because the module may have no text.
+    modules: BTreeMap<RegisteredModuleId, Module>,
 }
 
 struct LoadedCode {
-    /// Kept alive here in the store to have a strong reference to keep the
-    /// relevant code mapped while the store is alive.
-    _code: Arc<CodeObject>,
+    /// The StoreCode in this range.
+    code: StoreCode,
 
-    /// Modules found within `self.code`, keyed by start address here of the
-    /// address of the first function in the module.
-    modules: BTreeMap<usize, Module>,
-
-    /// These modules have no functions inside of them but they can still be
-    /// used for trampoline lookup.
-    modules_with_only_trampolines: Vec<Module>,
+    /// Map by starting text offset of Modules in this code region.
+    modules: BTreeMap<usize, RegisteredModuleId>,
 }
 
 /// An identifier of a module that has previously been inserted into a
 /// `ModuleRegistry`.
-#[derive(Clone, Copy, Debug)]
-pub enum RegisteredModuleId {
-    /// Index into `ModuleRegistry::modules_without_code`.
-    WithoutCode(usize),
-    /// Start address of the module's code so that we can get it again via
-    /// `ModuleRegistry::lookup_module`.
-    LoadedCode(usize),
+///
+/// This is just a newtype around `CompiledModuleId`, which is unique
+/// within the Engine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RegisteredModuleId(CompiledModuleId);
+
+fn assert_no_overlap(loaded_code: &BTreeMap<StoreCodePC, LoadedCode>, range: Range<StoreCodePC>) {
+    if let Some((start, _)) = loaded_code.range(range.start..).next() {
+        assert!(*start >= range.end);
+    }
+    if let Some((_, code)) = loaded_code.range(..range.end).next_back() {
+        assert!(code.code.text_range().end <= range.start);
+    }
 }
 
 impl ModuleRegistry {
     /// Get a previously-registered module by id.
-    pub fn lookup_module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
-        match id {
-            RegisteredModuleId::WithoutCode(idx) => self.modules_without_code.get(idx),
-            RegisteredModuleId::LoadedCode(pc) => {
-                let (module, _) = self.module_and_offset(pc)?;
-                Some(module)
-            }
-        }
+    pub fn module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
+        self.modules.get(&id)
     }
 
-    /// Fetches a registered module given a program counter value.
-    #[cfg(any(feature = "gc", feature = "debug"))]
-    pub fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
-        let (module, _) = self.module_and_offset(pc)?;
-        Some(module)
+    /// Fetches a registered StoreCode and module and an offset within
+    /// it given a program counter value.
+    pub fn module_and_code_by_pc<'a>(&'a self, pc: usize) -> Option<(ModuleWithCode<'a>, usize)> {
+        let (_, code) = self
+            .loaded_code
+            .range(..=StoreCodePC::from_raw(pc))
+            .next_back()?;
+        let offset = StoreCodePC::offset_of(code.code.text_range(), pc)?;
+        let (_, module_id) = code.modules.range(..=offset).next_back()?;
+        let module = self.modules.get(&module_id)?;
+        Some((ModuleWithCode::from_raw(module, &code.code), offset))
     }
 
-    fn code(&self, pc: usize) -> Option<(&LoadedCode, usize)> {
-        let (end, (start, code)) = self.loaded_code.range(pc..).next()?;
-        if pc < *start || *end < pc {
-            return None;
-        }
-        Some((code, pc - *start))
-    }
-
-    fn module_and_offset(&self, pc: usize) -> Option<(&Module, usize)> {
-        let (code, offset) = self.code(pc)?;
-        Some((code.module(pc)?, offset))
+    /// Fetches the `StoreCode` for a given `EngineCode`.
+    pub fn store_code(&self, engine_code: &EngineCode) -> Option<&StoreCode> {
+        let store_code_pc = *self.store_code.get(&engine_code.text_range().start)?;
+        let (_, code) = self.loaded_code.range(store_code_pc..).next()?;
+        Some(&code.code)
     }
 
     /// Gets an iterator over all modules in the registry.
     #[cfg(feature = "coredump")]
     pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
-        self.loaded_code
-            .values()
-            .flat_map(|(_, code)| code.modules.values())
-            .chain(self.modules_without_code.iter())
+        self.modules.values()
     }
 
     /// Registers a new module with the registry.
-    pub fn register_module(&mut self, module: &Module) -> RegisteredModuleId {
-        self.register(module.code_object(), Some(module)).unwrap()
+    pub fn register_module(
+        &mut self,
+        module: &Module,
+        engine: &Engine,
+    ) -> Result<RegisteredModuleId> {
+        self.register(module.id(), module.engine_code(), Some(module), engine)
+            .map(|id| id.unwrap())
     }
 
     #[cfg(feature = "component-model")]
-    pub fn register_component(&mut self, component: &Component) {
-        self.register(component.code_object(), None);
+    pub fn register_component(&mut self, component: &Component, engine: &Engine) -> Result<()> {
+        self.register(component.id(), component.engine_code(), None, engine)?;
+        Ok(())
     }
 
     /// Registers a new module with the registry.
     fn register(
         &mut self,
-        code: &Arc<CodeObject>,
+        compiled_id: CompiledModuleId,
+        code: &Arc<EngineCode>,
         module: Option<&Module>,
-    ) -> Option<RegisteredModuleId> {
-        let text = code.code_memory().text();
+        engine: &Engine,
+    ) -> Result<Option<RegisteredModuleId>> {
+        // Register the module, if any.
+        let id = module.map(|module| {
+            let id = RegisteredModuleId(compiled_id);
+            self.modules.entry(id).or_insert_with(|| module.clone());
+            id
+        });
 
-        // If there's not actually any functions in this module then we may
-        // still need to preserve it for its data segments. Instances of this
-        // module will hold a pointer to the data stored in the module itself,
-        // and for schemes that perform lazy initialization which could use the
-        // module in the future. For that reason we continue to register empty
-        // modules and retain them.
-        if text.is_empty() {
-            return module.map(|module| {
-                let id = RegisteredModuleId::WithoutCode(self.modules_without_code.len());
-                self.modules_without_code.push(module.clone());
-                id
-            });
-        }
-
-        // The module code range is exclusive for end, so make it inclusive as
-        // it may be a valid PC value
-        let start_addr = text.as_ptr() as usize;
-        let end_addr = start_addr + text.len() - 1;
-        let id = module.map(|_| RegisteredModuleId::LoadedCode(start_addr));
-
-        // If this module is already present in the registry then that means
-        // it's either an overlapping image, for example for two modules
-        // found within a component, or it's a second instantiation of the same
-        // module. Delegate to `push_module` to find out.
-        if let Some((other_start, prev)) = self.loaded_code.get_mut(&end_addr) {
-            assert_eq!(*other_start, start_addr);
-            if let Some(module) = module {
-                prev.push_module(module);
+        // Create a StoreCode if one does not already exist.
+        let store_code_pc = match self.store_code.entry(code.text_range().start) {
+            Entry::Vacant(v) => {
+                let store_code = StoreCode::new(engine, code)?;
+                let store_code_pc = store_code.text_range().start;
+                assert_no_overlap(&self.loaded_code, store_code.text_range());
+                self.loaded_code.insert(
+                    store_code_pc,
+                    LoadedCode {
+                        code: store_code,
+                        modules: BTreeMap::default(),
+                    },
+                );
+                *v.insert(store_code_pc)
             }
-            return id;
-        }
-
-        // Assert that this module's code doesn't collide with any other
-        // registered modules
-        if let Some((_, (prev_start, _))) = self.loaded_code.range(start_addr..).next() {
-            assert!(*prev_start > end_addr);
-        }
-        if let Some((prev_end, _)) = self.loaded_code.range(..=start_addr).next_back() {
-            assert!(*prev_end < start_addr);
-        }
-
-        let mut item = LoadedCode {
-            _code: code.clone(),
-            modules: Default::default(),
-            modules_with_only_trampolines: Vec::new(),
+            Entry::Occupied(o) => *o.get(),
         };
-        if let Some(module) = module {
-            item.push_module(module);
+
+        // Add this module to the LoadedCode if not present.
+        if let (Some(module), Some(id)) = (module, id) {
+            if let Some((_, range)) = module.compiled_module().finished_function_ranges().next() {
+                let loaded_code = self
+                    .loaded_code
+                    .get_mut(&store_code_pc)
+                    .expect("loaded_code must have entry for StoreCodePC");
+                loaded_code.modules.insert(range.start, id);
+            }
         }
-        let prev = self.loaded_code.insert(end_addr, (start_addr, item));
-        assert!(prev.is_none());
-        id
+
+        Ok(id)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -178,10 +203,23 @@ impl ModuleRegistry {
     /// debug information due to the compiler's configuration. The second
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
-    pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, &Module)> {
-        let (module, offset) = self.module_and_offset(pc)?;
-        let info = FrameInfo::new(module.clone(), offset)?;
-        Some((info, module))
+    pub(crate) fn lookup_frame_info<'a>(
+        &'a self,
+        pc: usize,
+    ) -> Option<(FrameInfo, ModuleWithCode<'a>)> {
+        let (_, code) = self
+            .loaded_code
+            .range(..=StoreCodePC::from_raw(pc))
+            .next_back()?;
+        let text_offset = StoreCodePC::offset_of(code.code.text_range(), pc)?;
+        let (_, module_id) = code.modules.range(..=text_offset).next_back()?;
+        let module = self
+            .modules
+            .get(&module_id)
+            .expect("referenced module ID not found");
+        let info = FrameInfo::new(module.clone(), text_offset)?;
+        let module_with_code = ModuleWithCode::from_raw(module, &code.code);
+        Some((info, module_with_code))
     }
 
     pub fn wasm_to_array_trampoline(
@@ -195,56 +233,12 @@ impl ModuleRegistry {
         // `VMSharedSignatureIndex` to `SignatureIndex` map.
         //
         // See also the comment in `ModuleInner::wasm_to_native_trampoline`.
-        for (_, code) in self.loaded_code.values() {
-            for module in code
-                .modules
-                .values()
-                .chain(&code.modules_with_only_trampolines)
-            {
-                if let Some(trampoline) = module.wasm_to_array_trampoline(sig) {
-                    return Some(trampoline);
-                }
+        for module in self.modules.values() {
+            if let Some(trampoline) = module.wasm_to_array_trampoline(sig) {
+                return Some(trampoline);
             }
         }
         None
-    }
-}
-
-impl LoadedCode {
-    fn push_module(&mut self, module: &Module) {
-        let func = match module.compiled_module().finished_functions().next() {
-            Some((_, func)) => func,
-            // There are no compiled functions in this module so there's no
-            // need to push onto `self.modules` which is only used for frame
-            // information lookup for a trap which only symbolicates defined
-            // functions.
-            None => {
-                self.modules_with_only_trampolines.push(module.clone());
-                return;
-            }
-        };
-        let start = func.as_ptr() as usize;
-
-        match self.modules.entry(start) {
-            // This module is already present, and it should be the same as
-            // `module`.
-            Entry::Occupied(m) => {
-                debug_assert!(Arc::ptr_eq(&module.inner, &m.get().inner));
-            }
-            // This module was not already present, so now it's time to insert.
-            Entry::Vacant(v) => {
-                v.insert(module.clone());
-            }
-        }
-    }
-
-    fn module(&self, pc: usize) -> Option<&Module> {
-        // The `modules` map is keyed on the start address of the first
-        // function in the module, so find the first module whose start address
-        // is less than the `pc`. That may be the wrong module but lookup
-        // within the module should fail in that case.
-        let (_start, module) = self.modules.range(..=pc).next_back()?;
-        Some(module)
     }
 }
 
@@ -285,26 +279,24 @@ pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
 /// is a trap or not.
-pub fn register_code(code: &Arc<CodeMemory>) {
-    let text = code.text();
-    if text.is_empty() {
+pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) {
+    if address.is_empty() {
         return;
     }
-    let start = text.as_ptr() as usize;
-    let end = start + text.len() - 1;
-    let prev = global_code().write().insert(end, (start, code.clone()));
+    let start = address.start;
+    let end = address.end - 1;
+    let prev = global_code().write().insert(end, (start, image.clone()));
     assert!(prev.is_none());
 }
 
 /// Unregisters a code mmap from the global map.
 ///
 /// Must have been previously registered with `register`.
-pub fn unregister_code(code: &Arc<CodeMemory>) {
-    let text = code.text();
-    if text.is_empty() {
+pub fn unregister_code(address: Range<usize>) {
+    if address.is_empty() {
         return;
     }
-    let end = (text.as_ptr() as usize) + text.len() - 1;
+    let end = address.end - 1;
     let code = global_code().write().remove(&end);
     assert!(code.is_some());
 }
@@ -332,12 +324,12 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     // Create an instance to ensure the frame information is registered.
     Instance::new(&mut store, &module, &[])?;
 
-    for (i, alloc) in module.compiled_module().finished_functions() {
-        let (start, end) = {
-            let ptr = alloc.as_ptr();
-            let len = alloc.len();
-            (ptr as usize, ptr as usize + len)
-        };
+    // Look for frame info for each function. Assume that StoreCode
+    // does not actually clone in the default configuration.
+    for (i, range) in module.compiled_module().finished_function_ranges() {
+        let base = module.engine_code().text_range().start.raw();
+        let start = base + range.start;
+        let end = base + range.end;
         for pc in start..end {
             let (frame, _) = store
                 .as_context()

@@ -231,7 +231,7 @@ impl Instance {
         // Note that under normal operation this shouldn't do much as the list
         // of funcs-with-holes should generally be empty. As a result the
         // process of filling this out is not super optimized at this point.
-        store.modules_mut().register_module(module);
+        store.register_module(module)?;
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
@@ -308,7 +308,7 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        let module_id = store.modules_mut().register_module(module);
+        let module_id = store.register_module(module)?;
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -371,10 +371,14 @@ impl Instance {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
-        let mut instance = self.id.get_mut(store.0);
+        let (mut instance, registry) = self.id.get_mut_and_module_registry(store.0);
         // SAFETY: the `store_id` is the id of the store that owns this
         // instance and any function stored within the instance.
-        let f = unsafe { instance.as_mut().get_exported_func(store_id, start) };
+        let f = unsafe {
+            instance
+                .as_mut()
+                .get_exported_func(registry, store_id, start)
+        };
         let caller_vmctx = instance.vmctx();
         unsafe {
             let funcref = f.vm_func_ref(store.0);
@@ -479,7 +483,10 @@ impl Instance {
         let id = store.id();
         // SAFETY: the store `id` owns this instance and all exports contained
         // within.
-        let export = unsafe { self.id.get_mut(store).get_export_by_index_mut(id, entity) };
+        let export = unsafe {
+            let (instance, registry) = self.id.get_mut_and_module_registry(store);
+            instance.get_export_by_index_mut(registry, id, entity)
+        };
         Extern::from_wasmtime_export(export, store)
     }
 
@@ -922,7 +929,7 @@ fn pre_instantiate_raw(
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
-    store.modules_mut().register_module(module);
+    store.register_module(module)?;
     let (funcrefs, modules) = store.func_refs_and_modules();
     funcrefs.fill(modules);
 

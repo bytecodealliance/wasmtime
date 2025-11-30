@@ -325,7 +325,8 @@ impl WasmBacktrace {
                 // do this then we will print out a helpful note in
                 // `Display` to indicate that more detailed information
                 // in a trap may be available.
-                let has_unparsed_debuginfo = module.compiled_module().has_unparsed_debuginfo();
+                let has_unparsed_debuginfo =
+                    module.module().compiled_module().has_unparsed_debuginfo();
                 if has_unparsed_debuginfo
                     && wasm_backtrace_details_env_used
                     && cfg!(feature = "addr2line")
@@ -439,10 +440,8 @@ impl FrameInfo {
         let compiled_module = module.compiled_module();
         let index = compiled_module.func_by_text_offset(text_offset)?;
         let func_start = compiled_module.func_start_srcloc(index);
-        let instr = wasmtime_environ::lookup_file_pos(
-            compiled_module.code_memory().address_map_data(),
-            text_offset,
-        );
+        let instr =
+            wasmtime_environ::lookup_file_pos(module.engine_code().address_map_data(), text_offset);
         let index = compiled_module.module().func_index(index);
         let func_index = index.as_u32();
         let func_name = compiled_module.func_name(index).map(|s| s.to_string());

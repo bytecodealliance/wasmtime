@@ -7,6 +7,7 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
+use crate::module::ModuleRegistry;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
@@ -368,6 +369,7 @@ impl ComponentInstance {
     /// Returns the `Func` at index `func_idx` in the funcref table at `table_idx`.
     pub fn index_runtime_func_table(
         &self,
+        registry: &ModuleRegistry,
         table_idx: RuntimeTableIndex,
         func_idx: u64,
     ) -> Result<Option<Func>> {
@@ -381,7 +383,8 @@ impl ComponentInstance {
             // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
             // this call, so we don't need a lifetime to bind it to.
             let instance = Pin::new_unchecked(instance_ptr.as_mut());
-            let table = instance.get_defined_table_with_lazy_init(table.index, [func_idx]);
+            let table =
+                instance.get_defined_table_with_lazy_init(registry, table.index, [func_idx]);
             let func = table
                 .get_func(func_idx)?
                 .map(|funcref| Func::from_vm_func_ref(store.id(), funcref));

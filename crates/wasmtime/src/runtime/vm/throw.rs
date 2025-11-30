@@ -54,11 +54,9 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
             frame.fp(),
             frame.pc()
         );
-        let module = nogc.modules().lookup_module_by_pc(frame.pc())?;
-        let base = module.code_object().code_memory().text().as_ptr() as usize;
-        let rel_pc = u32::try_from(frame.pc().wrapping_sub(base)).expect("Module larger than 4GiB");
-        let et = module.exception_table();
-        let (frame_offset, handlers) = et.lookup_pc(rel_pc);
+        let (module, rel_pc) = nogc.modules().module_and_code_by_pc(frame.pc())?;
+        let et = module.module().exception_table();
+        let (frame_offset, handlers) = et.lookup_pc(u32::try_from(rel_pc).unwrap());
         let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
         for handler in handlers {
             log::trace!("-> checking handler: {handler:?}");
@@ -112,9 +110,10 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
             if is_match {
                 let fp_to_sp = fp_to_sp.expect("frame offset must be known if we found a handler");
                 return Some((
-                    base.wrapping_add(
-                        usize::try_from(handler.handler_offset).expect("Module larger than usize"),
-                    ),
+                    (module.store_code().text_range().start
+                        + usize::try_from(handler.handler_offset)
+                            .expect("Module larger than usize"))
+                    .raw(),
                     frame.fp().wrapping_add_signed(fp_to_sp),
                 ));
             }

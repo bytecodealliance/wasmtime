@@ -515,4 +515,29 @@ impl FuncKey {
             _ => panic!("`FuncKey::unwrap_resource_drop_trampoline` called on {self:?}"),
         }
     }
+
+    /// Is this "Store-invariant"? This allows us to execute
+    /// EngineCode directly rather than StoreCode.
+    ///
+    /// Any function that is either directly from Wasm code, or calls
+    /// it directly (not indirected through a runtime-provided
+    /// function pointer), is "store-variant": we need to use a
+    /// StoreCode-specific version of the code to hit any patching
+    /// that our specific instantiations may have (due to debugging
+    /// breakpoints, etc). Trampolines into the runtime cannot be
+    /// patched and so can use EngineCode instead. This allows for
+    /// less complex plumbing in some places where we can avoid
+    /// looking up the StoreCode (or having access to the Store).
+    pub fn is_store_invariant(&self) -> bool {
+        match self {
+            Self::DefinedWasmFunction(..) | Self::ArrayToWasmTrampoline(..) => false,
+            Self::WasmToArrayTrampoline(..)
+            | Self::WasmToBuiltinTrampoline(..)
+            | Self::PulleyHostCall(..) => true,
+            #[cfg(feature = "component-model")]
+            Self::ComponentTrampoline(..)
+            | Self::ResourceDropTrampoline
+            | Self::UnsafeIntrinsic(..) => true,
+        }
+    }
 }
