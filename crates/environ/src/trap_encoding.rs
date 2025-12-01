@@ -194,7 +194,7 @@ impl fmt::Display for Trap {
             DisabledOpcode => "pulley opcode disabled at compile time was executed",
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
             CannotLeaveComponent => "cannot leave component instance",
-            CannotBlockSyncTask => "cannot block a synchronous task",
+            CannotBlockSyncTask => "cannot block a synchronous task before returning",
         };
         write!(f, "wasm trap: {desc}")
     }
