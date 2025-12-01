@@ -424,3 +424,36 @@ block0(v0: i64):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %patchable_call(i64) system_v {
+  fn0 = colocated %f(i64) patchable
+block0(v0: i64):
+  patchable_call fn0(v0)
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   call %f ; patchable
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

@@ -408,7 +408,8 @@ pub(crate) fn emit(
             Inst::addq_mi(rsp, guard_plus_count).emit(sink, info, state);
         }
 
-        Inst::CallKnown { info: call_info } => {
+        Inst::CallKnown { info: call_info } | Inst::PatchableCallKnown { info: call_info } => {
+            let is_patchable = matches!(inst, Inst::PatchableCallKnown { .. });
             let stack_map = state.take_stack_map();
 
             asm::inst::callq_d::new(0).emit(sink, info, state);
@@ -430,6 +431,10 @@ pub(crate) fn emit(
                     Some(state.frame_layout().sp_to_fp()),
                     try_call.exception_handlers(&state.frame_layout()),
                 );
+            } else if is_patchable {
+                // Patchable call-site of length 5 bytes. The
+                // MachBuffer knows how to NOP out the callsite.
+                sink.add_patchable_call_site(5);
             } else {
                 sink.add_call_site();
             }
@@ -438,6 +443,7 @@ pub(crate) fn emit(
             // callee, to ensure that StackAMode values are always computed from
             // a consistent SP.
             if call_info.callee_pop_size > 0 {
+                assert!(!is_patchable);
                 let rsp = Writable::from_reg(regs::rsp());
                 let callee_pop_size = i32::try_from(call_info.callee_pop_size)
                     .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");

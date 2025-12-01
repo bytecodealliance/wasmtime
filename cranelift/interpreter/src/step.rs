@@ -1323,6 +1323,7 @@ where
         Opcode::GetExceptionHandlerAddress => unimplemented!("GetExceptionHandlerAddress"),
 
         Opcode::SequencePoint => unimplemented!("SequencePoint"),
+        Opcode::PatchableCall => unimplemented!("PatchableCall"),
     })
 }
 

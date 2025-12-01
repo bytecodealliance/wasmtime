@@ -620,6 +620,10 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.gen_try_call_rets(sig)
         }
 
+        fn gen_patchable_call_rets(&mut self) -> CallRetList {
+            smallvec::smallvec![]
+        }
+
         fn try_call_none(&mut self) -> OptionTryCallInfo {
             None
         }

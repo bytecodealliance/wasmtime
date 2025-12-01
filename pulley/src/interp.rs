@@ -1343,6 +1343,10 @@ impl OpVisitor for Interpreter<'_> {
         &mut self.pc
     }
 
+    fn nop(&mut self) -> ControlFlow<Done> {
+        ControlFlow::Continue(())
+    }
+
     fn ret(&mut self) -> ControlFlow<Done> {
         let lr = self.state.lr;
         if lr == HOST_RETURN_ADDR {
@@ -2827,10 +2831,6 @@ impl OpVisitor for Interpreter<'_> {
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
-    fn nop(&mut self) -> ControlFlow<Done> {
-        ControlFlow::Continue(())
-    }
-
     fn trap(&mut self) -> ControlFlow<Done> {
         self.done_trap::<crate::Trap>()
     }

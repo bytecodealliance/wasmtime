@@ -148,7 +148,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
         }
 
-        Inst::Call { info } => {
+        Inst::Call { info } | Inst::PatchableCall { info } => {
             let CallInfo {
                 uses,
                 defs,
@@ -435,7 +435,8 @@ where
             }
             | Inst::Call { .. }
             | Inst::IndirectCall { .. }
-            | Inst::IndirectCallHost { .. } => true,
+            | Inst::IndirectCallHost { .. }
+            | Inst::PatchableCall { .. } => true,
             _ => false,
         }
     }
@@ -498,9 +499,10 @@ where
 
     fn call_type(&self) -> CallType {
         match &self.inst {
-            Inst::Call { .. } | Inst::IndirectCall { .. } | Inst::IndirectCallHost { .. } => {
-                CallType::Regular
-            }
+            Inst::Call { .. }
+            | Inst::IndirectCall { .. }
+            | Inst::IndirectCallHost { .. }
+            | Inst::PatchableCall { .. } => CallType::Regular,
 
             Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => CallType::TailCall,
 
@@ -531,6 +533,12 @@ where
 
     fn gen_nop(_preferred_size: usize) -> Self {
         todo!()
+    }
+
+    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
+        // See unit test `nop_is_single_zero_byte` in Pulley crate
+        // where this is validated.
+        smallvec::smallvec![0]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -710,6 +718,10 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("indirect_call {callee}, {info:?}{try_call}")
+            }
+
+            Inst::PatchableCall { info } => {
+                format!("patchable_call {info:?}")
             }
 
             Inst::ReturnCall { info } => {

@@ -166,7 +166,10 @@ fn pulley_emit<P>(
             sink.add_reloc_at_offset(end - size, Reloc::Abs8, &**name, *offset);
         }
 
-        Inst::Call { info } => {
+        Inst::Call { info } | Inst::PatchableCall { info } => {
+            let is_patchable = matches!(inst, Inst::PatchableCall { .. });
+            let start = sink.cur_offset();
+
             // If arguments happen to already be in the right register for the
             // ABI then remove them from this list. Otherwise emit the
             // appropriate `Call` instruction depending on how many arguments we
@@ -196,6 +199,8 @@ fn pulley_emit<P>(
                     Some(state.frame_layout.sp_to_fp()),
                     try_call.exception_handlers(&state.frame_layout),
                 );
+            } else if is_patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
             } else {
                 sink.add_call_site();
             }

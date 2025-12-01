@@ -167,6 +167,7 @@ impl Inst {
             | Inst::Extend { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::PatchableCall { .. }
             | Inst::ReturnCall { .. }
             | Inst::ReturnCallInd { .. }
             | Inst::Jal { .. }
@@ -1193,9 +1194,12 @@ impl Inst {
                     .for_each(|i| i.emit(sink, emit_info, state));
             }
 
-            &Inst::Call { ref info } => {
+            &Inst::Call { ref info } | &Inst::PatchableCall { ref info } => {
+                let is_patchable = matches!(self, Inst::PatchableCall { .. });
+
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
+                let start = sink.cur_offset();
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
@@ -1210,6 +1214,9 @@ impl Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
+                } else if is_patchable {
+                    let len = sink.cur_offset() - start;
+                    sink.add_patchable_call_site(len);
                 } else {
                     sink.add_call_site();
                 }

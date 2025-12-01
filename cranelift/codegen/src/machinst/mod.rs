@@ -177,6 +177,10 @@ pub trait MachInst: Clone + Debug {
     /// the instruction must have a nonzero size if preferred_size is nonzero.
     fn gen_nop(preferred_size: usize) -> Self;
 
+    /// The smallest possible NOP, as a unit that can be used to patch
+    /// out code.
+    fn gen_nop_unit() -> SmallVec<[u8; 8]>;
+
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.
     fn align_basic_block(offset: CodeOffset) -> CodeOffset {
@@ -446,6 +450,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
         let relocs = self.buffer.relocs();
         let traps = self.buffer.traps();
+        let mut patchables = self.buffer.patchable_call_sites().peekable();
 
         // Normalize the block starts to include an initial block of offset 0.
         let mut block_starts = Vec::new();
@@ -493,6 +498,17 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
                 if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
                     write!(buf, " ; trap: {}", trap.code)?;
+                }
+
+                if let Some(patchable) = patchables.peek()
+                    && patchable.ret_addr == end as u32
+                {
+                    write!(
+                        buf,
+                        " ; patchable call: NOP out last {} bytes",
+                        patchable.len
+                    )?;
+                    patchables.next();
                 }
 
                 writeln!(buf)?;

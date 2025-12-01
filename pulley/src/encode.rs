@@ -332,3 +332,16 @@ macro_rules! impl_extended_encoders {
     };
 }
 for_each_extended_op!(impl_extended_encoders);
+
+#[test]
+#[cfg(feature = "std")]
+fn nop_is_single_zero_byte() {
+    // The fact that [0x00] is a nop is load-bearing; the MachInst
+    // impl in the Cranelift backend uses this. To ensure this, we
+    // list Nop first in the opcode list in lib.rs and give it zero
+    // arguments.
+    let inst = crate::op::Nop {};
+    let mut bytes = vec![];
+    inst.encode(&mut bytes);
+    assert_eq!(bytes, vec![0]);
+}

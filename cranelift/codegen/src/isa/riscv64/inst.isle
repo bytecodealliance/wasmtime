@@ -111,10 +111,14 @@
       (from_bits u8)
       (to_bits u8))
 
+    ;; A machine direct-call instruction.
     (Call (info BoxCallInfo))
 
-      ;; A machine indirect-call instruction.
+    ;; A machine indirect-call instruction.
     (CallInd (info BoxCallIndInfo))
+
+    ;; A patchable machine direct-call instruction.
+    (PatchableCall (info BoxCallInfo))
 
     ;; A direct return-call macro instruction.
     (ReturnCall (info BoxReturnCallInfo))
@@ -3113,6 +3117,11 @@
 (decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
 (rule (call_ind_impl info)
       (SideEffectNoResult.Inst (MInst.CallInd info)))
+
+;; Helper for creating `MInst.PatchableCall` instructions.
+(decl patchable_call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (patchable_call_impl info)
+      (SideEffectNoResult.Inst (MInst.PatchableCall info)))
 
 ;; Helper for creating `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)

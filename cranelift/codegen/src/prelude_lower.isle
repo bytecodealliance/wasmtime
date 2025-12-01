@@ -1173,6 +1173,9 @@
 (decl gen_try_call_rets (Sig) CallRetList)
 (extern constructor gen_try_call_rets gen_try_call_rets)
 
+(decl gen_patchable_call_rets () CallRetList)
+(extern constructor gen_patchable_call_rets gen_patchable_call_rets)
+
 (type OptionTryCallInfo (primitive OptionTryCallInfo))
 (decl try_call_info (ExceptionTable MachLabelSlice) OptionTryCallInfo)
 (extern constructor try_call_info try_call_info)

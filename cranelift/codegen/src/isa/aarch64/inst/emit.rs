@@ -2941,7 +2941,8 @@ impl MachInstEmit for Inst {
                     sink.put4(0xd65f0bff | (op2 << 9)); // reta{key}
                 }
             }
-            &Inst::Call { ref info } => {
+            &Inst::Call { ref info } | &Inst::PatchableCall { ref info } => {
+                let is_patchable = matches!(self, Inst::PatchableCall { .. });
                 let user_stack_map = state.take_stack_map();
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
@@ -2955,6 +2956,8 @@ impl MachInstEmit for Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
+                } else if is_patchable {
+                    sink.add_patchable_call_site(4);
                 } else {
                     sink.add_call_site();
                 }

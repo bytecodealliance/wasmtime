@@ -168,3 +168,29 @@ block0(v0: i64):
 ;   popq %rbp
 ;   retq
 
+function %patchable_call(i64) system_v {
+  fn0 = colocated %f(i64) patchable
+block0(v0: i64):
+  patchable_call fn0(v0)
+  return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   patchable_call TestCase(%f)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq 9 ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
