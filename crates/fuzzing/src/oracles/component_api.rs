@@ -27,6 +27,9 @@ const MIN_LIST_LENGTH: u32 = 0;
 /// Maximum length of an arbitrary list value generated for a test case
 const MAX_LIST_LENGTH: u32 = 10;
 
+/// Maximum number of invocations of one fuzz case.
+const MAX_ITERS: usize = 1_000;
+
 /// Generate an arbitrary instance of the specified type.
 fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::Result<Val> {
     use component::Type;
@@ -263,7 +266,8 @@ where
             .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
             .unwrap();
 
-        while input.arbitrary()? {
+        let mut iters = 0..MAX_ITERS;
+        while iters.next().is_some() && input.arbitrary()? {
             let params = input.arbitrary::<P>()?;
             let result = input.arbitrary::<R>()?;
             *store.data_mut() = Box::new((params.clone(), result.clone()));
@@ -352,7 +356,8 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
         let ty = func.ty(&store);
 
-        while input.arbitrary()? {
+        let mut iters = 0..MAX_ITERS;
+        while iters.next().is_some() && input.arbitrary()? {
             let params = ty
                 .params()
                 .map(|(_, ty)| arbitrary_val(&ty, input))
