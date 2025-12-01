@@ -728,7 +728,7 @@ async fn cancel_host_future() -> Result<()> {
     ))
   ))
 
-  (func (export "run") (param "f" $f)
+  (func (export "run") async (param "f" $f)
     (canon lift
       (core func $i "run")
       (memory $libc "memory")
