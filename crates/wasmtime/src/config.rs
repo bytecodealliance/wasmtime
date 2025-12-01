@@ -242,6 +242,10 @@ impl Config {
             }
         }
 
+        // Quiet warnings.
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        let _ = &mut ret;
+
         ret
     }
 
