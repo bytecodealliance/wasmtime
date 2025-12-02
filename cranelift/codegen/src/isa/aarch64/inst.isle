@@ -817,6 +817,9 @@
        ;; An indirect return-call macro instruction.
        (ReturnCallInd (info BoxReturnCallIndInfo))
 
+       ;; A patchable call instruction.
+       (PatchableCall (info BoxCallInfo))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))
@@ -4509,6 +4512,11 @@
 (decl return_call_ind_impl (BoxReturnCallIndInfo) SideEffectNoResult)
 (rule (return_call_ind_impl info)
       (SideEffectNoResult.Inst (MInst.ReturnCallInd info)))
+
+;; Helper for creating `MInst.PatchableCall` instructions.
+(decl patchable_call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (patchable_call_impl info)
+      (SideEffectNoResult.Inst (MInst.PatchableCall info)))
 
 ;; Helpers for pinned register manipulation.
 

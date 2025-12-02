@@ -3918,4 +3918,31 @@ pub(crate) fn define(
         )
         .other_side_effects(),
     );
+
+    ig.push(
+        Inst::new(
+            "patchable_call",
+            r#"
+         A call instruction that can be turned on/off by patching machine code.
+
+         This call is different than an ordinary call in a few ways:
+         - It can only call functions with the `patchable` ABI.
+         - As a result of that, the called function cannot have any
+           return values.
+         - The call emits metadata into the MachBuffer that allows the consumer
+           of the machine code to edit the code to either make the call or not.
+
+         Note that the lack of return values is necessary: because the call
+         may or may not occur, dynamically, we cannot rely on any values
+         actually being defined.
+         "#,
+            &formats.call,
+        )
+        .operands_in(vec![
+            Operand::new("FN", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+        ])
+        .call(),
+    );
 }

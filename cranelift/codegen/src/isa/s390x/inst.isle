@@ -901,6 +901,11 @@
       (link WritableReg)
       (info BoxCallInfo))
 
+    ;; A patchable machine call instruction.
+    (PatchableCall
+      (link WritableReg)
+      (info BoxCallInfo))     
+
     ;; A machine tail call instruction (direct or indirect).
     (ReturnCall
       (info BoxReturnCallInfo))
@@ -2711,6 +2716,11 @@
 (decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
 (rule (call_impl reg info)
       (SideEffectNoResult.Inst (MInst.Call reg info)))
+
+;; Helper for emitting `MInst.PatchableCall` instructions.
+(decl patchable_call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
+(rule (patchable_call_impl reg info)
+      (SideEffectNoResult.Inst (MInst.PatchableCall reg info)))
 
 ;; Helper for emitting `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)

@@ -801,7 +801,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Ret { .. } | Inst::AuthenticatedRet { .. } => {}
         Inst::Jump { .. } => {}
-        Inst::Call { info, .. } => {
+        Inst::Call { info, .. } | Inst::PatchableCall { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -1008,6 +1008,7 @@ impl MachInst for Inst {
         match self {
             Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::PatchableCall { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
 
@@ -1092,7 +1093,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } | Inst::PatchableCall { .. } => true,
             _ => false,
         }
     }
@@ -1108,6 +1109,10 @@ impl MachInst for Inst {
         // We can't give a NOP (or any insn) < 4 bytes.
         assert!(preferred_size >= 4);
         Inst::Nop4
+    }
+
+    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
+        smallvec![0x1f, 0x20, 0x03, 0xd5]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -2593,6 +2598,9 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("blr {rn}{try_call}")
+            }
+            &Inst::PatchableCall { .. } => {
+                format!("bl 0 ; patchable")
             }
             &Inst::ReturnCall { ref info } => {
                 let mut s = format!(
