@@ -56,6 +56,7 @@ typedef struct wasmtime_guestprofiler_modules {
 /**
  * \brief Begin profiling a new guest.
  *
+ * \param engine         engine in which to perform the profiling
  * \param module_name    name recorded in the profile
  * \param interval_nanos intended sampling interval in nanoseconds recorded in
  *                       the profile
@@ -71,6 +72,7 @@ typedef struct wasmtime_guestprofiler_modules {
  * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.new
  */
 WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *wasmtime_guestprofiler_new(
+    const wasm_engine_t *engine,
     const wasm_name_t *module_name, uint64_t interval_nanos,
     const wasmtime_guestprofiler_modules_t *modules, size_t modules_len);
 
