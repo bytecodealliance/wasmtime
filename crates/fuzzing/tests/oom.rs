@@ -1,5 +1,5 @@
 use std::alloc::{Layout, alloc};
-use wasmtime::Result;
+use wasmtime::{Config, Result};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -24,4 +24,13 @@ fn smoke_test_missed_oom() -> Result<()> {
         "should have missed an OOM, got: {err}"
     );
     Ok(())
+}
+
+#[test]
+fn config_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        Ok(())
+    })
 }

@@ -39,7 +39,7 @@ pub struct LinkOptions {
 }
 
 pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
-    Ok(Box::new(Builder {
+    let mut builder = Builder {
         tunables: None,
         inner: IsaBuilder::new(triple, |triple| isa::lookup(triple).map_err(|e| e.into()))?,
         linkopts: LinkOptions::default(),
@@ -47,7 +47,20 @@ pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
         clif_dir: None,
         wmemcheck: false,
         emit_debug_checks: false,
-    }))
+    };
+
+    builder.set("enable_verifier", "false").unwrap();
+    builder.set("opt_level", "speed").unwrap();
+
+    // When running under MIRI try to optimize for compile time of Wasm code
+    // itself as much as possible. Disable optimizations by default and use the
+    // fastest regalloc available to us.
+    if cfg!(miri) {
+        builder.set("opt_level", "none").unwrap();
+        builder.set("regalloc_algorithm", "single_pass").unwrap();
+    }
+
+    Ok(Box::new(builder))
 }
 
 impl CompilerBuilder for Builder {
