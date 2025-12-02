@@ -596,6 +596,8 @@ jobs:
     - name: Install apt packages
       if: ${{ matrix.apt_packages }}
       run: sudo apt-get update && sudo apt-get install -y ${{ matrix.apt_packages }}
+      retry:
+        max-attempts: 5
     - run: ${{ matrix.test }}
       env:
         CARGO_BUILD_TARGET: ${{ matrix.target }}
@@ -632,7 +634,12 @@ jobs:
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
     - run: cargo install cargo-fuzz --vers "^0.11" --locked
-    - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
+    - run: sudo apt-get update
+      retry:
+        max-attempts: 5
+    - run: apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
+      retry:
+        max-attempts: 5
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --dev
@@ -745,12 +752,15 @@ jobs:
 
     - run: cargo fetch --locked
 
+    - run: sudo apt-get update
+      retry:
+        max-attempts: 5
+    - run: sudo apt-get install -y ${{ matrix.gcc_package }}
+      retry:
+        max-attempts: 5
     - name: Install cross-compilation tools
       run: |
         set -ex
-
-        sudo apt-get update
-        sudo apt-get install -y ${{ matrix.gcc_package }}
 
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
@@ -791,7 +801,16 @@ jobs:
         fi
 
         # Install build dependencies of QEMU itself.
-        sudo apt-get install -y libglib2.0-dev ninja-build
+        okay=false
+        for i in {1..5}; do
+          sudo apt-get install -y libglib2.0-dev ninja-build || continue
+          okay=true
+          break
+        done
+        if [[ $okay != true ]]; then
+          echo "Failed to install QEMU dependencies from apt"
+          exit 1
+        fi
 
         # Download and build qemu from source since the most recent release is
         # way faster at arm emulation than the current version github actions'
@@ -983,8 +1002,13 @@ jobs:
         curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-28/wasi-sdk-28.0-x86_64-linux.tar.gz
         tar -xzf wasi-sdk-28.0-x86_64-linux.tar.gz
         mv wasi-sdk-28.0-x86_64-linux wasi-sdk
+    - run: sudo apt-get update
+      retry:
+        max-attempts: 5
+    - run: sudo apt-get install -y gdb lldb-18 llvm
+      retry:
+        max-attempts: 5
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
