@@ -453,6 +453,7 @@ impl CodeMemory {
     /// that can be patched or mutated independently. Also returns a
     /// "metadata and location" handle that can be registered with the
     /// global module registry and used for trap metadata lookups.
+    #[cfg(feature = "debug")]
     pub(crate) fn deep_clone(self: &Arc<Self>, engine: &Engine) -> Result<CodeMemory> {
         let mmap = self.mmap.deep_clone()?;
         Self::new(engine, mmap)

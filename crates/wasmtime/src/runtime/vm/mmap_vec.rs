@@ -273,6 +273,7 @@ impl MmapVec {
 
     /// Create a copy of this `MmapVec` that can be separately
     /// mutated.
+    #[cfg(feature = "debug")]
     pub(crate) fn deep_clone(&self) -> Result<MmapVec> {
         match self {
             #[cfg(not(has_virtual_memory))]

@@ -3,6 +3,7 @@ use crate::Module;
 use crate::module::ModuleRegistry;
 use crate::vm::ModuleMemoryImageSource;
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
+#[cfg(feature = "debug")]
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use anyhow::Result;
@@ -307,6 +308,7 @@ enum StoreCodeStorage {
     ///
     /// This is the only reference to this CodeMemory. The StoreCode
     /// is owned directly by the Store's ModuleRegistry.
+    #[cfg(feature = "debug")]
     Private(Box<CodeMemory>),
 }
 
@@ -318,6 +320,7 @@ impl StoreCode {
         // copies of code in every store, to allow individual enabling
         // of breakpoints (by code patching) independently in each
         // one.
+        #[cfg(feature = "debug")]
         let code = if engine.tunables().debug_guest {
             let mut private_copy = engine_code.original_code.deep_clone(engine)?;
             private_copy.publish()?;
@@ -327,6 +330,12 @@ impl StoreCode {
             StoreCodeStorage::Shared(engine_code.original_code.clone())
         };
 
+        #[cfg(not(feature = "debug"))]
+        let code = StoreCodeStorage::Shared(engine_code.original_code.clone());
+        // Avoid unused-variable warning in build without debugging
+        // support.
+        let _ = engine;
+
         Ok(StoreCode(code))
     }
 
@@ -334,12 +343,14 @@ impl StoreCode {
     pub fn code_memory(&self) -> &CodeMemory {
         match &self.0 {
             StoreCodeStorage::Shared(m) => m,
+            #[cfg(feature = "debug")]
             StoreCodeStorage::Private(m) => m,
         }
     }
 
     /// Provide a mutable reference to a CodeMemory that is privately
     /// owned only by this StoreCode.
+    #[cfg(feature = "debug")]
     pub fn code_memory_mut(&mut self) -> Option<&mut CodeMemory> {
         match &mut self.0 {
             StoreCodeStorage::Shared(_) => None,
@@ -366,6 +377,7 @@ impl Drop for StoreCode {
                 // Drop impl for EngineCode will de-register (see
                 // above).
             }
+            #[cfg(feature = "debug")]
             StoreCodeStorage::Private(mem) => {
                 crate::module::unregister_code(mem.raw_addr_range());
             }
