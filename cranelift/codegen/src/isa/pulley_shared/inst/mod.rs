@@ -536,9 +536,13 @@ where
     }
 
     fn gen_nop_unit() -> SmallVec<[u8; 8]> {
-        // See unit test `nop_is_single_zero_byte` in Pulley crate
-        // where this is validated.
-        smallvec::smallvec![0]
+        let mut bytes = smallvec::smallvec![];
+        let nop = pulley_interpreter::op::Nop {};
+        nop.encode(&mut bytes);
+        // NOP needs to be a 1-byte opcode so it can be used to
+        // overwrite a callsite of any length.
+        assert_eq!(bytes.len(), 1);
+        bytes
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

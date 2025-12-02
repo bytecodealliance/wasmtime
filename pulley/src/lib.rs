@@ -87,8 +87,6 @@ macro_rules! for_each_op {
     ( $macro:ident ) => {
         $macro! {
             /// No-operation.
-            ///
-            /// NOTE: must be first; we rely on the opcode being zero.
             nop = Nop;
 
             /// Transfer control the address in the `lr` register.
