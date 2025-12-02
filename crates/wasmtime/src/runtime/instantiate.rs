@@ -3,10 +3,10 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
-use crate::{code::EngineCode, Engine};
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use crate::runtime::vm::CompiledModuleId;
+use crate::{Engine, code::EngineCode};
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::str;
