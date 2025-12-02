@@ -753,6 +753,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
             );
         }
 
+        if self.types[adapter.lift.ty].async_ {
+            let check_blocking = self.module.import_check_blocking();
+            self.instruction(Call(check_blocking.as_u32()));
+        }
+
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
             self.instruction(Call(enter.as_u32()));

@@ -187,6 +187,8 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
+            check_blocking(vmctx: vmctx) -> bool;
+            #[cfg(feature = "component-model-async")]
             context_get(vmctx: vmctx, caller_instance: u32, slot: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             context_set(vmctx: vmctx, caller_instance: u32, slot: u32, val: u32) -> bool;

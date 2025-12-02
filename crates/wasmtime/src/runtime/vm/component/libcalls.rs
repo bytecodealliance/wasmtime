@@ -980,6 +980,11 @@ fn error_context_transfer(
 }
 
 #[cfg(feature = "component-model-async")]
+fn check_blocking(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
+    crate::component::concurrent::check_blocking(store)
+}
+
+#[cfg(feature = "component-model-async")]
 unsafe impl HostResultHasUnwindSentinel for ResourcePair {
     type Abi = u64;
     const SENTINEL: u64 = u64::MAX;

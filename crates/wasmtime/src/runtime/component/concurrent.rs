@@ -2072,6 +2072,10 @@ impl Instance {
     ) -> Result<()> {
         self.id().get(store.0).check_may_leave(caller_instance)?;
 
+        if let (CallerInfo::Sync { .. }, true) = (&caller_info, callee_async) {
+            store.0.concurrent_state_mut().check_blocking()?;
+        }
+
         enum ResultInfo {
             Heap { results: u32 },
             Stack { result_count: u32 },
