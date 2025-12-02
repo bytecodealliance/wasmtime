@@ -274,38 +274,13 @@ impl MmapVec {
     /// Create a copy of this `MmapVec` that can be separately
     /// mutated.
     pub(crate) fn deep_clone(&self) -> Result<MmapVec> {
-        // If we don't have any additional information because the
-        // MmapVec ultimately wraps an externally-provided slice of a
-        // module, let's align to a reasonable but small value -- say,
-        // 64 bytes.
-        //
-        // Note that (i) the public API of Wasmtime
-        // (`Module::deserialize_raw()`) does not actually enforce any
-        // alignment of the code contained inside, let alone take a
-        // parameter; so in Wasmtime and Cranelift we have a deep and
-        // implicit dependency on the invariant that all code is
-        // "fully relocatable" (up to only the alignment requirements
-        // of the ISA itself).
-        //
-        // For an example of what this implies and what we need to be
-        // careful about: we can never use the `ADRP` opcode on
-        // aarch64 in compiled Wasm functions, because the way this is
-        // relocated (and paired add-immediate-12) depends on the
-        // position-in-the-4K-page of the reference and referred-to
-        // address. This is true today because we only generate
-        // "colocated" calls to other functions in the module, and we
-        // never use the `func_addr` or `symbol_addr` opcodes.
-        //
-        // We should document and enforce this more fully!
-        const DEFAULT_CODE_COPY_ALIGNMENT: usize = 64;
-
         match self {
             #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { layout, .. } => {
                 MmapVec::from_slice_with_alignment(&self[..], layout.align())
             }
             MmapVec::ExternallyOwned { .. } => {
-                MmapVec::from_slice_with_alignment(&self[..], DEFAULT_CODE_COPY_ALIGNMENT)
+                anyhow::bail!("Cannot clone an externally-owned code memory.");
             }
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => {
@@ -313,7 +288,10 @@ impl MmapVec {
                     let mmap = Mmap::from_file(original_file.clone())?;
                     Ok(MmapVec::Mmap { mmap, len: *len })
                 } else {
-                    MmapVec::from_slice_with_alignment(&self[..], DEFAULT_CODE_COPY_ALIGNMENT)
+                    MmapVec::from_slice_with_alignment(
+                        &self[..],
+                        crate::runtime::vm::host_page_size(),
+                    )
                 }
             }
         }
