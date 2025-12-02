@@ -72,9 +72,9 @@ typedef struct wasmtime_guestprofiler_modules {
  * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.new
  */
 WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *wasmtime_guestprofiler_new(
-    const wasm_engine_t *engine,
-    const wasm_name_t *module_name, uint64_t interval_nanos,
-    const wasmtime_guestprofiler_modules_t *modules, size_t modules_len);
+    const wasm_engine_t *engine, const wasm_name_t *module_name,
+    uint64_t interval_nanos, const wasmtime_guestprofiler_modules_t *modules,
+    size_t modules_len);
 
 /**
  * \brief Add a sample to the profile.
