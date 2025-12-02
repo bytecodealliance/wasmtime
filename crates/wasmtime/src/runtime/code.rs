@@ -322,6 +322,8 @@ impl StoreCode {
         // one.
         #[cfg(feature = "debug")]
         let code = if engine.tunables().debug_guest {
+            // TODO(#12104): we should be able to clone only `.text`;
+            // this clones the whole image.
             let mut private_copy = engine_code.original_code.deep_clone(engine)?;
             private_copy.publish()?;
             crate::module::register_code(&engine_code.original_code, private_copy.raw_addr_range());
