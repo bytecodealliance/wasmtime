@@ -11,6 +11,7 @@ use crate::{
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
+use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
@@ -673,6 +674,18 @@ impl Component {
             }
         }
         Some(resources)
+    }
+
+    /// Returns the range, in the host's address space, that this module's
+    /// compiled code resides at.
+    ///
+    /// For more information see
+    /// [`Module::image_range`](crate::Module::image_range).
+    pub fn image_range(&self) -> Range<*const u8> {
+        let range = self.inner.code.text_range();
+        let start = range.start.raw() as *const u8;
+        let end = range.end.raw() as *const u8;
+        start..end
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
