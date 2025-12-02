@@ -1002,13 +1002,11 @@ impl Instance {
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 for (i, func_idx) in positions.zip(elements) {
+                    let (instance, registry) =
+                        store.instance_and_module_registry_mut(elements_instance_id);
                     // SAFETY: the `store_id` passed to `get_exported_func` is
                     // indeed the store that owns the function.
-                    let func = unsafe {
-                        let (instance, registry) =
-                            store.instance_and_module_registry_mut(elements_instance_id);
-                        instance.get_exported_func(registry, store_id, *func_idx)
-                    };
+                    let func = unsafe { instance.get_exported_func(registry, store_id, *func_idx) };
                     table.set_(store, i, func.into()).unwrap();
                 }
             }

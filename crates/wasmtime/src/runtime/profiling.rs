@@ -1,8 +1,8 @@
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{AsContext, CallHook, Module};
+use crate::{Engine, prelude::*};
 use core::cmp::Ordering;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
@@ -108,10 +108,20 @@ impl GuestProfiler {
     /// "Security" section of the [`GuestProfiler`] documentation for guidance
     /// on what modules should not be included in this list.
     pub fn new(
+        engine: &Engine,
         module_name: &str,
         interval: Duration,
         modules: impl IntoIterator<Item = (String, Module)>,
-    ) -> Self {
+    ) -> Result<Self> {
+        // Check that guest debugging is not enabled. The
+        // instrumentation would make profiling results unreliable,
+        // but more fundamentally, it means that code is cloned per
+        // instantiation (for breakpoint patching) so the logic below
+        // is incorrect.
+        if engine.tunables().debug_guest {
+            anyhow::bail!("Profiling cannot be performed when guest-debugging is enabled.");
+        }
+
         let zero = ReferenceTimestamp::from_millis_since_unix_epoch(0.0);
         let mut profile = Profile::new(module_name, zero, interval.into());
 
@@ -120,19 +130,12 @@ impl GuestProfiler {
         let mut modules: Vec<_> = modules
             .into_iter()
             .filter_map(|(name, module)| {
+                assert!(Engine::same(module.engine(), engine));
                 let compiled = module.compiled_module();
                 let text_range = {
                     // Assumption: within text, the code for a given module is packed linearly and
                     // is non-overlapping; if this is violated, it should be safe but might result
                     // in incorrect profiling results.
-                    //
-                    // Assumption: there is no code cloning going on
-                    // when profiling, so the EngineCode is the same
-                    // as the StoreCode. This is a hack and we should
-                    // have a better API (e.g.,
-                    // `.text_range_for_store_code_if_invariant()`
-                    // that returns a Result and errors if config is
-                    // wrong).
                     let start = compiled.finished_function_ranges().next()?.1.start;
                     let end = compiled.finished_function_ranges().last()?.1.end;
 
@@ -159,14 +162,14 @@ impl GuestProfiler {
         let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
         let start = Instant::now();
         let marker = CallMarker::new(&mut profile);
-        Self {
+        Ok(Self {
             profile,
             modules,
             process,
             thread,
             start,
             marker,
-        }
+        })
     }
 
     /// Create a new profiler for the provided component
@@ -176,16 +179,17 @@ impl GuestProfiler {
     /// instrumentation to track calls in each of its constituent modules.
     #[cfg(feature = "component-model")]
     pub fn new_component(
+        engine: &Engine,
         component_name: &str,
         interval: Duration,
         component: Component,
         extra_modules: impl IntoIterator<Item = (String, Module)>,
-    ) -> Self {
+    ) -> Result<Self> {
         let modules = component
             .static_modules()
             .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
             .chain(extra_modules);
-        Self::new(component_name, interval, modules)
+        Self::new(engine, component_name, interval, modules)
     }
 
     /// Add a sample to the profile. This function collects a backtrace from

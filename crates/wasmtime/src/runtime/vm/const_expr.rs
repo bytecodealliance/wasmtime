@@ -51,12 +51,10 @@ impl ConstEvalContext {
 
     fn ref_func(&mut self, store: &mut StoreOpaque, index: FuncIndex) -> Result<Val> {
         let id = store.id();
+        let (instance, registry) = store.instance_and_module_registry_mut(self.instance);
         // SAFETY: `id` is the correct store-owner of the function being looked
         // up
-        let func = unsafe {
-            let (instance, registry) = store.instance_and_module_registry_mut(self.instance);
-            instance.get_exported_func(registry, id, index)
-        };
+        let func = unsafe { instance.get_exported_func(registry, id, index) };
         Ok(func.into())
     }
 
