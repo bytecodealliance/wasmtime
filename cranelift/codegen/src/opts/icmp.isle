@@ -376,3 +376,11 @@
   (simplify (band ty (ult ty x y) (ne ty (iconst_s _ -1) x)))
    (ult ty x y))
 
+;; icmp on select with two constant inputs compared with one of the two
+;; constants can directly use the inner select condition.
+;; See: https://github.com/bytecodealliance/wasmtime/issues/11578
+(rule (simplify (icmp _ (IntCC.Equal)
+  (select ty inner_cond (iconst ty (u64_from_imm64 k1)) (iconst ty (u64_from_imm64 k2)))
+    (iconst ty (u64_from_imm64 k1))))
+  (if-let false (u64_eq k1 k2))
+  inner_cond)
