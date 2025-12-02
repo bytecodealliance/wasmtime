@@ -532,8 +532,7 @@ impl Module {
         index: Arc<CompiledFunctionsTable>,
         serializable: bool,
     ) -> Result<Self> {
-        let module =
-            CompiledModule::from_artifacts(engine, code.clone(), info, index, engine.profiler())?;
+        let module = CompiledModule::from_artifacts(code.clone(), info, index, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());

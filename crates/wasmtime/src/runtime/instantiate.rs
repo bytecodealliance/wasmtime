@@ -3,10 +3,10 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::code::EngineCode;
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use crate::runtime::vm::CompiledModuleId;
-use crate::{Engine, code::EngineCode};
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::str;
@@ -47,7 +47,6 @@ impl CompiledModule {
     /// The `profiler` argument here is used to inform JIT profiling runtimes
     /// about new code that is loaded.
     pub fn from_artifacts(
-        engine: &Engine,
         engine_code: Arc<EngineCode>,
         info: CompiledModuleInfo,
         index: Arc<CompiledFunctionsTable>,
@@ -61,19 +60,14 @@ impl CompiledModule {
             index,
             func_names: info.func_names,
         };
-        ret.register_profiling(engine, profiler)?;
+        ret.register_profiling(profiler)?;
 
         Ok(ret)
     }
 
-    fn register_profiling(&mut self, engine: &Engine, profiler: &dyn ProfilingAgent) -> Result<()> {
+    fn register_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         // TODO-Bug?: "code_memory" is not exclusive for this module in the case of components,
         // so we may be registering the same code range multiple times here.
-
-        if engine.tunables().debug_guest {
-            // TODO(#12105): support this case.
-            anyhow::bail!("Cannot register profiling when guest debugging is enabled");
-        }
 
         profiler.register_module(self.engine_code.image(), &|addr| {
             let idx = self.func_by_text_offset(addr)?;
