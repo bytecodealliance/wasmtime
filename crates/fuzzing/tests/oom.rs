@@ -27,9 +27,10 @@ fn smoke_test_missed_oom() -> Result<()> {
 }
 
 #[test]
-fn config_without_compiler() -> Result<()> {
+fn config_new() -> Result<()> {
     OomTest::new().test(|| {
-        let _ = Config::without_compiler();
+        let mut config = Config::new();
+        config.enable_compiler(false);
         Ok(())
     })
 }

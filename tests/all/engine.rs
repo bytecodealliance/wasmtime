@@ -3,7 +3,8 @@ use wasmtime::*;
 
 #[test]
 fn engine_without_compiler_cannot_compile() -> Result<()> {
-    let config = Config::without_compiler();
+    let mut config = Config::new();
+    config.enable_compiler(false);
     let engine = Engine::new(&config)?;
     match Module::new(&engine, r#"(module (func (export "f") nop))"#) {
         Ok(_) => panic!("should not compile without a compiler"),

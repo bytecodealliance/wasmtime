@@ -225,54 +225,10 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Self {
-        let mut ret = Self::without_compiler();
-
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        {
-            ret.compiler_config = Some(CompilerConfig::default());
-            ret.cranelift_debug_verifier(false);
-            ret.cranelift_opt_level(OptLevel::Speed);
-
-            // When running under MIRI try to optimize for compile time of wasm
-            // code itself as much as possible. Disable optimizations by
-            // default and use the fastest regalloc available to us.
-            if cfg!(miri) {
-                ret.cranelift_opt_level(OptLevel::None);
-                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
-            }
-        }
-
-        // Quiet warnings.
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        let _ = &mut ret;
-
-        ret
-    }
-
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn has_compiler(&self) -> bool {
-        self.compiler_config.is_some()
-    }
-
-    #[track_caller]
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    fn compiler_config_mut(&mut self) -> &mut CompilerConfig {
-        self.compiler_config.as_mut().expect(
-            "cannot configure compiler settings for `Config`s \
-             created by `Config::without_compiler`",
-        )
-    }
-
-    /// Creates a new configuration object with the default configuration
-    /// specified, but without a compiler.
-    ///
-    /// Any attempt to configure compiler settings on the resulting
-    /// configuration will panic.
-    pub fn without_compiler() -> Self {
         let mut ret = Self {
             tunables: ConfigTunables::default(),
             #[cfg(any(feature = "cranelift", feature = "winch"))]
-            compiler_config: None,
+            compiler_config: Some(CompilerConfig::default()),
             target: None,
             #[cfg(feature = "gc")]
             collector: Collector::default(),
@@ -324,6 +280,63 @@ impl Config {
         ret
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub(crate) fn has_compiler(&self) -> bool {
+        self.compiler_config.is_some()
+    }
+
+    #[track_caller]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    fn compiler_config_mut(&mut self) -> &mut CompilerConfig {
+        self.compiler_config.as_mut().expect(
+            "cannot configure compiler settings for `Config`s \
+             created by `Config::without_compiler`",
+        )
+    }
+
+    /// Configure whether Wasm compilation is enabled.
+    ///
+    /// Disabling Wasm compilation will allow you to load and run
+    /// [pre-compiled][crate::Engine::precompile_module] Wasm programs, but not
+    /// to compile and run new Wasm programs that have not already been
+    /// pre-compiled.
+    ///
+    /// Many compilation-related configuration methods will panic if compilation
+    /// has been disabled.
+    ///
+    /// Note that there are two ways to disable Wasm compilation:
+    ///
+    /// 1. Statically, by disabling the `"cranelift"` and `"winch"` cargo
+    ///    features when building Wasmtime. These builds of Wasmtime will have
+    ///    smaller code size, since they do not include any of the code to
+    ///    compile Wasm.
+    ///
+    /// 2. Dynamically, by passing `false` to this method at run-time when
+    ///    configuring Wasmtime. The Wasmtime binary will still include the code
+    ///    for compiling Wasm, it just won't be executed, so code size is larger
+    ///    than with the first approach.
+    ///
+    /// The static approach is better in most cases, however dynamically calling
+    /// `enable_compiler(false)` is useful whenever you create multiple
+    /// `Engine`s in the same process, some of which must be able to compile
+    /// Wasm and some of which should never do so. Tests are a common example of
+    /// such a situation, especially when there are multiple Rust binaries in
+    /// the same cargo workspace, and cargo's feature resolution enables the
+    /// `"cranelift"` or `"winch"` features across the whole workspace.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn enable_compiler(&mut self, enable: bool) -> &mut Self {
+        match (enable, &self.compiler_config) {
+            (true, Some(_)) | (false, None) => {}
+            (true, None) => {
+                self.compiler_config = Some(CompilerConfig::default());
+            }
+            (false, Some(_)) => {
+                self.compiler_config = None;
+            }
+        }
+        self
+    }
+
     /// Configures the target platform of this [`Config`].
     ///
     /// This method is used to configure the output of compilation in an
@@ -359,7 +372,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     pub fn enable_incremental_compilation(
         &mut self,
@@ -1311,7 +1324,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
         self.compiler_config_mut().strategy = strategy.not_auto();
@@ -1361,7 +1374,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
@@ -1378,7 +1391,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_wasmtime_debug_checks(&mut self, enable: bool) -> &mut Self {
         unsafe { self.cranelift_flag_set("wasmtime_debug_checks", &enable.to_string()) }
@@ -1394,7 +1407,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
@@ -1420,7 +1433,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
@@ -1449,7 +1462,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
@@ -1475,7 +1488,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_pcc(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
@@ -1504,7 +1517,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
         self.compiler_config_mut().flags.insert(flag.to_string());
@@ -1533,7 +1546,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
         self.compiler_config_mut()
@@ -2129,7 +2142,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// Panics if this configuration was created by `Config::without_compiler`.
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn wmemcheck(&mut self, enable: bool) -> &mut Self {
         self.wmemcheck = enable;
