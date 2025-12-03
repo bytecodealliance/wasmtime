@@ -1916,6 +1916,7 @@ enum WriteState {
     /// The write end is owned by a guest task and a write is pending.
     GuestReady {
         instance: Instance,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         flat_abi: Option<FlatAbi>,
         options: OptionsIndex,
@@ -1953,6 +1954,7 @@ enum ReadState {
     /// The read end is owned by a guest task and a read is pending.
     GuestReady {
         ty: TransmitIndex,
+        caller: RuntimeComponentInstanceIndex,
         flat_abi: Option<FlatAbi>,
         instance: Instance,
         options: OptionsIndex,
@@ -2672,6 +2674,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             count,
             handle,
             instance,
+            caller,
         } => {
             let guest_offset = guest_offset.unwrap();
 
@@ -2746,6 +2749,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     count,
                     handle,
                     instance,
+                    caller,
                 };
 
                 anyhow::Ok(())
@@ -2916,9 +2920,11 @@ impl Instance {
         self,
         mut store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
+        write_caller: RuntimeComponentInstanceIndex,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
+        read_caller: RuntimeComponentInstanceIndex,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
         read_address: usize,
@@ -2930,8 +2936,15 @@ impl Instance {
             (TransmitIndex::Future(write_ty), TransmitIndex::Future(read_ty)) => {
                 assert_eq!(count, 1);
 
-                let val = types[types[write_ty].ty]
-                    .payload
+                let payload = types[types[write_ty].ty].payload;
+
+                if write_caller == read_caller && payload.is_some() {
+                    bail!(
+                        "cannot read from and write to intra-component future with non-unit payload"
+                    )
+                }
+
+                let val = payload
                     .map(|ty| {
                         let lift =
                             &mut LiftContext::new(store.0.store_opaque_mut(), write_options, self);
@@ -2968,6 +2981,12 @@ impl Instance {
             }
             (TransmitIndex::Stream(write_ty), TransmitIndex::Stream(read_ty)) => {
                 if let Some(flat_abi) = flat_abi {
+                    if write_caller == read_caller && types[types[write_ty].ty].payload.is_some() {
+                        bail!(
+                            "cannot read from and write to intra-component stream with non-unit payload"
+                        )
+                    }
+
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let length_in_bytes = usize::try_from(flat_abi.size).unwrap() * count;
                     if length_in_bytes > 0 {
@@ -3086,6 +3105,7 @@ impl Instance {
     pub(super) fn guest_write<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
@@ -3137,6 +3157,7 @@ impl Instance {
             );
             transmit.write = WriteState::GuestReady {
                 instance: self,
+                caller,
                 ty,
                 flat_abi,
                 options,
@@ -3156,6 +3177,7 @@ impl Instance {
                 count: read_count,
                 handle: read_handle,
                 instance: read_instance,
+                caller: read_caller,
             } => {
                 assert_eq!(flat_abi, read_flat_abi);
 
@@ -3195,9 +3217,11 @@ impl Instance {
                 self.copy(
                     store.as_context_mut(),
                     flat_abi,
+                    caller,
                     ty,
                     options,
                     address,
+                    read_caller,
                     read_ty,
                     read_options,
                     read_address,
@@ -3238,6 +3262,7 @@ impl Instance {
                         count: read_count - count,
                         handle: read_handle,
                         instance: read_instance,
+                        caller: read_caller,
                     };
                 }
 
@@ -3308,6 +3333,7 @@ impl Instance {
     pub(super) fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
@@ -3362,6 +3388,7 @@ impl Instance {
                 count,
                 handle,
                 instance: self,
+                caller,
             };
             Ok::<_, crate::Error>(())
         };
@@ -3375,6 +3402,7 @@ impl Instance {
                 address: write_address,
                 count: write_count,
                 handle: write_handle,
+                caller: write_caller,
             } => {
                 assert_eq!(flat_abi, write_flat_abi);
 
@@ -3397,9 +3425,11 @@ impl Instance {
                 self.copy(
                     store.as_context_mut(),
                     flat_abi,
+                    write_caller,
                     write_ty,
                     write_options,
                     write_address,
+                    caller,
                     ty,
                     options,
                     address,
@@ -3440,6 +3470,7 @@ impl Instance {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.write = WriteState::GuestReady {
                         instance: self,
+                        caller: write_caller,
                         ty: write_ty,
                         flat_abi: write_flat_abi,
                         options: write_options,
