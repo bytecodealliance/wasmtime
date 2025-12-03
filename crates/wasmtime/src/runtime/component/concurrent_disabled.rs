@@ -1,8 +1,8 @@
-use crate::Uninhabited;
 use crate::component::Val;
 use crate::component::func::{ComponentType, LiftContext, LowerContext};
 use crate::runtime::vm::VMStore;
 use anyhow::{Result, anyhow};
+use core::convert::Infallible;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::pin::pin;
@@ -56,7 +56,7 @@ pub(crate) fn lower_error_context_to_index<U>(
     should_have_failed_validation("use of `error-context`")
 }
 
-pub struct ErrorContext(Uninhabited);
+pub struct ErrorContext(Infallible);
 
 impl ErrorContext {
     pub(crate) fn into_val(self) -> Val {
@@ -81,7 +81,7 @@ impl ErrorContext {
 }
 
 pub struct StreamReader<P> {
-    uninhabited: Uninhabited,
+    uninhabited: Infallible,
     _phantom: PhantomData<P>,
 }
 
@@ -108,7 +108,7 @@ impl<P> StreamReader<P> {
 }
 
 pub struct FutureReader<P> {
-    uninhabited: Uninhabited,
+    uninhabited: Infallible,
     _phantom: PhantomData<P>,
 }
 

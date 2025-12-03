@@ -106,8 +106,9 @@ use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
-use crate::{Global, Instance, Table, Uninhabited};
+use crate::{Global, Instance, Table};
 use alloc::sync::Arc;
+use core::convert::Infallible;
 use core::fmt;
 use core::marker;
 use core::mem::{self, ManuallyDrop, MaybeUninit};
@@ -384,7 +385,7 @@ enum CallHookInner<T: 'static> {
         reason = "forcing, regardless of cfg, the type param to be used"
     )]
     ForceTypeParameterToBeUsed {
-        uninhabited: Uninhabited,
+        uninhabited: Infallible,
         _marker: marker::PhantomData<T>,
     },
 }

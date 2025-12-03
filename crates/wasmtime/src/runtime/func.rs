@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
@@ -12,6 +11,7 @@ use crate::{
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
 use alloc::sync::Arc;
+use core::convert::Infallible;
 use core::ffi::c_void;
 #[cfg(feature = "async")]
 use core::future::Future;
@@ -77,7 +77,7 @@ use wasmtime_environ::VMSharedTypeIndex;
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct NoFunc {
-    _inner: Uninhabited,
+    _inner: Infallible,
 }
 
 impl NoFunc {
