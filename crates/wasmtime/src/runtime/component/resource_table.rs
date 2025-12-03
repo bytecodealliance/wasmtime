@@ -62,6 +62,10 @@ impl Entry {
 
 struct Tombstone;
 
+// Change this to `true` to assist with handle debugging in development if
+// necessary.
+const DELETE_WITH_TOMBSTONE: bool = false;
+
 /// This structure tracks parent and child relationships for a given table entry.
 ///
 /// Parents and children are referred to by table index. We maintain the
@@ -311,7 +315,7 @@ impl ResourceTable {
     where
         T: Any,
     {
-        self.delete_maybe_debug(resource, cfg!(debug_assertions))
+        self.delete_maybe_debug(resource, DELETE_WITH_TOMBSTONE)
     }
 
     fn delete_maybe_debug<T>(
