@@ -23,15 +23,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
+pub(crate) struct i8x16(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
+pub(crate) struct f32x4(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
+pub(crate) struct f64x2(core::convert::Infallible);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
