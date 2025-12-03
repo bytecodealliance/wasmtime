@@ -117,8 +117,14 @@ fn insert_call(
     _args: &[Type],
     _rets: &[Type],
 ) -> Result<()> {
-    assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
+    assert!(matches!(
+        opcode,
+        Opcode::Call | Opcode::CallIndirect | Opcode::PatchableCall
+    ));
     let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
+    if opcode == Opcode::PatchableCall && sig.call_conv != CallConv::Patchable {
+        return Err(arbitrary::Error::IncorrectFormat.into());
+    }
 
     insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
 }
