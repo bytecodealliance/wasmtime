@@ -3608,6 +3608,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_write(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Future(ty),
                 options,
                 None,
@@ -3631,6 +3632,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_read(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Future(ty),
                 options,
                 None,
@@ -3655,6 +3657,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_write(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Stream(ty),
                 options,
                 None,
@@ -3679,6 +3682,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_read(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Stream(ty),
                 options,
                 None,
@@ -3716,6 +3720,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_write(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Stream(ty),
                 options,
                 Some(FlatAbi {
@@ -3745,6 +3750,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         instance
             .guest_read(
                 StoreContextMut(self),
+                caller,
                 TransmitIndex::Stream(ty),
                 options,
                 Some(FlatAbi {
