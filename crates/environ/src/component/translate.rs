@@ -1394,7 +1394,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = match export.kind {
-                wasmparser::ExternalKind::Func => {
+                wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
                     let index = FuncIndex::from_u32(export.index);
                     EntityIndex::Function(index)
                 }
@@ -1491,7 +1491,9 @@ impl<'a, 'data> Translator<'a, 'data> {
         name: &'data str,
     ) -> LocalInitializer<'data> {
         match kind {
-            wasmparser::ExternalKind::Func => LocalInitializer::AliasExportFunc(instance, name),
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
+                LocalInitializer::AliasExportFunc(instance, name)
+            }
             wasmparser::ExternalKind::Memory => LocalInitializer::AliasExportMemory(instance, name),
             wasmparser::ExternalKind::Table => LocalInitializer::AliasExportTable(instance, name),
             wasmparser::ExternalKind::Global => LocalInitializer::AliasExportGlobal(instance, name),

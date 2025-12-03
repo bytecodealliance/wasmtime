@@ -412,6 +412,7 @@ impl ComponentTypesBuilder {
             Memory(ty) => EntityType::Memory((*ty).into()),
             Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
             Tag(_) => bail!("exceptions proposal not implemented"),
+            FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
     }
 
