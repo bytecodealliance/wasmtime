@@ -244,12 +244,11 @@ impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
     fn decode(store: &mut StoreOpaque, frame: Frame, is_trapping_frame: bool) -> Vec<VirtualFrame> {
-        let module = store
+        let (module_with_code, pc) = store
             .modules()
-            .lookup_module_by_pc(frame.pc())
+            .module_and_code_by_pc(frame.pc())
             .expect("Wasm frame PC does not correspond to a module");
-        let base = module.code_object().code_memory().text().as_ptr() as usize;
-        let pc = frame.pc().wrapping_sub(base);
+        let module = module_with_code.module();
         let table = module.frame_table().unwrap();
         let pc = u32::try_from(pc).expect("PC offset too large");
         let pos = if is_trapping_frame {
