@@ -51,19 +51,18 @@
 ;; @0027                               v30 = isub v27, v29
 ;;                                     v64 = ishl v5, v53  ; v53 = 3
 ;; @0027                               v32 = uextend.i64 v64
-;;                                     v66 = isub v29, v32
-;;                                     v67 = isub v27, v66
+;; @0027                               v33 = iadd v30, v32
 ;; @0027                               jump block2(v30)
 ;;
 ;;                                 block2(v35: i64):
-;; @0027                               v36 = icmp eq v35, v67
+;; @0027                               v36 = icmp eq v35, v33
 ;; @0027                               brif v36, block4, block3
 ;;
 ;;                                 block3:
 ;; @0027                               store.i64 notrap aligned little v4, v35
-;;                                     v68 = iconst.i64 8
-;;                                     v69 = iadd.i64 v35, v68  ; v68 = 8
-;; @0027                               jump block2(v69)
+;;                                     v66 = iconst.i64 8
+;;                                     v67 = iadd.i64 v35, v66  ; v66 = 8
+;; @0027                               jump block2(v67)
 ;;
 ;;                                 block4:
 ;; @002a                               jump block1
