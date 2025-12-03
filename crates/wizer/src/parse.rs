@@ -120,6 +120,7 @@ fn export_section<'a>(
         match export.kind {
             wasmparser::ExternalKind::Tag
             | wasmparser::ExternalKind::Func
+            | wasmparser::ExternalKind::FuncExact
             | wasmparser::ExternalKind::Table
             | wasmparser::ExternalKind::Memory
             | wasmparser::ExternalKind::Global => {

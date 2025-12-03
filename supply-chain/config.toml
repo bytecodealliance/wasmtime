@@ -246,10 +246,6 @@ criteria = "safe-to-deploy"
 version = "0.16.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.console]]
-version = "0.15.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.constant_time_eq]]
 version = "0.1.5"
 criteria = "safe-to-deploy"
@@ -298,10 +294,6 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.encode_unicode]]
-version = "0.3.6"
-criteria = "safe-to-deploy"
-
 [[exemptions.fallible-iterator]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
@@ -338,10 +330,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.im-rc]]
 version = "15.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.indicatif]]
-version = "0.13.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
@@ -397,10 +385,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.num-complex]]
 version = "0.4.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.number_prefix]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.object]]

@@ -369,6 +369,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result.module.num_imported_tags += 1;
                             EntityType::Tag(tag)
                         }
+                        TypeRef::FuncExact(_) => {
+                            bail!("custom-descriptors proposal not implemented yet");
+                        }
                     };
                     self.declare_import(import.module, import.name, ty);
                 }
@@ -471,7 +474,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 for entry in exports {
                     let wasmparser::Export { name, kind, index } = entry?;
                     let entity = match kind {
-                        ExternalKind::Func => {
+                        ExternalKind::Func | ExternalKind::FuncExact => {
                             let index = FuncIndex::from_u32(index);
                             self.flag_func_escaped(index);
                             EntityIndex::Function(index)
