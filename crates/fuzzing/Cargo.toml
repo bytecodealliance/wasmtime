@@ -29,6 +29,7 @@ wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime = { workspace = true, features = ['default', 'winch'] }
+wasmtime-error = { workspace = true, features = ['backtrace'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }

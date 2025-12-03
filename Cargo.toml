@@ -158,6 +158,7 @@ members = [
   "crates/bench-api",
   "crates/c-api/artifact",
   "crates/environ/fuzz",
+  "crates/error",
   "crates/misc/component-async-tests",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
@@ -258,6 +259,7 @@ wasmtime-wast = { path = "crates/wast", version = "=41.0.0" }
 # that these are internal unsupported crates for external use. These exist as
 # part of the project organization of other public crates in Wasmtime and are
 # otherwise not supported in terms of CVEs for example.
+wasmtime-error = { path = "crates/error", version = "=41.0.0", package = "wasmtime-internal-error" }
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=41.0.0", package = 'wasmtime-internal-wmemcheck' }
 wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=41.0.0", package = 'wasmtime-internal-c-api-macros' }
 wasmtime-cache = { path = "crates/cache", version = "=41.0.0", package = 'wasmtime-internal-cache' }

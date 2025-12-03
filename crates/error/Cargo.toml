@@ -1,0 +1,21 @@
+[package]
+name = "wasmtime-internal-error"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[features]
+# Enable the use of the `std` crate.
+std = []
+# Enable backtraces.
+backtrace = ["std"]
+# Enable the `From<Error> for anyhow::Error` implementation and
+# `Error::from_anyhow` constructor.
+anyhow = ["dep:anyhow"]
