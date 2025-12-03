@@ -1030,6 +1030,12 @@ impl<T> Store<T> {
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
+
+    /// Trigger the ending of the current "epoch" as soon as possible, if using
+    /// [`Config::epoch_interruption_via_mmu()`]. Panic if not.
+    pub fn end_epoch_via_mmu(&mut self) {
+        self.inner.inner.vm_store_context.protect_interrupt_page()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {

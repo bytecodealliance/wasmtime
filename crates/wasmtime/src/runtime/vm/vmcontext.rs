@@ -16,7 +16,7 @@ use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
-use rustix::mm::{MapFlags, ProtFlags, mmap_anonymous, munmap};
+use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
 use rustix::param::page_size;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
@@ -1225,6 +1225,20 @@ impl VMStoreContext {
             Some(non_null_page_ptr.into())
         };
         ret
+    }
+
+    /// Twiddles MMU access control bits such that reads from the interrupt page
+    /// will cause a segfault. This effectively ends the epoch, as running wasm
+    /// will soon execute such reads.
+    pub fn protect_interrupt_page(&self) {
+        if let Some(page_ptr) = self.epoch_interrupt_page_ptr {
+            unsafe {
+                mprotect(page_ptr.as_ptr(), page_size(), MprotectFlags::empty())
+                    .expect("any error from mprotect is a programming error")
+            }
+        } else {
+            panic!("called protect_interrupt_page though epoch-interruption-via-mmu was not on")
+        }
     }
 
     /// Disposes of any allocated epoch interrupt page. This must be called if
