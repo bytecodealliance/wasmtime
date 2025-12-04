@@ -4202,8 +4202,8 @@ impl GuestTask {
         };
         Ok(Self {
             common: WaitableCommon::default(),
-            lower_params: lower_params,
-            lift_result: lift_result,
+            lower_params,
+            lift_result,
             result: None,
             callback,
             caller,
