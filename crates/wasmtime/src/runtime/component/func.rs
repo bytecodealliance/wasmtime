@@ -241,17 +241,24 @@ impl Func {
             "must use `call_async` when async support is enabled on the config"
         );
 
-        let callee_instance = self.abi_info(store.0).3.instance;
+        // If the async feature is enabled, we need ot call sync_to_sync_enter/exit_call
+        // to track concurrent state.
         #[cfg(feature = "component-model-async")]
-        let old_thread = self
-            .instance
-            .sync_to_sync_enter_call(store.0, None, callee_instance)?;
+        {
+            let callee_instance = self.abi_info(store.0).3.instance;
+            let old_thread =
+                self.instance
+                    .sync_to_sync_enter_call(store.0, None, callee_instance)?;
 
+            self.call_impl(&mut store.as_context_mut(), params, results)?;
+
+            self.instance
+                .sync_to_sync_exit_call(store.0, callee_instance, old_thread)?;
+        }
+        #[cfg(not(feature = "component-model-async"))]
         self.call_impl(&mut store.as_context_mut(), params, results)?;
 
-        #[cfg(feature = "component-model-async")]
-        self.instance
-            .sync_to_sync_exit_call(store.0, callee_instance, old_thread)
+        Ok(())
     }
 
     /// Exactly like [`Self::call`] except for use on async stores.

@@ -832,16 +832,14 @@ impl<'a> Instantiator<'a> {
             match initializer {
                 GlobalInitializer::InstantiateModule(m) => {
                     let module;
+                    #[cfg(feature = "component-model-async")]
                     let instance = Instance::from_wasmtime(store.0, self.id);
-                    let (imports, runtime_instance) = match m {
+                    let imports = match m {
                         // Since upvars are statically know we know that the
                         // `args` list is already in the right order.
-                        InstantiateModule::Static(idx, args, component_instance) => {
+                        InstantiateModule::Static(idx, args, _) => {
                             module = self.component.static_module(*idx);
-                            (
-                                self.build_imports(store.0, module, args.iter()),
-                                *component_instance,
-                            )
+                            self.build_imports(store.0, module, args.iter())
                         }
 
                         // With imports, unlike upvars, we need to do runtime
@@ -852,7 +850,7 @@ impl<'a> Instantiator<'a> {
                         // FIXME: see the note in `ExportItem::Name` handling
                         // above for how we ideally shouldn't do string lookup
                         // here.
-                        InstantiateModule::Import(idx, args, component_instance) => {
+                        InstantiateModule::Import(idx, args, _) => {
                             module = match &self.imports[*idx] {
                                 RuntimeImport::Module(m) => m,
                                 _ => unreachable!(),
@@ -860,30 +858,45 @@ impl<'a> Instantiator<'a> {
                             let args = module
                                 .imports()
                                 .map(|import| &args[import.module()][import.name()]);
-                            (
-                                self.build_imports(store.0, module, args),
-                                *component_instance,
-                            )
+                            self.build_imports(store.0, module, args)
                         }
                     };
 
-                    #[cfg(feature = "component-model-async")]
-                    let old_thread =
-                        instance.sync_to_sync_enter_call(store.0, None, runtime_instance)?;
-                    // Note that the unsafety here should be ok because the
-                    // validity of the component means that type-checks have
-                    // already been performed. This means that the unsafety due
-                    // to imports having the wrong type should not happen here.
+                    // If async is enabled, we need to call sync_to_sync_enter/exit_call
+                    // to track concurrent state.
+                    //
+                    // Note that the unsafety in the call to new_started
+                    // should be ok because the validity of the component means
+                    // that type-checks have already been performed. This means
+                    // that the unsafety due to imports having the wrong type should
+                    // not happen here.
                     //
                     // Also note we have already checked for asyncness and are
                     // running on a fiber if required.
-                    let i = unsafe {
-                        crate::Instance::new_started(store, module, imports.as_ref()).await?
-                    };
                     #[cfg(feature = "component-model-async")]
-                    instance.sync_to_sync_exit_call(store.0, runtime_instance, old_thread)?;
+                    {
+                        let runtime_instance = match m {
+                            InstantiateModule::Static(_, _, i) => *i,
+                            InstantiateModule::Import(_, _, i) => *i,
+                        };
+                        let old_thread =
+                            instance.sync_to_sync_enter_call(store.0, None, runtime_instance)?;
 
-                    self.instance_mut(store.0).push_instance_id(i.id());
+                        let i = unsafe {
+                            crate::Instance::new_started(store, module, imports.as_ref()).await?
+                        };
+
+                        instance.sync_to_sync_exit_call(store.0, runtime_instance, old_thread)?;
+
+                        self.instance_mut(store.0).push_instance_id(i.id());
+                    }
+                    #[cfg(not(feature = "component-model-async"))]
+                    {
+                        let i = unsafe {
+                            crate::Instance::new_started(store, module, imports.as_ref()).await?
+                        };
+                        self.instance_mut(store.0).push_instance_id(i.id());
+                    }
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {

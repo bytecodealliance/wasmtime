@@ -665,8 +665,10 @@ fn resource_exit_call(store: &mut dyn VMStore, instance: Instance) -> Result<()>
     instance.resource_exit_call(store)
 }
 
+#[cfg(feature = "component-model-async")]
 struct SyncToSyncEnterCallRet(Option<(u32, u32)>);
 
+#[cfg(feature = "component-model-async")]
 unsafe impl HostResultHasUnwindSentinel for SyncToSyncEnterCallRet {
     type Abi = u64;
     const SENTINEL: u64 = u64::MAX;
