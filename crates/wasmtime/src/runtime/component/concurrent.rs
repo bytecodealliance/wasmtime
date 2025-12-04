@@ -3333,6 +3333,9 @@ impl Instance {
     ) -> Result<Option<(u32, u32)>> {
         let state = store.concurrent_state_mut();
         let caller = if caller_instance.is_some() {
+            if state.guest_thread.is_none() {
+                bail!("No existing guest thread for guest->guest sync call");
+            }
             Caller::Guest {
                 thread: state.guest_thread.unwrap(),
                 instance: caller_instance.unwrap(),

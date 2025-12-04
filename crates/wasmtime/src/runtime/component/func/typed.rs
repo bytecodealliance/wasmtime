@@ -157,11 +157,32 @@ where
     /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         assert!(
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config"
         );
+        // If the async feature is enabled, we need ot call sync_to_sync_enter/exit_call
+        // to track concurrent state.
+        #[cfg(feature = "component-model-async")]
+        {
+            let callee_instance = self.func.abi_info(store.as_context_mut().0).3.instance;
+            let old_thread = self.func.instance.sync_to_sync_enter_call(
+                store.as_context_mut().0,
+                None,
+                callee_instance,
+            )?;
+
+            let ret = self.call_impl(store.as_context_mut(), params)?;
+
+            self.func.instance.sync_to_sync_exit_call(
+                store.as_context_mut().0,
+                callee_instance,
+                old_thread,
+            )?;
+            Ok(ret)
+        }
+        #[cfg(not(feature = "component-model-async"))]
         self.call_impl(store, params)
     }
 
