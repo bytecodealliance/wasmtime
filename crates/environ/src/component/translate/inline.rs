@@ -609,7 +609,7 @@ impl<'a> Inliner<'a> {
                             lower_options: options_lower,
                             func: func.clone(),
                         });
-                        dfg::CoreDef::Adapter(adapter_idx)
+                        dfg::CoreDef::Adapter(adapter_idx, frame.instance)
                     }
 
                     ComponentFuncDef::UnsafeIntrinsic(intrinsic) => {
@@ -1223,7 +1223,7 @@ impl<'a> Inliner<'a> {
                         }
                         (
                             InstanceModule::Static(*idx),
-                            dfg::Instance::Static(*idx, defs.into()),
+                            dfg::Instance::Static(*idx, defs.into(), frame.instance),
                         )
                     }
                     ModuleDef::Import(path, ty) => {
@@ -1239,7 +1239,7 @@ impl<'a> Inliner<'a> {
                         let index = self.runtime_import(path);
                         (
                             InstanceModule::Import(*ty),
-                            dfg::Instance::Import(index, defs),
+                            dfg::Instance::Import(index, defs, frame.instance),
                         )
                     }
                 };

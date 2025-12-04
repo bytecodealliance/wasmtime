@@ -75,12 +75,6 @@ struct Compiler<'a, 'b> {
     /// to be a heuristic to split up the main function into theoretically
     /// reusable portions.
     fuel: usize,
-
-    /// Indicates whether an "enter call" should be emitted in the generated
-    /// function with a call to `Resource{Enter,Exit}Call` at the beginning and
-    /// end of the function for tracking of information related to borrowed
-    /// resources.
-    emit_resource_call: bool,
 }
 
 pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
@@ -97,23 +91,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             .funcs
             .push(Function::new(Some(adapter.name.clone()), ty));
 
-        // If this type signature contains any borrowed resources then invocations
-        // of enter/exit call for resource-related metadata tracking must be used.
-        // It shouldn't matter whether the lower/lift signature is used here as both
-        // should return the same answer.
-        let emit_resource_call = module.types.contains_borrow_resource(&adapter.lower);
-        assert_eq!(
-            emit_resource_call,
-            module.types.contains_borrow_resource(&adapter.lift)
-        );
-
         (
-            Compiler::new(
-                module,
-                result,
-                lower_sig.params.len() as u32,
-                emit_resource_call,
-            ),
+            Compiler::new(module, result, lower_sig.params.len() as u32),
             lower_sig,
             lift_sig,
         )
@@ -124,18 +103,18 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
     //
     // This allows the host to delay copying the parameters until the callee
     // signals readiness by clearing its backpressure flag.
-    let async_start_adapter = |module: &mut Module| {
+    let async_to_any_start_adapter = |module: &mut Module| {
         let sig = module
             .types
-            .async_start_signature(&adapter.lower, &adapter.lift);
+            .async_to_any_start_signature(&adapter.lower, &adapter.lift);
         let ty = module.core_types.function(&sig.params, &sig.results);
         let result = module.funcs.push(Function::new(
             Some(format!("[async-start]{}", adapter.name)),
             ty,
         ));
 
-        Compiler::new(module, result, sig.params.len() as u32, false)
-            .compile_async_start_adapter(adapter, &sig);
+        Compiler::new(module, result, sig.params.len() as u32)
+            .compile_async_to_any_start_adapter(adapter, &sig);
 
         result
     };
@@ -158,7 +137,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             ty,
         ));
 
-        Compiler::new(module, result, sig.params.len() as u32, false)
+        Compiler::new(module, result, sig.params.len() as u32)
             .compile_async_return_adapter(adapter, &sig);
 
         result
@@ -187,7 +166,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             // switch events), when the callee has produced a result, it will
             // call `async-return` via the `task.return` intrinsic, at which
             // point a `STATUS_RETURNED` event will be delivered to the caller.
-            let start = async_start_adapter(module);
+            let start = async_to_any_start_adapter(module);
             let return_ = async_return_adapter(module);
             let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
             compiler.compile_async_to_async_adapter(
@@ -211,7 +190,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             // Similarly, the host will also temporarily store the results that
             // the callee provides to `async-return` until it is ready to resume
             // the caller.
-            let start = async_start_adapter(module);
+            let start = async_to_any_start_adapter(module);
             let return_ = async_return_adapter(module);
             let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
             compiler.compile_sync_to_async_adapter(
@@ -243,7 +222,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             // linear memory and deliver a `STATUS_RETURNED` event to the
             // caller.
             let lift_sig = module.types.signature(&adapter.lift);
-            let start = async_start_adapter(module);
+            let start = async_to_any_start_adapter(module);
             let return_ = async_return_adapter(module);
             let (compiler, lower_sig, ..) = compiler(module, adapter);
             compiler.compile_async_to_sync_adapter(
@@ -334,9 +313,6 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
         traps: Vec::new(),
         result,
         fuel: INITIAL_FUEL,
-        // This is a helper function and only the top-level function is
-        // responsible for emitting these intrinsic calls.
-        emit_resource_call: false,
     };
     compiler.translate(&helper.src.ty, &src, &helper.dst.ty, &dst);
     compiler.finish();
@@ -432,12 +408,7 @@ struct GcArray<'a> {
 }
 
 impl<'a, 'b> Compiler<'a, 'b> {
-    fn new(
-        module: &'b mut Module<'a>,
-        result: FunctionId,
-        nlocals: u32,
-        emit_resource_call: bool,
-    ) -> Self {
+    fn new(module: &'b mut Module<'a>, result: FunctionId, nlocals: u32) -> Self {
         Self {
             types: module.types,
             module,
@@ -447,7 +418,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             free_locals: HashMap::new(),
             traps: Vec::new(),
             fuel: INITIAL_FUEL,
-            emit_resource_call,
         }
     }
 
@@ -468,9 +438,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         param_count: i32,
         lower_sig: &Signature,
     ) {
-        let start_call =
-            self.module
-                .import_async_start_call(&adapter.name, adapter.lift.options.callback, None);
+        let start_call = self.module.import_async_to_any_start_call(
+            &adapter.name,
+            adapter.lift.options.callback,
+            None,
+        );
 
         self.call_prepare(adapter, start, return_, lower_sig, false);
 
@@ -597,7 +569,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         lift_param_count: i32,
         lower_sig: &Signature,
     ) {
-        let start_call = self.module.import_sync_start_call(
+        let start_call = self.module.import_sync_to_async_start_call(
             &adapter.name,
             adapter.lift.options.callback,
             &lower_sig.results,
@@ -643,9 +615,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         result_count: i32,
         lower_sig: &Signature,
     ) {
-        let start_call =
-            self.module
-                .import_async_start_call(&adapter.name, None, adapter.lift.post_return);
+        let start_call = self.module.import_async_to_any_start_call(
+            &adapter.name,
+            None,
+            adapter.lift.post_return,
+        );
 
         self.call_prepare(adapter, start, return_, lower_sig, false);
 
@@ -671,7 +645,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     ///
     /// This allows the host to delay copying the parameters until the callee
     /// signals readiness by clearing its backpressure flag.
-    fn compile_async_start_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
+    fn compile_async_to_any_start_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
         let param_locals = sig
             .params
             .iter()
@@ -723,8 +697,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// sync-lifted export.
     ///
     /// Unlike calls involving async-lowered imports or async-lifted exports,
-    /// this adapter need not involve host built-ins except possibly for
-    /// resource bookkeeping.
+    /// this adapter requires host built-ins only for entry and exit bookkeeping.
     fn compile_sync_to_sync_adapter(
         mut self,
         adapter: &AdapterData,
@@ -748,10 +721,17 @@ impl<'a, 'b> Compiler<'a, 'b> {
             );
         }
 
-        if self.emit_resource_call {
-            let enter = self.module.import_resource_enter_call();
-            self.instruction(Call(enter.as_u32()));
-        }
+        let enter = self.module.import_sync_to_sync_enter_call();
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+        ));
+        // Leaves the old thread to pass to sync_to_sync_exit call on the stack
+        // encoded as a u64
+        self.instruction(Call(enter.as_u32()));
+        let old_thread = self.local_set_new_tmp(ValType::I64);
 
         // Perform the translation of arguments. Note that `FLAG_MAY_LEAVE` is
         // cleared around this invocation for the callee as per the
@@ -816,10 +796,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.free_temp_local(tmp);
         }
 
-        if self.emit_resource_call {
-            let exit = self.module.import_resource_exit_call();
-            self.instruction(Call(exit.as_u32()));
-        }
+        let exit = self.module.import_sync_to_sync_exit_call();
+        self.instruction(I32Const(
+            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(LocalGet(old_thread.idx));
+        self.instruction(Call(exit.as_u32()));
+        self.free_temp_local(old_thread);
 
         self.finish()
     }

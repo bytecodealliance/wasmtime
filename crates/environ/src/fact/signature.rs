@@ -58,7 +58,7 @@ impl ComponentTypesBuilder {
     /// Note that this function uses multi-value return to return up to
     /// `MAX_FLAT_PARAMS` _results_ via the stack, allowing the host to pass
     /// them directly to the callee with no additional effort.
-    pub(super) fn async_start_signature(
+    pub(super) fn async_to_any_start_signature(
         &self,
         lower: &AdapterOptions,
         lift: &AdapterOptions,
@@ -220,24 +220,5 @@ impl ComponentTypesBuilder {
         } else {
             (abi.size32, abi.align32)
         }
-    }
-
-    /// Tests whether the type signature for `options` contains a borrowed
-    /// resource anywhere.
-    pub(super) fn contains_borrow_resource(&self, options: &AdapterOptions) -> bool {
-        let ty = &self[options.ty];
-
-        // Only parameters need to be checked since results should never have
-        // borrowed resources.
-        debug_assert!(
-            !self[ty.results]
-                .types
-                .iter()
-                .any(|t| self.ty_contains_borrow_resource(t))
-        );
-        self[ty.params]
-            .types
-            .iter()
-            .any(|t| self.ty_contains_borrow_resource(t))
     }
 }

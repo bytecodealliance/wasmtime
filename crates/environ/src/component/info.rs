@@ -356,7 +356,11 @@ pub enum InstantiateModule {
     /// order of imports required is statically known and can be pre-calculated
     /// to avoid string lookups related to names at runtime, represented by the
     /// flat list of arguments here.
-    Static(StaticModuleIndex, Box<[CoreDef]>),
+    Static(
+        StaticModuleIndex,
+        Box<[CoreDef]>,
+        RuntimeComponentInstanceIndex,
+    ),
 
     /// An imported module is being instantiated.
     ///
@@ -366,6 +370,7 @@ pub enum InstantiateModule {
     Import(
         RuntimeImportIndex,
         IndexMap<String, IndexMap<String, CoreDef>>,
+        RuntimeComponentInstanceIndex,
     ),
 }
 
@@ -1049,14 +1054,11 @@ pub enum Trampoline {
     ResourceTransferBorrow,
 
     /// An intrinsic used by FACT-generated modules which indicates that a call
-    /// is being entered and resource-related metadata needs to be configured.
-    ///
-    /// Note that this is currently only invoked when borrowed resources are
-    /// detected, otherwise this is "optimized out".
-    ResourceEnterCall,
+    /// is being entered and thread/resource-related metadata needs to be configured.
+    SyncToSyncEnterCall,
 
-    /// Same as `ResourceEnterCall` except for when exiting a call.
-    ResourceExitCall,
+    /// Same as `SyncToSyncEnterCall` except for when exiting a call.
+    SyncToSyncExitCall,
 
     /// An intrinsic used by FACT-generated modules to prepare a call involving
     /// an async-lowered import and/or an async-lifted export.
@@ -1069,7 +1071,7 @@ pub enum Trampoline {
 
     /// An intrinsic used by FACT-generated modules to start a call involving a
     /// sync-lowered import and async-lifted export.
-    SyncStartCall {
+    SyncToAsyncStartCall {
         /// The callee's callback function, if any.
         callback: Option<RuntimeCallbackIndex>,
     },
@@ -1077,11 +1079,11 @@ pub enum Trampoline {
     /// An intrinsic used by FACT-generated modules to start a call involving
     /// an async-lowered import function.
     ///
-    /// Note that `AsyncPrepareCall` and `AsyncStartCall` could theoretically be
+    /// Note that `PrepareCall` and `AsyncToAnyStartCall` could theoretically be
     /// combined into a single `AsyncCall` intrinsic, but we separate them to
     /// allow the FACT-generated module to optionally call the callee directly
     /// without an intermediate host stack frame.
-    AsyncStartCall {
+    AsyncToAnyStartCall {
         /// The callee's callback, if any.
         callback: Option<RuntimeCallbackIndex>,
         /// The callee's post-return function, if any.
@@ -1234,11 +1236,11 @@ impl Trampoline {
             ErrorContextDrop { .. } => format!("error-context-drop"),
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
-            ResourceEnterCall => format!("component-resource-enter-call"),
-            ResourceExitCall => format!("component-resource-exit-call"),
+            SyncToSyncEnterCall => format!("component-sync-to-sync-enter-call"),
+            SyncToSyncExitCall => format!("component-sync-to-sync-exit-call"),
             PrepareCall { .. } => format!("component-prepare-call"),
-            SyncStartCall { .. } => format!("component-sync-start-call"),
-            AsyncStartCall { .. } => format!("component-async-start-call"),
+            SyncToAsyncStartCall { .. } => format!("component-sync-to-async-start-call"),
+            AsyncToAnyStartCall { .. } => format!("component-async-to-any-start-call"),
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),

@@ -559,7 +559,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         for init in &translation.component.initializers {
             match init {
                 GlobalInitializer::InstantiateModule(instantiation) => match instantiation {
-                    InstantiateModule::Static(module, args) => {
+                    InstantiateModule::Static(module, args, _) => {
                         instantiations[*module].join(AbstractInstantiations::One(&*args));
                         instance_to_module.push(Some(*module).into());
                     }

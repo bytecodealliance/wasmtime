@@ -652,11 +652,11 @@ impl Component {
         for init in &self.env_component().initializers {
             match init {
                 GlobalInitializer::InstantiateModule(inst) => match inst {
-                    InstantiateModule::Static(index, _) => {
+                    InstantiateModule::Static(index, _, _) => {
                         let module = self.static_module(*index);
                         resources.add(&module.resources_required());
                     }
-                    InstantiateModule::Import(_, _) => {
+                    InstantiateModule::Import(_, _, _) => {
                         // We can't statically determine the resources required
                         // to instantiate this component.
                         return None;

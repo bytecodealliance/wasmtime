@@ -1616,7 +1616,7 @@ impl Instance {
                     bail!(Trap::NoAsyncResult);
                 }
                 match &task.caller {
-                    Caller::Host { .. } => {
+                    Caller::AsyncHost { .. } => {
                         if task.ready_to_delete() {
                             Waitable::Guest(guest_thread.task)
                                 .delete_from(store.concurrent_state_mut())?;
@@ -1626,6 +1626,8 @@ impl Instance {
                         task.exited = true;
                         task.callback = None;
                     }
+                    // Must have async support enabled to reach here
+                    Caller::SyncHost => unreachable!(),
                 }
             }
             callback_code::YIELD => {
@@ -1993,7 +1995,7 @@ impl Instance {
                 let task = state.get_mut(guest_thread.task)?;
 
                 match &task.caller {
-                    Caller::Host { .. } => {
+                    Caller::AsyncHost { .. } => {
                         if task.ready_to_delete() {
                             Waitable::Guest(guest_thread.task).delete_from(state)?;
                         }
@@ -2001,6 +2003,8 @@ impl Instance {
                     Caller::Guest { .. } => {
                         task.exited = true;
                     }
+                    // Must have async support enabled to reach here
+                    Caller::SyncHost => unreachable!(),
                 }
 
                 Ok(())
@@ -2082,7 +2086,7 @@ impl Instance {
         let old_thread = state.guest_thread.take();
         let new_task = GuestTask::new(
             state,
-            Box::new(move |store, dst| {
+            Some(Box::new(move |store, dst| {
                 let mut store = token.as_context_mut(store);
                 assert!(dst.len() <= MAX_FLAT_PARAMS);
                 // The `+ 1` here accounts for the return pointer, if any:
@@ -2110,7 +2114,7 @@ impl Instance {
                 // SAFETY: `start` is a valid `*mut VMFuncRef` from
                 // `wasmtime-cranelift`-generated fused adapter code.  Based on
                 // how it was constructed (see
-                // `wasmtime_environ::fact::trampoline::Compiler::compile_async_start_adapter`
+                // `wasmtime_environ::fact::trampoline::Compiler::compile_async_to_any_start_adapter`
                 // for details) we know it takes count parameters and returns
                 // `dst.len()` results.
                 unsafe {
@@ -2132,8 +2136,8 @@ impl Instance {
                     }),
                 )?;
                 Ok(())
-            }),
-            LiftResult {
+            })),
+            Some(LiftResult {
                 lift: Box::new(move |store, src| {
                     // SAFETY: See comment in closure passed as `lower_params`
                     // parameter above.
@@ -2175,7 +2179,7 @@ impl Instance {
                 ty: task_return_type,
                 memory: NonNull::new(memory).map(SendSyncPtr::new),
                 string_encoding: StringEncoding::from_u8(string_encoding).unwrap(),
-            },
+            }),
             Caller::Guest {
                 thread: old_thread.unwrap(),
                 instance: caller_instance,
@@ -2684,14 +2688,7 @@ impl Instance {
             .get_mut(guest_task)?
             .call_post_return_automatically()
         {
-            let (calls, host_table, _, instance) =
-                store.component_resource_state_with_instance(self);
-            ResourceTables {
-                calls,
-                host_table: Some(host_table),
-                guest: Some(instance.guest_tables()),
-            }
-            .exit_call()?;
+            self.get_resource_tables(store).exit_call()?;
         } else {
             // As of this writing, the only scenario where `call_post_return_automatically`
             // would be false for a `GuestTask` is for host-to-guest calls using
@@ -2710,13 +2707,18 @@ impl Instance {
         let state = store.concurrent_state_mut();
         let task = state.get_mut(guest_task)?;
 
-        if let Caller::Host { tx, .. } = &mut task.caller {
-            if let Some(tx) = tx.take() {
-                _ = tx.send(result);
+        match &mut task.caller {
+            Caller::AsyncHost { tx, .. } => {
+                if let Some(tx) = tx.take() {
+                    _ = tx.send(result);
+                }
             }
-        } else {
-            task.result = Some(result);
-            Waitable::Guest(guest_task).set_event(state, Some(Event::Subtask { status }))?;
+            Caller::Guest { .. } => {
+                task.result = Some(result);
+                Waitable::Guest(guest_task).set_event(state, Some(Event::Subtask { status }))?;
+            }
+            // Must have async support enabled to reach here
+            Caller::SyncHost => unreachable!(),
         }
 
         Ok(())
@@ -3322,6 +3324,84 @@ impl Instance {
         self.id().get(store).check_may_leave(caller)?;
         store.concurrent_state_mut().context_set(slot, value)
     }
+
+    pub(crate) fn sync_to_sync_enter_call(
+        self,
+        store: &mut StoreOpaque,
+        caller_instance: Option<RuntimeComponentInstanceIndex>,
+        callee_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<Option<(u32, u32)>> {
+        let state = store.concurrent_state_mut();
+        let caller = if caller_instance.is_some() {
+            Caller::Guest {
+                thread: state.guest_thread.unwrap(),
+                instance: caller_instance.unwrap(),
+            }
+        } else {
+            Caller::SyncHost
+        };
+        let task = GuestTask::new(state, None, None, caller, None, callee_instance)?;
+
+        let task = state.push(task)?;
+        let thread = state.push(GuestThread::new_implicit(task))?;
+        state.get_mut(task)?.threads.insert(thread);
+        let guest_thread = QualifiedThreadId { task, thread };
+        store
+            .concurrent_state_mut()
+            .get_mut(guest_thread.thread)?
+            .state = GuestThreadState::Running;
+
+        self.add_guest_thread_to_instance_table(guest_thread.thread, store, callee_instance)?;
+        let old_thread = store
+            .concurrent_state_mut()
+            .guest_thread
+            .replace(guest_thread);
+        log::trace!(
+            "entering sync call: replaced {old_thread:?} with {guest_thread:?} as current thread",
+        );
+        if let Some(old_thread) = old_thread {
+            store
+                .concurrent_state_mut()
+                .get_mut(old_thread.task)?
+                .subtasks
+                .insert(guest_thread.task);
+        }
+        self.get_resource_tables(store).enter_call();
+
+        Ok(old_thread.map(|thread| (thread.task.rep(), thread.thread.rep())))
+    }
+
+    pub(crate) fn sync_to_sync_exit_call(
+        self,
+        store: &mut StoreOpaque,
+        callee_instance: RuntimeComponentInstanceIndex,
+        old_thread: Option<(u32, u32)>,
+    ) -> Result<()> {
+        let state = store.concurrent_state_mut();
+        let guest_thread = state.guest_thread.unwrap();
+        self.get_resource_tables(store).exit_call()?;
+        self.cleanup_thread(store, guest_thread, callee_instance)?;
+        Waitable::Guest(guest_thread.task).delete_from(store.concurrent_state_mut())?;
+
+        let old_thread = old_thread.map(|(task, thread)| QualifiedThreadId {
+            task: TableId::new(task),
+            thread: TableId::new(thread),
+        });
+        store.concurrent_state_mut().guest_thread = old_thread;
+        log::trace!(
+            "exiting sync call: replaced {guest_thread:?} with {old_thread:?} as current thread",
+        );
+        Ok(())
+    }
+
+    fn get_resource_tables<'a>(self, store: &'a mut StoreOpaque) -> ResourceTables<'a> {
+        let (calls, host_table, _, instance) = store.component_resource_state_with_instance(self);
+        ResourceTables {
+            calls,
+            host_table: Some(host_table),
+            guest: Some(instance.guest_tables()),
+        }
+    }
 }
 
 /// Trait representing component model ABI async intrinsics and fused adapter
@@ -3354,7 +3434,7 @@ pub trait VMComponentAsyncStore {
 
     /// A helper function for fused adapter modules involving calls where the
     /// caller is sync-lowered but the callee is async-lifted.
-    unsafe fn sync_start(
+    unsafe fn sync_to_async_start(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -3366,7 +3446,7 @@ pub trait VMComponentAsyncStore {
 
     /// A helper function for fused adapter modules involving calls where the
     /// caller is async-lowered.
-    unsafe fn async_start(
+    unsafe fn async_to_any_start(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -3543,7 +3623,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         }
     }
 
-    unsafe fn sync_start(
+    unsafe fn sync_to_async_start(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -3571,7 +3651,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         }
     }
 
-    unsafe fn async_start(
+    unsafe fn async_to_any_start(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -3845,8 +3925,8 @@ type CallbackFn = Box<
 
 /// Represents the caller of a given guest task.
 enum Caller {
-    /// The host called the guest task.
-    Host {
+    /// The host called the guest task asynchronously.
+    AsyncHost {
         /// If present, may be used to deliver the result.
         tx: Option<oneshot::Sender<LiftedResult>>,
         /// Channel to notify once all subtasks spawned by this caller have
@@ -3862,6 +3942,8 @@ enum Caller {
         /// If true, call `post-return` function (if any) automatically.
         call_post_return_automatically: bool,
     },
+    /// The host called the guest task synchronously.
+    SyncHost,
     /// Another guest thread called the guest task
     Guest {
         /// The id of the caller
@@ -4098,16 +4180,16 @@ impl GuestTask {
     }
     fn new(
         state: &mut ConcurrentState,
-        lower_params: RawLower,
-        lift_result: LiftResult,
+        lower_params: Option<RawLower>,
+        lift_result: Option<LiftResult>,
         caller: Caller,
         callback: Option<CallbackFn>,
         component_instance: RuntimeComponentInstanceIndex,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         let host_future_state = match &caller {
-            Caller::Guest { .. } => HostFutureState::NotApplicable,
-            Caller::Host {
+            Caller::Guest { .. } | Caller::SyncHost => HostFutureState::NotApplicable,
+            Caller::AsyncHost {
                 host_future_present,
                 ..
             } => {
@@ -4120,8 +4202,8 @@ impl GuestTask {
         };
         Ok(Self {
             common: WaitableCommon::default(),
-            lower_params: Some(lower_params),
-            lift_result: Some(lift_result),
+            lower_params: lower_params,
+            lift_result: lift_result,
             result: None,
             callback,
             caller,
@@ -4179,9 +4261,9 @@ impl GuestTask {
                     };
                 }
             }
-            Caller::Host { exit_tx, .. } => {
+            Caller::AsyncHost { exit_tx, .. } => {
                 for subtask in &self.subtasks {
-                    state.get_mut(*subtask)?.caller = Caller::Host {
+                    state.get_mut(*subtask)?.caller = Caller::AsyncHost {
                         tx: None,
                         // Clone `exit_tx` to ensure that it is only dropped
                         // once all transitive subtasks of the host call have
@@ -4190,6 +4272,11 @@ impl GuestTask {
                         host_future_present: false,
                         call_post_return_automatically: true,
                     };
+                }
+            }
+            Caller::SyncHost => {
+                for subtask in &self.subtasks {
+                    state.get_mut(*subtask)?.caller = Caller::SyncHost;
                 }
             }
         }
@@ -4207,7 +4294,7 @@ impl GuestTask {
         matches!(
             self.caller,
             Caller::Guest { .. }
-                | Caller::Host {
+                | Caller::AsyncHost {
                     call_post_return_automatically: true,
                     ..
                 }
@@ -4656,7 +4743,7 @@ impl ConcurrentState {
         // constant time check.
         loop {
             let next_thread = match &self.get_mut(guest_task).unwrap().caller {
-                Caller::Host { .. } => break true,
+                Caller::AsyncHost { .. } => break true,
                 Caller::Guest { thread, instance } => {
                     if *instance == guest_instance {
                         break false;
@@ -4664,6 +4751,8 @@ impl ConcurrentState {
                         *thread
                     }
                 }
+                // Must have async support enabled to reach here
+                Caller::SyncHost => unreachable!(),
             };
             guest_task = next_thread.task;
         }
@@ -4926,18 +5015,18 @@ pub(crate) fn prepare_call<T, R>(
 
     let mut task = GuestTask::new(
         state,
-        Box::new(for_any_lower(move |store, params| {
+        Some(Box::new(for_any_lower(move |store, params| {
             lower_params(handle, token.as_context_mut(store), params)
-        })),
-        LiftResult {
+        }))),
+        Some(LiftResult {
             lift: Box::new(for_any_lift(move |store, result| {
                 lift_result(handle, store, result)
             })),
             ty: task_return_type,
             memory,
             string_encoding,
-        },
-        Caller::Host {
+        }),
+        Caller::AsyncHost {
             tx: Some(tx),
             exit_tx: Arc::new(exit_tx),
             host_future_present,

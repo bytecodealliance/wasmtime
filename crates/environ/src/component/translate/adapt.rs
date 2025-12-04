@@ -323,20 +323,20 @@ fn fact_import_to_core_def(
         fact::Import::ResourceTransferBorrow => {
             simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
         }
-        fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
-        fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
+        fact::Import::SyncToSyncEnterCall => simple_intrinsic(dfg::Trampoline::SyncToSyncEnterCall),
+        fact::Import::SyncToSyncExitCall => simple_intrinsic(dfg::Trampoline::SyncToSyncExitCall),
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),
         }),
-        fact::Import::SyncStartCall { callback } => {
-            simple_intrinsic(dfg::Trampoline::SyncStartCall {
+        fact::Import::SyncToAsyncStartCall { callback } => {
+            simple_intrinsic(dfg::Trampoline::SyncToAsyncStartCall {
                 callback: callback.clone().map(|v| dfg.callbacks.push(v)),
             })
         }
-        fact::Import::AsyncStartCall {
+        fact::Import::AsyncToAnyStartCall {
             callback,
             post_return,
-        } => simple_intrinsic(dfg::Trampoline::AsyncStartCall {
+        } => simple_intrinsic(dfg::Trampoline::AsyncToAnyStartCall {
             callback: callback.clone().map(|v| dfg.callbacks.push(v)),
             post_return: post_return.clone().map(|v| dfg.post_returns.push(v)),
         }),
@@ -430,7 +430,7 @@ impl PartitionAdapterModules {
     fn core_def(&mut self, dfg: &dfg::ComponentDfg, def: &dfg::CoreDef) {
         match def {
             dfg::CoreDef::Export(e) => self.core_export(dfg, e),
-            dfg::CoreDef::Adapter(id) => {
+            dfg::CoreDef::Adapter(id, _) => {
                 // If this adapter is already defined then we can safely depend
                 // on it with no consequences.
                 if self.defined_items.contains(&Def::Adapter(*id)) {
@@ -482,12 +482,12 @@ impl PartitionAdapterModules {
         // then the instances own arguments are recursively visited to find
         // transitive dependencies on adapters.
         match &dfg.instances[instance] {
-            dfg::Instance::Static(_, args) => {
+            dfg::Instance::Static(_, args, _) => {
                 for arg in args.iter() {
                     self.core_def(dfg, arg);
                 }
             }
-            dfg::Instance::Import(_, args) => {
+            dfg::Instance::Import(_, args, _) => {
                 for (_, values) in args {
                     for (_, def) in values {
                         self.core_def(dfg, def);

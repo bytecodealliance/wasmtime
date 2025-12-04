@@ -77,11 +77,13 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
-    imported_resource_enter_call: Option<FuncIndex>,
-    imported_resource_exit_call: Option<FuncIndex>,
+
+    /// Cached versions of imported trampolines for sync->sync guest function calls.
+    imported_sync_to_sync_enter_call: Option<FuncIndex>,
+    imported_sync_to_sync_exit_call: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
-    imported_async_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
+    imported_async_to_any_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
 
     // Cached versions of imported trampolines for working with `stream`s,
     // `future`s, and `error-context`s.
@@ -253,9 +255,9 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
-            imported_resource_enter_call: None,
-            imported_resource_exit_call: None,
-            imported_async_start_calls: HashMap::new(),
+            imported_sync_to_sync_enter_call: None,
+            imported_sync_to_sync_exit_call: None,
+            imported_async_to_any_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
@@ -568,7 +570,7 @@ impl<'a> Module<'a> {
     /// we've kept them separate to allow a future optimization where the caller
     /// calls the callee directly rather than using `sync-start` to have the host
     /// do it.
-    fn import_sync_start_call(
+    fn import_sync_to_async_start_call(
         &mut self,
         suffix: &str,
         callback: Option<FuncIndex>,
@@ -582,7 +584,7 @@ impl<'a> Module<'a> {
             &format!("[start-call]{suffix}"),
             EntityType::Function(ty),
         );
-        let import = Import::SyncStartCall {
+        let import = Import::SyncToAsyncStartCall {
             callback: callback
                 .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
         };
@@ -598,7 +600,7 @@ impl<'a> Module<'a> {
     /// we've kept them separate to allow a future optimization where the caller
     /// calls the callee directly rather than using `async-start` to have the
     /// host do it.
-    fn import_async_start_call(
+    fn import_async_to_any_start_call(
         &mut self,
         suffix: &str,
         callback: Option<FuncIndex>,
@@ -609,7 +611,7 @@ impl<'a> Module<'a> {
             &format!("[start-call]{suffix}"),
             &[ValType::FUNCREF, ValType::I32, ValType::I32, ValType::I32],
             &[ValType::I32],
-            Import::AsyncStartCall {
+            Import::AsyncToAnyStartCall {
                 callback: callback
                     .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
                 post_return: post_return.map(|post_return| {
@@ -621,13 +623,13 @@ impl<'a> Module<'a> {
                 }),
             },
             |me| {
-                me.imported_async_start_calls
+                me.imported_async_to_any_start_calls
                     .get(&(callback, post_return))
                     .copied()
             },
             |me, v| {
                 assert!(
-                    me.imported_async_start_calls
+                    me.imported_async_to_any_start_calls
                         .insert((callback, post_return), v)
                         .is_none()
                 )
@@ -690,25 +692,25 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_resource_enter_call(&mut self) -> FuncIndex {
+    fn import_sync_to_sync_enter_call(&mut self) -> FuncIndex {
         self.import_simple(
-            "resource",
+            "sync",
             "enter-call",
-            &[],
-            &[],
-            Import::ResourceEnterCall,
-            |me| &mut me.imported_resource_enter_call,
+            &[ValType::I32, ValType::I32],
+            &[ValType::I64],
+            Import::SyncToSyncEnterCall,
+            |me| &mut me.imported_sync_to_sync_enter_call,
         )
     }
 
-    fn import_resource_exit_call(&mut self) -> FuncIndex {
+    fn import_sync_to_sync_exit_call(&mut self) -> FuncIndex {
         self.import_simple(
-            "resource",
+            "sync",
             "exit-call",
+            &[ValType::I32, ValType::I64],
             &[],
-            &[],
-            Import::ResourceExitCall,
-            |me| &mut me.imported_resource_exit_call,
+            Import::SyncToSyncExitCall,
+            |me| &mut me.imported_sync_to_sync_exit_call,
         )
     }
 
@@ -833,11 +835,11 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
-    /// Sets up entry metadata for a borrow resources when a call starts.
-    ResourceEnterCall,
+    /// Sets up thread and resource borrow state when a sync->sync call starts.
+    SyncToSyncEnterCall,
     /// Tears down a previous entry and handles checking borrow-related
-    /// metadata.
-    ResourceExitCall,
+    /// metadata for sync->sync calls.
+    SyncToSyncExitCall,
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
@@ -848,13 +850,13 @@ pub enum Import {
     },
     /// An intrinsic used by FACT-generated modules to complete a call involving
     /// a sync-lowered import and async-lifted export.
-    SyncStartCall {
+    SyncToAsyncStartCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
     },
     /// An intrinsic used by FACT-generated modules to complete a call involving
     /// an async-lowered import function.
-    AsyncStartCall {
+    AsyncToAnyStartCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
 

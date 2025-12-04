@@ -657,12 +657,53 @@ fn resource_transfer_borrow(
     instance.resource_transfer_borrow(store, src_idx, src_table, dst_table)
 }
 
-fn resource_enter_call(store: &mut dyn VMStore, instance: Instance) {
-    instance.resource_enter_call(store)
+struct SyncToSyncEnterCallRet(Option<(u32, u32)>);
+
+unsafe impl HostResultHasUnwindSentinel for SyncToSyncEnterCallRet {
+    type Abi = u64;
+    const SENTINEL: u64 = u64::MAX;
+    fn into_abi(self) -> u64 {
+        match self.0 {
+            Some((task, thread)) => (u64::from(task) << 32) | (u64::from(thread) << 1) | 1,
+            None => 0,
+        }
+    }
 }
 
-fn resource_exit_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
-    instance.resource_exit_call(store)
+fn sync_to_sync_enter_call(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller_instance: u32,
+    callee_instance: u32,
+) -> Result<SyncToSyncEnterCallRet> {
+    instance
+        .sync_to_sync_enter_call(
+            store,
+            Some(RuntimeComponentInstanceIndex::from_u32(caller_instance)),
+            RuntimeComponentInstanceIndex::from_u32(callee_instance),
+        )
+        .map(SyncToSyncEnterCallRet)
+}
+
+fn sync_to_sync_exit_call(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    callee_instance: u32,
+    old_thread: u64,
+) -> Result<()> {
+    let old_thread = if old_thread & 1 == 1 {
+        Some((
+            (old_thread >> 32) as u32,
+            ((old_thread & 0xffffffff) >> 1) as u32,
+        ))
+    } else {
+        None
+    };
+    instance.sync_to_sync_exit_call(
+        store,
+        RuntimeComponentInstanceIndex::from_u32(callee_instance),
+        old_thread,
+    )
 }
 
 fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
@@ -887,7 +928,7 @@ unsafe fn prepare_call(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn sync_start(
+unsafe fn sync_to_async_start(
     store: &mut dyn VMStore,
     instance: Instance,
     callback: *mut u8,
@@ -897,7 +938,7 @@ unsafe fn sync_start(
     param_count: u32,
 ) -> Result<()> {
     unsafe {
-        store.component_async_store().sync_start(
+        store.component_async_store().sync_to_async_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
             callee.cast::<crate::vm::VMFuncRef>(),
@@ -909,7 +950,7 @@ unsafe fn sync_start(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn async_start(
+unsafe fn async_to_any_start(
     store: &mut dyn VMStore,
     instance: Instance,
     callback: *mut u8,
@@ -920,7 +961,7 @@ unsafe fn async_start(
     flags: u32,
 ) -> Result<u32> {
     unsafe {
-        store.component_async_store().async_start(
+        store.component_async_store().async_to_any_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
             post_return.cast::<crate::vm::VMFuncRef>(),

@@ -48,6 +48,8 @@ impl WastCommand {
         let async_ = optional_flag_with_default(self.async_, true);
         let mut config = self.common.config(None)?;
         config.async_support(async_);
+        config.wasm_component_model_async(true);
+        config.wasm_component_model_threading(true);
         config.shared_memory(true);
         let engine = Engine::new(&config)?;
         let mut wast_context = WastContext::new(

@@ -229,10 +229,15 @@ id! {
 /// Same as `info::InstantiateModule`
 #[expect(missing_docs, reason = "tedious to document variants")]
 pub enum Instance {
-    Static(StaticModuleIndex, Box<[CoreDef]>),
+    Static(
+        StaticModuleIndex,
+        Box<[CoreDef]>,
+        RuntimeComponentInstanceIndex,
+    ),
     Import(
         RuntimeImportIndex,
         IndexMap<String, IndexMap<String, CoreDef>>,
+        RuntimeComponentInstanceIndex,
     ),
 }
 
@@ -276,7 +281,7 @@ pub enum CoreDef {
     /// During translation into `info::CoreDef` this variant is erased and
     /// replaced by `info::CoreDef::Export` since adapters are always
     /// represented as the exports of a core wasm instance.
-    Adapter(AdapterId),
+    Adapter(AdapterId, RuntimeComponentInstanceIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -463,15 +468,15 @@ pub enum Trampoline {
     },
     ResourceTransferOwn,
     ResourceTransferBorrow,
-    ResourceEnterCall,
-    ResourceExitCall,
+    SyncToSyncEnterCall,
+    SyncToSyncExitCall,
     PrepareCall {
         memory: Option<MemoryId>,
     },
-    SyncStartCall {
+    SyncToAsyncStartCall {
         callback: Option<CallbackId>,
     },
-    AsyncStartCall {
+    AsyncToAnyStartCall {
         callback: Option<CallbackId>,
         post_return: Option<PostReturnId>,
     },
@@ -735,11 +740,12 @@ impl LinearizeDfg<'_> {
     fn instantiate(&mut self, instance: InstanceId, args: &Instance) {
         log::trace!("creating instance {instance:?}");
         let instantiation = match args {
-            Instance::Static(index, args) => InstantiateModule::Static(
+            Instance::Static(index, args, component_instance) => InstantiateModule::Static(
                 *index,
                 args.iter().map(|def| self.core_def(def)).collect(),
+                *component_instance,
             ),
-            Instance::Import(index, args) => InstantiateModule::Import(
+            Instance::Import(index, args, component_instance) => InstantiateModule::Import(
                 *index,
                 args.iter()
                     .map(|(module, values)| {
@@ -750,6 +756,7 @@ impl LinearizeDfg<'_> {
                         (module.clone(), values)
                     })
                     .collect(),
+                *component_instance,
             ),
         };
         let index = RuntimeInstanceIndex::new(self.runtime_instances.len());
@@ -897,7 +904,7 @@ impl LinearizeDfg<'_> {
         match def {
             CoreDef::Export(e) => info::CoreDef::Export(self.core_export(e)),
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
-            CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
+            CoreDef::Adapter(id, instance) => info::CoreDef::Export(self.adapter(*id, *instance)),
             CoreDef::Trampoline(index) => info::CoreDef::Trampoline(self.trampoline(*index)),
             CoreDef::UnsafeIntrinsic(ty, i) => {
                 let index = usize::try_from(i.index()).unwrap();
@@ -1142,18 +1149,20 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
-            Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
-            Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
+            Trampoline::SyncToSyncEnterCall => info::Trampoline::SyncToSyncEnterCall,
+            Trampoline::SyncToSyncExitCall => info::Trampoline::SyncToSyncExitCall,
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),
             },
-            Trampoline::SyncStartCall { callback } => info::Trampoline::SyncStartCall {
-                callback: callback.map(|v| self.runtime_callback(v)),
-            },
-            Trampoline::AsyncStartCall {
+            Trampoline::SyncToAsyncStartCall { callback } => {
+                info::Trampoline::SyncToAsyncStartCall {
+                    callback: callback.map(|v| self.runtime_callback(v)),
+                }
+            }
+            Trampoline::AsyncToAnyStartCall {
                 callback,
                 post_return,
-            } => info::Trampoline::AsyncStartCall {
+            } => info::Trampoline::AsyncToAnyStartCall {
                 callback: callback.map(|v| self.runtime_callback(v)),
                 post_return: post_return.map(|v| self.runtime_post_return(v)),
             },
@@ -1222,13 +1231,17 @@ impl LinearizeDfg<'_> {
         }
     }
 
-    fn adapter(&mut self, adapter: AdapterId) -> info::CoreExport<EntityIndex> {
+    fn adapter(
+        &mut self,
+        adapter: AdapterId,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> info::CoreExport<EntityIndex> {
         let (adapter_module, entity_index) = self.dfg.adapter_partitionings[adapter];
 
         // Instantiates the adapter module if it hasn't already been
         // instantiated or otherwise returns the index that the module was
         // already instantiated at.
-        let instance = self.adapter_module(adapter_module);
+        let instance = self.adapter_module(adapter_module, instance);
 
         // This adapter is always an export of the instance.
         info::CoreExport {
@@ -1237,7 +1250,11 @@ impl LinearizeDfg<'_> {
         }
     }
 
-    fn adapter_module(&mut self, adapter_module: AdapterModuleId) -> RuntimeInstanceIndex {
+    fn adapter_module(
+        &mut self,
+        adapter_module: AdapterModuleId,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> RuntimeInstanceIndex {
         self.intern(
             RuntimeInstance::Adapter(adapter_module),
             |me| &mut me.runtime_instances,
@@ -1245,7 +1262,7 @@ impl LinearizeDfg<'_> {
                 log::debug!("instantiating {adapter_module:?}");
                 let (module_index, args) = &me.dfg.adapter_modules[adapter_module];
                 let args = args.iter().map(|arg| me.core_def(arg)).collect();
-                let instantiate = InstantiateModule::Static(*module_index, args);
+                let instantiate = InstantiateModule::Static(*module_index, args, instance);
                 GlobalInitializer::InstantiateModule(instantiate)
             },
             |_, init| init,

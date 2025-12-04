@@ -256,6 +256,7 @@ impl Instance {
             // function.
             unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports).await? }
         };
+
         if let Some(start) = start {
             if store.0.async_support() {
                 #[cfg(feature = "async")]
@@ -757,7 +758,7 @@ pub struct InstancePre<T> {
     module: Module,
 
     /// The items which this `InstancePre` use to instantiate the `module`
-    /// provided, passed to `Instance::new_started` after inserting them into a
+    /// provided, passed to `Instance::∑tarted` after inserting them into a
     /// `Store`.
     ///
     /// Note that this is stored as an `Arc<[T]>` to quickly move a strong

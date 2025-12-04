@@ -96,8 +96,16 @@ macro_rules! foreach_builtin_component_function {
 
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
-            resource_enter_call(vmctx: vmctx);
-            resource_exit_call(vmctx: vmctx) -> bool;
+
+            // Returns an `Option<(u32,u32)>` where `None` is "no thread to restore"
+            // and `Some((task,thread))` is "restore this thread after the sync call".
+            // The option is encoded as a 64-bit integer where the low bit is Some/None,
+            // bits 1-32 are the thread ID and bits 33-64 are the task ID.
+            sync_to_sync_enter_call(
+                vmctx: vmctx,
+                caller_instance: u32,
+                callee_instance: u32) -> u64;
+            sync_to_sync_exit_call(vmctx: vmctx, callee_instance: u32, old_thread: u64) -> bool;
 
             #[cfg(feature = "component-model-async")]
             backpressure_set(vmctx: vmctx, caller_instance: u32, enabled: u32) -> bool;
@@ -138,9 +146,9 @@ macro_rules! foreach_builtin_component_function {
                 storage_len: size
             ) -> bool;
             #[cfg(feature = "component-model-async")]
-            sync_start(vmctx: vmctx, callback: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32) -> bool;
+            sync_to_async_start(vmctx: vmctx, callback: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            async_start(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> u64;
+            async_to_any_start(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             future_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
