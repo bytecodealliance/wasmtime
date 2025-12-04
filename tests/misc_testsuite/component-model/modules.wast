@@ -1,4 +1,5 @@
 ;;! reference_types = true
+;;! exceptions = true
 
 (component $foo
   (core module (export "a-module"))
