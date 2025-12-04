@@ -1,5 +1,4 @@
 ;;! component_model_async = true
-;;! component_model_threading = true
 
 ;; bare bones "intrinsics work"
 (component
@@ -493,7 +492,6 @@
     (core module $m
       (import "" "ctor" (func $ctor (param i32) (result i32)))
       (import "" "drop" (func $drop (param i32)))
-      (import "" "thread.index" (func $thread-index (result i32)))
 
       (func (export "alloc")
         (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
@@ -502,10 +500,8 @@
         (call $drop (i32.const 2))
       )
     )
-    (core func $thread-index (canon thread.index))
     (core instance $i (instantiate $m
       (with "" (instance
-        (export "thread.index" (func $thread-index))
         (export "ctor" (func $ctor))
         (export "drop" (func $drop))
       ))
@@ -515,19 +511,6 @@
   )
   (instance $i1 (instantiate $inner))
   (instance $i2 (instantiate $inner))
-
-  (component $guest
-    (import "alloc" (func $alloc))
-    (core module $gm
-      (import "" "alloc" (func $alloc))
-      (func (export "check") (call $alloc)))
-    (core func $alloc' (canon lower (func $alloc)))
-    (core instance $gi (instantiate $gm
-      (with "" (instance
-        (export "alloc" (func $alloc'))))))
-    (func (export "check") (canon lift (core func $gi "check"))))
- 
-  (instance $g (instantiate $guest (with "alloc" (func $i1 "alloc"))))
 
   (alias export $i1 "alloc" (func $alloc_in_1))
   (alias export $i1 "dealloc" (func $dealloc_in_1))
