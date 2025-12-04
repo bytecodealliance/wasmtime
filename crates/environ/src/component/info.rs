@@ -1054,6 +1054,16 @@ pub enum Trampoline {
     ResourceTransferBorrow,
 
     /// An intrinsic used by FACT-generated modules which indicates that a call
+    /// is being entered and resource-related metadata needs to be configured.
+    ///
+    /// Note that this is currently only invoked when borrowed resources are
+    /// detected, otherwise this is "optimized out".
+    ResourceEnterCall,
+
+    /// Same as `ResourceEnterCall` except for when exiting a call.
+    ResourceExitCall,
+
+    /// An intrinsic used by FACT-generated modules which indicates that a call
     /// is being entered and thread/resource-related metadata needs to be configured.
     SyncToSyncEnterCall,
 
@@ -1236,6 +1246,8 @@ impl Trampoline {
             ErrorContextDrop { .. } => format!("error-context-drop"),
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
+            ResourceEnterCall => format!("component-resource-enter-call"),
+            ResourceExitCall => format!("component-resource-exit-call"),
             SyncToSyncEnterCall => format!("component-sync-to-sync-enter-call"),
             SyncToSyncExitCall => format!("component-sync-to-sync-exit-call"),
             PrepareCall { .. } => format!("component-prepare-call"),

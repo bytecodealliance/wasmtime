@@ -77,6 +77,8 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
+    imported_resource_enter_call: Option<FuncIndex>,
+    imported_resource_exit_call: Option<FuncIndex>,
 
     /// Cached versions of imported trampolines for sync->sync guest function calls.
     imported_sync_to_sync_enter_call: Option<FuncIndex>,
@@ -255,6 +257,8 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
+            imported_resource_enter_call: None,
+            imported_resource_exit_call: None,
             imported_sync_to_sync_enter_call: None,
             imported_sync_to_sync_exit_call: None,
             imported_async_to_any_start_calls: HashMap::new(),
@@ -692,6 +696,28 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_resource_enter_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "enter-call",
+            &[],
+            &[],
+            Import::ResourceEnterCall,
+            |me| &mut me.imported_resource_enter_call,
+        )
+    }
+
+    fn import_resource_exit_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "exit-call",
+            &[],
+            &[],
+            Import::ResourceExitCall,
+            |me| &mut me.imported_resource_exit_call,
+        )
+    }
+
     fn import_sync_to_sync_enter_call(&mut self) -> FuncIndex {
         self.import_simple(
             "sync",
@@ -835,6 +861,11 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
+    /// Sets up entry metadata for a borrow resources when a call starts.
+    ResourceEnterCall,
+    /// Tears down a previous entry and handles checking borrow-related
+    /// metadata.
+    ResourceExitCall,
     /// Sets up thread and resource borrow state when a sync->sync call starts.
     SyncToSyncEnterCall,
     /// Tears down a previous entry and handles checking borrow-related

@@ -670,6 +670,7 @@ unsafe impl HostResultHasUnwindSentinel for SyncToSyncEnterCallRet {
     }
 }
 
+#[cfg(feature = "component-model-async")]
 fn sync_to_sync_enter_call(
     store: &mut dyn VMStore,
     instance: Instance,
@@ -685,6 +686,7 @@ fn sync_to_sync_enter_call(
         .map(SyncToSyncEnterCallRet)
 }
 
+#[cfg(feature = "component-model-async")]
 fn sync_to_sync_exit_call(
     store: &mut dyn VMStore,
     instance: Instance,

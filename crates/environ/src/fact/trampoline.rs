@@ -75,6 +75,12 @@ struct Compiler<'a, 'b> {
     /// to be a heuristic to split up the main function into theoretically
     /// reusable portions.
     fuel: usize,
+
+    /// Indicates whether an "enter call" should be emitted in the generated
+    /// function with a call to `Resource{Enter,Exit}Call` at the beginning and
+    /// end of the function for tracking of information related to borrowed
+    /// resources.
+    emit_resource_call: bool,
 }
 
 pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
@@ -91,8 +97,23 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             .funcs
             .push(Function::new(Some(adapter.name.clone()), ty));
 
+        // If this type signature contains any borrowed resources then invocations
+        // of enter/exit call for resource-related metadata tracking must be used.
+        // It shouldn't matter whether the lower/lift signature is used here as both
+        // should return the same answer.
+        let emit_resource_call = module.types.contains_borrow_resource(&adapter.lower);
+        assert_eq!(
+            emit_resource_call,
+            module.types.contains_borrow_resource(&adapter.lift)
+        );
+
         (
-            Compiler::new(module, result, lower_sig.params.len() as u32),
+            Compiler::new(
+                module,
+                result,
+                lower_sig.params.len() as u32,
+                emit_resource_call,
+            ),
             lower_sig,
             lift_sig,
         )
@@ -137,7 +158,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             ty,
         ));
 
-        Compiler::new(module, result, sig.params.len() as u32)
+        Compiler::new(module, result, sig.params.len() as u32, false)
             .compile_async_return_adapter(adapter, &sig);
 
         result
@@ -313,6 +334,9 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
         traps: Vec::new(),
         result,
         fuel: INITIAL_FUEL,
+        // This is a helper function and only the top-level function is
+        // responsible for emitting these intrinsic calls.
+        emit_resource_call: false,
     };
     compiler.translate(&helper.src.ty, &src, &helper.dst.ty, &dst);
     compiler.finish();
@@ -408,7 +432,12 @@ struct GcArray<'a> {
 }
 
 impl<'a, 'b> Compiler<'a, 'b> {
-    fn new(module: &'b mut Module<'a>, result: FunctionId, nlocals: u32) -> Self {
+    fn new(
+        module: &'b mut Module<'a>,
+        result: FunctionId,
+        nlocals: u32,
+        emit_resource_call: bool,
+    ) -> Self {
         Self {
             types: module.types,
             module,
@@ -418,6 +447,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             free_locals: HashMap::new(),
             traps: Vec::new(),
             fuel: INITIAL_FUEL,
+            emit_resource_call,
         }
     }
 
@@ -721,17 +751,26 @@ impl<'a, 'b> Compiler<'a, 'b> {
             );
         }
 
-        let enter = self.module.import_sync_to_sync_enter_call();
-        self.instruction(I32Const(
-            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
-        ));
-        self.instruction(I32Const(
-            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
-        ));
-        // Leaves the old thread to pass to sync_to_sync_exit call on the stack
-        // encoded as a u64
-        self.instruction(Call(enter.as_u32()));
-        let old_thread = self.local_set_new_tmp(ValType::I64);
+        // If we have async support, we need to call sync_to_sync_enter_call to set up
+        // necessary threading context. Otherwise, we can output a call to the simpler
+        // resource_enter_call intrinsic, and omit this entirely if there are no borrows.
+        let old_thread = if cfg!(feature = "component-model-async") {
+            let enter = self.module.import_sync_to_sync_enter_call();
+            self.instruction(I32Const(
+                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+            ));
+            self.instruction(I32Const(
+                i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+            ));
+            self.instruction(Call(enter.as_u32()));
+            Some(self.local_set_new_tmp(ValType::I64))
+        } else {
+            if self.emit_resource_call {
+                let enter = self.module.import_resource_enter_call();
+                self.instruction(Call(enter.as_u32()));
+            }
+            None
+        };
 
         // Perform the translation of arguments. Note that `FLAG_MAY_LEAVE` is
         // cleared around this invocation for the callee as per the
@@ -796,13 +835,23 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.free_temp_local(tmp);
         }
 
-        let exit = self.module.import_sync_to_sync_exit_call();
-        self.instruction(I32Const(
-            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
-        ));
-        self.instruction(LocalGet(old_thread.idx));
-        self.instruction(Call(exit.as_u32()));
-        self.free_temp_local(old_thread);
+        // Similar to how we handled function entry, we select between intrinsics
+        // to call based on whether we have async support.
+        if cfg!(feature = "component-model-async") {
+            let old_thread = old_thread.unwrap();
+            let exit = self.module.import_sync_to_sync_exit_call();
+            self.instruction(I32Const(
+                i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+            ));
+            self.instruction(LocalGet(old_thread.idx));
+            self.instruction(Call(exit.as_u32()));
+            self.free_temp_local(old_thread);
+        } else {
+            if self.emit_resource_call {
+                let exit = self.module.import_resource_exit_call();
+                self.instruction(Call(exit.as_u32()));
+            }
+        }
 
         self.finish()
     }

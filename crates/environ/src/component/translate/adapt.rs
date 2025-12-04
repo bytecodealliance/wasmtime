@@ -173,7 +173,7 @@ pub struct AdapterOptions {
     /// An optional definition of a `post-return` to use.
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
-    pub async_: bool,
+    pub aF: bool,
     /// Whether or not this intrinsic can consume a task cancellation
     /// notification.
     pub cancellable: bool,
@@ -323,6 +323,8 @@ fn fact_import_to_core_def(
         fact::Import::ResourceTransferBorrow => {
             simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
         }
+        fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
+        fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
         fact::Import::SyncToSyncEnterCall => simple_intrinsic(dfg::Trampoline::SyncToSyncEnterCall),
         fact::Import::SyncToSyncExitCall => simple_intrinsic(dfg::Trampoline::SyncToSyncExitCall),
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {

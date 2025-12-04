@@ -96,15 +96,19 @@ macro_rules! foreach_builtin_component_function {
 
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
+            resource_enter_call(vmctx: vmctx);
+            resource_exit_call(vmctx: vmctx) -> bool;
 
             // Returns an `Option<(u32,u32)>` where `None` is "no thread to restore"
             // and `Some((task,thread))` is "restore this thread after the sync call".
             // The option is encoded as a 64-bit integer where the low bit is Some/None,
             // bits 1-32 are the thread ID and bits 33-64 are the task ID.
+            #[cfg(feature = "component-model-async")]
             sync_to_sync_enter_call(
                 vmctx: vmctx,
                 caller_instance: u32,
                 callee_instance: u32) -> u64;
+            #[cfg(feature = "component-model-async")]
             sync_to_sync_exit_call(vmctx: vmctx, callee_instance: u32, old_thread: u64) -> bool;
 
             #[cfg(feature = "component-model-async")]

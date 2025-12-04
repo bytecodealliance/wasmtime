@@ -1149,6 +1149,8 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
+            Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
+            Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
             Trampoline::SyncToSyncEnterCall => info::Trampoline::SyncToSyncEnterCall,
             Trampoline::SyncToSyncExitCall => info::Trampoline::SyncToSyncExitCall,
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {

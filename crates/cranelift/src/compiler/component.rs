@@ -49,7 +49,6 @@ impl From<GetLibcallFn> for HostCallee {
 /// How to interpret the results of a host function.
 enum HostResult {
     /// The host function has no results.
-    #[allow(dead_code)]
     None,
 
     /// The host function returns the sentinel specified which is interpreted
@@ -645,6 +644,22 @@ impl<'a> TrampolineCompiler<'a> {
                 self.translate_libcall(
                     host::resource_transfer_borrow,
                     TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ResourceEnterCall => {
+                self.translate_libcall(
+                    host::resource_enter_call,
+                    HostResult::None,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ResourceExitCall => {
+                self.translate_libcall(
+                    host::resource_exit_call,
+                    TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |_, _| {},
                 );
