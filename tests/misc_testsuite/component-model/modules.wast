@@ -477,3 +477,12 @@
 
   (core instance (instantiate $import_globals (with "" (instance $m))))
 )
+
+(component $tag-module
+  (core module (export "m")
+        (tag (export "t") (param i32))))
+(component
+  (import "tag-module" (instance
+                         (export "m"
+                                 (core module
+                                       (export "t" (tag (param i32))))))))
