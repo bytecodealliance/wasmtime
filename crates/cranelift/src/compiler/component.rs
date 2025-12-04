@@ -49,6 +49,7 @@ impl From<GetLibcallFn> for HostCallee {
 /// How to interpret the results of a host function.
 enum HostResult {
     /// The host function has no results.
+    #[allow(dead_code)]
     None,
 
     /// The host function returns the sentinel specified which is interpreted

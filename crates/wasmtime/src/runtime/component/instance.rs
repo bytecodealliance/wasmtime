@@ -857,6 +857,7 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
+                    #[cfg(feature = "component-model-async")]
                     let old_thread =
                         instance.sync_to_sync_enter_call(store.0, None, runtime_instance)?;
                     // Note that the unsafety here should be ok because the
@@ -869,6 +870,7 @@ impl<'a> Instantiator<'a> {
                     let i = unsafe {
                         crate::Instance::new_started(store, module, imports.as_ref()).await?
                     };
+                    #[cfg(feature = "component-model-async")]
                     instance.sync_to_sync_exit_call(store.0, runtime_instance, old_thread)?;
 
                     self.instance_mut(store.0).push_instance_id(i.id());
