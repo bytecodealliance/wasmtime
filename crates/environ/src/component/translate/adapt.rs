@@ -173,7 +173,7 @@ pub struct AdapterOptions {
     /// An optional definition of a `post-return` to use.
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
-    pub aF: bool,
+    pub async_: bool,
     /// Whether or not this intrinsic can consume a task cancellation
     /// notification.
     pub cancellable: bool,

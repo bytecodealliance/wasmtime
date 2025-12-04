@@ -452,6 +452,16 @@ impl Instance {
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
     }
 
+    pub(crate) fn resource_enter_call(self, store: &mut StoreOpaque) {
+        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, instance).enter_call()
+    }
+
+    pub(crate) fn resource_exit_call(self, store: &mut StoreOpaque) -> Result<()> {
+        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, instance).exit_call()
+    }
+
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
         lookup_vmdef(store, self.id.instance(), def)
     }

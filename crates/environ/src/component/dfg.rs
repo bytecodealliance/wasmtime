@@ -468,6 +468,8 @@ pub enum Trampoline {
     },
     ResourceTransferOwn,
     ResourceTransferBorrow,
+    ResourceEnterCall,
+    ResourceExitCall,
     SyncToSyncEnterCall,
     SyncToSyncExitCall,
     PrepareCall {

@@ -134,7 +134,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             ty,
         ));
 
-        Compiler::new(module, result, sig.params.len() as u32)
+        Compiler::new(module, result, sig.params.len() as u32, false)
             .compile_async_to_any_start_adapter(adapter, &sig);
 
         result

@@ -657,6 +657,14 @@ fn resource_transfer_borrow(
     instance.resource_transfer_borrow(store, src_idx, src_table, dst_table)
 }
 
+fn resource_enter_call(store: &mut dyn VMStore, instance: Instance) {
+    instance.resource_enter_call(store)
+}
+
+fn resource_exit_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
+    instance.resource_exit_call(store)
+}
+
 struct SyncToSyncEnterCallRet(Option<(u32, u32)>);
 
 unsafe impl HostResultHasUnwindSentinel for SyncToSyncEnterCallRet {
