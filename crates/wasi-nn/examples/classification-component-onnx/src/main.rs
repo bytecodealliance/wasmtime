@@ -17,14 +17,46 @@ use self::wasi::nn::{
     tensor::{Tensor, TensorData, TensorDimensions, TensorType},
 };
 
+/// Determine execution target from command-line argument
+/// Usage: wasm_module [cpu|gpu|cuda]
+fn get_execution_target() -> ExecutionTarget {
+    let args: Vec<String> = std::env::args().collect();
+
+    // First argument (index 0) is the program name, second (index 1) is the target
+    // Ignore any arguments after index 1
+    if args.len() >= 2 {
+        match args[1].to_lowercase().as_str() {
+            "gpu" | "cuda" => {
+                println!("Using GPU (CUDA) execution target from argument");
+                return ExecutionTarget::Gpu;
+            }
+            "cpu" => {
+                println!("Using CPU execution target from argument");
+                return ExecutionTarget::Cpu;
+            }
+            _ => {
+                println!("Unknown execution target '{}', defaulting to CPU", args[1]);
+            }
+        }
+    } else {
+        println!("No execution target specified, defaulting to CPU");
+        println!("Usage: <program> [cpu|gpu|cuda]");
+    }
+
+    ExecutionTarget::Cpu
+}
+
 fn main() {
     // Load the ONNX model - SqueezeNet 1.1-7
     // Full details: https://github.com/onnx/models/tree/main/vision/classification/squeezenet
     let model: GraphBuilder = fs::read("fixture/models/squeezenet1.1-7.onnx").unwrap();
     println!("Read ONNX model, size in bytes: {}", model.len());
 
-    let graph = load(&[model], GraphEncoding::Onnx, ExecutionTarget::Cpu).unwrap();
-    println!("Loaded graph into wasi-nn");
+    // Determine execution target
+    let execution_target = get_execution_target();
+
+    let graph = load(&[model], GraphEncoding::Onnx, execution_target).unwrap();
+    println!("Loaded graph into wasi-nn with {:?} target", execution_target);
 
     let exec_context = Graph::init_execution_context(&graph).unwrap();
     println!("Created wasi-nn execution context.");
