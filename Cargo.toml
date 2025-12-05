@@ -318,6 +318,7 @@ component-async-tests = { path = "crates/misc/component-async-tests" }
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
 regalloc2 = "0.13.3"
+wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
 target-lexicon = "0.13.0"
