@@ -28,7 +28,7 @@ use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
 use poll::Pollable;
-use wasi::*;
+use wasip1::*;
 
 #[cfg(not(feature = "proxy"))]
 use crate::bindings::wasi::filesystem::types as filesystem;
@@ -136,7 +136,7 @@ pub extern "C" fn run() -> u32 {
 #[cfg(feature = "proxy")]
 macro_rules! cfg_filesystem_available {
     ($($t:tt)*) => {
-        wasi::ERRNO_NOTSUP
+        wasip1::ERRNO_NOTSUP
     };
 }
 #[cfg(not(feature = "proxy"))]
@@ -741,7 +741,7 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) 
             // For not-files, fail with BADF
             ds.get_file(fd)?;
             // For all files, fail with NOTSUP, because this call does not exist in preview 2.
-            Err(wasi::ERRNO_NOTSUP)
+            Err(wasip1::ERRNO_NOTSUP)
         })
     }
 }
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) 
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
     State::with(|state| {
         if let Descriptor::Bad = state.descriptors().get(fd)? {
-            return Err(wasi::ERRNO_BADF);
+            return Err(wasip1::ERRNO_BADF);
         }
 
         // If there's a dirent cache entry for this file descriptor then drop
@@ -799,41 +799,41 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                     match type_ {
                         filesystem::DescriptorType::Directory => {
                             // Hard-coded set of rights expected by many userlands:
-                            let fs_rights_base = wasi::RIGHTS_PATH_CREATE_DIRECTORY
-                                | wasi::RIGHTS_PATH_CREATE_FILE
-                                | wasi::RIGHTS_PATH_LINK_SOURCE
-                                | wasi::RIGHTS_PATH_LINK_TARGET
-                                | wasi::RIGHTS_PATH_OPEN
-                                | wasi::RIGHTS_FD_READDIR
-                                | wasi::RIGHTS_PATH_READLINK
-                                | wasi::RIGHTS_PATH_RENAME_SOURCE
-                                | wasi::RIGHTS_PATH_RENAME_TARGET
-                                | wasi::RIGHTS_PATH_SYMLINK
-                                | wasi::RIGHTS_PATH_REMOVE_DIRECTORY
-                                | wasi::RIGHTS_PATH_UNLINK_FILE
-                                | wasi::RIGHTS_PATH_FILESTAT_GET
-                                | wasi::RIGHTS_PATH_FILESTAT_SET_TIMES
-                                | wasi::RIGHTS_FD_FILESTAT_GET
-                                | wasi::RIGHTS_FD_FILESTAT_SET_TIMES;
+                            let fs_rights_base = wasip1::RIGHTS_PATH_CREATE_DIRECTORY
+                                | wasip1::RIGHTS_PATH_CREATE_FILE
+                                | wasip1::RIGHTS_PATH_LINK_SOURCE
+                                | wasip1::RIGHTS_PATH_LINK_TARGET
+                                | wasip1::RIGHTS_PATH_OPEN
+                                | wasip1::RIGHTS_FD_READDIR
+                                | wasip1::RIGHTS_PATH_READLINK
+                                | wasip1::RIGHTS_PATH_RENAME_SOURCE
+                                | wasip1::RIGHTS_PATH_RENAME_TARGET
+                                | wasip1::RIGHTS_PATH_SYMLINK
+                                | wasip1::RIGHTS_PATH_REMOVE_DIRECTORY
+                                | wasip1::RIGHTS_PATH_UNLINK_FILE
+                                | wasip1::RIGHTS_PATH_FILESTAT_GET
+                                | wasip1::RIGHTS_PATH_FILESTAT_SET_TIMES
+                                | wasip1::RIGHTS_FD_FILESTAT_GET
+                                | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES;
 
                             let fs_rights_inheriting = fs_rights_base
-                                | wasi::RIGHTS_FD_DATASYNC
-                                | wasi::RIGHTS_FD_READ
-                                | wasi::RIGHTS_FD_SEEK
-                                | wasi::RIGHTS_FD_FDSTAT_SET_FLAGS
-                                | wasi::RIGHTS_FD_SYNC
-                                | wasi::RIGHTS_FD_TELL
-                                | wasi::RIGHTS_FD_WRITE
-                                | wasi::RIGHTS_FD_ADVISE
-                                | wasi::RIGHTS_FD_ALLOCATE
-                                | wasi::RIGHTS_FD_FILESTAT_GET
-                                | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
-                                | wasi::RIGHTS_FD_FILESTAT_SET_TIMES
-                                | wasi::RIGHTS_POLL_FD_READWRITE;
+                                | wasip1::RIGHTS_FD_DATASYNC
+                                | wasip1::RIGHTS_FD_READ
+                                | wasip1::RIGHTS_FD_SEEK
+                                | wasip1::RIGHTS_FD_FDSTAT_SET_FLAGS
+                                | wasip1::RIGHTS_FD_SYNC
+                                | wasip1::RIGHTS_FD_TELL
+                                | wasip1::RIGHTS_FD_WRITE
+                                | wasip1::RIGHTS_FD_ADVISE
+                                | wasip1::RIGHTS_FD_ALLOCATE
+                                | wasip1::RIGHTS_FD_FILESTAT_GET
+                                | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE
+                                | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES
+                                | wasip1::RIGHTS_POLL_FD_READWRITE;
 
                             unsafe {
                                 stat.write(Fdstat {
-                                    fs_filetype: wasi::FILETYPE_DIRECTORY,
+                                    fs_filetype: wasip1::FILETYPE_DIRECTORY,
                                     fs_flags: 0,
                                     fs_rights_base,
                                     fs_rights_inheriting,
@@ -918,7 +918,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     // Only support changing the NONBLOCK or APPEND flags.
     if flags & !(FDFLAGS_NONBLOCK | FDFLAGS_APPEND) != 0 {
-        return wasi::ERRNO_INVAL;
+        return wasip1::ERRNO_INVAL;
     }
 
     cfg_filesystem_available! {
@@ -929,7 +929,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
                     type_: StreamType::File(file),
                     ..
                 }) if !file.is_dir() => file,
-                _ => Err(wasi::ERRNO_BADF)?,
+                _ => Err(wasip1::ERRNO_BADF)?,
             };
             file.append = flags & FDFLAGS_APPEND == FDFLAGS_APPEND;
             file.blocking_mode = if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
@@ -942,7 +942,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     }
 }
 
-/// Does not do anything if `fd` corresponds to a valid descriptor and returns [`wasi::ERRNO_BADF`] otherwise.
+/// Does not do anything if `fd` corresponds to a valid descriptor and returns [`wasip1::ERRNO_BADF`] otherwise.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_fdstat_set_rights(
     fd: Fd,
@@ -952,8 +952,8 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
     State::with(|state| {
         let ds = state.descriptors();
         match ds.get(fd)? {
-            Descriptor::Streams(..) => Err(wasi::ERRNO_NOTSUP),
-            Descriptor::Closed(..) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
+            Descriptor::Streams(..) => Err(wasip1::ERRNO_NOTSUP),
+            Descriptor::Closed(..) | Descriptor::Bad => Err(wasip1::ERRNO_BADF),
         }
     })
 }
@@ -1001,7 +1001,7 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: &mut Filestat) -> Errno {
                     };
                     Ok(())
                 }
-                _ => Err(wasi::ERRNO_BADF),
+                _ => Err(wasip1::ERRNO_BADF),
             }
         })
     }
@@ -1024,7 +1024,7 @@ pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
 #[cfg(not(feature = "proxy"))]
 fn systimespec(set: bool, ts: Timestamp, now: bool) -> Result<filesystem::NewTimestamp, Errno> {
     if set && now {
-        Err(wasi::ERRNO_INVAL)
+        Err(wasip1::ERRNO_INVAL)
     } else if set {
         Ok(filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
             seconds: ts / 1_000_000_000,
@@ -1332,7 +1332,7 @@ pub unsafe extern "C" fn fd_readdir(
     cookie: Dircookie,
     bufused: *mut Size,
 ) -> Errno {
-    wasi::ERRNO_NOTSUP
+    wasip1::ERRNO_NOTSUP
 }
 
 #[unsafe(no_mangle)]
@@ -1394,7 +1394,7 @@ pub unsafe extern "C" fn fd_readdir(
             None => {
                 iter = DirectoryEntryIterator {
                     state,
-                    cookie: wasi::DIRCOOKIE_START,
+                    cookie: wasip1::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirectoryEntryStream(dir.fd.read_directory()?),
                     dir_descriptor: &dir.fd,
@@ -1402,7 +1402,7 @@ pub unsafe extern "C" fn fd_readdir(
 
                 // Skip to the entry that is requested by the `cookie`
                 // parameter.
-                for _ in wasi::DIRCOOKIE_START..cookie {
+                for _ in wasip1::DIRCOOKIE_START..cookie {
                     match iter.next() {
                         Some(Ok(_)) => {}
                         Some(Err(e)) => return Err(e),
@@ -1426,7 +1426,7 @@ pub unsafe extern "C" fn fd_readdir(
             // truncating it if it doesn't fit entirely.
             let bytes = unsafe {
                 slice::from_raw_parts(
-                    (&dirent as *const wasi::Dirent).cast::<u8>(),
+                    (&dirent as *const wasip1::Dirent).cast::<u8>(),
                     size_of::<Dirent>(),
                 )
             };
@@ -1497,7 +1497,7 @@ pub unsafe extern "C" fn fd_readdir(
     impl<'a> Iterator for DirectoryEntryIterator<'a> {
         // Note the usage of `UnsafeCell<u8>` here to indicate that the data can
         // alias the storage within `state`.
-        type Item = Result<(wasi::Dirent, &'a [UnsafeCell<u8>]), Errno>;
+        type Item = Result<(wasip1::Dirent, &'a [UnsafeCell<u8>]), Errno>;
 
         fn next(&mut self) -> Option<Self::Item> {
             let current_cookie = self.cookie;
@@ -1512,19 +1512,19 @@ pub unsafe extern "C" fn fd_readdir(
                         Ok(h) => h,
                         Err(e) => return Some(Err(e.into())),
                     };
-                    let dirent = wasi::Dirent {
+                    let dirent = wasip1::Dirent {
                         d_next: self.cookie,
                         d_ino: metadata_hash.lower,
-                        d_type: wasi::FILETYPE_DIRECTORY,
+                        d_type: wasip1::FILETYPE_DIRECTORY,
                         d_namlen: 1,
                     };
                     return Some(Ok((dirent, &self.state.dotdot[..1])));
                 }
                 1 => {
-                    let dirent = wasi::Dirent {
+                    let dirent = wasip1::Dirent {
                         d_next: self.cookie,
                         d_ino: 0,
-                        d_type: wasi::FILETYPE_DIRECTORY,
+                        d_type: wasip1::FILETYPE_DIRECTORY,
                         d_namlen: 2,
                     };
                     return Some(Ok((dirent, &self.state.dotdot[..])));
@@ -1559,7 +1559,7 @@ pub unsafe extern "C" fn fd_readdir(
                 .map(|h| h.lower)
                 .unwrap_or(0);
             let name = ManuallyDrop::new(name);
-            let dirent = wasi::Dirent {
+            let dirent = wasip1::Dirent {
                 d_next: self.cookie,
                 d_ino,
                 d_namlen: u32::try_from(name.len()).trapping_unwrap(),
@@ -1880,10 +1880,10 @@ pub unsafe extern "C" fn path_open(
         let at_flags = at_flags_from_lookupflags(dirflags);
         let o_flags = o_flags_from_oflags(oflags);
         let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
-        let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
+        let append = fdflags & wasip1::FDFLAGS_APPEND == wasip1::FDFLAGS_APPEND;
 
         #[cfg(feature = "proxy")]
-        return wasi::ERRNO_NOTSUP;
+        return wasip1::ERRNO_NOTSUP;
 
         #[cfg(not(feature = "proxy"))]
         State::with(|state| {
@@ -1901,7 +1901,7 @@ pub unsafe extern "C" fn path_open(
                     descriptor_type,
                     position: Cell::new(0),
                     append,
-                    blocking_mode: if fdflags & wasi::FDFLAGS_NONBLOCK == 0 {
+                    blocking_mode: if fdflags & wasip1::FDFLAGS_NONBLOCK == 0 {
                         BlockingMode::Blocking
                     } else {
                         BlockingMode::NonBlocking
@@ -2131,9 +2131,9 @@ pub unsafe extern "C" fn poll_oneoff(
     }
 
     State::with(|state| {
-        const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
-        const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
-        const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
+        const EVENTTYPE_CLOCK: u8 = wasip1::EVENTTYPE_CLOCK.raw();
+        const EVENTTYPE_FD_READ: u8 = wasip1::EVENTTYPE_FD_READ.raw();
+        const EVENTTYPE_FD_WRITE: u8 = wasip1::EVENTTYPE_FD_WRITE.raw();
 
         let mut pollables = Pollables {
             pointer: pollables,
@@ -2249,12 +2249,12 @@ pub unsafe extern "C" fn poll_oneoff(
 
             let (error, nbytes, flags) = match subscription.u.tag {
                 EVENTTYPE_CLOCK => {
-                    type_ = wasi::EVENTTYPE_CLOCK;
+                    type_ = wasip1::EVENTTYPE_CLOCK;
                     (ERRNO_SUCCESS, 0, 0)
                 }
 
                 EVENTTYPE_FD_READ => {
-                    type_ = wasi::EVENTTYPE_FD_READ;
+                    type_ = wasip1::EVENTTYPE_FD_READ;
                     let ds = state.descriptors();
                     let desc = ds
                         .get(unsafe { subscription.u.u.fd_read.file_descriptor })
@@ -2283,7 +2283,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     }
                 }
                 EVENTTYPE_FD_WRITE => {
-                    type_ = wasi::EVENTTYPE_FD_WRITE;
+                    type_ = wasip1::EVENTTYPE_FD_WRITE;
                     let ds = state.descriptors();
                     let desc = ds
                         .get(unsafe { subscription.u.u.fd_write.file_descriptor })
@@ -2424,8 +2424,8 @@ pub unsafe extern "C" fn sock_shutdown(fd: Fd, _how: Sdflags) -> Errno {
     State::with(|state| {
         state
             .descriptors_mut()
-            .get_stream_with_error_mut(fd, wasi::ERRNO_BADF)?;
-        Err(wasi::ERRNO_NOTSOCK)
+            .get_stream_with_error_mut(fd, wasip1::ERRNO_BADF)?;
+        Err(wasip1::ERRNO_NOTSOCK)
     })
 }
 
@@ -2468,19 +2468,19 @@ fn o_flags_from_oflags(flags: Oflags) -> filesystem::OpenFlags {
 #[cfg(not(feature = "proxy"))]
 fn descriptor_flags_from_flags(rights: Rights, fdflags: Fdflags) -> filesystem::DescriptorFlags {
     let mut flags = filesystem::DescriptorFlags::empty();
-    if rights & wasi::RIGHTS_FD_READ == wasi::RIGHTS_FD_READ {
+    if rights & wasip1::RIGHTS_FD_READ == wasip1::RIGHTS_FD_READ {
         flags |= filesystem::DescriptorFlags::READ;
     }
-    if rights & wasi::RIGHTS_FD_WRITE == wasi::RIGHTS_FD_WRITE {
+    if rights & wasip1::RIGHTS_FD_WRITE == wasip1::RIGHTS_FD_WRITE {
         flags |= filesystem::DescriptorFlags::WRITE;
     }
-    if fdflags & wasi::FDFLAGS_SYNC == wasi::FDFLAGS_SYNC {
+    if fdflags & wasip1::FDFLAGS_SYNC == wasip1::FDFLAGS_SYNC {
         flags |= filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
     }
-    if fdflags & wasi::FDFLAGS_DSYNC == wasi::FDFLAGS_DSYNC {
+    if fdflags & wasip1::FDFLAGS_DSYNC == wasip1::FDFLAGS_DSYNC {
         flags |= filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
     }
-    if fdflags & wasi::FDFLAGS_RSYNC == wasi::FDFLAGS_RSYNC {
+    if fdflags & wasip1::FDFLAGS_RSYNC == wasip1::FDFLAGS_RSYNC {
         flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
     }
     flags
@@ -2535,8 +2535,8 @@ impl From<filesystem::ErrorCode> for Errno {
 }
 
 #[cfg(not(feature = "proxy"))]
-impl From<filesystem::DescriptorType> for wasi::Filetype {
-    fn from(ty: filesystem::DescriptorType) -> wasi::Filetype {
+impl From<filesystem::DescriptorType> for wasip1::Filetype {
+    fn from(ty: filesystem::DescriptorType) -> wasip1::Filetype {
         match ty {
             filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
             filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
@@ -2671,7 +2671,7 @@ const PAGE_SIZE: usize = 65536;
 /// polyfill.
 const PATH_MAX: usize = 4096;
 
-/// Maximum number of bytes to cache for a `wasi::Dirent` plus its path name.
+/// Maximum number of bytes to cache for a `wasip1::Dirent` plus its path name.
 const DIRENT_CACHE: usize = 256;
 
 /// A canary value to detect memory corruption within `State`.
@@ -2696,7 +2696,7 @@ struct State {
     /// TODO
     temporary_data: UnsafeCell<MaybeUninit<[u8; temporary_data_size()]>>,
 
-    /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
+    /// Cache for the `fd_readdir` call for a final `wasip1::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
     #[cfg(not(feature = "proxy"))]
     dirent_cache: DirentCache,
@@ -2713,9 +2713,9 @@ struct State {
 #[cfg(not(feature = "proxy"))]
 struct DirentCache {
     stream: Cell<Option<DirectoryEntryStream>>,
-    for_fd: Cell<wasi::Fd>,
-    cookie: Cell<wasi::Dircookie>,
-    cached_dirent: Cell<wasi::Dirent>,
+    for_fd: Cell<wasip1::Fd>,
+    cookie: Cell<wasip1::Dircookie>,
+    cached_dirent: Cell<wasip1::Dirent>,
     path_data: UnsafeCell<MaybeUninit<[u8; DIRENT_CACHE]>>,
 }
 
@@ -2872,8 +2872,8 @@ impl State {
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
-                    cookie: Cell::new(wasi::DIRCOOKIE_START),
-                    cached_dirent: Cell::new(wasi::Dirent {
+                    cookie: Cell::new(wasip1::DIRCOOKIE_START),
+                    cached_dirent: Cell::new(wasip1::Dirent {
                         d_next: 0,
                         d_ino: 0,
                         d_type: FILETYPE_UNKNOWN,

@@ -19,7 +19,7 @@ futures = { workspace = true, default-features = false, features = ['alloc', 'as
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = { workspace = true }
-wasip1 = "1.0.0"
+wasip1 = { version = "1.0.0", default-features = true }
 wasip2 = "1.0.0"
 once_cell = "1.19.0"
 flate2 = "1.0.28"

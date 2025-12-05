@@ -4197,7 +4197,7 @@ dependencies = [
  "bitflags 2.9.4",
  "byte-array-literals",
  "object 0.37.3",
- "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasip1",
  "wasm-encoder",
  "wit-bindgen-rust-macro",
 ]
