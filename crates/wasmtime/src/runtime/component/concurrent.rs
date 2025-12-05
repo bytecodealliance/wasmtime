@@ -4709,7 +4709,7 @@ impl ConcurrentState {
         Ok(())
     }
 
-    /// Implements the `backpressure.{set,inc,dec}` intrinsics.
+    /// Implements the `backpressure.{inc,dec}` intrinsics.
     pub(crate) fn backpressure_modify(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
