@@ -1158,6 +1158,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     list_u8_param: wasmtime::component::Func,
                     list_u16_param: wasmtime::component::Func,

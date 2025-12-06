@@ -11,6 +11,7 @@
 //! panicking.
 
 pub mod component_api;
+pub mod component_async;
 #[cfg(feature = "fuzz-spec-interpreter")]
 pub mod diff_spec;
 pub mod diff_wasmi;
@@ -22,10 +23,10 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
-use crate::block_on;
 use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
+use crate::{YieldN, block_on};
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
 use std::future::Future;
@@ -1203,23 +1204,6 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
                 *a
             }
             None => 0,
-        }
-    }
-
-    /// Helper future to yield N times before resolving.
-    struct YieldN(u32);
-
-    impl Future for YieldN {
-        type Output = ();
-
-        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-            if self.0 == 0 {
-                Poll::Ready(())
-            } else {
-                self.0 -= 1;
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
         }
     }
 

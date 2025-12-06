@@ -671,6 +671,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     kebab_case: wasmtime::component::Func,
                     foo: wasmtime::component::Func,

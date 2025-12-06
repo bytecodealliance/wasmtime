@@ -88,6 +88,7 @@ impl Artifacts {
                 s if s.starts_with("p3_http_") => "p3_http",
                 s if s.starts_with("p3_api_") => "p3_api",
                 s if s.starts_with("p3_") => "p3",
+                s if s.starts_with("fuzz_") => "fuzz",
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that
