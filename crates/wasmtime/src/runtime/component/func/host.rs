@@ -2,6 +2,8 @@ use crate::component::concurrent;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{Accessor, Status};
 use crate::component::func::{LiftContext, LowerContext};
+#[cfg(feature = "caller")]
+use crate::component::linker::CallerInstance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::types::ComponentFunc;
@@ -57,6 +59,22 @@ impl HostFunc {
         })
     }
 
+    #[cfg(feature = "caller")]
+    fn from_canonical_with_caller<T, F, P, R>(func: F) -> Arc<HostFunc>
+    where
+        F: Fn(StoreContextMut<'_, T>, CallerInstance, P) -> HostResult<R> + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
+        T: 'static,
+    {
+        let entrypoint = Self::entrypoint_with_caller::<T, F, P, R>;
+        Arc::new(HostFunc {
+            entrypoint,
+            typecheck: Box::new(typecheck::<P, R>),
+            func: Box::new(func),
+        })
+    }
+
     pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
@@ -66,6 +84,19 @@ impl HostFunc {
     {
         Self::from_canonical::<T, _, _, _>(move |store, params| {
             HostResult::Done(func(store, params))
+        })
+    }
+
+    #[cfg(feature = "caller")]
+    pub(crate) fn from_closure_with_caller<T, F, P, R>(func: F) -> Arc<HostFunc>
+    where
+        T: 'static,
+        F: Fn(StoreContextMut<T>, CallerInstance, P) -> Result<R> + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
+    {
+        Self::from_canonical_with_caller::<T, _, _, _>(move |store, caller_instance, params| {
+            HostResult::Done(func(store, caller_instance, params))
         })
     }
 
@@ -113,6 +144,43 @@ impl HostFunc {
                     OptionsIndex::from_u32(options),
                     NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     move |store, args| (*data.as_ptr())(store, args),
+                )
+            })
+        }
+    }
+
+    #[cfg(feature = "caller")]
+    extern "C" fn entrypoint_with_caller<T, F, P, R>(
+        cx: NonNull<VMOpaqueContext>,
+        data: NonNull<u8>,
+        ty: u32,
+        options: u32,
+        storage: NonNull<MaybeUninit<ValRaw>>,
+        storage_len: usize,
+    ) -> bool
+    where
+        F: Fn(StoreContextMut<'_, T>, CallerInstance, P) -> HostResult<R> + Send + Sync + 'static,
+        P: ComponentNamedList + Lift,
+        R: ComponentNamedList + Lower + 'static,
+        T: 'static,
+    {
+        let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
+        unsafe {
+            call_host_and_handle_result::<T>(cx, |store, instance| {
+                call_host(
+                    store,
+                    instance,
+                    TypeFuncIndex::from_u32(ty),
+                    OptionsIndex::from_u32(options),
+                    NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
+                    move |store, args| {
+                        let vminstance = instance.id().get(store.0);
+                        let opts = &vminstance.component().env_component().options
+                            [OptionsIndex::from_u32(options)];
+                        let caller = opts.instance.as_u32();
+
+                        (*data.as_ptr())(store, CallerInstance { instance, caller }, args)
+                    },
                 )
             })
         }

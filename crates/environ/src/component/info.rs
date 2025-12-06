@@ -51,6 +51,7 @@ use crate::prelude::*;
 use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use cranelift_entity::packed_option::PackedOption;
 use serde_derive::{Deserialize, Serialize};
+use wasmparser::collections::Map;
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {
@@ -59,6 +60,91 @@ pub struct ComponentTranslation {
 
     /// Metadata about required trampolines and what they're supposed to do.
     pub trampolines: PrimaryMap<TrampolineIndex, Trampoline>,
+}
+
+/// A view over the runtime interactions between the subcomponents of a webassembly application.
+/// The elements within [`Self::instances`] correspond to the runtime component
+/// instances which directly instantiate core modules. Each element should contain the information
+/// needed to identify the source of their imports. Specific information about how that is
+/// implemented is available in [`info::RuntimeComponentInstanceStructure`]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct RootComponentInstanceStructure {
+    /// Subcomponent instances that instantiate core modules directly. The keys are the [`RuntimeComponentInstanceStructure.path`]
+    pub instances: Map<String, RuntimeComponentInstanceStructure>,
+
+    /// Re-mapping table from the [`RuntimeComponentInstanceIndex`] to [`RuntimeComponentInstanceStructure.path`]
+    pub table: Map<u32, String>,
+}
+
+impl RootComponentInstanceStructure {
+    /// Returns a mutable reference to the map of runtime component instances
+    /// contained within this root component.
+    pub fn runtime_instances_mut(&mut self) -> &mut Map<String, RuntimeComponentInstanceStructure> {
+        &mut self.instances
+    }
+
+    /// Returns a mutable reference to the component table associated with this  root component.
+    pub fn table_mut(&mut self) -> &mut Map<u32, String> {
+        &mut self.table
+    }
+}
+
+/// Part of the instantiation graph, it represents a core instance of a component instance
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct CoreInstanceStructure {
+    /// Hex encoded sha256 digest of the core module binary.
+    pub module_code_digest: String,
+    /// Exported items from this core instance
+    pub core_exports: Map<u32, String>,
+    /// Imported items by this core instance
+    pub core_imports: Map<u32, String>,
+    /// The sources of the imported items
+    pub sources: Map<u32, Source>,
+}
+
+/// Represents a core export definition in the instantiation graph, used to track the source of
+/// core module imports or the source of component exports
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Source {
+    /// Dot [`.`] separated indices to identify a component instance entry in the instantiation graph
+    pub path: String,
+    /// Index of the referenced core instance within the instance represented by the path
+    pub core_instance: u32,
+    /// Index of the referenced export entry
+    pub export: u32,
+}
+
+impl Source {
+    /// Associates imports with the host as the source.
+    pub fn host() -> Source {
+        Source {
+            path: "host".to_string(),
+            core_instance: 0,
+            export: 0,
+        }
+    }
+
+    /// Full path through the instantiation graph to a core export entry
+    pub fn full_path(self) -> String {
+        format!("{}.{}.{}", self.path, self.core_instance, self.export)
+    }
+}
+
+/// Part of the instantiation graph. Represents a component instance which instantiates *statically*
+/// known modules. Corresponds to a [`RuntimeComponentInstanceIndex`].
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct RuntimeComponentInstanceStructure {
+    /// The path of this runtime component instance starting from the root.
+    /// E.g. `0.1.4` where each number corresponds to the instance index in the
+    /// previous component index space. So instance 4 of instance 1 of .
+    pub path: String,
+
+    /// Maps to the core definitions that are being exported by this component.
+    pub component_exports: Map<u32, Source>,
+
+    /// Map of the core instances associated with this component instance.
+    /// The index represents the core instance index within the index space of this component.
+    pub core_instances: Map<u32, CoreInstanceStructure>,
 }
 
 /// Run-time-type-information about a `Component`, its structure, and how to
@@ -72,6 +158,9 @@ pub struct ComponentTranslation {
 /// this is going to undergo a lot of churn.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Component {
+    /// Component Structure keeping track of the runtime instances dependency graph
+    pub instantiation_graph: RootComponentInstanceStructure,
+
     /// A list of typed values that this component imports.
     ///
     /// Note that each name is given an `ImportIndex` here for the next map to
