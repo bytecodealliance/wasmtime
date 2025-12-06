@@ -670,19 +670,6 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
 }
 
 #[cfg(feature = "component-model-async")]
-fn backpressure_set(
-    store: &mut dyn VMStore,
-    _instance: Instance,
-    caller_instance: u32,
-    enabled: u32,
-) -> Result<()> {
-    store.concurrent_state_mut().backpressure_modify(
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        |_| Some(if enabled != 0 { 1 } else { 0 }),
-    )
-}
-
-#[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
     _instance: Instance,

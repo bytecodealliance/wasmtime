@@ -759,13 +759,6 @@ pub enum Trampoline {
         ty: TypeResourceTableIndex,
     },
 
-    /// A `backpressure.set` intrinsic, which tells the host to enable or
-    /// disable backpressure for the caller's instance.
-    BackpressureSet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-    },
-
     /// A `backpressure.inc` intrinsic.
     BackpressureInc {
         /// The specific component instance which is calling the intrinsic.
@@ -1202,7 +1195,6 @@ impl Trampoline {
             ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
             ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
             ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
-            BackpressureSet { .. } => format!("backpressure-set"),
             BackpressureInc { .. } => format!("backpressure-inc"),
             BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),

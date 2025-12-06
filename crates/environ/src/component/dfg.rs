@@ -338,9 +338,6 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
     },
-    BackpressureSet {
-        instance: RuntimeComponentInstanceIndex,
-    },
     BackpressureInc {
         instance: RuntimeComponentInstanceIndex,
     },
@@ -957,9 +954,6 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceRep { instance, ty } => info::Trampoline::ResourceRep {
                 instance: *instance,
                 ty: *ty,
-            },
-            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
-                instance: *instance,
             },
             Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
                 instance: *instance,
