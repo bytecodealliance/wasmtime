@@ -21,6 +21,10 @@ fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     ))
 }
 
+pub(crate) fn check_blocking(_: &mut dyn VMStore) -> Result<()> {
+    Ok(())
+}
+
 pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     _store: &mut dyn VMStore,
     future: impl Future<Output = Result<R>> + Send + 'static,

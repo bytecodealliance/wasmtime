@@ -122,7 +122,7 @@ interface resource-stream {
     foo: func();
   }
 
-  foo: func(count: u32) -> stream<x>;
+  foo: async func(count: u32) -> stream<x>;
 }
 
 interface closed {
@@ -157,7 +157,7 @@ interface cancel {
     leak-task-after-cancel,
   }
 
-  run: func(mode: mode, cancel-delay-millis: u64);
+  run: async func(mode: mode, cancel-delay-millis: u64);
 }
 
 interface intertask {

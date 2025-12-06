@@ -51,7 +51,7 @@
     ))
   ))
 
-  (func (export "f") (result u32) (canon lift (core func $i "f")))
+  (func (export "f") async (result u32) (canon lift (core func $i "f")))
 )
 
 (assert_return (invoke "f") (u32.const 1)) ;; expect DROPPED status (not CANCELLED)

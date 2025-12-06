@@ -112,6 +112,9 @@ pub enum Trap {
     /// scenario where a component instance tried to call an import or intrinsic
     /// when it wasn't allowed to, e.g. from a post-return function.
     CannotLeaveComponent,
+
+    /// A synchronous task attempted to make a potentially blocking call.
+    CannotBlockSyncTask,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -154,6 +157,7 @@ impl Trap {
             DisabledOpcode
             AsyncDeadlock
             CannotLeaveComponent
+            CannotBlockSyncTask
         }
 
         None
@@ -190,6 +194,7 @@ impl fmt::Display for Trap {
             DisabledOpcode => "pulley opcode disabled at compile time was executed",
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
             CannotLeaveComponent => "cannot leave component instance",
+            CannotBlockSyncTask => "cannot block a synchronous task before returning",
         };
         write!(f, "wasm trap: {desc}")
     }

@@ -58,7 +58,7 @@
     ))
   ))
 
-  (func (export "f") (result u32) (canon lift (core func $i "f")))
+  (func (export "f") async (result u32) (canon lift (core func $i "f")))
 )
 
 ;; Note that there's no way for `future.read` to return DROPPED since the write

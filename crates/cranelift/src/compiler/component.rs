@@ -742,6 +742,14 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
+            Trampoline::CheckBlocking => {
+                self.translate_libcall(
+                    host::check_blocking,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
             Trampoline::ContextGet { instance, slot } => {
                 self.translate_libcall(
                     host::context_get,

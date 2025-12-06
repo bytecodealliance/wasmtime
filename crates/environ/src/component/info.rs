@@ -1112,6 +1112,10 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
+    /// An intrinsic used by FACT-generated modules to check whether an
+    /// async-typed function may be called via a sync lower.
+    CheckBlocking,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
@@ -1242,6 +1246,7 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
+            CheckBlocking => format!("check-blocking"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),

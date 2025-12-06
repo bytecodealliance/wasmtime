@@ -214,7 +214,7 @@ mod one_import_concurrent {
 
                 export bar: async func();
             }
-        ",
+        "
     });
 
     #[tokio::test]
@@ -229,7 +229,7 @@ mod one_import_concurrent {
             r#"
                 (component
                     (import "foo" (instance $foo-instance
-                        (export "foo" (func))
+                        (export "foo" (func async))
                     ))
                     (core module $libc
                         (memory (export "memory") 1)
@@ -255,7 +255,7 @@ mod one_import_concurrent {
                         ))
                     ))
 
-                    (func $f (export "bar")
+                    (func $f (export "bar") async
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
