@@ -60,6 +60,7 @@ component-model = [
   "dep:semver",
   "wasmparser/component-model",
 ]
+component-model-async = ['component-model']
 demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 gc-drc = ["gc"]
@@ -74,9 +75,4 @@ compile = [
 stack-switching = []
 threads = ['std']
 wmemcheck = ['std']
-std = [
-  'anyhow/std',
-  'object/std',
-  'wasmparser/std',
-  'indexmap/std',
-]
+std = ['anyhow/std', 'object/std', 'wasmparser/std', 'indexmap/std']

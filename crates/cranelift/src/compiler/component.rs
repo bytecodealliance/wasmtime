@@ -664,6 +664,22 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
+            Trampoline::SyncToSyncEnterCall => {
+                self.translate_libcall(
+                    host::sync_to_sync_enter_call,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::SyncToSyncExitCall => {
+                self.translate_libcall(
+                    host::sync_to_sync_exit_call,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
             Trampoline::PrepareCall { memory } => {
                 self.translate_libcall(
                     host::prepare_call,
@@ -675,7 +691,7 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::SyncStartCall { callback } => {
+            Trampoline::SyncToAsyncStartCall { callback } => {
                 let pointer_type = self.isa.pointer_type();
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     &WasmFuncType::new(
@@ -687,7 +703,7 @@ impl<'a> TrampolineCompiler<'a> {
                 );
                 let values_vec_len = self.builder.ins().iconst(pointer_type, i64::from(len));
                 self.translate_libcall(
-                    host::sync_start,
+                    host::sync_to_async_start,
                     HostResult::MultiValue {
                         ptr: Some(values_vec_ptr),
                         len: Some(values_vec_len),
@@ -701,12 +717,12 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::AsyncStartCall {
+            Trampoline::AsyncToAnyStartCall {
                 callback,
                 post_return,
             } => {
                 self.translate_libcall(
-                    host::async_start,
+                    host::async_to_any_start,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
