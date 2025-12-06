@@ -10,6 +10,8 @@ use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
 
@@ -535,14 +537,14 @@ where
         todo!()
     }
 
-    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
-        let mut bytes = smallvec::smallvec![];
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        let mut bytes = vec![];
         let nop = pulley_interpreter::op::Nop {};
         nop.encode(&mut bytes);
         // NOP needs to be a 1-byte opcode so it can be used to
         // overwrite a callsite of any length.
         assert_eq!(bytes.len(), 1);
-        bytes
+        vec![bytes]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

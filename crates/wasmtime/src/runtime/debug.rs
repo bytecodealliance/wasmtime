@@ -1,19 +1,23 @@
 //! Debugging API.
 
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, OwnedRooted,
-    StoreContext, StoreContextMut, Val,
+    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
+    OwnedRooted, StoreContext, StoreContextMut, Val,
+    code::StoreCodePC,
+    module::ModuleRegistry,
     store::{AutoAssertNoGc, StoreOpaque},
-    vm::{CurrentActivationBacktrace, VMContext},
+    vm::{CompiledModuleId, CurrentActivationBacktrace, VMContext},
 };
+use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
+use anyhow::Result;
 use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
+    FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -52,6 +56,34 @@ impl<'a, T> StoreContextMut<'a, T> {
         };
         view.move_to_parent(); // Load the first frame.
         Some(view)
+    }
+
+    /// Start an edit session to update breakpoints.
+    pub fn edit_breakpoints(self) -> Option<BreakpointEdit<'a>> {
+        if !self.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let (breakpoints, registry) = self.0.breakpoints_and_registry_mut();
+        Some(breakpoints.edit(registry))
+    }
+}
+
+impl<'a, T> StoreContext<'a, T> {
+    /// Return all breakpoints.
+    pub fn breakpoints(self) -> Option<impl Iterator<Item = Breakpoint> + 'a> {
+        if !self.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let (breakpoints, registry) = self.0.breakpoints_and_registry();
+        Some(breakpoints.breakpoints(registry))
+    }
+
+    /// Indicate whether single-step mode is enabled.
+    pub fn is_single_step(&self) -> bool {
+        let (breakpoints, _) = self.0.breakpoints_and_registry();
+        breakpoints.is_single_step()
     }
 }
 
@@ -458,6 +490,8 @@ pub enum DebugEvent<'a> {
     UncaughtExceptionThrown(OwnedRooted<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
+    /// A breakpoint was reached.
+    Breakpoint,
 }
 
 /// A handler for debug events.
@@ -515,4 +549,199 @@ pub trait DebugHandler: Clone + Send + Sync + 'static {
         store: StoreContextMut<'_, Self::Data>,
         event: DebugEvent<'_>,
     ) -> impl Future<Output = ()> + Send;
+}
+
+/// Breakpoint state for modules within a store.
+#[derive(Default)]
+pub(crate) struct BreakpointState {
+    /// Single-step mode.
+    single_step: bool,
+    /// Breakpoints added individually.
+    breakpoints: BTreeSet<BreakpointKey>,
+}
+
+/// A breakpoint.
+pub struct Breakpoint {
+    /// Reference to the module in which we are setting the breakpoint.
+    pub module: Module,
+    /// Wasm PC offset within the module.
+    pub pc: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct BreakpointKey(CompiledModuleId, u32);
+
+impl BreakpointKey {
+    fn from_raw(module: &Module, pc: u32) -> BreakpointKey {
+        BreakpointKey(module.id(), pc)
+    }
+
+    fn get(&self, registry: &ModuleRegistry) -> Breakpoint {
+        let module = registry
+            .module_by_compiled_id(self.0)
+            .expect("Module should not have been removed from Store")
+            .clone();
+        Breakpoint { module, pc: self.1 }
+    }
+}
+
+/// A breakpoint-editing session.
+///
+/// This enables updating breakpoint state (setting or unsetting
+/// individual breakpoints or the store-global single-step flag) in a
+/// batch. It is more efficient to batch these updates because
+/// "re-publishing" the newly patched code, with update breakpoint
+/// settings, typically requires a syscall to re-enable execute
+/// permissions.
+pub struct BreakpointEdit<'a> {
+    state: &'a mut BreakpointState,
+    registry: &'a mut ModuleRegistry,
+    /// Modules that have been edited.
+    ///
+    /// Invariant: each of these modules' CodeMemory objects is
+    /// *unpublished* when in the dirty set.
+    dirty_modules: BTreeSet<StoreCodePC>,
+}
+
+impl BreakpointState {
+    pub(crate) fn edit<'a>(&'a mut self, registry: &'a mut ModuleRegistry) -> BreakpointEdit<'a> {
+        BreakpointEdit {
+            state: self,
+            registry,
+            dirty_modules: BTreeSet::new(),
+        }
+    }
+
+    pub(crate) fn breakpoints<'a>(
+        &'a self,
+        registry: &'a ModuleRegistry,
+    ) -> impl Iterator<Item = Breakpoint> + 'a {
+        self.breakpoints.iter().map(|key| key.get(registry))
+    }
+
+    pub(crate) fn is_single_step(&self) -> bool {
+        self.single_step
+    }
+}
+
+impl<'a> BreakpointEdit<'a> {
+    fn get_code_memory<'b>(
+        registry: &'b mut ModuleRegistry,
+        dirty_modules: &mut BTreeSet<StoreCodePC>,
+        module: &Module,
+    ) -> Result<&'b mut CodeMemory> {
+        let store_code_pc = registry.store_code_base_or_register(module)?;
+        let code_memory = registry
+            .store_code_mut(store_code_pc)
+            .expect("Just checked presence above")
+            .code_memory_mut()
+            .expect("Must have unique ownership of StoreCode in guest-debug mode");
+        if dirty_modules.insert(store_code_pc) {
+            // SAFETY: We have a mutable borrow to the `registry`,
+            // which is part of the `Store`. Code in this store cannot
+            // run while we hold that borrow. We re-publish when we
+            // are dropped.
+            unsafe {
+                code_memory.unpublish()?;
+            }
+        }
+        Ok(code_memory)
+    }
+
+    fn patch<'b>(
+        patches: impl Iterator<Item = FrameTableBreakpointData<'b>> + 'b,
+        mem: &mut CodeMemory,
+        enable: bool,
+    ) {
+        // SAFETY: we are invoked only in a context where the code
+        // memory is not being actively executed.
+        unsafe {
+            mem.edit(|mem| {
+                for patch in patches {
+                    let data = if enable { patch.enable } else { patch.disable };
+                    let mem = &mut mem[patch.offset..patch.offset + data.len()];
+                    log::trace!("patch: offset 0x{:x} with enable={enable}: data {data:?} replacing {mem:?}", patch.offset);
+                    mem.copy_from_slice(data);
+                }
+            });
+        }
+    }
+
+    /// Add a breakpoint in the given module at the given PC in that
+    /// module.
+    ///
+    /// No effect if the breakpoint is already set.
+    pub fn add_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+        let key = BreakpointKey::from_raw(module, pc);
+        self.state.breakpoints.insert(key);
+        log::trace!("patching in breakpoint {key:?}");
+        let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+        let frame_table = module
+            .frame_table()
+            .expect("Frame table must be present when guest-debug is enabled");
+        let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
+        Self::patch(patches, mem, true);
+        Ok(())
+    }
+
+    /// Remove a breakpoint in the given module at the given PC in
+    /// that module.
+    ///
+    /// No effect if the breakpoint was not set.
+    pub fn remove_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+        let key = BreakpointKey::from_raw(module, pc);
+        self.state.breakpoints.remove(&key);
+        if !self.state.single_step {
+            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+            let frame_table = module
+                .frame_table()
+                .expect("Frame table must be present when guest-debug is enabled");
+            let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
+            Self::patch(patches, mem, false);
+        }
+        Ok(())
+    }
+
+    /// Turn on or off single-step mode.
+    ///
+    /// In single-step mode, a breakpoint event is emitted at every
+    /// Wasm PC.
+    pub fn single_step(&mut self, enabled: bool) -> Result<()> {
+        log::trace!(
+            "single_step({enabled}) with breakpoint set {:?}",
+            self.state.breakpoints
+        );
+        let modules = self.registry.all_modules().cloned().collect::<Vec<_>>();
+        for module in modules {
+            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, &module)?;
+            let table = module
+                .frame_table()
+                .expect("Frame table must be present when guest-debug is enabled");
+            for (wasm_pc, patch) in table.breakpoint_patches() {
+                let key = BreakpointKey::from_raw(&module, wasm_pc);
+                let this_enabled = enabled || self.state.breakpoints.contains(&key);
+                log::trace!(
+                    "single_step: enabled {enabled} key {key:?} -> this_enabled {this_enabled}"
+                );
+                Self::patch(core::iter::once(patch), mem, this_enabled);
+            }
+        }
+
+        self.state.single_step = enabled;
+
+        Ok(())
+    }
+}
+
+impl<'a> Drop for BreakpointEdit<'a> {
+    fn drop(&mut self) {
+        for &store_code_base in &self.dirty_modules {
+            let store_code = self.registry.store_code_mut(store_code_base).unwrap();
+            store_code
+                .code_memory_mut()
+                .expect("Must have unique ownership of StoreCode in guest-debug mode")
+                .publish()
+                .expect("re-publish failed");
+        }
+    }
 }

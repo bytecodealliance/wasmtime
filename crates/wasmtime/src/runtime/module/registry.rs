@@ -106,6 +106,11 @@ impl ModuleRegistry {
         self.modules.get(&id)
     }
 
+    /// Get a module by CompiledModuleId, if present.
+    pub fn module_by_compiled_id(&self, id: CompiledModuleId) -> Option<&Module> {
+        self.modules.get(&RegisteredModuleId(id))
+    }
+
     /// Fetches a registered StoreCode and module and an offset within
     /// it given a program counter value.
     pub fn module_and_code_by_pc<'a>(&'a self, pc: usize) -> Option<(ModuleWithCode<'a>, usize)> {
@@ -121,13 +126,38 @@ impl ModuleRegistry {
 
     /// Fetches the `StoreCode` for a given `EngineCode`.
     pub fn store_code(&self, engine_code: &EngineCode) -> Option<&StoreCode> {
-        let store_code_pc = *self.store_code.get(&engine_code.text_range().start)?;
+        let store_code_pc = self.store_code_base(engine_code)?;
         let (_, code) = self.loaded_code.range(store_code_pc..).next()?;
         Some(&code.code)
     }
 
+    /// Fetches the base `StoreCodePC` for a given `EngineCode`.
+    pub fn store_code_base(&self, engine_code: &EngineCode) -> Option<StoreCodePC> {
+        self.store_code
+            .get(&engine_code.text_range().start)
+            .cloned()
+    }
+
+    /// Fetches the base `StoreCodePC` for a given `EngineCode` with
+    /// `Module`, registering the module if not already registered.
+    pub fn store_code_base_or_register(&mut self, module: &Module) -> Result<StoreCodePC> {
+        let key = module.engine_code().text_range().start;
+        if !self.store_code.contains_key(&key) {
+            let engine = module.engine().clone();
+            self.register_module(module, &engine)?;
+        }
+        Ok(*self.store_code.get(&key).unwrap())
+    }
+
+    /// Fetches a mutable `StoreCode` for a given base `StoreCodePC`.
+    pub fn store_code_mut(&mut self, store_code_base: StoreCodePC) -> Option<&mut StoreCode> {
+        let (_, code) = self.loaded_code.range_mut(store_code_base..).next()?;
+        assert_eq!(code.code.text_range().start, store_code_base);
+        Some(&mut code.code)
+    }
+
     /// Gets an iterator over all modules in the registry.
-    #[cfg(feature = "coredump")]
+    #[cfg(any(feature = "coredump", feature = "debug"))]
     pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
         self.modules.values()
     }

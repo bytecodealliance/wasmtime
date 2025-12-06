@@ -811,8 +811,8 @@ impl MachInst for Inst {
         Inst::Nop4
     }
 
-    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
-        smallvec![0x13, 0x00, 0x00, 0x00]
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![vec![0x13, 0x00, 0x00, 0x00]]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

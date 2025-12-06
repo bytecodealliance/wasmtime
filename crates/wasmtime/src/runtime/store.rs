@@ -76,8 +76,6 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-#[cfg(feature = "debug")]
-use crate::DebugHandler;
 #[cfg(all(feature = "gc", feature = "debug"))]
 use crate::OwnedRooted;
 use crate::RootSet;
@@ -103,6 +101,8 @@ use crate::runtime::vm::{
     VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
+#[cfg(feature = "debug")]
+use crate::{BreakpointState, DebugHandler};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
@@ -550,6 +550,20 @@ pub struct StoreOpaque {
     /// For example if Pulley is enabled and configured then this will store a
     /// Pulley interpreter.
     executor: Executor,
+
+    /// The debug breakpoint state for this store.
+    ///
+    /// When guest debugging is enabled, a given store may have a set
+    /// of breakpoints defined, denoted by module and Wasm PC within
+    /// that module. Or alternately, it may be in "single-step" mode,
+    /// where every possible breakpoint is logically enabled.
+    ///
+    /// When execution of any instance in this store hits any defined
+    /// breakpoint, a `Breakpoint` debug event is emitted and the
+    /// handler defined above, if any, has a chance to perform some
+    /// logic before returning to allow execution to resume.
+    #[cfg(feature = "debug")]
+    breakpoints: BreakpointState,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -758,6 +772,8 @@ impl<T> Store<T> {
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
             concurrent_state: Default::default(),
+            #[cfg(feature = "debug")]
+            breakpoints: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1252,6 +1268,24 @@ impl<T> Store<T> {
         self.as_context_mut().debug_frames()
     }
 
+    /// Start an edit session to update breakpoints.
+    #[cfg(feature = "debug")]
+    pub fn edit_breakpoints(&mut self) -> Option<crate::BreakpointEdit<'_>> {
+        self.as_context_mut().edit_breakpoints()
+    }
+
+    /// Return all breakpoints.
+    #[cfg(feature = "debug")]
+    pub fn breakpoints(&self) -> Option<impl Iterator<Item = crate::Breakpoint> + '_> {
+        self.as_context().breakpoints()
+    }
+
+    /// Indicate whether single-step mode is enabled.
+    #[cfg(feature = "debug")]
+    pub fn is_single_step(&self) -> bool {
+        self.as_context().is_single_step()
+    }
+
     /// Set the debug callback on this store.
     ///
     /// See [`crate::DebugHandler`] for more documentation.
@@ -1619,6 +1653,18 @@ impl StoreOpaque {
 
     pub fn store_data_mut_and_registry(&mut self) -> (&mut StoreData, &ModuleRegistry) {
         (&mut self.store_data, &self.modules)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn breakpoints_and_registry_mut(
+        &mut self,
+    ) -> (&mut BreakpointState, &mut ModuleRegistry) {
+        (&mut self.breakpoints, &mut self.modules)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn breakpoints_and_registry(&self) -> (&BreakpointState, &ModuleRegistry) {
+        (&self.breakpoints, &self.modules)
     }
 
     #[inline]

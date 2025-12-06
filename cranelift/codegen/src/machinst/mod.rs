@@ -177,9 +177,9 @@ pub trait MachInst: Clone + Debug {
     /// the instruction must have a nonzero size if preferred_size is nonzero.
     fn gen_nop(preferred_size: usize) -> Self;
 
-    /// The smallest possible NOP, as a unit that can be used to patch
-    /// out code.
-    fn gen_nop_unit() -> SmallVec<[u8; 8]>;
+    /// The various kinds of NOP, with size, sorted in ascending-size
+    /// order.
+    fn gen_nop_units() -> Vec<Vec<u8>>;
 
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.

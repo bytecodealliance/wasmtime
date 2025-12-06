@@ -247,6 +247,9 @@ macro_rules! foreach_builtin_function {
             // Throw an exception.
             #[cfg(feature = "gc")]
             throw_ref(vmctx: vmctx, exnref: u32) -> bool;
+
+            // Process a debug breakpoint.
+            breakpoint(vmctx: vmctx) -> bool;
         }
     };
 }

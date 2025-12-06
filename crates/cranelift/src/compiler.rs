@@ -9,6 +9,7 @@ use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::inline::InlineCommand;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
+use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::isa::{
     OwnedTargetIsa, TargetIsa,
     unwind::{UnwindInfo, UnwindInfoKind},
@@ -490,6 +491,9 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
 
+        let mut breakpoint_table = Vec::new();
+        let mut nop_units = None;
+
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, _key, func)) in funcs.iter().enumerate() {
             let (sym_id, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
@@ -523,6 +527,14 @@ impl wasmtime_environ::Compiler for Compiler {
                     &frame_descriptors,
                 )?;
             }
+            if self.tunables.debug_guest {
+                clif_to_env_breakpoints(
+                    range.clone(),
+                    func.breakpoint_patches(),
+                    &mut breakpoint_table,
+                )?;
+                nop_units.get_or_insert_with(|| func.buffer.nop_units.clone());
+            }
             builder.append_padding(self.linkopts.padding_between_functions);
 
             let info = FunctionLoc {
@@ -532,7 +544,37 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym_id, info));
         }
 
-        builder.finish();
+        // Sort breakpoints by Wasm PC now. Note that the same Wasm PC
+        // may appear in multiple functions (due to inlining) so it is
+        // only now that we can aggregate all appearances of a PC
+        // together for breakpoint metadata indexed by that PC.
+        breakpoint_table.sort_by_key(|(wasm_pc, _text_range)| *wasm_pc);
+
+        builder.finish(|text| {
+            if !breakpoint_table.is_empty() {
+                let nop_units = nop_units.as_ref().unwrap();
+                let fill_with_nops = |mut slice: &mut [u8]| {
+                    while !slice.is_empty() {
+                        let nop_unit = nop_units
+                            .iter()
+                            .rev()
+                            .find(|u| u.len() <= slice.len())
+                            .expect("no NOP is small enough for remaining slice");
+                        let (nop_sized_chunk, rest) = slice.split_at_mut(nop_unit.len());
+                        nop_sized_chunk.copy_from_slice(&nop_unit);
+                        slice = rest;
+                    }
+                };
+
+                for (wasm_pc, text_range) in &breakpoint_table {
+                    let start = usize::try_from(text_range.start).unwrap();
+                    let end = usize::try_from(text_range.end).unwrap();
+                    let text = &mut text[start..end];
+                    frame_tables.add_breakpoint_patch(*wasm_pc, text_range.start, text);
+                    fill_with_nops(text);
+                }
+            }
+        });
 
         if self.tunables.generate_address_map {
             addrs.append_to(obj);
@@ -674,8 +716,19 @@ impl wasmtime_environ::Compiler for Compiler {
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
         let sigs = BuiltinFunctionSignatures::new(self);
-        let builtin_func_index = key.unwrap_wasm_to_builtin_trampoline();
-        let wasm_sig = sigs.wasm_signature(builtin_func_index);
+
+        let (builtin_func_index, wasm_sig) = match key {
+            FuncKey::WasmToBuiltinTrampoline(builtin) => (builtin, sigs.wasm_signature(builtin)),
+            FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                let mut sig = sigs.wasm_signature(builtin);
+                // Patchable-ABI functions cannot return anything. We
+                // raise any errors that occur below so this is fine.
+                sig.returns.clear();
+                sig.call_conv = CallConv::Patchable;
+                (builtin, sig)
+            }
+            _ => unreachable!(),
+        };
         let host_sig = sigs.host_signature(builtin_func_index);
 
         let mut compiler = self.function_compiler();
@@ -736,7 +789,11 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         // And finally, return all the results of this libcall.
-        builder.ins().return_(&results);
+        if !wasm_sig.returns.is_empty() {
+            builder.ins().return_(&results);
+        } else {
+            builder.ins().return_(&[]);
+        }
         builder.finalize();
 
         Ok(CompiledFunctionBody {
@@ -885,6 +942,7 @@ impl InliningCompiler for Compiler {
             None => Cow::Borrowed(symbol),
             Some(Abi::Wasm) => Cow::Owned(format!("{symbol}_wasm_call")),
             Some(Abi::Array) => Cow::Owned(format!("{symbol}_array_call")),
+            Some(Abi::Patchable) => Cow::Owned(format!("{symbol}_patchable_call")),
         };
 
         let compiled_func = if let Some(input) = input {
@@ -1578,6 +1636,21 @@ fn clif_to_env_frame_tables<'a>(
         builder.add_program_point(native_pc_in_code_section, pos, &frames);
     }
 
+    Ok(())
+}
+
+/// Convert from Cranelift's representation of breakpoint patches to
+/// Wasmtime's serialized metadata.
+fn clif_to_env_breakpoints(
+    range: Range<u64>,
+    breakpoint_patches: impl Iterator<Item = (u32, Range<u32>)>,
+    patch_table: &mut Vec<(u32, Range<u32>)>,
+) -> anyhow::Result<()> {
+    patch_table.extend(breakpoint_patches.map(|(wasm_pc, offset_range)| {
+        let start = offset_range.start + u32::try_from(range.start).unwrap();
+        let end = offset_range.end + u32::try_from(range.start).unwrap();
+        (wasm_pc, start..end)
+    }));
     Ok(())
 }
 

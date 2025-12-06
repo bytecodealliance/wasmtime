@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, Func, Instance, Module,
-    Store, StoreContextMut,
+    Store, StoreContextMut, Val,
 };
 
 #[test]
@@ -451,5 +451,214 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoint_events() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+        },
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let mut stack = store.debug_frames().expect("frame cursor must be available");
+              assert!(!stack.done());
+              assert_eq!(stack.num_locals(), 2);
+              assert_eq!(stack.local(0).unwrap_i32(), 1);
+              assert_eq!(stack.local(1).unwrap_i32(), 2);
+              let (func, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(func.as_u32(), 0);
+              assert_eq!(pc, 0x28);
+              stack.move_to_parent();
+              assert!(stack.done());
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x28)?;
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 1);
+    assert!(Module::same(&breakpoints[0].module, &module));
+    assert_eq!(breakpoints[0].pc, 0x28);
+
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .remove_breakpoint(&module, 0x28)?;
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1); // Should not have incremented from above.
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // Enable single-step mode (on top of the breakpoint already enabled).
+    assert!(!store.is_single_step());
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    assert!(store.is_single_step());
+
+    debug_event_checker!(
+        D2, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x24);
+          }
+        },
+        {
+          1 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x26);
+          }
+        },
+        {
+          2 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x28);
+          }
+        },
+        {
+          3 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x29);
+          }
+        }
+    );
+
+    let (handler, counter) = D2::new_and_counter();
+    store.set_debug_handler(handler);
+
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+    // Re-enable individual breakpoint.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x28)
+        .unwrap();
+
+    // Now disable single-stepping. The single breakpoint set above
+    // should still remain.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .single_step(false)
+        .unwrap();
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoints_in_inlined_code() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+            config.compiler_inlining(true);
+            unsafe {
+                config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
+            }
+        },
+        r#"
+    (module
+      (func $f (export "f") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add)
+      
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        call $f))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {}
+        },
+        { 1 ;
+          wasmtime::DebugEvent::Breakpoint => {}
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x2d)?; // `i32.add` in `$f`.
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func_main = instance.get_func(&mut store, "main").unwrap();
+    let func_f = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::I32(0)];
+    // Breakpoint in `$f` should have been hit in `main` even if it
+    // was inlined.
+    func_main
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // Breakpoint in `$f` should be hit when called directly, too.
+    func_f
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 2);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
     Ok(())
 }

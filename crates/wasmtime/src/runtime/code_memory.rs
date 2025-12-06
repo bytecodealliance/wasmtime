@@ -22,6 +22,7 @@ pub struct CodeMemory {
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
+    registered: bool,
     enable_branch_protection: bool,
     needs_executable: bool,
     #[cfg(feature = "debug-builtins")]
@@ -46,6 +47,10 @@ impl Drop for CodeMemory {
     fn drop(&mut self) {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
+        //
+        // We do this rather than invoking `unpublish()` because we
+        // want to skip the mprotect() if we natively own the mmap and
+        // are going to munmap soon anyway.
         if let Some(mem) = self.custom_code_memory.as_ref() {
             if self.published && self.needs_executable {
                 let text = self.text();
@@ -207,6 +212,7 @@ impl CodeMemory {
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
             published: false,
+            registered: false,
             enable_branch_protection: enable_branch_protection
                 .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
             needs_executable,
@@ -303,15 +309,20 @@ impl CodeMemory {
 
     /// Publishes the internal ELF image to be ready for execution.
     ///
-    /// This method can only be called once and will panic if called twice. This
-    /// will parse the ELF image from the original `MmapVec` and do everything
-    /// necessary to get it ready for execution, including:
+    /// This method can only be when the image is not published (its
+    /// default state) and will panic if called when already
+    /// published. This will parse the ELF image from the original
+    /// `MmapVec` and do everything necessary to get it ready for
+    /// execution, including:
     ///
     /// * Change page protections from read/write to read/execute.
     /// * Register unwinding information with the OS
     /// * Register this image with the debugger if native DWARF is present
     ///
     /// After this function executes all JIT code should be ready to execute.
+    ///
+    /// The action may be reversed by calling [`unpublish`], as long
+    /// as that method's safety requirements are upheld.
     pub fn publish(&mut self) -> Result<()> {
         assert!(!self.published);
         self.published = true;
@@ -358,14 +369,17 @@ impl CodeMemory {
                 }
             }
 
-            // With all our memory set up use the platform-specific
-            // `UnwindRegistration` implementation to inform the general
-            // runtime that there's unwinding information available for all
-            // our just-published JIT functions.
-            self.register_unwind_info()?;
+            if !self.registered {
+                // With all our memory set up use the platform-specific
+                // `UnwindRegistration` implementation to inform the general
+                // runtime that there's unwinding information available for all
+                // our just-published JIT functions.
+                self.register_unwind_info()?;
 
-            #[cfg(feature = "debug-builtins")]
-            self.register_debug_image()?;
+                #[cfg(feature = "debug-builtins")]
+                self.register_debug_image()?;
+                self.registered = true;
+            }
         }
 
         Ok(())
@@ -391,6 +405,102 @@ impl CodeMemory {
             Ok(true)
         } else {
             Ok(false)
+        }
+    }
+
+    /// "Unpublish" code memory (transition it from executable to read/writable).
+    ///
+    /// This may be used to edit the code image, as long as the
+    /// overall size of the memory remains the same. Note the hazards
+    /// inherent in editing code that may have been executed: any
+    /// stack frames with PC still active in this code must be
+    /// suspended (e.g., called into a hostcall that is then invoking
+    /// this method, or async-yielded) and any active PC values must
+    /// point to valid instructions. Thus this is mostly useful for
+    /// patching in-place at particular sites, such as by the use of
+    /// Cranelift's `patchable_call` instruction.
+    ///
+    /// # Safety
+    ///
+    /// This code memory may not be actively executing when this
+    /// method is invoked or after it returns until the code is
+    /// re-[`publish`]ed. Doing so is UB (and will likely cause a
+    /// segfault, or possibly worse due to icache incoherence).
+    ///
+    /// If this method returns an error, the code memory is in an
+    /// undetermined state and must never be executed again.
+    pub unsafe fn unpublish(&mut self) -> Result<()> {
+        assert!(self.published);
+        self.published = false;
+
+        if self.text().is_empty() {
+            return Ok(());
+        }
+
+        if self.custom_unpublish()? {
+            return Ok(());
+        }
+
+        // SAFETY: we are guaranteed by our own safety conditions that
+        // we have exclusive access to this code and can change its
+        // permissions (removing the execute bit) without causing
+        // problems.
+        #[cfg(has_virtual_memory)]
+        unsafe {
+            if self.mmap.supports_virtual_memory() {
+                self.mmap.make_readwrite(0..self.mmap.len())?;
+            }
+        }
+
+        // Note that we do *not* unregister: we expect unpublish
+        // to be used for temporary edits, so we want the
+        // registration to "stick" after the initial publish and
+        // not toggle in subsequent unpublish/publish cycles.
+
+        Ok(())
+    }
+
+    fn custom_unpublish(&mut self) -> Result<bool> {
+        if let Some(mem) = self.custom_code_memory.as_ref() {
+            let text = self.text();
+            mem.unpublish_executable(text.as_ptr(), text.len())?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Temporarily edit the code with the given closure.
+    ///
+    /// This method swaps the memory's permissions from R+X (published
+    /// code) to R+W (ordinary data memory) and runs the closure, then
+    /// swaps them back. It allows for patching code memory when it is
+    /// uniquely owned.
+    ///
+    /// The code memory is not re-registered with any native debugger
+    /// or profiler; it is assumed that the original metadata, if any,
+    /// is still valid. Thus this mechanism is best used for local
+    /// patches, not wholesale rewrites.
+    ///
+    /// If an error is returned, the memory must no longer be used for
+    /// execution: changing permissions back to executable may have
+    /// failed.
+    ///
+    /// # Safety
+    ///
+    /// The owner must guarantee that no code is currently executing
+    /// in this range. This may be ensured, for example, by tying
+    /// unique ownership of this `CodeMemory` to an object (such as
+    /// the `Store`) that is required to run that code. If code in
+    /// this region does run while the edit is occurring, UB results
+    /// (likely a segfault).
+    pub unsafe fn edit(&mut self, editor: impl FnOnce(&mut [u8])) {
+        assert!(!self.published);
+        {
+            // SAFETY: we have successfully changed permissions above to
+            // read-write.
+            let text = unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] };
+            editor(text);
         }
     }
 

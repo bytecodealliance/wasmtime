@@ -1149,8 +1149,28 @@ impl Module {
         if data.is_empty() {
             None
         } else {
-            Some(FrameTable::parse(data).expect("Frame tables were validated on module load"))
+            let orig_text = self.inner.code.text();
+            Some(
+                FrameTable::parse(data, orig_text)
+                    .expect("Frame tables were validated on module load"),
+            )
         }
+    }
+
+    /// Is this `Module` the same as another?
+    ///
+    /// Ordinarily, module identity does not matter: a Wasmtime user
+    /// will create or obtain a module from some source and
+    /// instantiate it, and any two `Module` objects created from the
+    /// same source module are interchangeable. However, introspecting
+    /// module identity may be useful when examining Wasm VM state,
+    /// e.g. via debug APIs. It is guaranteed that `Module::same`
+    /// returns true for `Module` objects that reference the same
+    /// underlying module (e.g., one created via a `clone` of the
+    /// other).
+    #[inline]
+    pub fn same(a: &Module, b: &Module) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
     }
 }
 

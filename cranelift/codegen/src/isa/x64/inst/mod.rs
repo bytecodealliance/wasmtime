@@ -11,6 +11,8 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
 use smallvec::{SmallVec, smallvec};
@@ -1308,6 +1310,7 @@ impl MachInst for Inst {
         match self {
             Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::PatchableCallKnown { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
 
@@ -1391,8 +1394,13 @@ impl MachInst for Inst {
         Inst::nop(std::cmp::min(preferred_size, 9) as u8)
     }
 
-    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
-        smallvec![0x90]
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![
+            // Standard 1-byte NOP.
+            vec![0x90],
+            // 5-byte NOP useful for patching out patchable calls.
+            vec![0x0f, 0x1f, 0x44, 0x00, 0x00],
+        ]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

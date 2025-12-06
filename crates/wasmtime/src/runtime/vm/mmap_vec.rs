@@ -226,6 +226,21 @@ impl MmapVec {
         unsafe { mmap.make_readonly(range.start..range.end) }
     }
 
+    /// Makes the specified `range` within this `mmap` to be
+    /// read-write (and not executable).
+    #[cfg(has_virtual_memory)]
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        let (mmap, len) = match self {
+            MmapVec::Mmap { mmap, len } => (mmap, *len),
+            MmapVec::ExternallyOwned { .. } => {
+                bail!("Unable to make externally owned memory read-write");
+            }
+        };
+        assert!(range.start <= range.end);
+        assert!(range.end <= len);
+        unsafe { mmap.make_readwrite(range.start..range.end) }
+    }
+
     /// Returns the underlying file that this mmap is mapping, if present.
     #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
