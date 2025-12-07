@@ -109,3 +109,19 @@ block0(v2: i64):
 ; nextln:     v17 = iconst.i8 1
 ; nextln:     return v17
 ; nextln: }
+
+function %a(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 6
+    v3 = iconst.i64 7
+    v4 = select v0, v1, v3
+    v5 = icmp eq v4, v1
+    return v5
+}
+
+; check: function %a(i64) -> i8 fast {
+; check: block0(v0: i64):
+; nextln:     v6 = iconst.i64 0
+; nextln:     v7 = icmp ne v0, v6  ; v6 = 0
+; nextln:     return v7
+; nextln: }

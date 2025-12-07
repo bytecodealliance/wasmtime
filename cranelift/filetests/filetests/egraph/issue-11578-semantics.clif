@@ -81,3 +81,16 @@ block0(v2: i64):
 }
 
 ; run: %constant_propagated(0) == 1
+
+function %non_icmp_inner(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 6
+    v3 = iconst.i64 7
+    v4 = select v0, v1, v3
+    v5 = icmp eq v4, v1
+    return v5
+}
+
+; run: %non_icmp_inner(0) == 0
+; run: %non_icmp_inner(1) == 1
+; run: %non_icmp_inner(5) == 1
