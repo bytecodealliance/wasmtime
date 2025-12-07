@@ -1,0 +1,111 @@
+test optimize
+set opt_level=speed
+target x86_64
+target aarch64
+
+function %eq_k1(i64) -> i8 {
+block0(v2: i64):
+    v14 = iconst.i64 -562949953421310
+    v3 = band v2, v14
+    v16 = iconst.i64 0
+    v4 = icmp eq v3, v16
+    v5 = iconst.i64 6
+    v6 = iconst.i64 7
+    v7 = select v4, v5, v6
+    v8 = icmp eq v7, v5
+    return v8
+}
+
+; check:  function %eq_k1(i64) -> i8 fast {
+; check:  block0(v2: i64):
+; nextln:      v14 = iconst.i64 -562949953421310
+; nextln:      v3 = band v2, v14
+; nextln:      v16 = iconst.i64 0
+; nextln:      v4 = icmp eq v3, v16
+; nextln:      return v4
+; nextln: }
+
+function %eq_k2(i64) -> i8 {
+block0(v2: i64):
+    v14 = iconst.i64 -562949953421310
+    v3 = band v2, v14
+    v16 = iconst.i64 0
+    v4 = icmp eq v3, v16
+    v5 = iconst.i64 6
+    v6 = iconst.i64 7
+    v7 = select v4, v5, v6
+    v8 = icmp eq v7, v6
+    return v8
+}
+
+; check: function %eq_k2(i64) -> i8 fast {
+; check: block0(v2: i64):
+; nextln:     v14 = iconst.i64 -562949953421310
+; nextln:     v3 = band v2, v14  ; v14 = -562949953421310
+; nextln:     v16 = iconst.i64 0
+; nextln:     v18 = icmp ne v3, v16  ; v16 = 0
+; nextln:     return v18
+; nextln: }
+
+function %ne_k1(i64) -> i8 {
+block0(v2: i64):
+    v14 = iconst.i64 -562949953421310
+    v3 = band v2, v14
+    v16 = iconst.i64 0
+    v4 = icmp eq v3, v16
+    v5 = iconst.i64 6
+    v6 = iconst.i64 7
+    v7 = select v4, v5, v6
+    v8 = icmp ne v7, v5
+    return v8
+}
+
+; check: function %ne_k1(i64) -> i8 fast {
+; check: block0(v2: i64):
+; nextln:     v14 = iconst.i64 -562949953421310
+; nextln:     v3 = band v2, v14  ; v14 = -562949953421310
+; nextln:     v16 = iconst.i64 0
+; nextln:     v18 = icmp ne v3, v16  ; v16 = 0
+; nextln:     return v18
+; nextln: }
+
+function %ne_k2(i64) -> i8 {
+block0(v2: i64):
+    v14 = iconst.i64 -562949953421310
+    v3 = band v2, v14
+    v16 = iconst.i64 0
+    v4 = icmp eq v3, v16
+    v5 = iconst.i64 6
+    v6 = iconst.i64 7
+    v7 = select v4, v5, v6
+    v8 = icmp ne v7, v6
+    return v8
+}
+
+; check:  function %ne_k2(i64) -> i8 fast {
+; check:  block0(v2: i64):
+; nextln:      v14 = iconst.i64 -562949953421310
+; nextln:      v3 = band v2, v14
+; nextln:      v16 = iconst.i64 0
+; nextln:      v4 = icmp eq v3, v16
+; nextln:      return v4
+; nextln: }
+
+; select x, k1, k1 should be constant propagated
+function %constant_propagated(i64) -> i8 {
+block0(v2: i64):
+    v14 = iconst.i64 -562949953421310
+    v3 = band v2, v14
+    v16 = iconst.i64 0
+    v4 = icmp eq v3, v16
+    v5 = iconst.i64 6
+    v6 = select v4, v5, v5
+    v7 = icmp eq v6, v5
+    return v7
+}
+
+; check:  function %constant_propagated(i64) -> i8 fast {
+; check:  block0(v2: i64):
+; nextln:     v17 = iconst.i8 1
+; nextln:     return v17
+; nextln: }

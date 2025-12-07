@@ -379,8 +379,34 @@
 ;; icmp on select with two constant inputs compared with one of the two
 ;; constants can directly use the inner select condition.
 ;; See: https://github.com/bytecodealliance/wasmtime/issues/11578
-(rule (simplify (icmp _ (IntCC.Equal)
-  (select ty inner_cond (iconst ty (u64_from_imm64 k1)) (iconst ty (u64_from_imm64 k2)))
-    (iconst ty (u64_from_imm64 k1))))
+(rule (simplify (eq _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k1)))
   (if-let false (u64_eq k1 k2))
-  inner_cond)
+  (ne select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (eq _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k2)))
+  (if-let false (u64_eq k1 k2))
+  (eq select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (ne _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k1)))
+  (if-let false (u64_eq k1 k2))
+  (eq select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (ne _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k2)))
+  (if-let false (u64_eq k1 k2))
+  (ne select_ty inner_cond (iconst_u select_ty 0)))
