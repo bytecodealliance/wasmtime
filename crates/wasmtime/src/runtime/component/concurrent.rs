@@ -90,17 +90,17 @@ use wasmtime_environ::component::{
 };
 
 pub use abort::JoinHandle;
+pub use future_stream_any::{FutureAny, StreamAny};
 pub use futures_and_streams::{
     Destination, DirectDestination, DirectSource, ErrorContext, FutureConsumer, FutureProducer,
     FutureReader, GuardedFutureReader, GuardedStreamReader, ReadBuffer, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult, VecBuffer, WriteBuffer,
 };
-pub(crate) use futures_and_streams::{
-    ResourcePair, lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,
-};
+pub(crate) use futures_and_streams::{ResourcePair, lower_error_context_to_index};
 
 mod abort;
 mod error_contexts;
+mod future_stream_any;
 mod futures_and_streams;
 pub(crate) mod table;
 pub(crate) mod tls;
