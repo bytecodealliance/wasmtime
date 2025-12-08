@@ -18,7 +18,7 @@ use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets, info,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -884,6 +884,11 @@ impl Component {
             Export::LiftedFunction { ty, func, options } => (*ty, func, *options),
             _ => unreachable!(),
         }
+    }
+
+    /// Returns the Instantiation Graph.
+    pub fn instantiation_graph(&self) -> &info::RootComponentInstanceStructure {
+        &self.inner.info.component.instantiation_graph
     }
 }
 
