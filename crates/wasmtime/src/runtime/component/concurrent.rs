@@ -4243,7 +4243,6 @@ impl GuestTask {
             }
         }
 
-        println!("{:?}", self.threads);
         assert!(self.threads.is_empty());
 
         state.delete(self.sync_call_set)?;
