@@ -920,9 +920,15 @@ impl Dir {
             return Err(ErrorCode::Invalid);
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);
-        self.run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
-            .await?;
-        Ok(())
+        match self
+            .run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
+            .await
+        {
+            #[cfg(windows)]
+            Err(ErrorCode::Access) => Err(ErrorCode::NotPermitted),
+            Ok(()) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub(crate) async fn open_at(
