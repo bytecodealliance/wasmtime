@@ -752,8 +752,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
 
         // If we have async support, we need to call sync_to_sync_enter_call to set up
-        // necessary threading context. Otherwise, we can output a call to the simpler
-        // resource_enter_call intrinsic, and omit this entirely if there are no borrows.
+        // necessary threading context.ß
         let old_thread = if cfg!(feature = "component-model-async") {
             let enter = self.module.import_sync_to_sync_enter_call();
             self.instruction(I32Const(
@@ -765,12 +764,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(enter.as_u32()));
             Some(self.local_set_new_tmp(ValType::I64))
         } else {
-            if self.emit_resource_call {
-                let enter = self.module.import_resource_enter_call();
-                self.instruction(Call(enter.as_u32()));
-            }
             None
         };
+        if self.emit_resource_call {
+            let enter = self.module.import_resource_enter_call();
+            self.instruction(Call(enter.as_u32()));
+        }
 
         // Perform the translation of arguments. Note that `FLAG_MAY_LEAVE` is
         // cleared around this invocation for the callee as per the
@@ -846,11 +845,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(LocalGet(old_thread.idx));
             self.instruction(Call(exit.as_u32()));
             self.free_temp_local(old_thread);
-        } else {
-            if self.emit_resource_call {
-                let exit = self.module.import_resource_exit_call();
-                self.instruction(Call(exit.as_u32()));
-            }
+        }
+        if self.emit_resource_call {
+            let exit = self.module.import_resource_exit_call();
+            self.instruction(Call(exit.as_u32()));
         }
 
         self.finish()

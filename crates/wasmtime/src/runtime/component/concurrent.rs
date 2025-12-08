@@ -3369,7 +3369,6 @@ impl Instance {
                 .subtasks
                 .insert(guest_thread.task);
         }
-        self.get_resource_tables(store).enter_call();
 
         Ok(old_thread.map(|thread| (thread.task.rep(), thread.thread.rep())))
     }
@@ -3382,9 +3381,14 @@ impl Instance {
     ) -> Result<()> {
         let state = store.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
-        self.get_resource_tables(store).exit_call()?;
         self.cleanup_thread(store, guest_thread, callee_instance)?;
-        Waitable::Guest(guest_thread.task).delete_from(store.concurrent_state_mut())?;
+        if store
+            .concurrent_state_mut()
+            .get_mut(guest_thread.task)?
+            .ready_to_delete()
+        {
+            Waitable::Guest(guest_thread.task).delete_from(store.concurrent_state_mut())?;
+        }
 
         let old_thread = old_thread.map(|(task, thread)| QualifiedThreadId {
             task: TableId::new(task),
@@ -4239,6 +4243,7 @@ impl GuestTask {
             }
         }
 
+        println!("{:?}", self.threads);
         assert!(self.threads.is_empty());
 
         state.delete(self.sync_call_set)?;
