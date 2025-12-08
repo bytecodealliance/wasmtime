@@ -1045,6 +1045,11 @@ impl Dir {
             .await?;
 
         match opened {
+            #[cfg(windows)]
+            OpenResult::Dir(dir) if !flags.contains(DescriptorFlags::READ) => {
+                Err(ErrorCode::IsDirectory)
+            }
+
             OpenResult::Dir(dir) => Ok(Descriptor::Dir(Dir::new(
                 dir,
                 self.perms,
