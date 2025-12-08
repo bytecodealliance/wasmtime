@@ -1046,7 +1046,7 @@ impl Dir {
 
         match opened {
             #[cfg(windows)]
-            OpenResult::Dir(dir) if !flags.contains(DescriptorFlags::READ) => {
+            OpenResult::Dir(_) if !flags.contains(DescriptorFlags::READ) => {
                 Err(ErrorCode::IsDirectory)
             }
 
