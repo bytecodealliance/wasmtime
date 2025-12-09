@@ -64,8 +64,6 @@ const KNOWN_FAILURES: &[&str] = &[
     #[cfg(windows)]
     "path_open_missing",
     #[cfg(windows)]
-    "path_open_preopen",
-    #[cfg(windows)]
     "path_open_read_write",
     #[cfg(windows)]
     "path_rename",

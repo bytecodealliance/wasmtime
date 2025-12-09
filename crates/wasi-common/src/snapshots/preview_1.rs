@@ -814,6 +814,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         drop(dir_entry);
 
         let fd = match file {
+            // Paper over a divergence between Windows and POSIX, where
+            // POSIX returns EISDIR if you open a directory with the
+            // WRITE flag: https://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html#:~:text=EISDIR
+            #[cfg(windows)]
+            OpenResult::Dir(_) if write => {
+                return Err(types::Errno::Isdir.into());
+            }
             OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file, access_mode)))?,
             OpenResult::Dir(child_dir) => table.push(Arc::new(DirEntry::new(None, child_dir)))?,
         };
