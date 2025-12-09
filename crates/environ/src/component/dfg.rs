@@ -478,6 +478,7 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
+    CheckBlocking,
     ContextGet {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
@@ -1160,6 +1161,7 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
+            Trampoline::CheckBlocking => info::Trampoline::CheckBlocking,
             Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
                 instance: *instance,
                 slot: *slot,

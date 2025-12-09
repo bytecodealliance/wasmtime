@@ -47,6 +47,7 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
     ValType::I32,     // caller_instance
     ValType::I32,     // callee_instance
     ValType::I32,     // task_return_type
+    ValType::I32,     // callee_async
     ValType::I32,     // string_encoding
     ValType::I32,     // result_count_or_max_if_async
 ];
@@ -88,6 +89,8 @@ pub struct Module<'a> {
     imported_future_transfer: Option<FuncIndex>,
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
+
+    imported_check_blocking: Option<FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -259,6 +262,7 @@ impl<'a> Module<'a> {
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
+            imported_check_blocking: None,
             exports: Vec::new(),
         }
     }
@@ -712,6 +716,17 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_check_blocking(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "check-blocking",
+            &[],
+            &[],
+            Import::CheckBlocking,
+            |me| &mut me.imported_check_blocking,
+        )
+    }
+
     fn translate_helper(&mut self, helper: Helper) -> FunctionId {
         *self.helper_funcs.entry(helper).or_insert_with(|| {
             // Generate a fresh `Function` with a unique id for what we're about to
@@ -870,6 +885,9 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
+    /// An intrinsic used by FACT-generated modules to check whether an
+    /// async-typed function may be called via a sync lower.
+    CheckBlocking,
 }
 
 impl Options {
