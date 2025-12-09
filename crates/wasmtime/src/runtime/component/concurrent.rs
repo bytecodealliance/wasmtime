@@ -1696,6 +1696,8 @@ impl Instance {
                 }
             }
             callback_code::WAIT | callback_code::POLL => {
+                // The task may only return `WAIT` or `POLL` if it was created
+                // for a call to an async export).  Otherwise, we'll trap.
                 state.check_blocking_for(guest_thread.task)?;
 
                 let set = get_set(store, set)?;
@@ -2099,6 +2101,9 @@ impl Instance {
         self.id().get(store.0).check_may_leave(caller_instance)?;
 
         if let (CallerInfo::Sync { .. }, true) = (&caller_info, callee_async) {
+            // A task may only call an async-typed function via a sync lower if
+            // it was created by a call to an async export.  Otherwise, we'll
+            // trap.
             store.0.concurrent_state_mut().check_blocking()?;
         }
 
@@ -2957,6 +2962,9 @@ impl Instance {
         self.id().get(store).check_may_leave(caller)?;
 
         if !self.options(store, options).async_ {
+            // The caller may only call `waitable-set.poll` from an async task
+            // (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
             store.concurrent_state_mut().check_blocking()?;
         }
 
@@ -3151,7 +3159,9 @@ impl Instance {
                     return Ok(WaitResult::Completed);
                 }
             } else {
-                // This is a `thread.suspend` call
+                // The caller may only call `thread.suspend` from an async task
+                // (i.e. a task created via a call to an async export).
+                // Otherwise, we'll trap.
                 state.check_blocking()?;
             }
         }
@@ -3291,6 +3301,9 @@ impl Instance {
         self.id().get(store).check_may_leave(caller_instance)?;
 
         if !async_ {
+            // The caller may only sync call `subtask.cancel` from an async task
+            // (i.e. a task created via a call to an async export).  Otherwise,
+            // we'll trap.
             store.concurrent_state_mut().check_blocking()?;
         }
 

@@ -3094,6 +3094,9 @@ impl Instance {
         count: u32,
     ) -> Result<ReturnCode> {
         if !self.options(store.0, options).async_ {
+            // The caller may only sync call `{stream,future}.write` from an
+            // async task (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
             store.0.concurrent_state_mut().check_blocking()?;
         }
 
@@ -3320,6 +3323,9 @@ impl Instance {
         count: u32,
     ) -> Result<ReturnCode> {
         if !self.options(store.0, options).async_ {
+            // The caller may only sync call `{stream,future}.read` from an
+            // async task (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
             store.0.concurrent_state_mut().check_blocking()?;
         }
 
@@ -3698,6 +3704,9 @@ impl Instance {
         writer: u32,
     ) -> Result<ReturnCode> {
         if !async_ {
+            // The caller may only sync call `{stream,future}.cancel-write` from
+            // an async task (i.e. a task created via a call to an async
+            // export).  Otherwise, we'll trap.
             store.concurrent_state_mut().check_blocking()?;
         }
 
@@ -3736,6 +3745,9 @@ impl Instance {
         reader: u32,
     ) -> Result<ReturnCode> {
         if !async_ {
+            // The caller may only sync call `{stream,future}.cancel-read` from
+            // an async task (i.e. a task created via a call to an async
+            // export).  Otherwise, we'll trap.
             store.concurrent_state_mut().check_blocking()?;
         }
 
