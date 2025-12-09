@@ -1107,6 +1107,7 @@ pub mod exports {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
                 pub type Foo = super::super::super::super::foo::foo::transitive_interface_with_resource::Foo;
+                #[derive(Clone)]
                 pub struct Guest {
                     handle: wasmtime::component::Func,
                 }

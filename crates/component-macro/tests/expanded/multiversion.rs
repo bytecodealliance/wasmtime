@@ -285,6 +285,7 @@ pub mod exports {
             pub mod a {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
+                #[derive(Clone)]
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
@@ -364,6 +365,7 @@ pub mod exports {
             pub mod a {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
+                #[derive(Clone)]
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }

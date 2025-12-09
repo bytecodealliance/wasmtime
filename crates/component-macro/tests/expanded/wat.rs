@@ -188,6 +188,7 @@ pub mod exports {
                 pub struct GuestThisNameIsDuplicated<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {}
                 #[derive(Clone)]
                 pub struct GuestIndices {}

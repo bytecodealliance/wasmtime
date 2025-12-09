@@ -231,7 +231,7 @@ where
     /// Spawn a background task.
     ///
     /// See [`Accessor::spawn`] for details.
-    pub fn spawn(&mut self, task: impl AccessorTask<T, D, Result<()>>) -> JoinHandle
+    pub fn spawn(&mut self, task: impl AccessorTask<T, D>) -> JoinHandle
     where
         T: 'static,
     {
@@ -507,7 +507,7 @@ where
     /// Panics if called within a closure provided to the [`Accessor::with`]
     /// function. This can only be called outside an active invocation of
     /// [`Accessor::with`].
-    pub fn spawn(&self, task: impl AccessorTask<T, D, Result<()>>) -> JoinHandle
+    pub fn spawn(&self, task: impl AccessorTask<T, D>) -> JoinHandle
     where
         T: 'static,
     {
@@ -534,12 +534,12 @@ where
 // Send + Sync + 'static` fails with a type mismatch error when we try to pass
 // it an async closure (e.g. `async move |_| { ... }`).  So this seems to be the
 // best we can do for the time being.
-pub trait AccessorTask<T, D, R>: Send + 'static
+pub trait AccessorTask<T, D = HasSelf<T>>: Send + 'static
 where
     D: HasData + ?Sized,
 {
     /// Run the task.
-    fn run(self, accessor: &Accessor<T, D>) -> impl Future<Output = R> + Send;
+    fn run(self, accessor: &Accessor<T, D>) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Represents parameter and result metadata for the caller side of a
@@ -899,7 +899,7 @@ impl<T> Store<T> {
     }
 
     /// Convenience wrapper for [`StoreContextMut::spawn`].
-    pub fn spawn(&mut self, task: impl AccessorTask<T, HasSelf<T>, Result<()>>) -> JoinHandle
+    pub fn spawn(&mut self, task: impl AccessorTask<T, HasSelf<T>>) -> JoinHandle
     where
         T: 'static,
     {
@@ -951,7 +951,7 @@ impl<T> StoreContextMut<'_, T> {
     /// for this instance is run.
     ///
     /// The returned [`SpawnHandle`] may be used to cancel the task.
-    pub fn spawn(mut self, task: impl AccessorTask<T, HasSelf<T>, Result<()>>) -> JoinHandle
+    pub fn spawn(mut self, task: impl AccessorTask<T>) -> JoinHandle
     where
         T: 'static,
     {
@@ -964,7 +964,7 @@ impl<T> StoreContextMut<'_, T> {
     fn spawn_with_accessor<D>(
         self,
         accessor: Accessor<T, D>,
-        task: impl AccessorTask<T, D, Result<()>>,
+        task: impl AccessorTask<T, D>,
     ) -> JoinHandle
     where
         T: 'static,

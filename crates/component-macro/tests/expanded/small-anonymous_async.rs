@@ -350,6 +350,7 @@ pub mod exports {
                         1 == < Error as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     option_test: wasmtime::component::Func,
                 }
