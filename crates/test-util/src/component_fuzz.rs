@@ -1671,10 +1671,23 @@ impl<'a> TestCase<'a> {
             None
         };
 
+        let mut options = u.arbitrary::<TestCaseOptions>()?;
+
+        // Sync tasks cannot call async functions via a sync lower, nor can they
+        // block in other ways (e.g. by calling `waitable-set.wait`, returning
+        // `CALLBACK_CODE_WAIT`, etc.) prior to returning.  Therefore,
+        // async-ness cascades to the callers:
+        if options.host_async {
+            options.guest_callee_async = true;
+        }
+        if options.guest_callee_async {
+            options.guest_caller_async = true;
+        }
+
         Ok(Self {
             params,
             result,
-            options: u.arbitrary()?,
+            options,
         })
     }
 
