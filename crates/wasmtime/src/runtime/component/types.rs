@@ -1,10 +1,10 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
+#[cfg(feature = "component-model-async")]
 use crate::component::ComponentType;
 use crate::component::matching::InstanceType;
 use crate::{Engine, ExternType, FuncType};
 use alloc::sync::Arc;
-use anyhow::{Result, bail};
 use core::fmt;
 use core::ops::Deref;
 use wasmtime_environ::PrimaryMap;
@@ -531,10 +531,11 @@ impl PartialEq for Flags {
 
 impl Eq for Flags {}
 
+#[cfg(feature = "component-model-async")]
 pub(crate) fn typecheck_payload<T>(
     payload: Option<&InterfaceType>,
     types: &InstanceType<'_>,
-) -> Result<()>
+) -> anyhow::Result<()>
 where
     T: ComponentType,
 {
@@ -544,7 +545,7 @@ where
             if T::IS_RUST_UNIT_TYPE {
                 Ok(())
             } else {
-                bail!("future payload types differ")
+                anyhow::bail!("future payload types differ")
             }
         }
     }
@@ -567,6 +568,7 @@ impl FutureType {
         ))
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn equivalent_payload_guest(
         &self,
         ty: &InstanceType<'_>,
@@ -586,7 +588,8 @@ impl FutureType {
         }
     }
 
-    pub(crate) fn equivalent_payload_host<T>(&self) -> Result<()>
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
     where
         T: ComponentType,
     {
@@ -622,6 +625,7 @@ impl StreamType {
         ))
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn equivalent_payload_guest(
         &self,
         ty: &InstanceType<'_>,
@@ -641,7 +645,8 @@ impl StreamType {
         }
     }
 
-    pub(crate) fn equivalent_payload_host<T>(&self) -> Result<()>
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
     where
         T: ComponentType,
     {

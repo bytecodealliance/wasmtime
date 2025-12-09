@@ -1,13 +1,14 @@
-use crate::component::Val;
-use crate::component::func::{ComponentType, LiftContext, LowerContext};
+use crate::component::func::{LiftContext, LowerContext};
+use crate::component::matching::InstanceType;
+use crate::component::{ComponentType, Lift, Lower, Val};
 use crate::runtime::vm::VMStore;
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use core::convert::Infallible;
 use core::future::Future;
-use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 use core::pin::pin;
 use core::task::{Context, Poll, Waker};
-use wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex};
+use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType, RuntimeComponentInstanceIndex};
 
 #[derive(Default)]
 pub struct ConcurrentState;
@@ -30,22 +31,6 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
         Poll::Ready(result) => result,
         Poll::Pending => should_have_failed_validation("async lowered import"),
     }
-}
-
-pub(crate) fn lower_future_to_index<U>(
-    _rep: u32,
-    _cx: &mut LowerContext<'_, U>,
-    _ty: InterfaceType,
-) -> Result<u32> {
-    should_have_failed_validation("use of `future`")
-}
-
-pub(crate) fn lower_stream_to_index<U>(
-    _rep: u32,
-    _cx: &mut LowerContext<'_, U>,
-    _ty: InterfaceType,
-) -> Result<u32> {
-    should_have_failed_validation("use of `stream`")
 }
 
 pub(crate) fn lower_error_context_to_index<U>(
@@ -80,56 +65,102 @@ impl ErrorContext {
     }
 }
 
-pub struct StreamReader<P> {
-    uninhabited: Infallible,
-    _phantom: PhantomData<P>,
+#[derive(PartialEq, Clone, Debug)]
+pub struct FutureAny(Infallible);
+
+unsafe impl ComponentType for FutureAny {
+    type Lower = <u32 as ComponentType>::Lower;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+
+    fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+        bail!("support for component-model-async disabled at compile time")
+    }
 }
 
-impl<P> StreamReader<P> {
-    pub(crate) fn into_val(self) -> Val {
-        match self.uninhabited {}
-    }
-
-    pub(crate) fn linear_lift_from_flat(
+unsafe impl Lift for FutureAny {
+    fn linear_lift_from_flat(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
-        _src: &<u32 as ComponentType>::Lower,
+        _src: &Self::Lower,
     ) -> Result<Self> {
-        should_have_failed_validation("use of `stream`")
+        bail!("support for component-model-async disabled at compile time")
     }
 
-    pub(crate) fn linear_lift_from_memory(
+    fn linear_lift_from_memory(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        should_have_failed_validation("use of `stream`")
+        bail!("support for component-model-async disabled at compile time")
     }
 }
 
-pub struct FutureReader<P> {
-    uninhabited: Infallible,
-    _phantom: PhantomData<P>,
-}
-
-impl<P> FutureReader<P> {
-    pub(crate) fn into_val(self) -> Val {
-        match self.uninhabited {}
+unsafe impl Lower for FutureAny {
+    fn linear_lower_to_flat<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        match self.0 {}
     }
 
-    pub(crate) fn linear_lift_from_flat(
+    fn linear_lower_to_memory<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _offset: usize,
+    ) -> Result<()> {
+        match self.0 {}
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct StreamAny(Infallible);
+
+unsafe impl ComponentType for StreamAny {
+    type Lower = <u32 as ComponentType>::Lower;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+
+    fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+        bail!("support for component-model-async disabled at compile time")
+    }
+}
+
+unsafe impl Lift for StreamAny {
+    fn linear_lift_from_flat(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
-        _src: &<u32 as ComponentType>::Lower,
+        _src: &Self::Lower,
     ) -> Result<Self> {
-        should_have_failed_validation("use of `future`")
+        bail!("support for component-model-async disabled at compile time")
     }
 
-    pub(crate) fn linear_lift_from_memory(
+    fn linear_lift_from_memory(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        should_have_failed_validation("use of `future`")
+        bail!("support for component-model-async disabled at compile time")
+    }
+}
+
+unsafe impl Lower for StreamAny {
+    fn linear_lower_to_flat<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        match self.0 {}
+    }
+
+    fn linear_lower_to_memory<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _offset: usize,
+    ) -> Result<()> {
+        match self.0 {}
     }
 }

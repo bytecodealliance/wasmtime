@@ -1,7 +1,7 @@
 use crate::ValRaw;
-use crate::component::concurrent::{self, ErrorContext};
+use crate::component::ResourceAny;
+use crate::component::concurrent::{self, ErrorContext, FutureAny, StreamAny};
 use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
-use crate::component::{FutureAny, ResourceAny, StreamAny};
 use crate::prelude::*;
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
