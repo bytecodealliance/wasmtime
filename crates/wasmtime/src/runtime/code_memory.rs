@@ -470,7 +470,14 @@ impl CodeMemory {
         }
     }
 
-    /// Temporarily edit the code with the given closure.
+    /// Return a mutable borrow to the code, suitable for editing.
+    ///
+    /// Must not be published.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the code has been published (and not
+    /// subsequently unpublished).
     pub fn text_mut(&mut self) -> &mut [u8] {
         assert!(!self.published);
         // SAFETY: we assert !published, which means we either have
