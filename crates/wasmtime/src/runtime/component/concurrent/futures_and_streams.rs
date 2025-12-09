@@ -3113,6 +3113,13 @@ impl Instance {
         address: u32,
         count: u32,
     ) -> Result<ReturnCode> {
+        if !self.options(store.0, options).async_ {
+            // The caller may only sync call `{stream,future}.write` from an
+            // async task (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
+            store.0.concurrent_state_mut().check_blocking()?;
+        }
+
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
         self.check_bounds(store.0, options, ty, address, count)?;
@@ -3341,6 +3348,13 @@ impl Instance {
         address: u32,
         count: u32,
     ) -> Result<ReturnCode> {
+        if !self.options(store.0, options).async_ {
+            // The caller may only sync call `{stream,future}.read` from an
+            // async task (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
+            store.0.concurrent_state_mut().check_blocking()?;
+        }
+
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
         self.check_bounds(store.0, options, ty, address, count)?;
@@ -3720,6 +3734,13 @@ impl Instance {
         async_: bool,
         writer: u32,
     ) -> Result<ReturnCode> {
+        if !async_ {
+            // The caller may only sync call `{stream,future}.cancel-write` from
+            // an async task (i.e. a task created via a call to an async
+            // export).  Otherwise, we'll trap.
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
@@ -3754,6 +3775,13 @@ impl Instance {
         async_: bool,
         reader: u32,
     ) -> Result<ReturnCode> {
+        if !async_ {
+            // The caller may only sync call `{stream,future}.cancel-read` from
+            // an async task (i.e. a task created via a call to an async
+            // export).  Otherwise, we'll trap.
+            store.concurrent_state_mut().check_blocking()?;
+        }
+
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);

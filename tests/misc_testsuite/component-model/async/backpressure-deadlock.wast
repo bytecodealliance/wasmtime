@@ -91,7 +91,7 @@
     ))
   ))
 
-  (func (export "f") (canon lift (core func $i "f")))
+  (func (export "f") async (canon lift (core func $i "f")))
 )
 
 (assert_trap (invoke "f") "deadlock detected")

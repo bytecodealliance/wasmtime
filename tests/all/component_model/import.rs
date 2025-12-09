@@ -492,7 +492,7 @@ async fn stack_and_heap_args_and_rets_concurrent() -> Result<()> {
 }
 
 async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
-    let (body, async_lower_opts, async_lift_opts) = if concurrent {
+    let (body, async_lower_opts, async_lift_opts, async_type) = if concurrent {
         (
             r#"
     (import "host" "f1" (func $f1 (param i32 i32) (result i32)))
@@ -549,6 +549,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             "#,
             "async",
             r#"async (callback (func $m "callback"))"#,
+            "async",
         )
     } else {
         (
@@ -594,6 +595,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             "#,
             "",
             "",
+            "",
         )
     };
 
@@ -604,10 +606,10 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                       string string string string
                       string string string string
                       string))
-  (import "f1" (func $f1 (param "a" u32) (result u32)))
-  (import "f2" (func $f2 (param "a" $many_params) (result u32)))
-  (import "f3" (func $f3 (param "a" u32) (result string)))
-  (import "f4" (func $f4 (param "a" $many_params) (result string)))
+  (import "f1" (func $f1 {async_type} (param "a" u32) (result u32)))
+  (import "f2" (func $f2 {async_type} (param "a" $many_params) (result u32)))
+  (import "f3" (func $f3 {async_type} (param "a" u32) (result string)))
+  (import "f4" (func $f4 {async_type} (param "a" $many_params) (result string)))
 
   (core module $libc
     {REALLOC_AND_FREE}
@@ -710,7 +712,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     ))
   ))
 
-  (func (export "run")
+  (func (export "run") {async_type}
     (canon lift (core func $m "run") {async_lift_opts})
   )
 )
