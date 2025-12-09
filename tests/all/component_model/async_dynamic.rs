@@ -22,6 +22,7 @@ fn simple_type_conversions() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn simple_type_assertions() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
