@@ -150,7 +150,7 @@ impl<R, W> HandleStates<R, W> {
 /// metadata all stays in sync.
 #[derive(Default)]
 struct HalfStates<T> {
-    /// All know handles of this type, where they're located, etc.
+    /// All known handles of this type, where they're located, etc.
     handles: IndexMap<u32, (Scope, HalfState, Transferrable)>,
 
     /// All handles which can currently be dropped. Handles can't be dropped if
@@ -660,8 +660,9 @@ impl State {
                 let id = *set.get_index(i).unwrap();
                 let scope = self.futures.writers.remove(id);
 
-                // Writers can't actually be dropped so "fake" a write by
-                // writing a value and asserting that the result is "dropped".
+                // Writers can't actually be dropped prior to writing so fake
+                // a write by writing a value and asserting that the result is
+                // "dropped".
                 commands.push((scope, Command::FutureWriteDropped(id)));
 
                 assert!(!self.futures.readers.handles.contains_key(&id));
@@ -783,7 +784,7 @@ impl State {
                     let min = count.min(write_count);
 
                     match (count, write_count) {
-                        // Two zero-length operations rendeszvousing will leave
+                        // Two zero-length operations rendezvousing will leave
                         // the reader blocked but the writer should wake up. A
                         // nonzero-length read and a 0-length write performs
                         // the same way too.

@@ -203,7 +203,13 @@ impl types::Host for Data {}
 /// executed.
 pub fn run(mut input: ComponentAsync) {
     log::debug!("Running component async fuzz test with\n{input:?}");
+
+    // Commands are executed in the order that they're listed in the input, but
+    // to make it easier on the `StreamProducer` implementation below they're
+    // popped off the back. To ensure that they're all delivered in the right
+    // order reverse the list to ensure the correct order is maintained.
     input.commands.reverse();
+
     let (engine, pre) = STATE.get().unwrap();
     let mut store = Store::new(
         engine,

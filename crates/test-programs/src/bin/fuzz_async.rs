@@ -23,7 +23,7 @@
 //! * Mixing host<->guest, guest<->guest, guest<->host, and host<->host
 //!   calls/primitives
 //!
-//! The purpose of this fuzzer is not stress the management of async stacks, the
+//! The purpose of this fuzzer is to stress the management of async stacks, the
 //! async runtime, and in theory suss out various edge cases in the handling of
 //! async events. This fuzzer does NOT stress lifting/lowering at all because
 //! there is a static WIT signature that this fuzzer works with.
@@ -121,7 +121,7 @@
 //!   meaning it's a kludge way of synchronizing the receipt of a message.
 //!
 //! * The second is that there can still be small races where an async event
-//!   hasn't quite happen yet but it's queued up to happen. To handle these
+//!   hasn't quite happened yet but it's queued up to happen. To handle these
 //!   events calls to `test_property` are sprinkled around which has an
 //!   internally-bounded yield-loop. It's expected that while yielding other
 //!   code can run which resolves the property being tested at-hand, and then
