@@ -204,16 +204,6 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceDrop { instance, ty } => {
                 self.translate_resource_drop(*instance, *ty);
             }
-            Trampoline::BackpressureSet { instance } => {
-                self.translate_libcall(
-                    host::backpressure_set,
-                    TrapSentinel::Falsy,
-                    WasmArgs::InRegisters,
-                    |me, params| {
-                        params.push(me.index_value(*instance));
-                    },
-                );
-            }
             Trampoline::BackpressureInc { instance } => {
                 self.translate_libcall(
                     host::backpressure_modify,

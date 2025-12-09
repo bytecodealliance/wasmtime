@@ -199,9 +199,6 @@ enum LocalInitializer<'data> {
     ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
-    BackpressureSet {
-        func: ModuleInternedTypeIndex,
-    },
     BackpressureInc {
         func: ModuleInternedTypeIndex,
     },
@@ -871,9 +868,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             bail!("unsupported intrinsic")
                         }
                         wasmparser::CanonicalFunction::BackpressureSet => {
-                            let core_type = self.core_func_signature(core_func_index)?;
-                            core_func_index += 1;
-                            LocalInitializer::BackpressureSet { func: core_type }
+                            bail!("unsupported intrinsic")
                         }
                         wasmparser::CanonicalFunction::BackpressureInc => {
                             let core_type = self.core_func_signature(core_func_index)?;
