@@ -653,17 +653,15 @@ impl<'a> BreakpointEdit<'a> {
         mem: &mut CodeMemory,
         enable: bool,
     ) {
-        // SAFETY: we are invoked only in a context where the code
-        // memory is not being actively executed.
-        unsafe {
-            mem.edit(|mem| {
-                for patch in patches {
-                    let data = if enable { patch.enable } else { patch.disable };
-                    let mem = &mut mem[patch.offset..patch.offset + data.len()];
-                    log::trace!("patch: offset 0x{:x} with enable={enable}: data {data:?} replacing {mem:?}", patch.offset);
-                    mem.copy_from_slice(data);
-                }
-            });
+        let mem = mem.text_mut();
+        for patch in patches {
+            let data = if enable { patch.enable } else { patch.disable };
+            let mem = &mut mem[patch.offset..patch.offset + data.len()];
+            log::trace!(
+                "patch: offset 0x{:x} with enable={enable}: data {data:?} replacing {mem:?}",
+                patch.offset
+            );
+            mem.copy_from_slice(data);
         }
     }
 

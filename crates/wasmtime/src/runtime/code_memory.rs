@@ -471,37 +471,12 @@ impl CodeMemory {
     }
 
     /// Temporarily edit the code with the given closure.
-    ///
-    /// This method swaps the memory's permissions from R+X (published
-    /// code) to R+W (ordinary data memory) and runs the closure, then
-    /// swaps them back. It allows for patching code memory when it is
-    /// uniquely owned.
-    ///
-    /// The code memory is not re-registered with any native debugger
-    /// or profiler; it is assumed that the original metadata, if any,
-    /// is still valid. Thus this mechanism is best used for local
-    /// patches, not wholesale rewrites.
-    ///
-    /// If an error is returned, the memory must no longer be used for
-    /// execution: changing permissions back to executable may have
-    /// failed.
-    ///
-    /// # Safety
-    ///
-    /// The owner must guarantee that no code is currently executing
-    /// in this range. This may be ensured, for example, by tying
-    /// unique ownership of this `CodeMemory` to an object (such as
-    /// the `Store`) that is required to run that code. If code in
-    /// this region does run while the edit is occurring, UB results
-    /// (likely a segfault).
-    pub unsafe fn edit(&mut self, editor: impl FnOnce(&mut [u8])) {
+    pub fn text_mut(&mut self) -> &mut [u8] {
         assert!(!self.published);
-        {
-            // SAFETY: we have successfully changed permissions above to
-            // read-write.
-            let text = unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] };
-            editor(text);
-        }
+        // SAFETY: we assert !published, which means we either have
+        // not yet applied readonly + execute permissinos, or we have
+        // undone that and flipped back to read-write via unpublish.
+        unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] }
     }
 
     unsafe fn register_unwind_info(&mut self) -> Result<()> {

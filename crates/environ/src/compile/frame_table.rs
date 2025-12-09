@@ -216,6 +216,8 @@ impl FrameStateSlotBuilder {
 ///    - patch offset in text: u32
 /// - `num_breakpoints` times:
 ///    - end of breakpoint patch data in pool: u32
+///      (find the start by end of previous; patches are in the
+///      pool in order and this saves storing redundant start/end values)
 /// - frame descriptors (format described above; `frame_descriptor_pool_length` bytes)
 /// - progpoint descriptors (`progpoint_descriptor_pool_length` bytes)
 ///   - each descriptor: sequence of frames
