@@ -1,6 +1,6 @@
 # Using `VTune`
 
-[VTune][help] is a popular performance profiling tool that targets both 32-bit
+[VTune][main] is a popular performance profiling tool that targets both 32-bit
 and 64-bit x86 architectures. The tool collects profiling data during runtime
 and then, either through the command line or GUI, provides a variety of options
 for viewing and analyzing that data. VTune Profiler is available in both
@@ -20,9 +20,9 @@ the [`ittapi-rs`] crate.
 For more information on VTune and the analysis tools it provides see its
 [documentation].
 
-[help]: https://software.intel.com/en-us/vtune-help
-[download]: https://software.intel.com/en-us/vtune/choose-download#standalone
-[documentation]: https://software.intel.com/en-us/vtune-help
+[main]: https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html
+[download]: https://www.intel.com/content/www/us/en/docs/vtune-profiler/installation-guide/current/overview.html
+[documentation]: https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/current/overview.html
 [`ittapi`]: https://github.com/intel/ittapi
 [`ittapi-rs`]: https://crates.io/crates/ittapi-rs
 
