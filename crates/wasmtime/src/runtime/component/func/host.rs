@@ -126,13 +126,12 @@ impl HostFunc {
         let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
         unsafe {
             call_host_and_handle_result::<T>(cx, |store, instance| {
-                call_host(
+                call_host::<_, _, _, _, S>(
                     store,
                     instance,
                     TypeFuncIndex::from_u32(ty),
                     OptionsIndex::from_u32(options),
                     NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
-                    S::ASYNC,
                     move |store, args| (*data.as_ptr())(store, args),
                 )
             })
@@ -155,12 +154,17 @@ impl HostFunc {
     {
         Arc::new(HostFunc {
             entrypoint: dynamic_entrypoint::<T, F, S>,
-            // This function performs dynamic type checks and subsequently does
-            // not need to perform up-front type checks. Instead everything is
-            // dynamically managed at runtime.
-            //
-            // TODO: Where does async checking happen?
-            typecheck: Box::new(move |_expected_index, _expected_types| Ok(())),
+            // This function performs dynamic type checks on its parameters and
+            // results and subsequently does not need to perform up-front type
+            // checks. However, we _do_ verify async-ness here.
+            typecheck: Box::new(move |ty, types| {
+                let ty = &types.types[ty];
+                if S::ASYNC != ty.async_ {
+                    bail!("type mismatch with async");
+                }
+
+                Ok(())
+            }),
             func: Box::new(func),
         })
     }
@@ -253,6 +257,7 @@ where
 /// * `Return` - the result of the host function
 /// * `F` - the `closure` to actually receive the `Params` and return the
 ///   `Return`
+/// * `S` - the expected `FunctionStyle`
 ///
 /// It's expected that `F` will "un-tuple" the arguments to pass to a host
 /// closure.
@@ -260,19 +265,19 @@ where
 /// This function is in general `unsafe` as the validity of all the parameters
 /// must be upheld. Generally that's done by ensuring this is only called from
 /// the select few places it's intended to be called from.
-unsafe fn call_host<T, Params, Return, F>(
+unsafe fn call_host<T, Params, Return, F, S>(
     store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
     options: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
-    async_function: bool,
     closure: F,
 ) -> Result<()>
 where
     F: Fn(StoreContextMut<'_, T>, Params) -> HostResult<Return> + Send + Sync + 'static,
     Params: Lift,
     Return: Lower + 'static,
+    S: FunctionStyle,
 {
     let (component, store) = instance.component_and_store_mut(store.0);
     let mut store = StoreContextMut(store);
@@ -369,7 +374,10 @@ where
             );
         }
     } else {
-        if async_function {
+        if S::ASYNC {
+            // The caller has synchronously lowered an async function, meaning
+            // the caller can only call it from an async task (i.e. a task
+            // created via a call to an async export).  Otherwise, we'll trap.
             concurrent::check_blocking(store.0)?;
         }
 
@@ -731,13 +739,12 @@ where
     }
 }
 
-unsafe fn call_host_dynamic<T, F>(
+unsafe fn call_host_dynamic<T, F, S>(
     store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
     options: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
-    async_function: bool,
     closure: F,
 ) -> Result<()>
 where
@@ -751,6 +758,7 @@ where
         + Sync
         + 'static,
     T: 'static,
+    S: FunctionStyle,
 {
     let (component, store) = instance.component_and_store_mut(store.0);
     let mut store = StoreContextMut(store);
@@ -853,7 +861,10 @@ where
             );
         }
     } else {
-        if async_function {
+        if S::ASYNC {
+            // The caller has synchronously lowered an async function, meaning
+            // the caller can only call it from an async task (i.e. a task
+            // created via a call to an async export).  Otherwise, we'll trap.
             concurrent::check_blocking(store.0)?;
         }
 
@@ -975,13 +986,12 @@ where
     let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
     unsafe {
         call_host_and_handle_result(cx, |store, instance| {
-            call_host_dynamic::<T, _>(
+            call_host_dynamic::<T, _, S>(
                 store,
                 instance,
                 TypeFuncIndex::from_u32(ty),
                 OptionsIndex::from_u32(options),
                 NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
-                S::ASYNC,
                 &*data.as_ptr(),
             )
         })

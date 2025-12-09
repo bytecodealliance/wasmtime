@@ -574,6 +574,7 @@ enum SuspendReason {
     Waiting {
         set: TableId<WaitableSet>,
         thread: QualifiedThreadId,
+        skip_may_block_check: bool,
     },
     /// The fiber has finished handling its most recent work item and is waiting
     /// for another (or to be dropped if it is no longer needed).
@@ -582,7 +583,10 @@ enum SuspendReason {
     /// chance to run.
     Yielding { thread: QualifiedThreadId },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
-    ExplicitlySuspending { thread: QualifiedThreadId },
+    ExplicitlySuspending {
+        thread: QualifiedThreadId,
+        skip_may_block_check: bool,
+    },
 }
 
 /// Represents a pending call into guest code for a given guest task.
@@ -805,6 +809,7 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
             store.suspend(SuspendReason::Waiting {
                 set,
                 thread: caller,
+                skip_may_block_check: false,
             })?;
         }
     }
@@ -1445,7 +1450,7 @@ impl StoreOpaque {
                 SuspendReason::ExplicitlySuspending { thread, .. } => {
                     state.get_mut(thread.thread)?.state = GuestThreadState::Suspended(fiber);
                 }
-                SuspendReason::Waiting { set, thread } => {
+                SuspendReason::Waiting { set, thread, .. } => {
                     let old = state
                         .get_mut(set)?
                         .waiting
@@ -1484,6 +1489,26 @@ impl StoreOpaque {
         } else {
             None
         };
+
+        // We should not have reached here unless either there's no current
+        // task, or the current task is permitted to block.  In addition, we
+        // special-case `thread.switch-to` and waiting for a subtask to go from
+        // `starting` to `started`, both of which we consider non-blocking
+        // operations despite requiring a suspend.
+        assert!(
+            matches!(
+                reason,
+                SuspendReason::ExplicitlySuspending {
+                    skip_may_block_check: true,
+                    ..
+                } | SuspendReason::Waiting {
+                    skip_may_block_check: true,
+                    ..
+                }
+            ) || old_guest_thread
+                .map(|thread| self.concurrent_state_mut().may_block(thread.task))
+                .unwrap_or(true)
+        );
 
         let suspend_reason = &mut self.concurrent_state_mut().suspend_reason;
         assert!(suspend_reason.is_none());
@@ -1540,6 +1565,7 @@ impl StoreOpaque {
         self.suspend(SuspendReason::Waiting {
             set,
             thread: caller,
+            skip_may_block_check: false,
         })?;
         let state = self.concurrent_state_mut();
         waitable.join(state, old_set)
@@ -2308,6 +2334,7 @@ impl Instance {
         let async_caller = storage.is_none();
         let state = store.0.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
+        let callee_async = state.get_mut(guest_thread.task)?.async_function;
         let may_enter_after_call = state
             .get_mut(guest_thread.task)?
             .call_post_return_automatically();
@@ -2401,6 +2428,14 @@ impl Instance {
             store.0.suspend(SuspendReason::Waiting {
                 set,
                 thread: caller,
+                // Normally, `StoreOpaque::suspend` would assert it's being
+                // called from a context where blocking is allowed.  However, if
+                // `async_caller` is `true`, we'll only "block" long enough for
+                // the callee to start, i.e. we won't repeat this loop, so we
+                // tell `suspend` it's okay even if we're not allowed to block.
+                // Alternatively, if the callee is not an async function, then
+                // we know it won't block anyway.
+                skip_may_block_check: async_caller || !callee_async,
             })?;
 
             let state = store.0.concurrent_state_mut();
@@ -2885,6 +2920,9 @@ impl Instance {
         self.id().get(store).check_may_leave(caller)?;
 
         if !self.options(store, options).async_ {
+            // The caller may only call `waitable-set.wait` from an async task
+            // (i.e. a task created via a call to an async export).
+            // Otherwise, we'll trap.
             store.concurrent_state_mut().check_blocking()?;
         }
 
@@ -3136,6 +3174,10 @@ impl Instance {
         } else {
             SuspendReason::ExplicitlySuspending {
                 thread: guest_thread,
+                // Tell `StoreOpaque::suspend` it's okay to suspend here since
+                // we're handling a `thread.switch-to` call; otherwise it would
+                // panic if we called it in a non-blocking context.
+                skip_may_block_check: to_thread.is_some(),
             }
         };
 
@@ -3193,6 +3235,7 @@ impl Instance {
                 store.suspend(SuspendReason::Waiting {
                     set,
                     thread: guest_thread,
+                    skip_may_block_check: false,
                 })?;
             }
         }
