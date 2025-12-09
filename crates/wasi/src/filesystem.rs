@@ -1045,8 +1045,11 @@ impl Dir {
             .await?;
 
         match opened {
+            // Paper over a divergence between Windows and POSIX, where
+            // POSIX returns EISDIR if you open a directory with the
+            // WRITE flag: https://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html#:~:text=EISDIR
             #[cfg(windows)]
-            OpenResult::Dir(_) if !flags.contains(DescriptorFlags::READ) => {
+            OpenResult::Dir(_) if flags.contains(DescriptorFlags::WRITE) => {
                 Err(ErrorCode::IsDirectory)
             }
 
