@@ -3,8 +3,12 @@ use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
 use crate::component::concurrent::{ConcurrentState, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
-use crate::component::{AsAccessor, Instance, Lift, Lower, Val, WasmList};
+use crate::component::types;
+use crate::component::values::ErrorContextAny;
+use crate::component::{
+    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower, StreamAny,
+    Val, WasmList,
+};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
@@ -1136,11 +1140,15 @@ impl<T> FutureReader<T> {
         )
     }
 
-    fn new_(id: TableId<TransmitHandle>) -> Self {
+    pub(super) fn new_(id: TableId<TransmitHandle>) -> Self {
         Self {
             id,
             _phantom: PhantomData,
         }
+    }
+
+    pub(super) fn id(&self) -> TableId<TransmitHandle> {
+        self.id
     }
 
     /// Set the consumer that accepts the result of this future.
@@ -1194,51 +1202,18 @@ impl<T> FutureReader<T> {
             .set_consumer(self.id, TransmitKind::Future, Consumer(consumer));
     }
 
-    /// Convert this `FutureReader` into a [`Val`].
-    // See TODO comment for `FutureAny`; this is prone to handle leakage.
-    pub fn into_val(self) -> Val {
-        Val::Future(FutureAny(self.id.rep()))
-    }
-
-    /// Attempt to convert the specified [`Val`] to a `FutureReader`.
-    pub fn from_val(mut store: impl AsContextMut<Data: Send>, value: &Val) -> Result<Self> {
-        let Val::Future(FutureAny(rep)) = value else {
-            bail!("expected `future`; got `{}`", value.desc());
-        };
-        let store = store.as_context_mut();
-        let id = TableId::<TransmitHandle>::new(*rep);
-        store.0.concurrent_state_mut().get_mut(id)?; // Just make sure it's present
+    /// Transfer ownership of the read end of a future from a guest to the host.
+    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
+        let id = lift_index_to_future(cx, ty, index)?;
         Ok(Self::new_(id))
     }
 
-    /// Transfer ownership of the read end of a future from a guest to the host.
-    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        match ty {
-            InterfaceType::Future(src) => {
-                let handle_table = cx
-                    .instance_mut()
-                    .table_for_transmit(TransmitIndex::Future(src));
-                let (rep, is_done) = handle_table.future_remove_readable(src, index)?;
-                if is_done {
-                    bail!("cannot lift future after being notified that the writable end dropped");
-                }
-                let id = TableId::<TransmitHandle>::new(rep);
-                let concurrent_state = cx.concurrent_state_mut();
-                let future = concurrent_state.get_mut(id)?;
-                future.common.handle = None;
-                let state = future.state;
-
-                if concurrent_state.get_mut(state)?.done {
-                    bail!("cannot lift future after previous read succeeded");
-                }
-
-                Ok(Self::new_(id))
-            }
-            _ => func::bad_type_info(),
-        }
-    }
-
-    /// Close this `FutureReader`, writing the default value.
+    /// Close this `FutureReader`.
+    ///
+    /// This will close this half of the future which will signal to a pending
+    /// write, if any, that the reader side is dropped. If the writer half has
+    /// not yet written a value then when it attempts to write a value it will
+    /// see that this end is closed.
     ///
     /// # Panics
     ///
@@ -1246,13 +1221,7 @@ impl<T> FutureReader<T> {
     /// this future. Usage of this future after calling `close` will also cause
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
-        // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
-        store
-            .as_context_mut()
-            .0
-            .host_drop_reader(id, TransmitKind::Future)
-            .unwrap();
+        future_close(store.as_context_mut().0, &mut self.id)
     }
 
     /// Convenience method around [`Self::close`].
@@ -1271,6 +1240,32 @@ impl<T> FutureReader<T> {
     {
         GuardedFutureReader::new(accessor, self)
     }
+
+    /// Attempts to convert this [`FutureReader<T>`] to a [`FutureAny`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `self` does not belong to
+    /// `store`.
+    pub fn try_into_future_any(self, store: impl AsContextMut) -> Result<FutureAny>
+    where
+        T: ComponentType + 'static,
+    {
+        FutureAny::try_from_future_reader(store, self)
+    }
+
+    /// Attempts to convert a [`FutureAny`] into a [`FutureReader<T>`].
+    ///
+    /// # Errors
+    ///
+    /// This function will fail if `T` doesn't match the type of the value that
+    /// `future` is sending.
+    pub fn try_from_future_any(future: FutureAny) -> Result<Self>
+    where
+        T: ComponentType + 'static,
+    {
+        future.try_into_future_reader()
+    }
 }
 
 impl<T> fmt::Debug for FutureReader<T> {
@@ -1281,16 +1276,51 @@ impl<T> fmt::Debug for FutureReader<T> {
     }
 }
 
+pub(super) fn future_close(store: &mut StoreOpaque, id: &mut TableId<TransmitHandle>) {
+    let id = mem::replace(id, TableId::new(u32::MAX));
+    store.host_drop_reader(id, TransmitKind::Future).unwrap();
+}
+
 /// Transfer ownership of the read end of a future from the host to a guest.
-pub(crate) fn lower_future_to_index<U>(
-    rep: u32,
+pub(super) fn lift_index_to_future(
+    cx: &mut LiftContext<'_>,
+    ty: InterfaceType,
+    index: u32,
+) -> Result<TableId<TransmitHandle>> {
+    match ty {
+        InterfaceType::Future(src) => {
+            let handle_table = cx
+                .instance_mut()
+                .table_for_transmit(TransmitIndex::Future(src));
+            let (rep, is_done) = handle_table.future_remove_readable(src, index)?;
+            if is_done {
+                bail!("cannot lift future after being notified that the writable end dropped");
+            }
+            let id = TableId::<TransmitHandle>::new(rep);
+            let concurrent_state = cx.concurrent_state_mut();
+            let future = concurrent_state.get_mut(id)?;
+            future.common.handle = None;
+            let state = future.state;
+
+            if concurrent_state.get_mut(state)?.done {
+                bail!("cannot lift future after previous read succeeded");
+            }
+
+            Ok(id)
+        }
+        _ => func::bad_type_info(),
+    }
+}
+
+/// Transfer ownership of the read end of a future from the host to a guest.
+pub(super) fn lower_future_to_index<U>(
+    id: TableId<TransmitHandle>,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
             let concurrent_state = cx.store.0.concurrent_state_mut();
-            let id = TableId::<TransmitHandle>::new(rep);
             let state = concurrent_state.get_mut(id)?.state;
             let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
@@ -1309,32 +1339,31 @@ pub(crate) fn lower_future_to_index<U>(
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower future handles as `u32`s.
-unsafe impl<T: Send + Sync> func::ComponentType for FutureReader<T> {
+unsafe impl<T: ComponentType> ComponentType for FutureReader<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
-            InterfaceType::Future(_) => Ok(()),
+            InterfaceType::Future(ty) => {
+                let ty = types.types[*ty].ty;
+                types::typecheck_payload::<T>(types.types[ty].payload.as_ref(), types)
+            }
             other => bail!("expected `future`, found `{}`", func::desc(other)),
         }
     }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: Send + Sync> func::Lower for FutureReader<T> {
+unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_future_to_index(self.id.rep(), cx, ty)?.linear_lower_to_flat(
-            cx,
-            InterfaceType::U32,
-            dst,
-        )
+        lower_future_to_index(self.id, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1343,7 +1372,7 @@ unsafe impl<T: Send + Sync> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_future_to_index(self.id.rep(), cx, ty)?.linear_lower_to_memory(
+        lower_future_to_index(self.id, cx, ty)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -1352,7 +1381,7 @@ unsafe impl<T: Send + Sync> func::Lower for FutureReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: Send + Sync> func::Lift for FutureReader<T> {
+unsafe impl<T: ComponentType> func::Lift for FutureReader<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
@@ -1454,11 +1483,15 @@ impl<T> StreamReader<T> {
         )
     }
 
-    fn new_(id: TableId<TransmitHandle>) -> Self {
+    pub(super) fn new_(id: TableId<TransmitHandle>) -> Self {
         Self {
             id,
             _phantom: PhantomData,
         }
+    }
+
+    pub(super) fn id(&self) -> TableId<TransmitHandle> {
+        self.id
     }
 
     /// Attempt to consume this object by converting it into the specified type.
@@ -1507,57 +1540,23 @@ impl<T> StreamReader<T> {
             .set_consumer(self.id, TransmitKind::Stream, consumer);
     }
 
-    /// Convert this `StreamReader` into a [`Val`].
-    // See TODO comment for `StreamAny`; this is prone to handle leakage.
-    pub fn into_val(self) -> Val {
-        Val::Stream(StreamAny(self.id.rep()))
-    }
-
-    /// Attempt to convert the specified [`Val`] to a `StreamReader`.
-    pub fn from_val(mut store: impl AsContextMut<Data: Send>, value: &Val) -> Result<Self> {
-        let Val::Stream(StreamAny(rep)) = value else {
-            bail!("expected `stream`; got `{}`", value.desc());
-        };
-        let store = store.as_context_mut();
-        let id = TableId::<TransmitHandle>::new(*rep);
-        store.0.concurrent_state_mut().get_mut(id)?; // Just make sure it's present
+    /// Transfer ownership of the read end of a stream from a guest to the host.
+    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
+        let id = lift_index_to_stream(cx, ty, index)?;
         Ok(Self::new_(id))
     }
 
-    /// Transfer ownership of the read end of a stream from a guest to the host.
-    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        match ty {
-            InterfaceType::Stream(src) => {
-                let handle_table = cx
-                    .instance_mut()
-                    .table_for_transmit(TransmitIndex::Stream(src));
-                let (rep, is_done) = handle_table.stream_remove_readable(src, index)?;
-                if is_done {
-                    bail!("cannot lift stream after being notified that the writable end dropped");
-                }
-                let id = TableId::<TransmitHandle>::new(rep);
-                cx.concurrent_state_mut().get_mut(id)?.common.handle = None;
-                Ok(Self::new_(id))
-            }
-            _ => func::bad_type_info(),
-        }
-    }
-
-    /// Close this `StreamReader`, writing the default value.
+    /// Close this `StreamReader`.
+    ///
+    /// This will signal that this portion of the stream is closed causing all
+    /// future writes to return immediately with "DROPPED".
     ///
     /// # Panics
     ///
-    /// Panics if the store that the [`Accessor`] is derived from does not own
-    /// this future. Usage of this future after calling `close` will also cause
-    /// a panic.
+    /// Panics if the `store` does not own this future. Usage of this future
+    /// after calling `close` will also cause a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
-        // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
-        store
-            .as_context_mut()
-            .0
-            .host_drop_reader(id, TransmitKind::Stream)
-            .unwrap()
+        stream_close(store.as_context_mut().0, &mut self.id);
     }
 
     /// Convenience method around [`Self::close`].
@@ -1576,6 +1575,32 @@ impl<T> StreamReader<T> {
     {
         GuardedStreamReader::new(accessor, self)
     }
+
+    /// Attempts to convert this [`StreamReader<T>`] to a [`StreamAny`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `self` does not belong to
+    /// `store`.
+    pub fn try_into_stream_any(self, store: impl AsContextMut) -> Result<StreamAny>
+    where
+        T: ComponentType + 'static,
+    {
+        StreamAny::try_from_stream_reader(store, self)
+    }
+
+    /// Attempts to convert a [`StreamAny`] into a [`StreamReader<T>`].
+    ///
+    /// # Errors
+    ///
+    /// This function will fail if `T` doesn't match the type of the value that
+    /// `stream` is sending.
+    pub fn try_from_stream_any(stream: StreamAny) -> Result<Self>
+    where
+        T: ComponentType + 'static,
+    {
+        stream.try_into_stream_reader()
+    }
 }
 
 impl<T> fmt::Debug for StreamReader<T> {
@@ -1586,16 +1611,43 @@ impl<T> fmt::Debug for StreamReader<T> {
     }
 }
 
+pub(super) fn stream_close(store: &mut StoreOpaque, id: &mut TableId<TransmitHandle>) {
+    let id = mem::replace(id, TableId::new(u32::MAX));
+    store.host_drop_reader(id, TransmitKind::Stream).unwrap();
+}
+
+/// Transfer ownership of the read end of a stream from a guest to the host.
+pub(super) fn lift_index_to_stream(
+    cx: &mut LiftContext<'_>,
+    ty: InterfaceType,
+    index: u32,
+) -> Result<TableId<TransmitHandle>> {
+    match ty {
+        InterfaceType::Stream(src) => {
+            let handle_table = cx
+                .instance_mut()
+                .table_for_transmit(TransmitIndex::Stream(src));
+            let (rep, is_done) = handle_table.stream_remove_readable(src, index)?;
+            if is_done {
+                bail!("cannot lift stream after being notified that the writable end dropped");
+            }
+            let id = TableId::<TransmitHandle>::new(rep);
+            cx.concurrent_state_mut().get_mut(id)?.common.handle = None;
+            Ok(id)
+        }
+        _ => func::bad_type_info(),
+    }
+}
+
 /// Transfer ownership of the read end of a stream from the host to a guest.
-pub(crate) fn lower_stream_to_index<U>(
-    rep: u32,
+pub(super) fn lower_stream_to_index<U>(
+    id: TableId<TransmitHandle>,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
             let concurrent_state = cx.store.0.concurrent_state_mut();
-            let id = TableId::<TransmitHandle>::new(rep);
             let state = concurrent_state.get_mut(id)?.state;
             let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
@@ -1614,32 +1666,31 @@ pub(crate) fn lower_stream_to_index<U>(
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower stream handles as `u32`s.
-unsafe impl<T: Send + Sync> func::ComponentType for StreamReader<T> {
+unsafe impl<T: ComponentType> ComponentType for StreamReader<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
-            InterfaceType::Stream(_) => Ok(()),
+            InterfaceType::Stream(ty) => {
+                let ty = types.types[*ty].ty;
+                types::typecheck_payload::<T>(types.types[ty].payload.as_ref(), types)
+            }
             other => bail!("expected `stream`, found `{}`", func::desc(other)),
         }
     }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: Send + Sync> func::Lower for StreamReader<T> {
+unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_stream_to_index(self.id.rep(), cx, ty)?.linear_lower_to_flat(
-            cx,
-            InterfaceType::U32,
-            dst,
-        )
+        lower_stream_to_index(self.id, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1648,7 +1699,7 @@ unsafe impl<T: Send + Sync> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_stream_to_index(self.id.rep(), cx, ty)?.linear_lower_to_memory(
+        lower_stream_to_index(self.id, cx, ty)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -1657,7 +1708,7 @@ unsafe impl<T: Send + Sync> func::Lower for StreamReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: Send + Sync> func::Lift for StreamReader<T> {
+unsafe impl<T: ComponentType> func::Lift for StreamReader<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
@@ -1883,16 +1934,27 @@ struct TransmitState {
     read: ReadState,
     /// Whether futher values may be transmitted via this stream or future.
     done: bool,
+    /// The original creator of this stream, used for type-checking with
+    /// `{Future,Stream}Any`.
+    pub(super) origin: TransmitOrigin,
 }
 
-impl Default for TransmitState {
-    fn default() -> Self {
+#[derive(Copy, Clone)]
+pub(super) enum TransmitOrigin {
+    Host,
+    GuestFuture(ComponentInstanceId, TypeFutureTableIndex),
+    GuestStream(ComponentInstanceId, TypeStreamTableIndex),
+}
+
+impl TransmitState {
+    fn new(origin: TransmitOrigin) -> Self {
         Self {
             write_handle: TableId::new(u32::MAX),
             read_handle: TableId::new(u32::MAX),
             read: ReadState::Open,
             write: WriteState::Open,
             done: false,
+            origin,
         }
     }
 }
@@ -1900,6 +1962,15 @@ impl Default for TransmitState {
 impl TableDebug for TransmitState {
     fn type_name() -> &'static str {
         "TransmitState"
+    }
+}
+
+impl TransmitOrigin {
+    fn guest(id: ComponentInstanceId, index: TransmitIndex) -> Self {
+        match index {
+            TransmitIndex::Future(ty) => TransmitOrigin::GuestFuture(id, ty),
+            TransmitIndex::Stream(ty) => TransmitOrigin::GuestStream(id, ty),
+        }
     }
 }
 
@@ -2265,6 +2336,15 @@ impl StoreOpaque {
         }
         Ok(())
     }
+
+    pub(super) fn transmit_origin(
+        &mut self,
+        id: TableId<TransmitHandle>,
+    ) -> Result<TransmitOrigin> {
+        let state = self.concurrent_state_mut();
+        let state_id = state.get_mut(id)?.state;
+        Ok(state.get_mut(state_id)?.origin)
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -2278,7 +2358,7 @@ impl<T> StoreContextMut<'_, T> {
     {
         let token = StoreToken::new(self.as_context_mut());
         let state = self.0.concurrent_state_mut();
-        let (_, read) = state.new_transmit().unwrap();
+        let (_, read) = state.new_transmit(TransmitOrigin::Host).unwrap();
         let producer = Arc::new(Mutex::new(Some((Box::pin(producer), P::Buffer::default()))));
         let id = state.get_mut(read).unwrap().state;
         let mut dropped = false;
@@ -3996,7 +4076,9 @@ impl Instance {
     /// write ends to the (sub-)component instance to which the specified
     /// `TransmitIndex` belongs.
     fn guest_new(self, store: &mut StoreOpaque, ty: TransmitIndex) -> Result<ResourcePair> {
-        let (write, read) = store.concurrent_state_mut().new_transmit()?;
+        let (write, read) = store
+            .concurrent_state_mut()
+            .new_transmit(TransmitOrigin::guest(self.id().instance(), ty))?;
 
         let table = self.id().get_mut(store).table_for_transmit(ty);
         let (read_handle, write_handle) = match ty {
@@ -4320,8 +4402,11 @@ impl ConcurrentState {
 
     /// Allocate a new future or stream, including the `TransmitState` and the
     /// `TransmitHandle`s corresponding to the read and write ends.
-    fn new_transmit(&mut self) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
-        let state_id = self.push(TransmitState::default())?;
+    fn new_transmit(
+        &mut self,
+        origin: TransmitOrigin,
+    ) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
+        let state_id = self.push(TransmitState::new(origin))?;
 
         let write = self.push(TransmitHandle::new(state_id))?;
         let read = self.push(TransmitHandle::new(state_id))?;

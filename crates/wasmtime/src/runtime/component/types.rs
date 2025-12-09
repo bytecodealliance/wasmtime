@@ -1,5 +1,7 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
+#[cfg(feature = "component-model-async")]
+use crate::component::ComponentType;
 use crate::component::matching::InstanceType;
 use crate::{Engine, ExternType, FuncType};
 use alloc::sync::Arc;
@@ -529,6 +531,26 @@ impl PartialEq for Flags {
 
 impl Eq for Flags {}
 
+#[cfg(feature = "component-model-async")]
+pub(crate) fn typecheck_payload<T>(
+    payload: Option<&InterfaceType>,
+    types: &InstanceType<'_>,
+) -> anyhow::Result<()>
+where
+    T: ComponentType,
+{
+    match payload {
+        Some(a) => T::typecheck(a, types),
+        None => {
+            if T::IS_RUST_UNIT_TYPE {
+                Ok(())
+            } else {
+                anyhow::bail!("future payload types differ")
+            }
+        }
+    }
+}
+
 /// An `future` interface type
 #[derive(Clone, Debug)]
 pub struct FutureType(Handle<TypeFutureIndex>);
@@ -544,6 +566,37 @@ impl FutureType {
             self.0.types[self.0.index].payload.as_ref()?,
             &self.0.instance(),
         ))
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_guest(
+        &self,
+        ty: &InstanceType<'_>,
+        payload: Option<&InterfaceType>,
+    ) -> bool {
+        let my_payload = self.0.types[self.0.index].payload.as_ref();
+        match (my_payload, payload) {
+            (Some(a), Some(b)) => TypeChecker {
+                a_types: &self.0.types,
+                a_resource: &self.0.resources,
+                b_types: ty.types,
+                b_resource: ty.resources,
+            }
+            .interface_types_equal(*a, *b),
+            (None, None) => true,
+            (Some(_), None) | (None, Some(_)) => false,
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
+    where
+        T: ComponentType,
+    {
+        typecheck_payload::<T>(
+            self.0.types[self.0.index].payload.as_ref(),
+            &self.0.instance(),
+        )
     }
 }
 
@@ -570,6 +623,37 @@ impl StreamType {
             self.0.types[self.0.index].payload.as_ref()?,
             &self.0.instance(),
         ))
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_guest(
+        &self,
+        ty: &InstanceType<'_>,
+        payload: Option<&InterfaceType>,
+    ) -> bool {
+        let my_payload = self.0.types[self.0.index].payload.as_ref();
+        match (my_payload, payload) {
+            (Some(a), Some(b)) => TypeChecker {
+                a_types: &self.0.types,
+                a_resource: &self.0.resources,
+                b_types: ty.types,
+                b_resource: ty.resources,
+            }
+            .interface_types_equal(*a, *b),
+            (None, None) => true,
+            (Some(_), None) | (None, Some(_)) => false,
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
+    where
+        T: ComponentType,
+    {
+        typecheck_payload::<T>(
+            self.0.types[self.0.index].payload.as_ref(),
+            &self.0.instance(),
+        )
     }
 }
 
