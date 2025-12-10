@@ -3463,7 +3463,7 @@ impl Instance {
         } else {
             Caller::SyncHost
         };
-        let task = GuestTask::new(state, None, None, caller, None, callee_instance)?;
+        let task = GuestTask::new(state, None, None, caller, None, callee_instance, false)?;
 
         let task = state.push(task)?;
         let thread = state.push(GuestThread::new_implicit(task))?;

@@ -741,6 +741,9 @@ impl<'a> Module<'a> {
             &[],
             Import::SyncToSyncExitCall,
             |me| &mut me.imported_sync_to_sync_exit_call,
+        )
+    }
+
     fn import_check_blocking(&mut self) -> FuncIndex {
         self.import_simple(
             "async",
