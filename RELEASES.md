@@ -37,9 +37,13 @@ Unreleased.
   and reduce contention.
   [#11987](https://github.com/bytecodealliance/wasmtime/pull/11987)
 
-* Support for component-model-async has been updated to account for the binary
+* Support for component-model-async has been updated to account for the
   changes specified in [WebAssembly/component-model#578](https://github.com/WebAssembly/component-model/pull/578).
+  This means that historical binaries using WASIp3, for example, are no longer
+  valid. Recompilation of historical components will be required and
+  source-level changes may also be required in some circumstances.
   [#12031](https://github.com/bytecodealliance/wasmtime/pull/12031)
+  [#12043](https://github.com/bytecodealliance/wasmtime/pull/12043)
 
 * The `UnsyncBoxBody` type is now used everywhere in wasmtime-wasi-http instead
   of just in the wasip3 support.
