@@ -4289,7 +4289,7 @@ impl GuestTask {
         }
 
         for subtask in self.subtasks {
-            if state.get_mut(subtask)?.exited {
+            if state.get_mut(subtask)?.exited && state.get_mut(subtask)?.ready_to_delete() {
                 Waitable::Guest(subtask).delete_from(state)?;
             }
         }
