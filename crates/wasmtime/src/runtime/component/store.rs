@@ -49,7 +49,7 @@ impl ComponentStoreData {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn assert_guest_tables_empty(&mut self) {
+    pub(crate) fn assert_instance_states_empty(&mut self) {
         for (_, instance) in self.instances.iter_mut() {
             let Some(instance) = instance.as_mut() else {
                 continue;
@@ -58,10 +58,11 @@ impl ComponentStoreData {
             assert!(
                 instance
                     .get_mut()
-                    .guest_tables()
+                    .instance_states()
                     .0
-                    .iter()
-                    .all(|(_, table)| table.is_empty())
+                    .iter_mut()
+                    .all(|(_, state)| state.handle_table().is_empty()
+                        && state.concurrent_state().pending_is_empty())
             );
         }
     }

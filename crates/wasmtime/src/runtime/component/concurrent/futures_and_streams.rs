@@ -2492,7 +2492,7 @@ impl<T> StoreContextMut<'_, T> {
                     *producer.lock().unwrap() = Some((mine, buffer));
 
                     if write_buffer {
-                        write( token, id, producer.clone(), kind).await?;
+                        write(token, id, producer.clone(), kind).await?;
                     }
 
                     Ok(if dropped {
@@ -4261,21 +4261,21 @@ impl Instance {
 
 impl ComponentInstance {
     fn table_for_transmit(self: Pin<&mut Self>, ty: TransmitIndex) -> &mut HandleTable {
-        let (tables, types) = self.guest_tables();
+        let (states, types) = self.instance_states();
         let runtime_instance = match ty {
             TransmitIndex::Stream(ty) => types[ty].instance,
             TransmitIndex::Future(ty) => types[ty].instance,
         };
-        &mut tables[runtime_instance]
+        states[runtime_instance].handle_table()
     }
 
     fn table_for_error_context(
         self: Pin<&mut Self>,
         ty: TypeComponentLocalErrorContextTableIndex,
     ) -> &mut HandleTable {
-        let (tables, types) = self.guest_tables();
+        let (states, types) = self.instance_states();
         let runtime_instance = types[ty].instance;
-        &mut tables[runtime_instance]
+        states[runtime_instance].handle_table()
     }
 
     fn get_mut_by_index(
@@ -4456,7 +4456,8 @@ impl Waitable {
             } => {
                 let instance = instance.id().get_mut(store);
                 let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                let (rep, state) = instance.instance_states().0[runtime_instance]
+                    .handle_table()
                     .future_rep(ty, handle)
                     .unwrap();
                 assert_eq!(rep, self.rep());
@@ -4477,7 +4478,8 @@ impl Waitable {
             } => {
                 let instance = instance.id().get_mut(store);
                 let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                let (rep, state) = instance.instance_states().0[runtime_instance]
+                    .handle_table()
                     .stream_rep(ty, handle)
                     .unwrap();
                 assert_eq!(rep, self.rep());

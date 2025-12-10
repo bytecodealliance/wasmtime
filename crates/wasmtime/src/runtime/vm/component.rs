@@ -9,6 +9,8 @@
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::module::ModuleRegistry;
 use crate::runtime::component::ComponentInstanceId;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::concurrent::ConcurrentInstanceState;
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
@@ -44,6 +46,35 @@ pub use self::handle_table::{TransmitLocalState, Waitable};
 #[cfg(feature = "component-model-async")]
 pub use self::resources::CallContext;
 pub use self::resources::{CallContexts, ResourceTables, TypedResource, TypedResourceIndex};
+
+/// Represents the state of a (sub-)component instance.
+#[derive(Default)]
+pub struct InstanceState {
+    /// Represents the Component Model Async state of a (sub-)component instance.
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: ConcurrentInstanceState,
+
+    /// State of handles (e.g. resources, waitables, etc.) for this instance.
+    ///
+    /// For resource handles, this is paired with other information to create a
+    /// `ResourceTables` and manipulated through that.  For other handles, this
+    /// is used directly to translate guest handles to host representations and
+    /// vice-versa.
+    handle_table: HandleTable,
+}
+
+impl InstanceState {
+    /// Represents the Component Model Async state of a (sub-)component instance.
+    #[cfg(feature = "component-model-async")]
+    pub fn concurrent_state(&mut self) -> &mut ConcurrentInstanceState {
+        &mut self.concurrent_state
+    }
+
+    /// State of handles (e.g. resources, waitables, etc.) for this instance.
+    pub fn handle_table(&mut self) -> &mut HandleTable {
+        &mut self.handle_table
+    }
+}
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -86,13 +117,9 @@ pub struct ComponentInstance {
     // borrowing a store mutably at the same time as a contained instance.
     component: Component,
 
-    /// State of handles (e.g. resources, waitables, etc.) for this component.
-    ///
-    /// For resource handles, this is paired with other information to create a
-    /// `ResourceTables` and manipulated through that.  For other handles, this
-    /// is used directly to translate guest handles to host representations and
-    /// vice-versa.
-    instance_handle_tables: PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
+    /// Contains state specific to each (sub-)component instance within this
+    /// top-level instance.
+    instance_states: PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
@@ -293,16 +320,15 @@ impl ComponentInstance {
     ) -> OwnedComponentInstance {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
-        let mut instance_handle_tables =
-            PrimaryMap::with_capacity(num_instances.try_into().unwrap());
+        let mut instance_states = PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
-            instance_handle_tables.push(HandleTable::default());
+            instance_states.push(InstanceState::default());
         }
 
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
-            instance_handle_tables,
+            instance_states,
             instances: PrimaryMap::with_capacity(
                 component
                     .env_component()
@@ -825,20 +851,28 @@ impl ComponentInstance {
         resource_instance == component.defined_resource_instances[idx]
     }
 
-    /// Returns the runtime state of resources associated with this component.
+    /// Returns the runtime state of resources and concurrency associated with
+    /// this component.
     #[inline]
-    pub fn guest_tables(
+    pub fn instance_states(
         self: Pin<&mut Self>,
     ) -> (
-        &mut PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
+        &mut PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &ComponentTypes,
     ) {
         // safety: we've chosen the `pin` guarantee of `self` to not apply to
         // the map returned.
         unsafe {
             let me = self.get_unchecked_mut();
-            (&mut me.instance_handle_tables, me.component.types())
+            (&mut me.instance_states, me.component.types())
         }
+    }
+
+    pub fn instance_state(
+        self: Pin<&mut Self>,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> Option<&mut InstanceState> {
+        self.instance_states().0.get_mut(instance)
     }
 
     /// Returns the destructor and instance flags for the specified resource

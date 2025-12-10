@@ -767,3 +767,73 @@ async fn cancel_host_future() -> Result<()> {
         }
     }
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn run_wasm_in_call_async() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.async_support(true);
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let a = Component::new(
+        &engine,
+        r#"
+(component
+  (type $t (func async))
+  (import "a" (func $f (type $t)))
+  (core func $f (canon lower (func $f)))
+  (core module $a
+    (import "" "f" (func $f))
+    (func (export "run") call $f)
+  )
+  (core instance $a (instantiate $a
+    (with "" (instance (export "f" (func $f))))
+  ))
+  (func (export "run") (type $t)
+    (canon lift (core func $a "run")))
+)
+        "#,
+    )?;
+    let b = Component::new(
+        &engine,
+        r#"
+(component
+  (type $t (func async))
+  (core module $a
+    (func (export "run"))
+  )
+  (core instance $a (instantiate $a))
+  (func (export "run") (type $t)
+    (canon lift (core func $a "run")))
+)
+        "#,
+    )?;
+
+    type State = Option<Instance>;
+
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap_concurrent("a", |accessor: &Accessor<State>, (): ()| {
+            Box::pin(async move {
+                let func = accessor.with(|mut access| {
+                    access
+                        .get()
+                        .unwrap()
+                        .get_typed_func::<(), ()>(&mut access, "run")
+                })?;
+                func.call_concurrent(accessor, ()).await?;
+                Ok(())
+            })
+        })?;
+    let mut store = Store::new(&engine, None);
+    let instance_a = linker.instantiate_async(&mut store, &a).await?;
+    let instance_b = linker.instantiate_async(&mut store, &b).await?;
+    *store.data_mut() = Some(instance_b);
+    let run = instance_a.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_async(&mut store, ()).await?;
+    Ok(())
+}

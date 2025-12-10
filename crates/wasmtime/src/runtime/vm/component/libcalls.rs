@@ -672,12 +672,15 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
 #[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
-    _instance: Instance,
+    instance: Instance,
     caller_instance: u32,
     increment: u8,
 ) -> Result<()> {
-    store.concurrent_state_mut().backpressure_modify(
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    store.backpressure_modify(
+        (
+            instance,
+            RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        ),
         |old| {
             if increment != 0 {
                 old.checked_add(1)
