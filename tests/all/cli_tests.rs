@@ -2523,13 +2523,14 @@ fn profile_with_vtune() -> Result<()> {
     println!("> executing: {bin:?}");
     let output = bin.output()?;
 
-    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("> stdout:\n{stdout}");
-    assert!(stdout.contains("CPU Time"));
     println!("> stderr:\n{stderr}");
+
+    assert!(output.status.success());
     assert!(!stderr.contains("Error"));
+    assert!(stdout.contains("CPU Time"));
     Ok(())
 }
 
