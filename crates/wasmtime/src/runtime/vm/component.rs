@@ -155,7 +155,7 @@ pub struct ComponentInstance {
 /// This function returns a `bool` which indicates whether the call succeeded
 /// or not. On failure this function records trap information in TLS which
 /// should be suitable for reading later.
-pub type VMLoweringCallee = extern "C" fn(
+pub type VMLoweringCallee = unsafe extern "C" fn(
     vmctx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,

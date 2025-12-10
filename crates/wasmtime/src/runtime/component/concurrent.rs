@@ -2519,7 +2519,7 @@ impl Instance {
     /// stack and linear memory unless the task has been cancelled.
     pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
         self,
-        mut store: StoreContextMut<T>,
+        mut store: StoreContextMut<'_, T>,
         future: impl Future<Output = Result<R>> + Send + 'static,
         caller_instance: RuntimeComponentInstanceIndex,
         lower: impl FnOnce(StoreContextMut<T>, R) -> Result<()> + Send + 'static,
