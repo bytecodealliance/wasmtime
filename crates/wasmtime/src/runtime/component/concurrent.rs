@@ -2941,6 +2941,7 @@ impl Instance {
 
         self.waitable_check(
             store,
+            caller,
             cancellable,
             WaitableCheck::Wait(WaitableCheckParams {
                 set: TableId::new(rep),
@@ -2978,6 +2979,7 @@ impl Instance {
 
         self.waitable_check(
             store,
+            caller,
             cancellable,
             WaitableCheck::Poll(WaitableCheckParams {
                 set: TableId::new(rep),
@@ -3191,7 +3193,16 @@ impl Instance {
             }
         };
 
+        let mut flags = self.id().get(store).instance_flags(caller);
+        let may_enter;
+        unsafe {
+            may_enter = flags.may_enter();
+            flags.set_may_enter(true);
+        }
+
         store.suspend(reason)?;
+
+        unsafe { flags.set_may_enter(may_enter) };
 
         if cancellable && store.concurrent_state_mut().take_pending_cancellation() {
             Ok(WaitResult::Cancelled)
@@ -3204,6 +3215,7 @@ impl Instance {
     fn waitable_check(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         check: WaitableCheck,
     ) -> Result<u32> {
@@ -3213,6 +3225,13 @@ impl Instance {
             WaitableCheck::Wait(params) => (true, Some(params.set)),
             WaitableCheck::Poll(params) => (false, Some(params.set)),
         };
+
+        let mut flags = self.id().get(store).instance_flags(caller);
+        let may_enter;
+        unsafe {
+            may_enter = flags.may_enter();
+            flags.set_may_enter(true);
+        }
 
         log::trace!("waitable check for {guest_thread:?}; set {set:?}");
         // First, suspend this fiber, allowing any other threads to run.
@@ -3249,6 +3268,8 @@ impl Instance {
                 })?;
             }
         }
+
+        unsafe { flags.set_may_enter(may_enter) };
 
         log::trace!("waitable check for {guest_thread:?}; set {set:?}, part two");
 
@@ -4054,6 +4075,7 @@ enum GuestThreadState {
     Pending,
     Completed,
 }
+
 pub struct GuestThread {
     /// Context-local state used to implement the `context.{get,set}`
     /// intrinsics.
