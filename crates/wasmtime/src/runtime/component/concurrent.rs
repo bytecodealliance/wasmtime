@@ -82,8 +82,8 @@ use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
+    CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
@@ -3279,8 +3279,11 @@ impl Instance {
                     }
                 };
                 let memory = self.options_memory_mut(store, params.options);
-                let ptr =
-                    func::validate_inbounds::<(u32, u32)>(memory, &ValRaw::u32(params.payload))?;
+                let ptr = func::validate_inbounds_dynamic(
+                    &CanonicalAbiInfo::POINTER_PAIR,
+                    memory,
+                    &ValRaw::u32(params.payload),
+                )?;
                 memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
                 memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
                 Ok(ordinal)

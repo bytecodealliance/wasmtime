@@ -4,11 +4,8 @@ use crate::component::{ComponentType, Lift, Lower, Val};
 use crate::runtime::vm::VMStore;
 use anyhow::{Result, anyhow, bail};
 use core::convert::Infallible;
-use core::future::Future;
 use core::mem::MaybeUninit;
-use core::pin::pin;
-use core::task::{Context, Poll, Waker};
-use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType, RuntimeComponentInstanceIndex};
+use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
 #[derive(Default)]
 pub struct ConcurrentState;
@@ -24,17 +21,6 @@ fn should_have_failed_validation<T>(what: &str) -> Result<T> {
 
 pub(crate) fn check_blocking(_: &mut dyn VMStore) -> Result<()> {
     Ok(())
-}
-
-pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
-    _store: &mut dyn VMStore,
-    future: impl Future<Output = Result<R>> + Send + 'static,
-    _caller_instance: RuntimeComponentInstanceIndex,
-) -> Result<R> {
-    match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
-        Poll::Ready(result) => result,
-        Poll::Pending => should_have_failed_validation("async lowered import"),
-    }
 }
 
 pub(crate) fn lower_error_context_to_index<U>(

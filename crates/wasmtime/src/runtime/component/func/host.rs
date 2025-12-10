@@ -7,7 +7,7 @@ use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{slice_to_storage, slice_to_storage_mut};
 use crate::component::types::ComponentFunc;
-use crate::component::{ComponentNamedList, ComponentType, Instance, Lift, Lower, Val};
+use crate::component::{ComponentNamedList, Instance, Lift, Lower, Val};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
     ComponentInstance, VMComponentContext, VMLowering, VMLoweringCallee,
@@ -16,13 +16,12 @@ use crate::runtime::vm::{VMOpaqueContext, VMStore};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
-use core::future::Future;
 use core::mem::{self, MaybeUninit};
+#[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    OptionsIndex, TypeFuncIndex,
+    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex, TypeFuncIndex,
 };
 
 /// A host function suitable for passing into a component.
@@ -333,6 +332,7 @@ where
 
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
+        #[cfg(feature = "component-model-async")]
         let caller_instance = lift.options().instance;
 
         let ret = match self.run(store.as_context_mut(), params) {
@@ -376,6 +376,8 @@ where
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
+        use wasmtime_environ::component::MAX_FLAT_ASYNC_PARAMS;
+
         let (component, store) = instance.component_and_store_mut(store.0);
         let mut store = StoreContextMut(store);
         let types = component.types();
@@ -415,6 +417,7 @@ where
                 )?;
                 None
             }
+            #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
                 instance.first_poll(store, future, caller_instance, move |store, ret| {
                     Self::lower_result_and_exit_call(
@@ -681,22 +684,6 @@ where
         }
         Ok(())
     }
-}
-
-pub(crate) fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
-    // FIXME(#4311): needs memory64 support
-    let ptr = usize::try_from(ptr.get_u32())?;
-    if ptr % usize::try_from(T::ALIGN32)? != 0 {
-        bail!("pointer not aligned");
-    }
-    let end = match ptr.checked_add(T::SIZE32) {
-        Some(n) => n,
-        None => bail!("pointer size overflow"),
-    };
-    if end > memory.len() {
-        bail!("pointer out of bounds")
-    }
-    Ok(ptr)
 }
 
 pub(crate) fn validate_inbounds_dynamic(
