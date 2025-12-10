@@ -794,27 +794,64 @@ impl ABIMachineSpec for S390xMachineDeps {
             });
         }
 
-        // Save FPRs.
-        for (i, reg) in get_clobbered_fprs(frame_layout).iter().enumerate() {
-            insts.push(Inst::VecStoreLane {
-                size: 64,
-                rd: reg.to_reg().into(),
-                mem: MemArg::reg_plus_off(
-                    stack_reg(),
-                    (i * 8) as i64
-                        + frame_layout.outgoing_args_size as i64
-                        + frame_layout.fixed_frame_storage_size as i64,
-                    MemFlags::trusted(),
-                ),
-                lane_imm: 0,
-            });
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::SaveReg {
-                        clobber_offset: (i * 8) as u32,
-                        reg: reg.to_reg(),
-                    },
+        // Write the dedicated clobber region.
+        match call_conv {
+            isa::CallConv::Patchable => {
+                // Explicitly save full v0-v31. Save r0-r5; r6-r15 are
+                // in the ABI-defined register save area.
+                //
+                // N.B.: unwind metadata doesn't support a full vector
+                // reg clobber-save, and we don't expect an unwinder
+                // to try to unwind the patchable ABI anyway, so we
+                // omit unwind insts.
+                for i in 0..32 {
+                    insts.push(Inst::VecStore {
+                        rd: regs::vr(i),
+                        mem: MemArg::reg_plus_off(
+                            stack_reg(),
+                            6 * 8
+                                + (i as i64) * 16
+                                + frame_layout.outgoing_args_size as i64
+                                + frame_layout.fixed_frame_storage_size as i64,
+                            MemFlags::trusted(),
+                        ),
+                    });
+                }
+                insts.push(Inst::StoreMultiple64 {
+                    rt: regs::gpr(0),
+                    rt2: regs::gpr(5),
+                    mem: MemArg::reg_plus_off(
+                        stack_reg(),
+                        frame_layout.outgoing_args_size as i64
+                            + frame_layout.fixed_frame_storage_size as i64,
+                        MemFlags::trusted(),
+                    ),
                 });
+            }
+            _ => {
+                // Save FPRs.
+                for (i, reg) in get_clobbered_fprs(frame_layout).iter().enumerate() {
+                    insts.push(Inst::VecStoreLane {
+                        size: 64,
+                        rd: reg.to_reg().into(),
+                        mem: MemArg::reg_plus_off(
+                            stack_reg(),
+                            (i * 8) as i64
+                                + frame_layout.outgoing_args_size as i64
+                                + frame_layout.fixed_frame_storage_size as i64,
+                            MemFlags::trusted(),
+                        ),
+                        lane_imm: 0,
+                    });
+                    if flags.unwind_info() {
+                        insts.push(Inst::Unwind {
+                            inst: UnwindInst::SaveReg {
+                                clobber_offset: (i * 8) as u32,
+                                reg: reg.to_reg(),
+                            },
+                        });
+                    }
+                }
             }
         }
 
@@ -828,8 +865,15 @@ impl ABIMachineSpec for S390xMachineDeps {
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
 
-        // Restore FPRs.
-        insts.extend(gen_restore_fprs(frame_layout));
+        match call_conv {
+            isa::CallConv::Patchable => {
+                insts.extend(gen_restore_patchable(frame_layout));
+            }
+            _ => {
+                // Restore FPRs.
+                insts.extend(gen_restore_fprs(frame_layout));
+            }
+        }
 
         // Restore GPRs (including SP).
         insts.extend(gen_restore_gprs(call_conv, frame_layout, 0));
@@ -942,17 +986,28 @@ impl ABIMachineSpec for S390xMachineDeps {
         // sort because the registers will be unique (there are no dups).
         regs.sort_unstable();
 
-        // Compute clobber size.  We only need to count FPR save slots.
-        let mut clobber_size = 0;
-        for reg in &regs {
-            match reg.to_reg().class() {
-                RegClass::Int => {}
-                RegClass::Float => {
-                    clobber_size += 8;
+        // Compute clobber size. If we are in the patchable ABI, we
+        // know we save r0-r5 and v0-v31 in the separate clobber area,
+        // and use the register-save area for r6-r15; otherwise we
+        // don't count GPRs and only save the FPR part of vector regs.
+        let mut clobber_size = match call_conv {
+            isa::CallConv::Patchable => 8 * 6 + 16 * 32,
+            _ => {
+                let mut clobber_size = 0;
+                for reg in &regs {
+                    match reg.to_reg().class() {
+                        RegClass::Int => {}
+                        RegClass::Float => {
+                            // We only need to count FPR save slots in the
+                            // ordinary (SysV and tail-call) ABIs.
+                            clobber_size += 8;
+                        }
+                        RegClass::Vector => unreachable!(),
+                    }
                 }
-                RegClass::Vector => unreachable!(),
+                clobber_size
             }
-        }
+        };
 
         // Common code assumes that tail-call arguments are part of the caller's
         // frame.  This is not correct for our tail-call convention.  To ensure
@@ -1131,6 +1186,12 @@ fn get_clobbered_gprs(frame_layout: &FrameLayout) -> Option<(u8, u8)> {
     let last = clobbered_gpr.last().unwrap().to_reg().hw_enc();
     debug_assert!(clobbered_gpr.iter().all(|r| r.to_reg().hw_enc() >= first));
     debug_assert!(clobbered_gpr.iter().all(|r| r.to_reg().hw_enc() <= last));
+
+    // Explicitly clamp `first` at r6 at a minimum; that is what the
+    // reg-save area has space for. If we're in the patchable ABI with
+    // all regs clobber-saved, we save r0-r5 separately.
+    let first = core::cmp::max(first, 6);
+
     Some((first, last))
 }
 
@@ -1223,6 +1284,35 @@ fn gen_restore_fprs(frame_layout: &FrameLayout) -> SmallVec<[Inst; 16]> {
             lane_imm: 0,
         });
     }
+
+    insts
+}
+
+fn gen_restore_patchable(frame_layout: &FrameLayout) -> SmallVec<[Inst; 16]> {
+    let mut insts = SmallVec::new();
+
+    for i in 0..32 {
+        insts.push(Inst::VecLoad {
+            rd: regs::writable_vr(i),
+            mem: MemArg::reg_plus_off(
+                stack_reg(),
+                6 * 8
+                    + (i as i64) * 16
+                    + frame_layout.outgoing_args_size as i64
+                    + frame_layout.fixed_frame_storage_size as i64,
+                MemFlags::trusted(),
+            ),
+        });
+    }
+    insts.push(Inst::LoadMultiple64 {
+        rt: regs::writable_gpr(0),
+        rt2: regs::writable_gpr(5),
+        mem: MemArg::reg_plus_off(
+            stack_reg(),
+            frame_layout.outgoing_args_size as i64 + frame_layout.fixed_frame_storage_size as i64,
+            MemFlags::trusted(),
+        ),
+    });
 
     insts
 }
