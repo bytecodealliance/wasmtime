@@ -206,6 +206,7 @@ impl Wizer {
                     anyhow::bail!("imported memories are not supported")
                 }
                 wasmparser::TypeRef::Func(_) => {}
+                wasmparser::TypeRef::FuncExact(_) => {}
                 wasmparser::TypeRef::Tag(_) => {}
             }
         }

@@ -23,15 +23,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
+pub(crate) struct i8x16(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
+pub(crate) struct f32x4(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
+pub(crate) struct f64x2(core::convert::Infallible);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
@@ -44,9 +44,7 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
-use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
-};
+use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
@@ -124,10 +122,12 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
+#[cfg(feature = "component-model")]
+pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
@@ -344,44 +344,12 @@ impl ModuleRuntimeInfo {
     fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .shared_type(module_index)
                 .expect("bad module-level interned type index"),
             ModuleRuntimeInfo::Bare(_) => unreachable!(),
         }
-    }
-
-    /// Returns the address, in memory, that the function `index` resides at.
-    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        let module = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = module
-            .compiled_module()
-            .finished_function(index)
-            .as_ptr()
-            .cast::<VMWasmCallFunction>()
-            .cast_mut();
-        NonNull::new(ptr).unwrap()
-    }
-
-    /// Returns the address, in memory, of the trampoline that allows the given
-    /// defined Wasm function to be called by the array calling convention.
-    ///
-    /// Returns `None` for Wasm functions which do not escape, and therefore are
-    /// not callable from outside the Wasm module itself.
-    fn array_to_wasm_trampoline(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMArrayCallFunction>> {
-        let m = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = NonNull::from(m.compiled_module().array_to_wasm_trampoline(index)?);
-        Some(ptr.cast())
     }
 
     /// Returns the `MemoryImage` structure used for copy-on-write
@@ -413,7 +381,7 @@ impl ModuleRuntimeInfo {
     /// A slice pointing to all data that is referenced by this instance.
     fn wasm_data(&self) -> &[u8] {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.compiled_module().code_memory().wasm_data(),
+            ModuleRuntimeInfo::Module(m) => m.engine_code().wasm_data(),
             ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
@@ -423,7 +391,7 @@ impl ModuleRuntimeInfo {
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .as_module_map()
                 .values()

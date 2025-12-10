@@ -587,10 +587,14 @@ impl<'a> Verifier<'a> {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {
-                func_ref, ref args, ..
+                opcode,
+                func_ref,
+                ref args,
+                ..
             } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
+                self.verify_callee_abi(inst, func_ref, opcode, errors)?;
             }
             CallIndirect {
                 sig_ref, ref args, ..
@@ -947,6 +951,38 @@ impl<'a> Verifier<'a> {
                     "calling convention `{callee_call_conv}` of callee does not support exceptions"
                 ),
             ))?;
+        }
+        Ok(())
+    }
+
+    fn verify_callee_abi(
+        &self,
+        inst: Inst,
+        func_ref: FuncRef,
+        opcode: Opcode,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        let callee_sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
+        let callee_sig = &self.func.dfg.signatures[callee_sig_ref];
+        let callee_abi = callee_sig.call_conv;
+        match (opcode, callee_abi) {
+            (Opcode::PatchableCall, CallConv::Patchable) => {
+                if !self.func.dfg.ext_funcs[func_ref].colocated {
+                    errors.fatal((
+                        inst,
+                        self.context(inst),
+                        "patchable call to non-colocated function".to_string(),
+                    ))?;
+                }
+            }
+            (Opcode::PatchableCall, _) => {
+                errors.fatal((
+                    inst,
+                    self.context(inst),
+                    "patchable call with non-patchable-ABI callee".to_string(),
+                ))?;
+            }
+            _ => {}
         }
         Ok(())
     }

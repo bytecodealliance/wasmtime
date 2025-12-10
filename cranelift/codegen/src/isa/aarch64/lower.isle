@@ -2573,6 +2573,17 @@
             (_ Unit (emit_side_effect (call_ind_impl info))))
         output))
 
+;;;; Rules for `patchable_call` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct call to an in-range function.
+(rule (lower (patchable_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_patchable_call_rets))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (patchable_call_impl info))))
+        (output_none)))
+
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.

@@ -48,9 +48,9 @@
 ;;                                 block2:
 ;;                                     v90 = iconst.i32 -1476394984
 ;; @0025                               v31 = load.i64 notrap aligned readonly can_move v56+24
-;;                                     v128 = band.i32 v21, v89  ; v89 = -8
-;;                                     v129 = uextend.i64 v128
-;; @0025                               v33 = iadd v31, v129
+;;                                     v175 = band.i32 v21, v89  ; v89 = -8
+;;                                     v176 = uextend.i64 v175
+;; @0025                               v33 = iadd v31, v176
 ;; @0025                               store notrap aligned v90, v33  ; v90 = -1476394984
 ;; @0025                               v37 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0025                               v38 = load.i32 notrap aligned readonly can_move v37
@@ -65,13 +65,13 @@
 ;;                                     v103 = iadd v33, v64  ; v64 = 12
 ;; @0025                               store notrap aligned little v49, v103
 ;;                                     v48 = load.i32 notrap v61
-;;                                     v105 = iconst.i64 16
-;;                                     v111 = iadd v33, v105  ; v105 = 16
-;; @0025                               store notrap aligned little v48, v111
+;;                                     v106 = iconst.i64 16
+;;                                     v112 = iadd v33, v106  ; v106 = 16
+;; @0025                               store notrap aligned little v48, v112
 ;;                                     v47 = load.i32 notrap v60
-;;                                     v113 = iconst.i64 20
-;;                                     v119 = iadd v33, v113  ; v113 = 20
-;; @0025                               store notrap aligned little v47, v119
+;;                                     v129 = iconst.i64 20
+;;                                     v135 = iadd v33, v129  ; v129 = 20
+;; @0025                               store notrap aligned little v47, v135
 ;; @0029                               jump block1
 ;;
 ;;                                 block3 cold:
@@ -80,6 +80,6 @@
 ;; @0025                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v130 = band.i32 v21, v89  ; v89 = -8
-;; @0029                               return v130
+;;                                     v177 = band.i32 v21, v89  ; v89 = -8
+;; @0029                               return v177
 ;; }

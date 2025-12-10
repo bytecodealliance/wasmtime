@@ -145,6 +145,25 @@ impl StoreComponentInstanceId {
         self.from_data_get_mut(store.store_data_mut())
     }
 
+    /// Return a mutable `ComponentInstance` and a `ModuleRegistry`
+    /// from the store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn get_mut_and_registry<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (
+        Pin<&'a mut ComponentInstance>,
+        &'a crate::module::ModuleRegistry,
+    ) {
+        let (store_data, registry) = store.store_data_mut_and_registry();
+        let instance = self.from_data_get_mut(store_data);
+        (instance, registry)
+    }
+
     /// Same as `get_mut`, but borrows less of a store.
     pub(crate) fn from_data_get_mut<'a>(
         &self,

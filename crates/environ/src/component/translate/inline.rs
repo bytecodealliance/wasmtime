@@ -699,15 +699,6 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*ty, dfg::CoreDef::Trampoline(index)));
             }
-            BackpressureSet { func } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::BackpressureSet {
-                        instance: frame.instance,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
             BackpressureInc { func } => {
                 let index = self.result.trampolines.push((
                     *func,

@@ -536,6 +536,7 @@ impl Wasmtime {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
                 };
+                uwriteln!(generator.src, "#[derive(Clone)]");
                 uwriteln!(generator.src, "pub struct {struct_name} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(

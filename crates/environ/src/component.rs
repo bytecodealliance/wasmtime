@@ -112,8 +112,6 @@ macro_rules! foreach_builtin_component_function {
             sync_to_sync_exit_call(vmctx: vmctx, callee_instance: u32, old_thread: u64) -> bool;
 
             #[cfg(feature = "component-model-async")]
-            backpressure_set(vmctx: vmctx, caller_instance: u32, enabled: u32) -> bool;
-            #[cfg(feature = "component-model-async")]
             backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
             #[cfg(feature = "component-model-async")]
             task_return(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, storage: ptr_u8, storage_len: size) -> bool;
@@ -144,6 +142,7 @@ macro_rules! foreach_builtin_component_function {
                 caller_instance: u32,
                 callee_instance: u32,
                 task_return_type: u32,
+                callee_async: u32,
                 string_encoding: u32,
                 result_count_or_max_if_async: u32,
                 storage: ptr_u8,
@@ -197,6 +196,8 @@ macro_rules! foreach_builtin_component_function {
             stream_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
+            #[cfg(feature = "component-model-async")]
+            check_blocking(vmctx: vmctx) -> bool;
             #[cfg(feature = "component-model-async")]
             context_get(vmctx: vmctx, caller_instance: u32, slot: u32) -> u64;
             #[cfg(feature = "component-model-async")]

@@ -330,8 +330,15 @@ async fn p3_http_middleware() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_middleware_host_to_host() -> Result<()> {
-    test_http_middleware(true).await
+async fn p3_http_middleware_host_to_host() {
+    let error = format!("{:?}", test_http_middleware(true).await.unwrap_err());
+
+    let expected = "cannot read from and write to intra-component stream with non-unit payload";
+
+    assert!(
+        error.contains(expected),
+        "expected `{expected}`; got `{error}`"
+    );
 }
 
 async fn test_http_middleware(host_to_host: bool) -> Result<()> {

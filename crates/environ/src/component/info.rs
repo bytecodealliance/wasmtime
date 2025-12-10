@@ -764,13 +764,6 @@ pub enum Trampoline {
         ty: TypeResourceTableIndex,
     },
 
-    /// A `backpressure.set` intrinsic, which tells the host to enable or
-    /// disable backpressure for the caller's instance.
-    BackpressureSet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-    },
-
     /// A `backpressure.inc` intrinsic.
     BackpressureInc {
         /// The specific component instance which is calling the intrinsic.
@@ -1124,6 +1117,10 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
+    /// An intrinsic used by FACT-generated modules to check whether an
+    /// async-typed function may be called via a sync lower.
+    CheckBlocking,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
@@ -1214,7 +1211,6 @@ impl Trampoline {
             ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
             ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
             ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
-            BackpressureSet { .. } => format!("backpressure-set"),
             BackpressureInc { .. } => format!("backpressure-inc"),
             BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),
@@ -1256,6 +1252,7 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
+            CheckBlocking => format!("check-blocking"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),

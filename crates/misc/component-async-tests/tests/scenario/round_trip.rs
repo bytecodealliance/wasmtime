@@ -287,7 +287,7 @@ pub async fn test_round_trip(
                 tx: oneshot::Sender<()>,
             }
 
-            impl AccessorTask<Ctx, HasSelf<Ctx>, Result<()>> for Task {
+            impl AccessorTask<Ctx, HasSelf<Ctx>> for Task {
                 async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
                     let round_trip = accessor.with(|mut store| {
                         component_async_tests::round_trip::bindings::RoundTrip::new(

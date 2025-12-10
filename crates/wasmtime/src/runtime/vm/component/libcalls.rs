@@ -723,19 +723,6 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
 }
 
 #[cfg(feature = "component-model-async")]
-fn backpressure_set(
-    store: &mut dyn VMStore,
-    _instance: Instance,
-    caller_instance: u32,
-    enabled: u32,
-) -> Result<()> {
-    store.concurrent_state_mut().backpressure_modify(
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        |_| Some(if enabled != 0 { 1 } else { 0 }),
-    )
-}
-
-#[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
     _instance: Instance,
@@ -917,6 +904,7 @@ unsafe fn prepare_call(
     caller_instance: u32,
     callee_instance: u32,
     task_return_type: u32,
+    callee_async: u32,
     string_encoding: u32,
     result_count_or_max_if_async: u32,
     storage: *mut u8,
@@ -931,6 +919,7 @@ unsafe fn prepare_call(
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             RuntimeComponentInstanceIndex::from_u32(callee_instance),
             TypeTupleIndex::from_u32(task_return_type),
+            callee_async != 0,
             u8::try_from(string_encoding).unwrap(),
             result_count_or_max_if_async,
             storage.cast::<crate::ValRaw>(),
@@ -1028,6 +1017,11 @@ fn error_context_transfer(
     let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
     let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
     instance.error_context_transfer(store, src_idx, src_table, dst_table)
+}
+
+#[cfg(feature = "component-model-async")]
+fn check_blocking(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
+    crate::component::concurrent::check_blocking(store)
 }
 
 #[cfg(feature = "component-model-async")]

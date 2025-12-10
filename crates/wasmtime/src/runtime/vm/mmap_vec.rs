@@ -270,6 +270,33 @@ impl MmapVec {
             MmapVec::Mmap { mmap, len } => unsafe { mmap.slice_mut(0..*len) },
         }
     }
+
+    /// Create a copy of this `MmapVec` that can be separately
+    /// mutated.
+    #[cfg(feature = "debug")]
+    pub(crate) fn deep_clone(&self) -> Result<MmapVec> {
+        match self {
+            #[cfg(not(has_virtual_memory))]
+            MmapVec::Alloc { layout, .. } => {
+                MmapVec::from_slice_with_alignment(&self[..], layout.align())
+            }
+            MmapVec::ExternallyOwned { .. } => {
+                anyhow::bail!("Cannot clone an externally-owned code memory.");
+            }
+            #[cfg(has_virtual_memory)]
+            MmapVec::Mmap { mmap, len } => {
+                if let Some(original_file) = mmap.original_file() {
+                    let mmap = Mmap::from_file(original_file.clone())?;
+                    Ok(MmapVec::Mmap { mmap, len: *len })
+                } else {
+                    MmapVec::from_slice_with_alignment(
+                        &self[..],
+                        crate::runtime::vm::host_page_size(),
+                    )
+                }
+            }
+        }
+    }
 }
 
 impl Deref for MmapVec {

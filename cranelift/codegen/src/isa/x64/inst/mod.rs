@@ -77,6 +77,7 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::ReturnCallKnown { .. }
             | Inst::ReturnCallUnknown { .. }
+            | Inst::PatchableCallKnown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
             | Inst::CvtFloatToSintSeq { .. }
@@ -644,6 +645,11 @@ impl PrettyPrint for Inst {
                 s
             }
 
+            Inst::PatchableCallKnown { info } => {
+                let op = ljustify("patchable_call".to_string());
+                format!("{op} {:?}", info.dest)
+            }
+
             Inst::Rets { rets } => {
                 let mut s = "rets".to_string();
                 for ret in rets {
@@ -959,7 +965,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp);
         }
 
-        Inst::CallKnown { info } => {
+        Inst::CallKnown { info } | Inst::PatchableCallKnown { info } => {
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
@@ -1385,6 +1391,10 @@ impl MachInst for Inst {
         Inst::nop(std::cmp::min(preferred_size, 9) as u8)
     }
 
+    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
+        smallvec![0x90]
+    }
+
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
             types::I8 => Ok((&[RegClass::Int], &[types::I8])),
@@ -1447,7 +1457,9 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::CallKnown { .. } | Inst::CallUnknown { .. } => true,
+            Inst::CallKnown { .. } | Inst::CallUnknown { .. } | Inst::PatchableCallKnown { .. } => {
+                true
+            }
             _ => false,
         }
     }

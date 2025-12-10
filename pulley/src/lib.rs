@@ -86,6 +86,9 @@ extern crate alloc;
 macro_rules! for_each_op {
     ( $macro:ident ) => {
         $macro! {
+            /// No-operation.
+            nop = Nop;
+
             /// Transfer control the address in the `lr` register.
             ret = Ret;
 
@@ -622,9 +625,6 @@ macro_rules! for_each_extended_op {
         $macro! {
             /// Raise a trap.
             trap = Trap;
-
-            /// Do nothing.
-            nop = Nop;
 
             /// A special opcode to halt interpreter execution and yield control
             /// back to the host.

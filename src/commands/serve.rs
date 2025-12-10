@@ -769,11 +769,12 @@ fn setup_guest_profiler(
     let module_name = "<main>";
 
     store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
+        store.engine(),
         module_name,
         interval,
         component,
         std::iter::empty(),
-    )));
+    )?));
 
     fn sample(
         mut store: StoreContextMut<Host>,

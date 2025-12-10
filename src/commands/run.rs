@@ -355,7 +355,7 @@ impl RunCommand {
                 profiled_modules,
                 path,
                 *interval,
-            ));
+            )?);
             #[cfg(not(feature = "profiling"))]
             {
                 let _ = (profiled_modules, path, interval, main_target);
@@ -383,22 +383,24 @@ impl RunCommand {
         profiled_modules: Vec<(String, Module)>,
         path: &str,
         interval: std::time::Duration,
-    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
         use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
             RunTarget::Core(_m) => Some(Arc::new(GuestProfiler::new(
+                store.engine(),
                 module_name,
                 interval,
                 profiled_modules,
-            ))),
+            )?)),
             RunTarget::Component(component) => Some(Arc::new(GuestProfiler::new_component(
+                store.engine(),
                 module_name,
                 interval,
                 component.clone(),
                 profiled_modules,
-            ))),
+            )?)),
         };
 
         fn sample(
@@ -450,7 +452,7 @@ impl RunCommand {
         });
 
         let path = path.to_string();
-        return Box::new(move |store| {
+        Ok(Box::new(move |store| {
             let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
                 .expect("profiling doesn't support threads yet");
             if let Err(e) = std::fs::File::create(&path)
@@ -463,7 +465,7 @@ impl RunCommand {
                 eprintln!("Profile written to: {path}");
                 eprintln!("View this profile at https://profiler.firefox.com/.");
             }
-        });
+        }))
     }
 
     async fn load_main_module(

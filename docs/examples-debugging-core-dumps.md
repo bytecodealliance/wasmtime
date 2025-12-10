@@ -7,7 +7,7 @@ consumed by external tooling (such as [`wasmgdb`][wasmgdb]) for post-mortem anal
 This page focuses on generating and inspecting core dumps via the Wasmtime
 command-line interface. For details on how to generate core dumps via the
 `wasmtime` embedding API, see [Core Dumps in a Rust
-Embedding](./examples-rust-core-dumps.md).
+Embedding](./examples-core-dumps.md).
 
 First, we need to compile some code to Wasm that can trap. Consider the
 following Rust code:

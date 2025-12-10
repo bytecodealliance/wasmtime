@@ -632,7 +632,7 @@ where
         .store_data_mut()
         .component_instance_mut(id)
         .instance(item.instance);
-    let instance = store.instance_mut(id);
+    let (instance, registry) = store.instance_and_module_registry_mut(id);
     let idx = match &item.item {
         ExportItem::Index(idx) => (*idx).into(),
 
@@ -649,7 +649,7 @@ where
     };
     // SAFETY: the `store_id` owns this instance and all exports contained
     // within.
-    unsafe { instance.get_export_by_index_mut(store_id, idx) }
+    unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
 }
 
 fn resource_tables<'a>(
@@ -742,9 +742,9 @@ impl<'a> Instantiator<'a> {
         component: &'a Component,
         store: &mut StoreOpaque,
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    ) -> Instantiator<'a> {
+    ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        store.modules_mut().register_component(component);
+        store.register_component(component)?;
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
@@ -757,12 +757,12 @@ impl<'a> Instantiator<'a> {
         );
         let id = store.store_data_mut().push_component_instance(instance);
 
-        Instantiator {
+        Ok(Instantiator {
             component,
             imports,
             core_imports: OwnedImports::empty(),
             id,
-        }
+        })
     }
 
     async fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
@@ -1189,7 +1189,7 @@ impl<T: 'static> InstancePre<T> {
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports);
+        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
         instantiator.run(&mut store).await.map_err(|e| {
             store
                 .engine()

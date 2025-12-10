@@ -222,6 +222,7 @@ impl Inst {
             | Inst::AllocateArgs { .. }
             | Inst::Call { .. }
             | Inst::ReturnCall { .. }
+            | Inst::PatchableCall { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -899,7 +900,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rn);
         }
         Inst::AllocateArgs { .. } => {}
-        Inst::Call { link, info, .. } => {
+        Inst::Call { link, info, .. } | Inst::PatchableCall { link, info, .. } => {
             let CallInfo {
                 dest,
                 uses,
@@ -1125,14 +1126,16 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } => true,
+            Inst::Call { .. } | Inst::PatchableCall { .. } => true,
             _ => false,
         }
     }
 
     fn call_type(&self) -> CallType {
         match self {
-            Inst::Call { .. } | Inst::ElfTlsGetOffset { .. } => CallType::Regular,
+            Inst::Call { .. } | Inst::PatchableCall { .. } | Inst::ElfTlsGetOffset { .. } => {
+                CallType::Regular
+            }
 
             Inst::ReturnCall { .. } => CallType::TailCall,
 
@@ -1159,6 +1162,10 @@ impl MachInst for Inst {
             assert!(preferred_size >= 2);
             Inst::Nop2
         }
+    }
+
+    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
+        smallvec::smallvec![0x07, 0x07]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -3188,7 +3195,8 @@ impl Inst {
                     format!("slgfi {}, {}", show_reg(stack_reg()), size)
                 }
             }
-            &Inst::Call { link, ref info } => {
+            &Inst::Call { link, ref info } | &Inst::PatchableCall { link, ref info } => {
+                let is_patchable = matches!(self, Inst::PatchableCall { .. });
                 state.nominal_sp_offset = 0;
                 let link = link.to_reg();
                 let (opcode, dest) = match &info.dest {
@@ -3219,14 +3227,16 @@ impl Inst {
                 } else {
                     "".to_string()
                 };
+                let patchable = if is_patchable { " ; patchable" } else { "" };
                 format!(
-                    "{} {}, {}{}{}{}",
+                    "{} {}, {}{}{}{}{}",
                     opcode,
                     show_reg(link),
                     dest,
                     callee_pop_size,
                     retval_loads,
-                    try_call
+                    try_call,
+                    patchable
                 )
             }
             &Inst::ReturnCall { ref info } => {

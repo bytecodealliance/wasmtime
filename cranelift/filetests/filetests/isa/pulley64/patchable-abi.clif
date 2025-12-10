@@ -370,3 +370,23 @@ block0(v0: i64):
 ; pop_frame_restore 896, 
 ; ret
 
+function %patchable_call(i64) system_v {
+  fn0 = colocated %f(i64) patchable
+block0(v0: i64):
+  patchable_call fn0(v0)
+  return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   patchable_call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: Patchable, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call 0x1    // target = 0x2
+; pop_frame
+; ret
+

@@ -27,3 +27,17 @@ function %patchable_abi_sigref(i32) system_v {
 block0(v0: i32):
   return
 }
+
+function %patchable_call_to_non_patchable_abi() system_v {
+  fn0 = %f() system_v
+block0:
+  patchable_call fn0() ; error: patchable call with non-patchable-ABI callee
+  return
+}
+
+function %patchable_call_to_non_colocated_patchable_abi() system_v {
+  fn0 = %f() patchable
+block0:
+  patchable_call fn0() ; error: patchable call to non-colocated function
+  return
+}

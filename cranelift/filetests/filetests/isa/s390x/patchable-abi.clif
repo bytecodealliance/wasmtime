@@ -193,3 +193,27 @@ block0(v0: i64):
 ;   lmg %r0, %r15, 0x1a0(%r15)
 ;   br %r14
 
+function %patchable_call(i64) system_v {
+  fn0 = colocated %f(i64) patchable
+block0(v0: i64):
+  patchable_call fn0(v0)
+  return
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   brasl %r14, %f ; patchable
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+

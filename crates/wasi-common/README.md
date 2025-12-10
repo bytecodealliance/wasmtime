@@ -35,7 +35,7 @@ In our *nix implementation, we currently support the entire [WASI API]
 with the exception of the `proc_raise` hostcall, as it is expected to
 be dropped entirely from WASI.
 
-[WASI API]: https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
+[WASI API]: https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
 
 ### Windows
 In our Windows implementation, we currently support the minimal subset of [WASI API]

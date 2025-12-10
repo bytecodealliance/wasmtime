@@ -66,37 +66,23 @@ unsafe fn path_open_preopen() {
     )
     .expect("open with O_DIRECTORY and read right");
 
-    if !test_programs::preview1::config().errno_expect_windows() {
-        // Open OFLAGS_DIRECTORY and read/write rights should fail with isdir:
-        let err = wasip1::path_open(
-            FIRST_PREOPEN,
-            0,
-            ".",
-            wasip1::OFLAGS_DIRECTORY,
-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
-            0,
-            0,
-        )
-        .err()
-        .expect("open with O_DIRECTORY and read/write should fail");
-        assert_eq!(
-            err,
-            wasip1::ERRNO_ISDIR,
-            "opening directory read/write should fail with ISDIR"
-        );
-    } else {
-        // Open OFLAGS_DIRECTORY and read/write rights will succeed, only on windows:
-        let _ = wasip1::path_open(
-            FIRST_PREOPEN,
-            0,
-            ".",
-            wasip1::OFLAGS_DIRECTORY,
-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
-            0,
-            0,
-        )
-        .expect("open with O_DIRECTORY and read/write should succeed on windows");
-    }
+    // Open OFLAGS_DIRECTORY and read/write rights should fail with isdir:
+    let err = wasip1::path_open(
+        FIRST_PREOPEN,
+        0,
+        ".",
+        wasip1::OFLAGS_DIRECTORY,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .err()
+    .expect("open with O_DIRECTORY and read/write should fail");
+    assert_eq!(
+        err,
+        wasip1::ERRNO_ISDIR,
+        "opening directory read/write should fail with ISDIR"
+    );
 }
 
 fn main() {

@@ -7,6 +7,7 @@ use wasmtime_test_util::component::{TypedFuncExt, async_engine, engine};
 
 mod aot;
 mod r#async;
+mod async_dynamic;
 mod bindgen;
 mod call_hook;
 mod dynamic;

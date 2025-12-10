@@ -302,6 +302,7 @@ pub mod exports {
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                     static_a_static_a: wasmtime::component::Func,
@@ -489,6 +490,7 @@ pub mod exports {
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                     static_a_static_a: wasmtime::component::Func,
@@ -685,6 +687,7 @@ pub mod exports {
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                 }
@@ -791,6 +794,7 @@ pub mod exports {
                 pub struct GuestB<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_b_constructor: wasmtime::component::Func,
                 }

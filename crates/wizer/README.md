@@ -46,8 +46,8 @@ initialization with Wizer, depending on the workload:
 | [`regex`][regex-bench] | 248.85 us     | 183.99 us  | **1.35x faster** |
 | [UAP][uap-bench]       | 98.297 ms     | 16.385 ms  | **6.00x faster** |
 
-[regex-bench]: https://github.com/bytecodealliance/wizer/tree/main/benches/regex-bench
-[uap-bench]: https://github.com/bytecodealliance/wizer/tree/main/benches/uap-bench
+[regex-bench]: https://github.com/bytecodealliance/wasmtime/tree/main/crates/wizer/benches/regex-bench
+[uap-bench]: https://github.com/bytecodealliance/wasmtime/tree/main/crates/wizer/benches/uap-bench
 
 Not every program will see an improvement to instantiation and start up
 latency. For example, Wizer will often increase the size of the Wasm module's

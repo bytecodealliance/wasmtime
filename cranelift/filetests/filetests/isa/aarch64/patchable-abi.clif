@@ -163,3 +163,27 @@ block0(v0: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %patchable_call(i64) system_v {
+  fn0 = colocated %f(i64) patchable
+block0(v0: i64):
+  patchable_call fn0(v0)
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0 ; patchable
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

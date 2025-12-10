@@ -13,13 +13,16 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true, features = ['std'] }
 wasi-nn = "0.6.0"
-wit-bindgen = { workspace = true, features = ['default', 'async-spawn'] }
+wit-bindgen = { workspace = true, features = ['default', 'async-spawn', 'inter-task-wakeup'] }
 libc = { workspace = true }
 futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = { workspace = true }
-wasip1 = "1.0.0"
+wasip1 = { version = "1.0.0", default-features = true }
 wasip2 = "1.0.0"
 once_cell = "1.19.0"
 flate2 = "1.0.28"
+log = { workspace = true }
+env_logger = { workspace = true }
+pin-project-lite = { workspace = true }

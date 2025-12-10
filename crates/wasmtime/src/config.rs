@@ -120,7 +120,7 @@ impl core::hash::Hash for ModuleVersionStrategy {
 #[derive(Clone)]
 pub struct Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compiler_config: CompilerConfig,
+    compiler_config: Option<CompilerConfig>,
     target: Option<target_lexicon::Triple>,
     #[cfg(feature = "gc")]
     collector: Collector,
@@ -228,7 +228,7 @@ impl Config {
         let mut ret = Self {
             tunables: ConfigTunables::default(),
             #[cfg(any(feature = "cranelift", feature = "winch"))]
-            compiler_config: CompilerConfig::default(),
+            compiler_config: Some(CompilerConfig::default()),
             target: None,
             #[cfg(feature = "gc")]
             collector: Collector::default(),
@@ -276,23 +276,65 @@ impl Config {
             x86_float_abi_ok: None,
             shared_memory: false,
         };
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        {
-            ret.cranelift_debug_verifier(false);
-            ret.cranelift_opt_level(OptLevel::Speed);
+        ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
+        ret
+    }
 
-            // When running under MIRI try to optimize for compile time of wasm
-            // code itself as much as possible. Disable optimizations by
-            // default and use the fastest regalloc available to us.
-            if cfg!(miri) {
-                ret.cranelift_opt_level(OptLevel::None);
-                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub(crate) fn has_compiler(&self) -> bool {
+        self.compiler_config.is_some()
+    }
+
+    #[track_caller]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    fn compiler_config_mut(&mut self) -> &mut CompilerConfig {
+        self.compiler_config.as_mut().expect(
+            "cannot configure compiler settings for `Config`s \
+             created by `Config::without_compiler`",
+        )
+    }
+
+    /// Configure whether Wasm compilation is enabled.
+    ///
+    /// Disabling Wasm compilation will allow you to load and run
+    /// [pre-compiled][crate::Engine::precompile_module] Wasm programs, but not
+    /// to compile and run new Wasm programs that have not already been
+    /// pre-compiled.
+    ///
+    /// Many compilation-related configuration methods will panic if compilation
+    /// has been disabled.
+    ///
+    /// Note that there are two ways to disable Wasm compilation:
+    ///
+    /// 1. Statically, by disabling the `"cranelift"` and `"winch"` cargo
+    ///    features when building Wasmtime. These builds of Wasmtime will have
+    ///    smaller code size, since they do not include any of the code to
+    ///    compile Wasm.
+    ///
+    /// 2. Dynamically, by passing `false` to this method at run-time when
+    ///    configuring Wasmtime. The Wasmtime binary will still include the code
+    ///    for compiling Wasm, it just won't be executed, so code size is larger
+    ///    than with the first approach.
+    ///
+    /// The static approach is better in most cases, however dynamically calling
+    /// `enable_compiler(false)` is useful whenever you create multiple
+    /// `Engine`s in the same process, some of which must be able to compile
+    /// Wasm and some of which should never do so. Tests are a common example of
+    /// such a situation, especially when there are multiple Rust binaries in
+    /// the same cargo workspace, and cargo's feature resolution enables the
+    /// `"cranelift"` or `"winch"` features across the whole workspace.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn enable_compiler(&mut self, enable: bool) -> &mut Self {
+        match (enable, &self.compiler_config) {
+            (true, Some(_)) | (false, None) => {}
+            (true, None) => {
+                self.compiler_config = Some(CompilerConfig::default());
+            }
+            (false, Some(_)) => {
+                self.compiler_config = None;
             }
         }
-
-        ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
-
-        ret
+        self
     }
 
     /// Configures the target platform of this [`Config`].
@@ -327,12 +369,16 @@ impl Config {
 
     /// Enables the incremental compilation cache in Cranelift, using the provided `CacheStore`
     /// backend for storage.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     pub fn enable_incremental_compilation(
         &mut self,
         cache_store: Arc<dyn CacheStore>,
     ) -> Result<&mut Self> {
-        self.compiler_config.cache_store = Some(cache_store);
+        self.compiler_config_mut().cache_store = Some(cache_store);
         Ok(self)
     }
 
@@ -1275,9 +1321,13 @@ impl Config {
     /// and its documentation.
     ///
     /// The default value for this is `Strategy::Auto`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
-        self.compiler_config.strategy = strategy.not_auto();
+        self.compiler_config_mut().strategy = strategy.not_auto();
         self
     }
 
@@ -1321,10 +1371,14 @@ impl Config {
     /// developers of wasmtime itself.
     ///
     /// The default value for this is `false`
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("enable_verifier".to_string(), val.to_string());
         self
@@ -1334,6 +1388,10 @@ impl Config {
     /// Wasmtime-generated code by Cranelift.
     ///
     /// The default value for this is `false`
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_wasmtime_debug_checks(&mut self, enable: bool) -> &mut Self {
         unsafe { self.cranelift_flag_set("wasmtime_debug_checks", &enable.to_string()) }
@@ -1346,6 +1404,10 @@ impl Config {
     /// more information see the documentation of [`OptLevel`].
     ///
     /// The default value for this is `OptLevel::Speed`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
@@ -1353,7 +1415,7 @@ impl Config {
             OptLevel::Speed => "speed",
             OptLevel::SpeedAndSize => "speed_and_size",
         };
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("opt_level".to_string(), val.to_string());
         self
@@ -1368,13 +1430,17 @@ impl Config {
     /// For more information see the documentation of [`RegallocAlgorithm`].
     ///
     /// The default value for this is `RegallocAlgorithm::Backtracking`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
             RegallocAlgorithm::SinglePass => "single_pass",
         };
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("regalloc_algorithm".to_string(), val.to_string());
         self
@@ -1393,10 +1459,14 @@ impl Config {
     /// them to normalize NaN values as needed.
     ///
     /// The default value for this is `false`
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("enable_nan_canonicalization".to_string(), val.to_string());
         self
@@ -1415,10 +1485,14 @@ impl Config {
     /// solvers or logic engines to verify, but only a linear pass
     /// over a trail of "breadcrumbs" or facts at each intermediate
     /// value. Thus, it is appropriate to enable in production.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_pcc(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("enable_pcc".to_string(), val.to_string());
         self
@@ -1440,9 +1514,13 @@ impl Config {
     /// The validation of the flags are deferred until the engine is being built, and thus may
     /// cause `Engine::new` fail if the flag's name does not exist, or the value is not appropriate
     /// for the flag type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
-        self.compiler_config.flags.insert(flag.to_string());
+        self.compiler_config_mut().flags.insert(flag.to_string());
         self
     }
 
@@ -1465,9 +1543,13 @@ impl Config {
     ///
     /// For example, feature `wasm_backtrace` will set `unwind_info` to `true`, but if it's
     /// manually set to false then it will fail.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert(name.to_string(), value.to_string());
         self
@@ -2057,10 +2139,14 @@ impl Config {
     /// Enables memory error checking for wasm programs.
     ///
     /// This option is disabled by default.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn wmemcheck(&mut self, enable: bool) -> &mut Self {
         self.wmemcheck = enable;
-        self.compiler_config.wmemcheck = enable;
+        self.compiler_config_mut().wmemcheck = enable;
         self
     }
 
@@ -2184,7 +2270,7 @@ impl Config {
         let mut unsupported = !features_known_to_wasmtime;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        match self.compiler_config.strategy {
+        match self.compiler_config.as_ref().and_then(|c| c.strategy) {
             None | Some(Strategy::Cranelift) => {
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
@@ -2392,7 +2478,10 @@ impl Config {
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
-            tunables.winch_callable = self.compiler_config.strategy == Some(Strategy::Winch);
+            tunables.winch_callable = self
+                .compiler_config
+                .as_ref()
+                .is_some_and(|c| c.strategy == Some(Strategy::Winch));
         }
 
         tunables.collector = if features.gc_types() {
@@ -2530,7 +2619,7 @@ impl Config {
                 Some(target.clone())
             };
 
-        let mut compiler = match self.compiler_config.strategy {
+        let mut compiler = match self.compiler_config_mut().strategy {
             #[cfg(feature = "cranelift")]
             Some(Strategy::Cranelift) => wasmtime_cranelift::builder(target_for_builder)?,
             #[cfg(not(feature = "cranelift"))]
@@ -2543,14 +2632,14 @@ impl Config {
             None | Some(Strategy::Auto) => unreachable!(),
         };
 
-        if let Some(path) = &self.compiler_config.clif_dir {
+        if let Some(path) = &self.compiler_config_mut().clif_dir {
             compiler.clif_dir(path)?;
         }
 
         // If probestack is enabled for a target, Wasmtime will always use the
         // inline strategy which doesn't require us to define a `__probestack`
         // function or similar.
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("probestack_strategy".into(), "inline".into());
 
@@ -2559,19 +2648,19 @@ impl Config {
         // commits its stacks, but it's also a good idea on other
         // platforms to ensure guard pages are hit for large frame
         // sizes.
-        self.compiler_config
+        self.compiler_config_mut()
             .flags
             .insert("enable_probestack".into());
 
         // The current wasm multivalue implementation depends on this.
         // FIXME(#9510) handle this in wasmtime-cranelift instead.
-        self.compiler_config
+        self.compiler_config_mut()
             .flags
             .insert("enable_multi_ret_implicit_sret".into());
 
         if let Some(unwind_requested) = self.native_unwind_info {
             if !self
-                .compiler_config
+                .compiler_config_mut()
                 .ensure_setting_unset_or_given("unwind_info", &unwind_requested.to_string())
             {
                 bail!(
@@ -2582,7 +2671,7 @@ impl Config {
 
         if target.operating_system == target_lexicon::OperatingSystem::Windows {
             if !self
-                .compiler_config
+                .compiler_config_mut()
                 .ensure_setting_unset_or_given("unwind_info", "true")
             {
                 bail!("`native_unwind_info` cannot be disabled on Windows");
@@ -2592,16 +2681,16 @@ impl Config {
         // We require frame pointers for correct stack walking, which is safety
         // critical in the presence of reference types, and otherwise it is just
         // really bad developer experience to get wrong.
-        self.compiler_config
+        self.compiler_config_mut()
             .settings
             .insert("preserve_frame_pointers".into(), "true".into());
 
         if !tunables.signals_based_traps {
             let mut ok = self
-                .compiler_config
+                .compiler_config_mut()
                 .ensure_setting_unset_or_given("enable_table_access_spectre_mitigation", "false");
             ok = ok
-                && self.compiler_config.ensure_setting_unset_or_given(
+                && self.compiler_config_mut().ensure_setting_unset_or_given(
                     "enable_heap_access_spectre_mitigation",
                     "false",
                 );
@@ -2633,7 +2722,7 @@ impl Config {
             };
 
             if !self
-                .compiler_config
+                .compiler_config_mut()
                 .ensure_setting_unset_or_given("stack_switch_model", model)
             {
                 bail!(
@@ -2644,20 +2733,20 @@ impl Config {
 
         // Apply compiler settings and flags
         compiler.set_tunables(tunables.clone())?;
-        for (k, v) in self.compiler_config.settings.iter() {
+        for (k, v) in self.compiler_config_mut().settings.iter() {
             compiler.set(k, v)?;
         }
-        for flag in self.compiler_config.flags.iter() {
+        for flag in self.compiler_config_mut().flags.iter() {
             compiler.enable(flag)?;
         }
         *tunables = compiler.tunables().cloned().unwrap();
 
         #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
-        if let Some(cache_store) = &self.compiler_config.cache_store {
+        if let Some(cache_store) = &self.compiler_config_mut().cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.wmemcheck(self.compiler_config.wmemcheck);
+        compiler.wmemcheck(self.compiler_config_mut().wmemcheck);
 
         Ok((self, compiler.build()?))
     }
@@ -2674,7 +2763,7 @@ impl Config {
     /// Enables clif output when compiling a WebAssembly module.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn emit_clif(&mut self, path: &Path) -> &mut Self {
-        self.compiler_config.clif_dir = Some(path.to_path_buf());
+        self.compiler_config_mut().clif_dir = Some(path.to_path_buf());
         self
     }
 

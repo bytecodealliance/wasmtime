@@ -343,9 +343,6 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
     },
-    BackpressureSet {
-        instance: RuntimeComponentInstanceIndex,
-    },
     BackpressureInc {
         instance: RuntimeComponentInstanceIndex,
     },
@@ -485,6 +482,7 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
+    CheckBlocking,
     ContextGet {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
@@ -967,9 +965,6 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
                 ty: *ty,
             },
-            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
-                instance: *instance,
-            },
             Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
                 instance: *instance,
             },
@@ -1173,6 +1168,7 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
+            Trampoline::CheckBlocking => info::Trampoline::CheckBlocking,
             Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
                 instance: *instance,
                 slot: *slot,

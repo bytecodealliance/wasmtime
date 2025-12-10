@@ -330,7 +330,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        Inst::Call { info, .. } => {
+        Inst::Call { info, .. } | Inst::PatchableCall { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -725,7 +725,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } | Inst::PatchableCall { .. } => true,
             _ => false,
         }
     }
@@ -764,9 +764,10 @@ impl MachInst for Inst {
 
     fn call_type(&self) -> CallType {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } | Inst::ElfTlsGetAddr { .. } => {
-                CallType::Regular
-            }
+            Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::PatchableCall { .. }
+            | Inst::ElfTlsGetAddr { .. } => CallType::Regular,
 
             Inst::ReturnCall { .. } | Inst::ReturnCallInd { .. } => CallType::TailCall,
 
@@ -808,6 +809,10 @@ impl MachInst for Inst {
         // We can't give a NOP (or any insn) < 4 bytes.
         assert!(preferred_size >= 4);
         Inst::Nop4
+    }
+
+    fn gen_nop_unit() -> SmallVec<[u8; 8]> {
+        smallvec![0x13, 0x00, 0x00, 0x00]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -1351,6 +1356,9 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("callind {rd}{try_call}")
+            }
+            &MInst::PatchableCall { ref info } => {
+                format!("call {} ; patchable", info.dest.display(None))
             }
             &MInst::ReturnCall { ref info } => {
                 let mut s = format!(

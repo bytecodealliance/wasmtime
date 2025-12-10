@@ -92,7 +92,7 @@ For explanations of what each tier means see below.
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
-[`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[`threads`]: https://github.com/WebAssembly/threads
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md

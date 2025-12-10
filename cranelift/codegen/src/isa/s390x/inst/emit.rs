@@ -3297,7 +3297,10 @@ impl Inst {
                 assert_eq!(state.nominal_sp_offset, 0);
                 state.nominal_sp_offset += size;
             }
-            &Inst::Call { link, ref info } => {
+            &Inst::Call { link, ref info } | &Inst::PatchableCall { link, ref info } => {
+                let is_patchable = matches!(self, Inst::PatchableCall { .. });
+                let start = sink.cur_offset();
+
                 let enc: &[u8] = match &info.dest {
                     CallInstDest::Direct { name } => {
                         let offset = sink.cur_offset() + 2;
@@ -3321,6 +3324,8 @@ impl Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
+                } else if is_patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
                 } else {
                     sink.add_call_site();
                 }

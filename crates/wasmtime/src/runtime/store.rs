@@ -106,8 +106,9 @@ use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
-use crate::{Global, Instance, Table, Uninhabited};
+use crate::{Global, Instance, Table};
 use alloc::sync::Arc;
+use core::convert::Infallible;
 use core::fmt;
 use core::marker;
 use core::mem::{self, ManuallyDrop, MaybeUninit};
@@ -384,7 +385,7 @@ enum CallHookInner<T: 'static> {
         reason = "forcing, regardless of cfg, the type param to be used"
     )]
     ForceTypeParameterToBeUsed {
-        uninhabited: Uninhabited,
+        uninhabited: Infallible,
         _marker: marker::PhantomData<T>,
     },
 }
@@ -1616,14 +1617,25 @@ impl StoreOpaque {
         &mut self.store_data
     }
 
+    pub fn store_data_mut_and_registry(&mut self) -> (&mut StoreData, &ModuleRegistry) {
+        (&mut self.store_data, &self.modules)
+    }
+
     #[inline]
     pub(crate) fn modules(&self) -> &ModuleRegistry {
         &self.modules
     }
 
-    #[inline]
-    pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
-        &mut self.modules
+    pub(crate) fn register_module(&mut self, module: &Module) -> Result<RegisteredModuleId> {
+        self.modules.register_module(module, &self.engine)
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn register_component(
+        &mut self,
+        component: &crate::component::Component,
+    ) -> Result<()> {
+        self.modules.register_component(component, &self.engine)
     }
 
     pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
@@ -1649,7 +1661,7 @@ impl StoreOpaque {
             StoreInstanceKind::Real { module_id } => {
                 let module = self
                     .modules()
-                    .lookup_module_by_id(module_id)
+                    .module_by_id(module_id)
                     .expect("should always have a registered module for real instances");
                 Some(module)
             }
@@ -1674,6 +1686,16 @@ impl StoreOpaque {
     #[inline]
     pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
         self.instances[id].handle.get_mut()
+    }
+
+    /// Accessor from `InstanceId` to both `Pin<&mut vm::Instance>`
+    /// and `&ModuleRegistry`.
+    #[inline]
+    pub fn instance_and_module_registry_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> (Pin<&mut vm::Instance>, &ModuleRegistry) {
+        (self.instances[id].handle.get_mut(), &self.modules)
     }
 
     /// Access multiple instances specified via `ids`.
@@ -1708,6 +1730,23 @@ impl StoreOpaque {
         id: InstanceId,
     ) -> (Option<&mut GcStore>, Pin<&mut vm::Instance>) {
         (self.gc_store.as_mut(), self.instances[id].handle.get_mut())
+    }
+
+    /// Tuple of `Self::optional_gc_store_mut`, `Self::modules`, and
+    /// `Self::instance_mut`.
+    pub fn optional_gc_store_and_registry_and_instance_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> (
+        Option<&mut GcStore>,
+        &ModuleRegistry,
+        Pin<&mut vm::Instance>,
+    ) {
+        (
+            self.gc_store.as_mut(),
+            &self.modules,
+            self.instances[id].handle.get_mut(),
+        )
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
@@ -2036,12 +2075,12 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let module_info = self
+        let (module_with_code, _offset) = self
             .modules()
-            .lookup_module_by_pc(pc)
+            .module_and_code_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+        if let Some(stack_map) = module_with_code.lookup_stack_map(pc) {
             log::trace!(
                 "We have a stack map that maps {} bytes in this Wasm frame",
                 stack_map.frame_size()
@@ -2056,8 +2095,10 @@ impl StoreOpaque {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(frame_table) = module_info.frame_table() {
-            let relpc = module_info.text_offset(pc);
+        if let Some(frame_table) = module_with_code.module().frame_table() {
+            let relpc = module_with_code
+                .text_offset(pc)
+                .expect("PC should be within module");
             for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);

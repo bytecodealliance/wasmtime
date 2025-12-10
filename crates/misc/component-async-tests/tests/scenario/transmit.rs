@@ -552,6 +552,7 @@ pub trait TransmitTest {
     ) -> impl Future<Output = Result<Self::Result>> + Send + 'a;
 
     fn into_params(
+        store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
@@ -603,6 +604,7 @@ impl TransmitTest for StaticTransmitTest {
     }
 
     fn into_params(
+        _store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
@@ -663,21 +665,31 @@ impl TransmitTest for DynamicTransmitTest {
     }
 
     fn into_params(
+        mut store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
         caller_future2: FutureReader<String>,
     ) -> Self::Params {
         vec![
-            control.into_val(),
-            caller_stream.into_val(),
-            caller_future1.into_val(),
-            caller_future2.into_val(),
+            control.try_into_stream_any(&mut store).unwrap().into(),
+            caller_stream
+                .try_into_stream_any(&mut store)
+                .unwrap()
+                .into(),
+            caller_future1
+                .try_into_future_any(&mut store)
+                .unwrap()
+                .into(),
+            caller_future2
+                .try_into_future_any(&mut store)
+                .unwrap()
+                .into(),
         ]
     }
 
     fn from_result(
-        mut store: impl AsContextMut<Data = Ctx>,
+        _store: impl AsContextMut<Data = Ctx>,
         result: Self::Result,
     ) -> Result<(
         StreamReader<String>,
@@ -687,9 +699,19 @@ impl TransmitTest for DynamicTransmitTest {
         let Val::Tuple(fields) = result else {
             unreachable!()
         };
-        let stream = StreamReader::from_val(store.as_context_mut(), &fields[0])?;
-        let future1 = FutureReader::from_val(store.as_context_mut(), &fields[1])?;
-        let future2 = FutureReader::from_val(store.as_context_mut(), &fields[2])?;
+        let mut fields = fields.into_iter();
+        let Val::Stream(stream) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let Val::Future(future1) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let Val::Future(future2) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let stream = StreamReader::try_from_stream_any(stream).unwrap();
+        let future1 = FutureReader::try_from_future_any(future1).unwrap();
+        let future2 = FutureReader::try_from_future_any(future2).unwrap();
         Ok((stream, future1, future2))
     }
 }
@@ -770,19 +792,20 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                 .boxed(),
             );
 
-            futures.push(
-                Test::call(
-                    accessor,
-                    &test,
-                    Test::into_params(
-                        control_rx,
-                        caller_stream_rx,
-                        caller_future1_rx,
-                        caller_future2_rx,
-                    ),
+            let params = accessor.with(|s| {
+                Test::into_params(
+                    s,
+                    control_rx,
+                    caller_stream_rx,
+                    caller_future1_rx,
+                    caller_future2_rx,
                 )
-                .map(|v| v.map(Event::Result))
-                .boxed(),
+            });
+
+            futures.push(
+                Test::call(accessor, &test, params)
+                    .map(|v| v.map(Event::Result))
+                    .boxed(),
             );
 
             while let Some(event) = futures.try_next().await? {

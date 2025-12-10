@@ -1,9 +1,9 @@
 use crate::runtime::vm::{GcStore, VMGcRef};
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
-    runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
 };
+use core::convert::Infallible;
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
 use core::marker;
@@ -48,7 +48,7 @@ impl RootSet {
 /// This type is disabled because the `gc` cargo feature was not enabled at
 /// compile time.
 pub struct Rooted<T: GcRef> {
-    pub(crate) inner: Uninhabited,
+    pub(crate) inner: Infallible,
     _phantom: marker::PhantomData<T>,
 }
 
@@ -122,7 +122,7 @@ pub struct RootScope<C>
 where
     C: AsContextMut,
 {
-    inner: Uninhabited,
+    inner: Infallible,
     _phantom: marker::PhantomData<C>,
 }
 
@@ -161,7 +161,7 @@ pub struct OwnedRooted<T>
 where
     T: GcRef,
 {
-    pub(crate) inner: Uninhabited,
+    pub(crate) inner: Infallible,
     _phantom: marker::PhantomData<T>,
 }
 

@@ -411,7 +411,17 @@ impl ComponentTypesBuilder {
             Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             Memory(ty) => EntityType::Memory((*ty).into()),
             Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
-            Tag(_) => bail!("exceptions proposal not implemented"),
+            Tag(id) => {
+                let func = self.module_types_builder_mut().intern_type(types, *id)?;
+                let exc = self
+                    .module_types_builder_mut()
+                    .define_exception_type_for_tag(func);
+                EntityType::Tag(crate::types::Tag {
+                    signature: func.into(),
+                    exception: exc.into(),
+                })
+            }
+            FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
     }
 

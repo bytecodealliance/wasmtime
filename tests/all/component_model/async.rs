@@ -1,5 +1,7 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
 use anyhow::Result;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use wasmtime::{AsContextMut, Config, component::*};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 use wasmtime_component_util::REALLOC_AND_FREE;
@@ -471,33 +473,33 @@ async fn task_deletion() -> Result<()> {
                     (export "waitable-set.new" (func $waitable-set.new))))
                 (with "libc" (instance $libc))))
 
-        (func (export "explicit-thread-calls-return-stackful") (result u32)
+        (func (export "explicit-thread-calls-return-stackful") async (result u32)
             (canon lift (core func $cm "explicit-thread-calls-return-stackful") async))
-        (func (export "explicit-thread-calls-return-stackless") (result u32)
+        (func (export "explicit-thread-calls-return-stackless") async (result u32)
             (canon lift (core func $cm "explicit-thread-calls-return-stackless") async (callback (func $cm "cb"))))
-        (func (export "explicit-thread-suspends-sync") (result u32)
+        (func (export "explicit-thread-suspends-sync") async (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-sync")))
-        (func (export "explicit-thread-suspends-stackful") (result u32)
+        (func (export "explicit-thread-suspends-stackful") async (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-stackful") async))
-        (func (export "explicit-thread-suspends-stackless") (result u32)
+        (func (export "explicit-thread-suspends-stackless") async (result u32)
             (canon lift (core func $cm "explicit-thread-suspends-stackless") async (callback (func $cm "cb"))))
-        (func (export "explicit-thread-yield-loops-sync") (result u32)
+        (func (export "explicit-thread-yield-loops-sync") async (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-sync")))
-        (func (export "explicit-thread-yield-loops-stackful") (result u32)
+        (func (export "explicit-thread-yield-loops-stackful") async (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-stackful") async))
-        (func (export "explicit-thread-yield-loops-stackless") (result u32)
+        (func (export "explicit-thread-yield-loops-stackless") async (result u32)
             (canon lift (core func $cm "explicit-thread-yield-loops-stackless") async (callback (func $cm "cb"))))
     )
 
     (component $D
-        (import "explicit-thread-calls-return-stackful" (func $explicit-thread-calls-return-stackful (result u32)))
-        (import "explicit-thread-calls-return-stackless" (func $explicit-thread-calls-return-stackless (result u32)))
-        (import "explicit-thread-suspends-sync" (func $explicit-thread-suspends-sync (result u32)))
-        (import "explicit-thread-suspends-stackful" (func $explicit-thread-suspends-stackful (result u32)))
-        (import "explicit-thread-suspends-stackless" (func $explicit-thread-suspends-stackless (result u32)))
-        (import "explicit-thread-yield-loops-sync" (func $explicit-thread-yield-loops-sync (result u32)))
-        (import "explicit-thread-yield-loops-stackful" (func $explicit-thread-yield-loops-stackful (result u32)))
-        (import "explicit-thread-yield-loops-stackless" (func $explicit-thread-yield-loops-stackless (result u32)))
+        (import "explicit-thread-calls-return-stackful" (func $explicit-thread-calls-return-stackful async (result u32)))
+        (import "explicit-thread-calls-return-stackless" (func $explicit-thread-calls-return-stackless async (result u32)))
+        (import "explicit-thread-suspends-sync" (func $explicit-thread-suspends-sync async (result u32)))
+        (import "explicit-thread-suspends-stackful" (func $explicit-thread-suspends-stackful async (result u32)))
+        (import "explicit-thread-suspends-stackless" (func $explicit-thread-suspends-stackless async (result u32)))
+        (import "explicit-thread-yield-loops-sync" (func $explicit-thread-yield-loops-sync async (result u32)))
+        (import "explicit-thread-yield-loops-stackful" (func $explicit-thread-yield-loops-stackful async (result u32)))
+        (import "explicit-thread-yield-loops-stackless" (func $explicit-thread-yield-loops-stackless async (result u32)))
 
         (core module $Memory (memory (export "mem") 1))
         (core instance $memory (instantiate $Memory))
@@ -618,7 +620,7 @@ async fn task_deletion() -> Result<()> {
             (export "subtask.cancel" (func $subtask.cancel))
             (export "thread.yield" (func $thread.yield))
         ))))
-        (func (export "run") (result u32) (canon lift (core func $dm "run")))
+        (func (export "run") async (result u32) (canon lift (core func $dm "run")))
     )
 
     (instance $c (instantiate $C))
@@ -669,4 +671,99 @@ async fn task_deletion() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_host_future() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (core module $m
+    (import "" "future.read" (func $future.read (param i32 i32) (result i32)))
+    (import "" "future.cancel-read" (func $future.cancel-read (param i32) (result i32)))
+    (memory (export "memory") 1)
+
+    (func (export "run") (param i32)
+      ;; read/cancel attempt 1
+      (call $future.read (local.get 0) (i32.const 100))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+
+      (call $future.cancel-read (local.get 0))
+      i32.const 2 ;; CANCELLED
+      i32.ne
+      if unreachable end
+
+      ;; read/cancel attempt 2
+      (call $future.read (local.get 0) (i32.const 100))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+
+      (call $future.cancel-read (local.get 0))
+      i32.const 2 ;; CANCELLED
+      i32.ne
+      if unreachable end
+    )
+  )
+
+  (type $f (future u32))
+  (core func $future.read (canon future.read $f async (memory $libc "memory")))
+  (core func $future.cancel-read (canon future.cancel-read $f))
+
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "future.read" (func $future.read))
+      (export "future.cancel-read" (func $future.cancel-read))
+    ))
+  ))
+
+  (func (export "run") async (param "f" $f)
+    (canon lift
+      (core func $i "run")
+      (memory $libc "memory")
+    )
+  )
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let func = instance.get_typed_func::<(FutureReader<u32>,), ()>(&mut store, "run")?;
+    let reader = FutureReader::new(&mut store, MyFutureReader);
+    func.call_async(&mut store, (reader,)).await?;
+
+    return Ok(());
+
+    struct MyFutureReader;
+
+    impl FutureProducer<()> for MyFutureReader {
+        type Item = u32;
+
+        fn poll_produce(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<()>,
+            finish: bool,
+        ) -> Poll<Result<Option<Self::Item>>> {
+            if finish {
+                Poll::Ready(Ok(None))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
 }

@@ -546,6 +546,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(
             i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
         ));
+        self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
+            1
+        } else {
+            0
+        }));
         self.instruction(I32Const(i32::from(
             adapter.lift.options.string_encoding as u8,
         )));
@@ -766,6 +771,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         } else {
             None
         };
+        if self.types[adapter.lift.ty].async_ {
+            let check_blocking = self.module.import_check_blocking();
+            self.instruction(Call(check_blocking.as_u32()));
+        }
+
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
             self.instruction(Call(enter.as_u32()));

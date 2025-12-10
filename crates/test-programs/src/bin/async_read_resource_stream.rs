@@ -15,7 +15,7 @@ struct Component;
 impl Guest for Component {
     async fn run() {
         let mut count = 7;
-        let mut stream = resource_stream::foo(count);
+        let mut stream = resource_stream::foo(count).await;
 
         while let Some(x) = stream.next().await {
             if count > 0 {
