@@ -16,7 +16,6 @@ use wit_component::ComponentEncoder;
 
 const KNOWN_FAILURES: &[&str] = &[
     "filesystem-hard-links",
-    "http-response",
     "filesystem-read-directory",
     // FIXME(#11524)
     "remove_directory_trailing_slashes",
