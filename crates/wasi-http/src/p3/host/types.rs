@@ -679,11 +679,13 @@ impl HostResponse for WasiHttpCtxView<'_> {
         status_code: StatusCode,
     ) -> wasmtime::Result<Result<(), ()>> {
         let res = get_response_mut(self.table, &res)?;
-        let Ok(status) = http::StatusCode::from_u16(status_code) else {
-            return Ok(Err(()));
-        };
-        res.status = status;
-        Ok(Ok(()))
+        match http::StatusCode::from_u16(status_code) {
+            Ok(status) if matches!(status_code, 100..=599) => {
+                res.status = status;
+                Ok(Ok(()))
+            }
+            _ => Ok(Err(())),
+        }
     }
 
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
