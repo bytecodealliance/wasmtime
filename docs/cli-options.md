@@ -123,7 +123,7 @@ You will notice that (when using WAVE) the exported function's name and exported
 function's parentheses are both enclosed in one set of single quotes, i.e.
 `'initialize()'`. This treats the exported function as a single argument in a
 Unix shell and prevents issues with shell interpretation and signifies function
-invocation (as apposed to the function name just being referenced). Using WAVE
+invocation (as opposed to the function name just being referenced). Using WAVE
 (when calling exported functions of Wasm components) helps to distinguish
 function calls from other kinds of string arguments. Below are some more
 examples:
@@ -262,7 +262,7 @@ wasm[0]::function[0]:
 You can also pass various options to configure and annotate the output:
 
 ```console
-$ wasmtime objdump foo.cwasm --addresses --bytes --addrma
+$ wasmtime objdump foo.cwasm --addresses --bytes --addrmap
 00000000 wasm[0]::function[0]:
          0: fd 7b bf a9                  stp     x29, x30, [sp, #-0x10]!
          4: fd 03 00 91                  mov     x29, sp
@@ -330,6 +330,6 @@ wasmtime compile --optimize opt-level=0
 assuming the TOML file is called `config.toml`. Of course you can put as many
 key-value pairs as you want in the TOML file.
 
-Options on the CLI take precedent over options specified in a configuration
+Options on the CLI take precedence over options specified in a configuration
 file, meaning they're allowed to shadow configuration values in a TOML
 configuration file.
