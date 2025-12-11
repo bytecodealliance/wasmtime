@@ -22,7 +22,9 @@ wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
-wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley'] }
+wasmtime-cranelift = { workspace = true, optional = true, features = [
+  'pulley',
+] }
 wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
@@ -202,22 +204,22 @@ cache = ["dep:wasmtime-cache", "std"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
-async = [
-  "dep:wasmtime-fiber",
-  "wasmtime-component-macro?/async",
-  "runtime",
-]
+async = ["dep:wasmtime-fiber", "wasmtime-component-macro?/async", "runtime"]
 
 # Enables support for the pooling instance allocation strategy
 pooling-allocator = [
   "runtime",
-  "std",                 # not ported to no_std yet
+  "std",     # not ported to no_std yet
 ]
 
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch", "pulley"]
+all-arch = [
+  "wasmtime-cranelift?/all-arch",
+  "wasmtime-winch?/all-arch",
+  "pulley",
+]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
@@ -252,9 +254,7 @@ coredump = ["dep:wasm-encoder", "runtime", "std"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = [
-  "wasmtime-jit-debug/gdb_jit_int",
-]
+debug-builtins = ["wasmtime-jit-debug/gdb_jit_int"]
 
 # Enable support for executing compiled Wasm modules.
 runtime = [
@@ -287,11 +287,7 @@ runtime = [
 #
 # You can additionally configure which GC implementations are enabled via the
 # `gc-drc` and `gc-null` features.
-gc = [
-  "wasmtime-environ/gc",
-  "wasmtime-cranelift?/gc",
-  "wasmtime-winch?/gc",
-]
+gc = ["wasmtime-environ/gc", "wasmtime-cranelift?/gc", "wasmtime-winch?/gc"]
 
 # Enable the deferred reference counting garbage collector.
 gc-drc = [
@@ -310,11 +306,7 @@ gc-null = [
 ]
 
 # Enable runtime support for the WebAssembly threads proposal.
-threads = [
-  "wasmtime-cranelift?/threads",
-  "wasmtime-winch?/threads",
-  "std",
-]
+threads = ["wasmtime-cranelift?/threads", "wasmtime-winch?/threads", "std"]
 
 stack-switching = [
   "runtime",
@@ -406,22 +398,17 @@ component-model-async = [
   "async",
   "component-model",
   "std",
+  "wasmtime-environ/component-model-async",
   "wasmtime-component-macro?/component-model-async",
   "dep:futures",
   "futures/std",
 ]
 
 # Enables support for `stream` interop with the `bytes` crate.
-component-model-async-bytes = [
-  "component-model-async",
-  "dep:bytes",
-]
+component-model-async-bytes = ["component-model-async", "dep:bytes"]
 
 # Enables support for guest debugging.
-debug = [
-    'runtime',
-    'async'
-]
+debug = ['runtime', 'async']
 
 # Enables support for defining compile-time builtins.
 compile-time-builtins = ['dep:wasm-compose', 'dep:tempfile']

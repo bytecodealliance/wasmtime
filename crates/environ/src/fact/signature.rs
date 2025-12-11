@@ -58,7 +58,7 @@ impl ComponentTypesBuilder {
     /// Note that this function uses multi-value return to return up to
     /// `MAX_FLAT_PARAMS` _results_ via the stack, allowing the host to pass
     /// them directly to the callee with no additional effort.
-    pub(super) fn async_start_signature(
+    pub(super) fn async_to_any_start_signature(
         &self,
         lower: &AdapterOptions,
         lift: &AdapterOptions,
