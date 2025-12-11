@@ -5,7 +5,7 @@ use crate::component::Instance;
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::ResourcePair;
+use crate::runtime::component::concurrent::{ResourcePair, RuntimeInstance};
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -677,10 +677,10 @@ fn backpressure_modify(
     increment: u8,
 ) -> Result<()> {
     store.backpressure_modify(
-        (
-            instance,
-            RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        ),
+        RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        },
         |old| {
             if increment != 0 {
                 old.checked_add(1)
