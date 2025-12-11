@@ -26,6 +26,9 @@ pub struct TypeInfo {
 
     /// Whether or not this type (transitively) has a handle.
     pub has_handle: bool,
+
+    /// Whether or not this type (transitively) has a future or a stream.
+    pub has_future_or_stream: bool,
 }
 
 impl std::ops::BitOrAssign for TypeInfo {
@@ -35,6 +38,7 @@ impl std::ops::BitOrAssign for TypeInfo {
         self.error |= rhs.error;
         self.has_list |= rhs.has_list;
         self.has_handle |= rhs.has_handle;
+        self.has_future_or_stream |= rhs.has_future_or_stream;
     }
 }
 
@@ -153,6 +157,7 @@ impl Types {
             }
             TypeDefKind::Future(ty) | TypeDefKind::Stream(ty) => {
                 info = self.optional_type_info(resolve, ty.as_ref());
+                info.has_future_or_stream = true;
             }
             TypeDefKind::Handle(_) => info.has_handle = true,
             TypeDefKind::Resource => {}
@@ -184,10 +189,10 @@ impl Types {
 
 impl TypeInfo {
     pub fn is_copy(&self) -> bool {
-        !self.has_list && !self.has_handle
+        !self.has_list && !self.has_handle && !self.has_future_or_stream
     }
 
     pub fn is_clone(&self) -> bool {
-        !self.has_handle
+        !self.has_handle && !self.has_future_or_stream
     }
 }
