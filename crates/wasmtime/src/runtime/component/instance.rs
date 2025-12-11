@@ -659,7 +659,7 @@ fn resource_tables<'a>(
     ResourceTables {
         host_table: None,
         calls,
-        guest: Some(instance.guest_tables()),
+        guest: Some(instance.instance_states()),
     }
 }
 

@@ -286,7 +286,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             ResourceTables {
                 host_table: Some(host_table),
                 calls,
-                guest: Some(instance.guest_tables()),
+                guest: Some(instance.instance_states()),
             },
             host_resource_data,
         )
@@ -473,7 +473,7 @@ impl<'a> LiftContext<'a> {
                 calls: self.calls,
                 // Note that the unsafety here should be valid given the contract of
                 // `LiftContext::new`.
-                guest: Some(self.instance.as_mut().guest_tables()),
+                guest: Some(self.instance.as_mut().instance_states()),
             },
             self.host_resource_data,
         )

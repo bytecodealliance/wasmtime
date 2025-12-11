@@ -794,7 +794,7 @@ impl Func {
             ResourceTables {
                 host_table: Some(host_table),
                 calls,
-                guest: Some(instance.guest_tables()),
+                guest: Some(instance.instance_states()),
             }
             .exit_call()?;
         }

@@ -20,7 +20,7 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleTable, RemovedResource};
+use super::{HandleTable, InstanceState, RemovedResource};
 use crate::prelude::*;
 use core::error::Error;
 use core::fmt;
@@ -53,7 +53,7 @@ pub struct ResourceTables<'a> {
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
     pub guest: Option<(
-        &'a mut PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
+        &'a mut PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
     )>,
 
@@ -196,8 +196,8 @@ impl ResourceTables<'_> {
         match resource {
             TypedResource::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResource::Component { ty, .. } => {
-                let (tables, types) = self.guest.as_mut().unwrap();
-                &mut tables[types[*ty].unwrap_concrete_instance()]
+                let (states, types) = self.guest.as_mut().unwrap();
+                states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         }
     }
@@ -206,8 +206,8 @@ impl ResourceTables<'_> {
         match index {
             TypedResourceIndex::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResourceIndex::Component { ty, .. } => {
-                let (tables, types) = self.guest.as_mut().unwrap();
-                &mut tables[types[*ty].unwrap_concrete_instance()]
+                let (states, types) = self.guest.as_mut().unwrap();
+                states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         }
     }
