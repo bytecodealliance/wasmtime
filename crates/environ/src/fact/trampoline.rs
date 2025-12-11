@@ -756,8 +756,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             );
         }
 
+        if self.types[adapter.lift.ty].async_ {
+            let check_blocking = self.module.import_check_blocking();
+            self.instruction(Call(check_blocking.as_u32()));
+        }
+
         // If we have async support, we need to call sync_to_sync_enter_call to set up
-        // necessary threading context.ß
+        // necessary threading context.
         let old_thread = if cfg!(feature = "component-model-async") {
             let enter = self.module.import_sync_to_sync_enter_call();
             self.instruction(I32Const(
@@ -771,10 +776,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         } else {
             None
         };
-        if self.types[adapter.lift.ty].async_ {
-            let check_blocking = self.module.import_check_blocking();
-            self.instruction(Call(check_blocking.as_u32()));
-        }
 
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
