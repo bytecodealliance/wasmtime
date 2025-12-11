@@ -241,7 +241,7 @@ impl Func {
             "must use `call_async` when async support is enabled on the config"
         );
 
-        // If the async feature is enabled, we need ot call sync_to_sync_enter/exit_call
+        // If the async feature is enabled, we need to call sync_to_sync_enter/exit_call
         // to track concurrent state.
         #[cfg(feature = "component-model-async")]
         {
