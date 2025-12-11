@@ -635,11 +635,11 @@ jobs:
     - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
+    - run: cargo fuzz check --dev
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
