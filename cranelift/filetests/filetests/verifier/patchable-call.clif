@@ -1,0 +1,15 @@
+test verifier
+
+function %call_to_non_colocated_patchable_abi() system_v {
+  fn0 = patchable %f() system_v
+block0:
+  call fn0() ; error: patchable call to non-colocated function
+  return
+}
+
+function %call_to_non_colocated_patchable_abi() system_v {
+  fn0 = colocated patchable %f() -> i32 system_v
+block0:
+  v0 = call fn0() ; error: patchable call cannot occur to a function with return values
+  return
+}

@@ -1,8 +1,8 @@
 test compile precise-output
 target s390x
 
-function %call_patchable_abi(i64) system_v {
-    sig0 = (i64, i64, i64, i64) patchable
+function %call_preserve_all_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
 block0(v0: i64):
     call_indirect sig0, v0(v0, v0, v0, v0)
     call_indirect sig0, v0(v0, v0, v0, v0)
@@ -34,7 +34,7 @@ block0(v0: i64):
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 
-function %patchable_abi_trampoline(i64) patchable {
+function %preserve_all_abi_trampoline(i64) preserve_all {
     fn0 = %libcall(i64) system_v
 block0(v0: i64):
     call fn0(v0)
@@ -197,10 +197,10 @@ block0(v0: i64):
 ;   lmg %r6, %r15, 0x300(%r15)
 ;   br %r14
 
-function %patchable_call(i64) system_v {
-  fn0 = colocated %f(i64) patchable
+function %preserve_all_call(i64) system_v {
+  fn0 = colocated %f(i64) preserve_all
 block0(v0: i64):
-  patchable_call fn0(v0)
+  call fn0(v0)
   return
 }
 
@@ -208,7 +208,7 @@ block0(v0: i64):
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
 ; block0:
-;   brasl %r14, %f ; patchable
+;   brasl %r14, %f
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 ;
@@ -217,7 +217,7 @@ block0(v0: i64):
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
 ; block1: ; offset 0xa
-;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %f 2
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 

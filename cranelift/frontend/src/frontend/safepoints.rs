@@ -820,6 +820,7 @@ mod tests {
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Here the value `v1` is technically not live but our single-pass liveness
@@ -886,6 +887,7 @@ block0(v0: i32, v1: i32):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // At each `call` we are losing one more value as no longer live, so
@@ -978,6 +980,7 @@ block0:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Here we rely on the post-order to make sure that we never visit block
@@ -1080,6 +1083,7 @@ block3:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // We should not have a stack map entry for `v1` in block 1 because it
@@ -1169,6 +1173,7 @@ block2:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let block0 = builder.create_block();
@@ -1238,6 +1243,7 @@ block2:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Depending on which post-order traversal we take, we might consider
@@ -1325,6 +1331,7 @@ block2:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let block0 = builder.create_block();
@@ -1392,6 +1399,7 @@ block2:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Create an if/else CFG diamond that and check that various things get
@@ -1533,6 +1541,7 @@ block3(v5: i64, v6: i64):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Test that we support stack maps of heterogeneous types and properly
@@ -1618,6 +1627,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: i128, v5: f32, v6: f64, v7: i8x16,
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let name = builder
@@ -1633,6 +1643,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: i128, v5: f32, v6: f64, v7: i8x16,
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Create a series of needs-stack-map values that do not have
@@ -1738,6 +1749,7 @@ block0:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Use a variable, create a control flow diamond so that the variable
@@ -1896,6 +1908,7 @@ block3(v6: i32):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let block0 = builder.create_block();
@@ -1958,6 +1971,7 @@ block0(v0: i32):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Regression test found via fuzzing in
@@ -2035,6 +2049,7 @@ block0(v0: i32):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let name = builder
@@ -2048,6 +2063,7 @@ block0(v0: i32):
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Test that we support stack maps in loops and that we properly handle
@@ -2134,6 +2150,7 @@ block1:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let name = builder
@@ -2149,6 +2166,7 @@ block1:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Test an irreducible loop with multiple entry points, both block1 and
@@ -2273,6 +2291,7 @@ block4:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         let name = builder
@@ -2288,6 +2307,7 @@ block4:
             name: ir::ExternalName::user(name),
             signature,
             colocated: true,
+            patchable: false,
         });
 
         // Test that we detect the `block1 -> block2 -> block3 -> block2 ->
@@ -2430,6 +2450,7 @@ block3:
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 

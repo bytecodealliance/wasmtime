@@ -635,6 +635,8 @@ pub struct CallInfo<T> {
     /// argument/return logic; they mostly differ in the metadata that
     /// they emit, which this information feeds into.
     pub try_call_info: Option<TryCallInfo>,
+    /// Whether this call is patchable.
+    pub patchable: bool,
 }
 
 /// Out-of-line information present on `try_call` instructions only:
@@ -674,6 +676,7 @@ impl<T> CallInfo<T> {
             callee_conv: call_conv,
             callee_pop_size: 0,
             try_call_info: None,
+            patchable: false,
         }
     }
 }
@@ -1219,11 +1222,10 @@ impl<M: ABIMachineSpec> Callee<M> {
             call_conv == isa::CallConv::SystemV
                 || call_conv == isa::CallConv::Tail
                 || call_conv == isa::CallConv::Fast
-                || call_conv == isa::CallConv::Cold
                 || call_conv == isa::CallConv::WindowsFastcall
                 || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::Winch
-                || call_conv == isa::CallConv::Patchable,
+                || call_conv == isa::CallConv::PreserveAll,
             "Unsupported calling convention: {call_conv:?}"
         );
 
@@ -2085,6 +2087,8 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// `uses` is the `CallArgList` describing argument constraints
     /// `defs` is the `CallRetList` describing return constraints
     /// `try_call_info` describes exception targets for try_call instructions
+    /// `patchable` describes whether this callsite should emit metadata
+    /// for patching to enable/disable it.
     ///
     /// The clobber list is computed here from the above data.
     pub fn gen_call_info<T>(
@@ -2095,6 +2099,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> CallInfo<T> {
         let caller_conv = self.call_conv;
         let callee_conv = sigs[sig].call_conv;
@@ -2142,6 +2147,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             caller_conv,
             callee_pop_size,
             try_call_info,
+            patchable,
         }
     }
 

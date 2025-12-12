@@ -187,6 +187,7 @@ impl Compiler {
                 // This is the signal that a special `call_indirect_host`
                 // opcode is used to jump from pulley to the host.
                 colocated: false,
+                patchable: false,
             });
             let mut raw_args = vec![addr];
             raw_args.extend_from_slice(args);
@@ -721,10 +722,10 @@ impl wasmtime_environ::Compiler for Compiler {
             FuncKey::WasmToBuiltinTrampoline(builtin) => (builtin, sigs.wasm_signature(builtin)),
             FuncKey::PatchableToBuiltinTrampoline(builtin) => {
                 let mut sig = sigs.wasm_signature(builtin);
-                // Patchable-ABI functions cannot return anything. We
+                // Patchable functions cannot return anything. We
                 // raise any errors that occur below so this is fine.
                 sig.returns.clear();
-                sig.call_conv = CallConv::Patchable;
+                sig.call_conv = CallConv::PreserveAll;
                 (builtin, sig)
             }
             _ => unreachable!(),
@@ -1364,6 +1365,7 @@ impl Compiler {
                 name,
                 signature,
                 colocated: true,
+                patchable: false,
             })
         };
 

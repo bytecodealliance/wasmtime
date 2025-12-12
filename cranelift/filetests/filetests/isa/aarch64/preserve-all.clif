@@ -1,8 +1,8 @@
 test compile precise-output
 target aarch64
 
-function %call_patchable_abi(i64) system_v {
-    sig0 = (i64, i64, i64, i64) patchable
+function %call_preserve_all_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
 block0(v0: i64):
     call_indirect sig0, v0(v0, v0, v0, v0)
     call_indirect sig0, v0(v0, v0, v0, v0)
@@ -34,7 +34,7 @@ block0(v0: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
-function %patchable_abi_trampoline(i64) patchable {
+function %preserve_all_abi_trampoline(i64) preserve_all {
     fn0 = %libcall(i64) system_v
 block0(v0: i64):
     call fn0(v0)
@@ -163,10 +163,10 @@ block0(v0: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
-function %patchable_call(i64) system_v {
-  fn0 = colocated %f(i64) patchable
+function %preserve_all_call(i64) system_v {
+  fn0 = colocated %f(i64) preserve_all
 block0(v0: i64):
-  patchable_call fn0(v0)
+  call fn0(v0)
   return
 }
 
@@ -174,7 +174,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   bl 0 ; patchable
+;   bl 0
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -183,7 +183,7 @@ block0(v0: i64):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   bl #8 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   bl #8 ; reloc_external Call %f 0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

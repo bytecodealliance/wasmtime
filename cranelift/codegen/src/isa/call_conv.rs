@@ -14,8 +14,6 @@ use serde_derive::{Deserialize, Serialize};
 pub enum CallConv {
     /// Best performance, not ABI-stable.
     Fast,
-    /// Smallest caller code size, not ABI-stable.
-    Cold,
     /// Supports tail calls, not ABI-stable except for exception
     /// payload registers.
     ///
@@ -45,26 +43,18 @@ pub enum CallConv {
     /// defines no callee-save registers, and restricts the number of return
     /// registers to one integer, and one floating point.
     Winch,
-    /// Calling convention for patchable-call instructions.
+    /// Calling convention optimized for callsite efficiency, at the
+    /// cost of the callee. It does so by not clobbering any
+    /// registers.
     ///
-    /// This is designed for a very specific need: we want a *single*
-    /// call instruction at our callsite, with no other setup, and we
-    /// don't want any registers clobbered. This allows patchable
-    /// callsites to be as unobtrusive as possible.
+    /// This is designed for a very specific need: we want callsites
+    /// that we can insert as instrumentation (perhaps patchable)
+    /// while affecting surrounding instructions' register allocation
+    /// as little as possible.
     ///
     /// The ABI is based on the native register-argument ABI on each
-    /// respective platform, but puts severe restrictions on allowable
-    /// signatures: only up to four arguments of integer type, and no
-    /// return values. It does not support tail-calls, and disallows
-    /// any extension modes on arguments.
-    ///
-    /// The ABI specifies that *no* registers, not even argument
-    /// registers, are clobbered. This is pretty unique: it means that
-    /// the call instruction will constrain regalloc to have any args
-    /// in the right registers, but those registers will be preserved,
-    /// so multiple patchable callsites can reuse those values. This
-    /// further reduces the cost of the callsites.
-    Patchable,
+    /// respective platform. It does not support tail-calls.
+    PreserveAll,
 }
 
 impl CallConv {
@@ -85,10 +75,10 @@ impl CallConv {
         match flags.libcall_call_conv() {
             LibcallCallConv::IsaDefault => default_call_conv,
             LibcallCallConv::Fast => Self::Fast,
-            LibcallCallConv::Cold => Self::Cold,
             LibcallCallConv::SystemV => Self::SystemV,
             LibcallCallConv::WindowsFastcall => Self::WindowsFastcall,
             LibcallCallConv::AppleAarch64 => Self::AppleAarch64,
+            LibcallCallConv::PreserveAll => Self::PreserveAll,
             LibcallCallConv::Probestack => Self::Probestack,
         }
     }
@@ -104,7 +94,7 @@ impl CallConv {
     /// Does this calling convention support exceptions?
     pub fn supports_exceptions(&self) -> bool {
         match self {
-            CallConv::Tail | CallConv::SystemV | CallConv::Winch => true,
+            CallConv::Tail | CallConv::SystemV | CallConv::Winch | CallConv::PreserveAll => true,
             _ => false,
         }
     }
@@ -122,7 +112,7 @@ impl CallConv {
     /// destinations as this return value.
     pub fn exception_payload_types(&self, pointer_ty: Type) -> &[Type] {
         match self {
-            CallConv::Tail | CallConv::SystemV => match pointer_ty {
+            CallConv::Tail | CallConv::SystemV | CallConv::PreserveAll => match pointer_ty {
                 types::I32 => &[types::I32, types::I32],
                 types::I64 => &[types::I64, types::I64],
                 _ => unreachable!(),
@@ -136,14 +126,13 @@ impl fmt::Display for CallConv {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
             Self::Fast => "fast",
-            Self::Cold => "cold",
             Self::Tail => "tail",
             Self::SystemV => "system_v",
             Self::WindowsFastcall => "windows_fastcall",
             Self::AppleAarch64 => "apple_aarch64",
             Self::Probestack => "probestack",
             Self::Winch => "winch",
-            Self::Patchable => "patchable",
+            Self::PreserveAll => "preserve_all",
         })
     }
 }
@@ -153,14 +142,13 @@ impl str::FromStr for CallConv {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fast" => Ok(Self::Fast),
-            "cold" => Ok(Self::Cold),
             "tail" => Ok(Self::Tail),
             "system_v" => Ok(Self::SystemV),
             "windows_fastcall" => Ok(Self::WindowsFastcall),
             "apple_aarch64" => Ok(Self::AppleAarch64),
             "probestack" => Ok(Self::Probestack),
             "winch" => Ok(Self::Winch),
-            "patchable" => Ok(Self::Patchable),
+            "preserve_all" => Ok(Self::PreserveAll),
             _ => Err(()),
         }
     }

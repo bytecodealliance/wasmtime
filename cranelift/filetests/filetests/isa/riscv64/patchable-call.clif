@@ -1,0 +1,314 @@
+test compile precise-output
+target riscv64
+
+function %patchable_call(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a3,a0
+;   mv a1,a3
+;   mv a2,a3
+;   call %f
+;   call %f
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   mv a3, a0
+;   mv a1, a3
+;   mv a2, a3
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %patchable_call_stack_args(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   sd a0,0(sp)
+;   sd a0,8(sp)
+;   mv a7,a0
+;   mv a1,a7
+;   mv a2,a7
+;   mv a3,a7
+;   mv a4,a7
+;   mv a5,a7
+;   mv a6,a7
+;   call %f
+;   sd a7,0(sp)
+;   sd a7,8(sp)
+;   call %f
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   sd a0, 0(sp)
+;   sd a0, 8(sp)
+;   mv a7, a0
+;   mv a1, a7
+;   mv a2, a7
+;   mv a3, a7
+;   mv a4, a7
+;   mv a5, a7
+;   mv a6, a7
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+;   sd a7, 0(sp)
+;   sd a7, 8(sp)
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %patchable_try_call(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    try_call fn0(v0, v0, v0, v0), sig0, block1(), [ default: block2(exn0) ]
+
+block1():
+    return v0
+
+block2(v1: i64):
+    return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-208
+;   sd fp,200(sp)
+;   sd s1,192(sp)
+;   sd s2,184(sp)
+;   sd s3,176(sp)
+;   sd s4,168(sp)
+;   sd s5,160(sp)
+;   sd s6,152(sp)
+;   sd s7,144(sp)
+;   sd s8,136(sp)
+;   sd s9,128(sp)
+;   sd s10,120(sp)
+;   sd s11,112(sp)
+;   fsd fs0,104(sp)
+;   fsd fs2,96(sp)
+;   fsd fs3,88(sp)
+;   fsd fs4,80(sp)
+;   fsd fs5,72(sp)
+;   fsd fs6,64(sp)
+;   fsd fs7,56(sp)
+;   fsd fs8,48(sp)
+;   fsd fs9,40(sp)
+;   fsd fs10,32(sp)
+;   fsd fs11,24(sp)
+; block0:
+;   sd a0,0(slot)
+;   ld a1,0(slot)
+;   ld a2,0(slot)
+;   ld a3,0(slot)
+;   call %f; j MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   ld a0,0(slot)
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+; block2:
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xd0
+;   sd s0, 0xc8(sp)
+;   sd s1, 0xc0(sp)
+;   sd s2, 0xb8(sp)
+;   sd s3, 0xb0(sp)
+;   sd s4, 0xa8(sp)
+;   sd s5, 0xa0(sp)
+;   sd s6, 0x98(sp)
+;   sd s7, 0x90(sp)
+;   sd s8, 0x88(sp)
+;   sd s9, 0x80(sp)
+;   sd s10, 0x78(sp)
+;   sd s11, 0x70(sp)
+;   fsd fs0, 0x68(sp)
+;   fsd fs2, 0x60(sp)
+;   fsd fs3, 0x58(sp)
+;   fsd fs4, 0x50(sp)
+;   fsd fs5, 0x48(sp)
+;   fsd fs6, 0x40(sp)
+;   fsd fs7, 0x38(sp)
+;   fsd fs8, 0x30(sp)
+;   fsd fs9, 0x28(sp)
+;   fsd fs10, 0x20(sp)
+;   fsd fs11, 0x18(sp)
+; block1: ; offset 0x70
+;   sd a0, 0(sp)
+;   ld a1, 0(sp)
+;   ld a2, 0(sp)
+;   ld a3, 0(sp)
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
+;   jalr ra ; patchable call: NOP out last 8 bytes
+; block2: ; offset 0x88
+;   ld a0, 0(sp)
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+; block3: ; offset 0xfc
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

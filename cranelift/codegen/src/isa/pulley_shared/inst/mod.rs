@@ -150,7 +150,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
         }
 
-        Inst::Call { info } | Inst::PatchableCall { info } => {
+        Inst::Call { info } => {
             let CallInfo {
                 uses,
                 defs,
@@ -437,8 +437,7 @@ where
             }
             | Inst::Call { .. }
             | Inst::IndirectCall { .. }
-            | Inst::IndirectCallHost { .. }
-            | Inst::PatchableCall { .. } => true,
+            | Inst::IndirectCallHost { .. } => true,
             _ => false,
         }
     }
@@ -501,10 +500,9 @@ where
 
     fn call_type(&self) -> CallType {
         match &self.inst {
-            Inst::Call { .. }
-            | Inst::IndirectCall { .. }
-            | Inst::IndirectCallHost { .. }
-            | Inst::PatchableCall { .. } => CallType::Regular,
+            Inst::Call { .. } | Inst::IndirectCall { .. } | Inst::IndirectCallHost { .. } => {
+                CallType::Regular
+            }
 
             Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => CallType::TailCall,
 
@@ -724,10 +722,6 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("indirect_call {callee}, {info:?}{try_call}")
-            }
-
-            Inst::PatchableCall { info } => {
-                format!("patchable_call {info:?}")
             }
 
             Inst::ReturnCall { info } => {

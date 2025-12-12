@@ -323,9 +323,6 @@
        ;; A pseudoinstruction that serves as a sequence point.
        (SequencePoint)
 
-       ;; A patchable call to a known location.
-       (PatchableCallKnown (info BoxCallInfo))
-
        ;; An instruction assembled outside of cranelift-codegen.
        (External (inst AssemblerInst))))
 
@@ -1313,7 +1310,7 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
 (extern constructor gen_call_info gen_call_info)
 
 (decl gen_call_ind_info (Sig RegMem CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
@@ -1344,11 +1341,6 @@
 (decl return_call_unknown (BoxReturnCallIndInfo) SideEffectNoResult)
 (rule (return_call_unknown info)
       (SideEffectNoResult.Inst (MInst.ReturnCallUnknown info)))
-
-;; Helper for creating `PatchableCallKnown` instructions.
-(decl patchable_call_known (BoxCallInfo) SideEffectNoResult)
-(rule (patchable_call_known info)
-      (SideEffectNoResult.Inst (MInst.PatchableCallKnown info)))
 
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

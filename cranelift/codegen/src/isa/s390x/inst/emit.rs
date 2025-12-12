@@ -3297,8 +3297,7 @@ impl Inst {
                 assert_eq!(state.nominal_sp_offset, 0);
                 state.nominal_sp_offset += size;
             }
-            &Inst::Call { link, ref info } | &Inst::PatchableCall { link, ref info } => {
-                let is_patchable = matches!(self, Inst::PatchableCall { .. });
+            &Inst::Call { link, ref info } => {
                 let start = sink.cur_offset();
 
                 let enc: &[u8] = match &info.dest {
@@ -3324,8 +3323,6 @@ impl Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
-                } else if is_patchable {
-                    sink.add_patchable_call_site(sink.cur_offset() - start);
                 } else {
                     sink.add_call_site();
                 }
@@ -3333,11 +3330,15 @@ impl Inst {
                 state.nominal_sp_offset -= info.callee_pop_size;
                 assert_eq!(state.nominal_sp_offset, 0);
 
-                state.outgoing_sp_offset = info.callee_pop_size;
-                for inst in S390xMachineDeps::gen_retval_loads(info) {
-                    inst.emit(sink, emit_info, state);
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    state.outgoing_sp_offset = info.callee_pop_size;
+                    for inst in S390xMachineDeps::gen_retval_loads(info) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                    state.outgoing_sp_offset = 0;
                 }
-                state.outgoing_sp_offset = 0;
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

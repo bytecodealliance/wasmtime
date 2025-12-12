@@ -117,9 +117,6 @@
     ;; A machine indirect-call instruction.
     (CallInd (info BoxCallIndInfo))
 
-    ;; A patchable machine direct-call instruction.
-    (PatchableCall (info BoxCallInfo))
-
     ;; A direct return-call macro instruction.
     (ReturnCall (info BoxReturnCallInfo))
 
@@ -3096,7 +3093,7 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
 (extern constructor gen_call_info gen_call_info)
 
 (decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
@@ -3117,11 +3114,6 @@
 (decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
 (rule (call_ind_impl info)
       (SideEffectNoResult.Inst (MInst.CallInd info)))
-
-;; Helper for creating `MInst.PatchableCall` instructions.
-(decl patchable_call_impl (BoxCallInfo) SideEffectNoResult)
-(rule (patchable_call_impl info)
-      (SideEffectNoResult.Inst (MInst.PatchableCall info)))
 
 ;; Helper for creating `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)

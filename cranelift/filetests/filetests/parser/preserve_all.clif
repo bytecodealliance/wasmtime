@@ -1,0 +1,12 @@
+test cat
+
+function %cold() preserve_all {
+    sig0 = () preserve_all
+    sig1 = () -> i8 preserve_all
+block1:
+    return
+}
+
+; sameln: function %cold() preserve_all {
+; nextln:     sig0 = () preserve_all
+; nextln:     sig1 = () -> i8 preserve_all

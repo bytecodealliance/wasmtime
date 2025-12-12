@@ -1,0 +1,108 @@
+test compile precise-output
+target pulley32
+
+function %patchable_call(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i), XReg(p0i), XReg(p0i), XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: true }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i), XReg(p0i), XReg(p0i), XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: true }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call4 x0, x0, x0, x0, 0x5    // target = 0x6
+; call4 x0, x0, x0, x0, 0x5    // target = 0xf
+; pop_frame
+; ret
+
+function %patchable_call_stack_args(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   xmov x9, x0
+;   xmov x4, x9
+;   xmov x5, x9
+;   xmov x6, x9
+;   xmov x7, x9
+;   xmov x8, x9
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p9i), XReg(p9i), XReg(p9i), XReg(p9i)] }, uses: [CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: true }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p9i), XReg(p9i), XReg(p9i), XReg(p9i)] }, uses: [CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: true }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; xmov x9, x0
+; xmov x4, x9
+; xmov x5, x9
+; xmov x6, x9
+; xmov x7, x9
+; xmov x8, x9
+; call4 x9, x9, x9, x9, 0x5    // target = 0x18
+; call4 x9, x9, x9, x9, 0x5    // target = 0x21
+; pop_frame
+; ret
+
+function %patchable_try_call(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    try_call fn0(v0, v0, v0, v0), sig0, block1(), [ default: block2(exn0) ]
+
+block1():
+    return v0
+
+block2(v1: i32):
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; VCode:
+;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+; block0:
+;   xmov x8, x0
+;   xmov x10, x0
+;   xmov x11, x0
+;   xmov x12, x0
+;   xstore64 Slot(0), x0 // flags =  notrap aligned
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p8i), XReg(p12i), XReg(p11i), XReg(p10i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967295, 4294967295, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: true }; jump MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+; block2:
+;   zext32 x0, x0
+;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+;
+; Disassembled:
+; push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; xmov x8, x0
+; xmov x10, x0
+; xmov x11, x0
+; xmov x12, x0
+; xstore64le_o32 sp, 0, x0
+; call4 x8, x12, x11, x10, 0x5    // target = 0x1d
+; xload64le_o32 x0, sp, 0
+; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+; zext32 x0, x0
+; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+

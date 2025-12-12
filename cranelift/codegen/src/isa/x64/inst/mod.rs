@@ -79,7 +79,6 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::ReturnCallKnown { .. }
             | Inst::ReturnCallUnknown { .. }
-            | Inst::PatchableCallKnown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
             | Inst::CvtFloatToSintSeq { .. }
@@ -647,11 +646,6 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::PatchableCallKnown { info } => {
-                let op = ljustify("patchable_call".to_string());
-                format!("{op} {:?}", info.dest)
-            }
-
             Inst::Rets { rets } => {
                 let mut s = "rets".to_string();
                 for ret in rets {
@@ -967,7 +961,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp);
         }
 
-        Inst::CallKnown { info } | Inst::PatchableCallKnown { info } => {
+        Inst::CallKnown { info } => {
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
@@ -1310,7 +1304,6 @@ impl MachInst for Inst {
         match self {
             Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
-            | Inst::PatchableCallKnown { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
 
@@ -1465,9 +1458,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::CallKnown { .. } | Inst::CallUnknown { .. } | Inst::PatchableCallKnown { .. } => {
-                true
-            }
+            Inst::CallKnown { .. } | Inst::CallUnknown { .. } => true,
             _ => false,
         }
     }

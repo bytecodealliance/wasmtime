@@ -72,6 +72,7 @@ impl BuiltinFunctions {
             name,
             signature,
             colocated: true,
+            patchable: false,
         });
         *cache = Some(f);
         f
@@ -79,7 +80,7 @@ impl BuiltinFunctions {
 
     pub(crate) fn patchable_breakpoint(&mut self, func: &mut Function) -> ir::FuncRef {
         *self.breakpoint_trampoline.get_or_insert_with(|| {
-            let mut signature = ir::Signature::new(CallConv::Patchable);
+            let mut signature = ir::Signature::new(CallConv::PreserveAll);
             signature
                 .params
                 .push(ir::AbiParam::new(self.types.pointer_type));
@@ -93,6 +94,7 @@ impl BuiltinFunctions {
                 name,
                 signature,
                 colocated: true,
+                patchable: true,
             })
         })
     }
@@ -1475,6 +1477,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -1515,6 +1518,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -3766,7 +3770,7 @@ impl FuncEnvironment<'_> {
         if self.is_reachable() && self.state_slot.is_some() {
             let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let inst = builder.ins().patchable_call(builtin, &[vmctx]);
+            let inst = builder.ins().call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }

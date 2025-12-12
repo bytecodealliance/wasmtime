@@ -796,7 +796,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Write the dedicated clobber region.
         match call_conv {
-            isa::CallConv::Patchable => {
+            isa::CallConv::PreserveAll => {
                 // Explicitly save full v0-v31. Save r0-r5; r6-r15 are
                 // in the ABI-defined register save area.
                 //
@@ -866,7 +866,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         match call_conv {
-            isa::CallConv::Patchable => {
+            isa::CallConv::PreserveAll => {
                 insts.extend(gen_restore_patchable(frame_layout));
             }
             _ => {
@@ -923,8 +923,14 @@ impl ABIMachineSpec for S390xMachineDeps {
     ) -> PRegSet {
         match call_conv_of_callee {
             isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            isa::CallConv::PreserveAll if is_exception => ALL_CLOBBERS,
             isa::CallConv::Tail => TAIL_CLOBBERS,
-            isa::CallConv::Patchable => NO_CLOBBERS,
+            isa::CallConv::PreserveAll => NO_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
     }
@@ -991,7 +997,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         // and use the register-save area for r6-r15; otherwise we
         // don't count GPRs and only save the FPR part of vector regs.
         let mut clobber_size = match call_conv {
-            isa::CallConv::Patchable => 8 * 6 + 16 * 32,
+            isa::CallConv::PreserveAll => 8 * 6 + 16 * 32,
             _ => {
                 let mut clobber_size = 0;
                 for reg in &regs {
@@ -1042,7 +1048,9 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[gpr(6), gpr(7)];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -1159,7 +1167,7 @@ fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
             // r8 - r14 inclusive are callee-saves.
             r.hw_enc() >= 8 && r.hw_enc() <= 14
         }
-        (isa::CallConv::Patchable, _) => true,
+        (isa::CallConv::PreserveAll, _) => true,
         (_, RegClass::Int) => {
             // r6 - r15 inclusive are callee-saves.
             r.hw_enc() >= 6 && r.hw_enc() <= 15
