@@ -99,6 +99,9 @@ macro_rules! foreach_builtin_component_function {
             resource_enter_call(vmctx: vmctx);
             resource_exit_call(vmctx: vmctx) -> bool;
 
+            enter_sync_call(vmctx: vmctx, caller_instance: u32, callee_async: u32, callee_instance: u32) -> bool;
+            exit_sync_call(vmctx: vmctx) -> bool;
+
             #[cfg(feature = "component-model-async")]
             backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -184,8 +187,6 @@ macro_rules! foreach_builtin_component_function {
             stream_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
-            #[cfg(feature = "component-model-async")]
-            check_blocking(vmctx: vmctx) -> bool;
             #[cfg(feature = "component-model-async")]
             context_get(vmctx: vmctx, caller_instance: u32, slot: u32) -> u64;
             #[cfg(feature = "component-model-async")]

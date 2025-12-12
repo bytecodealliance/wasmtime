@@ -538,11 +538,9 @@ impl<'a> Inliner<'a> {
                     // happening within the same component instance.
                     //
                     // In this situation if the `canon.lower`'d function is
-                    // called then it immediately sets `may_enter` to `false`.
-                    // When calling the callee, however, that's `canon.lift`
-                    // which immediately traps if `may_enter` is `false`. That
-                    // means that this pairing of functions creates a function
-                    // that always traps.
+                    // called then it recursively re-enters itself, which is
+                    // defined to trap by the spec. That means that this pairing
+                    // of functions creates a function that always traps.
                     //
                     // When closely reading the spec though the precise trap
                     // that comes out can be somewhat variable. Technically the
@@ -1594,7 +1592,7 @@ impl<'a> Inliner<'a> {
         }
     }
 
-    /// Translatees an `AdapterOptions` into a `CanonicalOptions` where
+    /// Translates an `AdapterOptions` into a `CanonicalOptions` where
     /// memories/functions are inserted into the global initializer list for
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.

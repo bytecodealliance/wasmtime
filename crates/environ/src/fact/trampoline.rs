@@ -16,8 +16,8 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_LEAVE, FixedEncoding as FE, FlatType,
+    InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
     TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
     TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
@@ -738,25 +738,63 @@ impl<'a, 'b> Compiler<'a, 'b> {
             FLAG_MAY_LEAVE,
             Trap::CannotLeaveComponent,
         );
-        if adapter.called_as_export {
-            self.trap_if_not_flag(
-                adapter.lift.flags,
-                FLAG_MAY_ENTER,
-                Trap::CannotEnterComponent,
-            );
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, false);
-        } else if self.module.debug {
-            self.assert_not_flag(
-                adapter.lift.flags,
-                FLAG_MAY_ENTER,
-                Trap::DebugAssertMayEnterUnset,
-            );
-        }
-
-        if self.types[adapter.lift.ty].async_ {
-            let check_blocking = self.module.import_check_blocking();
-            self.instruction(Call(check_blocking.as_u32()));
-        }
+        let old_task_may_block =
+            if adapter.called_as_export && self.module.might_recursively_reenter {
+                // Here we call a runtime intrinsic to check whether the instance
+                // we're about to enter has already been entered by this task
+                // (i.e. whether this is a recursive reentrance).  If so, we'll trap
+                // per the component model specification.  Otherwise, we'll push a
+                // task onto the stack and then later pop it off after the call.
+                //
+                // Note that, prior to the introduction of concurrency to the
+                // component model, we were able to handle this via a per-instance
+                // variable, allowing us to check and set that variable without
+                // leaving Wasm code.  However, now that there may be more than one
+                // concurrent task running in a given instance, a per-instance
+                // variable is not sufficient.
+                //
+                // Fortunately, we still have a number of opportunities to optimize
+                // common cases (e.g. components which contain only sync functions,
+                // and compositions of fewer than 64 transitive subcomponents, for
+                // which a per-task `uint64` bitset would suffice) and avoid the
+                // host call.  See the discussion of `trap_if_on_the_stack` in
+                // https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md
+                // for details.
+                //
+                // TODO: Implement one or more of those optimizations if
+                // appropriate, but note that we already have a fast path for
+                // when `self.module.might_recursively_reenter` is false, which
+                // is true of all real-world components as of this writing.
+                self.instruction(I32Const(
+                    i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+                ));
+                self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
+                    1
+                } else {
+                    0
+                }));
+                self.instruction(I32Const(
+                    i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+                ));
+                let enter_sync_call = self.module.import_enter_sync_call();
+                self.instruction(Call(enter_sync_call.as_u32()));
+                None
+            } else if self.types[adapter.lift.ty].async_ {
+                let task_may_block = self.module.import_task_may_block();
+                self.instruction(GlobalGet(task_may_block.as_u32()));
+                self.instruction(I32Eqz);
+                self.instruction(If(BlockType::Empty));
+                self.trap(Trap::CannotBlockSyncTask);
+                self.instruction(End);
+                None
+            } else {
+                let task_may_block = self.module.import_task_may_block();
+                self.instruction(GlobalGet(task_may_block.as_u32()));
+                let old_task_may_block = self.local_set_new_tmp(ValType::I32);
+                self.instruction(I32Const(0));
+                self.instruction(GlobalSet(task_may_block.as_u32()));
+                Some(old_task_may_block)
+            };
 
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
@@ -818,9 +856,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
             self.instruction(Call(func.as_u32()));
         }
-        if adapter.called_as_export {
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, true);
-        }
 
         for tmp in temps {
             self.free_temp_local(tmp);
@@ -829,6 +864,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
         if self.emit_resource_call {
             let exit = self.module.import_resource_exit_call();
             self.instruction(Call(exit.as_u32()));
+        }
+
+        if adapter.called_as_export && self.module.might_recursively_reenter {
+            let exit_sync_call = self.module.import_exit_sync_call();
+            self.instruction(Call(exit_sync_call.as_u32()));
+        } else if let Some(old_task_may_block) = old_task_may_block {
+            let task_may_block = self.module.import_task_may_block();
+            self.instruction(LocalGet(old_task_may_block.idx));
+            self.instruction(GlobalSet(task_may_block.as_u32()));
+            self.free_temp_local(old_task_may_block);
         }
 
         self.finish()
@@ -3263,15 +3308,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(flag_to_test));
         self.instruction(I32And);
         self.instruction(I32Eqz);
-        self.instruction(If(BlockType::Empty));
-        self.trap(trap);
-        self.instruction(End);
-    }
-
-    fn assert_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, trap: Trap) {
-        self.instruction(GlobalGet(flags_global.as_u32()));
-        self.instruction(I32Const(flag_to_test));
-        self.instruction(I32And);
         self.instruction(If(BlockType::Empty));
         self.trap(trap);
         self.instruction(End);

@@ -1,11 +1,11 @@
 //! Implementation of string transcoding required by the component model.
 
-use crate::component::Instance;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::WaitResult;
+use crate::component::{Instance, RuntimeInstance};
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::{ResourcePair, RuntimeInstance};
+use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -671,6 +671,30 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u32) -> Result<()> 
         .into())
 }
 
+fn enter_sync_call(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller_instance: u32,
+    callee_async: u32,
+    callee_instance: u32,
+) -> Result<()> {
+    store.enter_sync_call(
+        RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        },
+        callee_async != 0,
+        RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
+        },
+    )
+}
+
+fn exit_sync_call(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
+    store.exit_sync_call()
+}
+
 #[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
@@ -969,11 +993,6 @@ fn error_context_transfer(
     let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
     let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
     instance.error_context_transfer(store, src_idx, src_table, dst_table)
-}
-
-#[cfg(feature = "component-model-async")]
-fn check_blocking(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
-    crate::component::concurrent::check_blocking(store)
 }
 
 #[cfg(feature = "component-model-async")]

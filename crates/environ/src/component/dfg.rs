@@ -267,6 +267,7 @@ pub enum CoreDef {
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
     UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
+    TaskMayBlock,
 
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
@@ -475,8 +476,9 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
-    CheckBlocking,
     Trap,
+    EnterSyncCall,
+    ExitSyncCall,
     ContextGet {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
@@ -905,6 +907,7 @@ impl LinearizeDfg<'_> {
                 }
                 info::CoreDef::UnsafeIntrinsic(*i)
             }
+            CoreDef::TaskMayBlock => info::CoreDef::TaskMayBlock,
         }
     }
 
@@ -1156,8 +1159,9 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
-            Trampoline::CheckBlocking => info::Trampoline::CheckBlocking,
             Trampoline::Trap => info::Trampoline::Trap,
+            Trampoline::EnterSyncCall => info::Trampoline::EnterSyncCall,
+            Trampoline::ExitSyncCall => info::Trampoline::ExitSyncCall,
             Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
                 instance: *instance,
                 slot: *slot,
