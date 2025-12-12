@@ -139,17 +139,44 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+fn aarch64_flush_icache(start: u64, end: u64) {
+    use core::arch::asm;
+
+    // See `sys_icache_invalidate` implementation in Darwin at
+    // https://github.com/apple/darwin-libplatform/blob/main/src/cachecontrol/arm64/cache.s. It
+    // turns out that all of these instructions work in userspace, so
+    // we can do this portably without having to rely on OS-specific
+    // syscalls like `sys_cache_invalidate()` on macOS or something
+    // equivalent on Linux.
+    const CACHE_LINE_SIZE: u64 = 64;
+    // For each cache line, flush the icache.
+    let mut start = start & !(CACHE_LINE_SIZE - 1); // Round down.
+    let end = (end + CACHE_LINE_SIZE - 1) & !(CACHE_LINE_SIZE - 1); // Round up.
+    while start < end {
+        unsafe {
+            asm!("ic ivau, {}", in(reg) start);
+        }
+        start += CACHE_LINE_SIZE;
+    }
+
+    // Flush the dcache, and then issue an instruction barrier so
+    // fetch can't restart until that's done. All cache lines we are
+    // about to execute (in the flushed range) are now guaranteed to
+    // see the new data.
+    unsafe {
+        asm!("dsb ish"); // Flush dcache.
+        asm!("isb"); // Instruction fetch barrier.
+    }
+}
+
 pub(crate) use details::*;
 
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
 #[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
-    // TODO: On AArch64 we currently rely on the `mprotect` call that switches the memory from W+R
-    // to R+X to do this for us, however that is an implementation detail and should not be relied
-    // upon.
-    // We should call some implementation of `clear_cache` here.
-    //
-    // See: https://github.com/bytecodealliance/wasmtime/issues/3310
+    #[cfg(target_arch = "aarch64")]
+    aarch64_flush_icache(_ptr as u64, (_ptr as u64) + (_len as u64));
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     riscv_flush_icache(_ptr as u64, (_ptr as u64) + (_len as u64))?;
     Ok(())
