@@ -82,6 +82,16 @@ macro_rules! anyhow {
     }};
 }
 
+/// Identical to the [`anyhow!`][crate::anyhow] macro.
+///
+/// Provided for compatibility.
+#[macro_export]
+macro_rules! format_err {
+    ( $( $args:tt )* ) => {
+        anyhow!( $( $args )* )
+    };
+}
+
 /// Early exit from the current function with an error.
 ///
 /// This helper is equivalent to `return Err(anyhow!(...))`.

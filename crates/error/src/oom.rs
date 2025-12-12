@@ -47,8 +47,6 @@ impl OutOfMemory {
 
 impl From<OutOfMemory> for OomOrDynError {
     fn from(OutOfMemory { _private: () }: OutOfMemory) -> Self {
-        OomOrDynError {
-            inner: OomOrDynError::OOM,
-        }
+        OomOrDynError::OOM
     }
 }

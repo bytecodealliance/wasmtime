@@ -1,4 +1,7 @@
-use super::{Error, ErrorExt, OomOrDynError, OomOrDynErrorMut, OomOrDynErrorRef, Result};
+use crate::{
+    Error, ErrorExt, Result,
+    error::{OomOrDynError, OomOrDynErrorMut, OomOrDynErrorRef},
+};
 use core::any::TypeId;
 use core::fmt;
 use core::ptr::NonNull;
