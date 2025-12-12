@@ -1,0 +1,187 @@
+test compile precise-output
+target x86_64
+
+function %patchable_call(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rcx
+;   movq %rcx, %rdx
+;   movq %rcx, %rsi
+;   call    TestCase(%f)
+;   call    TestCase(%f)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rcx
+;   movq %rcx, %rdx
+;   movq %rcx, %rsi
+;   callq 0x12 ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+;   callq 0x17 ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %patchable_call_stack_args(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x20, %rsp
+; block0:
+;   movq %rdi, (%rsp)
+;   movq %rdi, 8(%rsp)
+;   movq %rdi, 0x10(%rsp)
+;   movq %rdi, 0x18(%rsp)
+;   movq %rdi, %r9
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %r8
+;   call    TestCase(%f)
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   call    TestCase(%f)
+;   addq $0x20, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x20, %rsp
+; block1: ; offset 0x8
+;   movq %rdi, (%rsp)
+;   movq %rdi, 8(%rsp)
+;   movq %rdi, 0x10(%rsp)
+;   movq %rdi, 0x18(%rsp)
+;   movq %rdi, %r9
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %r8
+;   callq 0x2f ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   callq 0x47 ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+;   addq $0x20, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %patchable_try_call(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    try_call fn0(v0, v0, v0, v0), sig0, block1(), [ default: block2(exn0) ]
+
+block1():
+    return v0
+
+block2(v1: i64):
+    return v1
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block0:
+;   movq %rdi, <offset:1>+(%rsp)
+;   movq <offset:1>+(%rsp), %rcx
+;   movq <offset:1>+(%rsp), %rdx
+;   movq <offset:1>+(%rsp), %rsi
+;   call    TestCase(%f); jmp MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   movq <offset:1>+(%rsp), %rax
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block1: ; offset 0x21
+;   movq %rdi, (%rsp)
+;   movq (%rsp), %rcx
+;   movq (%rsp), %rdx
+;   movq (%rsp), %rsi
+;   callq 0x36 ; reloc_external CallPCRel4 %f -4 ; patchable call: NOP out last 5 bytes
+; block2: ; offset 0x36
+;   movq (%rsp), %rax
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x5c
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

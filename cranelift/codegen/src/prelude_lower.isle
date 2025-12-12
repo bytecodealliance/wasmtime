@@ -987,7 +987,7 @@
 
 ;; Accessor for `FuncRef`.
 
-(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(decl func_ref_data (SigRef ExternalName RelocDistance bool) FuncRef)
 (extern extractor infallible func_ref_data func_ref_data)
 
 ;; Accessor for `ExceptionTable`.

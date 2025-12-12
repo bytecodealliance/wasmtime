@@ -855,6 +855,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             callee_conv: call_conv,
             caller_conv: call_conv,
             try_call_info: None,
+            patchable: false,
         })));
         insts
     }
@@ -888,10 +889,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> PRegSet {
         match (call_conv_of_callee, is_exception) {
             (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, _) => ALL_CLOBBERS,
             (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
             (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
-            (isa::CallConv::Patchable, _) => NO_CLOBBERS,
+            (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
             (_, false) => SYSV_CLOBBERS,
             (call_conv, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
@@ -922,7 +929,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `winch` calling convention doesn't have any callee-save
             // registers.
             CallConv::Winch => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::Tail => regs
+            CallConv::Fast | CallConv::SystemV | CallConv::Tail => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -932,8 +939,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
-            // The `patchable` calling convention makes every reg a callee-save reg.
-            CallConv::Patchable => regs.iter().cloned().collect(),
+            // The `preserve_all` calling convention makes every reg a callee-save reg.
+            CallConv::PreserveAll => regs.iter().cloned().collect(),
             CallConv::Probestack => todo!("probestack?"),
             CallConv::AppleAarch64 => unreachable!(),
         };
@@ -972,7 +979,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::rax(), regs::rdx()];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -1075,7 +1084,7 @@ fn get_intreg_for_retval(
             // NB: `r15` is reserved as a scratch register.
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             2 if flags.enable_llvm_abi_extensions() => Some(regs::rcx()),
@@ -1088,8 +1097,6 @@ fn get_intreg_for_retval(
         },
 
         CallConv::Winch => is_last.then(|| regs::rax()),
-        // The patchable ABI does not support any return values.
-        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1108,7 +1115,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             7 => Some(regs::xmm7()),
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
@@ -1118,8 +1125,6 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
-        // The patchable ABI does not support any return values.
-        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }

@@ -801,7 +801,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Ret { .. } | Inst::AuthenticatedRet { .. } => {}
         Inst::Jump { .. } => {}
-        Inst::Call { info, .. } | Inst::PatchableCall { info, .. } => {
+        Inst::Call { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -1008,7 +1008,6 @@ impl MachInst for Inst {
         match self {
             Inst::Call { .. }
             | Inst::CallInd { .. }
-            | Inst::PatchableCall { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
 
@@ -1093,7 +1092,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } | Inst::PatchableCall { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
@@ -2598,9 +2597,6 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("blr {rn}{try_call}")
-            }
-            &Inst::PatchableCall { .. } => {
-                format!("bl 0 ; patchable")
             }
             &Inst::ReturnCall { ref info } => {
                 let mut s = format!(

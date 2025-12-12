@@ -167,7 +167,6 @@ impl Inst {
             | Inst::Extend { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
-            | Inst::PatchableCall { .. }
             | Inst::ReturnCall { .. }
             | Inst::ReturnCallInd { .. }
             | Inst::Jal { .. }
@@ -1194,9 +1193,7 @@ impl Inst {
                     .for_each(|i| i.emit(sink, emit_info, state));
             }
 
-            &Inst::Call { ref info } | &Inst::PatchableCall { ref info } => {
-                let is_patchable = matches!(self, Inst::PatchableCall { .. });
-
+            &Inst::Call { ref info } => {
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
                 let start = sink.cur_offset();
@@ -1214,9 +1211,6 @@ impl Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
-                } else if is_patchable {
-                    let len = sink.cur_offset() - start;
-                    sink.add_patchable_call_site(len);
                 } else {
                     sink.add_call_site();
                 }
@@ -1228,12 +1222,16 @@ impl Inst {
                     }
                 }
 
-                // Load any stack-carried return values.
-                info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
-                    state.frame_layout().stackslots_size,
-                    |inst| inst.emit(sink, emit_info, state),
-                    |needed_space| Some(Inst::EmitIsland { needed_space }),
-                );
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    // Load any stack-carried return values.
+                    info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
+                        state.frame_layout().stackslots_size,
+                        |inst| inst.emit(sink, emit_info, state),
+                        |needed_space| Some(Inst::EmitIsland { needed_space }),
+                    );
+                }
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

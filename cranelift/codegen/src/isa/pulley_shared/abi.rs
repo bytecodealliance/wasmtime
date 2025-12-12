@@ -483,10 +483,10 @@ where
         call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Patchable {
-            NO_CLOBBERS
-        } else if is_exception {
+        if is_exception {
             ALL_CLOBBERS
+        } else if call_conv_of_callee == isa::CallConv::PreserveAll {
+            NO_CLOBBERS
         } else {
             DEFAULT_CLOBBERS
         }
@@ -505,7 +505,7 @@ where
         outgoing_args_size: u32,
     ) -> FrameLayout {
         let is_callee_save = |reg: &Writable<RealReg>| match call_conv {
-            isa::CallConv::Patchable => true,
+            isa::CallConv::PreserveAll => true,
             _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
         };
         let mut regs: Vec<Writable<RealReg>> =

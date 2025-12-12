@@ -1,0 +1,197 @@
+test compile precise-output
+target aarch64
+
+function %patchable_call(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x3, x0
+;   mov x1, x3
+;   mov x2, x3
+;   bl 0
+;   bl 0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov x3, x0
+;   mov x1, x3
+;   mov x2, x3
+;   bl #0x14 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   bl #0x18 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %patchable_call_stack_args(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   str x0, [sp]
+;   str x0, [sp, #8]
+;   mov x7, x0
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   bl 0
+;   str x7, [sp]
+;   str x7, [sp, #8]
+;   bl 0
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   stur x0, [sp]
+;   stur x0, [sp, #8]
+;   mov x7, x0
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   bl #0x30 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   stur x7, [sp]
+;   stur x7, [sp, #8]
+;   bl #0x3c ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %patchable_try_call(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    try_call fn0(v0, v0, v0, v0), sig0, block1(), [ default: block2(exn0) ]
+
+block1():
+    return v0
+
+block2(v1: i64):
+    return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   str x0, [sp]
+;   ldr x1, [sp]
+;   ldr x2, [sp]
+;   ldr x3, [sp]
+;   bl 0; b MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   ldr x0, [sp]
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+; block2:
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   sub sp, sp, #0x10
+; block1: ; offset 0x30
+;   stur x0, [sp]
+;   ldur x1, [sp]
+;   ldur x2, [sp]
+;   ldur x3, [sp]
+;   bl #0x40 ; reloc_external Call %f 0 ; patchable call: NOP out last 4 bytes
+; block2: ; offset 0x44
+;   ldur x0, [sp]
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; block3: ; offset 0x78
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

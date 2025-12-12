@@ -593,6 +593,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 callee_conv: call_conv,
                 callee_pop_size: 0,
                 try_call_info: None,
+                patchable: false,
             }),
         });
         insts
@@ -622,7 +623,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> PRegSet {
         match call_conv_of_callee {
             isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
-            isa::CallConv::Patchable => NO_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            isa::CallConv::PreserveAll if is_exception => ALL_CLOBBERS,
+            isa::CallConv::PreserveAll => NO_CLOBBERS,
             _ => DEFAULT_CLOBBERS,
         }
     }
@@ -640,7 +647,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         outgoing_args_size: u32,
     ) -> FrameLayout {
         let is_callee_saved = |reg: &Writable<RealReg>| match call_conv {
-            isa::CallConv::Patchable => true,
+            isa::CallConv::PreserveAll => true,
             _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
         };
         let mut regs: Vec<Writable<RealReg>> =
@@ -720,7 +727,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::a0(), regs::a1()];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }

@@ -2302,11 +2302,11 @@
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a function, target reachable via PC-relative instruction.
-(rule 1 (lower (func_addr (func_ref_data _ name (RelocDistance.Near))))
+(rule 1 (lower (func_addr (func_ref_data _ name (RelocDistance.Near) _)))
       (load_addr (memarg_symbol name 0 (memflags_trusted))))
 
 ;; Load the address of a function, general case.
-(rule (lower (func_addr (func_ref_data _ name _)))
+(rule (lower (func_addr (func_ref_data _ name _ _)))
       (load_symbol_reloc (SymbolReloc.Absolute name 0)))
 
 
@@ -3966,25 +3966,25 @@
 ;;;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_call_rets abi output))
-            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
             (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
         output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (call (func_ref_data sig_ref name _) args))
+(rule (lower (call (func_ref_data sig_ref name _ false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_call_rets abi output))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
-            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none) false))
             (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
         output))
 
@@ -3996,24 +3996,14 @@
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_call_rets abi output))
-            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none) false))
             (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
         output))
-
-;; Patchable direct call to an in-range function.
-(rule (lower (patchable_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
-      (let ((abi Sig (abi_sig sig_ref))
-            (_ Unit (abi_emit_call_adjust_stack abi))
-            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
-            (defs CallRetList (gen_patchable_call_rets))
-            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
-            (_ Unit (emit_side_effect (patchable_call_impl (writable_link_reg) info))))
-        (output_none)))
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct tail call to an in-range function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_return_call_adjust_stack abi))
             (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
@@ -4021,7 +4011,7 @@
         (side_effect (return_call_impl info))))
 
 ;; Direct tail call to an out-of-range function (implicitly via pointer).
-(rule (lower (return_call (func_ref_data sig_ref name _) args))
+(rule (lower (return_call (func_ref_data sig_ref name _ false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_return_call_adjust_stack abi))
             (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
@@ -4042,24 +4032,24 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_try_call_rets abi))
-            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
         (emit_side_effect (call_impl (writable_link_reg) info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_try_call_rets abi))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
-            (info BoxCallInfo (gen_call_info abi target uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall false)))
         (emit_side_effect (call_impl (writable_link_reg) info))))
 
 ;; Indirect call.
@@ -4071,7 +4061,7 @@
             (_ Unit (abi_emit_call_adjust_stack abi))
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_try_call_rets abi))
-            (info BoxCallInfo (gen_call_info abi target uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall false)))
         (emit_side_effect (call_impl (writable_link_reg) info))))
 
 
