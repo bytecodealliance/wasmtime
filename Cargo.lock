@@ -4747,6 +4747,7 @@ dependencies = [
  "wasmprinter",
  "wasmtime",
  "wasmtime-cli-flags",
+ "wasmtime-internal-error",
  "wasmtime-test-util",
  "wasmtime-wasi",
  "wasmtime-wast",
@@ -4830,6 +4831,13 @@ dependencies = [
  "wasmtime-internal-math",
  "wasmtime-internal-unwinder",
  "wasmtime-internal-versioned-export-macros",
+]
+
+[[package]]
+name = "wasmtime-internal-error"
+version = "41.0.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]
