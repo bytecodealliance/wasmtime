@@ -79,6 +79,7 @@ capstone = { workspace = true, optional = true }
 termcolor = { workspace = true, optional = true }
 gimli = { workspace = true, optional = true }
 pulley-interpreter = { workspace = true, optional = true }
+smallvec = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }

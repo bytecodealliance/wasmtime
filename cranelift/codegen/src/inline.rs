@@ -227,6 +227,14 @@ pub(crate) fn do_inlining(
                     // Can't inline indirect calls; need to have some earlier
                     // pass rewrite them into direct calls first, when possible.
                 }
+                ir::InstructionData::Call {
+                    opcode: ir::Opcode::PatchableCall,
+                    ..
+                } => {
+                    // Can't inline patchable calls; they need to
+                    // remain patchable and inlining the whole body is
+                    // decidedly *not* patchable!
+                }
                 _ => {
                     debug_assert!(
                         !cursor.func.dfg.insts[inst].opcode().is_call(),
@@ -497,7 +505,19 @@ fn inline_one(
                         call_opcode == ir::Opcode::TryCall,
                         call_exception_table.is_some()
                     );
-                    if call_opcode == ir::Opcode::TryCall {
+                    // Note that we do not fix up patchable calls
+                    // inlined at a try-call to a try-call, because
+                    // the "patchable ABI" does not support catching
+                    // exceptions. This does mean that we cannot have
+                    // an exception-throw propagate out of a
+                    // breakpoint when we use patchable calls to set
+                    // up breakpoints, but we don't expect that to
+                    // occur.
+                    //
+                    // FIXME: consider making patchability an aspect
+                    // of any call; then we can remove this special
+                    // case.
+                    if call_opcode == ir::Opcode::TryCall && opcode != ir::Opcode::PatchableCall {
                         allocs
                             .calls_needing_exception_table_fixup
                             .push(inlined_inst);

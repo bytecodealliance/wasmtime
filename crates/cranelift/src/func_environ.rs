@@ -14,7 +14,7 @@ use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::ir::{Block, types::*};
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
@@ -45,6 +45,7 @@ pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
     builtins: [Option<ir::FuncRef>; BuiltinFunctionIndex::len() as usize],
+    breakpoint_trampoline: Option<ir::FuncRef>,
 }
 
 impl BuiltinFunctions {
@@ -52,6 +53,7 @@ impl BuiltinFunctions {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::len() as usize],
+            breakpoint_trampoline: None,
         }
     }
 
@@ -74,6 +76,26 @@ impl BuiltinFunctions {
         *cache = Some(f);
         f
     }
+
+    pub(crate) fn patchable_breakpoint(&mut self, func: &mut Function) -> ir::FuncRef {
+        *self.breakpoint_trampoline.get_or_insert_with(|| {
+            let mut signature = ir::Signature::new(CallConv::Patchable);
+            signature
+                .params
+                .push(ir::AbiParam::new(self.types.pointer_type));
+            let signature = func.import_signature(signature);
+            let key = FuncKey::PatchableToBuiltinTrampoline(BuiltinFunctionIndex::breakpoint());
+            let (namespace, index) = key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
+            func.import_function(ir::ExtFuncData {
+                name,
+                signature,
+                colocated: true,
+            })
+        })
+    }
 }
 
 // Generate helper methods on `BuiltinFunctions` above for each named builtin
@@ -85,6 +107,7 @@ macro_rules! declare_function_signatures {
     )*) => {
         $(impl BuiltinFunctions {
             $( #[$attr] )*
+            #[allow(dead_code, reason = "debug breakpoint libcall not used in host ABI, only patchable ABI")]
             pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
                 self.load_builtin(func, BuiltinFunctionIndex::$name())
             }
@@ -3741,7 +3764,9 @@ impl FuncEnvironment<'_> {
             self.fuel_before_op(op, builder, self.is_reachable());
         }
         if self.is_reachable() && self.state_slot.is_some() {
-            let inst = builder.ins().sequence_point();
+            let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let inst = builder.ins().patchable_call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }

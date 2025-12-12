@@ -109,6 +109,20 @@ impl Mmap {
         Ok(())
     }
 
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        unsafe {
+            let base = self.memory.as_ptr().byte_add(range.start).cast();
+            let len = range.end - range.start;
+
+            cvt(capi::wasmtime_mprotect(
+                base,
+                len,
+                capi::PROT_READ | capi::PROT_WRITE,
+            ))?;
+        }
+        Ok(())
+    }
+
     pub unsafe fn map_image_at(
         &self,
         image_source: &MemoryImageSource,

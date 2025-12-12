@@ -50,9 +50,9 @@
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64, i64, i32) tail
-;;     fn0 = colocated u3758096384:0 sig0
-;;     fn1 = colocated u3758096384:1 sig1
-;;     fn2 = colocated u3758096384:2 sig2
+;;     fn0 = colocated u2147483648:0 sig0
+;;     fn1 = colocated u2147483648:1 sig1
+;;     fn2 = colocated u2147483648:2 sig2
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):

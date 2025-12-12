@@ -248,6 +248,18 @@ impl Mmap {
         Ok(())
     }
 
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        let mut old = 0;
+        unsafe {
+            let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+            let result = VirtualProtect(base, range.end - range.start, PAGE_READWRITE, &mut old);
+            if result == 0 {
+                bail!(io::Error::last_os_error());
+            }
+        }
+        Ok(())
+    }
+
     pub unsafe fn map_image_at(
         &self,
         image_source: &MemoryImageSource,

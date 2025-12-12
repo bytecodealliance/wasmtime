@@ -9,6 +9,7 @@ use object::read::elf::ElfFile64;
 use object::{Architecture, Endianness, FileFlags, Object, ObjectSection, ObjectSymbol};
 use pulley_interpreter::decode::{Decoder, DecodingError, OpVisitor};
 use pulley_interpreter::disas::Disassembler;
+use smallvec::SmallVec;
 use std::io::{IsTerminal, Read, Write};
 use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
@@ -137,6 +138,20 @@ impl ObjdumpCommand {
             .context("missing .text section")?;
         let text = text.data()?;
 
+        let frame_table_descriptors = elf
+            .section_by_name(obj::ELF_WASMTIME_FRAMES)
+            .and_then(|section| section.data().ok())
+            .and_then(|bytes| FrameTable::parse(bytes, text).ok());
+
+        let mut breakpoints = frame_table_descriptors
+            .iter()
+            .flat_map(|ftd| ftd.breakpoint_patches())
+            .map(|(wasm_pc, patch)| (wasm_pc, patch.offset, SmallVec::from(patch.enable)))
+            .collect::<Vec<_>>();
+        breakpoints.sort_by_key(|(_wasm_pc, native_offset, _patch)| *native_offset);
+        let breakpoints: Box<dyn Iterator<Item = _>> = Box::new(breakpoints.into_iter());
+        let breakpoints = breakpoints.peekable();
+
         // Build the helper that'll get used to attach decorations/annotations
         // to various instructions.
         let mut decorator = Decorator {
@@ -164,14 +179,13 @@ impl ObjdumpCommand {
             frame_tables: elf
                 .section_by_name(obj::ELF_WASMTIME_FRAMES)
                 .and_then(|section| section.data().ok())
-                .and_then(|bytes| FrameTable::parse(bytes).ok())
+                .and_then(|bytes| FrameTable::parse(bytes, text).ok())
                 .map(|table| table.into_program_points())
                 .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
 
-            frame_table_descriptors: elf
-                .section_by_name(obj::ELF_WASMTIME_FRAMES)
-                .and_then(|section| section.data().ok())
-                .and_then(|bytes| FrameTable::parse(bytes).ok()),
+            breakpoints,
+
+            frame_table_descriptors,
 
             objdump: &self,
         };
@@ -186,7 +200,9 @@ impl ObjdumpCommand {
             };
             let bytes = &text[sym.address() as usize..][..sym.size() as usize];
 
-            let kind = if name.starts_with("wasmtime_builtin") {
+            let kind = if name.starts_with("wasmtime_builtin")
+                || name.starts_with("wasmtime_patchable_builtin")
+            {
                 Func::Builtin
             } else if name.contains("]::function[") {
                 Func::Wasm
@@ -565,6 +581,11 @@ struct Decorator<'a> {
         >,
     >,
 
+    // Breakpoint table, sorted by native offset instead so we can
+    // display inline with disassembly (the table in the image is
+    // sorted by Wasm PC).
+    breakpoints: Peekable<Box<dyn Iterator<Item = (u32, usize, SmallVec<[u8; 8]>)>>>,
+
     frame_table_descriptors: Option<FrameTable<'a>>,
 }
 
@@ -575,6 +596,7 @@ impl Decorator<'_> {
         self.stack_maps(address, post_list);
         self.exception_table(address, pre_list);
         self.frame_table(address, pre_list, post_list);
+        self.breakpoints(address, pre_list);
     }
 
     fn addrmap(&mut self, address: u64, list: &mut Vec<String>) {
@@ -710,6 +732,19 @@ impl Decorator<'_> {
                 let func_key = frame_descriptor.func_key();
                 list.push(format!("debug frame state ({pos}): func key {func_key:?}, wasm PC {wasm_pc}, slot at FP-0x{offset:x}, locals {local_shape}, stack {stack_shape}"));
             }
+        }
+    }
+
+    fn breakpoints(&mut self, address: u64, list: &mut Vec<String>) {
+        while let Some((wasm_pc, addr, patch)) = self.breakpoints.next_if(|(_, addr, patch)| {
+            u64::try_from(*addr).unwrap() + u64::try_from(patch.len()).unwrap() <= address
+        }) {
+            if u64::try_from(addr).unwrap() + u64::try_from(patch.len()).unwrap() != address {
+                continue;
+            }
+            list.push(format!(
+                "breakpoint patch: wasm PC {wasm_pc}, patch bytes {patch:?}"
+            ));
         }
     }
 

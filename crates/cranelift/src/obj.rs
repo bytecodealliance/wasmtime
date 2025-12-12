@@ -218,9 +218,12 @@ impl<'a> ModuleTextBuilder<'a> {
     ///
     /// Note that this will also write out the unwind information sections if
     /// necessary.
-    pub fn finish(mut self) {
+    pub fn finish(mut self, postprocess_text: impl FnOnce(&mut [u8])) {
         // Finish up the text section now that we're done adding functions.
-        let text = self.text.finish(&mut self.ctrl_plane);
+        let mut text = self.text.finish(&mut self.ctrl_plane);
+
+        postprocess_text(&mut text[..]);
+
         self.obj
             .section_mut(self.text_section)
             .set_data(text, text_align(self.compiler));

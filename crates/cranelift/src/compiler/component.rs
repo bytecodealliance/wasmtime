@@ -1420,6 +1420,10 @@ impl ComponentCompiler for Compiler {
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
                 )?);
             }
+
+            Abi::Patchable => unreachable!(
+                "We should not be compiling a patchable-ABI trampoline for a component function"
+            ),
         }
 
         let mut compiler = self.function_compiler();
@@ -1498,6 +1502,12 @@ impl ComponentCompiler for Compiler {
                     offsets.vm_store_context(),
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
                 )?);
+            }
+
+            Abi::Patchable => {
+                unreachable!(
+                    "We should not be compiling a patchable trampoline for a component intrinsic"
+                )
             }
         }
 
