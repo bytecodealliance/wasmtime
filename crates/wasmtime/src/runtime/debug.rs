@@ -637,13 +637,7 @@ impl<'a> BreakpointEdit<'a> {
             .code_memory_mut()
             .expect("Must have unique ownership of StoreCode in guest-debug mode");
         if dirty_modules.insert(store_code_pc) {
-            // SAFETY: We have a mutable borrow to the `registry`,
-            // which is part of the `Store`. Code in this store cannot
-            // run while we hold that borrow. We re-publish when we
-            // are dropped.
-            unsafe {
-                code_memory.unpublish()?;
-            }
+            code_memory.unpublish()?;
         }
         Ok(code_memory)
     }

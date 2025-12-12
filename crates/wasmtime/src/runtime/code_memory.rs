@@ -419,17 +419,7 @@ impl CodeMemory {
     /// point to valid instructions. Thus this is mostly useful for
     /// patching in-place at particular sites, such as by the use of
     /// Cranelift's `patchable_call` instruction.
-    ///
-    /// # Safety
-    ///
-    /// This code memory may not be actively executing when this
-    /// method is invoked or after it returns until the code is
-    /// re-[`publish`]ed. Doing so is UB (and will likely cause a
-    /// segfault, or possibly worse due to icache incoherence).
-    ///
-    /// If this method returns an error, the code memory is in an
-    /// undetermined state and must never be executed again.
-    pub unsafe fn unpublish(&mut self) -> Result<()> {
+    pub fn unpublish(&mut self) -> Result<()> {
         assert!(self.published);
         self.published = false;
 
@@ -441,15 +431,17 @@ impl CodeMemory {
             return Ok(());
         }
 
+        if !self.mmap.supports_virtual_memory() {
+            bail!("this target requires virtual memory to be enabled");
+        }
+
         // SAFETY: we are guaranteed by our own safety conditions that
         // we have exclusive access to this code and can change its
         // permissions (removing the execute bit) without causing
         // problems.
         #[cfg(has_virtual_memory)]
         unsafe {
-            if self.mmap.supports_virtual_memory() {
-                self.mmap.make_readwrite(0..self.mmap.len())?;
-            }
+            self.mmap.make_readwrite(0..self.mmap.len())?;
         }
 
         // Note that we do *not* unregister: we expect unpublish

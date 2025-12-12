@@ -461,7 +461,7 @@ impl<'a> ModuleWithCode<'a> {
 
     /// Get the text offset (relative PC) for a given absolute PC in
     /// this module.
-    #[cfg(any(feature = "gc", feature = "debug"))]
+    #[cfg(feature = "gc")]
     pub(crate) fn text_offset(&self, pc: usize) -> Option<u32> {
         StoreCodePC::offset_of(self.store_code.text_range(), pc)
             .map(|offset| u32::try_from(offset).expect("Module larger than 4GiB"))
