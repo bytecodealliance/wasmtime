@@ -78,7 +78,7 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 ///
 /// Useful in situations where Rust's type inference cannot figure out that the
 /// `Result`'s error type is [`Error`].
-#[allow(non_snake_case)]
+#[allow(non_snake_case, reason = "matching anyhow API")]
 pub fn Ok<T>(value: T) -> Result<T> {
     core::result::Result::Ok(value)
 }

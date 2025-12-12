@@ -13,7 +13,7 @@ use core::{
 };
 #[cfg(feature = "std")]
 use std::backtrace::BacktraceStatus;
-use wasmtime_internal_error::*;
+use wasmtime_internal_error::{Context, Error, OutOfMemory, Result, anyhow, bail, ensure};
 
 #[derive(Debug)]
 struct TestError(u32);

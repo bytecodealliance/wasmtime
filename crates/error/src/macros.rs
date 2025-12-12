@@ -41,6 +41,7 @@ use core::fmt::{self, write};
 /// [`Error::new`][crate::Error::new] or [`Error::msg`][crate::Error::msg]:
 ///
 /// ```
+/// # fn _foo() {
 /// #![cfg(feature = "std")]
 /// # use wasmtime_internal_error as wasmtime;
 /// use std::fmt;
@@ -60,6 +61,7 @@ use core::fmt::{self, write};
 /// let error: Error = anyhow!(SomeOtherError(36));
 /// assert!(error.is::<SomeOtherError>());
 /// assert_eq!(error.to_string(), "some other error (code 36)");
+/// # }
 /// ```
 #[macro_export]
 macro_rules! anyhow {

@@ -65,9 +65,9 @@ pub(crate) unsafe trait ErrorExt: core::error::Error + Send + Sync + 'static {
 pub(crate) struct DynError {
     // Safety: this vtable must always be associated with the `E` for the
     // `ConcreteError<E>` that this `DynError` is punning.
-    vtable: &'static Vtable,
+    pub(crate) vtable: &'static Vtable,
     #[cfg(feature = "backtrace")]
-    backtrace: Option<Backtrace>,
+    pub(crate) backtrace: Option<Backtrace>,
     // error: <?>
 }
 
@@ -78,9 +78,9 @@ pub(crate) struct DynError {
 pub(crate) struct ConcreteError<E> {
     // Safety: this vtable must always be `E`'s vtable. This is ensured in
     // `BoxDynError::new`.
-    vtable: &'static Vtable,
+    pub(crate) vtable: &'static Vtable,
     #[cfg(feature = "backtrace")]
-    backtrace: Option<Backtrace>,
+    pub(crate) backtrace: Option<Backtrace>,
     pub(crate) error: E,
 }
 
@@ -127,7 +127,7 @@ impl BoxedDynError {
         #[cfg(feature = "backtrace")]
         let backtrace = match error.take_backtrace() {
             Some(bt) => bt,
-            None => backtrace::capture(),
+            None => crate::backtrace::capture(),
         };
 
         let error = try_box(ConcreteError {
@@ -1491,12 +1491,14 @@ impl OomOrDynError {
     const _DYN_ERROR_HAS_GREATER_ALIGN_THAN_OOM: () =
         assert!(mem::align_of::<DynError>() > mem::align_of::<OutOfMemory>());
 
+    const OOM_PTR: NonNull<u8> = NonNull::<OutOfMemory>::dangling().cast();
+
     pub(crate) const OOM: Self = OomOrDynError {
-        inner: NonNull::<OutOfMemory>::dangling().cast(),
+        inner: Self::OOM_PTR,
     };
 
     fn is_oom(&self) -> bool {
-        self.inner == Self::OOM.inner
+        self.inner == Self::OOM_PTR
     }
 
     fn is_boxed_dyn_error(&self) -> bool {
