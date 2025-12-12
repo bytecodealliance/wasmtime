@@ -175,7 +175,7 @@ fn main() {
             // update C API version in wasmtime.h
             update_capi_version();
             // update the lock file
-            run_cmd(Command::new("cargo").arg("fetch"));
+            run_cmd(Command::new("cargo").arg("fetch").arg("--offline"));
         }
 
         "publish" => {
@@ -248,11 +248,7 @@ fn run_cmd(cmd: &mut Command) {
 fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
     if dir.join("Cargo.toml").exists() {
         let krate = read_crate(Some(ws), &dir.join("Cargo.toml"));
-        if !krate.publish || CRATES_TO_PUBLISH.iter().any(|c| krate.name == *c) {
-            dst.push(krate);
-        } else {
-            panic!("failed to find {:?} in whitelist or blacklist", krate.name);
-        }
+        dst.push(krate);
     }
 
     for entry in dir.read_dir().unwrap() {
@@ -295,6 +291,11 @@ fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
     }
     let name = name.unwrap();
     let version = version.unwrap();
+    assert!(
+        !publish || CRATES_TO_PUBLISH.contains(&&name[..]),
+        "a crate must either be listed in `CRATES_TO_PUBLISH` or have `publish = false` \
+         in its `Cargo.toml`"
+    );
     Crate {
         manifest: manifest.to_path_buf(),
         name,
@@ -304,9 +305,10 @@ fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
 }
 
 fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
+    println!("bumping `{}`...", krate.name);
     let contents = fs::read_to_string(&krate.manifest).unwrap();
     let next_version = |krate: &Crate| -> String {
-        if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
+        if krate.publish {
             bump(&krate.version, patch)
         } else {
             krate.version.clone()
@@ -318,13 +320,8 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
     for line in contents.lines() {
         let mut rewritten = false;
         if !is_deps && line.starts_with("version =") {
-            if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
-                println!(
-                    "bump `{}` {} => {}",
-                    krate.name,
-                    krate.version,
-                    next_version(krate),
-                );
+            if krate.publish {
+                println!("  {} => {}", krate.version, next_version(krate));
                 new_manifest.push_str(&line.replace(&krate.version, &next_version(krate)));
                 rewritten = true;
             }
@@ -345,7 +342,8 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
             }
             if !is_deps
                 || (!line.starts_with(&format!("{} ", other.name))
-                    && !line.contains(&format!("package = '{}'", other.name)))
+                    && !(line.contains(&format!("package = '{}'", other.name))
+                        || line.contains(&format!("package = \"{}\"", other.name))))
             {
                 continue;
             }
@@ -441,7 +439,7 @@ fn bump(version: &str, patch_bump: bool) -> String {
 }
 
 fn publish(krate: &Crate) -> bool {
-    if !CRATES_TO_PUBLISH.iter().any(|s| *s == krate.name) {
+    if !krate.publish {
         return true;
     }
 
