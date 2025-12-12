@@ -175,7 +175,7 @@ fn main() {
             // update C API version in wasmtime.h
             update_capi_version();
             // update the lock file
-            run_cmd(Command::new("cargo").arg("fetch"));
+            run_cmd(Command::new("cargo").arg("fetch").arg("--offline"));
         }
 
         "publish" => {
