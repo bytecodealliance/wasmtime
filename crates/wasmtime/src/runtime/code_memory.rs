@@ -47,10 +47,17 @@ impl Drop for CodeMemory {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            if self.published && self.needs_executable {
-                let text = self.text();
-                mem.unpublish_executable(text.as_ptr(), text.len())
-                    .expect("Executable memory unpublish failed");
+            if self.published {
+                mem.unpublish_image(
+                    self.mmap.as_ptr(),
+                    self.mmap.len(),
+                    if self.needs_executable {
+                        Some(self.text.clone())
+                    } else {
+                        None
+                    },
+                )
+                .expect("Executable memory unpublish failed");
             }
         }
 
@@ -67,6 +74,23 @@ fn _assert() {
     _assert_send_sync::<CodeMemory>();
 }
 
+#[derive(PartialEq, PartialOrd)]
+/// Actions that were performed by `CustomCodeMemory::publish_image` hook.
+pub enum HandledByCustomCodeMemory {
+    /// Nothing was performed, publishing will be done by the
+    /// default Wasmtime implementation.
+    Nothing,
+
+    /// Only memory mapping was performed by the hook,
+    /// registering unwind and debug information will
+    /// be done by default Wasmtime implementation.
+    Mapping,
+
+    /// Everything was performed by the hook and no further
+    /// publishing actions are required.
+    MappingAndRegistration,
+}
+
 /// Interface implemented by an embedder to provide custom
 /// implementations of code-memory protection and execute permissions.
 pub trait CustomCodeMemory: Send + Sync {
@@ -78,30 +102,50 @@ pub trait CustomCodeMemory: Send + Sync {
     /// of virtual memory are disabled.
     fn required_alignment(&self) -> usize;
 
-    /// Publish a region of memory as executable.
+    /// Publish an image.
     ///
-    /// This should update permissions from the default RW
-    /// (readable/writable but not executable) to RX
-    /// (readable/executable but not writable), enforcing W^X
-    /// discipline.
+    /// This should ensure that the provided image region is mapped
+    /// read-only, with the exception of `code` area that (if provided)
+    /// should be mapped as readable and executable.
+    ///
+    /// Return value describes which actions were completed, while other
+    /// steps will be handled by Wasmtime default implementation.
     ///
     /// If the platform requires any data/instruction coherence
     /// action, that should be performed as part of this hook as well.
     ///
-    /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
-    /// per `required_alignment()`.
-    fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
-
-    /// Unpublish a region of memory.
+    /// If `image` is the image provided to `Module::deserialize_raw`
+    /// which was already prepared for execution, this hook might
+    /// be a no-op reporting all actions as completed.
     ///
-    /// This should perform the opposite effect of `make_executable`,
-    /// switching a range of memory back from RX (readable/executable)
-    /// to RW (readable/writable). It is guaranteed that no code is
+    /// Values in `code` range are relative to `image` pointer.
+    /// `code` is guaranteed to be aligned as per `required_alignment()`.
+    fn publish_image(
+        &self,
+        image: *const u8,
+        len: usize,
+        code: Option<Range<usize>>,
+    ) -> anyhow::Result<HandledByCustomCodeMemory>;
+
+    /// Unpublish an image.
+    ///
+    /// This should perform the opposite effect of `publish_image`.
+    ///
+    /// If `image` is the image provided to `Module::deserialize_raw`,
+    /// this hook might be used for unloading that image from address space.
+    ///
+    /// Otherwise it should switch a range of memory back to
+    /// readable and writable. It is guaranteed that no code is
     /// running anymore from this region.
     ///
-    /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
-    /// per `required_alignment()`.
-    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    /// Values in `code` range are relative to `image` pointer.
+    /// `code` is guaranteed to be aligned as per `required_alignment()`.
+    fn unpublish_image(
+        &self,
+        image: *const u8,
+        len: usize,
+        code: Option<Range<usize>>,
+    ) -> anyhow::Result<()>;
 }
 
 impl CodeMemory {
@@ -329,25 +373,29 @@ impl CodeMemory {
         //   both the actual unwinding tables as well as the validity of the
         //   pointers we pass in itself.
         unsafe {
-            // Next freeze the contents of this image by making all of the
-            // memory readonly. Nothing after this point should ever be modified
-            // so commit everything. For a compiled-in-memory image this will
-            // mean IPIs to evict writable mappings from other cores. For
-            // loaded-from-disk images this shouldn't result in IPIs so long as
-            // there weren't any relocations because nothing should have
-            // otherwise written to the image at any point either.
-            //
-            // Note that if virtual memory is disabled this is skipped because
-            // we aren't able to make it readonly, but this is just a
-            // defense-in-depth measure and isn't required for correctness.
-            #[cfg(has_virtual_memory)]
-            if self.mmap.supports_virtual_memory() {
-                self.mmap.make_readonly(0..self.mmap.len())?;
-            }
+            // Potentially call embedder-provided custom publishing implementation,
+            // and only perform publishing steps that weren't done by it.
+            let handled = self.custom_publish()?;
 
-            // Switch the executable portion from readonly to read/execute.
-            if self.needs_executable {
-                if !self.custom_publish()? {
+            if handled < HandledByCustomCodeMemory::Mapping {
+                // Next freeze the contents of this image by making all of the
+                // memory readonly. Nothing after this point should ever be modified
+                // so commit everything. For a compiled-in-memory image this will
+                // mean IPIs to evict writable mappings from other cores. For
+                // loaded-from-disk images this shouldn't result in IPIs so long as
+                // there weren't any relocations because nothing should have
+                // otherwise written to the image at any point either.
+                //
+                // Note that if virtual memory is disabled this is skipped because
+                // we aren't able to make it readonly, but this is just a
+                // defense-in-depth measure and isn't required for correctness.
+                #[cfg(has_virtual_memory)]
+                if self.mmap.supports_virtual_memory() {
+                    self.mmap.make_readonly(0..self.mmap.len())?;
+                }
+
+                // Switch the executable portion from readonly to read/execute.
+                if self.needs_executable {
                     if !self.mmap.supports_virtual_memory() {
                         bail!("this target requires virtual memory to be enabled");
                     }
@@ -358,39 +406,45 @@ impl CodeMemory {
                 }
             }
 
-            // With all our memory set up use the platform-specific
-            // `UnwindRegistration` implementation to inform the general
-            // runtime that there's unwinding information available for all
-            // our just-published JIT functions.
-            self.register_unwind_info()?;
+            if handled < HandledByCustomCodeMemory::MappingAndRegistration {
+                // With all our memory set up use the platform-specific
+                // `UnwindRegistration` implementation to inform the general
+                // runtime that there's unwinding information available for all
+                // our just-published JIT functions.
+                self.register_unwind_info()?;
 
-            #[cfg(feature = "debug-builtins")]
-            self.register_debug_image()?;
+                #[cfg(feature = "debug-builtins")]
+                self.register_debug_image()?;
+            }
         }
 
         Ok(())
     }
 
-    fn custom_publish(&mut self) -> Result<bool> {
+    fn custom_publish(&mut self) -> Result<HandledByCustomCodeMemory> {
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            let text = self.text();
-            // The text section should be aligned to
-            // `custom_code_memory.required_alignment()` due to a
-            // combination of two invariants:
-            //
-            // - MmapVec aligns its start address, even in owned-Vec mode; and
-            // - The text segment inside the ELF image will be aligned according
-            //   to the platform's requirements.
-            let text_addr = text.as_ptr() as usize;
-            assert_eq!(text_addr & (mem.required_alignment() - 1), 0);
+            if self.needs_executable {
+                // The text section should be aligned to
+                // `custom_code_memory.required_alignment()` due to a
+                // combination of two invariants:
+                //
+                // - MmapVec aligns its start address, even in owned-Vec mode; and
+                // - The text segment inside the ELF image will be aligned according
+                //   to the platform's requirements.
+                assert_eq!(
+                    (self.text().as_ptr() as usize) & (mem.required_alignment() - 1),
+                    0
+                );
 
-            // The custom code memory handler will ensure the
-            // memory is executable and also handle icache
-            // coherence.
-            mem.publish_executable(text.as_ptr(), text.len())?;
-            Ok(true)
+                // The custom code memory handler will ensure the
+                // memory is executable and also handle icache
+                // coherence.
+                mem.publish_image(self.mmap.as_ptr(), self.mmap.len(), Some(self.text.clone()))
+            } else {
+                mem.publish_image(self.mmap.as_ptr(), self.mmap.len(), None)
+            }
         } else {
-            Ok(false)
+            Ok(HandledByCustomCodeMemory::Nothing)
         }
     }
 

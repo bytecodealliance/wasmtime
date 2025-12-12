@@ -1,5 +1,6 @@
 #[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
+    use core::ops::Range;
     use rustix::mm::{MprotectFlags, mprotect};
     use rustix::param::page_size;
     use std::sync::Arc;
@@ -11,18 +12,31 @@ mod not_for_windows {
             page_size()
         }
 
-        fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()> {
+        fn publish_image(
+            &self,
+            ptr: *const u8,
+            len: usize,
+            code: Option<Range<usize>>,
+        ) -> anyhow::Result<HandledByCustomCodeMemory> {
             unsafe {
-                mprotect(
-                    ptr as *mut _,
-                    len,
-                    MprotectFlags::READ | MprotectFlags::EXEC,
-                )?;
+                mprotect(ptr as *mut _, len, MprotectFlags::READ)?;
+                if let Some(code) = code {
+                    mprotect(
+                        ptr.add(code.start) as *mut _,
+                        code.end - code.start,
+                        MprotectFlags::READ | MprotectFlags::EXEC,
+                    )?;
+                }
             }
-            Ok(())
+            Ok(HandledByCustomCodeMemory::Mapping)
         }
 
-        fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()> {
+        fn unpublish_image(
+            &self,
+            ptr: *const u8,
+            len: usize,
+            _code: Option<Range<usize>>,
+        ) -> anyhow::Result<()> {
             unsafe {
                 mprotect(
                     ptr as *mut _,
