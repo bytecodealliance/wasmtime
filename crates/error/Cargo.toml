@@ -1,9 +1,11 @@
 [package]
-name = "wasmtime-internal-error"
-version.workspace = true
 authors.workspace = true
+description = "INTERNAL: Wasmtime's universal error type's implementation"
 edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+name = "wasmtime-internal-error"
 rust-version.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
