@@ -151,8 +151,9 @@ fn aarch64_flush_icache(start: u64, end: u64) {
     // equivalent on Linux.
     const CACHE_LINE_SIZE: u64 = 64;
     // For each cache line, flush the icache.
-    let mut start = start & !(CACHE_LINE_SIZE - 1); // Round down.
-    let end = (end + CACHE_LINE_SIZE - 1) & !(CACHE_LINE_SIZE - 1); // Round up.
+    // Round down the start and round up the end.
+    let mut start = (start - CACHE_LINE_SIZE + 1).next_multiple_of(CACHE_LINE_SIZE);
+    let end = end.next_multiple_of(CACHE_LINE_SIZE);
     while start < end {
         unsafe {
             asm!("ic ivau, {}", in(reg) start);
