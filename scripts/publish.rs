@@ -345,7 +345,8 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
             }
             if !is_deps
                 || (!line.starts_with(&format!("{} ", other.name))
-                    && !line.contains(&format!("package = '{}'", other.name)))
+                    && !(line.contains(&format!("package = '{}'", other.name))
+                        || line.contains(&format!("package = \"{}\"", other.name))))
             {
                 continue;
             }
