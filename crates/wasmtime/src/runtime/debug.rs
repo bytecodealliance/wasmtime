@@ -729,11 +729,59 @@ impl<'a> Drop for BreakpointEdit<'a> {
     fn drop(&mut self) {
         for &store_code_base in &self.dirty_modules {
             let store_code = self.registry.store_code_mut(store_code_base).unwrap();
-            store_code
+            if let Err(e) = store_code
                 .code_memory_mut()
                 .expect("Must have unique ownership of StoreCode in guest-debug mode")
                 .publish()
-                .expect("re-publish failed");
+            {
+                abort_on_republish_error(e);
+            }
         }
     }
+}
+
+/// Abort when we cannot re-publish executable code.
+///
+/// Note that this puts us in quite a conundrum. Typically we will
+/// have been editing breakpoints from within a hostcall context
+/// (e.g. inside a debugger hook while execution is paused) with JIT
+/// code on the stack. Wasmtime's usual path to return errors is back
+/// through that JIT code: we do not panic-unwind across the JIT code,
+/// we return into the exit trampoline and that then re-enters the
+/// raise libcall to use a Cranelift exception-throw to cross most of
+/// the JIT frames to the entry trampoline. When even trampolines are
+/// no longer executable, we have no way out. Even an ordinary
+/// `panic!` cannot work, because we catch panics and carry them
+/// across JIT code using that trampoline-based error path. Our only
+/// way out is to directly abort the whole process.
+///
+/// This is not without precedent: other engines have similar failure
+/// paths. For example, SpiderMonkey directly aborts the process when
+/// failing to re-apply executable permissions (see [1]).
+///
+/// Note that we don't really expect to ever hit this case in
+/// practice: it's unlikely that `mprotect` applying `PROT_EXEC` would
+/// fail due to, e.g., resource exhaustion in the kernel, because we
+/// will have the same net number of virtual memory areas before and
+/// after the permissions change. Nevertheless, we have to account for
+/// the possibility of error.
+///
+/// [1]: https://searchfox.org/firefox-main/rev/7496c8515212669451d7e775a00c2be07da38ca5/js/src/jit/AutoWritableJitCode.h#26-56
+#[cfg(feature = "std")]
+fn abort_on_republish_error(e: anyhow::Error) -> ! {
+    log::error!(
+        "Failed to re-publish executable code: {e:?}. Wasmtime cannot return through JIT code on the stack and cannot even panic; aborting the process."
+    );
+    std::process::abort();
+}
+
+/// In the `no_std` case, we don't have a concept of a "process
+/// abort", so rely on `panic!`. Typically an embedded scenario that
+/// uses `no_std` will build with `panic=abort` so the effect is the
+/// same. If it doesn't, there is truly nothing we can do here so
+/// let's panic anyway; the panic propagation through the trampolines
+/// will at least deterministically crash.
+#[cfg(not(feature = "std"))]
+fn abort_on_republish_error(e: anyhow::Error) -> ! {
+    panic!("Failed to re-publish executable code: {e:?}");
 }

@@ -419,6 +419,8 @@ impl CodeMemory {
     /// point to valid instructions. Thus this is mostly useful for
     /// patching in-place at particular sites, such as by the use of
     /// Cranelift's `patchable_call` instruction.
+    ///
+    /// If this fails, then the memory remains executable.
     pub fn unpublish(&mut self) -> Result<()> {
         assert!(self.published);
         self.published = false;
