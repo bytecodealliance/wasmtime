@@ -3,96 +3,96 @@
 (rule (simplify
       (clz (fits_in_64 ty)
             (iconst ty kx)))
-      (subsume (iconst ty (imm64_clz ty kx))))
+      (subsume (const ty (imm64_clz ty kx))))
 
 
 (rule (simplify
        (ctz (fits_in_64 ty)
              (iconst ty kx)))
-      (subsume (iconst ty (imm64_ctz ty kx))))
+      (subsume (const ty (imm64_ctz ty kx))))
 
 (rule (simplify
        (iadd (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_add k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_add k1 k2)))))
 
 (rule (simplify
        (isub (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_sub k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_sub k1 k2)))))
 
 (rule (simplify
        (imul (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_mul k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_mul k1 k2)))))
 
 (rule (simplify_skeleton
        (sdiv (iconst ty k1)
              (iconst ty k2)))
       (if-let d (imm64_sdiv ty k1 k2))
-      (iconst ty d))
+      (const ty d))
 
 (rule (simplify_skeleton
        (srem (iconst ty k1)
              (iconst ty k2)))
       (if-let d (imm64_srem ty k1 k2))
-      (iconst ty d))
+      (const ty d))
 
 (rule (simplify_skeleton
        (udiv (iconst_u ty k1)
              (iconst_u ty k2)))
       (if-let d (u64_checked_div k1 k2))
-      (iconst ty (imm64_masked ty d)))
+      (const ty (imm64_masked ty d)))
 
 (rule (simplify_skeleton
        (urem (iconst_u ty k1)
              (iconst_u ty k2)))
       (if-let d (u64_checked_rem k1 k2))
-      (iconst ty (imm64_masked ty d)))
+      (const ty (imm64_masked ty d)))
 
 (rule (simplify
        (bor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_or k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_or k1 k2)))))
 
 (rule (simplify
        (band (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_and k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_and k1 k2)))))
 
 (rule (simplify
        (bxor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_xor k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_xor k1 k2)))))
 
 (rule (simplify
        (bnot (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k))))
-      (subsume (iconst ty (imm64_masked ty (u64_not k)))))
+      (subsume (const ty (imm64_masked ty (u64_not k)))))
 
 (rule (simplify (ishl (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_shl ty k1 k2))))
+      (subsume (const ty (imm64_shl ty k1 k2))))
 
 (rule (simplify (ushr (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_ushr ty k1 k2))))
+      (subsume (const ty (imm64_ushr ty k1 k2))))
 
 (rule (simplify (sshr (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_sshr ty k1 k2))))
+      (subsume (const ty (imm64_sshr ty k1 k2))))
 
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
-      (subsume (iconst narrow (imm64_masked narrow imm))))
+      (subsume (const narrow (imm64_masked narrow imm))))
 
 ;; iconst_[su] support $I128, but do so by extending, so restricting to
 ;; 64-bit or smaller keeps it from just remaking essentially the same thing.
@@ -106,7 +106,7 @@
             cc
             (iconst ty k1)
             (iconst ty k2)))
-      (subsume (iconst result_ty (imm64_icmp ty cc k1 k2))))
+      (subsume (const result_ty (imm64_icmp ty cc k1 k2))))
 
 
 ;; Canonicalize via commutativity: push immediates to the right.
@@ -225,17 +225,19 @@
 ;; A splat of a constant can become a direct `vconst` with the appropriate bit
 ;; pattern.
 (rule (simplify (splat (ty_vec128 dst) (iconst $I8 n)))
-      (vconst dst (splat8 (u64_uextend_imm64 $I8 n))))
+      (const dst n))
 (rule (simplify (splat (ty_vec128 dst) (iconst $I16 n)))
-      (vconst dst (splat16 (u64_uextend_imm64 $I16 n))))
+      (const dst n))
 (rule (simplify (splat (ty_vec128 dst) (iconst $I32 n)))
-      (vconst dst (splat32 (u64_uextend_imm64 $I32 n))))
+      (const dst n))
 (rule (simplify (splat (ty_vec128 dst) (iconst $I64 n)))
-      (vconst dst (splat64 (u64_uextend_imm64 $I64 n))))
+      (const dst n))
+(rule (simplify (splat (ty_vec128 dst) (f16const _ (u16_from_ieee16 n))))
+      (const dst (imm64 n)))
 (rule (simplify (splat (ty_vec128 dst) (f32const _ (u32_from_ieee32 n))))
-      (vconst dst (splat32 n)))
+      (const dst (imm64 n)))
 (rule (simplify (splat (ty_vec128 dst) (f64const _ (u64_from_ieee64 n))))
-      (vconst dst (splat64 n)))
+      (const dst (imm64 n)))
 
 (decl splat8 (u64) Constant)
 (rule (splat8 n) (splat16 (u64_or n (u64_shl n 8))))
@@ -286,13 +288,13 @@
 
 ;; Constant fold int-to-float conversions.
 (rule (simplify (fcvt_from_uint $F32 (iconst_u _ n)))
-      (f32const $F32 (f32_from_uint n)))
+      (const $F32 (imm64_from_ieee32 (f32_from_uint n))))
 (rule (simplify (fcvt_from_uint $F64 (iconst_u _ n)))
-      (f64const $F64 (f64_from_uint n)))
+      (const $F64 (imm64_from_ieee64 (f64_from_uint n))))
 (rule (simplify (fcvt_from_sint $F32 (iconst_s _ n)))
-      (f32const $F32 (f32_from_sint n)))
+      (const $F32 (imm64_from_ieee32 (f32_from_sint n))))
 (rule (simplify (fcvt_from_sint $F64 (iconst_s _ n)))
-      (f64const $F64 (f64_from_sint n)))
+      (const $F64 (imm64_from_ieee64 (f64_from_sint n))))
 
 (decl f32_from_uint (u64) Ieee32)
 (extern constructor f32_from_uint f32_from_uint)
@@ -305,11 +307,11 @@
 
 ;; Constant fold bswap of a constant.
 (rule (simplify (bswap $I16 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I16 (imm64 (u64_bswap16 n)))))
+      (subsume (const $I16 (imm64 (u64_bswap16 n)))))
 (rule (simplify (bswap $I32 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I32 (imm64 (u64_bswap32 n)))))
+      (subsume (const $I32 (imm64 (u64_bswap32 n)))))
 (rule (simplify (bswap $I64 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I64 (imm64 (u64_bswap64 n)))))
+      (subsume (const $I64 (imm64 (u64_bswap64 n)))))
 
 (decl pure u64_bswap16 (u64) u64)
 (extern constructor u64_bswap16 u64_bswap16)
@@ -329,117 +331,117 @@
 ;; TODO: fcmp, fma, demote, promote, to-int ops
 (rule (simplify (fadd $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_add lhs rhs))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fadd $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
       (if-let r (f64_add lhs rhs))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (fsub $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_sub lhs rhs))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fsub $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
       (if-let r (f64_sub lhs rhs))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (fmul $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_mul lhs rhs))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fmul $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
       (if-let r (f64_mul lhs rhs))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (fdiv $F32 (f32const $F32 lhs) (f32const $F32 rhs)))
       (if-let r (f32_div lhs rhs))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fdiv $F64 (f64const $F64 lhs) (f64const $F64 rhs)))
       (if-let r (f64_div lhs rhs))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (sqrt $F32 (f32const $F32 n)))
       (if-let r (f32_sqrt n))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (sqrt $F64 (f64const $F64 n)))
       (if-let r (f64_sqrt n))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (ceil $F32 (f32const $F32 n)))
       (if-let r (f32_ceil n))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (ceil $F64 (f64const $F64 n)))
       (if-let r (f64_ceil n))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (floor $F32 (f32const $F32 n)))
       (if-let r (f32_floor n))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (floor $F64 (f64const $F64 n)))
       (if-let r (f64_floor n))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (trunc $F32 (f32const $F32 n)))
       (if-let r (f32_trunc n))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (trunc $F64 (f64const $F64 n)))
       (if-let r (f64_trunc n))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (nearest $F32 (f32const $F32 n)))
       (if-let r (f32_nearest n))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (nearest $F64 (f64const $F64 n)))
       (if-let r (f64_nearest n))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 
 (rule (simplify (fmin $F16 (f16const $F16 n) (f16const $F16 m)))
       (if-let r (f16_min n m))
-      (subsume (f16const $F32 r)))
+      (subsume (const $F16 (imm64_from_ieee16 r))))
 (rule (simplify (fmin $F32 (f32const $F32 n) (f32const $F32 m)))
       (if-let r (f32_min n m))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fmin $F64 (f64const $F64 n) (f64const $F64 m)))
       (if-let r (f64_min n m))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 (rule (simplify (fmin $F128 (f128const $F128 (ieee128_constant n)) (f128const $F128 (ieee128_constant m))))
       (if-let r (f128_min n m))
       (subsume (f128const $F128 (ieee128_constant r))))
 
 (rule (simplify (fmax $F16 (f16const $F16 n) (f16const $F16 m)))
       (if-let r (f16_max n m))
-      (subsume (f16const $F16 r)))
+      (subsume (const $F16 (imm64_from_ieee16 r))))
 (rule (simplify (fmax $F32 (f32const $F32 n) (f32const $F32 m)))
       (if-let r (f32_max n m))
-      (subsume (f32const $F32 r)))
+      (subsume (const $F32 (imm64_from_ieee32 r))))
 (rule (simplify (fmax $F64 (f64const $F64 n) (f64const $F64 m)))
       (if-let r (f64_max n m))
-      (subsume (f64const $F64 r)))
+      (subsume (const $F64 (imm64_from_ieee64 r))))
 (rule (simplify (fmax $F128 (f128const $F128 (ieee128_constant n)) (f128const $F128 (ieee128_constant m))))
       (if-let r (f128_max n m))
       (subsume (f128const $F128 (ieee128_constant r))))
 
 (rule (simplify (fneg $F16 (f16const $F16 n)))
-      (subsume (f16const $F16 (f16_neg n))))
+      (subsume (const $F16 (imm64_from_ieee16 (f16_neg n)))))
 (rule (simplify (fneg $F32 (f32const $F32 n)))
-      (subsume (f32const $F32 (f32_neg n))))
+      (subsume (const $F32 (imm64_from_ieee32 (f32_neg n)))))
 (rule (simplify (fneg $F64 (f64const $F64 n)))
-      (subsume (f64const $F64 (f64_neg n))))
+      (subsume (const $F64 (imm64_from_ieee64 (f64_neg n)))))
 (rule (simplify (fneg $F128 (f128const $F128 (ieee128_constant n))))
       (subsume (f128const $F128 (ieee128_constant (f128_neg n)))))
 
 (rule (simplify (fabs $F16 (f16const $F16 n)))
-      (subsume (f16const $F16 (f16_abs n))))
+      (subsume (const $F16 (imm64_from_ieee16 (f16_abs n)))))
 (rule (simplify (fabs $F32 (f32const $F32 n)))
-      (subsume (f32const $F32 (f32_abs n))))
+      (subsume (const $F32 (imm64_from_ieee32 (f32_abs n)))))
 (rule (simplify (fabs $F64 (f64const $F64 n)))
-      (subsume (f64const $F64 (f64_abs n))))
+      (subsume (const $F64 (imm64_from_ieee64 (f64_abs n)))))
 (rule (simplify (fabs $F128 (f128const $F128 (ieee128_constant n))))
       (subsume (f128const $F128 (ieee128_constant (f128_abs n)))))
 
 (rule (simplify (fcopysign $F16 (f16const $F16 n) (f16const $F16 m)))
-      (subsume (f16const $F16 (f16_copysign n m))))
+      (subsume (const $F16 (imm64_from_ieee16 (f16_copysign n m)))))
 (rule (simplify (fcopysign $F32 (f32const $F32 n) (f32const $F32 m)))
-      (subsume (f32const $F32 (f32_copysign n m))))
+      (subsume (const $F32 (imm64_from_ieee32 (f32_copysign n m)))))
 (rule (simplify (fcopysign $F64 (f64const $F64 n) (f64const $F64 m)))
-      (subsume (f64const $F64 (f64_copysign n m))))
+      (subsume (const $F64 (imm64_from_ieee64 (f64_copysign n m)))))
 (rule (simplify (fcopysign $F128 (f128const $F128 (ieee128_constant n)) (f128const $F128 (ieee128_constant m))))
       (subsume (f128const $F128 (ieee128_constant (f128_copysign n m)))))
 
