@@ -752,9 +752,17 @@ impl File {
         advice: system_interface::fs::Advice,
     ) -> Result<(), ErrorCode> {
         use system_interface::fs::FileIoExt as _;
-        self.run_blocking(move |f| f.advise(offset, len, advice))
-            .await?;
-        Ok(())
+        match self
+            .run_blocking(move |f| f.advise(offset, len, advice))
+            .await
+        {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            Err(ErrorCode::FileTooLarge) if advice == system_interface::fs::Advice::WillNeed => {
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+            Ok(()) => Ok(()),
+        }
     }
 
     pub(crate) async fn set_size(&self, size: u64) -> Result<(), ErrorCode> {
