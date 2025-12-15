@@ -330,7 +330,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        Inst::Call { info, .. } | Inst::PatchableCall { info, .. } => {
+        Inst::Call { info, .. } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -725,7 +725,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } | Inst::PatchableCall { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
@@ -764,10 +764,9 @@ impl MachInst for Inst {
 
     fn call_type(&self) -> CallType {
         match self {
-            Inst::Call { .. }
-            | Inst::CallInd { .. }
-            | Inst::PatchableCall { .. }
-            | Inst::ElfTlsGetAddr { .. } => CallType::Regular,
+            Inst::Call { .. } | Inst::CallInd { .. } | Inst::ElfTlsGetAddr { .. } => {
+                CallType::Regular
+            }
 
             Inst::ReturnCall { .. } | Inst::ReturnCallInd { .. } => CallType::TailCall,
 
@@ -1356,9 +1355,6 @@ impl Inst {
                     .map(|tci| pretty_print_try_call(tci))
                     .unwrap_or_default();
                 format!("callind {rd}{try_call}")
-            }
-            &MInst::PatchableCall { ref info } => {
-                format!("call {} ; patchable", info.dest.display(None))
             }
             &MInst::ReturnCall { ref info } => {
                 let mut s = format!(

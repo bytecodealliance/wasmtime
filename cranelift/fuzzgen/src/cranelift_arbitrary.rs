@@ -45,7 +45,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // These are implemented and should work on all backends
         let mut allowed_callconvs = vec![
             CallConv::Fast,
-            CallConv::Cold,
+            CallConv::PreserveAll,
             CallConv::SystemV,
             CallConv::Tail,
         ];

@@ -2941,8 +2941,8 @@ impl MachInstEmit for Inst {
                     sink.put4(0xd65f0bff | (op2 << 9)); // reta{key}
                 }
             }
-            &Inst::Call { ref info } | &Inst::PatchableCall { ref info } => {
-                let is_patchable = matches!(self, Inst::PatchableCall { .. });
+            &Inst::Call { ref info } => {
+                let start = sink.cur_offset();
                 let user_stack_map = state.take_stack_map();
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
@@ -2956,8 +2956,6 @@ impl MachInstEmit for Inst {
                         Some(state.frame_layout.sp_to_fp()),
                         try_call.exception_handlers(&state.frame_layout),
                     );
-                } else if is_patchable {
-                    sink.add_patchable_call_site(4);
                 } else {
                     sink.add_call_site();
                 }
@@ -2970,12 +2968,16 @@ impl MachInstEmit for Inst {
                     }
                 }
 
-                // Load any stack-carried return values.
-                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
-                    state.frame_layout().stackslots_size,
-                    |inst| inst.emit(sink, emit_info, state),
-                    |needed_space| Some(Inst::EmitIsland { needed_space }),
-                );
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    // Load any stack-carried return values.
+                    info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                        state.frame_layout().stackslots_size,
+                        |inst| inst.emit(sink, emit_info, state),
+                        |needed_space| Some(Inst::EmitIsland { needed_space }),
+                    );
+                }
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

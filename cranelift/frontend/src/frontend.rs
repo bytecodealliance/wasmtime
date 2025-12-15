@@ -845,6 +845,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memcpy),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         self.ins().call(libc_memcpy, &[dest, src, size]);
@@ -946,6 +947,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memset),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         let ch = self.ins().uextend(types::I32, ch);
@@ -1043,6 +1045,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memmove),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         self.ins().call(libc_memmove, &[dest, source, size]);
@@ -1078,6 +1081,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memcmp),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         let call = self.ins().call(libc_memcmp, &[left, right, size]);
@@ -1960,6 +1964,7 @@ block0:
             name: ExternalName::User(name),
             signature: sig0,
             colocated: false,
+            patchable: false,
         });
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);

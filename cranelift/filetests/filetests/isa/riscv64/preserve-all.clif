@@ -1,8 +1,8 @@
 test compile precise-output
 target riscv64
 
-function %call_patchable_abi(i64) system_v {
-    sig0 = (i64, i64, i64, i64) patchable
+function %call_preserve_all_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
 block0(v0: i64):
     call_indirect sig0, v0(v0, v0, v0, v0)
     call_indirect sig0, v0(v0, v0, v0, v0)
@@ -42,7 +42,7 @@ block0(v0: i64):
 ;   addi sp, sp, 0x10
 ;   ret
 
-function %patchable_abi_trampoline(i64) patchable {
+function %preserve_all_abi_trampoline(i64) preserve_all {
     fn0 = %libcall(i64) system_v
 block0(v0: i64):
     call fn0(v0)
@@ -424,10 +424,10 @@ block0(v0: i64):
 ;   addi sp, sp, 0x10
 ;   ret
 
-function %patchable_call(i64) system_v {
-  fn0 = colocated %f(i64) patchable
+function %preserve_all_call(i64) system_v {
+  fn0 = colocated %f(i64) preserve_all
 block0(v0: i64):
-  patchable_call fn0(v0)
+  call fn0(v0)
   return
 }
 
@@ -437,7 +437,7 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   call %f ; patchable
+;   call %f
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -451,7 +451,7 @@ block0(v0: i64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %f 0
-;   jalr ra ; patchable call: NOP out last 8 bytes
+;   jalr ra
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

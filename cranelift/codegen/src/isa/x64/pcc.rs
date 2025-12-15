@@ -213,8 +213,6 @@ pub(crate) fn check(
 
         Inst::SequencePoint { .. } => Ok(()),
 
-        Inst::PatchableCallKnown { .. } => Ok(()),
-
         Inst::External { .. } => Ok(()), // TODO: unsure what to do about this!
     }
 }

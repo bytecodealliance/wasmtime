@@ -329,14 +329,22 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+        fn func_ref_data(
+            &mut self,
+            func_ref: FuncRef,
+        ) -> (SigRef, ExternalName, RelocDistance, bool) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             let reloc_distance = if funcdata.colocated {
                 RelocDistance::Near
             } else {
                 RelocDistance::Far
             };
-            (funcdata.signature, funcdata.name.clone(), reloc_distance)
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                reloc_distance,
+                funcdata.patchable,
+            )
         }
 
         #[inline]

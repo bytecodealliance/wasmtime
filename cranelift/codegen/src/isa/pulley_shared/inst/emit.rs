@@ -166,8 +166,7 @@ fn pulley_emit<P>(
             sink.add_reloc_at_offset(end - size, Reloc::Abs8, &**name, *offset);
         }
 
-        Inst::Call { info } | Inst::PatchableCall { info } => {
-            let is_patchable = matches!(inst, Inst::PatchableCall { .. });
+        Inst::Call { info } => {
             let start = sink.cur_offset();
 
             // If arguments happen to already be in the right register for the
@@ -199,23 +198,25 @@ fn pulley_emit<P>(
                     Some(state.frame_layout.sp_to_fp()),
                     try_call.exception_handlers(&state.frame_layout),
                 );
-            } else if is_patchable {
-                sink.add_patchable_call_site(sink.cur_offset() - start);
             } else {
                 sink.add_call_site();
             }
 
-            let adjust = -i32::try_from(info.callee_pop_size).unwrap();
-            for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                i.emit(sink, emit_info, state);
-            }
+            if info.patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
+            } else {
+                let adjust = -i32::try_from(info.callee_pop_size).unwrap();
+                for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
+                    i.emit(sink, emit_info, state);
+                }
 
-            // Load any stack-carried return values.
-            info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
-                state.frame_layout().stackslots_size,
-                |inst| inst.emit(sink, emit_info, state),
-                |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
-            );
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
+                );
+            }
 
             // If this is a try-call, jump to the continuation
             // (normal-return) block.

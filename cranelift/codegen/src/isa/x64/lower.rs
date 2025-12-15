@@ -190,7 +190,7 @@ fn emit_vm_call(
         .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
 
     if flags.use_colocated_libcalls() {
-        let call_info = ctx.gen_call_info(sig, extname, uses, defs, None);
+        let call_info = ctx.gen_call_info(sig, extname, uses, defs, None, false);
         ctx.emit(Inst::call_known(Box::new(call_info)));
     } else {
         let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
@@ -200,7 +200,7 @@ fn emit_vm_call(
             offset: 0,
             distance: RelocDistance::Far,
         });
-        let call_info = ctx.gen_call_info(sig, RegMem::reg(tmp.to_reg()), uses, defs, None);
+        let call_info = ctx.gen_call_info(sig, RegMem::reg(tmp.to_reg()), uses, defs, None, false);
         ctx.emit(Inst::call_unknown(Box::new(call_info)));
     }
     Ok(outputs)

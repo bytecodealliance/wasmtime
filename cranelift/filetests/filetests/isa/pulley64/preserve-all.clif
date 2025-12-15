@@ -1,8 +1,8 @@
 test compile precise-output
 target pulley64
 
-function %call_patchable_abi(i64) system_v {
-    sig0 = (i64, i64, i64, i64) patchable
+function %call_preserve_all_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
 block0(v0: i64):
     call_indirect sig0, v0(v0, v0, v0, v0)
     call_indirect sig0, v0(v0, v0, v0, v0)
@@ -15,8 +15,8 @@ block0(v0: i64):
 ;   xmov x3, x0
 ;   xmov x1, x3
 ;   xmov x2, x3
-;   indirect_call x3, CallInfo { dest: XReg(p3i), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: Patchable, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None }
-;   indirect_call x3, CallInfo { dest: XReg(p3i), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: Patchable, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None }
+;   indirect_call x3, CallInfo { dest: XReg(p3i), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   indirect_call x3, CallInfo { dest: XReg(p3i), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   pop_frame
 ;   ret
 ;
@@ -30,7 +30,7 @@ block0(v0: i64):
 ; pop_frame
 ; ret
 
-function %patchable_abi_trampoline(i64) patchable {
+function %preserve_all_abi_trampoline(i64) preserve_all {
     fn0 = %libcall(i64) system_v
 block0(v0: i64):
     call fn0(v0)
@@ -120,7 +120,7 @@ block0(v0: i64):
 ;   vstore128 sp+264, v30 // flags =  notrap aligned
 ;   vstore128 sp+256, v31 // flags =  notrap aligned
 ; block0:
-;   indirect_call_host CallInfo { dest: TestCase(%libcall), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: SystemV, caller_conv: Patchable, callee_pop_size: 0, try_call_info: None }
+;   indirect_call_host CallInfo { dest: TestCase(%libcall), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: SystemV, caller_conv: PreserveAll, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   x0 = xload64 sp+888 // flags = notrap aligned
 ;   x1 = xload64 sp+880 // flags = notrap aligned
 ;   x2 = xload64 sp+872 // flags = notrap aligned
@@ -370,17 +370,17 @@ block0(v0: i64):
 ; pop_frame_restore 896, 
 ; ret
 
-function %patchable_call(i64) system_v {
-  fn0 = colocated %f(i64) patchable
+function %preserve_all_call(i64) system_v {
+  fn0 = colocated %f(i64) preserve_all
 block0(v0: i64):
-  patchable_call fn0(v0)
+  call fn0(v0)
   return
 }
 
 ; VCode:
 ;   push_frame
 ; block0:
-;   patchable_call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: Patchable, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   pop_frame
 ;   ret
 ;

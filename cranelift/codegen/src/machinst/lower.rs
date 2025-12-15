@@ -710,10 +710,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> CallInfo<T> {
-        self.vcode
-            .abi()
-            .gen_call_info(self.vcode.sigs(), sig, dest, uses, defs, try_call_info)
+        self.vcode.abi().gen_call_info(
+            self.vcode.sigs(),
+            sig,
+            dest,
+            uses,
+            defs,
+            try_call_info,
+            patchable,
+        )
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
