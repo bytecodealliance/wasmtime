@@ -962,27 +962,28 @@ impl<'a> Verifier<'a> {
         opcode: Opcode,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
-        let callee_patchable = self.func.dfg.ext_funcs[func_ref].patchable;
-        let callee_colocated = self.func.dfg.ext_funcs[func_ref].colocated;
-        let callee_sigref = self.func.dfg.ext_funcs[func_ref].signature;
-        let callee_signature = &self.func.dfg.signatures[callee_sigref];
-        if callee_patchable
-            && (opcode == Opcode::ReturnCall || opcode == Opcode::ReturnCallIndirect)
-        {
+        let ir::ExtFuncData {
+            patchable,
+            colocated,
+            signature,
+            name: _,
+        } = self.func.dfg.ext_funcs[func_ref];
+        let signature = &self.func.dfg.signatures[signature];
+        if patchable && (opcode == Opcode::ReturnCall || opcode == Opcode::ReturnCallIndirect) {
             errors.fatal((
                 inst,
                 self.context(inst),
                 "patchable funcref cannot be used in a return_call".to_string(),
             ))?;
         }
-        if callee_patchable && !callee_colocated {
+        if patchable && !colocated {
             errors.fatal((
                 inst,
                 self.context(inst),
                 "patchable call to non-colocated function".to_string(),
             ))?;
         }
-        if callee_patchable && !callee_signature.returns.is_empty() {
+        if patchable && !signature.returns.is_empty() {
             errors.fatal((
                 inst,
                 self.context(inst),
