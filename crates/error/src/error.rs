@@ -532,76 +532,7 @@ impl Error {
             };
         }
 
-        return Self::from_error_ext(ForeignError(error));
-
-        // NB: The `repr(transparent)` is required for safety of the
-        // `ErrorExt::ext_is` implementation and the casts that are performed
-        // using that method's return value.
-        #[repr(transparent)]
-        struct ForeignError<E>(E);
-
-        impl<E> fmt::Debug for ForeignError<E>
-        where
-            E: core::error::Error + Send + Sync + 'static,
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Debug::fmt(&self.0, f)
-            }
-        }
-
-        impl<E> fmt::Display for ForeignError<E>
-        where
-            E: core::error::Error + Send + Sync + 'static,
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Display::fmt(&self.0, f)
-            }
-        }
-
-        impl<E> core::error::Error for ForeignError<E>
-        where
-            E: core::error::Error + Send + Sync + 'static,
-        {
-            fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-                self.0.source()
-            }
-        }
-
-        // Safety: `ext_is` is correct, `ext_move` always writes to `dest`.
-        unsafe impl<E> ErrorExt for ForeignError<E>
-        where
-            E: core::error::Error + Send + Sync + 'static,
-        {
-            fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
-                None
-            }
-
-            fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-                None
-            }
-
-            fn ext_take_source(&mut self) -> Option<OomOrDynError> {
-                None
-            }
-
-            unsafe fn ext_move(self, dest: NonNull<u8>) {
-                // Safety: implied by this trait method's safety contract.
-                unsafe {
-                    dest.cast::<E>().write(self.0);
-                }
-            }
-
-            fn ext_is(&self, type_id: TypeId) -> bool {
-                // NB: need to check type id of `E`, not `Self` aka
-                // `ForeignError<E>`.
-                type_id == TypeId::of::<E>()
-            }
-
-            #[cfg(feature = "backtrace")]
-            fn take_backtrace(&mut self) -> Option<Backtrace> {
-                None
-            }
-        }
+        Self::from_error_ext(ForeignError(error))
     }
 
     /// Construct a new `Error` from any type that implements `Debug` and
@@ -626,70 +557,7 @@ impl Error {
     where
         M: fmt::Debug + fmt::Display + Send + Sync + 'static,
     {
-        return Self::from_error_ext(MessageError(message));
-
-        // NB: The `repr(transparent)` is required for safety of the
-        // `ErrorExt::ext_is` implementation and the casts that are performed
-        // using that method's return value.
-        #[repr(transparent)]
-        struct MessageError<M>(M);
-
-        impl<M> fmt::Debug for MessageError<M>
-        where
-            M: fmt::Debug,
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-
-        impl<M> fmt::Display for MessageError<M>
-        where
-            M: fmt::Display,
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-
-        impl<M> core::error::Error for MessageError<M> where M: fmt::Debug + fmt::Display {}
-
-        // Safety: `ext_is` is implemented correctly and `ext_move` always
-        // writes to its pointer.
-        unsafe impl<M> ErrorExt for MessageError<M>
-        where
-            M: fmt::Debug + fmt::Display + Send + Sync + 'static,
-        {
-            fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
-                None
-            }
-
-            fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-                None
-            }
-
-            fn ext_take_source(&mut self) -> Option<OomOrDynError> {
-                None
-            }
-
-            fn ext_is(&self, type_id: TypeId) -> bool {
-                // NB: need to check type id of `M`, not `Self` aka
-                // `MessageError<M>`.
-                type_id == TypeId::of::<M>()
-            }
-
-            unsafe fn ext_move(self, dest: NonNull<u8>) {
-                // Safety: implied by this trait method's contract.
-                unsafe {
-                    dest.cast::<M>().write(self.0);
-                }
-            }
-
-            #[cfg(feature = "backtrace")]
-            fn take_backtrace(&mut self) -> Option<Backtrace> {
-                None
-            }
-        }
+        Self::from_error_ext(MessageError(message))
     }
 
     /// Create an `Error` from a `Box<dyn core::error::Error>`.
@@ -721,66 +589,7 @@ impl Error {
     /// # }
     /// ```
     pub fn from_boxed(error: Box<dyn core::error::Error + Send + Sync + 'static>) -> Self {
-        return Self::from_error_ext(BoxedError(error));
-
-        // NB: The `repr(transparent)` is required for safety of the
-        // `ErrorExt::ext_is` implementation and the casts that are performed
-        // using that method's return value.
-        #[repr(transparent)]
-        struct BoxedError(Box<dyn core::error::Error + Send + Sync + 'static>);
-
-        impl fmt::Debug for BoxedError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Debug::fmt(&self.0, f)
-            }
-        }
-
-        impl fmt::Display for BoxedError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Display::fmt(&self.0, f)
-            }
-        }
-
-        impl core::error::Error for BoxedError {
-            fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-                self.0.source()
-            }
-        }
-
-        // Safety: `ext_is` is implemented correctly and `ext_move` always
-        // writes to its pointer.
-        unsafe impl ErrorExt for BoxedError {
-            fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
-                None
-            }
-
-            fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-                None
-            }
-
-            fn ext_take_source(&mut self) -> Option<OomOrDynError> {
-                None
-            }
-
-            fn ext_is(&self, type_id: TypeId) -> bool {
-                // NB: need to check type id of `BoxDynSendSyncError`, not
-                // `BoxedError`.
-                type_id == TypeId::of::<Box<dyn core::error::Error + Send + Sync + 'static>>()
-            }
-
-            unsafe fn ext_move(self, dest: NonNull<u8>) {
-                // Safety: implied by this trait method's contract.
-                unsafe {
-                    dest.cast::<Box<dyn core::error::Error + Send + Sync + 'static>>()
-                        .write(self.0);
-                }
-            }
-
-            #[cfg(feature = "backtrace")]
-            fn take_backtrace(&mut self) -> Option<Backtrace> {
-                None
-            }
-        }
+        Self::from_error_ext(BoxedError(error))
     }
 
     /// Convert an `anyhow::Error` into an `Error`.
@@ -809,65 +618,7 @@ impl Error {
     #[cfg(feature = "anyhow")]
     #[inline]
     pub fn from_anyhow(error: anyhow::Error) -> Self {
-        return Self::from_error_ext(AnyhowError(error));
-
-        // NB: The `repr(transparent)` is required for safety of the
-        // `ErrorExt::ext_is` implementation and the casts that are performed
-        // using that method's return value.
-        #[repr(transparent)]
-        struct AnyhowError(anyhow::Error);
-
-        impl fmt::Debug for AnyhowError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Debug::fmt(&self.0, f)
-            }
-        }
-
-        impl fmt::Display for AnyhowError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                fmt::Display::fmt(&self.0, f)
-            }
-        }
-
-        impl core::error::Error for AnyhowError {
-            fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-                self.0.source()
-            }
-        }
-
-        // Safety: `ext_is` is implemented correctly and `ext_move` always
-        // writes to its pointer.
-        unsafe impl ErrorExt for AnyhowError {
-            fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
-                None
-            }
-
-            fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-                None
-            }
-
-            fn ext_take_source(&mut self) -> Option<OomOrDynError> {
-                None
-            }
-
-            fn ext_is(&self, type_id: TypeId) -> bool {
-                // NB: need to check type id of `BoxDynSendSyncError`, not
-                // `AnyhowError`.
-                type_id == TypeId::of::<anyhow::Error>()
-            }
-
-            unsafe fn ext_move(self, dest: NonNull<u8>) {
-                // Safety: implied by this trait method's contract.
-                unsafe {
-                    dest.cast::<anyhow::Error>().write(self.0);
-                }
-            }
-
-            #[cfg(feature = "backtrace")]
-            fn take_backtrace(&mut self) -> Option<Backtrace> {
-                None
-            }
-        }
+        Self::from_error_ext(AnyhowError(error))
     }
 
     /// Add additional context to this error.
@@ -1329,6 +1080,276 @@ impl Error {
     #[inline]
     pub fn into_boxed_dyn_error(self) -> Box<dyn core::error::Error + Send + Sync + 'static> {
         self.inner.into_boxed_dyn_core_error()
+    }
+}
+
+/// `ErrorExt` wrapper for foreign `core::error::Error` implementations.
+///
+/// For `Error::new`'s use only.
+///
+/// NB: The `repr(transparent)` is required for safety of the `ErrorExt::ext_is`
+/// implementation and the casts that are performed using that method's return
+/// value.
+#[repr(transparent)]
+struct ForeignError<E>(E);
+
+impl<E> fmt::Debug for ForeignError<E>
+where
+    E: core::error::Error + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<E> fmt::Display for ForeignError<E>
+where
+    E: core::error::Error + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl<E> core::error::Error for ForeignError<E>
+where
+    E: core::error::Error + Send + Sync + 'static,
+{
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+// Safety: `ext_is` is correct, `ext_move` always writes to `dest`.
+unsafe impl<E> ErrorExt for ForeignError<E>
+where
+    E: core::error::Error + Send + Sync + 'static,
+{
+    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+        None
+    }
+
+    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
+        None
+    }
+
+    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+        None
+    }
+
+    unsafe fn ext_move(self, dest: NonNull<u8>) {
+        // Safety: implied by this trait method's safety contract.
+        unsafe {
+            dest.cast::<E>().write(self.0);
+        }
+    }
+
+    fn ext_is(&self, type_id: TypeId) -> bool {
+        // NB: need to check type id of `E`, not `Self` aka
+        // `ForeignError<E>`.
+        type_id == TypeId::of::<E>()
+    }
+
+    #[cfg(feature = "backtrace")]
+    fn take_backtrace(&mut self) -> Option<Backtrace> {
+        None
+    }
+}
+
+/// `ErrorExt` wrapper for types given to `Error::msg`.
+///
+/// For `Error::msg`'s use only.
+///
+/// NB: The `repr(transparent)` is required for safety of the `ErrorExt::ext_is`
+/// implementation and the casts that are performed using that method's return
+/// value.
+#[repr(transparent)]
+struct MessageError<M>(M);
+
+impl<M> fmt::Debug for MessageError<M>
+where
+    M: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<M> fmt::Display for MessageError<M>
+where
+    M: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<M> core::error::Error for MessageError<M> where M: fmt::Debug + fmt::Display {}
+
+// Safety: `ext_is` is implemented correctly and `ext_move` always
+// writes to its pointer.
+unsafe impl<M> ErrorExt for MessageError<M>
+where
+    M: fmt::Debug + fmt::Display + Send + Sync + 'static,
+{
+    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+        None
+    }
+
+    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
+        None
+    }
+
+    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+        None
+    }
+
+    fn ext_is(&self, type_id: TypeId) -> bool {
+        // NB: need to check type id of `M`, not `Self` aka
+        // `MessageError<M>`.
+        type_id == TypeId::of::<M>()
+    }
+
+    unsafe fn ext_move(self, dest: NonNull<u8>) {
+        // Safety: implied by this trait method's contract.
+        unsafe {
+            dest.cast::<M>().write(self.0);
+        }
+    }
+
+    #[cfg(feature = "backtrace")]
+    fn take_backtrace(&mut self) -> Option<Backtrace> {
+        None
+    }
+}
+
+/// `ErrorExt` wrapper for `Box<dyn core::error::Error>`.
+///
+/// For `Error::from_boxed`'s use only.
+///
+/// NB: The `repr(transparent)` is required for safety of the `ErrorExt::ext_is`
+/// implementation and the casts that are performed using that method's return
+/// value.
+#[repr(transparent)]
+struct BoxedError(Box<dyn core::error::Error + Send + Sync + 'static>);
+
+impl fmt::Debug for BoxedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for BoxedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl core::error::Error for BoxedError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+// Safety: `ext_is` is implemented correctly and `ext_move` always
+// writes to its pointer.
+unsafe impl ErrorExt for BoxedError {
+    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+        None
+    }
+
+    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
+        None
+    }
+
+    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+        None
+    }
+
+    fn ext_is(&self, type_id: TypeId) -> bool {
+        // NB: need to check type id of `BoxDynSendSyncError`, not
+        // `BoxedError`.
+        type_id == TypeId::of::<Box<dyn core::error::Error + Send + Sync + 'static>>()
+    }
+
+    unsafe fn ext_move(self, dest: NonNull<u8>) {
+        // Safety: implied by this trait method's contract.
+        unsafe {
+            dest.cast::<Box<dyn core::error::Error + Send + Sync + 'static>>()
+                .write(self.0);
+        }
+    }
+
+    #[cfg(feature = "backtrace")]
+    fn take_backtrace(&mut self) -> Option<Backtrace> {
+        None
+    }
+}
+
+/// `ErrorExt` wrapper for `anyhow::Error`.
+///
+/// For `Error::from_anyhow`'s use only.
+///
+/// NB: The `repr(transparent)` is required for safety of the `ErrorExt::ext_is`
+/// implementation and the casts that are performed using that method's return
+/// value.
+#[repr(transparent)]
+#[cfg(feature = "anyhow")]
+struct AnyhowError(anyhow::Error);
+
+#[cfg(feature = "anyhow")]
+impl fmt::Debug for AnyhowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "anyhow")]
+impl fmt::Display for AnyhowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "anyhow")]
+impl core::error::Error for AnyhowError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+// Safety: `ext_is` is implemented correctly and `ext_move` always
+// writes to its pointer.
+#[cfg(feature = "anyhow")]
+unsafe impl ErrorExt for AnyhowError {
+    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+        None
+    }
+
+    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
+        None
+    }
+
+    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+        None
+    }
+
+    fn ext_is(&self, type_id: TypeId) -> bool {
+        // NB: need to check type id of `BoxDynSendSyncError`, not
+        // `AnyhowError`.
+        type_id == TypeId::of::<anyhow::Error>()
+    }
+
+    unsafe fn ext_move(self, dest: NonNull<u8>) {
+        // Safety: implied by this trait method's contract.
+        unsafe {
+            dest.cast::<anyhow::Error>().write(self.0);
+        }
+    }
+
+    #[cfg(feature = "backtrace")]
+    fn take_backtrace(&mut self) -> Option<Backtrace> {
+        None
     }
 }
 
