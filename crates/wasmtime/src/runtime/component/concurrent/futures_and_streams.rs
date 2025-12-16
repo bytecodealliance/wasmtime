@@ -336,6 +336,20 @@ pub struct DirectDestination<'a, D: 'static> {
     store: StoreContextMut<'a, D>,
 }
 
+impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let rem = self.remaining();
+        let n = rem.len().min(buf.len());
+        rem[..n].copy_from_slice(&buf[..n]);
+        self.mark_written(n);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &mut [u8] {
@@ -834,6 +848,16 @@ pub struct DirectSource<'a, D: 'static> {
     id: TableId<TransmitState>,
     host_buffer: Option<&'a mut dyn WriteBuffer<u8>>,
     store: StoreContextMut<'a, D>,
+}
+
+impl<D: 'static> std::io::Read for DirectSource<'_, D> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let rem = self.remaining();
+        let n = rem.len().min(buf.len());
+        buf[..n].copy_from_slice(&rem[..n]);
+        self.mark_read(n);
+        Ok(n)
+    }
 }
 
 impl<D: 'static> DirectSource<'_, D> {
