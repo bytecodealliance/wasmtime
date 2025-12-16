@@ -60,7 +60,12 @@ pub(crate) unsafe trait ErrorExt: core::error::Error + Send + Sync + 'static {
 /// `Box`, etc...) that is punning a `ConcreteError<?>` and never directly as an
 /// on-stack value, for example.
 ///
-/// XXX: Must have a compatible layout with `ConcreteError<E>`.
+/// See the docs for `Vtable` for details about why we make our own trait
+/// objects.
+///
+/// XXX: Must have a compatible layout with `ConcreteError<E>`. See the
+/// assertions in `BoxedDynError::new` and the
+/// `dyn_error_and_concrete_error_layouts_are_compatible` test below.
 #[repr(C)]
 pub(crate) struct DynError {
     // Safety: this vtable must always be associated with the `E` for the
@@ -73,7 +78,9 @@ pub(crate) struct DynError {
 
 /// A `dyn ErrorExt` trait object that we know the concrete type of.
 ///
-/// XXX: Must have a compatible layout with `DynError`.
+/// XXX: Must have a compatible layout with `DynError`. See the
+/// assertions in `BoxedDynError::new` and the
+/// `dyn_error_and_concrete_error_layouts_are_compatible` test below.
 #[repr(C)]
 pub(crate) struct ConcreteError<E> {
     // Safety: this vtable must always be `E`'s vtable. This is ensured in
