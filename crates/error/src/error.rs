@@ -350,7 +350,7 @@ impl BoxedDynError {
 /// When the `"anyhow"` feature is enabled, there is a `From<wasmtime::Error>
 /// for anyhow::Error` implementation. You can always call that implementation
 /// explicitly if needed, but `?`-propagation allows the conversion to happen
-/// seemlessly from functions that return a `Result<T, wasmtime::Error>` to
+/// seamlessly from functions that return a `Result<T, wasmtime::Error>` to
 /// those that return a `Result<U, anyhow::Error>`.
 ///
 /// ```
