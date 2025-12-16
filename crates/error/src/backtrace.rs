@@ -18,6 +18,7 @@ pub fn disable_backtrace() {
     ENABLED.store(false, Ordering::Release)
 }
 
+#[track_caller]
 pub fn capture() -> Backtrace {
     if enabled() {
         Backtrace::capture()
