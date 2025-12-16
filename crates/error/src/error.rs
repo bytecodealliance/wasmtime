@@ -1502,17 +1502,10 @@ impl<'a> OomOrDynErrorMut<'a> {
 /// implicit pointer tagging and `OutOfMemory` being zero-sized.
 pub(crate) struct OomOrDynError {
     // Safety: this must always be the casted-to-`u8` version of either (a)
-    // `OutOfMemory`'s dangling pointer, or (b) a valid, owned `DynError`
-    // pointer. (Note that these cases cannot overlap because the dangling OOM
-    // pointer is not aligned for `DynError`.)
+    // `0x1`, or (b) a valid, owned `DynError` pointer. (Note that these cases
+    // cannot overlap because `DynError`'s alignment is greater than `0x1`.)
     inner: NonNull<u8>,
 }
-
-// impl fmt::Debug for OomOrDynError {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         self.unpack().debug(f)
-//     }
-// }
 
 // Safety: `OomOrDynError` is either an `OutOfMemory` or a `BoxedDynError` and
 // both are `Send`.
@@ -1552,17 +1545,19 @@ impl OomOrDynError {
     const _SIZE: () = assert!(mem::size_of::<OomOrDynError>() == mem::size_of::<usize>());
 
     // Our pointer tagging relies on this property.
-    const _DYN_ERROR_HAS_GREATER_ALIGN_THAN_OOM: () =
-        assert!(mem::align_of::<DynError>() > mem::align_of::<OutOfMemory>());
+    const _DYN_ERROR_HAS_GREATER_ALIGN_THAN_OOM: () = assert!(mem::align_of::<DynError>() > 1);
 
-    const OOM_PTR: NonNull<u8> = NonNull::<OutOfMemory>::dangling().cast();
+    const OOM_REPR: NonNull<u8> = unsafe {
+        // Safety: `0x1` is not null.
+        NonNull::<u8>::new_unchecked(0x1 as *mut u8)
+    };
 
     pub(crate) const OOM: Self = OomOrDynError {
-        inner: Self::OOM_PTR,
+        inner: Self::OOM_REPR,
     };
 
     fn is_oom(&self) -> bool {
-        self.inner == Self::OOM_PTR
+        self.inner == Self::OOM_REPR
     }
 
     fn is_boxed_dyn_error(&self) -> bool {
@@ -1574,10 +1569,11 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom(&self) -> &OutOfMemory {
         debug_assert!(self.is_oom());
-        let inner = self.inner.cast::<OutOfMemory>();
-        // Safety: `inner` is OOM's dangling pointer and it is always valid to
-        // turn `T`'s dangling pointer into an `&T` reference for unit types.
-        unsafe { inner.as_ref() }
+        let dangling = NonNull::<OutOfMemory>::dangling();
+        debug_assert_eq!(mem::size_of::<OutOfMemory>(), 0);
+        // Safety: it is always valid to turn `T`'s dangling pointer into an
+        // `&T` reference for unit types.
+        unsafe { dangling.as_ref() }
     }
 
     /// # Safety
@@ -1585,10 +1581,11 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom_mut(&mut self) -> &mut OutOfMemory {
         debug_assert!(self.is_oom());
-        let mut inner = self.inner.cast::<OutOfMemory>();
-        // Safety: `inner` is OOM's dangling pointer and it is always valid to
-        // turn `T`'s dangling pointer into an `&T` reference for unit types.
-        unsafe { inner.as_mut() }
+        let mut dangling = NonNull::<OutOfMemory>::dangling();
+        debug_assert_eq!(mem::size_of::<OutOfMemory>(), 0);
+        // Safety: it is always valid to turn `T`'s dangling pointer into an
+        // `&mut T` reference for unit types.
+        unsafe { dangling.as_mut() }
     }
 
     /// # Safety
@@ -1686,10 +1683,10 @@ impl OomOrDynError {
         if self.is_oom() {
             debug_assert_eq!(type_id, TypeId::of::<OutOfMemory>());
             // Safety: this is an OOM error.
-            let oom = *unsafe { self.unchecked_oom() };
+            let oom = unsafe { self.unchecked_oom() };
             // Safety: implied by this method's safety contract.
             unsafe {
-                ret_ptr.cast::<OutOfMemory>().write(oom);
+                ret_ptr.cast::<OutOfMemory>().write(*oom);
             }
         } else {
             debug_assert!(self.is_boxed_dyn_error());
