@@ -1,0 +1,38 @@
+interface client {
+    use types.{certificate};
+
+    resource hello {
+        /// Constructs a new ClientHello message.
+        constructor();
+
+        /// Sets the server name indicator.
+        set-server-name: func(server-name: string) -> result;
+
+        /// Sets the ALPN IDs advertised by the client.
+        set-alpn-ids: func(alpn-ids: list<list<u8>>);
+
+        /// Sets a list of the symmetric cipher options supported by
+        /// the client, specifically the record protection algorithm
+        /// (including secret key length) and a hash to be used with HKDF, in
+        /// descending order of client preference.
+        ///
+        /// If this list is empty, the implementation must use a reasonable default.
+        set-cipher-suites: func(cipher-suites: list<u16>);
+    }
+
+    resource handshake {
+        set-client-certificate: func(cert: certificate);
+
+        get-server-certificate: func() -> option<certificate>;
+
+        /// Gets the single cipher suite selected by the server from
+        /// the list in ClientHello.cipher_suites.
+        get-cipher-suite: func() -> u16;
+
+        /// Closing the `data` stream will trigger `close_notify`.
+        finish: static func(this: handshake, data: stream<u8>) -> tuple<stream<u8>, future<result>>;
+    }
+
+    /// Initiate the client TLS handshake
+    connect: func(hello: hello, incoming: stream<u8>) -> tuple<stream<u8>, future<result<handshake>>>;
+}

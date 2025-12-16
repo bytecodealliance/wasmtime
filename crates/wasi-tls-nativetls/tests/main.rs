@@ -60,9 +60,9 @@ macro_rules! assert_test_exists {
     };
 }
 
-test_programs_artifacts::foreach_tls!(assert_test_exists);
+test_programs_artifacts::foreach_p2_tls!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
-async fn tls_sample_application() -> Result<()> {
-    run_test(test_programs_artifacts::TLS_SAMPLE_APPLICATION_COMPONENT).await
+async fn p2_tls_sample_application() -> Result<()> {
+    run_test(test_programs_artifacts::P2_TLS_SAMPLE_APPLICATION_COMPONENT).await
 }

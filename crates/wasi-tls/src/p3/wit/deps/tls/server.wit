@@ -1,0 +1,36 @@
+interface server {
+    use types.{certificate};
+
+    resource handshake {
+        set-server-certificate: func(cert: certificate);
+
+        get-client-certificate: func() -> future<result<certificate>>;
+
+        /// Gets the server name indicator.
+        /// Returns `none` if the client did not supply a SNI.
+        get-server-name: func() -> option<string>;
+
+        /// Gets the ALPN IDs advertised by the client.
+        /// Returns `none` if the client did not include an ALPN extension.
+        get-alpn-ids: func() -> option<list<list<u8>>>;
+
+        /// Gets a list of the symmetric cipher options supported by
+        /// the client, specifically the record protection algorithm
+        /// (including secret key length) and a hash to be used with HKDF, in
+        /// descending order of client preference.
+        get-cipher-suites: func() -> list<u16>;
+
+        /// Selects the cipher-suite from
+        /// the list returned by `get-cipher-suites`
+        ///
+        /// If this is not called before `finish`, implementation
+        /// will select appropriate cipher suite.
+        set-cipher-suite: func(cipher-suite: u16);
+
+        /// Closing the `data` stream will trigger `close_notify`.
+        finish: static func(this: handshake, data: stream<u8>) -> tuple<stream<u8>, future<result>>;
+    }
+
+    /// Accept the client TLS handshake
+    accept: async func(incoming: stream<u8>) -> result<tuple<stream<u8>, handshake>>;
+}

@@ -11,6 +11,10 @@ description = "Wasmtime implementation of the wasi-tls API"
 [lints]
 workspace = true
 
+[features]
+default = []
+p3 = ["wasmtime-wasi/p3", "wasmtime/component-model-async"]
+
 [dependencies]
 bytes = { workspace = true }
 tokio = { workspace = true, features = [
@@ -19,6 +23,7 @@ tokio = { workspace = true, features = [
     "time",
     "io-util",
 ] }
+tracing = { workspace = true }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
 

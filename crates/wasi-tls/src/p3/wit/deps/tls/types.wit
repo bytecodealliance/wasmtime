@@ -1,0 +1,5 @@
+interface types {
+    resource certificate {
+        // TODO: define
+    }
+}
