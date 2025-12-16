@@ -806,7 +806,23 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         path: String,
     ) -> FilesystemResult<()> {
         let dir = store.get_dir(&fd)?;
-        dir.unlink_file_at(path).await?;
+        dir.unlink_file_at(path).await.map_err(|e| {
+            match e {
+                // Linux returns EISDIR when attempting to unlink a
+                // directory instead of the POSIX-specified EPERM.
+                crate::filesystem::ErrorCode::IsDirectory => ErrorCode::NotPermitted,
+                // Windows on the other hand returns EACCESS when
+                // attempting to unlink a directory.  Unfortunately
+                // filesystem ownership and permissions can also give
+                // rise to EACCESS, on Windows and elsewhere.  However
+                // give filestem permissions aren't part of WASI, we can
+                // regain a single behavior if we reduce the precision
+                // on these errors by mapping all EACCESS errors to
+                // EPERM, on all platforms.
+                crate::filesystem::ErrorCode::Access => ErrorCode::NotPermitted,
+                e => e.into(),
+            }
+        })?;
         Ok(())
     }
 
