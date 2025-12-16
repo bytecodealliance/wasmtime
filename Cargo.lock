@@ -5189,6 +5189,7 @@ dependencies = [
  "test-programs-artifacts",
  "tokio",
  "tokio-rustls",
+ "tracing",
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",

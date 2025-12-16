@@ -65,6 +65,8 @@ mkdir -p crates/wasi-tls/wit/deps
 wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-tls/wit/deps/io.wit"
 get_github wasi-tls v0.2.0-draft+505fc98 crates/wasi-tls/wit/deps/tls
 
+get_github wasi-tls v0.3.0-draft crates/wasi-tls/src/p3/wit/deps/tls
+
 rm -rf crates/wasi-config/wit/deps
 mkdir -p crates/wasi-config/wit/deps
 get_github wasi-config v0.2.0-rc.1 crates/wasi-config/wit/deps/config
