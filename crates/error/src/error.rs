@@ -137,6 +137,36 @@ impl BoxedDynError {
             error,
         })?;
 
+        // We are going to pun the `ConcreteError<E>` pointer into a `DynError`
+        // pointer. Debug assert that their layouts are compatible first.
+        #[cfg(debug_assertions)]
+        {
+            let dyn_size = mem::size_of::<DynError>();
+            let concrete_size = mem::size_of::<ConcreteError<E>>();
+            assert!(
+                dyn_size <= concrete_size,
+                "assertion failed: {dyn_size} <= {concrete_size}"
+            );
+
+            let dyn_align = mem::align_of::<DynError>();
+            let concrete_align = mem::align_of::<ConcreteError<E>>();
+            assert!(
+                dyn_align <= concrete_align,
+                "assertion failed: {dyn_align} <= {concrete_align}"
+            );
+
+            let dyn_offset = mem::offset_of!(DynError, vtable);
+            let concrete_offset = mem::offset_of!(ConcreteError<E>, vtable);
+            assert_eq!(dyn_offset, concrete_offset);
+
+            #[cfg(feature = "backtrace")]
+            {
+                let dyn_offset = mem::offset_of!(DynError, backtrace);
+                let concrete_offset = mem::offset_of!(ConcreteError<E>, backtrace);
+                assert_eq!(dyn_offset, concrete_offset);
+            }
+        }
+
         let ptr = Box::into_raw(error);
         let ptr = ptr.cast::<DynError>();
         // Safety: `Box::into_raw` always returns a non-null pointer.
