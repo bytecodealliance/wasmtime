@@ -911,6 +911,12 @@ impl Error {
     /// documentation](https://doc.rust-lang.org/stable/std/backtrace/struct.Backtrace.html)
     /// for more details on backtraces.
     ///
+    /// Note that `std::backtrace::Backtrace` does not provide a
+    /// fallible-capture mechanism that returns an error, rather than aborting
+    /// the process, when it encounters memory exhaustion. If you require
+    /// out-of-memory error handling, do not enable this crate's `"backtrace"`
+    /// cargo feature.
+    ///
     /// # Example
     ///
     /// ```

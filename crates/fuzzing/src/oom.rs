@@ -153,7 +153,12 @@ impl OomTest {
     /// until the pass (or fail).
     pub fn new() -> Self {
         let _ = env_logger::try_init();
+
+        // NB: `std::backtrace::Backtrace` doesn't have ways to handle
+        // OOM. Ideally we would just disable the `"backtrace"` cargo feature,
+        // but workspace feature resolution doesn't play nice with that.
         wasmtime_error::disable_backtrace();
+
         OomTest {
             max_iters: None,
             max_duration: None,
