@@ -295,20 +295,8 @@ impl<'a> Elaborator<'a> {
         // how to do instead of the best.
         let use_worst = self.ctrl_plane.get_decision();
 
-        // Do a fixpoint loop to compute the best value for each eclass.
-        //
-        // The maximum number of iterations is the length of the longest chain
-        // of `vNN -> vMM` edges in the dataflow graph where `NN < MM`, so this
-        // is *technically* quadratic, but `cranelift-frontend` won't construct
-        // any such edges. NaN canonicalization will introduce some of these
-        // edges, but they are chains of only two or three edges. So in
-        // practice, we *never* do more than a handful of iterations here unless
-        // (a) we parsed the CLIF from text and the text was funkily numbered,
-        // which we don't really care about, or (b) the CLIF producer did
-        // something weird, in which case it is their responsibility to stop
-        // doing that.
         trace!(
-            "Entering fixpoint loop to compute the {} values for each eclass",
+            "Computing the {} values for each eclass",
             if use_worst {
                 "worst (chaos mode)"
             } else {
@@ -316,6 +304,10 @@ impl<'a> Elaborator<'a> {
             }
         );
 
+        // Because the values are topologically sorted, we know that we will see
+        // defs before uses, so an instruction's operands' costs will already be
+        // computed by the time we are computing the cost for the current value
+        // and its instruction.
         for value in sorted_values.iter().copied() {
             let def = self.func.dfg.value_def(value);
             trace!("computing best for value {:?} def {:?}", value, def);
@@ -326,14 +318,10 @@ impl<'a> Elaborator<'a> {
                 // tuple; `cost` comes first so the natural comparison works
                 // based on cost, and breaks ties based on value number.
                 ValueDef::Union(x, y) => {
+                    debug_assert!(!best[x].1.is_reserved_value());
+                    debug_assert!(!best[y].1.is_reserved_value());
                     best[value] = if use_worst {
-                        if best[x].1.is_reserved_value() {
-                            best[y]
-                        } else if best[y].1.is_reserved_value() {
-                            best[x]
-                        } else {
-                            std::cmp::max(best[x], best[y])
-                        }
+                        std::cmp::max(best[x], best[y])
                     } else {
                         std::cmp::min(best[x], best[y])
                     };
@@ -361,7 +349,10 @@ impl<'a> Elaborator<'a> {
                         // satisfied.
                         let cost = Cost::of_pure_op(
                             inst_data.opcode(),
-                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                            self.func.dfg.inst_values(inst).map(|value| {
+                                debug_assert!(!best[value].1.is_reserved_value());
+                                best[value].0
+                            }),
                         );
                         best[value] = BestEntry(cost, value);
                         trace!(" -> cost of value {} = {:?}", value, cost);
@@ -369,15 +360,16 @@ impl<'a> Elaborator<'a> {
                 }
             };
 
-            // You might be expecting an assert that the best cost is not
-            // infinity, however infinite cost *can* happen in practice. First,
-            // note that our cost function doesn't know about any shared
-            // structure in the dataflow graph, it only sums operand costs. (And
-            // trying to avoid that by deduping a single operation's operands is
-            // a losing game because you can always just add one indirection and
-            // go from `add(x, x)` to `add(foo(x), bar(x))` to hide the shared
-            // structure.) Given that blindness to sharing, we can make cost
-            // grow exponentially with a linear sequence of operations:
+            // You might be expecting an assert that the best cost we just
+            // computed is not infinity, however infinite cost *can* happen in
+            // practice. First, note that our cost function doesn't know about
+            // any shared structure in the dataflow graph, it only sums operand
+            // costs. (And trying to avoid that by deduping a single operation's
+            // operands is a losing game because you can always just add one
+            // indirection and go from `add(x, x)` to `add(foo(x), bar(x))` to
+            // hide the shared structure.) Given that blindness to sharing, we
+            // can make cost grow exponentially with a linear sequence of
+            // operations:
             //
             //     v0 = iconst.i32 1    ;; cost = 1
             //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
