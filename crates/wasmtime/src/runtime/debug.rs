@@ -6,7 +6,7 @@ use crate::{
     code::StoreCodePC,
     module::ModuleRegistry,
     store::{AutoAssertNoGc, StoreOpaque},
-    vm::{CompiledModuleId, CurrentActivationBacktrace, VMContext},
+    vm::{CompiledModuleId, FrameOrHostCode, StoreBacktrace, VMContext},
 };
 use alloc::collections::BTreeSet;
 use alloc::vec;
@@ -43,11 +43,7 @@ impl<'a, T> StoreContextMut<'a, T> {
             return None;
         }
 
-        // SAFETY: This takes a mutable borrow of `self` (the
-        // `StoreOpaque`), which owns all active stacks in the
-        // store. We do not provide any API that could mutate the
-        // frames that we are walking on the `DebugFrameCursor`.
-        let iter = unsafe { CurrentActivationBacktrace::new(self) };
+        let iter = StoreBacktrace::new(self);
         let mut view = DebugFrameCursor {
             iter,
             is_trapping_frame: false,
@@ -90,14 +86,14 @@ impl<'a, T> StoreContext<'a, T> {
 /// A view of an active stack frame, with the ability to move up the
 /// stack.
 ///
-/// See the documentation on `Store::stack_value` for more information
+/// See the documentation on `Store::debug_frames` for more information
 /// about which frames this view will show.
 pub struct DebugFrameCursor<'a, T: 'static> {
     /// Iterator over frames.
     ///
     /// This iterator owns the store while the view exists (accessible
     /// as `iter.store`).
-    iter: CurrentActivationBacktrace<'a, T>,
+    iter: StoreBacktrace<'a, T>,
 
     /// Is the next frame to be visited by the iterator a trapping
     /// frame?
@@ -120,9 +116,25 @@ pub struct DebugFrameCursor<'a, T: 'static> {
     current: Option<FrameData>,
 }
 
+/// The result type from `DebugFrameCursor::move_to_parent()`:
+/// indicates whether the cursor skipped over host code to move to the
+/// next Wasm frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameParentResult {
+    /// The new frame is in the same Wasm activation.
+    SameActivation,
+    /// The new frame is in the next higher Wasm activation on the
+    /// stack.
+    NewActivation,
+}
+
 impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Move up to the next frame in the activation.
-    pub fn move_to_parent(&mut self) {
+    ///
+    /// Returns `FrameParentMove` as an indication whether the
+    /// moved-to frame is in the same activation or skipped over host
+    /// code.
+    pub fn move_to_parent(&mut self) -> FrameParentResult {
         // If there are no virtual frames to yield, take and decode
         // the next physical frame.
         //
@@ -133,22 +145,35 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         // functions or other things that we completely ignore). If
         // this ever changes, we can remove the assert and convert
         // this to a loop that polls until it finds virtual frames.
+        let mut result = FrameParentResult::SameActivation;
         self.current = None;
-        if self.frames.is_empty() {
+        while self.frames.is_empty() {
             let Some(next_frame) = self.iter.next() else {
-                return;
+                return result;
             };
-            self.frames = VirtualFrame::decode(
-                self.iter.store.0.as_store_opaque(),
-                next_frame,
-                self.is_trapping_frame,
-            );
+            self.frames = match next_frame {
+                FrameOrHostCode::Frame(frame) => VirtualFrame::decode(
+                    // SAFETY: we are using the Store only to decode
+                    // frames; the only mutable aspect used here is
+                    // rooting any new GC values that are read out,
+                    // and we do not remove frames that we may be
+                    // visiting.
+                    unsafe { self.iter.store_mut() }.0.as_store_opaque(),
+                    frame,
+                    self.is_trapping_frame,
+                ),
+                FrameOrHostCode::HostCode => {
+                    result = FrameParentResult::NewActivation;
+                    continue;
+                }
+            };
             debug_assert!(!self.frames.is_empty());
             self.is_trapping_frame = false;
         }
 
         // Take a frame and focus it as the current one.
         self.current = self.frames.pop().map(|vf| FrameData::compute(vf));
+        result
     }
 
     /// Has the iterator reached the end of the activation?
@@ -178,7 +203,14 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Get the instance associated with the current frame.
     pub fn instance(&mut self) -> Instance {
         let instance = self.raw_instance();
-        Instance::from_wasmtime(instance.id(), self.iter.store.0.as_store_opaque())
+        Instance::from_wasmtime(
+            instance.id(),
+            // SAFETY: we are using the Store only
+            // to read the instance reference; we
+            // do not remove frames that we may be
+            // visiting.
+            unsafe { self.iter.store_mut() }.0.as_store_opaque(),
+        )
     }
 
     /// Get the module associated with the current frame, if any
@@ -229,7 +261,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         let slot_addr = data.slot_addr;
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it.
-        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store_mut().0, slot_addr, offset, ty) }
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -246,7 +278,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
         // into it.
-        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store_mut().0, slot_addr, offset, ty) }
     }
 }
 
@@ -468,12 +500,15 @@ pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) 
 impl<'a, T: 'static> AsContext for DebugFrameCursor<'a, T> {
     type Data = T;
     fn as_context(&self) -> StoreContext<'_, Self::Data> {
-        StoreContext(self.iter.store.0)
+        StoreContext(self.iter.store().0)
     }
 }
 impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
-        StoreContextMut(self.iter.store.0)
+        // SAFETY: `StoreContextMut` does not provide any methods that
+        // could remove frames from the stack, so the iterator remains
+        // valid.
+        unsafe { StoreContextMut(self.iter.store_mut().0) }
     }
 }
 

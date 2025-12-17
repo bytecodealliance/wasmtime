@@ -32,7 +32,7 @@ use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
 #[cfg(feature = "debug")]
-pub(crate) use self::backtrace::CurrentActivationBacktrace;
+pub(crate) use self::backtrace::{FrameOrHostCode, StoreBacktrace};
 #[cfg(feature = "gc")]
 pub use wasmtime_unwinder::Frame;
 
