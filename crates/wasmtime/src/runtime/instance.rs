@@ -33,7 +33,7 @@ use wasmtime_environ::{
 /// [`Linker::instantiate`](crate::Linker::instantiate) or similar
 /// [`Linker`](crate::Linker) methods, but a more low-level constructor is also
 /// available as [`Instance::new`].
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Instance {
     id: StoreInstanceId,

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime::{
-    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, Func, Instance, Module,
-    Store, StoreContextMut, Val,
+    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameParentResult,
+    Func, Instance, Module, Store, StoreContextMut, Val,
 };
 
 #[test]
@@ -89,12 +89,12 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
                 assert_eq!(stack.stack(0).unwrap_i32(), 1);
                 assert_eq!(stack.stack(1).unwrap_i32(), 2);
 
-                stack.move_to_parent();
+                assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
                 assert!(!stack.done());
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 55);
 
-                stack.move_to_parent();
+                assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
                 assert!(stack.done());
             },
         )?;
@@ -124,7 +124,7 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert_eq!(stack.stack(0).unwrap_i32(), 42);
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
@@ -151,7 +151,7 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert!(stack.stack(0).unwrap_anyref().is_some());
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
@@ -194,10 +194,101 @@ fn gc_access_during_call() -> anyhow::Result<()> {
                 .unwrap_struct(&stack)
                 .unwrap();
             assert_eq!(s.field(&mut stack, 0).unwrap().unwrap_i32(), 42);
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn stack_values_two_activations() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let module1 = Module::new(
+        &engine,
+        r#"
+    (module
+      (import "" "host1" (func (param i32 i32) (result i32)))
+      (func (export "main") (result i32)
+        i32.const 1
+        i32.const 2
+        call 0))
+    "#,
+    )?;
+    let module2 = Module::new(
+        &engine,
+        r#"
+    (module
+      (import "" "host2" (func))
+      (func (export "inner") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        call 0
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+
+    let module1_clone = module1.clone();
+    let module2_clone = module2.clone();
+    let host2 = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+        let mut stack = caller.debug_frames().unwrap();
+        assert!(!stack.done());
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 56);
+        assert!(Module::same(stack.module().unwrap(), &module2_clone));
+        assert_eq!(stack.num_locals(), 2);
+        assert_eq!(stack.num_stacks(), 2);
+        assert_eq!(stack.local(0).unwrap_i32(), 1);
+        assert_eq!(stack.local(1).unwrap_i32(), 2);
+        assert_eq!(stack.stack(0).unwrap_i32(), 1);
+        assert_eq!(stack.stack(1).unwrap_i32(), 2);
+        let inner_instance = stack.instance();
+
+        assert_eq!(stack.move_to_parent(), FrameParentResult::NewActivation);
+        assert!(!stack.done());
+
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 56);
+        assert!(Module::same(stack.module().unwrap(), &module1_clone));
+        assert_eq!(stack.num_locals(), 0);
+        assert_eq!(stack.num_stacks(), 2);
+        assert_eq!(stack.stack(0).unwrap_i32(), 1);
+        assert_eq!(stack.stack(1).unwrap_i32(), 2);
+        let outer_instance = stack.instance();
+
+        assert_ne!(inner_instance, outer_instance);
+
+        assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
+        assert!(stack.done());
+    });
+
+    let instance2 = Instance::new(&mut store, &module2, &[Extern::Func(host2)])?;
+    let inner = instance2.get_func(&mut store, "inner").unwrap();
+
+    let host1 = Func::wrap(
+        &mut store,
+        move |mut caller: Caller<'_, ()>, a: i32, b: i32| -> i32 {
+            let mut results = [Val::I32(0)];
+            inner
+                .call(&mut caller, &[Val::I32(a), Val::I32(b)], &mut results[..])
+                .unwrap();
+            results[0].unwrap_i32()
+        },
+    );
+
+    let instance1 = Instance::new(&mut store, &module1, &[Extern::Func(host1)])?;
+    let main = instance1.get_func(&mut store, "main").unwrap();
+
+    let mut results = [Val::I32(0)];
+    main.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+    Ok(())
 }
 
 #[test]
@@ -293,9 +384,9 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
               assert!(!stack.done());
               assert_eq!(stack.num_locals(), 1);
               assert_eq!(stack.local(0).unwrap_i32(), 100);
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(!stack.done());
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(stack.done());
           }
         }
@@ -349,9 +440,9 @@ async fn caught_exception_events() -> anyhow::Result<()> {
               assert!(!stack.done());
               assert_eq!(stack.num_locals(), 1);
               assert_eq!(stack.local(0).unwrap_i32(), 100);
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(!stack.done());
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(stack.done());
           }
         }
@@ -485,7 +576,7 @@ async fn breakpoint_events() -> anyhow::Result<()> {
               let (func, pc) = stack.wasm_function_index_and_pc().unwrap();
               assert_eq!(func.as_u32(), 0);
               assert_eq!(pc, 0x28);
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(stack.done());
           }
         }

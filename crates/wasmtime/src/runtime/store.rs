@@ -1256,11 +1256,6 @@ impl<T> Store<T> {
     /// VM-level values (locals and operand stack), when debugging is
     /// enabled.
     ///
-    /// This object views the frames from the most recent Wasm entry
-    /// onward (up to the exit that allows this host code to run). Any
-    /// Wasm stack frames upward from the most recent entry to Wasm
-    /// are not visible to this cursor.
-    ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
