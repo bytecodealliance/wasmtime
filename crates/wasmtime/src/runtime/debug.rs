@@ -508,9 +508,7 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
         // SAFETY: `StoreContextMut` does not provide any methods that
         // could remove frames from the stack, so the iterator remains
         // valid.
-        unsafe {
-            StoreContextMut(self.iter.store_mut().0)
-        }
+        unsafe { StoreContextMut(self.iter.store_mut().0) }
     }
 }
 
