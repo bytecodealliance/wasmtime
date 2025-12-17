@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 use std::fs;
-use wasi_nn;
 
 pub fn main() {
     let xml = fs::read_to_string("fixture/model.xml").unwrap();
@@ -17,10 +16,10 @@ pub fn main() {
         )
         .unwrap()
     };
-    println!("Loaded graph into wasi-nn with ID: {}", graph);
+    println!("Loaded graph into wasi-nn with ID: {graph}");
 
     let context = unsafe { wasi_nn::init_execution_context(graph).unwrap() };
-    println!("Created wasi-nn execution context with ID: {}", context);
+    println!("Created wasi-nn execution context with ID: {context}");
 
     // Load a tensor that precisely matches the graph input tensor (see
     // `fixture/frozen_inference_graph.xml`).

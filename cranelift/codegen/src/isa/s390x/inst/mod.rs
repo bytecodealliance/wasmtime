@@ -282,6 +282,10 @@ impl Inst {
             | Inst::VecStoreLaneRev { .. } => InstructionSet::VXRS_EXT2,
 
             Inst::DummyUse { .. } => InstructionSet::Base,
+
+            Inst::LabelAddress { .. } => InstructionSet::Base,
+
+            Inst::SequencePoint { .. } => InstructionSet::Base,
         }
     }
 
@@ -1006,6 +1010,10 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
+        }
+        Inst::SequencePoint { .. } => {}
     }
 }
 
@@ -1122,6 +1130,16 @@ impl MachInst for Inst {
         }
     }
 
+    fn call_type(&self) -> CallType {
+        match self {
+            Inst::Call { .. } | Inst::ElfTlsGetOffset { .. } => CallType::Regular,
+
+            Inst::ReturnCall { .. } => CallType::TailCall,
+
+            _ => CallType::None,
+        }
+    }
+
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
         assert!(ty.bits() <= 128);
         if ty.bits() <= 32 {
@@ -1141,6 +1159,10 @@ impl MachInst for Inst {
             assert!(preferred_size >= 2);
             Inst::Nop2
         }
+    }
+
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![vec![0x07, 0x07]]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -3208,7 +3230,7 @@ impl Inst {
                     dest,
                     callee_pop_size,
                     retval_loads,
-                    try_call
+                    try_call,
                 )
             }
             &Inst::ReturnCall { ref info } => {
@@ -3394,6 +3416,13 @@ impl Inst {
             &Inst::DummyUse { reg } => {
                 let reg = pretty_print_reg(reg);
                 format!("dummy_use {reg}")
+            }
+            &Inst::LabelAddress { dst, label } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                format!("label_address {dst}, {label:?}")
+            }
+            &Inst::SequencePoint {} => {
+                format!("sequence_point")
             }
         }
     }

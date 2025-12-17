@@ -31,11 +31,13 @@ pub fn config() -> Config {
         config.signals_based_traps(false);
     } else {
         config.cranelift_debug_verifier(true);
+        config.cranelift_wasmtime_debug_checks(true);
     }
     config.wasm_component_model(true);
     config.wasm_component_model_async(true);
     config.wasm_component_model_async_builtins(true);
     config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
     config.async_support(true);
     config
@@ -96,12 +98,18 @@ pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Comp
     }
 
     async fn compile(engine: &Engine, components: &[&str]) -> Result<Vec<u8>> {
-        match components {
-            [component] => engine.precompile_component(&fs::read(component).await?),
-            [a, b] => engine
-                .precompile_component(&compose(&fs::read(a).await?, &fs::read(b).await?).await?),
-            _ => Err(anyhow!("expected one or two paths")),
+        let mut composed = None::<Vec<u8>>;
+        for component in components {
+            let component = fs::read(component).await?;
+            if let Some(other) = composed.take() {
+                composed = Some(compose(&other, &component).await?);
+            } else {
+                composed = Some(component);
+            }
         }
+        engine.precompile_component(
+            &composed.ok_or_else(|| anyhow!("expected at least one component"))?,
+        )
     }
 
     async fn load(engine: &Engine, components: &[&str]) -> Result<Vec<u8>> {
@@ -209,13 +217,14 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
         });
     }
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let yield_host =
-        component_async_tests::yield_host::bindings::YieldHost::new(&mut store, &instance)?;
+    let yield_host = component_async_tests::yield_host::bindings::YieldHost::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await?;
 
     // Start `count` concurrent calls and then join them all:
-    instance
-        .run_concurrent(&mut store, async |store| {
+    store
+        .run_concurrent(async |store| {
             let mut futures = FuturesUnordered::new();
             for _ in 0..count {
                 futures.push(yield_host.local_local_run().call_run(store));

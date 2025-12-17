@@ -154,7 +154,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret

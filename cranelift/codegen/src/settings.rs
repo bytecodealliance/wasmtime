@@ -503,18 +503,14 @@ enable_verifier = true
 enable_pcc = false
 is_pic = false
 use_colocated_libcalls = false
-enable_float = true
 enable_nan_canonicalization = false
 enable_pinned_reg = false
-enable_atomics = true
-enable_safepoints = false
 enable_llvm_abi_extensions = false
 enable_multi_ret_implicit_sret = false
 unwind_info = true
 preserve_frame_pointers = false
 machine_code_cfg_info = false
 enable_probestack = false
-enable_jump_tables = true
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true
 enable_incremental_compilation_cache_checks = false
@@ -534,11 +530,11 @@ enable_incremental_compilation_cache_checks = false
     fn modify_bool() {
         let mut b = builder();
         assert_eq!(b.enable("not_there"), Err(BadName("not_there".to_string())));
-        assert_eq!(b.enable("enable_atomics"), Ok(()));
-        assert_eq!(b.set("enable_atomics", "false"), Ok(()));
+        assert_eq!(b.enable("enable_verifier"), Ok(()));
+        assert_eq!(b.set("enable_verifier", "false"), Ok(()));
 
         let f = Flags::new(b);
-        assert_eq!(f.enable_atomics(), false);
+        assert_eq!(f.enable_verifier(), false);
     }
 
     #[test]
@@ -549,11 +545,11 @@ enable_incremental_compilation_cache_checks = false
             Err(BadName("not_there".to_string()))
         );
         assert_eq!(
-            b.set("enable_atomics", ""),
+            b.set("enable_verifier", ""),
             Err(BadValue("bool".to_string()))
         );
         assert_eq!(
-            b.set("enable_atomics", "best"),
+            b.set("enable_verifier", "best"),
             Err(BadValue("bool".to_string()))
         );
         assert_eq!(
@@ -563,10 +559,10 @@ enable_incremental_compilation_cache_checks = false
             ))
         );
         assert_eq!(b.set("opt_level", "speed"), Ok(()));
-        assert_eq!(b.set("enable_atomics", "0"), Ok(()));
+        assert_eq!(b.set("enable_verifier", "0"), Ok(()));
 
         let f = Flags::new(b);
-        assert_eq!(f.enable_atomics(), false);
+        assert_eq!(f.enable_verifier(), false);
         assert_eq!(f.opt_level(), super::OptLevel::Speed);
     }
 }

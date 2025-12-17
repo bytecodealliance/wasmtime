@@ -1,6 +1,7 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::store::{StoreInstanceId, StoreOpaque};
+use crate::runtime::vm::{self, ExportMemory, VMStore};
+use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
@@ -259,7 +260,9 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        Self::_new(store.as_context_mut().0, ty)
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
+            .expect("must use `new_async` when async resource limiters are in use")
     }
 
     /// Async variant of [`Memory::new`]. You must use this variant with
@@ -272,17 +275,23 @@ impl Memory {
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| Self::_new(store.0, ty)).await?
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new(store, limiter.as_mut(), ty).await
     }
 
     /// Helper function for attaching the memory to a "frankenstein" instance
-    fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
-        generate_memory_export(store, &ty, None)
+    async fn _new(
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        ty: MemoryType,
+    ) -> Result<Memory> {
+        if ty.is_shared() {
+            bail!("shared memories must be created through `SharedMemory`")
+        }
+        Ok(generate_memory_export(store, limiter, &ty, None)
+            .await?
+            .unshared()
+            .unwrap())
     }
 
     /// Returns the underlying type of this memory.
@@ -596,20 +605,9 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        // FIXME(#11179) shouldn't use a raw pointer to work around the borrow
-        // checker here.
-        let mem: *mut _ = self.wasmtime_memory(store);
-        unsafe {
-            match (*mem).grow(delta, Some(store))? {
-                Some(size) => {
-                    let vm = (*mem).vmmemory();
-                    store[self.instance].memory_ptr(self.index).write(vm);
-                    let page_size = (*mem).page_size();
-                    Ok(u64::try_from(size).unwrap() / page_size)
-                }
-                None => bail!("failed to grow memory by `{}`", delta),
-            }
-        }
+        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
+            .expect("must use `grow_async` if an async resource limiter is used")
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a
@@ -621,24 +619,39 @@ impl Memory {
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `grow_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| self.grow(store, delta)).await?
+        let store = store.as_context_mut();
+        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+        self._grow(store, limiter.as_mut(), delta).await
     }
 
-    fn wasmtime_memory<'a>(
+    async fn _grow(
         &self,
-        store: &'a mut StoreOpaque,
-    ) -> &'a mut crate::runtime::vm::Memory {
-        self.instance
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        delta: u64,
+    ) -> Result<u64> {
+        let result = self
+            .instance
             .get_mut(store)
-            .get_defined_memory_mut(self.index)
+            .memory_grow(limiter, self.index, delta)
+            .await?;
+        match result {
+            Some(size) => {
+                let page_size = self.wasmtime_ty(store).page_size();
+                Ok(u64::try_from(size).unwrap() / page_size)
+            }
+            None => bail!("failed to grow memory by `{delta}`"),
+        }
     }
 
-    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
+    /// Creates a new memory from its raw component parts.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the memory pointed to by `instance` and
+    /// `index` is not a shared memory. For that `SharedMemory` must be used
+    /// instead.
+    pub(crate) unsafe fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
         Memory { instance, index }
     }
 
@@ -649,12 +662,7 @@ impl Memory {
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let instance = &store[self.instance];
-        crate::runtime::vm::VMMemoryImport {
-            from: instance.memory_ptr(self.index).into(),
-            vmctx: instance.vmctx().into(),
-            index: self.index,
-        }
+        store[self.instance].get_defined_memory_vmimport(self.index)
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
@@ -769,8 +777,9 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// used concurrently by multiple agents. Because these agents may execute in
 /// different threads, [`SharedMemory`] must be thread-safe.
 ///
-/// When the threads proposal is enabled, there are multiple ways to construct
-/// shared memory:
+/// When the [threads proposal is enabled](crate::Config::wasm_threads) and the
+/// [the creation of shared memories is enabled](crate::Config::shared_memory),
+/// there are multiple ways to construct shared memory:
 ///  1. for imported shared memory, e.g., `(import "env" "memory" (memory 1 1
 ///     shared))`, the user must supply a [`SharedMemory`] with the
 ///     externally-created memory as an import to the instance--e.g.,
@@ -789,6 +798,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # fn main() -> anyhow::Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
+/// config.shared_memory(true);
 /// # if Engine::new(&config).is_err() { return Ok(()); }
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
@@ -804,7 +814,6 @@ pub unsafe trait MemoryCreator: Send + Sync {
 pub struct SharedMemory {
     vm: crate::runtime::vm::SharedMemory,
     engine: Engine,
-    page_size_log2: u8,
 }
 
 impl SharedMemory {
@@ -818,15 +827,12 @@ impl SharedMemory {
         }
         debug_assert!(ty.maximum().is_some());
 
-        let tunables = engine.tunables();
         let ty = ty.wasmtime_memory();
-        let page_size_log2 = ty.page_size_log2;
-        let memory = crate::runtime::vm::SharedMemory::new(ty, tunables)?;
+        let memory = crate::runtime::vm::SharedMemory::new(engine, ty)?;
 
         Ok(Self {
             vm: memory,
             engine: engine.clone(),
-            page_size_log2,
         })
     }
 
@@ -838,7 +844,7 @@ impl SharedMemory {
     /// Returns the size, in WebAssembly pages, of this wasm memory.
     pub fn size(&self) -> u64 {
         let byte_size = u64::try_from(self.data_size()).unwrap();
-        let page_size = u64::from(self.page_size());
+        let page_size = self.page_size();
         byte_size / page_size
     }
 
@@ -849,9 +855,8 @@ impl SharedMemory {
     /// `1`. Future extensions might allow any power of two as a page size.
     ///
     /// [the custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
-    pub fn page_size(&self) -> u32 {
-        debug_assert!(self.page_size_log2 == 0 || self.page_size_log2 == 16);
-        1 << self.page_size_log2
+    pub fn page_size(&self) -> u64 {
+        self.ty().page_size()
     }
 
     /// Returns the byte length of this memory.
@@ -908,13 +913,13 @@ impl SharedMemory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     pub fn grow(&self, delta: u64) -> Result<u64> {
-        match self.vm.grow(delta, None)? {
+        match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
                 // the locked region.
-                Ok(u64::try_from(old_size).unwrap() / u64::from(self.page_size()))
+                Ok(u64::try_from(old_size).unwrap() / self.page_size())
             }
-            None => bail!("failed to grow memory by `{}`", delta),
+            None => bail!("failed to grow memory by `{delta}`"),
         }
     }
 
@@ -1007,36 +1012,25 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        generate_memory_export(store, &self.ty(), Some(&self.vm))
-            .unwrap()
-            .vmimport(store)
+        // Note `vm::assert_ready` shouldn't panic here because this isn't
+        // actually allocating any new memory (also no limiter), so resource
+        // limiting shouldn't kick in.
+        let memory = vm::assert_ready(generate_memory_export(
+            store,
+            None,
+            &self.ty(),
+            Some(&self.vm),
+        ))
+        .unwrap();
+        match memory {
+            ExportMemory::Unshared(_) => unreachable!(),
+            ExportMemory::Shared(_shared, vmimport) => vmimport,
+        }
     }
 
-    /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
-    /// function is available to handle the case in which a Wasm module exports
-    /// shared memory and the user wants host-side access to it.
-    pub(crate) fn from_memory(mem: Memory, store: &StoreOpaque) -> Self {
-        #![cfg_attr(
-            not(feature = "threads"),
-            expect(
-                unused_variables,
-                unreachable_code,
-                reason = "definitions cfg'd to dummy",
-            )
-        )]
-
-        let instance = mem.instance.get(store);
-        let memory = instance.get_defined_memory(mem.index);
-        let module = instance.env_module();
-        let page_size_log2 = module.memories[module.memory_index(mem.index)].page_size_log2;
-        match memory.as_shared_memory() {
-            Some(mem) => Self {
-                vm: mem.clone(),
-                engine: store.engine().clone(),
-                page_size_log2,
-            },
-            None => panic!("unable to convert from a shared memory"),
-        }
+    /// Creates a [`SharedMemory`] from its constituent parts.
+    pub(crate) fn from_raw(vm: crate::runtime::vm::SharedMemory, engine: Engine) -> Self {
+        SharedMemory { vm, engine }
     }
 }
 

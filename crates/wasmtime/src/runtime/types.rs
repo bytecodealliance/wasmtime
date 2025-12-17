@@ -1,7 +1,7 @@
 use crate::prelude::*;
-use crate::runtime::Memory as RuntimeMemory;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
+use crate::runtime::externals::Tag as RuntimeTag;
 use crate::{AsContextMut, Extern, Func, Val};
 use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
@@ -697,7 +697,7 @@ impl RefType {
 ///
 /// The top of the exception types hierarchy is `exn`; the bottom is
 /// `noexn`. At the WebAssembly level, there are no concrete types in
-/// this hierachy. However, internally we do reify a heap type for
+/// this hierarchy. However, internally we do reify a heap type for
 /// each tag, similar to how continuation objects work.
 ///
 /// ```text
@@ -1401,7 +1401,7 @@ impl HeapType {
     #[inline]
     pub(crate) fn is_vmgcref_type(&self) -> bool {
         match self.top() {
-            Self::Any | Self::Extern => true,
+            Self::Any | Self::Extern | Self::Exn => true,
             Self::Func => false,
             Self::Cont => false,
             ty => unreachable!("not a top type: {ty:?}"),
@@ -1519,14 +1519,14 @@ impl ExternType {
             EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
         }
     }
-    /// Construct a default value, if possible for the underlying type. Tags do not have a default value.
+    /// Construct a default value, if possible, for the underlying type.
     pub fn default_value(&self, store: impl AsContextMut) -> Result<Extern> {
         match self {
             ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
             ExternType::Global(global_ty) => global_ty.default_value(store).map(Extern::Global),
             ExternType::Table(table_ty) => table_ty.default_value(store).map(Extern::Table),
-            ExternType::Memory(mem_ty) => mem_ty.default_value(store).map(Extern::Memory),
-            ExternType::Tag(_) => bail!("default tags not supported yet"), // FIXME: #10252
+            ExternType::Memory(mem_ty) => mem_ty.default_value(store),
+            ExternType::Tag(tag_ty) => tag_ty.default_value(store).map(Extern::Tag),
         }
     }
 }
@@ -3038,6 +3038,15 @@ impl TagType {
         let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index());
         TagType { ty }
     }
+
+    /// Construct a new default tag with this type.
+    ///
+    /// This creates a host `Tag` in the given store. Tag instances
+    /// have no content other than their type, so this "default" value
+    /// is identical to ordinary host tag allocation.
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTag> {
+        RuntimeTag::new(store, self)
+    }
 }
 
 // Table Types
@@ -3484,12 +3493,26 @@ impl MemoryType {
     pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
     }
-    /// Construct a new memory import initialized to this memory type’s default state
+    /// Construct a new memory import initialized to this memory type’s default
+    /// state.
     ///
-    /// Returns a host `Memory` in the given store with the configured initial
-    /// page size and zeroed contents.
-    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeMemory> {
-        RuntimeMemory::new(store, self.clone())
+    /// Returns a host `Memory` or `SharedMemory` depending on if this is a
+    /// shared memory type or not. The memory's type will have the same type as
+    /// `self` and the initial contents of the memory, if any, will be all zero.
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<Extern> {
+        Ok(if self.is_shared() {
+            #[cfg(feature = "threads")]
+            {
+                let store = store.as_context();
+                Extern::SharedMemory(crate::SharedMemory::new(store.engine(), self.clone())?)
+            }
+            #[cfg(not(feature = "threads"))]
+            {
+                bail!("creation of shared memories disabled at compile time")
+            }
+        } else {
+            Extern::Memory(crate::Memory::new(store, self.clone())?)
+        })
     }
 }
 

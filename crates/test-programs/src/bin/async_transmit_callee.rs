@@ -14,7 +14,7 @@ use {
         wit_future, wit_stream,
     },
     std::future::IntoFuture,
-    wit_bindgen_rt::async_support::{self, FutureReader, StreamReader, StreamResult},
+    wit_bindgen::{FutureReader, StreamReader, StreamResult},
 };
 
 struct Component;
@@ -34,7 +34,7 @@ impl Guest for Component {
         let (callee_future_tx1, callee_future_rx1) = wit_future::new(|| todo!());
         let (callee_future_tx2, callee_future_rx2) = wit_future::new(|| String::new());
 
-        async_support::spawn(async move {
+        wit_bindgen::spawn(async move {
             let mut caller_future_rx1 = Some(caller_future_rx1);
             let mut callee_future_tx1 = Some(callee_future_tx1);
 

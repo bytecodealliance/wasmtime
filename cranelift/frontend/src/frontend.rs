@@ -338,6 +338,11 @@ impl<'a> FunctionBuilder<'a> {
         self.srcloc = srcloc;
     }
 
+    /// Get the current source location that this builder is using.
+    pub fn srcloc(&self) -> ir::SourceLoc {
+        self.srcloc
+    }
+
     /// Creates a new [`Block`] and returns its reference.
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
@@ -420,9 +425,10 @@ impl<'a> FunctionBuilder<'a> {
     /// map metadata.
     ///
     /// All values that are uses of this variable will be spilled to the stack
-    /// before each safepoint and their location on the stack included in stack
-    /// maps. Stack maps allow the garbage collector to identify the on-stack GC
-    /// roots.
+    /// before each safepoint and reloaded afterwards. Stack maps allow the
+    /// garbage collector to identify the on-stack GC roots. Between spilling
+    /// the stack and it being reloading again, the stack can be updated to
+    /// facilitate moving GCs.
     ///
     /// This does not affect any pre-existing uses of the variable.
     ///
@@ -536,10 +542,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Declare that the given value is a GC reference that requires inclusion
     /// in a stack map when it is live across GC safepoints.
     ///
-    /// At the current moment, values that need inclusion in stack maps are
-    /// spilled before safepoints, but they are not reloaded afterwards. This
-    /// means that moving GCs are not yet supported, however the intention is to
-    /// add this support in the near future.
+    /// All values that are uses of this variable will be spilled to the stack
+    /// before each safepoint and reloaded afterwards. Stack maps allow the
+    /// garbage collector to identify the on-stack GC roots. Between spilling
+    /// the stack and it being reloading again, the stack can be updated to
+    /// facilitate moving GCs.
     ///
     /// # Panics
     ///
@@ -838,6 +845,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memcpy),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         self.ins().call(libc_memcpy, &[dest, src, size]);
@@ -939,6 +947,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memset),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         let ch = self.ins().uextend(types::I32, ch);
@@ -1036,6 +1045,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memmove),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         self.ins().call(libc_memmove, &[dest, source, size]);
@@ -1071,6 +1081,7 @@ impl<'a> FunctionBuilder<'a> {
             name: ExternalName::LibCall(LibCall::Memcmp),
             signature,
             colocated: false,
+            patchable: false,
         });
 
         let call = self.ins().call(libc_memcmp, &[left, right, size]);
@@ -1953,6 +1964,7 @@ block0:
             name: ExternalName::User(name),
             signature: sig0,
             colocated: false,
+            patchable: false,
         });
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);

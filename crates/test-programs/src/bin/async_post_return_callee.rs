@@ -13,7 +13,7 @@ mod bindings {
         world: "post-return-callee",
         // Here we avoid using wit-bindgen so that we can export our own
         // post-return function and keep track of whether it was called.
-        skip: ["[async]foo"],
+        skip: ["foo"],
     });
 
     use super::Component;
@@ -22,7 +22,7 @@ mod bindings {
 
 struct Component;
 
-#[unsafe(export_name = "local:local/post-return#[async]foo")]
+#[unsafe(export_name = "local:local/post-return#foo")]
 unsafe extern "C" fn export_foo(ptr: *mut u8, len: usize) -> *mut u8 {
     let result = alloc::alloc(Layout::from_size_align(8, 4).unwrap());
     *result.cast::<*mut u8>() = ptr;
@@ -30,7 +30,7 @@ unsafe extern "C" fn export_foo(ptr: *mut u8, len: usize) -> *mut u8 {
     result
 }
 
-#[unsafe(export_name = "cabi_post_local:local/post-return#[async]foo")]
+#[unsafe(export_name = "cabi_post_local:local/post-return#foo")]
 unsafe extern "C" fn export_post_return_foo(ptr: *mut u8) {
     let s_ptr = *ptr.cast::<*mut u8>();
     let s_len = *ptr.add(4).cast::<usize>();

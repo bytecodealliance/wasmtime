@@ -72,10 +72,10 @@ mod generated {
         world: "wasi:keyvalue/imports",
         imports: { default: trappable },
         with: {
-            "wasi:keyvalue/store/bucket": crate::Bucket,
+            "wasi:keyvalue/store.bucket": crate::Bucket,
         },
         trappable_error_type: {
-            "wasi:keyvalue/store/error" => crate::Error,
+            "wasi:keyvalue/store.error" => crate::Error,
         },
     });
 }

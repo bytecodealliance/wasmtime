@@ -1,8 +1,6 @@
-use wasmtime::component::{Func, Val};
-
-use crate::{WasmtimeStoreContextMut, wasmtime_error_t};
-
 use super::wasmtime_component_val_t;
+use crate::{WasmtimeStoreContextMut, wasmtime_component_func_type_t, wasmtime_error_t};
+use wasmtime::component::{Func, Val};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_func_call(
@@ -13,8 +11,8 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
     results: *mut wasmtime_component_val_t,
     results_len: usize,
 ) -> Option<Box<wasmtime_error_t>> {
-    let c_args = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let c_results = unsafe { std::slice::from_raw_parts_mut(results, results_len) };
+    let c_args = unsafe { crate::slice_from_raw_parts(args, args_len) };
+    let c_results = unsafe { crate::slice_from_raw_parts_mut(results, results_len) };
 
     let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
     let mut results = vec![Val::Bool(false); results_len];
@@ -36,4 +34,12 @@ pub unsafe extern "C" fn wasmtime_component_func_post_return(
     let result = func.post_return(&mut context);
 
     crate::handle_result(result, |_| {})
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_func_type(
+    func: &Func,
+    context: WasmtimeStoreContextMut<'_>,
+) -> Box<wasmtime_component_func_type_t> {
+    Box::new(func.ty(context).into())
 }

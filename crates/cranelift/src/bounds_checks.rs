@@ -402,6 +402,7 @@ fn bounds_check_field_access(
     if can_use_virtual_memory
         && heap.memory.minimum_byte_size().unwrap_or(u64::MAX) <= memory_reservation
         && !heap.memory.memory_may_move(env.tunables())
+        && memory_reservation >= offset_and_size
     {
         let adjusted_bound = memory_reservation.checked_sub(offset_and_size).unwrap();
         let adjusted_bound_value = builder

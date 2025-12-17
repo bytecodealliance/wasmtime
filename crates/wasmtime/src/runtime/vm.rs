@@ -23,15 +23,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
+pub(crate) struct i8x16(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
+pub(crate) struct f32x4(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
+pub(crate) struct f64x2(core::convert::Infallible);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
@@ -44,9 +44,7 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
-use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
-};
+use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
@@ -69,6 +67,8 @@ mod stack_switching;
 mod store_box;
 mod sys;
 mod table;
+#[cfg(feature = "gc")]
+mod throw;
 mod traphandlers;
 mod vmcontext;
 
@@ -99,12 +99,11 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
-    initialize_instance,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
 pub use crate::runtime::vm::interpreter::*;
@@ -120,12 +119,18 @@ pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElementType};
+#[cfg(feature = "gc")]
+pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
+#[cfg(feature = "component-model")]
+pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
+#[cfg(has_custom_sync)]
+pub(crate) use sys::capi;
 
 pub use send_sync_ptr::SendSyncPtr;
 pub use wasmtime_unwinder::Unwind;
@@ -209,46 +214,11 @@ pub unsafe trait VMStore: 'static {
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// memory grow operation.
-    fn memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a memory
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `memory_growing` returns an error.
-    fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// table grow operation.
-    fn table_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a table
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `table_growing` returns an error.
-    fn table_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked whenever fuel runs out by a wasm instance. If an error
-    /// is returned that's raised as a trap. Otherwise wasm execution will
-    /// continue as normal.
-    fn out_of_gas(&mut self) -> Result<(), Error>;
-
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, Error>;
+    fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
@@ -258,6 +228,10 @@ pub unsafe trait VMStore: 'static {
     fn component_async_store(
         &mut self,
     ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
+
+    /// Invoke a debug handler, if present, at a debug event.
+    #[cfg(feature = "debug")]
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {
@@ -370,44 +344,12 @@ impl ModuleRuntimeInfo {
     fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .shared_type(module_index)
                 .expect("bad module-level interned type index"),
             ModuleRuntimeInfo::Bare(_) => unreachable!(),
         }
-    }
-
-    /// Returns the address, in memory, that the function `index` resides at.
-    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        let module = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = module
-            .compiled_module()
-            .finished_function(index)
-            .as_ptr()
-            .cast::<VMWasmCallFunction>()
-            .cast_mut();
-        NonNull::new(ptr).unwrap()
-    }
-
-    /// Returns the address, in memory, of the trampoline that allows the given
-    /// defined Wasm function to be called by the array calling convention.
-    ///
-    /// Returns `None` for Wasm functions which do not escape, and therefore are
-    /// not callable from outside the Wasm module itself.
-    fn array_to_wasm_trampoline(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMArrayCallFunction>> {
-        let m = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = NonNull::from(m.compiled_module().array_to_wasm_trampoline(index)?);
-        Some(ptr.cast())
     }
 
     /// Returns the `MemoryImage` structure used for copy-on-write
@@ -439,7 +381,7 @@ impl ModuleRuntimeInfo {
     /// A slice pointing to all data that is referenced by this instance.
     fn wasm_data(&self) -> &[u8] {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.compiled_module().code_memory().wasm_data(),
+            ModuleRuntimeInfo::Module(m) => m.engine_code().wasm_data(),
             ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
@@ -449,7 +391,7 @@ impl ModuleRuntimeInfo {
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .as_module_map()
                 .values()

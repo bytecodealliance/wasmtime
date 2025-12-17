@@ -31,7 +31,7 @@ pub struct JITBuilder {
     symbols: HashMap<String, SendWrapper<*const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    memory: Option<Box<dyn JITMemoryProvider>>,
+    memory: Option<Box<dyn JITMemoryProvider + Send>>,
 }
 
 impl JITBuilder {
@@ -150,7 +150,7 @@ impl JITBuilder {
     /// Set the memory provider for the module.
     ///
     /// If unset, defaults to [`SystemMemoryProvider`].
-    pub fn memory_provider(&mut self, provider: Box<dyn JITMemoryProvider>) -> &mut Self {
+    pub fn memory_provider(&mut self, provider: Box<dyn JITMemoryProvider + Send>) -> &mut Self {
         self.memory = Some(provider);
         self
     }
@@ -172,7 +172,7 @@ pub struct JITModule {
     symbols: RefCell<HashMap<String, SendWrapper<*const u8>>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    memory: Box<dyn JITMemoryProvider>,
+    memory: Box<dyn JITMemoryProvider + Send>,
     declarations: ModuleDeclarations,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
@@ -212,7 +212,7 @@ impl JITModule {
     }
 
     fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
-        match *name {
+        match name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
@@ -244,12 +244,18 @@ impl JITModule {
                     panic!("can't resolve symbol {name}");
                 }
             }
-            ModuleRelocTarget::LibCall(ref libcall) => {
+            ModuleRelocTarget::LibCall(libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {sym}"))
             }
-            _ => panic!("invalid name"),
+            ModuleRelocTarget::FunctionOffset(func_id, offset) => {
+                match &self.compiled_functions[*func_id] {
+                    Some(compiled) => return compiled.ptr.wrapping_add(*offset as usize),
+                    None => todo!(),
+                }
+            }
+            name => panic!("invalid name {name:?}"),
         }
     }
 
@@ -755,4 +761,15 @@ fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
         .iter()
         .find(|&f| f.name == "use_bti")
         .map_or(false, |f| f.as_bool().unwrap_or(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_jit_module_is_send() {
+        fn assert_is_send<T: Send>() {}
+        assert_is_send::<JITModule>();
+    }
 }

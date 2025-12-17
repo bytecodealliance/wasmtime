@@ -39,8 +39,31 @@ impl SimpleIndexAllocator {
         self.0.alloc(None)
     }
 
-    pub(crate) fn free(&self, index: SlotId) {
-        self.0.free(index);
+    /// Frees the `index` slot to be available for allocation elsewhere.
+    ///
+    /// The `bytes_resident` argument is a counter to keep track of how many
+    /// bytse are still resident in this slot, if any, for reporting later via
+    /// the [`Self::unused_bytes_resident`] method.
+    pub(crate) fn free(&self, index: SlotId, bytes_resident: usize) {
+        self.0.free(index, bytes_resident);
+    }
+
+    /// Returns the number of previously-used slots in this allocator which are
+    /// not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
+    pub fn unused_warm_slots(&self) -> u32 {
+        self.0.unused_warm_slots()
+    }
+
+    /// Returns the number of bytes that are resident in previously-used slots
+    /// in this allocator which are not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
+    pub fn unused_bytes_resident(&self) -> usize {
+        self.0.unused_bytes_resident()
     }
 
     #[cfg(test)]
@@ -96,6 +119,9 @@ struct Inner {
     /// The `List` here is appended to during deallocation and removal happens
     /// from the tail during allocation.
     module_affine: HashMap<MemoryInModule, List>,
+
+    /// Cache for the sum of the `bytes_resident` of all `UnusedWarm` slots.
+    unused_bytes_resident: usize,
 }
 
 /// A helper "linked list" data structure which is based on indices.
@@ -142,6 +168,10 @@ struct Unused {
     /// Which module this slot was historically affine to, if any.
     affinity: Option<MemoryInModule>,
 
+    /// Number of bytes that are part of `UnusedWarm` slots and are currently
+    /// kept resident (vs paged out).
+    bytes_resident: usize,
+
     /// Metadata about the linked list for all slots affine to `affinity`.
     affine_list_link: Link,
 
@@ -164,6 +194,7 @@ impl ModuleAffinityIndexAllocator {
             module_affine: HashMap::new(),
             slot_state: (0..capacity).map(|_| SlotState::UnusedCold).collect(),
             warm: List::default(),
+            unused_bytes_resident: 0,
         }))
     }
 
@@ -256,7 +287,11 @@ impl ModuleAffinityIndexAllocator {
             }
         })?;
 
-        inner.slot_state[slot_id.index()] = SlotState::Used(match mode {
+        let slot = &mut inner.slot_state[slot_id.index()];
+        if let SlotState::UnusedWarm(Unused { bytes_resident, .. }) = slot {
+            inner.unused_bytes_resident -= *bytes_resident;
+        }
+        *slot = SlotState::Used(match mode {
             AllocMode::ForceAffineAndClear => None,
             AllocMode::AnySlot => for_memory,
         });
@@ -264,7 +299,7 @@ impl ModuleAffinityIndexAllocator {
         Some(slot_id)
     }
 
-    pub(crate) fn free(&self, index: SlotId) {
+    pub(crate) fn free(&self, index: SlotId, bytes_resident: usize) {
         let mut inner = self.0.lock().unwrap();
         let inner = &mut *inner;
         let module_memory = match inner.slot_state[index.index()] {
@@ -298,8 +333,10 @@ impl ModuleAffinityIndexAllocator {
             None => Link::default(),
         };
 
+        inner.unused_bytes_resident += bytes_resident;
         inner.slot_state[index.index()] = SlotState::UnusedWarm(Unused {
             affinity: module_memory,
+            bytes_resident,
             affine_list_link,
             unused_list_link,
         });
@@ -330,6 +367,24 @@ impl ModuleAffinityIndexAllocator {
     pub(crate) fn testing_module_affinity_list(&self) -> Vec<MemoryInModule> {
         let inner = self.0.lock().unwrap();
         inner.module_affine.keys().copied().collect()
+    }
+
+    /// Returns the number of previously-used slots in this allocator which are
+    /// not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
+    pub fn unused_warm_slots(&self) -> u32 {
+        self.0.lock().unwrap().unused_warm_slots
+    }
+
+    /// Returns the number of bytes that are resident in previously-used slots
+    /// in this allocator which are not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
+    pub fn unused_bytes_resident(&self) -> usize {
+        self.0.lock().unwrap().unused_bytes_resident
     }
 }
 
@@ -507,15 +562,15 @@ mod test {
         assert_eq!(index2.index(), 1);
         assert_ne!(index1, index2);
 
-        state.free(index1);
+        state.free(index1, 0);
         assert_eq!(state.num_empty_slots(), 99);
 
         // Allocate to the same `index1` slot again.
         let index3 = state.alloc(Some(id1)).unwrap();
         assert_eq!(index3, index1);
-        state.free(index3);
+        state.free(index3, 0);
 
-        state.free(index2);
+        state.free(index2, 0);
 
         // Both id1 and id2 should have some slots with affinity.
         let affinity_modules = state.testing_module_affinity_list();
@@ -537,7 +592,7 @@ mod test {
         assert_eq!(state.num_empty_slots(), 0);
 
         for i in indices {
-            state.free(i);
+            state.free(i, 0);
         }
 
         // Now there should be no slots left with affinity for id1.
@@ -548,7 +603,7 @@ mod test {
         // Allocate an index we know previously had an instance but
         // now does not (list ran empty).
         let index = state.alloc(Some(id1)).unwrap();
-        state.free(index);
+        state.free(index, 0);
     }
 
     #[test]
@@ -561,8 +616,8 @@ mod test {
 
             let index1 = state.alloc(Some(MemoryInModule(id, memory_index))).unwrap();
             let index2 = state.alloc(Some(MemoryInModule(id, memory_index))).unwrap();
-            state.free(index2);
-            state.free(index1);
+            state.free(index2, 0);
+            state.free(index1, 0);
             assert!(
                 state
                     .alloc_affine_and_clear_affinity(id, memory_index)
@@ -601,7 +656,7 @@ mod test {
                 if !allocated.is_empty() && rng.random_bool(0.5) {
                     let i = rng.random_range(0..allocated.len());
                     let to_free_idx = allocated.swap_remove(i);
-                    state.free(to_free_idx);
+                    state.free(to_free_idx, 0);
                 } else {
                     let id = ids[rng.random_range(0..ids.len())];
                     let index = match state.alloc(Some(id)) {
@@ -636,14 +691,14 @@ mod test {
 
         // Set some slot affinities
         assert_eq!(state.alloc(Some(id1)), Some(SlotId(0)));
-        state.free(SlotId(0));
+        state.free(SlotId(0), 0);
         assert_eq!(state.alloc(Some(id2)), Some(SlotId(1)));
-        state.free(SlotId(1));
+        state.free(SlotId(1), 0);
 
         // Only 2 slots are allowed to be unused and warm, so we're at our
         // threshold, meaning one must now be evicted.
         assert_eq!(state.alloc(Some(id3)), Some(SlotId(0)));
-        state.free(SlotId(0));
+        state.free(SlotId(0), 0);
 
         // pickup `id2` again, it should be affine.
         assert_eq!(state.alloc(Some(id2)), Some(SlotId(1)));
@@ -652,17 +707,17 @@ mod test {
         // fresh slot
         assert_eq!(state.alloc(Some(id1)), Some(SlotId(2)));
 
-        state.free(SlotId(1));
-        state.free(SlotId(2));
+        state.free(SlotId(1), 0);
+        state.free(SlotId(2), 0);
 
         // ensure everything stays affine
         assert_eq!(state.alloc(Some(id1)), Some(SlotId(2)));
         assert_eq!(state.alloc(Some(id2)), Some(SlotId(1)));
         assert_eq!(state.alloc(Some(id3)), Some(SlotId(0)));
 
-        state.free(SlotId(1));
-        state.free(SlotId(2));
-        state.free(SlotId(0));
+        state.free(SlotId(1), 0);
+        state.free(SlotId(2), 0);
+        state.free(SlotId(0), 0);
 
         // LRU is 1, so that should be picked
         assert_eq!(
@@ -691,9 +746,9 @@ mod test {
             Some(SlotId(3))
         );
 
-        state.free(SlotId(1));
-        state.free(SlotId(2));
-        state.free(SlotId(3));
+        state.free(SlotId(1), 0);
+        state.free(SlotId(2), 0);
+        state.free(SlotId(3), 0);
 
         // for good measure make sure id3 is still affine
         assert_eq!(state.alloc(Some(id3)), Some(SlotId(0)));
@@ -705,15 +760,15 @@ mod test {
         assert_eq!(allocator.testing_freelist(), []);
         let a = allocator.alloc().unwrap();
         assert_eq!(allocator.testing_freelist(), []);
-        allocator.free(a);
+        allocator.free(a, 0);
         assert_eq!(allocator.testing_freelist(), [a]);
         assert_eq!(allocator.alloc(), Some(a));
         assert_eq!(allocator.testing_freelist(), []);
         let b = allocator.alloc().unwrap();
         assert_eq!(allocator.testing_freelist(), []);
-        allocator.free(b);
+        allocator.free(b, 0);
         assert_eq!(allocator.testing_freelist(), [b]);
-        allocator.free(a);
+        allocator.free(a, 0);
         assert_eq!(allocator.testing_freelist(), [b, a]);
     }
 }

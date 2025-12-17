@@ -90,7 +90,7 @@ pub fn stderr() -> Stderr {
 
 macro_rules! wasi_file_impl {
     ($ty:ty) => {
-        #[wiggle::async_trait]
+        #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self

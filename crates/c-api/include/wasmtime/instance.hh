@@ -64,7 +64,7 @@ public:
     }
     wasmtime_instance_t instance;
     wasm_trap_t *trap = nullptr;
-    auto *error = wasmtime_instance_new(cx.ptr, m.ptr.get(), raw_imports.data(),
+    auto *error = wasmtime_instance_new(cx.ptr, m.capi(), raw_imports.data(),
                                         raw_imports.size(), &instance, &trap);
     if (error != nullptr) {
       return TrapError(Error(error));

@@ -18,7 +18,7 @@
 ;;     gv5 = load.i64 notrap aligned gv4+40
 ;;     gv6 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
-;;     fn0 = colocated u1610612736:26 sig0
+;;     fn0 = colocated u805306368:26 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
@@ -52,9 +52,9 @@
 ;; @0022                               v32 = iconst.i32 -1476395008
 ;;                                     v74 = bor.i32 v10, v32  ; v32 = -1476395008
 ;; @0022                               v29 = load.i64 notrap aligned readonly can_move v51+32
-;;                                     v95 = band.i32 v19, v73  ; v73 = -8
-;;                                     v96 = uextend.i64 v95
-;; @0022                               v31 = iadd v29, v96
+;;                                     v88 = band.i32 v19, v73  ; v73 = -8
+;;                                     v89 = uextend.i64 v88
+;; @0022                               v31 = iadd v29, v89
 ;; @0022                               store notrap aligned v74, v31
 ;; @0022                               v35 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0022                               v36 = load.i32 notrap aligned readonly can_move v35
@@ -75,9 +75,9 @@
 ;;
 ;;                                 block5:
 ;; @0022                               store.i64 notrap aligned little v2, v45
-;;                                     v97 = iconst.i64 8
-;;                                     v98 = iadd.i64 v45, v97  ; v97 = 8
-;; @0022                               jump block4(v98)
+;;                                     v90 = iconst.i64 8
+;;                                     v91 = iadd.i64 v45, v90  ; v90 = 8
+;; @0022                               jump block4(v91)
 ;;
 ;;                                 block6:
 ;; @0025                               jump block1
@@ -88,6 +88,6 @@
 ;; @0022                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v99 = band.i32 v19, v73  ; v73 = -8
-;; @0025                               return v99
+;;                                     v92 = band.i32 v19, v73  ; v73 = -8
+;; @0025                               return v92
 ;; }

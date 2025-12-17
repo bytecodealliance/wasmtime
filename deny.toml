@@ -35,7 +35,9 @@ license-files = [
 multiple-versions = "deny"
 wildcards = "allow"
 deny = []
-
+skip = [
+    { name = "heck", reason = "wasm-compose uses an old version of `heck` and was updated in https://github.com/bytecodealliance/wasm-tools/pull/2359, but that hasn't released yet" },
+]
 skip-tree = [
     # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
     # ignore its dependency tree until it updates.

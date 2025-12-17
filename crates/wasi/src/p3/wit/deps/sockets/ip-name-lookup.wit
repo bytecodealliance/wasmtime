@@ -1,10 +1,10 @@
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface ip-name-lookup {
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     use types.{ip-address};
 
     /// Lookup error codes.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     enum error-code {
         /// Unknown error
         unknown,
@@ -57,6 +57,6 @@ interface ip-name-lookup {
     /// - <https://man7.org/linux/man-pages/man3/getaddrinfo.3.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3>
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     resolve-addresses: async func(name: string) -> result<list<ip-address>, error-code>;
 }

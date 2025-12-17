@@ -11,15 +11,15 @@
 pub mod api;
 mod async_config;
 mod codegen_settings;
-pub mod component_types;
+pub mod component_async;
 mod config;
+pub mod gc_ops;
 mod instance_allocation_strategy;
 mod memory;
 mod module;
 mod pooling_config;
 mod single_inst_module;
 mod stacks;
-pub mod table_ops;
 mod value;
 mod wast_test;
 
@@ -27,6 +27,7 @@ pub use async_config::AsyncConfig;
 pub use codegen_settings::CodegenSettings;
 pub use config::CompilerStrategy;
 pub use config::{Config, WasmtimeConfig};
+pub use gc_ops::{limits::GcOpsLimits, ops::GcOps};
 pub use instance_allocation_strategy::InstanceAllocationStrategy;
 pub use memory::{HeapImage, MemoryAccesses, MemoryConfig};
 pub use module::ModuleConfig;

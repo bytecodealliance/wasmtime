@@ -7,6 +7,10 @@ target aarch64 has_pauth sign_return_address
 target riscv64
 target riscv64 has_c has_zcb
 target s390x
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 ;;;; Tail-Recursive Loop ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -39,7 +43,7 @@ block4(v6: i64):
     return_call fn0(v4, v6)
 }
 
-; run: %loop(1_000_000, 0) == 1
+; run: %loop(100_000, 0) == 1
 
 ;;;; Tail-Recursive Loop With Stack Arguments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -72,7 +76,7 @@ block4(v30: i64):
     return_call fn0(v28, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v30)
 }
 
-; run: %loop_stack_args(1_000_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == 1
+; run: %loop_stack_args(100_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == 1
 
 ;;;; Mutually-Recursive Loop With Different #s of Stack Arguments ;;;;;;;;;;;;;;
 
@@ -113,7 +117,7 @@ block0(v0: i64, v1: i64):
     return_call fn0(v2, v1, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3)
 }
 
-; run: %mutual_loop_2(1_000_000, 0) == 1
+; run: %mutual_loop_2(100_000, 0) == 1
 
 ;;;; Indirect Return-Call Loop ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -141,4 +145,4 @@ block0(v0: i64):
     return_call fn0(v1)
 }
 
-; run: %indirect_main(1_000_000) == 42
+; run: %indirect_main(100_000) == 42

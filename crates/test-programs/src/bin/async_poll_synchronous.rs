@@ -27,7 +27,7 @@ fn async_when_ready() -> u32 {
     {
         #[link(wasm_import_module = "local:local/ready")]
         unsafe extern "C" {
-            #[link_name = "[async-lower][async]when-ready"]
+            #[link_name = "[async-lower]when-ready"]
             fn call_when_ready() -> u32;
         }
         unsafe { call_when_ready() }
@@ -64,7 +64,7 @@ impl Guest for Component {
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
-            assert!(async_when_ready() == STATUS_RETURNED);
+            assert_eq!(async_when_ready(), STATUS_RETURNED);
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 

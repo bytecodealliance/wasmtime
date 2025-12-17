@@ -31,7 +31,7 @@ defaults:
 # Cancel any in-flight jobs for the same PR/branch so there's only one active
 # at a time
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}2
   cancel-in-progress: true
 
 jobs:
@@ -76,6 +76,10 @@ jobs:
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
           xargs clang-format-18 --dry-run --Werror --verbose
+    # Make sure our `clangformat.sh` helper script keeps running and stays
+    # in-sync with the previous check.
+    - run: crates/c-api/clangformat.sh
+    - run: git diff --exit-code
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -91,7 +95,9 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: |
         set -e
-        curl -L https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        curl --retry 5 --retry-all-errors -L -o cargo-deny.tar.gz https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz
+        tar xzf cargo-deny.tar.gz
+        rm cargo-deny.tar.gz
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
@@ -198,6 +204,8 @@ jobs:
             echo platform-checks=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:miri' commits.log; then
             echo test-miri=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:capi' commits.log; then
+            echo test-capi=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -251,7 +259,8 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      CARGO_MDBOOK_VERSION: 0.4.37
+      MDBOOK_VERSION: 0.4.37
+      MDBOOK_LANGTABS_VERSION: 0.1.1
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -263,7 +272,10 @@ jobs:
         toolchain: wasmtime-ci-pinned-nightly
 
     # Build C API documentation
-    - run: curl -L https://github.com/doxygen/doxygen/releases/download/Release_1_9_3/doxygen-1.9.3.linux.bin.tar.gz | tar xzf -
+    - run: |
+        curl --retry 5 --retry-all-errors -o doxygen.tar.gz -L https://github.com/doxygen/doxygen/releases/download/Release_1_9_3/doxygen-1.9.3.linux.bin.tar.gz
+        tar xzf doxygen.tar.gz
+        rm doxygen.tar.gz
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
     - run: cmake -S crates/c-api -B target/c-api
     - run: cmake --build target/c-api --target doc
@@ -272,13 +284,12 @@ jobs:
     - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/mdbook
-        key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
+        key: cargo-mdbook-${{ env.MDBOOK_VERSION }}-langtabs-${{ env.MDBOOK_LANGTABS_VERSION }}
     - run: |
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_LANGTABS_VERSION }} mdbook-langtabs --locked
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasi-common --features wasmtime/wat,wasmtime/cranelift
-    - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
     #
@@ -288,7 +299,11 @@ jobs:
           --exclude wasmtime-cli \
           --exclude test-programs \
           --exclude cranelift-codegen-meta \
-          --features call-hook
+          --exclude wasmtime-wasi-nn \
+          --exclude wasmtime-fuzzing \
+          --exclude wasm-spec-interpreter \
+          --exclude calculator \
+          --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
@@ -313,7 +328,7 @@ jobs:
   micro_checks:
     name: Check ${{matrix.name}}
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         include:
           - name: wasmtime
@@ -351,6 +366,8 @@ jobs:
               -p wasmtime --no-default-features --features stack-switching
               -p wasmtime --no-default-features --features cranelift,stack-switching
               -p wasmtime --no-default-features --features runtime,stack-switching
+              -p wasmtime --no-default-features --features debug
+              -p wasmtime --no-default-features --features debug,gc
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
@@ -372,6 +389,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
               -p wasmtime-cli --no-default-features --features objdump
+              -p wasmtime-cli --no-default-features --features wizer
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -406,6 +424,14 @@ jobs:
               -p wasmtime-wasi --no-default-features --features p1
               -p wasmtime-wasi --no-default-features --features p2
               -p wasmtime-wasi --no-default-features --features p3
+
+          - name: wasmtime-wizer
+            checks: |
+              -p wasmtime-wizer --no-default-features
+              -p wasmtime-wizer --no-default-features --features wasmtime
+              -p wasmtime-wizer --no-default-features --features wasmprinter
+              -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -499,7 +525,7 @@ jobs:
     name: "Platform: ${{ matrix.target }}"
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         include:
         - target: x86_64-unknown-freebsd
@@ -609,39 +635,74 @@ jobs:
     - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz check --dev
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
     needs: determine
-    name: Test C-API ${{ matrix.os }}
+    name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     if: needs.determine.outputs.test-capi
 
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          # This configuration will build C/C++ tests, examples, and Rust tests.
+          # Everything is linked against the C shared library to speed up
+          # linking, and this is intended to be the "main set of tests".
+          #
+          # Run this on windows/mac/linux
+          - os: ubuntu-24.04
+            # Only run the "plugins" example on Linux
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
+            name: Linux
+          - os: macos-15
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: macOS
+          - os: windows-2025
+            # Note that dynamic linking is disabled here because I don't want to
+            # have to deal with figuring out how to get `wasmtime.dll` onto
+            # `PATH` for various tests.
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Windows
 
+          # This tests using static linking for examples but skips building the
+          # Rust examples as well as C/C++ tests. Intended to be a faster build
+          # which mostly just tests static linking.
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
+            name: Linux (static linking)
+
+          # Run tests with ASAN for leak checking primarily.
+          - os: ubuntu-24.04
+            flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
+            name: Linux (ASAN)
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-wasip2
 
-    # Build and test the C API with example C programs along with the example
-    # Rust programs. Note that this only executes if the `determine` step told
-    # us to test the capi which is off-by-default for PRs.
-    - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
-    - run: cmake --build examples/build --config Debug
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
+    - uses: ./.github/actions/install-plugins-prerequisites
+      if: runner.os == 'Linux'
+
+    - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    # An ode to MinGW: man you're a pain to work around sometimes
+    - run: rm /usr/bin/link
       if: runner.os == 'Windows'
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      if: runner.os != 'Windows'
+
+    - run: cmake -G Ninja -Sexamples -DCMAKE_BUILD_TYPE=Debug -Bexamples/build ${{ matrix.flags }}
+    - run: ninja -C examples/build
+    - run: ninja -C examples/build test
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        CTEST_PARALLEL_LEVEL: 4
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
@@ -653,7 +714,8 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 9.1.2
+      QEMU_BUILD_VERSION: 10.0.3
+      SDE_BUILD_VERSION: 9.58.0-2025-06-16
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -701,6 +763,13 @@ jobs:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/sde
+        key: sde-${{ env.SDE_BUILD_VERSION }}
+      if: matrix.sde != ''
+
     - name: Install qemu
       run: |
         set -ex
@@ -728,12 +797,48 @@ jobs:
         # way faster at arm emulation than the current version github actions'
         # ubuntu image uses. Disable as much as we can to get it to build
         # quickly.
-        curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
+        curl --retry 5 --retry-all-errors -o qemu.tar.xz https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz
+        tar xJf qemu.tar.xz
+        rm qemu.tar.xz
         cd qemu-$QEMU_BUILD_VERSION
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
+
+    - name: Install Intel SDE
+      run: |
+        set -ex
+
+        # Set up SDE as runner for x86_64 targets
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=${{ runner.tool_cache }}/sde/sde64 -future --" >> $GITHUB_ENV
+
+        # SDE emulation is very slow, so use release mode for better performance
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+
+        # Enable environment variable to indicate SDE is being used
+        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
+
+        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
+        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
+
+        # Similar to QEMU, reduce memory usage during SDE emulation
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+
+        # See if SDE is already in the cache
+        if [ -f ${{ runner.tool_cache }}/sde/sde64 ]; then
+          exit 0
+        fi
+
+        curl --retry 5 --retry-all-errors -o sde.tar.xz \
+          https://downloadmirror.intel.com/859732/sde-external-${{ env.SDE_BUILD_VERSION }}-lin.tar.xz
+
+        mkdir -p ${{ runner.tool_cache }}/sde
+        tar xJf sde.tar.xz --strip-components=1 -C ${{ runner.tool_cache }}/sde
+        rm sde.tar.xz
+
+        chmod +x ${{ runner.tool_cache }}/sde/sde64
+      if: matrix.sde != ''
 
     - name: Configure ASAN
       run: |
@@ -772,7 +877,7 @@ jobs:
     # Install VTune, see `cli_tests::profile_with_vtune`.
     - name: Install VTune
       if: matrix.filter == 'linux-x64' && contains(matrix.bucket, 'wasmtime-cli')
-      uses: abrown/install-vtune-action@v1
+      uses: abrown/install-vtune-action@v3
 
     # Build and test all features.
     #
@@ -782,7 +887,10 @@ jobs:
     # no output. It's believed that `bash` adds things like `/usr/bin` to PATH
     # which is the wrong DLL or something like that.
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os == 'Windows'
       shell: pwsh
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os != 'Windows'
 
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
   # compatible with all targets, and each must be tested separately anyways.
@@ -872,16 +980,16 @@ jobs:
     - run: |
         rustup target add wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
-        curl -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
-        tar -xzf wasi-sdk-25.0-x86_64-linux.tar.gz
-        mv wasi-sdk-25.0-x86_64-linux wasi-sdk
+        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-28/wasi-sdk-28.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-28.0-x86_64-linux.tar.gz
+        mv wasi-sdk-28.0-x86_64-linux wasi-sdk
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         # Only testing release since it is more likely to expose issues with our low-level symbol handling.
-        cargo test --release --test all -- --ignored --test-threads 1 debug::
+        cargo test --release --test all -- --ignored --test-threads 1 native_debug::
       env:
         LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk
@@ -903,7 +1011,9 @@ jobs:
 
     - name: Install wasm-tools
       run: |
-        curl -L https://github.com/bytecodealliance/wasm-tools/releases/download/wasm-tools-1.0.27/wasm-tools-1.0.27-x86_64-linux.tar.gz | tar xfz -
+        curl --retry 5 --retry-all-errors -o wasm-tools.tar.gz -L https://github.com/bytecodealliance/wasm-tools/releases/download/wasm-tools-1.0.27/wasm-tools-1.0.27-x86_64-linux.tar.gz
+        tar xfz wasm-tools.tar.gz
+        rm wasm-tools.tar.gz
         echo `pwd`/wasm-tools-1.0.27-x86_64-linux >> $GITHUB_PATH
 
     - run: ./ci/build-wasi-preview1-component-adapter.sh
@@ -939,7 +1049,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen --vers "^0.28" --locked
+    - run: cargo install cbindgen@0.29.0 --locked
     - run: rustup target add x86_64-unknown-none
     - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none
@@ -1005,7 +1115,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: |
         cd ${{ runner.tool_cache }}
-        curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        curl --retry 5 --retry-all-errors -L -o sccache.tar.gz \
+          https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz
+        tar xzf sccache.tar.gz
+        rm sccache.tar.gz
         echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
         echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
     - run: rustc scripts/publish.rs
@@ -1158,15 +1271,12 @@ jobs:
       - check_js
     if: always()
     steps:
-    - name: Successful test and build
-      if: ${{ !(contains(needs.*.result, 'failure')) }}
-      run: exit 0
-    - name: Failing test and build
-      if: ${{ contains(needs.*.result, 'failure') }}
-      run: exit 1
-    - name: Report failure on cancellation
-      if: ${{ contains(needs.*.result, 'cancelled') || cancelled() }}
-      run: exit 1
+    # Calculate the exit status of the whole CI workflow.
+    # If all dependent jobs were successful, this exits with 0 (and the
+    # outcome job continues successfully). If a some dependent job has
+    # failed, this exits with 1.
+    - name: calculate the correct exit status
+      run: jq --exit-status 'all(.result == "success" or .result == "skipped")' <<< '${{ toJson(needs) }}'
 
   # The purpose of this jobs is to watch for changes on the `release-*`
   # branches of this repository and look for the term

@@ -93,7 +93,7 @@ impl Vm {
         }
     }
 
-    /// Peforms the initial part of [`Vm::call`] in setting up the `args`
+    /// Performs the initial part of [`Vm::call`] in setting up the `args`
     /// provided in registers according to Pulley's ABI.
     ///
     /// # Return
@@ -103,7 +103,7 @@ impl Vm {
     ///
     /// # Unsafety
     ///
-    /// All the same unsafety as `call` and additiionally, you must
+    /// All the same unsafety as `call` and additionally, you must
     /// invoke `call_run` and then `call_end` after calling `call_start`.
     /// If you don't want to wrangle these invocations, use `call` instead
     /// of `call_{start,run,end}`.
@@ -1021,6 +1021,13 @@ struct Interpreter<'a> {
 }
 
 impl Interpreter<'_> {
+    /// Calculates the `offset` for the current instruction `I`.
+    #[inline]
+    fn pc_rel<I: Encode>(&mut self, offset: PcRelOffset) -> NonNull<u8> {
+        let offset = isize::try_from(i32::from(offset)).unwrap();
+        unsafe { self.current_pc::<I>().offset(offset) }
+    }
+
     /// Performs a relative jump of `offset` bytes from the current instruction.
     ///
     /// This will jump from the start of the current instruction, identified by
@@ -1029,9 +1036,8 @@ impl Interpreter<'_> {
     /// necessary to go back to ourselves after which we then go `offset` away.
     #[inline]
     fn pc_rel_jump<I: Encode>(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
-        let offset = isize::try_from(i32::from(offset)).unwrap();
-        let my_pc = self.current_pc::<I>();
-        self.pc = unsafe { UnsafeBytecodeStream::new(my_pc.offset(offset)) };
+        let new_pc = self.pc_rel::<I>(offset);
+        self.pc = unsafe { UnsafeBytecodeStream::new(new_pc) };
         ControlFlow::Continue(())
     }
 
@@ -1335,6 +1341,10 @@ impl OpVisitor for Interpreter<'_> {
 
     fn bytecode(&mut self) -> &mut UnsafeBytecodeStream {
         &mut self.pc
+    }
+
+    fn nop(&mut self) -> ControlFlow<Done> {
+        ControlFlow::Continue(())
     }
 
     fn ret(&mut self) -> ControlFlow<Done> {
@@ -2821,16 +2831,18 @@ impl OpVisitor for Interpreter<'_> {
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
-    fn nop(&mut self) -> ControlFlow<Done> {
-        ControlFlow::Continue(())
-    }
-
     fn trap(&mut self) -> ControlFlow<Done> {
         self.done_trap::<crate::Trap>()
     }
 
     fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
         self.done_call_indirect_host(id)
+    }
+
+    fn xpcadd(&mut self, dst: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
+        let pc = self.pc_rel::<crate::Xpcadd>(offset);
+        self.state[dst].set_ptr(pc.as_ptr());
+        ControlFlow::Continue(())
     }
 
     fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {

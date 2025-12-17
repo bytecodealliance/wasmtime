@@ -10,6 +10,7 @@
 #include <vector>
 #include <wasi.h>
 #include <wasmtime/conf.h>
+#include <wasmtime/helpers.hh>
 
 #ifdef WASMTIME_FEATURE_WASI
 
@@ -21,15 +22,8 @@ namespace wasmtime {
  * This is inserted into a store with `Store::Context::set_wasi`.
  */
 class WasiConfig {
-  friend class Store;
+  WASMTIME_OWN_WRAPPER(WasiConfig, wasi_config);
 
-  struct deleter {
-    void operator()(wasi_config_t *p) const { wasi_config_delete(p); }
-  };
-
-  std::unique_ptr<wasi_config_t, deleter> ptr;
-
-public:
   /// Creates a new configuration object with default settings.
   WasiConfig() : ptr(wasi_config_new()) {}
 

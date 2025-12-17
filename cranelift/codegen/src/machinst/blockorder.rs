@@ -79,6 +79,8 @@ pub struct BlockLoweringOrder {
     /// Ranges in `lowered_succ_indices` giving the successor lists for each lowered
     /// block. Indexed by lowering-order index (`BlockIndex`).
     lowered_succ_ranges: Vec<(Option<Inst>, std::ops::Range<usize>)>,
+    /// BlockIndex for each original Block.
+    blockindex_by_block: SecondaryMap<Block, BlockIndex>,
     /// Cold blocks. These blocks are not reordered in the
     /// `lowered_order` above; the lowered order must respect RPO
     /// (uses after defs) in order for lowering to be
@@ -197,9 +199,11 @@ impl BlockLoweringOrder {
         // lowering order, identifying critical edges to split along the way.
 
         let mut lowered_order = Vec::new();
-
+        let mut blockindex_by_block = SecondaryMap::with_default(BlockIndex::invalid());
         for &block in domtree.cfg_rpo() {
+            let idx = BlockIndex::new(lowered_order.len());
             lowered_order.push(LoweredBlock::Orig { block });
+            blockindex_by_block[block] = idx;
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
@@ -296,6 +300,7 @@ impl BlockLoweringOrder {
             lowered_order,
             lowered_succ_indices,
             lowered_succ_ranges,
+            blockindex_by_block,
             cold_blocks,
             indirect_branch_targets,
         };
@@ -307,6 +312,15 @@ impl BlockLoweringOrder {
     /// Get the lowered order of blocks.
     pub fn lowered_order(&self) -> &[LoweredBlock] {
         &self.lowered_order[..]
+    }
+
+    /// Get the BlockIndex, if any, for a given Block.
+    ///
+    /// The result will be `None` if the given Block is unreachable
+    /// (and thus does not appear in the lowered order).
+    pub fn lowered_index_for_block(&self, block: Block) -> Option<BlockIndex> {
+        let idx = self.blockindex_by_block[block];
+        if idx.is_valid() { Some(idx) } else { None }
     }
 
     /// Get the successor indices for a lowered block.

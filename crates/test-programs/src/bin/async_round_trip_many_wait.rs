@@ -2,19 +2,16 @@ mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",
         world: "round-trip-many",
-        async: ["-export:local:local/many#[async]foo"],
+        async: ["-export:local:local/many#foo"],
     });
 
     use super::Component;
     export!(Component);
 }
 
-use {
-    bindings::{
-        exports::local::local::many::{Guest, Stuff},
-        local::local::many,
-    },
-    wit_bindgen_rt::async_support,
+use bindings::{
+    exports::local::local::many::{Guest, Stuff},
+    local::local::many,
 };
 
 struct Component;
@@ -47,7 +44,7 @@ impl Guest for Component {
             b: v.b,
             c: v.c,
         };
-        async_support::block_on(async move {
+        wit_bindgen::block_on(async move {
             let (a, b, c, d, e, f, g) = many::foo(
                 format!("{a} - entered guest"),
                 b,

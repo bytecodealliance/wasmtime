@@ -3,7 +3,7 @@
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use wasmtime::{Engine, Store};
+use wasmtime::Engine;
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
@@ -31,6 +31,13 @@ pub struct WastCommand {
     /// compiling natively.
     #[arg(long)]
     precompile_load: Option<PathBuf>,
+
+    /// Whether or not to run wasm in async mode.
+    ///
+    /// This is enabled by default but disabling it may be useful when testing
+    /// Wasmtime itself.
+    #[arg(long = "async", require_equals = true, value_name = "true|false")]
+    async_: Option<Option<bool>>,
 }
 
 impl WastCommand {
@@ -38,17 +45,28 @@ impl WastCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
+        let async_ = optional_flag_with_default(self.async_, true);
         let mut config = self.common.config(None)?;
-        config.async_support(true);
-        let mut store = Store::new(&Engine::new(&config)?, ());
-        if let Some(fuel) = self.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
-        if let Some(true) = self.common.wasm.epoch_interruption {
-            store.epoch_deadline_trap();
-            store.set_epoch_deadline(1);
-        }
-        let mut wast_context = WastContext::new(store, wasmtime_wast::Async::Yes);
+        config.async_support(async_);
+        config.shared_memory(true);
+        let engine = Engine::new(&config)?;
+        let mut wast_context = WastContext::new(
+            &engine,
+            if async_ {
+                wasmtime_wast::Async::Yes
+            } else {
+                wasmtime_wast::Async::No
+            },
+            move |store| {
+                if let Some(fuel) = self.common.wasm.fuel {
+                    store.set_fuel(fuel).unwrap();
+                }
+                if let Some(true) = self.common.wasm.epoch_interruption {
+                    store.epoch_deadline_trap();
+                    store.set_epoch_deadline(1);
+                }
+            },
+        );
 
         wast_context.generate_dwarf(optional_flag_with_default(self.generate_dwarf, true));
         wast_context

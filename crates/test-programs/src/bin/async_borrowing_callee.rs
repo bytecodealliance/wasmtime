@@ -8,12 +8,9 @@ mod bindings {
     export!(Component);
 }
 
-use {
-    bindings::{
-        exports::local::local::{borrowing::Guest as Borrowing, run_bool::Guest as RunBool},
-        local::local::borrowing_types::X,
-    },
-    wit_bindgen_rt::async_support,
+use bindings::{
+    exports::local::local::{borrowing::Guest as Borrowing, run_bool::Guest as RunBool},
+    local::local::borrowing_types::X,
 };
 
 struct Component;
@@ -21,7 +18,7 @@ struct Component;
 impl Borrowing for Component {
     async fn foo(x: &X, misbehave: bool) {
         let handle = x.handle();
-        async_support::spawn(async move {
+        wit_bindgen::spawn(async move {
             if misbehave {
                 unsafe { X::from_handle(handle) }.foo();
             }

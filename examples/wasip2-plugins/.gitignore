@@ -1,0 +1,4 @@
+*.wasm
+c-plugin/plugin.c
+c-plugin/plugin.h
+c-plugin/plugin_component_type.o

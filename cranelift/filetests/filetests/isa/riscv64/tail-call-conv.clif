@@ -134,7 +134,7 @@ block0:
 ;   sd s2,120(sp)
 ;   sd a0,128(sp)
 ;   sd a1,136(sp)
-;   load_sym s3,%tail_callee_stack_args+0
+;   load_ext_name_far s3,%tail_callee_stack_args+0
 ;   ld a0,8(slot)
 ;   ld a1,0(slot)
 ;   callind s3
@@ -489,7 +489,7 @@ block0:
 ;   sd s11,312(sp)
 ; block0:
 ;   load_addr a0,0(sp)
-;   load_sym a4,%tail_callee_stack_rets+0
+;   load_ext_name_far a4,%tail_callee_stack_rets+0
 ;   callind a4
 ;   ld a0,96(slot)
 ;   ld s1,392(sp)
@@ -869,7 +869,7 @@ block0:
 ;   sd a1,136(sp)
 ;   sd a2,144(sp)
 ;   load_addr a0,160(sp)
-;   load_sym t1,%tail_callee_stack_args_and_rets+0
+;   load_ext_name_far t1,%tail_callee_stack_args_and_rets+0
 ;   ld a1,0(slot)
 ;   ld a2,96(slot)
 ;   callind t1

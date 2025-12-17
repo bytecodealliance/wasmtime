@@ -28,10 +28,8 @@ impl StaticMemory {
     ) -> Result<Self> {
         if base_capacity < initial_size {
             bail!(
-                "initial memory size of {} exceeds the pooling allocator's \
-                 configured maximum memory size of {} bytes",
-                initial_size,
-                base_capacity,
+                "initial memory size of {initial_size} exceeds the pooling allocator's \
+                 configured maximum memory size of {base_capacity} bytes",
             );
         }
 

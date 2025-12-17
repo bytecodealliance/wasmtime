@@ -82,8 +82,7 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x1, sp
-;   ldr x0, [x1]
+;   ldr x0, [sp]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -94,8 +93,7 @@ block0:
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x1, sp
-;   ldr x0, [x1]
+;   ldur x0, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -116,8 +114,7 @@ block0:
 ;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
-;   mov x1, sp
-;   ldr x0, [x1]
+;   ldr x0, [sp]
 ;   movz w16, #34480
 ;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
@@ -132,8 +129,7 @@ block0:
 ;   movk w16, #1, lsl #16
 ;   sub sp, sp, x16
 ; block1: ; offset 0x14
-;   mov x1, sp
-;   ldr x0, [x1]
+;   ldur x0, [sp]
 ;   mov w16, #0x86b0
 ;   movk w16, #1, lsl #16
 ;   add sp, sp, x16
@@ -153,8 +149,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x2, sp
-;   str x0, [x2]
+;   str x0, [sp]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -165,8 +160,7 @@ block0(v0: i64):
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x2, sp
-;   str x0, [x2]
+;   stur x0, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -187,8 +181,7 @@ block0(v0: i64):
 ;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
-;   mov x2, sp
-;   str x0, [x2]
+;   str x0, [sp]
 ;   movz w16, #34480
 ;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
@@ -203,8 +196,7 @@ block0(v0: i64):
 ;   movk w16, #1, lsl #16
 ;   sub sp, sp, x16
 ; block1: ; offset 0x14
-;   mov x2, sp
-;   str x0, [x2]
+;   stur x0, [sp]
 ;   mov w16, #0x86b0
 ;   movk w16, #1, lsl #16
 ;   add sp, sp, x16

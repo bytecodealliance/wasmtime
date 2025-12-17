@@ -329,14 +329,22 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+        fn func_ref_data(
+            &mut self,
+            func_ref: FuncRef,
+        ) -> (SigRef, ExternalName, RelocDistance, bool) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             let reloc_distance = if funcdata.colocated {
                 RelocDistance::Near
             } else {
                 RelocDistance::Far
             };
-            (funcdata.signature, funcdata.name.clone(), reloc_distance)
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                reloc_distance,
+                funcdata.patchable,
+            )
         }
 
         #[inline]
@@ -356,15 +364,6 @@ macro_rules! isle_lower_prelude_methods {
         ) -> Option<(ExternalName, RelocDistance, i64)> {
             let (name, reloc, offset) = self.lower_ctx.symbol_value_data(global_value)?;
             Some((name.clone(), reloc, offset))
-        }
-
-        #[inline]
-        fn reloc_distance_near(&mut self, dist: RelocDistance) -> Option<()> {
-            if dist == RelocDistance::Near {
-                Some(())
-            } else {
-                None
-            }
         }
 
         #[inline]
@@ -516,6 +515,22 @@ macro_rules! isle_lower_prelude_methods {
                 .into()
         }
 
+        fn abi_stackslot_offset_into_slot_region(
+            &mut self,
+            stack_slot: StackSlot,
+            offset1: Offset32,
+            offset2: Offset32,
+        ) -> i32 {
+            let offset1 = i32::from(offset1);
+            let offset2 = i32::from(offset2);
+            i32::try_from(self.lower_ctx.abi().sized_stackslot_offset(stack_slot))
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset1)
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset2)
+                .expect("Stack slot region cannot be larger than 2GiB")
+        }
+
         fn abi_dynamic_stackslot_addr(
             &mut self,
             dst: WritableReg,
@@ -611,6 +626,10 @@ macro_rules! isle_lower_prelude_methods {
 
         fn gen_try_call_rets(&mut self, sig: Sig) -> CallRetList {
             self.lower_ctx.gen_try_call_rets(sig)
+        }
+
+        fn gen_patchable_call_rets(&mut self) -> CallRetList {
+            smallvec::smallvec![]
         }
 
         fn try_call_none(&mut self) -> OptionTryCallInfo {
@@ -762,6 +781,14 @@ macro_rules! isle_lower_prelude_methods {
 
         fn value_is_unused(&mut self, val: Value) -> bool {
             self.lower_ctx.value_is_unused(val)
+        }
+
+        fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {
+            // The first N successors are the exceptional edges, and
+            // the normal return is last; so the `exn_succ`'th
+            // exceptional edge is just the `exn_succ`'th edge overall.
+            let succ = usize::try_from(exn_succ).unwrap();
+            self.lower_ctx.block_successor_label(*block, succ)
         }
     };
 }

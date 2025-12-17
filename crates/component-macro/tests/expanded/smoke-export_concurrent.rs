@@ -178,6 +178,7 @@ pub mod exports {
     pub mod the_name {
         #[allow(unused_imports)]
         use wasmtime::component::__internal::{anyhow, Box};
+        #[derive(Clone)]
         pub struct Guest {
             y: wasmtime::component::Func,
         }
@@ -242,7 +243,7 @@ pub mod exports {
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
                 };
-                let () = callee.call_concurrent(accessor, ()).await?;
+                let ((), _) = callee.call_concurrent(accessor, ()).await?;
                 Ok(())
             }
         }

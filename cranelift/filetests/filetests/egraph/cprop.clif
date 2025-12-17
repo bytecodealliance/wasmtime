@@ -22,6 +22,43 @@ block0:
 ; check: v3 = iconst.i16 -2
 ; nextln: return v3
 
+function %f0() -> i8 {
+block0:
+    v1 = iconst.i8 51
+    v2 = clz.i8 v1
+    return v2
+}
+
+function %f0() -> i16 {
+block0:
+    v1 = iconst.i16 51
+    v2 = clz.i16 v1
+    return v2
+}
+
+; check: v3 = iconst.i16 10
+; nextln: return v3
+
+function %f0() -> i16 {
+block0:
+    v1 = iconst.i16 48
+    v2 = ctz.i16 v1
+    return v2
+}
+
+; check: v3 = iconst.i16 4
+; nextln: return v3
+
+function %f0() -> i16 {
+block0:
+    v1 = iconst.i16 0
+    v2 = ctz.i16 v1
+    return v2
+}
+
+; check: v3 = iconst.i16 16
+; nextln: return v3
+
 function %ishl() -> i8 {
 block0:
     v0 = iconst.i8 1
@@ -263,8 +300,8 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v9 = iconst.i32 333
-; check: v19 = iadd v1, v9
+; check: v15 = iconst.i32 333
+; check: v19 = iadd v1, v15
 ; check: v20 = icmp eq v0, v19
 ; nextln: return v20
 
@@ -278,8 +315,8 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v40 = iconst.i32 333
-; check: v49 = iadd v0, v40
+; check: v47 = iconst.i32 333
+; check: v49 = iadd v0, v47
 ; check: v50 = icmp eq v1, v49
 ; nextln: return v50
 

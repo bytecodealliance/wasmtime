@@ -952,7 +952,7 @@ and also to use constructors in place of extractors during the match
 phase when this is more convenient.
 
 To introduce the concept, an example follows (this is taken from the
-[RFC](https://github.com/bytecodealliance/rfcs/tree/main/isle-extended-patterns.md)
+[RFC](https://github.com/bytecodealliance/rfcs/tree/main/accepted/isle-extended-patterns.md)
 that proposed if-lets):
 
 ```lisp
@@ -1412,10 +1412,6 @@ when an enum-typed value is destructured into different variants by
 various edges; we can use a Rust `match` statement in the generated
 source and have `O(1)` (or close to it) cost for the dispatch at this
 level.[^8]
-
-Building the trie is a somewhat subtle procedure; see [this block
-comment](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/isle/isle/src/trie.rs#L15-L166)
-for more information regarding the trie construction algorithm.
 
 [^8]: The worst-case complexity for a single term rewriting operation
       is still the cost of evaluating each rule's left-hand side

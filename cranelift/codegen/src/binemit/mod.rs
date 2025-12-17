@@ -82,6 +82,11 @@ pub enum Reloc {
     /// This is equivalent to `R_AARCH64_ADR_GOT_PAGE` (311) in the  [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#static-aarch64-relocations)
     Aarch64AdrGotPage21,
 
+    /// Equivalent of `R_AARCH64_ADR_PREL_PG_HI21`.
+    Aarch64AdrPrelPgHi21,
+    /// Equivalent of `R_AARCH64_ADD_ABS_LO12_NC`.
+    Aarch64AddAbsLo12Nc,
+
     /// AArch64 GOT Low bits
 
     /// Set the LD/ST immediate field to bits 11:3 of X. No overflow check; check that X&7 = 0
@@ -115,10 +120,19 @@ pub enum Reloc {
     /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
     RiscvGotHi20,
 
+    /// High 20 bits of a 32-bit PC-relative offset relocation
+    ///
+    /// This is the `R_RISCV_PCREL_HI20` relocation from the RISC-V ELF psABI document.
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
+    RiscvPCRelHi20,
+
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
     S390xTlsGdCall,
+
+    /// Pulley - a relocation which is a pc-relative offset.
+    PulleyPcRel,
 
     /// Pulley - call a host function indirectly where the embedder resolving
     /// this relocation needs to fill the 8-bit immediate that's part of the
@@ -144,6 +158,7 @@ impl fmt::Display for Reloc {
             Self::RiscvCallPlt => write!(f, "RiscvCallPlt"),
             Self::RiscvTlsGdHi20 => write!(f, "RiscvTlsGdHi20"),
             Self::RiscvGotHi20 => write!(f, "RiscvGotHi20"),
+            Self::RiscvPCRelHi20 => write!(f, "RiscvPCRelHi20"),
             Self::RiscvPCRelLo12I => write!(f, "RiscvPCRelLo12I"),
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
@@ -155,8 +170,11 @@ impl fmt::Display for Reloc {
             Self::Aarch64TlsDescCall => write!(f, "Aarch64TlsDescCall"),
             Self::Aarch64AdrGotPage21 => write!(f, "Aarch64AdrGotPage21"),
             Self::Aarch64Ld64GotLo12Nc => write!(f, "Aarch64AdrGotLo12Nc"),
+            Self::Aarch64AdrPrelPgHi21 => write!(f, "Aarch64AdrPrelPgHi21"),
+            Self::Aarch64AddAbsLo12Nc => write!(f, "Aarch64AddAbsLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),
             Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
+            Self::PulleyPcRel => write!(f, "PulleyPcRel"),
             Self::PulleyCallIndirectHost => write!(f, "PulleyCallIndirectHost"),
         }
     }

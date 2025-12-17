@@ -37,12 +37,19 @@ struct Test {
 
 impl Artifacts {
     fn build(&mut self) {
+        let mut generated_code = String::new();
         // Build adapters used below for componentization.
-        let reactor_adapter = self.build_adapter("reactor", &[]);
-        let command_adapter =
-            self.build_adapter("command", &["--no-default-features", "--features=command"]);
-        let proxy_adapter =
-            self.build_adapter("proxy", &["--no-default-features", "--features=proxy"]);
+        let reactor_adapter = self.build_adapter(&mut generated_code, "reactor", &[]);
+        let command_adapter = self.build_adapter(
+            &mut generated_code,
+            "command",
+            &["--no-default-features", "--features=command"],
+        );
+        let proxy_adapter = self.build_adapter(
+            &mut generated_code,
+            "proxy",
+            &["--no-default-features", "--features=proxy"],
+        );
 
         // Build all test programs both in Rust and C/C++.
         let mut tests = Vec::new();
@@ -53,7 +60,6 @@ impl Artifacts {
         // test along with constants pointing to various paths. Note that
         // components are created here as well from core modules.
         let mut kinds = BTreeMap::new();
-        let mut generated_code = String::new();
         let missing_sdk_path =
             PathBuf::from("Asset not compiled, WASI_SDK_PATH missing at compile time");
         for test in tests.iter() {
@@ -67,11 +73,11 @@ impl Artifacts {
             // Bucket, based on the name of the test, into a "kind" which
             // generates a `foreach_*` macro below.
             let kind = match test.name.as_str() {
-                s if s.starts_with("http_") => "http",
-                s if s.starts_with("preview1_") => "preview1",
-                s if s.starts_with("preview2_") => "preview2",
-                s if s.starts_with("cli_") => "cli",
-                s if s.starts_with("api_") => "api",
+                s if s.starts_with("p1_") => "p1",
+                s if s.starts_with("p2_http_") => "p2_http",
+                s if s.starts_with("p2_cli_") => "p2_cli",
+                s if s.starts_with("p2_api_") => "p2_api",
+                s if s.starts_with("p2_") => "p2",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",
                 s if s.starts_with("dwarf_") => "dwarf",
@@ -82,6 +88,7 @@ impl Artifacts {
                 s if s.starts_with("p3_http_") => "p3_http",
                 s if s.starts_with("p3_api_") => "p3_api",
                 s if s.starts_with("p3_") => "p3",
+                s if s.starts_with("fuzz_") => "fuzz",
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that
@@ -105,7 +112,7 @@ impl Artifacts {
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
                 s if s.starts_with("p3_") => &reactor_adapter,
-                s if s.starts_with("api_proxy") => &proxy_adapter,
+                s if s.starts_with("p2_api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
             let path = match &test.core_wasm {
@@ -175,7 +182,12 @@ impl Artifacts {
     }
 
     // Build the WASI Preview 1 adapter, and get the binary:
-    fn build_adapter(&mut self, name: &str, features: &[&str]) -> Vec<u8> {
+    fn build_adapter(
+        &mut self,
+        generated_code: &mut String,
+        name: &str,
+        features: &[&str],
+    ) -> Vec<u8> {
         let mut cmd = cargo();
         cmd.arg("build")
             .arg("--release")
@@ -202,6 +214,10 @@ impl Artifacts {
         std::fs::copy(&artifact, &adapter).unwrap();
         self.read_deps_of(&artifact);
         println!("wasi {name} adapter: {:?}", &adapter);
+        generated_code.push_str(&format!(
+            "pub const ADAPTER_{}: &'static str = {adapter:?};\n",
+            name.to_shouty_snake_case(),
+        ));
         fs::read(&adapter).unwrap()
     }
 
@@ -234,7 +250,7 @@ impl Artifacts {
             let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
             match path.extension().and_then(|s| s.to_str()) {
                 // Compile C/C++ tests with clang
-                Some("c") | Some("cpp") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
+                Some("c") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
 
                 // just a header, part of another test.
                 Some("h") => {}

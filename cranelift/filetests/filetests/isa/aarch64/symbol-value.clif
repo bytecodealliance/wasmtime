@@ -2,24 +2,163 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-function %f() -> i64 {
-  gv0 = symbol %my_global
+function %func_addr() -> i64 {
+    fn0 = %func0(i64) -> i64
 
 block0:
-  v0 = symbol_value.i64 gv0
-  return v0
+    v0 = func_addr.i64 fn0
+    return v0
 }
 
 ; VCode:
 ; block0:
-;   load_ext_name x0, TestCase(%my_global)+0
+;   load_ext_name_far x0, TestCase(%func0)+0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr x0, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %my_global 0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %func0 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   ret
+
+function %colocated_func_addr() -> i64 {
+    fn0 = colocated %func0(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_near x0, TestCase(%func0)+0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrPrelPgHi21 %func0 0
+;   add x0, x0, #0 ; reloc_external Aarch64AddAbsLo12Nc %func0 0
+;   ret
+
+function %symbol_value() -> i64 {
+    gv0 = symbol %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_far x0, TestCase(%global0)+0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, #8
+;   b #0x10
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ret
+
+function %symbol_value_plus_offset() -> i64 {
+    gv0 = symbol %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_far x0, TestCase(%global0)+123
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, #8
+;   b #0x10
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 123
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ret
+
+function %symbol_value_minus_offset() -> i64 {
+    gv0 = symbol %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_far x0, TestCase(%global0)+-123
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, #8
+;   b #0x10
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 -123
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ret
+
+function %colocated_symbol_value() -> i64 {
+    gv0 = symbol colocated %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_near x0, TestCase(%global0)+0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrPrelPgHi21 %global0 0
+;   add x0, x0, #0 ; reloc_external Aarch64AddAbsLo12Nc %global0 0
+;   ret
+
+function %colocated_symbol_value_plus_offset() -> i64 {
+    gv0 = symbol colocated %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_near x0, TestCase(%global0)+123
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrPrelPgHi21 %global0 123
+;   add x0, x0, #0 ; reloc_external Aarch64AddAbsLo12Nc %global0 123
+;   ret
+
+function %colocated_symbol_value_minus_offset() -> i64 {
+    gv0 = symbol colocated %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_near x0, TestCase(%global0)+-123
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrPrelPgHi21 %global0 -123
+;   add x0, x0, #0 ; reloc_external Aarch64AddAbsLo12Nc %global0 -123
 ;   ret
 

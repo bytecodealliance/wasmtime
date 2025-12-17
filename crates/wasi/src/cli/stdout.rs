@@ -1,6 +1,9 @@
 use crate::cli::{IsTerminal, StdoutStream};
 use crate::p2;
 use bytes::Bytes;
+use std::io::{self, Write};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use tokio::io::AsyncWrite;
 use wasmtime_wasi_io::streams::OutputStream;
 
@@ -15,7 +18,7 @@ impl StdoutStream for tokio::io::Stdout {
         Box::new(StdioOutputStream::Stdout)
     }
     fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(tokio::io::stdout())
+        Box::new(StdioOutputStream::Stdout)
     }
 }
 
@@ -30,7 +33,7 @@ impl StdoutStream for std::io::Stdout {
         Box::new(StdioOutputStream::Stdout)
     }
     fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(tokio::io::stdout())
+        Box::new(StdioOutputStream::Stdout)
     }
 }
 
@@ -45,7 +48,7 @@ impl StdoutStream for tokio::io::Stderr {
         Box::new(StdioOutputStream::Stderr)
     }
     fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(tokio::io::stderr())
+        Box::new(StdioOutputStream::Stderr)
     }
 }
 
@@ -60,7 +63,7 @@ impl StdoutStream for std::io::Stderr {
         Box::new(StdioOutputStream::Stderr)
     }
     fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(tokio::io::stderr())
+        Box::new(StdioOutputStream::Stderr)
     }
 }
 
@@ -71,7 +74,6 @@ enum StdioOutputStream {
 
 impl OutputStream for StdioOutputStream {
     fn write(&mut self, bytes: Bytes) -> p2::StreamResult<()> {
-        use std::io::Write;
         match self {
             StdioOutputStream::Stdout => std::io::stdout().write_all(&bytes),
             StdioOutputStream::Stderr => std::io::stderr().write_all(&bytes),
@@ -80,7 +82,6 @@ impl OutputStream for StdioOutputStream {
     }
 
     fn flush(&mut self) -> p2::StreamResult<()> {
-        use std::io::Write;
         match self {
             StdioOutputStream::Stdout => std::io::stdout().flush(),
             StdioOutputStream::Stderr => std::io::stderr().flush(),
@@ -90,6 +91,28 @@ impl OutputStream for StdioOutputStream {
 
     fn check_write(&mut self) -> p2::StreamResult<usize> {
         Ok(1024 * 1024)
+    }
+}
+
+impl AsyncWrite for StdioOutputStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(match *self {
+            StdioOutputStream::Stdout => std::io::stdout().write(buf),
+            StdioOutputStream::Stderr => std::io::stderr().write(buf),
+        })
+    }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(match *self {
+            StdioOutputStream::Stdout => std::io::stdout().flush(),
+            StdioOutputStream::Stderr => std::io::stderr().flush(),
+        })
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 }
 

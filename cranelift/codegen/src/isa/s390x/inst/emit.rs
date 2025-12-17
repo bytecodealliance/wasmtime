@@ -3298,6 +3298,8 @@ impl Inst {
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
+                let start = sink.cur_offset();
+
                 let enc: &[u8] = match &info.dest {
                     CallInstDest::Direct { name } => {
                         let offset = sink.cur_offset() + 2;
@@ -3317,7 +3319,10 @@ impl Inst {
                 put(sink, enc);
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
+                    sink.add_try_call_site(
+                        Some(state.frame_layout.sp_to_fp()),
+                        try_call.exception_handlers(&state.frame_layout),
+                    );
                 } else {
                     sink.add_call_site();
                 }
@@ -3325,11 +3330,15 @@ impl Inst {
                 state.nominal_sp_offset -= info.callee_pop_size;
                 assert_eq!(state.nominal_sp_offset, 0);
 
-                state.outgoing_sp_offset = info.callee_pop_size;
-                for inst in S390xMachineDeps::gen_retval_loads(info) {
-                    inst.emit(sink, emit_info, state);
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    state.outgoing_sp_offset = info.callee_pop_size;
+                    for inst in S390xMachineDeps::gen_retval_loads(info) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                    state.outgoing_sp_offset = 0;
                 }
-                state.outgoing_sp_offset = 0;
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.
@@ -3533,6 +3542,18 @@ impl Inst {
             }
 
             &Inst::DummyUse { .. } => {}
+
+            &Inst::LabelAddress { dst, label } => {
+                let inst = Inst::LoadAddr {
+                    rd: dst,
+                    mem: MemArg::Label { target: label },
+                };
+                inst.emit(sink, emit_info, state);
+            }
+
+            &Inst::SequencePoint { .. } => {
+                // Nothing.
+            }
         }
 
         state.clear_post_insn();

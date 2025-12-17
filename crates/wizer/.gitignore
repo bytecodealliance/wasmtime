@@ -1,0 +1,9 @@
+/target
+node_modules
+npm/wizer-darwin-arm64/
+npm/wizer-darwin-x64/
+npm/wizer-linux-x64/
+npm/wizer-win32-x64/
+npm/wizer-linux-s390x/
+npm/wizer-linux-arm64/
+test.wasm

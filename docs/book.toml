@@ -5,7 +5,70 @@ src = "."
 title = "Wasmtime"
 
 [output.html]
-additional-js = ["js/moment.min.2.30.1.js", "js/mermaid.min.11.6.0.js", "js/index.js"]
+additional-js = [
+  "js/moment.min.2.30.1.js",
+  "js/mermaid.min.11.6.0.js",
+  "js/index.js",
+  "js/langtabs.js",
+]
 cname = "docs.wasmtime.dev"
 git-repository-url = "https://github.com/bytecodealliance/wasmtime"
 edit-url-template = "https://github.com/bytecodealliance/wasmtime/edit/main/docs/{path}"
+additional-css = ["css/langtabs.css"]
+
+[output.html.redirect]
+"/examples-c-anyref.html" = "/examples-anyref.html"
+"/examples-c-debugging.html" = "/examples-debugging.html"
+"/examples-c-externref.html" = "/examples-externref.html"
+"/examples-c-gcd.html" = "/examples-gcd.html"
+"/examples-c-hello-world.html" = "/examples-hello-world.html"
+"/examples-c-linking.html" = "/examples-linking.html"
+"/examples-c-memory.html" = "/examples-memory.html"
+"/examples-c-multi-value.html" = "/examples-multi-value.html"
+"/examples-c-multimemory.html" = "/examples-multimemory.html"
+"/examples-c-multithreaded-embedding.html" = "/examples-multithreaded-embedding.html"
+"/examples-c-serialize.html" = "/examples-serialize.html"
+"/examples-c-wasi.html" = "/examples-wasip1.html"
+
+"/examples-cpp-anyref.html" = "/examples-anyref.html"
+"/examples-cpp-debugging.html" = "/examples-debugging.html"
+"/examples-cpp-externref.html" = "/examples-externref.html"
+"/examples-cpp-gcppd.html" = "/examples-gcppd.html"
+"/examples-cpp-hello-world.html" = "/examples-hello-world.html"
+"/examples-cpp-linking.html" = "/examples-linking.html"
+"/examples-cpp-memory.html" = "/examples-memory.html"
+"/examples-cpp-multi-value.html" = "/examples-multi-value.html"
+"/examples-cpp-multimemory.html" = "/examples-multimemory.html"
+"/examples-cpp-multithreaded-embedding.html" = "/examples-multithreaded-embedding.html"
+"/examples-cpp-serialize.html" = "/examples-serialize.html"
+"/examples-cpp-wasi.html" = "/examples-wasip1.html"
+"/examples-cpp-async.html" = "/examples-async.html"
+
+"/examples-rust-anyref.html" = "/examples-anyref.html"
+"/examples-rust-debugging.html" = "/examples-debugging.html"
+"/examples-rust-externref.html" = "/examples-externref.html"
+"/examples-rust-grustd.html" = "/examples-grustd.html"
+"/examples-rust-hello-world.html" = "/examples-hello-world.html"
+"/examples-rust-linking.html" = "/examples-linking.html"
+"/examples-rust-memory.html" = "/examples-memory.html"
+"/examples-rust-multi-value.html" = "/examples-multi-value.html"
+"/examples-rust-multimemory.html" = "/examples-multimemory.html"
+"/examples-rust-multithreaded-embedding.html" = "/examples-multithreaded-embedding.html"
+"/examples-rust-serialize.html" = "/examples-serialize.html"
+"/examples-rust-wasip2.html" = "/examples-wasip2.html"
+"/examples-rust-wasi.html" = "/examples-wasip1.html"
+"/examples-rust-wasip1.html" = "/examples-wasip1.html"
+"/examples-rust-core-dumps.html" = "/examples-core-dumps.html"
+"/examples-rust-mpk.html" = "/examples-mpk.html"
+
+"/lang-rust.html" = "/lang.html#rust"
+"/lang-c.html" = "/lang.html#c"
+"/lang-bash.html" = "/lang.html#bash"
+"/lang-python.html" = "/lang.html#python"
+"/lang-go.html" = "/lang.html#go"
+"/lang-dotnet.html" = "/lang.html#net"
+"/lang-ruby.html" = "/lang.html#ruby"
+"/lang-elixir.html" = "/lang.html#elixir"
+
+[preprocessor.langtabs]
+command = "mdbook-langtabs"

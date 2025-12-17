@@ -1,15 +1,12 @@
 //! Implementation for the `wasi:http/types` interface.
 
-use crate::{
-    HttpError, HttpResult, WasiHttpImpl, WasiHttpView,
-    bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
-    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
-    types::{
-        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
-        HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
-        remove_forbidden_headers,
-    },
+use crate::bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext};
+use crate::types::{
+    FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse,
+    HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam, remove_forbidden_headers,
 };
+use crate::{HttpError, HttpResult, WasiHttpImpl, WasiHttpView, get_content_length};
 use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
@@ -30,26 +27,6 @@ where
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
         let e = self.table().get(&err)?;
         Ok(e.downcast_ref::<types::ErrorCode>().cloned())
-    }
-}
-
-/// Extract the `Content-Length` header value from a [`FieldMap`], returning `None` if it's not
-/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
-/// header.
-fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
-    let header_val = match fields.get(hyper::header::CONTENT_LENGTH) {
-        Some(val) => val,
-        None => return Ok(None),
-    };
-
-    let header_str = match header_val.to_str() {
-        Ok(val) => val,
-        Err(_) => return Err(()),
-    };
-
-    match header_str.parse() {
-        Ok(len) => Ok(Some(len)),
-        Err(_) => Err(()),
     }
 }
 
@@ -401,7 +378,7 @@ where
 
         let size = match get_content_length(&req.headers) {
             Ok(size) => size,
-            Err(e) => return Ok(Err(e)),
+            Err(..) => return Ok(Err(())),
         };
 
         let (host_body, hyper_body) =
@@ -767,7 +744,7 @@ where
 
         let size = match get_content_length(&resp.headers) {
             Ok(size) => size,
-            Err(e) => return Ok(Err(e)),
+            Err(..) => return Ok(Err(())),
         };
 
         let (host, body) =

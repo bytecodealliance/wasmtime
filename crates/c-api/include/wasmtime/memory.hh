@@ -76,6 +76,39 @@ public:
     return prev;
   }
 
+  /// Returns the size of a page, in bytes, for this memory.
+  ///
+  /// WebAssembly memories are made up of a whole number of pages, so the byte
+  /// size will always be a multiple of their page size. Different Wasm memories
+  /// may have different page sizes.
+  ///
+  /// By default this is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or `65536`)
+  /// but [the custom-page-sizes proposal] allows opting into a page size of
+  /// `1`. Future extensions might allow any power of two as a page size.
+  ///
+  /// [the custom-page-sizes proposal]:
+  /// https://github.com/WebAssembly/custom-page-sizes
+  uint64_t page_size(Store::Context cx) const {
+    return wasmtime_memory_page_size(cx.ptr, &memory);
+  }
+
+  /// Returns the log2 of this memory's page size, in bytes.
+  ///
+  /// WebAssembly memories are made up of a whole number of pages, so the byte
+  /// size will always be a multiple of their page size. Different Wasm memories
+  /// may have different page sizes.
+  ///
+  /// By default the page size is 64KiB (aka `0x10000`, `2**16`, `1<<16`, or
+  /// `65536`) but [the custom-page-sizes proposal] allows opting into a page
+  /// size of `1`. Future extensions might allow any power of two as a page
+  /// size.
+  ///
+  /// [the custom-page-sizes proposal]:
+  /// https://github.com/WebAssembly/custom-page-sizes
+  uint8_t page_size_log2(Store::Context cx) const {
+    return wasmtime_memory_page_size_log2(cx.ptr, &memory);
+  }
+
   /// Returns the raw underlying C API memory this is using.
   const wasmtime_memory_t &capi() const { return memory; }
 };

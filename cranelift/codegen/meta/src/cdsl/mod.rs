@@ -11,17 +11,6 @@ pub mod settings;
 pub mod types;
 pub mod typevar;
 
-/// A macro that converts boolean settings into predicates to look more natural.
-#[macro_export]
-macro_rules! predicate {
-    ($a:ident && $($b:tt)*) => {
-        PredicateNode::And(Box::new($a.into()), Box::new(predicate!($($b)*)))
-    };
-    ($a:ident) => {
-        $a.into()
-    };
-}
-
 /// A macro that joins boolean settings into a list (e.g. `preset!(feature_a && feature_b)`).
 #[macro_export]
 macro_rules! preset {

@@ -17,7 +17,6 @@ impl wiggle::GuestErrorType for types::Errno {
 
 const TRIGGER_PENDING: u32 = 0;
 
-#[wiggle::async_trait]
 impl atoms::Atoms for Ctx {
     fn int_float_args(
         &mut self,

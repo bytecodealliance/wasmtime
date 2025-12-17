@@ -31,6 +31,7 @@ use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
+use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
 use std::collections::HashMap;
@@ -54,6 +55,10 @@ pub struct ComponentDfg {
     /// compiled by Cranelift.
     pub trampolines: Intern<TrampolineIndex, (ModuleInternedTypeIndex, Trampoline)>,
 
+    /// A map from `UnsafeIntrinsic::index()` to that intrinsic's
+    /// module-interned type.
+    pub unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
+
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
     pub reallocs: Intern<ReallocId, CoreDef>,
@@ -64,8 +69,11 @@ pub struct ComponentDfg {
     /// Same as `reallocs`, but for post-return.
     pub post_returns: Intern<PostReturnId, CoreDef>,
 
-    /// Same as `reallocs`, but for post-return.
+    /// Same as `reallocs`, but for memories.
     pub memories: Intern<MemoryId, CoreExport<MemoryIndex>>,
+
+    /// Same as `reallocs`, but for tables.
+    pub tables: Intern<TableId, CoreExport<TableIndex>>,
 
     /// Metadata about identified fused adapters.
     ///
@@ -258,6 +266,8 @@ pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
+    UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
+
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -316,13 +326,26 @@ pub enum Trampoline {
         to64: bool,
     },
     AlwaysTrap,
-    ResourceNew(TypeResourceTableIndex),
-    ResourceRep(TypeResourceTableIndex),
-    ResourceDrop(TypeResourceTableIndex),
-    BackpressureSet {
+    ResourceNew {
+        instance: RuntimeComponentInstanceIndex,
+        ty: TypeResourceTableIndex,
+    },
+    ResourceRep {
+        instance: RuntimeComponentInstanceIndex,
+        ty: TypeResourceTableIndex,
+    },
+    ResourceDrop {
+        instance: RuntimeComponentInstanceIndex,
+        ty: TypeResourceTableIndex,
+    },
+    BackpressureInc {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    BackpressureDec {
         instance: RuntimeComponentInstanceIndex,
     },
     TaskReturn {
+        instance: RuntimeComponentInstanceIndex,
         results: TypeTupleIndex,
         options: OptionsId,
     },
@@ -333,9 +356,11 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
     WaitableSetWait {
+        instance: RuntimeComponentInstanceIndex,
         options: OptionsId,
     },
     WaitableSetPoll {
+        instance: RuntimeComponentInstanceIndex,
         options: OptionsId,
     },
     WaitableSetDrop {
@@ -344,8 +369,9 @@ pub enum Trampoline {
     WaitableJoin {
         instance: RuntimeComponentInstanceIndex,
     },
-    Yield {
-        async_: bool,
+    ThreadYield {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
     },
     SubtaskDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -355,64 +381,81 @@ pub enum Trampoline {
         async_: bool,
     },
     StreamNew {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
     },
     StreamRead {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         options: OptionsId,
     },
     StreamWrite {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         options: OptionsId,
     },
     StreamCancelRead {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
     },
     StreamCancelWrite {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
     },
     StreamDropReadable {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
     },
     StreamDropWritable {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
     },
     FutureNew {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
     },
     FutureRead {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         options: OptionsId,
     },
     FutureWrite {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         options: OptionsId,
     },
     FutureCancelRead {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
     },
     FutureCancelWrite {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
     },
     FutureDropReadable {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
     },
     FutureDropWritable {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
     },
     ErrorContextNew {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsId,
     },
     ErrorContextDebugMessage {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsId,
     },
     ErrorContextDrop {
+        instance: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
     },
     ResourceTransferOwn,
@@ -432,8 +475,36 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
-    ContextGet(u32),
-    ContextSet(u32),
+    CheckBlocking,
+    ContextGet {
+        instance: RuntimeComponentInstanceIndex,
+        slot: u32,
+    },
+    ContextSet {
+        instance: RuntimeComponentInstanceIndex,
+        slot: u32,
+    },
+    ThreadIndex,
+    ThreadNewIndirect {
+        instance: RuntimeComponentInstanceIndex,
+        start_func_ty_idx: ComponentTypeIndex,
+        start_func_table_id: TableId,
+    },
+    ThreadSwitchTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadSuspend {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadResumeLater {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    ThreadYieldTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -470,6 +541,7 @@ pub struct CanonicalOptions {
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub cancellable: bool,
     pub core_type: ModuleInternedTypeIndex,
     pub data_model: CanonicalOptionsDataModel,
 }
@@ -552,6 +624,7 @@ impl ComponentDfg {
             runtime_callbacks: Default::default(),
             runtime_instances: Default::default(),
             num_lowerings: 0,
+            unsafe_intrinsics: Default::default(),
             trampolines: Default::default(),
             trampoline_defs: Default::default(),
             trampoline_map: Default::default(),
@@ -586,6 +659,7 @@ impl ComponentDfg {
                 exports,
                 export_items,
                 initializers: linearize.initializers,
+                unsafe_intrinsics: linearize.unsafe_intrinsics,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
                 options: linearize.options,
@@ -623,6 +697,7 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
+    unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
     trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
     options: PrimaryMap<OptionsIndex, info::CanonicalOptions>,
@@ -764,6 +839,7 @@ impl LinearizeDfg<'_> {
             callback,
             post_return,
             async_: options.async_,
+            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         };
@@ -776,6 +852,15 @@ impl LinearizeDfg<'_> {
             |me| &mut me.runtime_memories,
             |me, mem| me.core_export(&me.dfg.memories[mem]),
             |index, export| GlobalInitializer::ExtractMemory(ExtractMemory { index, export }),
+        )
+    }
+
+    fn runtime_table(&mut self, table: TableId) -> RuntimeTableIndex {
+        self.intern(
+            table,
+            |me| &mut me.runtime_tables,
+            |me, table| me.core_export(&me.dfg.tables[table]),
+            |index, export| GlobalInitializer::ExtractTable(ExtractTable { index, export }),
         )
     }
 
@@ -812,6 +897,13 @@ impl LinearizeDfg<'_> {
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
             CoreDef::Trampoline(index) => info::CoreDef::Trampoline(self.trampoline(*index)),
+            CoreDef::UnsafeIntrinsic(ty, i) => {
+                let index = usize::try_from(i.index()).unwrap();
+                if self.unsafe_intrinsics[index].is_none() {
+                    self.unsafe_intrinsics[index] = Some(*ty).into();
+                }
+                info::CoreDef::UnsafeIntrinsic(*i)
+            }
         }
     }
 
@@ -852,13 +944,30 @@ impl LinearizeDfg<'_> {
                 to64: *to64,
             },
             Trampoline::AlwaysTrap => info::Trampoline::AlwaysTrap,
-            Trampoline::ResourceNew(ty) => info::Trampoline::ResourceNew(*ty),
-            Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
-            Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
-            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
+            Trampoline::ResourceNew { instance, ty } => info::Trampoline::ResourceNew {
+                instance: *instance,
+                ty: *ty,
+            },
+            Trampoline::ResourceDrop { instance, ty } => info::Trampoline::ResourceDrop {
+                instance: *instance,
+                ty: *ty,
+            },
+            Trampoline::ResourceRep { instance, ty } => info::Trampoline::ResourceRep {
+                instance: *instance,
+                ty: *ty,
+            },
+            Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
                 instance: *instance,
             },
-            Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {
+            Trampoline::BackpressureDec { instance } => info::Trampoline::BackpressureDec {
+                instance: *instance,
+            },
+            Trampoline::TaskReturn {
+                instance,
+                results,
+                options,
+            } => info::Trampoline::TaskReturn {
+                instance: *instance,
                 results: *results,
                 options: self.options(*options),
             },
@@ -868,19 +977,31 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
                 instance: *instance,
             },
-            Trampoline::WaitableSetWait { options } => info::Trampoline::WaitableSetWait {
-                options: self.options(*options),
-            },
-            Trampoline::WaitableSetPoll { options } => info::Trampoline::WaitableSetPoll {
-                options: self.options(*options),
-            },
+            Trampoline::WaitableSetWait { instance, options } => {
+                info::Trampoline::WaitableSetWait {
+                    instance: *instance,
+                    options: self.options(*options),
+                }
+            }
+            Trampoline::WaitableSetPoll { instance, options } => {
+                info::Trampoline::WaitableSetPoll {
+                    instance: *instance,
+                    options: self.options(*options),
+                }
+            }
             Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
                 instance: *instance,
             },
             Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
                 instance: *instance,
             },
-            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
+            Trampoline::ThreadYield {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadYield {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
             Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
                 instance: *instance,
             },
@@ -888,63 +1009,132 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
                 async_: *async_,
             },
-            Trampoline::StreamNew { ty } => info::Trampoline::StreamNew { ty: *ty },
-            Trampoline::StreamRead { ty, options } => info::Trampoline::StreamRead {
+            Trampoline::StreamNew { instance, ty } => info::Trampoline::StreamNew {
+                instance: *instance,
+                ty: *ty,
+            },
+            Trampoline::StreamRead {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::StreamRead {
+                instance: *instance,
                 ty: *ty,
                 options: self.options(*options),
             },
-            Trampoline::StreamWrite { ty, options } => info::Trampoline::StreamWrite {
+            Trampoline::StreamWrite {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::StreamWrite {
+                instance: *instance,
                 ty: *ty,
                 options: self.options(*options),
             },
-            Trampoline::StreamCancelRead { ty, async_ } => info::Trampoline::StreamCancelRead {
+            Trampoline::StreamCancelRead {
+                instance,
+                ty,
+                async_,
+            } => info::Trampoline::StreamCancelRead {
+                instance: *instance,
                 ty: *ty,
                 async_: *async_,
             },
-            Trampoline::StreamCancelWrite { ty, async_ } => info::Trampoline::StreamCancelWrite {
+            Trampoline::StreamCancelWrite {
+                instance,
+                ty,
+                async_,
+            } => info::Trampoline::StreamCancelWrite {
+                instance: *instance,
                 ty: *ty,
                 async_: *async_,
             },
-            Trampoline::StreamDropReadable { ty } => {
-                info::Trampoline::StreamDropReadable { ty: *ty }
-            }
-            Trampoline::StreamDropWritable { ty } => {
-                info::Trampoline::StreamDropWritable { ty: *ty }
-            }
-            Trampoline::FutureNew { ty } => info::Trampoline::FutureNew { ty: *ty },
-            Trampoline::FutureRead { ty, options } => info::Trampoline::FutureRead {
-                ty: *ty,
-                options: self.options(*options),
-            },
-            Trampoline::FutureWrite { ty, options } => info::Trampoline::FutureWrite {
-                ty: *ty,
-                options: self.options(*options),
-            },
-            Trampoline::FutureCancelRead { ty, async_ } => info::Trampoline::FutureCancelRead {
-                ty: *ty,
-                async_: *async_,
-            },
-            Trampoline::FutureCancelWrite { ty, async_ } => info::Trampoline::FutureCancelWrite {
-                ty: *ty,
-                async_: *async_,
-            },
-            Trampoline::FutureDropReadable { ty } => {
-                info::Trampoline::FutureDropReadable { ty: *ty }
-            }
-            Trampoline::FutureDropWritable { ty } => {
-                info::Trampoline::FutureDropWritable { ty: *ty }
-            }
-            Trampoline::ErrorContextNew { ty, options } => info::Trampoline::ErrorContextNew {
-                ty: *ty,
-                options: self.options(*options),
-            },
-            Trampoline::ErrorContextDebugMessage { ty, options } => {
-                info::Trampoline::ErrorContextDebugMessage {
+            Trampoline::StreamDropReadable { instance, ty } => {
+                info::Trampoline::StreamDropReadable {
+                    instance: *instance,
                     ty: *ty,
-                    options: self.options(*options),
                 }
             }
-            Trampoline::ErrorContextDrop { ty } => info::Trampoline::ErrorContextDrop { ty: *ty },
+            Trampoline::StreamDropWritable { instance, ty } => {
+                info::Trampoline::StreamDropWritable {
+                    instance: *instance,
+                    ty: *ty,
+                }
+            }
+            Trampoline::FutureNew { instance, ty } => info::Trampoline::FutureNew {
+                instance: *instance,
+                ty: *ty,
+            },
+            Trampoline::FutureRead {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::FutureRead {
+                instance: *instance,
+                ty: *ty,
+                options: self.options(*options),
+            },
+            Trampoline::FutureWrite {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::FutureWrite {
+                instance: *instance,
+                ty: *ty,
+                options: self.options(*options),
+            },
+            Trampoline::FutureCancelRead {
+                instance,
+                ty,
+                async_,
+            } => info::Trampoline::FutureCancelRead {
+                instance: *instance,
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::FutureCancelWrite {
+                instance,
+                ty,
+                async_,
+            } => info::Trampoline::FutureCancelWrite {
+                instance: *instance,
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::FutureDropReadable { instance, ty } => {
+                info::Trampoline::FutureDropReadable {
+                    instance: *instance,
+                    ty: *ty,
+                }
+            }
+            Trampoline::FutureDropWritable { instance, ty } => {
+                info::Trampoline::FutureDropWritable {
+                    instance: *instance,
+                    ty: *ty,
+                }
+            }
+            Trampoline::ErrorContextNew {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::ErrorContextNew {
+                instance: *instance,
+                ty: *ty,
+                options: self.options(*options),
+            },
+            Trampoline::ErrorContextDebugMessage {
+                instance,
+                ty,
+                options,
+            } => info::Trampoline::ErrorContextDebugMessage {
+                instance: *instance,
+                ty: *ty,
+                options: self.options(*options),
+            },
+            Trampoline::ErrorContextDrop { instance, ty } => info::Trampoline::ErrorContextDrop {
+                instance: *instance,
+                ty: *ty,
+            },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
             Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
@@ -965,8 +1155,49 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
-            Trampoline::ContextGet(i) => info::Trampoline::ContextGet(*i),
-            Trampoline::ContextSet(i) => info::Trampoline::ContextSet(*i),
+            Trampoline::CheckBlocking => info::Trampoline::CheckBlocking,
+            Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
+                instance: *instance,
+                slot: *slot,
+            },
+            Trampoline::ContextSet { instance, slot } => info::Trampoline::ContextSet {
+                instance: *instance,
+                slot: *slot,
+            },
+            Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
+            Trampoline::ThreadNewIndirect {
+                instance,
+                start_func_ty_idx,
+                start_func_table_id,
+            } => info::Trampoline::ThreadNewIndirect {
+                instance: *instance,
+                start_func_ty_idx: *start_func_ty_idx,
+                start_func_table_idx: self.runtime_table(*start_func_table_id),
+            },
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSwitchTo {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSuspend {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadResumeLater { instance } => info::Trampoline::ThreadResumeLater {
+                instance: *instance,
+            },
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadYieldTo {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);

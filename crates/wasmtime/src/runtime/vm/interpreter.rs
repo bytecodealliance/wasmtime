@@ -6,8 +6,9 @@ use crate::{Engine, ValRaw};
 use core::marker;
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
-use pulley_interpreter::{FReg, Reg, XReg};
+use pulley_interpreter::{Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
+use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
 
 /// Interpreter state stored within a `Store<T>`.
@@ -46,14 +47,22 @@ pub struct Interpreter {
     /// carries a borrow of this type to ensure this isn't dropped
     /// independently, and then this file never overwrites this private field to
     /// otherwise guarantee this.
-    pulley: StoreBox<Vm>,
+    pulley: StoreBox<VmState>,
+}
+
+struct VmState {
+    vm: Vm,
+    resume_at_pc: Option<usize>,
 }
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
         let ret = Interpreter {
-            pulley: StoreBox::new(Vm::with_stack(engine.config().max_wasm_stack)),
+            pulley: StoreBox::new(VmState {
+                vm: Vm::with_stack(engine.config().max_wasm_stack),
+                resume_at_pc: None,
+            }),
         };
         engine.profiler().register_interpreter(&ret);
         ret
@@ -69,7 +78,8 @@ impl Interpreter {
     }
 
     pub fn pulley(&self) -> &Vm {
-        unsafe { self.pulley.get().as_ref() }
+        let state = unsafe { self.pulley.get().as_ref() };
+        &state.vm
     }
 
     /// Get an implementation of `Unwind` used to walk the Pulley stack.
@@ -82,8 +92,8 @@ impl Interpreter {
 /// zero-sized structure when pulley is disabled at compile time.
 #[repr(transparent)]
 pub struct InterpreterRef<'a> {
-    vm: NonNull<Vm>,
-    _phantom: marker::PhantomData<&'a mut Vm>,
+    vm: NonNull<VmState>,
+    _phantom: marker::PhantomData<&'a mut VmState>,
 }
 
 /// An implementation of stack-walking details specifically designed
@@ -116,42 +126,8 @@ unsafe impl Unwind for UnwindPulley {
     }
 }
 
-/// Equivalent of a native platform's `jmp_buf` (sort of).
-///
-/// This structure ensures that all callee-save state in Pulley is saved at wasm
-/// function boundaries. This handles the case for example where a function is
-/// executed but it traps halfway through. The trap will unwind the Pulley stack
-/// and reset it back to what it was when the function started. This means that
-/// Pulley function prologues don't execute and callee-saved registers aren't
-/// restored. This structure is used to restore all that state to as it was
-/// when the function started.
-///
-/// Note that this is a blind copy of all callee-saved state which is kept in
-/// sync with `pulley_shared/abi.rs` in Cranelift. This includes the upper 16
-/// x-regs, the upper 16 f-regs, the frame pointer, and the link register. The
-/// stack pointer is included in the upper 16 x-regs. This representation is
-/// explicitly chosen over an alternative such as only saving a bare minimum
-/// amount of state and using function ABIs to auto-save registers. For example
-/// we could, in Cranelift, indicate that the Pulley-to-host function call
-/// clobbered all registers forcing the function prologue to save all
-/// xregs/fregs. This means though that every wasm->host call would save/restore
-/// all this state, even when a trap didn't happen. Alternatively this structure
-/// being large means that the state is only saved once per host->wasm call
-/// instead which is currently what's being optimized for.
-///
-/// If saving this structure is a performance hot spot in the future it might be
-/// worth reevaluating this decision or perhaps shrinking the register file of
-/// Pulley so less state need be saved.
-#[derive(Clone, Copy)]
-struct Setjmp {
-    xregs: [u64; 16],
-    fregs: [f64; 16],
-    fp: *mut u8,
-    lr: *mut u8,
-}
-
 impl InterpreterRef<'_> {
-    fn vm(&mut self) -> &mut Vm {
+    fn vm_state(&mut self) -> &mut VmState {
         // SAFETY: This is a bit of a tricky code. The safety here is isolated
         // to this file, but not isolated to just this function call.
         //
@@ -179,6 +155,10 @@ impl InterpreterRef<'_> {
         unsafe { self.vm.as_mut() }
     }
 
+    fn vm(&mut self) -> &mut Vm {
+        &mut self.vm_state().vm
+    }
+
     /// Invokes interpreted code.
     ///
     /// The `bytecode` pointer should previously have been produced by Cranelift
@@ -201,14 +181,6 @@ impl InterpreterRef<'_> {
 
         let mut vm = self.vm();
 
-        // Fake a "poor man's setjmp" for now by saving some critical context to
-        // get restored when a trap happens. This pseudo-implements the stack
-        // unwinding necessary for a trap.
-        //
-        // See more comments in `trap` below about how this isn't actually
-        // correct as it's not saving all callee-save state.
-        let setjmp = setjmp(vm);
-
         let old_lr = unsafe { vm.call_start(&args) };
 
         // Run the interpreter as much as possible until it finishes, and then
@@ -228,38 +200,35 @@ impl InterpreterRef<'_> {
                     }
                 }
                 // If the VM wants to call out to the host then dispatch that
-                // here based on `sig`. Once that returns we can resume
+                // here based on `id`. Once that returns we typically resume
                 // execution at `resume`.
-                //
-                // Note that the `raise` libcall is handled specially here since
-                // longjmp/setjmp is handled differently than on the host.
                 DoneReason::CallIndirectHost { id, resume } => {
+                    unsafe {
+                        self.call_indirect_host(id);
+                    }
+
+                    // After the host has finished take a look at what hostcall
+                    // was just made. The `raise` hostcall gets special handling
+                    // for its non-local transfer of control flow.
+                    //
+                    // Also note that for non-`raise` hostcalls the
+                    // `state.resume_at_pc` value should always be `None`.
                     if u32::from(id) == HostCall::Builtin(BuiltinFunctionIndex::raise()).index() {
-                        longjmp(vm, setjmp);
-                        break false;
+                        bytecode = self.take_resume_at_pc();
                     } else {
-                        vm = unsafe { self.call_indirect_host(id) };
+                        debug_assert!(self.vm_state().resume_at_pc.is_none());
                         bytecode = resume;
                     }
+                    vm = self.vm();
                 }
                 // If the VM trapped then process that here and return `false`.
                 DoneReason::Trap { pc, kind } => {
-                    trap(vm, pc, kind, setjmp);
-                    break false;
+                    bytecode = self.trap(pc, kind);
+                    vm = self.vm();
                 }
             }
         };
 
-        if cfg!(debug_assertions) {
-            for (i, reg) in callee_save_xregs() {
-                assert!(vm[reg].get_u64() == setjmp.xregs[i]);
-            }
-            for (i, reg) in callee_save_fregs() {
-                assert!(vm[reg].get_f64().to_bits() == setjmp.fregs[i].to_bits());
-            }
-            assert!(vm.fp() == setjmp.fp);
-            assert!(vm.lr() == setjmp.lr);
-        }
         ret
     }
 
@@ -275,7 +244,7 @@ impl InterpreterRef<'_> {
         not(feature = "component-model"),
         expect(unused_macro_rules, reason = "macro-code")
     )]
-    unsafe fn call_indirect_host(&mut self, id: u8) -> &mut Vm {
+    unsafe fn call_indirect_host(&mut self, id: u8) {
         let id = u32::from(id);
         let fnptr = self.vm()[XReg::x0].get_ptr();
         let mut arg_reg = 1;
@@ -316,17 +285,18 @@ impl InterpreterRef<'_> {
                 };
                 let _ = arg_reg; // silence last dead arg_reg increment warning
 
-                let vm = self.vm();
+                let state = self.vm_state();
+                let _vm = &mut state.vm;
 
                 // Store the return value, if one is here, in x0.
                 $(
-                    call!(@set $result ret => vm[XReg::x0]);
+                    call!(@set $result ret => _vm[XReg::x0]);
                 )?
                 let _ = ret; // silence warning if no return value
 
                 // Return from the outer `call_indirect_host` host function as
                 // it's been processed.
-                return vm;
+                return;
             }};
 
             // Conversion from macro-defined types to Rust host types.
@@ -451,94 +421,86 @@ impl InterpreterRef<'_> {
             unreachable!()
         }
     }
-}
 
-/// Handles an interpreter trap. This will initialize the trap state stored
-/// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
-/// interpreter and seeing if that's a valid opcode to trap at.
-fn trap(vm: &mut Vm, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
-    let regs = TrapRegisters {
-        pc: pc.as_ptr() as usize,
-        fp: vm.fp() as usize,
-    };
-    tls::with(|s| {
-        let s = s.unwrap();
-        match kind {
-            Some(kind) => {
-                let trap = match kind {
-                    TrapKind::IntegerOverflow => Trap::IntegerOverflow,
-                    TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
-                    TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
-                    TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
-                    TrapKind::DisabledOpcode => Trap::DisabledOpcode,
-                    TrapKind::StackOverflow => Trap::StackOverflow,
-                };
-                s.set_jit_trap(regs, None, trap);
-            }
-            None => {
-                match s.test_if_trap(regs, None, |_| false) {
-                    // This shouldn't be possible, so this is a fatal error
-                    // if it happens.
-                    TrapTest::NotWasm => {
-                        panic!("pulley trap at {pc:?} without trap code registered")
+    /// Configures Pulley to be able to resume to the specified exception
+    /// handler.
+    ///
+    /// This is executed from a `raise` hostcall when an exception is being
+    /// raised.
+    ///
+    /// # Safety
+    ///
+    /// Requires that all the parameters here are valid and will leave Pulley
+    /// in a valid state for executing.
+    pub(crate) unsafe fn resume_to_exception_handler(
+        &mut self,
+        handler: &Handler,
+        payload1: usize,
+        payload2: usize,
+    ) {
+        unsafe {
+            let vm = self.vm();
+            vm[XReg::x0].set_u64(payload1 as u64);
+            vm[XReg::x1].set_u64(payload2 as u64);
+            vm[XReg::sp].set_ptr(core::ptr::with_exposed_provenance_mut::<u8>(handler.sp));
+            vm.set_fp(core::ptr::with_exposed_provenance_mut(handler.fp));
+        }
+        let state = self.vm_state();
+        debug_assert!(state.resume_at_pc.is_none());
+        self.vm_state().resume_at_pc = Some(handler.pc);
+    }
+
+    /// Handles an interpreter trap. This will initialize the trap state stored
+    /// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
+    /// interpreter and seeing if that's a valid opcode to trap at.
+    fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>) -> NonNull<u8> {
+        let regs = TrapRegisters {
+            pc: pc.as_ptr() as usize,
+            fp: self.vm().fp() as usize,
+        };
+        let handler = tls::with(|s| {
+            let s = s.unwrap();
+            match kind {
+                Some(kind) => {
+                    let trap = match kind {
+                        TrapKind::IntegerOverflow => Trap::IntegerOverflow,
+                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
+                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
+                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
+                        TrapKind::DisabledOpcode => Trap::DisabledOpcode,
+                        TrapKind::StackOverflow => Trap::StackOverflow,
+                    };
+                    s.set_jit_trap(regs, None, trap);
+                    s.entry_trap_handler()
+                }
+                None => {
+                    match s.test_if_trap(regs, None, |_| false) {
+                        // This shouldn't be possible, so this is a fatal error
+                        // if it happens.
+                        TrapTest::NotWasm => {
+                            panic!("pulley trap at {pc:?} without trap code registered")
+                        }
+
+                        // Not possible with our closure above returning `false`.
+                        #[cfg(has_host_compiler_backend)]
+                        TrapTest::HandledByEmbedder => unreachable!(),
+
+                        // Trap was handled, yay! Configure interpreter state
+                        // to resume at the exception handler.
+                        TrapTest::Trap(handler) => handler,
                     }
-
-                    // Not possible with our closure above returning `false`.
-                    #[cfg(has_host_compiler_backend)]
-                    TrapTest::HandledByEmbedder => unreachable!(),
-
-                    // Trap was handled, yay! We don't use `jmp_buf`.
-                    TrapTest::Trap { .. } => {}
                 }
             }
+        });
+        unsafe {
+            self.resume_to_exception_handler(&handler, 0, 0);
         }
-    });
-
-    longjmp(vm, setjmp);
-}
-
-fn setjmp(vm: &Vm) -> Setjmp {
-    let mut xregs = [0; 16];
-    let mut fregs = [0.0; 16];
-    for (i, reg) in callee_save_xregs() {
-        xregs[i] = vm[reg].get_u64();
+        self.take_resume_at_pc()
     }
-    for (i, reg) in callee_save_fregs() {
-        fregs[i] = vm[reg].get_f64();
-    }
-    Setjmp {
-        xregs,
-        fregs,
-        fp: vm.fp(),
-        lr: vm.lr(),
-    }
-}
 
-/// Perform a "longjmp" by restoring the "setjmp" context saved when this
-/// started.
-fn longjmp(vm: &mut Vm, setjmp: Setjmp) {
-    let Setjmp {
-        xregs,
-        fregs,
-        fp,
-        lr,
-    } = setjmp;
-    unsafe {
-        for (i, reg) in callee_save_xregs() {
-            vm[reg].set_u64(xregs[i]);
-        }
-        for (i, reg) in callee_save_fregs() {
-            vm[reg].set_f64(fregs[i]);
-        }
-        vm.set_fp(fp);
-        vm.set_lr(lr);
+    fn take_resume_at_pc(&mut self) -> NonNull<u8> {
+        let pc = self.vm_state().resume_at_pc.take().unwrap();
+        let pc = core::ptr::with_exposed_provenance_mut(pc);
+        NonNull::new(pc).unwrap()
     }
-}
-
-fn callee_save_xregs() -> impl Iterator<Item = (usize, XReg)> {
-    (0..16).map(|i| (i.into(), XReg::new(i + 16).unwrap()))
-}
-
-fn callee_save_fregs() -> impl Iterator<Item = (usize, FReg)> {
-    (0..16).map(|i| (i.into(), FReg::new(i + 16).unwrap()))
 }

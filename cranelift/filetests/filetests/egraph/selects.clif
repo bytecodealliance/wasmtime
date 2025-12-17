@@ -1,0 +1,91 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; (iadd ty (select ty c x y) z) -> (select ty c (x + z) (y + z))
+function %simplify_iadd_select_const_i32(i8) -> i32 fast {
+block0(v0: i8):
+    v1 = iconst.i32 5
+    v2 = iconst.i32 10
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 3
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %simplify_iadd_select_const_i32(i8) -> i32 fast {
+; block0(v0: i8):
+;     v6 = iconst.i32 8
+;     v7 = iconst.i32 13
+;     v8 = select v0, v6, v7  ; v6 = 8, v7 = 13
+;     return v8
+; }
+
+
+;; (iadd ty (select ty c x y) z) -> (select ty c (x + z) (y + z))
+function %simplify_iadd_select_const_i32_big_constants(i8) -> i8 fast {
+block0(v0: i8):
+    v1 = iconst.i8 100
+    v2 = iconst.i8 200
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 200
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %simplify_iadd_select_const_i32_big_constants(i8) -> i8 fast {
+; block0(v0: i8):
+;     v6 = iconst.i8 44
+;     v7 = iconst.i8 -112
+;     v8 = select v0, v6, v7  ; v6 = 44, v7 = -112
+;     return v8
+; }
+
+
+;; (iadd ty (select ty c x y) z) -> (select ty c (x + z) (y + z))
+function %simplify_iadd_select_const_i64_big_constants(i8) -> i64 fast {
+block0(v0: i8):
+    v1 = iconst.i64 0xa000_0000_0000_0000
+    v2 = iconst.i64 0xb000_0000_0000_0000
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 0xc000_0000_0000_0000
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %simplify_iadd_select_const_i64_big_constants(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 0x6000_0000_0000_0000
+;     v7 = iconst.i64 0x7000_0000_0000_0000
+;     v8 = select v0, v6, v7  ; v6 = 0x6000_0000_0000_0000, v7 = 0x7000_0000_0000_0000
+;     return v8
+; }
+
+function %test_sgt_select_slt_min(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v1, v0  
+    v3 = select v2, v1, v0 
+    v4 = icmp sgt v3, v0   
+    return v4
+}
+
+; function %test_sgt_select_slt_min(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = iconst.i8 0
+;     return v7  ; v7 = 0
+; }
+
+function %test_ugt_select_ult_min(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v1, v0  
+    v3 = select v2, v1, v0 
+    v4 = icmp ugt v3, v0   
+    return v4
+}
+
+; function %test_ugt_select_ult_min(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = iconst.i8 0
+;     return v7  ; v7 = 0
+; }
+

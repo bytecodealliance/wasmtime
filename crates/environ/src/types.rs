@@ -2152,7 +2152,7 @@ impl Memory {
     pub fn can_elide_bounds_check(&self, tunables: &Tunables, host_page_size_log2: u8) -> bool {
         self.can_use_virtual_memory(tunables, host_page_size_log2)
             && self.idx_type == IndexType::I32
-            && tunables.memory_reservation >= (1 << 32)
+            && tunables.memory_reservation + tunables.memory_guard_size >= (1 << 32)
     }
 
     /// Returns the static size of this heap in bytes at runtime, if available.
@@ -2238,6 +2238,8 @@ impl From<wasmparser::MemoryType> for Memory {
 pub struct Tag {
     /// The tag signature type.
     pub signature: EngineOrModuleTypeIndex,
+    /// The corresponding exception type.
+    pub exception: EngineOrModuleTypeIndex,
 }
 
 impl TypeTrace for Tag {
@@ -2245,14 +2247,18 @@ impl TypeTrace for Tag {
     where
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        func(self.signature)
+        func(self.signature)?;
+        func(self.exception)?;
+        Ok(())
     }
 
     fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        func(&mut self.signature)
+        func(&mut self.signature)?;
+        func(&mut self.exception)?;
+        Ok(())
     }
 }
 

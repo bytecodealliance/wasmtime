@@ -12,13 +12,14 @@ bitflags::bitflags! {
         const VERBOSE_TRACING = 1 << 4;
         const IGNORE_WIT = 1 << 5;
         const EXACT = 1 << 6;
+        const TASK_EXIT = 1 << 7;
     }
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct FunctionConfig {
     rules: Vec<FunctionRule>,
-    default: FunctionFlags,
+    pub(crate) default: FunctionFlags,
 }
 
 #[derive(Debug, Clone)]

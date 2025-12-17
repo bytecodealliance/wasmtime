@@ -53,7 +53,7 @@ cfg_if! {
                 println!("{}", disas.disas());
                 return Ok(());
             }
-            let cs = isa.to_capstone().map_err(|e| anyhow::format_err!("{}", e))?;
+            let cs = isa.to_capstone().map_err(|e| anyhow::format_err!("{e}"))?;
 
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
             for i in insns.iter() {

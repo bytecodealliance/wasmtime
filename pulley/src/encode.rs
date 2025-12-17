@@ -332,3 +332,14 @@ macro_rules! impl_extended_encoders {
     };
 }
 for_each_extended_op!(impl_extended_encoders);
+
+#[test]
+#[cfg(feature = "std")]
+fn nop_is_single_byte() {
+    // NOP needs to be a single byte so that it can be used to NOP out
+    // an instruction sequence of any length.
+    let inst = crate::op::Nop {};
+    let mut bytes = vec![];
+    inst.encode(&mut bytes);
+    assert_eq!(bytes.len(), 1);
+}

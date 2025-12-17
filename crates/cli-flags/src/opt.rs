@@ -463,10 +463,7 @@ impl WasmtimeOptionValue for wasmtime::OptLevel {
             "1" => Ok(wasmtime::OptLevel::Speed),
             "2" => Ok(wasmtime::OptLevel::Speed),
             "s" => Ok(wasmtime::OptLevel::SpeedAndSize),
-            other => bail!(
-                "unknown optimization level `{}`, only 0,1,2,s accepted",
-                other
-            ),
+            other => bail!("unknown optimization level `{other}`, only 0,1,2,s accepted"),
         }
     }
 
@@ -485,16 +482,17 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
-            other => bail!(
-                "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
-                other
-            ),
+            "single-pass" => Ok(wasmtime::RegallocAlgorithm::SinglePass),
+            other => {
+                bail!("unknown regalloc algorithm`{other}`, only backtracking,single-pass accepted")
+            }
         }
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             wasmtime::RegallocAlgorithm::Backtracking => f.write_str("backtracking"),
+            wasmtime::RegallocAlgorithm::SinglePass => f.write_str("single-pass"),
             _ => unreachable!(),
         }
     }

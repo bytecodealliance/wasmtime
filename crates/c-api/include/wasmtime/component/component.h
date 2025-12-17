@@ -4,6 +4,7 @@
 #define WASMTIME_COMPONENT_COMPONENT_H
 
 #include <wasm.h>
+#include <wasmtime/component/types/component.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
@@ -103,6 +104,15 @@ WASM_API_EXTERN wasmtime_component_t *
 wasmtime_component_clone(const wasmtime_component_t *component);
 
 /**
+ * \brief Returns the type of this component.
+ *
+ * The returned pointer must be deallocatd with
+ * `wasmtime_component_type_delete`.
+ */
+WASM_API_EXTERN wasmtime_component_type_t *
+wasmtime_component_type(const wasmtime_component_t *component);
+
+/**
  * \brief Deletes a #wasmtime_component_t created by #wasmtime_component_new
  *
  * \param component the component to delete
@@ -128,6 +138,13 @@ wasmtime_component_get_export_index(
     const wasmtime_component_t *component,
     const wasmtime_component_export_index_t *instance_export_index,
     const char *name, size_t name_len);
+
+/**
+ * \brief Creates a new separately-owned copy of the specified index.
+ */
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_export_index_clone(
+    const wasmtime_component_export_index_t *index);
 
 /**
  * \brief Deletes a #wasmtime_component_export_index_t

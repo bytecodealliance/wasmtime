@@ -270,6 +270,12 @@ pub struct Imm12 {
 }
 
 impl Imm12 {
+    /// Handy 0-value constant.
+    pub const ZERO: Imm12 = Imm12 {
+        bits: 0,
+        shift12: false,
+    };
+
     /// Compute a Imm12 from raw bits, if possible.
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
         if val & !0xfff == 0 {

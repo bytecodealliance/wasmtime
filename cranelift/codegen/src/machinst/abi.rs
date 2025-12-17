@@ -100,8 +100,8 @@
 
 use crate::CodegenError;
 use crate::entity::SecondaryMap;
-use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
+use crate::ir::{StackSlotKey, types::*};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
@@ -490,7 +490,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         sig: &Signature,
         regs: &[Writable<RealReg>],
-        is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -601,7 +601,12 @@ pub trait ABIMachineSpec {
 
     /// Get the exception payload registers, if any, for a calling
     /// convention.
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    ///
+    /// Note that the argument here is the calling convention of the *callee*.
+    /// This might differ from the caller but the exceptional payloads that are
+    /// available are defined by the callee, not the caller.
+    fn exception_payload_regs(callee_conv: isa::CallConv) -> &'static [Reg] {
+        let _ = callee_conv;
         &[]
     }
 }
@@ -630,6 +635,8 @@ pub struct CallInfo<T> {
     /// argument/return logic; they mostly differ in the metadata that
     /// they emit, which this information feeds into.
     pub try_call_info: Option<TryCallInfo>,
+    /// Whether this call is patchable.
+    pub patchable: bool,
 }
 
 /// Out-of-line information present on `try_call` instructions only:
@@ -669,6 +676,7 @@ impl<T> CallInfo<T> {
             callee_conv: call_conv,
             callee_pop_size: 0,
             try_call_info: None,
+            patchable: false,
         }
     }
 }
@@ -1078,6 +1086,9 @@ pub struct FrameLayout {
     /// according to the ABI.  These registers will be saved and
     /// restored by gen_clobber_save and gen_clobber_restore.
     pub clobbered_callee_saves: Vec<Writable<RealReg>>,
+
+    /// The function's call pattern classification.
+    pub function_calls: FunctionCalls,
 }
 
 impl FrameLayout {
@@ -1115,6 +1126,11 @@ impl FrameLayout {
 
         sp_off
     }
+
+    /// Get the offset from SP up to FP.
+    pub fn sp_to_fp(&self) -> u32 {
+        self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
+    }
 }
 
 /// ABI object for a function body.
@@ -1129,6 +1145,8 @@ pub struct Callee<M: ABIMachineSpec> {
     dynamic_stackslots: PrimaryMap<DynamicStackSlot, u32>,
     /// Offsets to each sized stackslot.
     sized_stackslots: PrimaryMap<StackSlot, u32>,
+    /// Descriptors for sized stackslots.
+    sized_stackslot_keys: SecondaryMap<StackSlot, Option<StackSlotKey>>,
     /// Total stack size of all stackslots
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
@@ -1150,9 +1168,6 @@ pub struct Callee<M: ABIMachineSpec> {
     flags: settings::Flags,
     /// The ISA-specific flag values controlling this function's compilation.
     isa_flags: M::F,
-    /// Whether or not this function is a "leaf", meaning it calls no other
-    /// functions
-    is_leaf: bool,
     /// If this function has a stack limit specified, then `Reg` is where the
     /// stack limit will be located after the instructions specified have been
     /// executed.
@@ -1207,16 +1222,17 @@ impl<M: ABIMachineSpec> Callee<M> {
             call_conv == isa::CallConv::SystemV
                 || call_conv == isa::CallConv::Tail
                 || call_conv == isa::CallConv::Fast
-                || call_conv == isa::CallConv::Cold
                 || call_conv == isa::CallConv::WindowsFastcall
                 || call_conv == isa::CallConv::AppleAarch64
-                || call_conv == isa::CallConv::Winch,
+                || call_conv == isa::CallConv::Winch
+                || call_conv == isa::CallConv::PreserveAll,
             "Unsupported calling convention: {call_conv:?}"
         );
 
         // Compute sized stackslot locations and total stackslot size.
         let mut end_offset: u32 = 0;
         let mut sized_stackslots = PrimaryMap::new();
+        let mut sized_stackslot_keys = SecondaryMap::new();
 
         for (stackslot, data) in f.sized_stack_slots.iter() {
             // We start our computation possibly unaligned where the previous
@@ -1240,6 +1256,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
             sized_stackslots.push(start_offset);
+            sized_stackslot_keys[stackslot] = data.key;
         }
 
         // Compute dynamic stackslot locations and total stackslot size.
@@ -1294,6 +1311,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             dynamic_stackslots,
             dynamic_type_sizes,
             sized_stackslots,
+            sized_stackslot_keys,
             stackslots_size,
             outgoing_args_size: 0,
             tail_args_size,
@@ -1303,7 +1321,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             call_conv,
             flags,
             isa_flags: isa_flags.clone(),
-            is_leaf: f.is_leaf(),
             stack_limit,
             _mach: PhantomData,
         })
@@ -2017,6 +2034,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         assert!(outputs.next().is_none());
 
         if let Some(try_call_payloads) = try_call_payloads {
+            // Let `M` say where the payload values are going to end up and then
+            // double-check it's the same size as the calling convention's
+            // reported number of exception types.
+            let pregs = M::exception_payload_regs(callee_conv);
+            assert_eq!(
+                callee_conv.exception_payload_types(M::word_type()).len(),
+                pregs.len()
+            );
+
             // We need to update `defs` to contain the exception
             // payload regs as well. We have two sources of info that
             // we join:
@@ -2036,7 +2062,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             // handle the two cases below for each payload register:
             // overlaps a return value (and we alias to it) or not
             // (and we add a def).
-            let pregs = M::exception_payload_regs(callee_conv);
             for (i, &preg) in pregs.iter().enumerate() {
                 let vreg = try_call_payloads[i];
                 if let Some(existing) = defs.iter().find(|def| match def.location {
@@ -2062,6 +2087,8 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// `uses` is the `CallArgList` describing argument constraints
     /// `defs` is the `CallRetList` describing return constraints
     /// `try_call_info` describes exception targets for try_call instructions
+    /// `patchable` describes whether this callsite should emit metadata
+    /// for patching to enable/disable it.
     ///
     /// The clobber list is computed here from the above data.
     pub fn gen_call_info<T>(
@@ -2072,6 +2099,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> CallInfo<T> {
         let caller_conv = self.call_conv;
         let callee_conv = sigs[sig].call_conv;
@@ -2119,7 +2147,13 @@ impl<M: ABIMachineSpec> Callee<M> {
             caller_conv,
             callee_pop_size,
             try_call_info,
+            patchable,
         }
+    }
+
+    /// Get the raw offset of a sized stackslot in the slot region.
+    pub fn sized_stackslot_offset(&self, slot: StackSlot) -> u32 {
+        self.sized_stackslots[slot]
     }
 
     /// Produce an instruction that computes a sized stackslot address.
@@ -2169,6 +2203,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         spillslots: usize,
         clobbered: Vec<Writable<RealReg>>,
+        function_calls: FunctionCalls,
     ) {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
@@ -2179,7 +2214,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             self.signature(),
             &clobbered,
-            self.is_leaf,
+            function_calls,
             self.stack_args_size(sigs),
             self.tail_args_size,
             self.stackslots_size,
@@ -2216,7 +2251,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             + frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size
-            + if self.is_leaf {
+            + if frame_layout.function_calls == FunctionCalls::None {
                 0
             } else {
                 frame_layout.setup_area_size
@@ -2224,7 +2259,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        if total_stacksize > 0 || !self.is_leaf {
+        if total_stacksize > 0 || frame_layout.function_calls != FunctionCalls::None {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);
@@ -2301,22 +2336,29 @@ impl<M: ABIMachineSpec> Callee<M> {
             .expect("frame layout not computed before prologue generation")
     }
 
-    /// Returns the full frame size for the given function, after prologue
-    /// emission has run. This comprises the spill slots and stack-storage
-    /// slots as well as storage for clobbered callee-save registers, but
-    /// not arguments arguments pushed at callsites within this function,
-    /// or other ephemeral pushes.
-    pub fn frame_size(&self) -> u32 {
+    /// Returns the offset from SP to FP for the given function, after
+    /// the prologue has set up the frame. This comprises the spill
+    /// slots and stack-storage slots as well as storage for clobbered
+    /// callee-save registers and outgoing arguments at callsites
+    /// (space for which is reserved during frame setup).
+    pub fn sp_to_fp_offset(&self) -> u32 {
         let frame_layout = self.frame_layout();
-        frame_layout.clobber_size + frame_layout.fixed_frame_storage_size
+        frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
+            + frame_layout.outgoing_args_size
     }
 
     /// Returns offset from the slot base in the current frame to the caller's SP.
     pub fn slot_base_to_caller_sp_offset(&self) -> u32 {
+        // Note: this looks very similar to `frame_size()` above, but
+        // it differs in both endpoints: it measures from the bottom
+        // of stackslots, excluding outgoing args; and it includes the
+        // setup area (FP/LR) size and any extra tail-args space.
         let frame_layout = self.frame_layout();
         frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.setup_area_size
+            + (frame_layout.tail_args_size - frame_layout.incoming_args_size)
     }
 
     /// Returns the size of arguments expected on the stack.
@@ -2366,6 +2408,28 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         let from = StackAMode::Slot(sp_off);
         <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
+    }
+
+    /// Provide metadata to be emitted alongside machine code.
+    ///
+    /// This metadata describes the frame layout sufficiently to find
+    /// stack slots, so that runtimes and unwinders can observe state
+    /// set up by compiled code in stackslots allocated for that
+    /// purpose.
+    pub fn frame_slot_metadata(&self) -> MachBufferFrameLayout {
+        let frame_to_fp_offset = self.sp_to_fp_offset();
+        let mut stackslots = SecondaryMap::with_capacity(self.sized_stackslots.len());
+        let storage_area_base = self.frame_layout().outgoing_args_size;
+        for (slot, storage_area_offset) in &self.sized_stackslots {
+            stackslots[slot] = MachBufferStackSlot {
+                offset: storage_area_base.checked_add(*storage_area_offset).unwrap(),
+                key: self.sized_stackslot_keys[slot],
+            };
+        }
+        MachBufferFrameLayout {
+            frame_to_fp_offset,
+            stackslots,
+        }
     }
 }
 
@@ -2433,10 +2497,14 @@ impl<T> CallInfo<T> {
         }
 
         let temp = M::retval_temp_reg(self.callee_conv);
-        // The temporary must be noted as clobbered.
+        // The temporary must be noted as clobbered unless there are
+        // no returns (hence it isn't needed). The latter can only be
+        // the case statically for an ABI when the ABI doesn't allow
+        // any returns at all (e.g., patchable-call ABI).
         debug_assert!(
-            M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())
-                .contains(PReg::from(temp.to_reg().to_real_reg().unwrap()))
+            self.defs.is_empty()
+                || M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())
+                    .contains(PReg::from(temp.to_reg().to_real_reg().unwrap()))
         );
 
         for CallRetPair { vreg, location } in &self.defs {
@@ -2459,11 +2527,14 @@ impl<T> CallInfo<T> {
                         // returns), we use the integer temp register in
                         // steps.
                         let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
+                        let one_part_load_ty =
+                            Type::int_with_byte_size(M::word_bytes().min(ty.bytes()) as u16)
+                                .unwrap();
                         for part in 0..parts {
                             emit(M::gen_load_stack(
                                 amode.offset_by(part * M::word_bytes()),
                                 temp,
-                                M::word_type(),
+                                one_part_load_ty,
                             ));
                             emit(M::gen_store_stack(
                                 StackAMode::Slot(
@@ -2495,7 +2566,9 @@ impl TryCallInfo {
             TryCallHandler::Default(label) => MachExceptionHandler::Default(*label),
             TryCallHandler::Context(reg) => {
                 let loc = if let Some(spillslot) = reg.to_spillslot() {
-                    let offset = layout.spillslot_offset(spillslot);
+                    // The spillslot offset is relative to the "fixed
+                    // storage area", which comes after outgoing args.
+                    let offset = layout.spillslot_offset(spillslot) + i64::from(layout.outgoing_args_size);
                     ExceptionContextLoc::SPOffset(u32::try_from(offset).expect("SP offset cannot be negative or larger than 4GiB"))
                 } else if let Some(realreg) = reg.to_real_reg() {
                     ExceptionContextLoc::GPR(realreg.hw_enc())

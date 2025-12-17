@@ -89,6 +89,9 @@ enum Subcommand {
     /// Inspect `*.cwasm` files output from Wasmtime
     #[cfg(feature = "objdump")]
     Objdump(wasmtime_cli::commands::ObjdumpCommand),
+
+    #[cfg(feature = "wizer")]
+    Wizer(wasmtime_cli::commands::WizerCommand),
 }
 
 impl Wasmtime {
@@ -126,6 +129,9 @@ impl Wasmtime {
 
             #[cfg(feature = "objdump")]
             Subcommand::Objdump(c) => c.execute(),
+
+            #[cfg(feature = "wizer")]
+            Subcommand::Wizer(c) => c.execute(),
         }
     }
 }

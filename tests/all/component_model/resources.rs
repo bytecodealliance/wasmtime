@@ -541,13 +541,13 @@ fn dynamic_type() -> Result<()> {
     let b = i.get_func(&mut store, "b").unwrap();
     let t2 = i.get_resource(&mut store, "t2").unwrap();
 
-    let a_params = a.params(&store);
+    let aty = a.ty(&store);
     assert_eq!(
-        a_params[0],
-        ("x".to_string(), Type::Own(ResourceType::host::<MyType>()))
+        aty.params().next().unwrap(),
+        ("x", Type::Own(ResourceType::host::<MyType>()))
     );
-    let b_params = b.params(&store);
-    match &b_params[0] {
+    let bty = b.ty(&store);
+    match bty.params().next().unwrap() {
         (name, Type::Tuple(t)) => {
             assert_eq!(name, "x");
             assert_eq!(t.types().len(), 1);
@@ -1311,60 +1311,48 @@ fn pass_host_borrow_to_guest() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn drop_on_owned_resource() -> Result<()> {
-    let engine = super::engine();
+#[tokio::test]
+async fn drop_on_owned_resource() -> Result<()> {
+    let mut config = wasmtime::Config::new();
+    config.wasm_component_model_async(true);
+    config.async_support(true);
+    let engine = &wasmtime::Engine::new(&config)?;
     let c = Component::new(
         &engine,
         r#"
             (component
                 (import "t" (type $t (sub resource)))
                 (import "[constructor]t" (func $ctor (result (own $t))))
-                (import "[method]t.foo" (func $foo (param "self" (borrow $t)) (result (list u8))))
+                (import "[method]t.foo" (func $foo async (param "self" (borrow $t))))
 
                 (core func $ctor (canon lower (func $ctor)))
                 (core func $drop (canon resource.drop $t))
+                (core func $foo (canon lower (func $foo) async))
 
-                (core module $m1
-                    (import "" "drop" (func $drop (param i32)))
-                    (memory (export "memory") 1)
-                    (global $to-drop (export "to-drop") (mut i32) (i32.const 0))
-                    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
-                        (call $drop (global.get $to-drop))
-                        unreachable)
-                )
-                (core instance $i1 (instantiate $m1
-                    (with "" (instance
-                        (export "drop" (func $drop))
-                    ))
-                ))
-
-                (core func $foo (canon lower (func $foo)
-                    (memory $i1 "memory")
-                    (realloc (func $i1 "realloc"))))
-
-                (core module $m2
+                (core module $m
                     (import "" "ctor" (func $ctor (result i32)))
-                    (import "" "foo" (func $foo (param i32 i32)))
-                    (import "i1" "to-drop" (global $to-drop (mut i32)))
+                    (import "" "foo" (func $foo (param i32) (result i32)))
+                    (import "" "drop" (func $drop (param i32)))
 
                     (func (export "f")
                         (local $r i32)
+                        (local $status i32)
                         (local.set $r (call $ctor))
-                        (global.set $to-drop (local.get $r))
-                        (call $foo
-                            (local.get $r)
-                            (i32.const 200))
+                        (local.set $status (call $foo (local.get $r)))
+                        (if (i32.ne (i32.const 1 (; STARTED ;)) (i32.and (local.get $status) (i32.const 0xf)))
+                           (then unreachable))
+                        (call $drop (local.get $r))
+                        (unreachable)
                     )
                 )
-                (core instance $i2 (instantiate $m2
+                (core instance $i (instantiate $m
                     (with "" (instance
                         (export "ctor" (func $ctor))
                         (export "foo" (func $foo))
+                        (export "drop" (func $drop))
                     ))
-                    (with "i1" (instance $i1))
                 ))
-                (func (export "f") (canon lift (core func $i2 "f")))
+                (func (export "f") async (canon lift (core func $i "f")))
             )
         "#,
     )?;
@@ -1376,19 +1364,19 @@ fn drop_on_owned_resource() -> Result<()> {
     linker
         .root()
         .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
-    linker.root().func_wrap("[constructor]t", |_cx, ()| {
+    linker.root().func_wrap("[constructor]t", |_, ()| {
         Ok((Resource::<MyType>::new_own(300),))
     })?;
     linker
         .root()
-        .func_wrap("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {
+        .func_wrap_concurrent("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {
             assert!(!r.owned());
-            Ok((vec![2u8],))
+            Box::pin(core::future::pending::<Result<()>>())
         })?;
-    let i = linker.instantiate(&mut store, &c)?;
+    let i = linker.instantiate_async(&mut store, &c).await?;
     let f = i.get_typed_func::<(), ()>(&mut store, "f")?;
 
-    let err = f.call(&mut store, ()).unwrap_err();
+    let err = f.call_async(&mut store, ()).await.unwrap_err();
     assert!(
         format!("{err:?}").contains("cannot remove owned resource while borrowed"),
         "bad error: {err:?}"
@@ -1538,5 +1526,148 @@ fn resource_any_to_typed_handles_borrow() -> Result<()> {
     f.call(&mut store, (&resource,))?;
     f.post_return(&mut store)?;
 
+    Ok(())
+}
+
+#[test]
+fn resource_dynamic() -> Result<()> {
+    let r = ResourceDynamic::new_own(1, 2);
+    assert_eq!(r.rep(), 1);
+    assert!(r.owned());
+    assert_eq!(r.ty(), 2);
+
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let r2 = r.try_into_resource_any(&mut store)?;
+    assert_eq!(r2.ty(), ResourceType::host_dynamic(2));
+    assert!(r2.owned());
+
+    let r3 = r2.try_into_resource_dynamic(&mut store)?;
+    assert_eq!(r3.rep(), 1);
+    assert_eq!(r3.ty(), 2);
+
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (import "u" (type $u (sub resource)))
+
+                (core func $t_drop (canon resource.drop $t))
+                (core func $u_drop (canon resource.drop $u))
+
+                (func (export "drop-t") (param "x" (own $t))
+                    (canon lift (core func $t_drop)))
+                (func (export "drop-u") (param "x" (own $u))
+                    (canon lift (core func $u_drop)))
+            )
+        "#,
+    )?;
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .resource("t", ResourceType::host_dynamic(2), |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("u", ResourceType::host_dynamic(3), |_, _| Ok(()))?;
+    let instance = linker.instantiate(&mut store, &c)?;
+
+    let drop_t = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")?;
+    let drop_u = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-u")?;
+
+    drop_t.call(&mut store, (ResourceDynamic::new_own(1, 2),))?;
+    drop_t.post_return(&mut store)?;
+
+    drop_u.call(&mut store, (ResourceDynamic::new_own(2, 3),))?;
+    drop_u.post_return(&mut store)?;
+
+    assert!(
+        drop_t
+            .call(&mut store, (ResourceDynamic::new_own(1, 1),))
+            .is_err()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn resource_dynamic_not_static() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (core func $t_drop (canon resource.drop $t))
+                (func (export "drop-t") (param "x" (own $t))
+                    (canon lift (core func $t_drop)))
+            )
+        "#,
+    )?;
+
+    struct T;
+
+    {
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .resource("t", ResourceType::host_dynamic(2), |_, _| Ok(()))?;
+        let instance = linker.instantiate(&mut store, &c)?;
+        instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")?;
+        assert!(
+            instance
+                .get_typed_func::<(Resource<T>,), ()>(&mut store, "drop-t")
+                .is_err()
+        );
+    }
+
+    {
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .resource("t", ResourceType::host::<T>(), |_, _| Ok(()))?;
+        let instance = linker.instantiate(&mut store, &c)?;
+        assert!(
+            instance
+                .get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")
+                .is_err()
+        );
+        instance.get_typed_func::<(Resource<T>,), ()>(&mut store, "drop-t")?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn intrinsic_trampolines() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let c = Component::new(
+        &engine,
+        r#"
+(component
+  (type $r' (resource (rep i32)))
+  (export $r "r" (type $r'))
+
+  (core func $new (canon resource.new $r))
+  (core func $rep (canon resource.rep $r))
+
+  (func (export "new") (param "x" u32) (result (own $r))
+    (canon lift (core func $new)))
+  (func (export "rep") (param "x" (borrow $r)) (result u32)
+    (canon lift (core func $rep)))
+)
+"#,
+    )?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let new = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "new")?;
+    let rep = i.get_typed_func::<(ResourceAny,), (u32,)>(&mut store, "rep")?;
+
+    let r = new.call(&mut store, (42,))?.0;
+    new.post_return(&mut store)?;
+    assert!(rep.call(&mut store, (r,)).is_err());
     Ok(())
 }

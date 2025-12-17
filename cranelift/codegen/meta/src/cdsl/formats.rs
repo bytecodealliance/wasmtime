@@ -40,6 +40,8 @@ pub(crate) struct InstructionFormat {
 
     pub num_block_operands: usize,
 
+    pub num_raw_block_operands: usize,
+
     /// Index of the value input operand that is used to infer the controlling type variable. By
     /// default, this is `0`, the first `value` operand. The index is relative to the values only,
     /// ignoring immediate operands.
@@ -52,6 +54,7 @@ pub(crate) struct FormatStructure {
     pub num_value_operands: usize,
     pub has_value_list: bool,
     pub num_block_operands: usize,
+    pub num_raw_block_operands: usize,
     /// Tuples of (Rust field name / Rust type) for each immediate field.
     pub imm_field_names: Vec<(&'static str, &'static str)>,
 }
@@ -65,8 +68,12 @@ impl fmt::Display for InstructionFormat {
             .collect::<Vec<_>>()
             .join(", ");
         fmt.write_fmt(format_args!(
-            "{}(imms=({}), vals={}, blocks={})",
-            self.name, imm_args, self.num_value_operands, self.num_block_operands,
+            "{}(imms=({}), vals={}, blocks={}, raw_blocks={})",
+            self.name,
+            imm_args,
+            self.num_value_operands,
+            self.num_block_operands,
+            self.num_raw_block_operands,
         ))?;
         Ok(())
     }
@@ -79,6 +86,7 @@ impl InstructionFormat {
             num_value_operands: self.num_value_operands,
             has_value_list: self.has_value_list,
             num_block_operands: self.num_block_operands,
+            num_raw_block_operands: self.num_raw_block_operands,
             imm_field_names: self
                 .imm_fields
                 .iter()
@@ -97,6 +105,7 @@ impl InstructionFormatBuilder {
             num_value_operands: 0,
             has_value_list: false,
             num_block_operands: 0,
+            num_raw_block_operands: 0,
             imm_fields: Vec::new(),
             typevar_operand: None,
         })
@@ -114,6 +123,11 @@ impl InstructionFormatBuilder {
 
     pub fn block(mut self) -> Self {
         self.0.num_block_operands += 1;
+        self
+    }
+
+    pub fn raw_block(mut self) -> Self {
+        self.0.num_raw_block_operands += 1;
         self
     }
 

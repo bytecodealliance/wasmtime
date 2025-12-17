@@ -151,11 +151,11 @@ fn worker_thread(
                         // The test panicked, leaving us a `Box<Any>`.
                         // Panics are usually strings.
                         if let Some(msg) = e.downcast_ref::<String>() {
-                            anyhow::bail!("panicked in worker #{}: {}", thread_num, msg)
+                            anyhow::bail!("panicked in worker #{thread_num}: {msg}")
                         } else if let Some(msg) = e.downcast_ref::<&'static str>() {
-                            anyhow::bail!("panicked in worker #{}: {}", thread_num, msg)
+                            anyhow::bail!("panicked in worker #{thread_num}: {msg}")
                         } else {
-                            anyhow::bail!("panicked in worker #{}", thread_num)
+                            anyhow::bail!("panicked in worker #{thread_num}")
                         }
                     });
 

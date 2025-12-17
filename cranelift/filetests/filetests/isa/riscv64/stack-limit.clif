@@ -54,7 +54,7 @@ block0(v0: i64):
 ;   addi t6,t6,16
 ;   trap_if stk_ovf##(sp ult t6)
 ; block0:
-;   load_sym a0,%foo+0
+;   load_ext_name_far a0,%foo+0
 ;   callind a0
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)

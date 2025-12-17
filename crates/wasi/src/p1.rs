@@ -130,7 +130,7 @@ use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 ///
 ///             wasi: WasiCtxBuilder::new()
 ///                 .arg("./foo.wasm")
-///                 // .. more customization if necesssary ..
+///                 // .. more customization if necessary ..
 ///                 .build_p1(),
 ///         }
 ///     }
@@ -1160,7 +1160,6 @@ fn first_non_empty_iovec(
     Ok(GuestPtr::new((0, 0)))
 }
 
-#[async_trait::async_trait]
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiP1Adapter struct.
@@ -1468,6 +1467,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         if let types::Filetype::Directory = fs_filetype {
             fs_rights_base &= !types::Rights::FD_SEEK;
             fs_rights_base &= !types::Rights::FD_FILESTAT_SET_SIZE;
+            fs_rights_base &= !types::Rights::PATH_FILESTAT_SET_SIZE;
         }
         if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
@@ -1537,7 +1537,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
         self.get_fd(fd)?;
-        Ok(())
+        Err(types::Errno::Notsup.into())
     }
 
     /// Return the attributes of an open file.
@@ -1840,10 +1840,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let mut st = self.transact()?;
         let from = from.into();
+        let to = to.into();
+        if !st.descriptors.used.contains_key(&to) {
+            return Err(types::Errno::Badf.into());
+        }
         let btree_map::Entry::Occupied(desc) = st.descriptors.used.entry(from) else {
             return Err(types::Errno::Badf.into());
         };
-        let to = to.into();
         if from != to {
             let desc = desc.remove();
             st.descriptors.free.insert(from);

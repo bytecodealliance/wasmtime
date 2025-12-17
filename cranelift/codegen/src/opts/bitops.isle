@@ -41,14 +41,6 @@
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
 
-;; DeMorgan's rule (two versions):
-;; bnot(bor(x, y)) == band(bnot(x), bnot(y))
-(rule (simplify (bnot ty (bor ty x y)))
-      (band ty (bnot ty x) (bnot ty y)))
-;; bnot(band(x, y)) == bor(bnot(x), bnot(y))
-(rule (simplify (bnot ty (band t x y)))
-      (bor ty (bnot ty x) (bnot ty y)))
-
 ;; `or(and(x, y), not(y)) == or(x, not(y))`
 (rule (simplify (bor ty
                      (band ty x y)
@@ -189,3 +181,47 @@
           (iconst_u ty 0xff00))
         (ushr ty x (iconst_u ty 56))))))
   (bswap ty x))
+
+(rule (simplify (bxor ty (bor ty x y) (band ty x y))) (bxor ty x y))
+
+
+(rule (simplify (bor ty (bor ty x y) x)) (bor ty x y))
+(rule (simplify (bor ty (bor ty x y) y)) (bor ty x y))
+(rule (simplify (bor ty x (bor ty x y))) (bor ty x y))
+(rule (simplify (bor ty y (bor ty x y))) (bor ty x y))
+
+(rule (simplify (band ty (band ty x y) x)) (band ty x y))
+(rule (simplify (band ty (band ty x y) y)) (band ty x y))
+(rule (simplify (band ty x (band ty x y))) (band ty x y))
+(rule (simplify (band ty y (band ty x y))) (band ty x y))
+
+;; (x ^ ~y) & x --> x & y
+(rule (simplify (band ty (bxor ty x (bnot ty y)) x)) (band ty x y))
+(rule (simplify (band ty (bxor ty (bnot ty y) x) x)) (band ty x y))
+(rule (simplify (band ty x (bxor ty x (bnot ty y)))) (band ty x y))
+(rule (simplify (band ty x (bxor ty (bnot ty y) x))) (band ty x y))
+
+; (x & y) + (x ^ y) --> x | y
+(rule (simplify (iadd ty (band ty x y) (bxor ty x y))) (bor ty x y))
+(rule (simplify (iadd ty (bxor ty x y) (band ty x y))) (bor ty x y))
+
+; (x | y) + (x & y) --> x + y
+(rule (simplify (iadd ty (bor ty x y) (band ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (band ty x y) (bor ty x y))) (iadd ty x y))
+
+; (x & y) | x --> x
+(rule (simplify (bor ty (band ty x y) x)) x)
+(rule (simplify (bor ty x (band ty x y))) x)
+
+; (x ^ y) ^ y --> x
+(rule (simplify (bxor ty (bxor ty x y) y)) x)
+(rule (simplify (bxor ty y (bxor ty x y))) x)
+
+; (x & y) | ~x -> y | ~x
+(rule (simplify (bor ty (band ty x y) (bnot ty x))) (bor ty y (bnot ty x)))
+(rule (simplify (bor ty (bnot ty x) (band ty x y))) (bor ty y (bnot ty x)))
+
+; (z & x) ^ (z & y) => z & (x ^ y)
+(rule (simplify 
+  (bxor ty (band ty z x) (band ty z y))) 
+	(band ty z (bxor ty x y)))

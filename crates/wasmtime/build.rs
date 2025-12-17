@@ -9,7 +9,11 @@ fn main() {
     let unix = cfg("unix");
     let windows = cfg("windows");
     let miri = cfg("miri");
-    let supported_os = unix || windows;
+
+    // A boolean indicating whether there's a `sys` module for this platform.
+    // This is true for `unix` or `windows`, but both of those require the `std`
+    // feature to also be active so check that too.
+    let supported_os = (unix || windows) && cfg!(feature = "std");
 
     // Determine if the current host architecture is supported by Cranelift
     // meaning that we might be executing native code.
@@ -22,9 +26,11 @@ fn main() {
         && (supported_os || cfg!(feature = "custom-native-signals"))
         && has_host_compiler_backend;
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
+    let has_custom_sync = !cfg!(feature = "std") && cfg!(feature = "custom-sync-primitives");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
+    custom_cfg("has_custom_sync", has_custom_sync);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
 
     // If this OS isn't supported and no debug-builtins or if Cranelift doesn't support
@@ -81,12 +87,13 @@ fn build_c_helpers() {
     build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     if std::env::var("CARGO_FEATURE_DEBUG_BUILTINS").is_ok() {
         build.define("FEATURE_DEBUG_BUILTINS", None);
-    }
-
-    // On MinGW targets work around a bug in the MinGW compiler described at
-    // https://github.com/bytecodealliance/wasmtime/pull/9688#issuecomment-2573367719
-    if cfg("windows") && cfg_is("target_env", "gnu") {
-        build.define("__USE_MINGW_SETJMP_NON_SEH", None);
+    } else if cfg("windows") {
+        // If debug builtins are disabled and this target is for Windows then
+        // there's no need to build the C helpers file.
+        //
+        // TODO: should skip this on Unix targets as well but needs a solution
+        // for `wasmtime_using_libunwind`.
+        return;
     }
 
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");

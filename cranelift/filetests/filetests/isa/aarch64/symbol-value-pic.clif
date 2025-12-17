@@ -3,22 +3,171 @@ set unwind_info=false
 set is_pic
 target aarch64
 
-function %f() -> i64 {
-  gv0 = symbol %my_global
+function %func_addr() -> i64 {
+    fn0 = %func0(i64) -> i64
 
 block0:
-  v0 = symbol_value.i64 gv0
-  return v0
+    v0 = func_addr.i64 fn0
+    return v0
 }
 
 ; VCode:
 ; block0:
-;   load_ext_name x0, TestCase(%my_global)+0
+;   load_ext_name_got x0, TestCase(%func0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %my_global 0
-;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %my_global 0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %func0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %func0 0
+;   ret
+
+function %colocated_func_addr() -> i64 {
+    fn0 = colocated %func0(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%func0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %func0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %func0 0
+;   ret
+
+function %symbol_value() -> i64 {
+    gv0 = symbol %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   ret
+
+function %symbol_value_plus_offset() -> i64 {
+    gv0 = symbol %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   movz x2, #123
+;   add x0, x0, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   mov x2, #0x7b
+;   add x0, x0, x2
+;   ret
+
+function %symbol_value_minus_offset() -> i64 {
+    gv0 = symbol %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   movn x2, #122
+;   add x0, x0, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   mov x2, #-0x7b
+;   add x0, x0, x2
+;   ret
+
+function %colocated_symbol_value() -> i64 {
+    gv0 = symbol colocated %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   ret
+
+function %colocated_symbol_value_plus_offset() -> i64 {
+    gv0 = symbol colocated %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   movz x2, #123
+;   add x0, x0, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   mov x2, #0x7b
+;   add x0, x0, x2
+;   ret
+
+function %colocated_symbol_value_minus_offset() -> i64 {
+    gv0 = symbol colocated %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name_got x0, TestCase(%global0)
+;   movn x2, #122
+;   add x0, x0, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %global0 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %global0 0
+;   mov x2, #-0x7b
+;   add x0, x0, x2
 ;   ret
 

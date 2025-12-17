@@ -9,6 +9,7 @@ use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::null::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
     GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmRefType, WasmResult,
     null::NullTypeLayouts,
@@ -252,7 +253,7 @@ impl GcCompiler for NullCompiler {
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[struct_type_index].unwrap_module_type_index();
-        let struct_layout = func_env.struct_layout(interned_type_index);
+        let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
 
         // Copy some stuff out of the struct layout to avoid borrowing issues.
         let struct_size = struct_layout.size;
@@ -292,6 +293,80 @@ impl GcCompiler for NullCompiler {
         )?;
 
         Ok(struct_ref)
+    }
+
+    fn alloc_exn(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        field_vals: &[ir::Value],
+        instance_id: ir::Value,
+        tag: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let interned_type_index = func_env.module.tags[tag_index]
+            .exception
+            .unwrap_module_type_index();
+        let exn_layout = func_env.struct_or_exn_layout(interned_type_index);
+
+        // Copy some stuff out of the exception layout to avoid borrowing issues.
+        let exn_size = exn_layout.size;
+        let exn_align = exn_layout.align;
+
+        assert_eq!(VMGcKind::MASK & exn_size, 0);
+        assert_eq!(VMGcKind::UNUSED_MASK & exn_size, exn_size);
+        let exn_size_val = builder.ins().iconst(ir::types::I32, i64::from(exn_size));
+
+        let align = builder.ins().iconst(ir::types::I32, i64::from(exn_align));
+
+        let (exn_ref, raw_exn_pointer) = self.emit_inline_alloc(
+            func_env,
+            builder,
+            VMGcKind::ExnRef,
+            Some(interned_type_index),
+            exn_size_val,
+            align,
+        );
+
+        // Initialize the exception object's fields.
+        //
+        // Note: we don't need to bounds-check the GC ref access here, because
+        // the result of the inline allocation is trusted and we aren't reading
+        // any pointers or offsets out from the (untrusted) GC heap.
+        initialize_struct_fields(
+            func_env,
+            builder,
+            interned_type_index,
+            raw_exn_pointer,
+            field_vals,
+            |func_env, builder, ty, field_addr, val| {
+                write_field_at_addr(func_env, builder, ty, field_addr, val)
+            },
+        )?;
+
+        // Initialize the tag fields.
+        let instance_id_addr = builder
+            .ins()
+            .iadd_imm(raw_exn_pointer, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
+        write_field_at_addr(
+            func_env,
+            builder,
+            WasmStorageType::Val(WasmValType::I32),
+            instance_id_addr,
+            instance_id,
+        )?;
+        let tag_addr = builder
+            .ins()
+            .iadd_imm(raw_exn_pointer, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
+        write_field_at_addr(
+            func_env,
+            builder,
+            WasmStorageType::Val(WasmValType::I32),
+            tag_addr,
+            tag,
+        )?;
+
+        Ok(exn_ref)
     }
 
     fn translate_read_gc_reference(

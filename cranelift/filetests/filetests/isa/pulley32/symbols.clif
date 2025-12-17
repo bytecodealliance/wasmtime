@@ -1,0 +1,139 @@
+test compile precise-output
+target pulley32
+
+function %func_addr() -> i32 {
+    fn0 = %func0(i32) -> i32
+
+block0:
+    v0 = func_addr.i32 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_far TestCase(%func0), 0
+;   ret
+;
+; Disassembled:
+; xconst32 x0, 0
+; ret
+
+function %colocated_func_addr() -> i32 {
+    fn0 = colocated %func0(i32) -> i32
+
+block0:
+    v0 = func_addr.i32 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_near TestCase(%func0), 0
+;   ret
+;
+; Disassembled:
+; xpcadd x0, 0x4    // target = 0x4
+; ret
+
+function %symbol_value() -> i32 {
+    gv0 = symbol %global0
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_far TestCase(%global0), 0
+;   ret
+;
+; Disassembled:
+; xconst32 x0, 0
+; ret
+
+function %symbol_value_plus_offset() -> i32 {
+    gv0 = symbol %global0+123
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_far TestCase(%global0), 123
+;   ret
+;
+; Disassembled:
+; xconst32 x0, 0
+; ret
+
+function %symbol_value_minus_offset() -> i32 {
+    gv0 = symbol %global0-123
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_far TestCase(%global0), -123
+;   ret
+;
+; Disassembled:
+; xconst32 x0, 0
+; ret
+
+function %colocated_symbol_value() -> i32 {
+    gv0 = symbol colocated %global0
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_near TestCase(%global0), 0
+;   ret
+;
+; Disassembled:
+; xpcadd x0, 0x4    // target = 0x4
+; ret
+
+function %colocated_symbol_value_plus_offset() -> i32 {
+    gv0 = symbol colocated %global0+123
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_near TestCase(%global0), 123
+;   ret
+;
+; Disassembled:
+; xpcadd x0, 0x4    // target = 0x4
+; ret
+
+function %colocated_symbol_value_minus_offset() -> i32 {
+    gv0 = symbol colocated %global0-123
+
+block0:
+    v0 = symbol_value.i32 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   x0 = load_ext_name_near TestCase(%global0), -123
+;   ret
+;
+; Disassembled:
+; xpcadd x0, 0x4    // target = 0x4
+; ret
+

@@ -20,7 +20,7 @@ use {
         pin::{Pin, pin},
         task::Poll,
     },
-    wit_bindgen_rt::async_support::{FutureWriteCancel, StreamResult},
+    wit_bindgen::{FutureWriteCancel, StreamResult},
 };
 
 struct Component;

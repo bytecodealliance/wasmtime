@@ -145,7 +145,7 @@ macro_rules! declare_function_sig {
 
             $(
                 $( #[ $attr ] )*
-                pub(crate) fn $name<A: ABI, P: PtrSize>(&mut self) -> Result<BuiltinFunction> {
+                pub(crate) fn $name<A: ABI>(&mut self) -> Result<BuiltinFunction> {
                     if self.$name.is_none() {
                         let params = vec![ $(self.$param() ),* ];
                         let result = vec![ $(self.$result() )?];

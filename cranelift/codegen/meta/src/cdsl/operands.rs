@@ -150,6 +150,10 @@ impl OperandKind {
     pub(crate) fn is_block(&self) -> bool {
         self.rust_type == "ir::BlockCall"
     }
+
+    pub(crate) fn is_raw_block(&self) -> bool {
+        self.rust_type == "ir::Block"
+    }
 }
 
 impl From<&TypeVar> for OperandKind {

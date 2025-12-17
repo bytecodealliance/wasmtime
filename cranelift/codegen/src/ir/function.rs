@@ -5,6 +5,7 @@
 
 use crate::HashMap;
 use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::ir::DebugTags;
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
@@ -190,6 +191,22 @@ pub struct FunctionStencil {
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 
+    /// Opaque debug-info tags on sequence-point and call
+    /// instructions.
+    ///
+    /// These tags are not interpreted by Cranelift, and are passed
+    /// through to compilation-result metadata. The only semantic
+    /// structure that Cranelift imposes is that when inlining, it
+    /// prepends the callsite call instruction's tags to the tags on
+    /// inlined instructions.
+    ///
+    /// In order to ensure clarity around guaranteed compiler
+    /// behavior, tags are only permitted on instructions whose
+    /// presence and sequence will remain the same in the compiled
+    /// output: namely, `sequence_point` instructions and ordinary
+    /// call instructions.
+    pub debug_tags: DebugTags,
+
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
     /// interpreted in the prologue, if necessary, to insert a stack check to
@@ -209,6 +226,7 @@ impl FunctionStencil {
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
+        self.debug_tags.clear();
         self.stack_limit = None;
     }
 
@@ -320,24 +338,6 @@ impl FunctionStencil {
         })
     }
 
-    /// Returns true if the function is function that doesn't call any other functions. This is not
-    /// to be confused with a "leaf function" in Windows terminology.
-    pub fn is_leaf(&self) -> bool {
-        // Conservative result: if there's at least one function signature referenced in this
-        // function, assume it is not a leaf.
-        let has_signatures = !self.dfg.signatures.is_empty();
-
-        // Under some TLS models, retrieving the address of a TLS variable requires calling a
-        // function. Conservatively assume that any function that references a tls global value
-        // is not a leaf.
-        let has_tls = self.global_values.values().any(|gv| match gv {
-            GlobalValueData::Symbol { tls, .. } => *tls,
-            _ => false,
-        });
-
-        !has_signatures && !has_tls
-    }
-
     /// Replace the `dst` instruction's data with the `src` instruction's data
     /// and then remove `src`.
     ///
@@ -426,6 +426,7 @@ impl Function {
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),
                 stack_limit: None,
+                debug_tags: DebugTags::default(),
             },
             params: FunctionParameters::new(),
         }

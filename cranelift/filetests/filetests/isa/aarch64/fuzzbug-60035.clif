@@ -17,7 +17,7 @@ block0:
 ;   mov fp, sp
 ;   str x19, [sp, #-16]!
 ; block0:
-;   load_ext_name x19, User(userextname0)+0
+;   load_ext_name_far x19, User(userextname0)+0
 ;   blr x19
 ;   blr x19
 ;   ldr x19, [sp], #16

@@ -41,7 +41,6 @@
 )]
 
 use crate::runtime::module::lookup_code;
-use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
 use crate::runtime::vm::traphandlers::{TrapRegisters, tls};
 use mach2::exc::*;
 use mach2::exception_types::*;
@@ -103,7 +102,7 @@ impl TrapHandler {
             // overflowed when a host overflows its fiber stack.
             let mut handler: libc::sigaction = mem::zeroed();
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
-            handler.sa_sigaction = sigbus_handler as usize;
+            handler.sa_sigaction = (sigbus_handler as *const ()).addr();
             libc::sigemptyset(&mut handler.sa_mask);
             if libc::sigaction(libc::SIGBUS, &handler, &raw mut PREV_SIGBUS) != 0 {
                 panic!(
@@ -352,7 +351,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                         *(state.__rsp as *mut u64) = state.__rip;
                     }
                 }
-                state.__rip = unwind as u64;
+                state.__rip = (unwind as *const ()).addr() as u64;
                 state.__rdi = pc as u64;
                 state.__rsi = fp as u64;
                 state.__rdx = fault1 as u64;
@@ -384,7 +383,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__x[2] = fault1 as u64;
                 state.__x[3] = fault2 as u64;
                 state.__x[4] = trap as u64;
-                state.__pc = unwind as u64;
+                state.__pc = (unwind as *const ()).addr() as u64;
             };
             let mut thread_state = unsafe { mem::zeroed::<ThreadState>() };
         } else {
@@ -455,10 +454,10 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 ///
 /// This is a small shim which primarily serves the purpose of simply capturing
 /// a native backtrace once we've switched back to the thread itself. After
-/// the backtrace is captured we can do the usual `longjmp` back to the source
+/// the backtrace is captured we can do the usual resumption back to the source
 /// of the wasm code.
 unsafe extern "C" fn unwind(pc: usize, fp: usize, fault1: usize, fault2: usize, trap: u8) -> ! {
-    let jmp_buf = tls::with(|state| {
+    let handler = tls::with(|state| {
         let state = state.unwrap();
         let regs = TrapRegisters { pc, fp };
         let faulting_addr = match fault1 {
@@ -467,11 +466,10 @@ unsafe extern "C" fn unwind(pc: usize, fp: usize, fault1: usize, fault2: usize, 
         };
         let trap = Trap::from_u8(trap).unwrap();
         state.set_jit_trap(regs, faulting_addr, trap);
-        state.take_jmp_buf()
+        state.entry_trap_handler()
     });
-    debug_assert!(!jmp_buf.is_null());
     unsafe {
-        wasmtime_longjmp(jmp_buf);
+        handler.resume_tailcc(0, 0);
     }
 }
 

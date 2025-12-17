@@ -16,7 +16,7 @@ struct TestUnwind;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "unwind");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed);
+        anyhow::bail!("No options allowed on {parsed}");
     }
     Ok(Box::new(TestUnwind))
 }
@@ -63,7 +63,7 @@ impl SubTest for TestUnwind {
                 systemv::dump(&mut text, &eh_frame.0.into_vec(), isa.pointer_bytes())
             }
             Some(ui) => {
-                anyhow::bail!("Unexpected unwind info type: {:?}", ui);
+                anyhow::bail!("Unexpected unwind info type: {ui:?}");
             }
             None => {}
         }

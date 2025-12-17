@@ -4,7 +4,7 @@ use {
         wasi::http::types::{ErrorCode, Request, Response},
         wit_future, wit_stream,
     },
-    wit_bindgen_rt::async_support::{self, StreamResult},
+    wit_bindgen::StreamResult,
 };
 
 struct Component;
@@ -15,11 +15,14 @@ impl Handler for Component {
     /// Return a response which echoes the request headers, body, and trailers.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers();
-        let (body, trailers) = request.consume_body().unwrap();
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (body, trailers) = Request::consume_body(request, result_rx);
 
-        // let (headers, body) = Request::into_parts(request);
-
-        let (response, _result) = if false {
+        let (response, _result) = if headers
+            .get("x-host-to-host")
+            .into_iter()
+            .any(|v| v == b"true")
+        {
             // This is the easy and efficient way to do it...
             Response::new(headers, Some(body), trailers)
         } else {
@@ -28,7 +31,7 @@ impl Handler for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            async_support::spawn(async move {
+            wit_bindgen::spawn(async move {
                 let mut body_rx = body;
                 let mut chunk = Vec::with_capacity(1024);
                 loop {
@@ -47,7 +50,6 @@ impl Handler for Component {
                 drop(pipe_tx);
 
                 trailers_tx.write(trailers.await).await.unwrap();
-                drop(request);
             });
 
             Response::new(headers, Some(pipe_rx), trailers_rx)

@@ -631,7 +631,7 @@ impl Expander for LiftExpander {
                 quote!(u32),
             ),
         };
-        let discrim_limit = proc_macro2::Literal::usize_unsuffixed(cases.len());
+        let discrim_limit = proc_macro2::Literal::u32_suffixed(cases.len().try_into().unwrap());
 
         let extract_ty = quote! {
             let ty = match ty {
@@ -667,7 +667,7 @@ impl Expander for LiftExpander {
                     let align = <Self as #wt::component::ComponentType>::ALIGN32;
                     debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
                     let discrim = #from_bytes;
-                    if discrim >= #discrim_limit {
+                    if u32::from(discrim) >= #discrim_limit {
                         #internal::anyhow::bail!("unexpected discriminant: {discrim}");
                     }
                     Ok(unsafe {

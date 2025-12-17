@@ -11,12 +11,21 @@
 #include <wasmtime/conf.h>
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
+#include <wasmtime/helpers.hh>
 #include <wasmtime/store.h>
 #include <wasmtime/wasi.hh>
 
 namespace wasmtime {
 
 class Caller;
+
+/// \brief An enum for the behavior before extending the epoch deadline.
+enum class DeadlineKind {
+  /// Directly continue to updating the deadline and executing WebAssembly.
+  Continue = WASMTIME_UPDATE_DEADLINE_CONTINUE,
+  /// Yield control (via async support) then update the deadline.
+  Yield = WASMTIME_UPDATE_DEADLINE_YIELD,
+};
 
 /**
  * \brief Owner of all WebAssembly objects
@@ -31,12 +40,9 @@ class Caller;
  * will be deallocated when the `Store` is deallocated.
  */
 class Store {
-  struct deleter {
-    void operator()(wasmtime_store_t *p) const { wasmtime_store_delete(p); }
-  };
+  WASMTIME_OWN_WRAPPER(Store, wasmtime_store);
 
-  std::unique_ptr<wasmtime_store_t, deleter> ptr;
-
+private:
   static void finalizer(void *ptr) {
     std::unique_ptr<std::any> _ptr(static_cast<std::any *>(ptr));
   }
@@ -44,7 +50,7 @@ class Store {
 public:
   /// Creates a new `Store` within the provided `Engine`.
   explicit Store(Engine &engine)
-      : ptr(wasmtime_store_new(engine.ptr.get(), nullptr, finalizer)) {}
+      : ptr(wasmtime_store_new(engine.capi(), nullptr, finalizer)) {}
 
   /**
    * \brief An interior pointer into a `Store`.
@@ -70,9 +76,10 @@ public:
     friend class Store;
     wasmtime_context_t *ptr;
 
-    Context(wasmtime_context_t *ptr) : ptr(ptr) {}
-
   public:
+    /// Creates a context from the raw C API pointer.
+    explicit Context(wasmtime_context_t *ptr) : ptr(ptr) {}
+
     /// Creates a context referencing the provided `Store`.
     Context(Store &store) : Context(wasmtime_store_context(store.ptr.get())) {}
     /// Creates a context referencing the provided `Store`.
@@ -131,7 +138,7 @@ public:
     /// `Linker::define_wasi` because otherwise no host functions will use the
     /// WASI state.
     Result<std::monostate> set_wasi(WasiConfig config) {
-      auto *error = wasmtime_context_set_wasi(ptr, config.ptr.release());
+      auto *error = wasmtime_context_set_wasi(ptr, config.capi_release());
       if (error != nullptr) {
         return Error(error);
       }
@@ -149,8 +156,11 @@ public:
       wasmtime_context_set_epoch_deadline(ptr, ticks_beyond_current);
     }
 
-    /// Returns the raw context pointer for the C API.
-    wasmtime_context_t *raw_context() { return ptr; }
+    /// \brief Returns the underlying C API pointer.
+    const wasmtime_context_t *capi() const { return ptr; }
+
+    /// \brief Returns the underlying C API pointer.
+    wasmtime_context_t *capi() { return ptr; }
   };
 
   /// \brief Provides limits for a store. Used by hosts to limit resource
@@ -189,8 +199,56 @@ public:
                            tables, memories);
   }
 
+  /// \brief Configures epoch deadline callback to C function.
+  ///
+  /// This function configures a store-local callback function that will be
+  /// called when the running WebAssembly function has exceeded its epoch
+  /// deadline. That function can:
+  /// - return an error to terminate the function
+  /// - set the delta argument and return DeadlineKind::Continue to update the
+  ///   epoch deadline delta and resume function execution.
+  /// - set the delta argument, update the epoch deadline, and return
+  ///   DeadlineKind::Yield to yield (via async support) and resume function
+  ///   execution.
+  template <typename F,
+            std::enable_if_t<std::is_invocable_r_v<Result<DeadlineKind>, F,
+                                                   Context, uint64_t &>,
+                             bool> = true>
+  void epoch_deadline_callback(F &&f) {
+    wasmtime_store_epoch_deadline_callback(
+        ptr.get(), raw_epoch_callback<std::remove_reference_t<F>>,
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
+        raw_epoch_finalizer<std::remove_reference_t<F>>);
+  }
+
   /// Explicit function to acquire a `Context` from this store.
   Context context() { return this; }
+
+  /// Runs a garbage collection pass in the referenced store to collect loose
+  /// GC-managed objects, if any are available.
+  void gc() { context().gc(); }
+
+private:
+  template <typename F>
+  static wasmtime_error_t *
+  raw_epoch_callback(wasmtime_context_t *context, void *data,
+                     uint64_t *epoch_deadline_delta,
+                     wasmtime_update_deadline_kind_t *update_kind) {
+    auto &callback = *static_cast<F *>(data);
+    Context ctx(context);
+    auto result = callback(ctx, *epoch_deadline_delta);
+
+    if (!result) {
+      return result.err().capi_release();
+    }
+    *update_kind = static_cast<wasmtime_update_deadline_kind_t>(result.ok());
+    return nullptr;
+  }
+
+  template <typename F> static void raw_epoch_finalizer(void *data) {
+    std::unique_ptr<F> _ptr(static_cast<F *>(data));
+  }
 };
 
 } // namespace wasmtime

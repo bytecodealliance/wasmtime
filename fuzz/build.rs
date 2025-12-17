@@ -11,6 +11,7 @@ mod component {
     use quote::quote;
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
+    use std::collections::HashMap;
     use std::env;
     use std::fmt::Write;
     use std::fs;
@@ -37,6 +38,7 @@ mod component {
     }
 
     fn write_static_api_tests(out: &mut String) -> Result<()> {
+        println!("cargo:rerun-if-env-changed=WASMTIME_FUZZ_SEED");
         let seed = if let Ok(seed) = env::var("WASMTIME_FUZZ_SEED") {
             seed.parse::<u64>()
                 .with_context(|| anyhow!("expected u64 in WASMTIME_FUZZ_SEED"))?
@@ -51,11 +53,11 @@ mod component {
         let mut rng = StdRng::seed_from_u64(seed);
 
         const TYPE_COUNT: usize = 50;
-        const MAX_ARITY: u32 = 5;
         const TEST_CASE_COUNT: usize = 100;
 
         let mut type_fuel = 1000;
         let mut types = Vec::new();
+        let mut rust_type_names = Vec::new();
         let name_counter = &mut 0;
         let mut declarations = TokenStream::new();
         let mut tests = TokenStream::new();
@@ -73,38 +75,40 @@ mod component {
                 ret
             })?;
 
-            let name =
+            let rust_ty_name =
                 wasmtime_test_util::component_fuzz::rust_type(&ty, name_counter, &mut declarations);
-            types.push((name, ty));
+            types.push(ty);
+            rust_type_names.push(rust_ty_name);
         }
+
+        fn hash_key(ty: &Type) -> usize {
+            let ty: *const Type = ty;
+            ty.addr()
+        }
+
+        let type_to_name_map = types
+            .iter()
+            .map(hash_key)
+            .zip(rust_type_names.iter().cloned())
+            .collect::<HashMap<_, _>>();
 
         // Next generate a set of static API test cases driven by the above
         // types.
         for index in 0..TEST_CASE_COUNT {
             let (case, rust_params, rust_results) = generate(&mut rng, |u| {
-                let mut params = Vec::new();
-                let mut result = None;
                 let mut rust_params = TokenStream::new();
                 let mut rust_results = TokenStream::new();
-                for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-                    let (name, ty) = u.choose(&types)?;
-                    params.push(ty);
+                let case = TestCase::generate(&types, u)?;
+                for ty in case.params.iter() {
+                    let name = &type_to_name_map[&hash_key(ty)];
                     rust_params.extend(name.clone());
                     rust_params.extend(quote!(,));
                 }
-                if u.arbitrary()? {
-                    let (name, ty) = u.choose(&types)?;
-                    result = Some(ty);
+                if let Some(ty) = &case.result {
+                    let name = &type_to_name_map[&hash_key(ty)];
                     rust_results.extend(name.clone());
                     rust_results.extend(quote!(,));
                 }
-
-                let case = TestCase {
-                    params,
-                    result,
-                    encoding1: u.arbitrary()?,
-                    encoding2: u.arbitrary()?,
-                };
                 Ok((case, rust_params, rust_results))
             })?;
 
@@ -113,12 +117,12 @@ mod component {
                 type_instantiation_args,
                 params,
                 results,
-                import_and_export,
-                encoding1,
-                encoding2,
+                caller_module,
+                callee_module,
+                options,
             } = case.declarations();
 
-            let test = quote!(#index => component_types::static_api_test::<(#rust_params), (#rust_results)>(
+            let test = quote!(#index => component_api::static_api_test::<(#rust_params), (#rust_results)>(
                 input,
                 {
                     static DECLS: Declarations = Declarations {
@@ -126,9 +130,9 @@ mod component {
                         type_instantiation_args: Cow::Borrowed(#type_instantiation_args),
                         params: Cow::Borrowed(#params),
                         results: Cow::Borrowed(#results),
-                        import_and_export: Cow::Borrowed(#import_and_export),
-                        encoding1: #encoding1,
-                        encoding2: #encoding2,
+                        caller_module: Cow::Borrowed(#caller_module),
+                        callee_module: Cow::Borrowed(#callee_module),
+                        options: #options,
                     };
                     &DECLS
                 }
@@ -147,7 +151,7 @@ mod component {
                 use std::borrow::Cow;
                 use std::sync::{Arc, Once};
                 use wasmtime::component::{ComponentType, Lift, Lower};
-                use wasmtime_fuzzing::generators::component_types;
+                use wasmtime_fuzzing::oracles::component_api;
 
                 const SEED: u64 = #seed;
 

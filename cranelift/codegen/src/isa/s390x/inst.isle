@@ -1015,6 +1015,13 @@
       (got Reg)
       (got_offset Reg)
       (symbol BoxSymbolReloc))
+
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableReg)
+                  (label MachLabel))
+
+    ;; A pseudoinstruction that serves as a sequence point.
+    (SequencePoint)
 ))
 
 ;; Primitive types used in instruction formats.
@@ -1825,7 +1832,7 @@
       (memarg_reg_plus_reg x y 0 flags))
 
 (rule 1 (lower_address flags
-                     (symbol_value (symbol_value_data name (reloc_distance_near) sym_offset))
+                     (symbol_value (symbol_value_data name (RelocDistance.Near) sym_offset))
                      (i64_from_offset offset))
       (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
       (memarg_symbol name final_offset flags))
@@ -1846,7 +1853,7 @@
 
 (decl pure partial load_sym (Inst) Inst)
 (rule (load_sym inst)
-      (if-let (load _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+      (if-let (load _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
                     (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
@@ -1854,7 +1861,7 @@
 
 (decl pure partial uload16_sym (Inst) Inst)
 (rule (uload16_sym inst)
-      (if-let (uload16 _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+      (if-let (uload16 _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
                        (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
@@ -3415,7 +3422,7 @@
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call_info (Sig CallInstDest CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(decl gen_call_info (Sig CallInstDest CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
 (extern constructor gen_call_info gen_call_info)
 
 (decl gen_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
@@ -4928,6 +4935,19 @@
 (decl vec_fcmphes (Type Reg Reg) ProducesFlags)
 (rule (vec_fcmphes (ty_vec128 ty) x y) (vec_float_cmps ty (vecop_float_cmphe ty) x y))
 
+;; Other helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl s390x_label_address (MachLabel) Reg)
+(rule (s390x_label_address label)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl s390x_sequence_point () SideEffectNoResult)
+(rule (s390x_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))
 
 ;; Implicit conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

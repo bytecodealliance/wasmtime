@@ -34,7 +34,7 @@ endif()
 
 set(WASMTIME_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
 
-if(WASMTIME_TARGET MATCHES "darwin")
+if(WASMTIME_TARGET MATCHES "apple")
   set(WASMTIME_SHARED_FILES libwasmtime.dylib)
   set(WASMTIME_STATIC_FILES libwasmtime.a)
 elseif(WASMTIME_TARGET MATCHES "windows-gnu")
@@ -86,7 +86,9 @@ add_dependencies(wasmtime wasmtime-crate)
 
 if(BUILD_SHARED_LIBS)
     if(NOT WASMTIME_TARGET MATCHES "windows")
+      if(NOT WASMTIME_TARGET MATCHES "apple")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
+      endif()
     endif()
     list(GET WASMTIME_SHARED_FILES 0 WASMTIME_SHARED_LIB_TO_LINK)
     target_link_libraries(wasmtime INTERFACE ${WASMTIME_SHARED_LIB_TO_LINK})
@@ -95,7 +97,7 @@ else()
         target_compile_options(wasmtime INTERFACE -DWASM_API_EXTERN= -DWASI_API_EXTERN=)
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
-    elseif(WASMTIME_TARGET MATCHES "darwin")
+    elseif(WASMTIME_TARGET MATCHES "apple")
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             "-framework CoreFoundation")
     else()
@@ -104,16 +106,19 @@ else()
     endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_BINARY_DIR}/include)
-set(WASMTIME_HEADER_DST ${CMAKE_BINARY_DIR}/include)
-include(cmake/install-headers.cmake)
+target_include_directories(wasmtime
+  INTERFACE include
+  INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/include)
+configure_file(include/wasmtime/conf.h.in include/wasmtime/conf.h)
 
 include(GNUInstallDirs)
-install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ TYPE INCLUDE)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ TYPE INCLUDE
+        FILES_MATCHING REGEX "\\.hh?$")
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-if(WASMTIME_TARGET MATCHES "darwin")
+if(WASMTIME_TARGET MATCHES "apple")
   # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
   # directive than the default one that comes out of the linker when typically
   # doing `cargo build`. For more info see #984
@@ -128,15 +133,6 @@ add_custom_target(doc
     COMMAND doxygen ${DOXYGEN_CONF_OUT}
     DEPENDS ${WASMTIME_GENERATED_CONF_H} ${DOXYGEN_CONF_OUT}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_dependencies(doc headers-to-doc)
-
-file(GLOB headers "include/*.h")
-add_custom_target(headers-to-doc
-  COMMAND
-    ${CMAKE_COMMAND}
-      -DWASMTIME_HEADER_DST=${CMAKE_BINARY_DIR}/include
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake
-  DEPENDS ${headers})
 
 if (NOT CMAKE_CXX_STANDARD)
   message(STATUS "Cannot detect C++ Standard. Switching to C++17 by default !!")
@@ -165,11 +161,6 @@ if (MSVC)
 else()
   target_link_libraries(wasmtime-cpp INTERFACE stdc++ pthread)
 endif()
-
-target_include_directories(
-        wasmtime-cpp
-        INTERFACE
-        ${PROJECT_SOURCE_DIR}/include)
 
 if (BUILD_TESTS)
   message(STATUS "Building tests")

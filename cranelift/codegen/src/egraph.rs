@@ -3,7 +3,7 @@
 use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
-use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use crate::dominator_tree::DominatorTree;
 use crate::egraph::elaborate::Elaborator;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
 use crate::ir::pcc::Fact;
@@ -54,7 +54,7 @@ pub struct EgraphPass<'a> {
     /// Dominator tree for the CFG, used to visit blocks in pre-order
     /// so we see value definitions before their uses, and also used for
     /// O(1) dominance checks.
-    domtree: DominatorTreePreorder,
+    domtree: &'a DominatorTree,
     /// Alias analysis, used during optimization.
     alias_analysis: &'a mut AliasAnalysis<'a>,
     /// Loop analysis results, used for built-in LICM during
@@ -92,7 +92,7 @@ where
     pub(crate) gvn_map_blocks: &'opt Vec<Block>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
-    domtree: &'opt DominatorTreePreorder,
+    domtree: &'opt DominatorTree,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
     flags: &'opt Flags,
@@ -264,10 +264,10 @@ where
                 block
             })
             .max_by(|&x, &y| {
-                if self.domtree.dominates(x, y) {
+                if self.domtree.block_dominates(x, y) {
                     Ordering::Less
                 } else {
-                    debug_assert!(self.domtree.dominates(y, x));
+                    debug_assert!(self.domtree.block_dominates(y, x));
                     Ordering::Greater
                 }
             })
@@ -407,7 +407,11 @@ where
     fn merge_availability(&self, a: Value, b: Value) -> Block {
         let a = self.available_block[a];
         let b = self.available_block[b];
-        if self.domtree.dominates(a, b) { a } else { b }
+        if self.domtree.block_dominates(a, b) {
+            a
+        } else {
+            b
+        }
     }
 
     /// Optimize a "skeleton" instruction.
@@ -714,14 +718,12 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        raw_domtree: &'a DominatorTree,
+        domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
         flags: &'a Flags,
         ctrl_plane: &'a mut ControlPlane,
     ) -> Self {
-        let mut domtree = DominatorTreePreorder::new();
-        domtree.compute(raw_domtree);
         Self {
             func,
             domtree,

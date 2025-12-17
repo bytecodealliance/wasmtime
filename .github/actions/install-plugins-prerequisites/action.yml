@@ -1,0 +1,19 @@
+name: 'Install prerequisites for plugins example'
+description: 'Install prerequisites for plugins example'
+
+runs:
+  using: composite
+  steps:
+    - name: Install WASI SDK (Linux)
+      run: wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-x86_64-linux.tar.gz -P ${{ runner.temp }} && tar xf ${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux.tar.gz -C ${{ runner.temp }} && echo WASI_SDK_PATH=${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux >> $GITHUB_ENV
+      if: runner.os == 'Linux'
+      shell: bash
+    - name: Install wit-bindgen (Linux)
+      run: cargo install wit-bindgen-cli@0.46.0
+      if: runner.os == 'Linux'
+      shell: bash
+    - name: Install jco (Linux)
+      run: npm install --global @bytecodealliance/jco@1.15.0 && npm install --global @bytecodealliance/componentize-js@0.19.1
+      if: runner.os == 'Linux'
+      shell: bash
+

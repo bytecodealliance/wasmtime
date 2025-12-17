@@ -1,0 +1,189 @@
+test compile precise-output
+target s390x
+
+function %patchable_call(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   brasl %r14, %f
+;   brasl %r14, %f
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   brasl %r14, 0x16 ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   brasl %r14, 0x1c ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %patchable_call_stack_args(i64) system_v {
+    fn0 = colocated patchable %f(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+;   aghi %r15, -200
+; block0:
+;   stg %r2, 160(%r15)
+;   stg %r2, 168(%r15)
+;   stg %r2, 176(%r15)
+;   stg %r2, 184(%r15)
+;   stg %r2, 192(%r15)
+;   lgr %r6, %r2
+;   lgr %r3, %r6
+;   lgr %r4, %r6
+;   lgr %r5, %r6
+;   brasl %r14, %f
+;   stg %r6, 160(%r15)
+;   stg %r6, 168(%r15)
+;   stg %r6, 176(%r15)
+;   stg %r6, 184(%r15)
+;   stg %r6, 192(%r15)
+;   brasl %r14, %f
+;   lmg %r6, %r15, 248(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+;   aghi %r15, -0xc8
+; block1: ; offset 0xa
+;   stg %r2, 0xa0(%r15)
+;   stg %r2, 0xa8(%r15)
+;   stg %r2, 0xb0(%r15)
+;   stg %r2, 0xb8(%r15)
+;   stg %r2, 0xc0(%r15)
+;   lgr %r6, %r2
+;   lgr %r3, %r6
+;   lgr %r4, %r6
+;   lgr %r5, %r6
+;   brasl %r14, 0x38 ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   stg %r6, 0xa0(%r15)
+;   stg %r6, 0xa8(%r15)
+;   stg %r6, 0xb0(%r15)
+;   stg %r6, 0xb8(%r15)
+;   stg %r6, 0xc0(%r15)
+;   brasl %r14, 0x5c ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+;   lmg %r6, %r15, 0xf8(%r15)
+;   br %r14
+
+function %patchable_try_call(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+    fn0 = colocated patchable %f(i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    try_call fn0(v0, v0, v0, v0), sig0, block1(), [ default: block2(exn0) ]
+
+block1():
+    return v0
+
+block2(v1: i64):
+    return v1
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+;   aghi %r15, -232
+;   std %f8, 168(%r15)
+;   std %f9, 176(%r15)
+;   std %f10, 184(%r15)
+;   std %f11, 192(%r15)
+;   std %f12, 200(%r15)
+;   std %f13, 208(%r15)
+;   std %f14, 216(%r15)
+;   std %f15, 224(%r15)
+; block0:
+;   stg %r2, 160(%r15)
+;   lg %r3, 160(%r15)
+;   lg %r4, 160(%r15)
+;   lg %r5, 160(%r15)
+;   brasl %r14, %f; jg MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   lg %r2, 160(%r15)
+;   ld %f8, 168(%r15)
+;   ld %f9, 176(%r15)
+;   ld %f10, 184(%r15)
+;   ld %f11, 192(%r15)
+;   ld %f12, 200(%r15)
+;   ld %f13, 208(%r15)
+;   ld %f14, 216(%r15)
+;   ld %f15, 224(%r15)
+;   lmg %r6, %r15, 280(%r15)
+;   br %r14
+; block2:
+;   lgr %r2, %r6
+;   ld %f8, 168(%r15)
+;   ld %f9, 176(%r15)
+;   ld %f10, 184(%r15)
+;   ld %f11, 192(%r15)
+;   ld %f12, 200(%r15)
+;   ld %f13, 208(%r15)
+;   ld %f14, 216(%r15)
+;   ld %f15, 224(%r15)
+;   lmg %r6, %r15, 280(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+;   aghi %r15, -0xe8
+;   std %f8, 0xa8(%r15)
+;   std %f9, 0xb0(%r15)
+;   std %f10, 0xb8(%r15)
+;   std %f11, 0xc0(%r15)
+;   std %f12, 0xc8(%r15)
+;   std %f13, 0xd0(%r15)
+;   std %f14, 0xd8(%r15)
+;   std %f15, 0xe0(%r15)
+; block1: ; offset 0x2a
+;   stg %r2, 0xa0(%r15)
+;   lg %r3, 0xa0(%r15)
+;   lg %r4, 0xa0(%r15)
+;   lg %r5, 0xa0(%r15)
+;   brasl %r14, 0x42 ; reloc_external PLTRel32Dbl %f 2 ; patchable call: NOP out last 6 bytes
+; block2: ; offset 0x48
+;   lg %r2, 0xa0(%r15)
+;   ld %f8, 0xa8(%r15)
+;   ld %f9, 0xb0(%r15)
+;   ld %f10, 0xb8(%r15)
+;   ld %f11, 0xc0(%r15)
+;   ld %f12, 0xc8(%r15)
+;   ld %f13, 0xd0(%r15)
+;   ld %f14, 0xd8(%r15)
+;   ld %f15, 0xe0(%r15)
+;   lmg %r6, %r15, 0x118(%r15)
+;   br %r14
+; block3: ; offset 0x76
+;   lgr %r2, %r6
+;   ld %f8, 0xa8(%r15)
+;   ld %f9, 0xb0(%r15)
+;   ld %f10, 0xb8(%r15)
+;   ld %f11, 0xc0(%r15)
+;   ld %f12, 0xc8(%r15)
+;   ld %f13, 0xd0(%r15)
+;   ld %f14, 0xd8(%r15)
+;   ld %f15, 0xe0(%r15)
+;   lmg %r6, %r15, 0x118(%r15)
+;   br %r14
+

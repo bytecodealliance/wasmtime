@@ -15,7 +15,7 @@ block0(v0: i8):
 ; nextln: mov fp, sp
 ; nextln: block0:
 ; check-not: uxtb w0, w0
-; nextln: load_ext_name x2, User(userextname0)+0
+; nextln: load_ext_name_far x2, User(userextname0)+0
 ; nextln: blr x2
 
 ; The aaple aarch64 call conv respects the uext and sext flags
@@ -32,5 +32,5 @@ block0(v0: i8):
 ; nextln: mov fp, sp
 ; nextln: block0:
 ; nextln: uxtb w0, w0
-; nextln: load_ext_name x4, User(userextname0)+0
+; nextln: load_ext_name_far x4, User(userextname0)+0
 ; nextln: blr x4

@@ -1,4 +1,5 @@
 mod gc;
+pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
@@ -10,23 +11,24 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
-use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, types};
+use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::ir::{Block, types::*};
+use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::mem;
-use wasmparser::{Operator, WasmFeatures};
+use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FuncIndex, FuncKey, GlobalIndex, IndexType, Memory, MemoryIndex, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
-    TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
+    MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -43,6 +45,7 @@ pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
     builtins: [Option<ir::FuncRef>; BuiltinFunctionIndex::len() as usize],
+    breakpoint_trampoline: Option<ir::FuncRef>,
 }
 
 impl BuiltinFunctions {
@@ -50,6 +53,7 @@ impl BuiltinFunctions {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::len() as usize],
+            breakpoint_trampoline: None,
         }
     }
 
@@ -68,9 +72,31 @@ impl BuiltinFunctions {
             name,
             signature,
             colocated: true,
+            patchable: false,
         });
         *cache = Some(f);
         f
+    }
+
+    pub(crate) fn patchable_breakpoint(&mut self, func: &mut Function) -> ir::FuncRef {
+        *self.breakpoint_trampoline.get_or_insert_with(|| {
+            let mut signature = ir::Signature::new(CallConv::PreserveAll);
+            signature
+                .params
+                .push(ir::AbiParam::new(self.types.pointer_type));
+            let signature = func.import_signature(signature);
+            let key = FuncKey::PatchableToBuiltinTrampoline(BuiltinFunctionIndex::breakpoint());
+            let (namespace, index) = key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
+            func.import_function(ir::ExtFuncData {
+                name,
+                signature,
+                colocated: true,
+                patchable: true,
+            })
+        })
     }
 }
 
@@ -83,6 +109,7 @@ macro_rules! declare_function_signatures {
     )*) => {
         $(impl BuiltinFunctions {
             $( #[$attr] )*
+            #[allow(dead_code, reason = "debug breakpoint libcall not used in host ABI, only patchable ABI")]
             pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
                 self.load_builtin(func, BuiltinFunctionIndex::$name())
             }
@@ -95,12 +122,16 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
+    key: FuncKey,
     pub(crate) module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
     needs_gc_heap: bool,
     entities: WasmEntities,
+
+    /// Translation state at the given point.
+    pub(crate) stacks: FuncTranslationStacks,
 
     #[cfg(feature = "gc")]
     ty_to_gc_layout: std::collections::HashMap<
@@ -175,6 +206,20 @@ pub struct FuncEnvironment<'module_environment> {
     /// always present even if this is a "leaf" function, as we have to call
     /// into the host to trap when signal handlers are disabled.
     pub(crate) stack_limit_at_function_entry: Option<ir::GlobalValue>,
+
+    /// Used by the stack switching feature. If set, we have a allocated a
+    /// slot on this function's stack to be used for the
+    /// current stack's `handler_list` field.
+    stack_switching_handler_list_buffer: Option<ir::StackSlot>,
+
+    /// Used by the stack switching feature. If set, we have a allocated a
+    /// slot on this function's stack to be used for the
+    /// current continuation's `values` field.
+    stack_switching_values_buffer: Option<ir::StackSlot>,
+
+    /// The stack-slot used for exposing Wasm state via debug
+    /// instrumentation, if any, and the builder containing its metadata.
+    pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -183,6 +228,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypesBuilder,
         wasm_func_ty: &'module_environment WasmFuncType,
+        key: FuncKey,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
@@ -192,6 +238,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let _ = BuiltinFunctions::raise;
 
         Self {
+            key,
             isa: compiler.isa(),
             module: &translation.module,
             compiler,
@@ -200,6 +247,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             sig_ref_to_ty: SecondaryMap::default(),
             needs_gc_heap: false,
             entities: WasmEntities::default(),
+            stacks: FuncTranslationStacks::new(),
 
             #[cfg(feature = "gc")]
             ty_to_gc_layout: std::collections::HashMap::new(),
@@ -229,6 +277,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             translation,
 
             stack_limit_at_function_entry: None,
+
+            stack_switching_handler_list_buffer: None,
+            stack_switching_values_buffer: None,
+
+            state_slot: None,
         }
     }
 
@@ -406,7 +459,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Call { .. }
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
-            | Operator::ReturnCallIndirect { .. } => {
+            | Operator::ReturnCallIndirect { .. }
+            | Operator::Throw { .. } | Operator::ThrowRef => {
                 self.fuel_increment_var(builder);
                 self.fuel_save_from_var(builder);
             }
@@ -1208,6 +1262,144 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let ty = self.module.types[type_index].unwrap_module_type_index();
         self.types[ty].unwrap_func().params().len()
     }
+
+    /// Initialize the state slot with an empty layout.
+    pub(crate) fn create_state_slot(&mut self, builder: &mut FunctionBuilder) {
+        if self.tunables.debug_guest {
+            let frame_builder = FrameStateSlotBuilder::new(self.key, self.pointer_type().bytes());
+
+            // Initially zero-size and with no descriptor; we will fill in
+            // this info once we're done with the function body.
+            let slot = builder
+                .func
+                .create_sized_stack_slot(ir::StackSlotData::new_with_key(
+                    ir::StackSlotKind::ExplicitSlot,
+                    0,
+                    0,
+                    ir::StackSlotKey::new(self.key.into_raw_u64()),
+                ));
+
+            self.state_slot = Some((slot, frame_builder));
+        }
+    }
+
+    /// Update the state slot layout with a new layout given a local.
+    pub(crate) fn add_state_slot_local(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: WasmValType,
+        init: Option<ir::Value>,
+    ) {
+        if let Some((slot, b)) = &mut self.state_slot {
+            let offset = b.add_local(FrameValType::from(ty));
+            if let Some(init) = init {
+                builder.ins().stack_store(init, *slot, offset.offset());
+            }
+        }
+    }
+
+    fn update_state_slot_stack(
+        &mut self,
+        validator: &FuncValidator<impl WasmModuleResources>,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        // Take ownership of the state-slot builder temporarily rather
+        // than mutably borrowing so we can invoke a method below.
+        if let Some((slot, mut b)) = self.state_slot.take() {
+            // If the stack-shape stack is shorter than the value
+            // stack, that means that values were popped and then new
+            // values were pushed; hence, these operand-stack values
+            // are "dirty" and need to be flushed to the stackslot.
+            //
+            // N.B.: note that we don't re-sync GC-rooted values, and
+            // we don't root the instrumentation slots
+            // explicitly. This is safe as long as we don't have a
+            // moving GC, because the value that we're observing in
+            // the main program dataflow is already rooted in the main
+            // program (we are only storing an extra copy of it). But
+            // if/when we do build a moving GC, we will need to handle
+            // this, probably by invalidating the "freshness" of all
+            // ref-typed values after a safepoint and re-writing them
+            // to the instrumentation slot; or alternately, extending
+            // the debug instrumentation mechanism to be able to
+            // directly refer to the user stack-slot.
+            for i in self.stacks.stack_shape.len()..self.stacks.stack.len() {
+                let parent_shape = i
+                    .checked_sub(1)
+                    .map(|parent_idx| self.stacks.stack_shape[parent_idx]);
+                if let Some(this_ty) = validator
+                    .get_operand_type(self.stacks.stack.len() - i - 1)
+                    .expect("Index should not be out of range")
+                {
+                    let wasm_ty = self.convert_valtype(this_ty)?;
+                    let (this_shape, offset) =
+                        b.push_stack(parent_shape, FrameValType::from(wasm_ty));
+                    self.stacks.stack_shape.push(this_shape);
+
+                    let value = self.stacks.stack[i];
+                    builder.ins().stack_store(value, slot, offset.offset());
+                } else {
+                    // Unreachable code with unknown type -- no
+                    // flushes for this or later-pushed values.
+                    break;
+                }
+            }
+
+            self.state_slot = Some((slot, b));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn debug_tags(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
+        if let Some((slot, _b)) = &self.state_slot {
+            self.stacks.assert_debug_stack_is_synced();
+            let stack_shape = self
+                .stacks
+                .stack_shape
+                .last()
+                .map(|s| s.raw())
+                .unwrap_or(u32::MAX);
+            let pc = srcloc.bits();
+            vec![
+                ir::DebugTag::StackSlot(*slot),
+                ir::DebugTag::User(pc),
+                ir::DebugTag::User(stack_shape),
+            ]
+        } else {
+            vec![]
+        }
+    }
+
+    fn finish_debug_metadata(&self, builder: &mut FunctionBuilder) {
+        if let Some((slot, b)) = &self.state_slot {
+            builder.func.sized_stack_slots[*slot].size = b.size();
+        }
+    }
+
+    /// Store a new value for a local in the state slot, if present.
+    pub(crate) fn state_slot_local_set(
+        &self,
+        builder: &mut FunctionBuilder,
+        local: u32,
+        value: ir::Value,
+    ) {
+        if let Some((slot, b)) = &self.state_slot {
+            let offset = b.local_offset(local);
+            builder.ins().stack_store(value, *slot, offset.offset());
+        }
+    }
+
+    fn update_state_slot_vmctx(&mut self, builder: &mut FunctionBuilder) {
+        if let &Some((slot, _)) = &self.state_slot {
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            // N.B.: we always store vmctx at offset 0 in the
+            // slot. This is relied upon in
+            // crates/wasmtime/src/runtime/debug.rs in
+            // `raw_instance()`. See also the slot layout computation in crates/environ/src/
+            builder.ins().stack_store(vmctx, slot, 0);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1319,7 +1511,7 @@ impl FuncEnvironment<'_> {
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
 
-        let key = FuncKey::DefinedWasmFunction(self.translation.module_index, def_func_index);
+        let key = FuncKey::DefinedWasmFunction(self.translation.module_index(), def_func_index);
         let (namespace, index) = key.into_raw_parts();
         let name = ir::ExternalName::User(
             func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
@@ -1329,6 +1521,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -1345,9 +1538,21 @@ impl FuncEnvironment<'_> {
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
 
-        let (module, def_func_index) =
-            self.translation.known_imported_functions[func_index].unwrap();
-        let key = FuncKey::DefinedWasmFunction(module, def_func_index);
+        let key = match self.translation.known_imported_functions[func_index] {
+            Some(key @ FuncKey::DefinedWasmFunction(..)) => key,
+
+            #[cfg(feature = "component-model")]
+            Some(key @ FuncKey::UnsafeIntrinsic(..)) => key,
+
+            Some(key) => {
+                panic!("unexpected kind of known-import function: {key:?}")
+            }
+
+            None => panic!(
+                "cannot make an `ir::FuncRef` for a function import that is not statically known"
+            ),
+        };
+
         let (namespace, index) = key.into_raw_parts();
         let name = ir::ExternalName::User(
             func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
@@ -1357,6 +1562,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -1656,11 +1862,71 @@ impl FuncEnvironment<'_> {
             element_size,
         }
     }
+
+    /// Get the type index associated with an exception object.
+    #[cfg(feature = "gc")]
+    pub(crate) fn exception_type_from_tag(&self, tag: TagIndex) -> EngineOrModuleTypeIndex {
+        self.module.tags[tag].exception
+    }
+
+    /// Get the parameter arity of the associated function type for the given tag.
+    pub(crate) fn tag_param_arity(&self, tag: TagIndex) -> usize {
+        let func_ty = self.module.tags[tag].signature.unwrap_module_type_index();
+        let func_ty = self
+            .types
+            .unwrap_func(func_ty)
+            .expect("already validated to refer to a function type");
+        func_ty.params().len()
+    }
+
+    /// Get the runtime instance ID and defined-tag ID in that
+    /// instance for a particular static tag ID.
+    #[cfg(feature = "gc")]
+    pub(crate) fn get_instance_and_tag(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+    ) -> (ir::Value, ir::Value) {
+        if let Some(defined_tag_index) = self.module.defined_tag_index(tag_index) {
+            // Our own tag -- we only need to get our instance ID.
+            let builtin = self.builtin_functions.get_instance_id(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(builtin, &[vmctx]);
+            let instance_id = builder.func.dfg.inst_results(call)[0];
+            let tag_id = builder
+                .ins()
+                .iconst(I32, i64::from(defined_tag_index.as_u32()));
+            (instance_id, tag_id)
+        } else {
+            // An imported tag -- we need to load the VMTagImport struct.
+            let vmctx_tag_vmctx_offset = self.offsets.vmctx_vmtag_import_vmctx(tag_index);
+            let vmctx_tag_index_offset = self.offsets.vmctx_vmtag_import_index(tag_index);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let pointer_type = self.pointer_type();
+            let from_vmctx = builder.ins().load(
+                pointer_type,
+                MemFlags::trusted().with_readonly(),
+                vmctx,
+                i32::try_from(vmctx_tag_vmctx_offset).unwrap(),
+            );
+            let index = builder.ins().load(
+                I32,
+                MemFlags::trusted().with_readonly(),
+                vmctx,
+                i32::try_from(vmctx_tag_index_offset).unwrap(),
+            );
+            let builtin = self.builtin_functions.get_instance_id(builder.func);
+            let call = builder.ins().call(builtin, &[from_vmctx]);
+            let from_instance_id = builder.func.dfg.inst_results(call)[0];
+            (from_instance_id, index)
+        }
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
     builder: &'a mut FunctionBuilder<'func>,
     env: &'a mut FuncEnvironment<'module_env>,
+    srcloc: ir::SourceLoc,
     tail: bool,
 }
 
@@ -1674,15 +1940,19 @@ enum CheckIndirectCallTypeSignature {
     StaticTrap,
 }
 
+type CallRets = SmallVec<[ir::Value; 4]>;
+
 impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// Create a new `Call` site that will do regular, non-tail calls.
     pub fn new(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
+        srcloc: ir::SourceLoc,
     ) -> Self {
         Call {
             builder,
             env,
+            srcloc,
             tail: false,
         }
     }
@@ -1691,10 +1961,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn new_tail(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
+        srcloc: ir::SourceLoc,
     ) -> Self {
         Call {
             builder,
             env,
+            srcloc,
             tail: true,
         }
     }
@@ -1704,9 +1976,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         mut self,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
-        call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        wasm_call_args: &[ir::Value],
+    ) -> WasmResult<CallRets> {
+        let mut real_call_args = Vec::with_capacity(wasm_call_args.len() + 2);
         let caller_vmctx = self
             .builder
             .func
@@ -1723,7 +1995,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             real_call_args.push(caller_vmctx);
 
             // Then append the regular call arguments.
-            real_call_args.extend_from_slice(call_args);
+            real_call_args.extend_from_slice(wasm_call_args);
 
             // Finally, make the direct call!
             let callee = self
@@ -1758,25 +2030,47 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
-        // Then append the regular call arguments.
-        real_call_args.extend_from_slice(call_args);
+        // Then append the Wasm call arguments.
+        real_call_args.extend_from_slice(wasm_call_args);
 
         // If we statically know the imported function (e.g. this is a
         // component-to-component call where we statically know both components)
-        // then we can actually still make a direct call (although we do have to
-        // pass the callee's vmctx that we just loaded, not our own). Otherwise,
-        // we really do an indirect call.
-        if self.env.translation.known_imported_functions[callee_index].is_some() {
-            let callee = self
-                .env
-                .get_or_create_imported_func_ref(self.builder.func, callee_index);
-            Ok(self.direct_call_inst(callee, &real_call_args))
-        } else {
-            let func_addr = self
-                .builder
-                .ins()
-                .load(pointer_type, mem_flags, base, body_offset);
-            Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        // then we can avoid doing an indirect call.
+        match self.env.translation.known_imported_functions[callee_index].as_ref() {
+            // The import is always a compile-time builtin intrinsic. Make a
+            // direct call to that function (presumably it will eventually be
+            // inlined).
+            #[cfg(feature = "component-model")]
+            Some(FuncKey::UnsafeIntrinsic(..)) => {
+                let callee = self
+                    .env
+                    .get_or_create_imported_func_ref(self.builder.func, callee_index);
+                Ok(self.direct_call_inst(callee, &real_call_args))
+            }
+
+            // The import is always satisfied with the given defined Wasm
+            // function, so do a direct call to that function! (Although we take
+            // care to still pass its `funcref`'s `vmctx` as the callee `vmctx`
+            // in `real_call_args` and not the caller's.)
+            Some(FuncKey::DefinedWasmFunction(..)) => {
+                let callee = self
+                    .env
+                    .get_or_create_imported_func_ref(self.builder.func, callee_index);
+                Ok(self.direct_call_inst(callee, &real_call_args))
+            }
+
+            Some(key) => panic!("unexpected kind of known-import function: {key:?}"),
+
+            // Unknown import function or this module is instantiated many times
+            // and with different functions. Either way, we have to do the
+            // indirect call.
+            None => {
+                let func_addr = self
+                    .builder
+                    .ins()
+                    .load(pointer_type, mem_flags, base, body_offset);
+                Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+            }
         }
     }
 
@@ -1789,7 +2083,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<Option<ir::Inst>> {
+    ) -> WasmResult<Option<CallRets>> {
         let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
             features,
             table_index,
@@ -1935,8 +2229,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
-            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
-
             // Engine-indexed types don't show up until runtime and it's a Wasm
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
@@ -1954,6 +2246,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::Exn
             | WasmHeapType::ConcreteExn(_)
             | WasmHeapType::NoExn
+            | WasmHeapType::Cont
+            | WasmHeapType::ConcreteCont(_)
+            | WasmHeapType::NoCont
             | WasmHeapType::None => {
                 unreachable!()
             }
@@ -2004,11 +2299,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     /// Call a typed function reference.
     pub fn call_ref(
-        mut self,
+        self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         // FIXME: the wasm type system tracks enough information to know whether
         // `callee` is a null reference or not. In some situations it can be
         // statically known here that `callee` cannot be null in which case this
@@ -2026,12 +2321,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// special callee/caller vmctxs. It is used by both call_indirect (which
     /// checks the signature) and call_ref (which doesn't).
     fn unchecked_call(
-        &mut self,
+        mut self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         callee_load_trap_code: Option<ir::TrapCode>,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         let (func_addr, callee_vmctx) = self.load_code_and_vmctx(callee, callee_load_trap_code);
         self.unchecked_call_impl(sig_ref, func_addr, callee_vmctx, call_args)
     }
@@ -2075,22 +2370,25 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         (func_addr, callee_vmctx)
     }
 
+    fn caller_vmctx(&self) -> ir::Value {
+        self.builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap()
+    }
+
     /// This calls a function by reference without checking the
     /// signature, given the raw code pointer to the
     /// Wasm-calling-convention entry point and the callee vmctx.
     fn unchecked_call_impl(
-        &mut self,
+        mut self,
         sig_ref: ir::SigRef,
         func_addr: ir::Value,
         callee_vmctx: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = self
-            .builder
-            .func
-            .special_param(ArgumentPurpose::VMContext)
-            .unwrap();
+        let caller_vmctx = self.caller_vmctx();
 
         // First append the callee and caller vmctx addresses.
         real_call_args.push(callee_vmctx);
@@ -2102,28 +2400,88 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
-    fn direct_call_inst(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst {
-        if self.tail {
-            self.builder.ins().return_call(callee, args)
-        } else {
-            let inst = self.builder.ins().call(callee, args);
-            let results: SmallVec<[_; 4]> = self
+    fn exception_table(
+        &mut self,
+        sig: ir::SigRef,
+    ) -> Option<(ir::ExceptionTable, Block, CallRets)> {
+        if !self.tail && !self.env.stacks.handlers.is_empty() {
+            let continuation_block = self.builder.create_block();
+            let mut args = vec![];
+            let mut results = smallvec![];
+            for i in 0..self.builder.func.dfg.signatures[sig].returns.len() {
+                let ty = self.builder.func.dfg.signatures[sig].returns[i].value_type;
+                results.push(
+                    self.builder
+                        .func
+                        .dfg
+                        .append_block_param(continuation_block, ty),
+                );
+                args.push(BlockArg::TryCallRet(u32::try_from(i).unwrap()));
+            }
+
+            let continuation = self
                 .builder
                 .func
                 .dfg
-                .inst_results(inst)
-                .iter()
-                .copied()
-                .collect();
-            for (i, val) in results.into_iter().enumerate() {
-                if self
-                    .env
-                    .func_ref_result_needs_stack_map(&self.builder.func, callee, i)
-                {
-                    self.builder.declare_value_needs_stack_map(val);
-                }
+                .block_call(continuation_block, args.iter());
+            let mut handlers = vec![ExceptionTableItem::Context(self.caller_vmctx())];
+            for (tag, block) in self.env.stacks.handlers.handlers() {
+                let block_call = self
+                    .builder
+                    .func
+                    .dfg
+                    .block_call(block, &[BlockArg::TryCallExn(0)]);
+                handlers.push(match tag {
+                    Some(tag) => ExceptionTableItem::Tag(tag, block_call),
+                    None => ExceptionTableItem::Default(block_call),
+                });
             }
-            inst
+            let etd = ExceptionTableData::new(sig, continuation, handlers);
+            let et = self.builder.func.dfg.exception_tables.push(etd);
+            Some((et, continuation_block, results))
+        } else {
+            None
+        }
+    }
+
+    fn results_from_call_inst(&self, inst: ir::Inst) -> CallRets {
+        self.builder
+            .func
+            .dfg
+            .inst_results(inst)
+            .iter()
+            .copied()
+            .collect()
+    }
+
+    fn handle_call_result_stackmap(&mut self, results: &[ir::Value], sig_ref: ir::SigRef) {
+        for (i, &val) in results.iter().enumerate() {
+            if self.env.sig_ref_result_needs_stack_map(sig_ref, i) {
+                self.builder.declare_value_needs_stack_map(val);
+            }
+        }
+    }
+
+    fn direct_call_inst(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> CallRets {
+        let sig_ref = self.builder.func.dfg.ext_funcs[callee].signature;
+        if self.tail {
+            self.builder.ins().return_call(callee, args);
+            smallvec![]
+        } else if let Some((exception_table, continuation_block, results)) =
+            self.exception_table(sig_ref)
+        {
+            let inst = self.builder.ins().try_call(callee, args, exception_table);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.builder.switch_to_block(continuation_block);
+            self.builder.seal_block(continuation_block);
+            self.attach_tags(inst);
+            results
+        } else {
+            let inst = self.builder.ins().call(callee, args);
+            let results = self.results_from_call_inst(inst);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.attach_tags(inst);
+            results
         }
     }
 
@@ -2132,27 +2490,37 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         sig_ref: ir::SigRef,
         func_addr: ir::Value,
         args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> CallRets {
         if self.tail {
             self.builder
                 .ins()
-                .return_call_indirect(sig_ref, func_addr, args)
+                .return_call_indirect(sig_ref, func_addr, args);
+            smallvec![]
+        } else if let Some((exception_table, continuation_block, results)) =
+            self.exception_table(sig_ref)
+        {
+            let inst = self
+                .builder
+                .ins()
+                .try_call_indirect(func_addr, args, exception_table);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.builder.switch_to_block(continuation_block);
+            self.builder.seal_block(continuation_block);
+            self.attach_tags(inst);
+            results
         } else {
             let inst = self.builder.ins().call_indirect(sig_ref, func_addr, args);
-            let results: SmallVec<[_; 4]> = self
-                .builder
-                .func
-                .dfg
-                .inst_results(inst)
-                .iter()
-                .copied()
-                .collect();
-            for (i, val) in results.into_iter().enumerate() {
-                if self.env.sig_ref_result_needs_stack_map(sig_ref, i) {
-                    self.builder.declare_value_needs_stack_map(val);
-                }
-            }
-            inst
+            let results = self.results_from_call_inst(inst);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.attach_tags(inst);
+            results
+        }
+    }
+
+    fn attach_tags(&mut self, inst: ir::Inst) {
+        let tags = self.env.debug_tags(self.srcloc);
+        if !tags.is_empty() {
+            self.builder.func.debug_tags.set(inst, tags);
         }
     }
 }
@@ -2183,7 +2551,9 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
         let needs_stack_map = match wasm_ty.top() {
             WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => true,
             WasmHeapTopType::Func => false,
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            // TODO(#10248) Once continuations can be stored on the GC heap, we
+            // will need stack maps for continuation objects.
+            WasmHeapTopType::Cont => false,
         };
         (ty, needs_stack_map)
     }
@@ -2206,10 +2576,18 @@ impl FuncEnvironment<'_> {
         &self.heaps
     }
 
-    pub fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
+    pub fn is_wasm_parameter(&self, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
+    }
+
+    pub fn clif_param_as_wasm_param(&self, index: usize) -> Option<WasmValType> {
+        if index >= 2 {
+            Some(self.wasm_func_ty.params()[index - 2])
+        } else {
+            None
+        }
     }
 
     pub fn param_needs_stack_map(&self, _signature: &ir::Signature, index: usize) -> bool {
@@ -2226,17 +2604,6 @@ impl FuncEnvironment<'_> {
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
 
-    pub fn func_ref_result_needs_stack_map(
-        &self,
-        func: &ir::Function,
-        func_ref: ir::FuncRef,
-        index: usize,
-    ) -> bool {
-        let sig_ref = func.dfg.ext_funcs[func_ref].signature;
-        let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
-        wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
-    }
-
     pub fn translate_table_grow(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -2247,22 +2614,32 @@ impl FuncEnvironment<'_> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
         let ty = table.ref_type.heap_type;
-        let grow = if ty.is_vmgcref_type() {
-            gc::builtins::table_grow_gc_ref(self, &mut pos.func)?
-        } else {
-            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
-            self.builtin_functions.table_grow_func_ref(&mut pos.func)
-        };
-
         let (table_vmctx, defined_table_index) =
             self.table_vmctx_and_defined_index(&mut pos, table_index);
-
         let index_type = table.idx_type;
         let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
-        let call_inst = pos
-            .ins()
-            .call(grow, &[table_vmctx, defined_table_index, delta, init_value]);
-        let result = pos.func.dfg.first_result(call_inst);
+
+        let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, defined_table_index, delta];
+        let grow = match ty.top() {
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                args.push(init_value);
+                gc::builtins::table_grow_gc_ref(self, pos.func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(init_value);
+                self.builtin_functions.table_grow_func_ref(pos.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, init_value);
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_grow_cont_obj(self, pos.func)?
+            }
+        };
+
+        let call_inst = pos.ins().call(grow, &args);
+        let result = builder.func.dfg.first_result(call_inst);
+
         Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
     }
 
@@ -2294,7 +2671,15 @@ impl FuncEnvironment<'_> {
             }
 
             // Continuation types.
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                Ok(builder.ins().load(
+                    stack_switching::fatpointer::fatpointer_type(self),
+                    flags,
+                    elem_addr,
+                    0,
+                ))
+            }
         }
     }
 
@@ -2342,7 +2727,11 @@ impl FuncEnvironment<'_> {
             }
 
             // Continuation types.
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                builder.ins().store(flags, value, elem_addr, 0);
+                Ok(())
+            }
         }
     }
 
@@ -2356,21 +2745,31 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
-        let index_type = table.idx_type;
-        let dst = self.cast_index_to_i64(&mut pos, dst, index_type);
-        let len = self.cast_index_to_i64(&mut pos, len, index_type);
         let ty = table.ref_type.heap_type;
-        let libcall = if ty.is_vmgcref_type() {
-            gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
-        } else {
-            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
-            self.builtin_functions.table_fill_func_ref(&mut pos.func)
-        };
-
+        let dst = self.cast_index_to_i64(&mut pos, dst, table.idx_type);
+        let len = self.cast_index_to_i64(&mut pos, len, table.idx_type);
         let (table_vmctx, table_index) = self.table_vmctx_and_defined_index(&mut pos, table_index);
 
-        pos.ins()
-            .call(libcall, &[table_vmctx, table_index, dst, val, len]);
+        let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, table_index, dst];
+        let libcall = match ty.top() {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
+                args.push(val);
+                gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(val);
+                self.builtin_functions.table_fill_func_ref(&mut pos.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, val);
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_fill_cont_obj(self, &mut pos.func)?
+            }
+        };
+
+        args.push(len);
+        builder.ins().call(libcall, &args);
 
         Ok(())
     }
@@ -2473,6 +2872,32 @@ impl FuncEnvironment<'_> {
             struct_ref,
             value,
         )
+    }
+
+    pub fn translate_exn_unbox(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        exn_ref: ir::Value,
+    ) -> WasmResult<SmallVec<[ir::Value; 4]>> {
+        gc::translate_exn_unbox(self, builder, tag_index, exn_ref)
+    }
+
+    pub fn translate_exn_throw(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        args: &[ir::Value],
+    ) -> WasmResult<()> {
+        gc::translate_exn_throw(self, builder, tag_index, args)
+    }
+
+    pub fn translate_exn_throw_ref(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        exnref: ir::Value,
+    ) -> WasmResult<()> {
+        gc::translate_exn_throw_ref(self, builder, exnref)
     }
 
     pub fn translate_array_new(
@@ -2694,7 +3119,10 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 pos.ins().iconst(types::I32, 0)
             }
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                let zero = pos.ins().iconst(self.pointer_type(), 0);
+                stack_switching::fatpointer::construct(self, &mut pos, zero, zero)
+            }
         })
     }
 
@@ -2710,9 +3138,18 @@ impl FuncEnvironment<'_> {
             return Ok(pos.ins().iconst(ir::types::I32, 0));
         }
 
-        let byte_is_null =
-            pos.ins()
-                .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0);
+        let byte_is_null = match ty.heap_type.top() {
+            WasmHeapTopType::Cont => {
+                let (_revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, value);
+                pos.ins()
+                    .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, contref, 0)
+            }
+            _ => pos
+                .ins()
+                .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0),
+        };
+
         Ok(pos.ins().uextend(ir::types::I32, byte_is_null))
     }
 
@@ -2825,17 +3262,18 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    pub fn translate_call_indirect(
+    pub fn translate_call_indirect<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<Option<ir::Inst>> {
-        Call::new(builder, self).indirect_call(
+    ) -> WasmResult<Option<CallRets>> {
+        Call::new(builder, self, srcloc).indirect_call(
             features,
             table_index,
             ty_index,
@@ -2845,40 +3283,44 @@ impl FuncEnvironment<'_> {
         )
     }
 
-    pub fn translate_call(
+    pub fn translate_call<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).direct_call(callee_index, sig_ref, call_args)
+    ) -> WasmResult<CallRets> {
+        Call::new(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)
     }
 
-    pub fn translate_call_ref(
+    pub fn translate_call_ref<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).call_ref(sig_ref, callee, call_args)
+    ) -> WasmResult<CallRets> {
+        Call::new(builder, self, srcloc).call_ref(sig_ref, callee, call_args)
     }
 
     pub fn translate_return_call(
         &mut self,
         builder: &mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).direct_call(callee_index, sig_ref, call_args)?;
+        Call::new_tail(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)?;
         Ok(())
     }
 
     pub fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
@@ -2886,7 +3328,7 @@ impl FuncEnvironment<'_> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).indirect_call(
+        Call::new_tail(builder, self, srcloc).indirect_call(
             features,
             table_index,
             ty_index,
@@ -2900,11 +3342,12 @@ impl FuncEnvironment<'_> {
     pub fn translate_return_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
+        srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).call_ref(sig_ref, callee, call_args)?;
+        Call::new_tail(builder, self, srcloc).call_ref(sig_ref, callee, call_args)?;
         Ok(())
     }
 
@@ -3371,23 +3814,32 @@ impl FuncEnvironment<'_> {
         op: &Operator,
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel {
-            self.fuel_before_op(op, builder, state.reachable());
+            self.fuel_before_op(op, builder, self.is_reachable());
         }
+        if self.is_reachable() && self.state_slot.is_some() {
+            let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let inst = builder.ins().call(builtin, &[vmctx]);
+            let tags = self.debug_tags(builder.srcloc());
+            builder.func.debug_tags.set(inst, tags);
+        }
+
         Ok(())
     }
 
     pub fn after_translate_operator(
         &mut self,
         op: &Operator,
-        _operand_types: Option<&[WasmValType]>,
+        validator: &FuncValidator<impl WasmModuleResources>,
         builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
     ) -> WasmResult<()> {
-        if self.tunables.consume_fuel && state.reachable() {
+        if self.tunables.consume_fuel && self.is_reachable() {
             self.fuel_after_op(op, builder);
+        }
+        if self.is_reachable() {
+            self.update_state_slot_stack(validator, builder)?;
         }
         Ok(())
     }
@@ -3399,11 +3851,7 @@ impl FuncEnvironment<'_> {
         }
     }
 
-    pub fn before_translate_function(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        _state: &FuncTranslationStacks,
-    ) -> WasmResult<()> {
+    pub fn before_translate_function(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
         // If an explicit stack limit is requested, emit one here at the start
         // of the function.
         if let Some(gv) = self.stack_limit_at_function_entry {
@@ -3437,17 +3885,16 @@ impl FuncEnvironment<'_> {
             }
         }
 
+        self.update_state_slot_vmctx(builder);
+
         Ok(())
     }
 
-    pub fn after_translate_function(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
-    ) -> WasmResult<()> {
-        if self.tunables.consume_fuel && state.reachable() {
+    pub fn after_translate_function(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+        if self.tunables.consume_fuel && self.is_reachable() {
             self.fuel_function_exit(builder);
         }
+        self.finish_debug_metadata(builder);
         Ok(())
     }
 
@@ -3461,6 +3908,118 @@ impl FuncEnvironment<'_> {
 
     pub fn is_x86(&self) -> bool {
         self.isa.triple().architecture == target_lexicon::Architecture::X86_64
+    }
+
+    pub fn translate_cont_bind(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        contobj: ir::Value,
+        args: &[ir::Value],
+    ) -> ir::Value {
+        stack_switching::instructions::translate_cont_bind(self, builder, contobj, args)
+    }
+
+    pub fn translate_cont_new(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        func: ir::Value,
+        arg_types: &[WasmValType],
+        return_types: &[WasmValType],
+    ) -> WasmResult<ir::Value> {
+        stack_switching::instructions::translate_cont_new(
+            self,
+            builder,
+            func,
+            arg_types,
+            return_types,
+        )
+    }
+
+    pub fn translate_resume(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        type_index: u32,
+        contobj: ir::Value,
+        resume_args: &[ir::Value],
+        resumetable: &[(u32, Option<ir::Block>)],
+    ) -> WasmResult<Vec<ir::Value>> {
+        stack_switching::instructions::translate_resume(
+            self,
+            builder,
+            type_index,
+            contobj,
+            resume_args,
+            resumetable,
+        )
+    }
+
+    pub fn translate_suspend(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: u32,
+        suspend_args: &[ir::Value],
+        tag_return_types: &[ir::Type],
+    ) -> Vec<ir::Value> {
+        stack_switching::instructions::translate_suspend(
+            self,
+            builder,
+            tag_index,
+            suspend_args,
+            tag_return_types,
+        )
+    }
+
+    /// Translates switch instructions.
+    pub fn translate_switch(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        tag_index: u32,
+        contobj: ir::Value,
+        switch_args: &[ir::Value],
+        return_types: &[ir::Type],
+    ) -> WasmResult<Vec<ir::Value>> {
+        stack_switching::instructions::translate_switch(
+            self,
+            builder,
+            tag_index,
+            contobj,
+            switch_args,
+            return_types,
+        )
+    }
+
+    pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
+        self.types[self.types[idx]
+            .unwrap_cont()
+            .clone()
+            .unwrap_module_type_index()]
+        .unwrap_func()
+        .params()
+    }
+
+    pub fn continuation_returns(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
+        self.types[self.types[idx]
+            .unwrap_cont()
+            .clone()
+            .unwrap_module_type_index()]
+        .unwrap_func()
+        .returns()
+    }
+
+    pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
+        self.types[idx.unwrap_module_type_index()]
+            .unwrap_func()
+            .params()
+    }
+
+    pub fn tag_returns(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
+        self.types[idx.unwrap_module_type_index()]
+            .unwrap_func()
+            .returns()
     }
 
     pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
@@ -4013,11 +4572,14 @@ impl FuncEnvironment<'_> {
     /// Returns whether it's acceptable to have CLIF instructions natively trap,
     /// such as division-by-zero.
     ///
-    /// This enabled if `signals_based_traps` is `true` or on Pulley
-    /// unconditionally since Pulley doesn't use hardware-based traps in its
-    /// runtime.
+    /// This is enabled if `signals_based_traps` is `true` or on
+    /// Pulley unconditionally since Pulley doesn't use hardware-based
+    /// traps in its runtime. However, if guest debugging is enabled,
+    /// then we cannot rely on Pulley traps and still need a libcall
+    /// to gain proper ownership of the store in the runtime's
+    /// debugger hooks.
     pub fn clif_instruction_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps || self.is_pulley()
+        self.tunables.signals_based_traps || (self.is_pulley() && !self.tunables.debug_guest)
     }
 
     /// Returns whether loads from the null address are allowed as signals of
@@ -4033,6 +4595,11 @@ impl FuncEnvironment<'_> {
     pub fn is_pulley(&self) -> bool {
         self.isa.triple().is_pulley()
     }
+
+    /// Returns whether the current location is reachable.
+    pub fn is_reachable(&self) -> bool {
+        self.stacks.reachable()
+    }
 }
 
 // Helper function to convert an `IndexType` to an `ir::Type`.
@@ -4044,18 +4611,4 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
-}
-
-/// TODO(10248) This is removed in the next stack switching PR. It stops the
-/// compiler from complaining about the stack switching libcalls being dead
-/// code.
-#[cfg(feature = "stack-switching")]
-#[allow(
-    dead_code,
-    reason = "Dummy function to suppress more dead code warnings"
-)]
-pub fn use_stack_switching_libcalls() {
-    let _ = BuiltinFunctions::cont_new;
-    let _ = BuiltinFunctions::table_grow_cont_obj;
-    let _ = BuiltinFunctions::table_fill_cont_obj;
 }

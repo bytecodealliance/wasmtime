@@ -41,7 +41,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-#[wiggle::async_trait]
 impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn args_get(
         &mut self,
@@ -246,10 +245,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
             let _file_entry: Arc<FileEntry> = table.get(fd)?;
-            Ok(())
+            Err(Error::not_supported())
         } else if table.is::<DirEntry>(fd) {
             let _dir_entry: Arc<DirEntry> = table.get(fd)?;
-            Ok(())
+            Err(Error::not_supported())
         } else {
             Err(Error::badf())
         }
@@ -580,6 +579,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if !table.contains_key(from) {
             return Err(Error::badf());
         }
+        if !table.contains_key(to) {
+            return Err(Error::badf());
+        }
         table.renumber(from, to)
     }
 
@@ -812,6 +814,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         drop(dir_entry);
 
         let fd = match file {
+            // Paper over a divergence between Windows and POSIX, where
+            // POSIX returns EISDIR if you open a directory with the
+            // WRITE flag: https://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html#:~:text=EISDIR
+            #[cfg(windows)]
+            OpenResult::Dir(_) if write => {
+                return Err(types::Errno::Isdir.into());
+            }
             OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file, access_mode)))?,
             OpenResult::Dir(child_dir) => table.push(Arc::new(DirEntry::new(None, child_dir)))?,
         };

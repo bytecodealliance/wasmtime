@@ -6,8 +6,10 @@
 #include <wasm.h>
 #include <wasmtime/component/component.h>
 #include <wasmtime/component/instance.h>
+#include <wasmtime/component/types/func.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
+#include <wasmtime/module.h>
 #include <wasmtime/store.h>
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
@@ -32,6 +34,16 @@ typedef struct wasmtime_component_linker_instance_t
  */
 WASM_API_EXTERN wasmtime_component_linker_t *
 wasmtime_component_linker_new(const wasm_engine_t *engine);
+
+/**
+ * \brief Configures whether this linker allows later definitions to shadow
+ * previous definitions.
+ *
+ * By default this setting is `false`.
+ */
+WASM_API_EXTERN void
+wasmtime_component_linker_allow_shadowing(wasmtime_component_linker_t *linker,
+                                          bool allow);
 
 /**
  * \brief Returns the "root instance" of this linker, used to define names into
@@ -63,6 +75,13 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instantiate(
     const wasmtime_component_linker_t *linker, wasmtime_context_t *context,
     const wasmtime_component_t *component,
     wasmtime_component_instance_t *instance_out);
+
+/**
+ * \brief Defines all unknown imports of `component` as trapping functions.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_define_unknown_imports_as_traps(
+    wasmtime_component_linker_t *linker, const wasmtime_component_t *component);
 
 /**
  * \brief Deletes a #wasmtime_component_linker_t created by
@@ -116,8 +135,8 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
 
 /// Type of the callback used in #wasmtime_component_linker_instance_add_func
 typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
-    void *, wasmtime_context_t *, const wasmtime_component_val_t *, size_t,
-    wasmtime_component_val_t *, size_t);
+    void *, wasmtime_context_t *, const wasmtime_component_func_type_t *,
+    wasmtime_component_val_t *, size_t, wasmtime_component_val_t *, size_t);
 
 /**
  * \brief Define a function within this instance.
@@ -145,6 +164,29 @@ WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_linker_add_wasip2(wasmtime_component_linker_t *linker);
 
 #endif // WASMTIME_FEATURE_WASI
+
+/// Type of the callback used in
+/// #wasmtime_component_linker_instance_add_resource
+typedef wasmtime_error_t *(*wasmtime_component_resource_destructor_t)(
+    void *, wasmtime_context_t *, uint32_t);
+
+/**
+ * \brief Defines a new resource type within this instance.
+ *
+ * This can be used to define a new resource type that the guest will be able
+ * to import. Here the `resource` is a type, often a host-defined type, which
+ * can be used to distinguish and definie different types of resources. A
+ * destruction callback is also specified via `destructor` which has private
+ * data `data` along with an optional `finalizer` for the `data` too.
+ *
+ * \return on success `NULL`, otherwise an error
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_instance_add_resource(
+    wasmtime_component_linker_instance_t *linker_instance, const char *name,
+    size_t name_len, const wasmtime_component_resource_type_t *resource,
+    wasmtime_component_resource_destructor_t destructor, void *data,
+    void (*finalizer)(void *));
 
 /**
  * \brief Deletes a #wasmtime_component_linker_instance_t

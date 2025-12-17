@@ -43,6 +43,16 @@ pub async fn async_round_trip_stackless_plus_stackless() -> Result<()> {
 }
 
 #[tokio::test]
+pub async fn async_round_trip_stackless_plus_stackless_plus_stackless() -> Result<()> {
+    test_round_trip_composed_more(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+    )
+    .await
+}
+
+#[tokio::test]
 async fn async_round_trip_synchronous_plus_stackless() -> Result<()> {
     test_round_trip_composed(
         test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
@@ -232,14 +242,13 @@ pub async fn test_round_trip(
         let mut store = make_store();
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
-        instance.enable_concurrent_state_debug(&mut store, true);
         let round_trip =
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 
         if call_style == 0 || !cfg!(miri) {
-            // Now do it again using `Instance::run_concurrent`:
-            instance
-                .run_concurrent(&mut store, {
+            // Run the test using `StoreContextMut::run_concurrent`:
+            store
+                .run_concurrent({
                     let inputs_and_outputs = inputs_and_outputs
                         .iter()
                         .map(|(a, b)| (String::from(*a), String::from(*b)))
@@ -267,7 +276,7 @@ pub async fn test_round_trip(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 1 || !cfg!(miri) {
@@ -278,7 +287,7 @@ pub async fn test_round_trip(
                 tx: oneshot::Sender<()>,
             }
 
-            impl AccessorTask<Ctx, HasSelf<Ctx>, Result<()>> for Task {
+            impl AccessorTask<Ctx, HasSelf<Ctx>> for Task {
                 async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
                     let round_trip = accessor.with(|mut store| {
                         component_async_tests::round_trip::bindings::RoundTrip::new(
@@ -310,23 +319,18 @@ pub async fn test_round_trip(
             }
 
             let (tx, rx) = oneshot::channel();
-            instance.spawn(
-                &mut store,
-                Task {
-                    instance,
-                    inputs_and_outputs: inputs_and_outputs
-                        .iter()
-                        .map(|(a, b)| (String::from(*a), String::from(*b)))
-                        .collect::<Vec<_>>(),
-                    tx,
-                },
-            );
+            store.spawn(Task {
+                instance,
+                inputs_and_outputs: inputs_and_outputs
+                    .iter()
+                    .map(|(a, b)| (String::from(*a), String::from(*b)))
+                    .collect::<Vec<_>>(),
+                tx,
+            });
 
-            instance
-                .run_concurrent(&mut store, async |_| rx.await)
-                .await??;
+            store.run_concurrent(async |_| rx.await).await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 2 || !cfg!(miri) {
@@ -346,7 +350,7 @@ pub async fn test_round_trip(
                 );
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 
@@ -358,7 +362,7 @@ pub async fn test_round_trip(
         linker
             .root()
             .instance("local:local/baz")?
-            .func_new_concurrent("[async]foo", |_, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
@@ -376,15 +380,15 @@ pub async fn test_round_trip(
             .get_export_index(&mut store, None, "local:local/baz")
             .ok_or_else(|| anyhow!("can't find `local:local/baz` in instance"))?;
         let foo_function = instance
-            .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
+            .get_export_index(&mut store, Some(&baz_instance), "foo")
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
-            instance
-                .run_concurrent(&mut store, async |store| {
+            store
+                .run_concurrent(async |store| {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {
@@ -412,7 +416,7 @@ pub async fn test_round_trip(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 4 || !cfg!(miri) {
@@ -433,7 +437,7 @@ pub async fn test_round_trip(
                 foo_function.post_return_async(&mut store).await?;
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 
@@ -479,6 +483,30 @@ pub async fn test_round_trip_composed(a: &str, b: &str) -> Result<()> {
                 "hi y'all!",
                 "hi y'all! - entered guest - entered guest - entered host \
                  - exited host - exited guest - exited guest",
+            ),
+        ],
+    )
+    .await
+}
+
+pub async fn test_round_trip_composed_more(a: &str, b: &str, c: &str) -> Result<()> {
+    test_round_trip(
+        &[a, b, c],
+        &[
+            (
+                "hello, world!",
+                "hello, world! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
+            ),
+            (
+                "¡hola, mundo!",
+                "¡hola, mundo! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
+            ),
+            (
+                "hi y'all!",
+                "hi y'all! - entered guest - entered guest - entered guest - entered host \
+                 - exited host - exited guest - exited guest - exited guest",
             ),
         ],
     )

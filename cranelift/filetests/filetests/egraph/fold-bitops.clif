@@ -1,0 +1,76 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; (rule (simplify (bor ty x (bor ty x y))) (bor ty x y))
+function %simplify_bor_xxy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; function %simplify_bor_xxy(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = bor v0, v1
+;     return v2
+; }
+
+;; (rule (simplify (bor ty y (bor ty x y))) (bor ty x y))
+function %simplify_bor_yxy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v3 = bor v0, v1
+    v4 = bor v1, v3
+    return v4
+}
+
+; function %simplify_bor_yxy(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = bor v0, v1
+;     return v3
+; }
+
+;; (rule (simplify (bor ty (bor ty x y) x)) (bor ty x y))
+function %simplify_bor_xyx(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; function %simplify_bor_xyx(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = bor v0, v1
+;     return v2
+; }
+
+;; (rule (simplify (bor ty (bor ty x y) y)) (bor ty x y))
+function %simplify_bor_xyy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v2, v1
+    return v3
+}
+
+; function %simplify_bor_xyy(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = bor v0, v1
+;     return v2
+; }
+
+;; (bxor ty (band ty z x) (band ty z y)) -> (band ty z (bxor ty x y))
+function %test_bxor_band_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1  
+    v4 = band v0, v2 
+    v5 = bxor v3, v4
+    return v5
+}
+
+; function %test_bxor_band_band(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = bxor v1, v2
+;     v7 = band v0, v6
+;     return v7
+; }
+

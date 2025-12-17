@@ -108,5 +108,5 @@ fn pretty_anyhow_error(
     err: cranelift_codegen::CodegenError,
 ) -> anyhow::Error {
     let s = cranelift_codegen::print_errors::pretty_error(func, err);
-    anyhow::anyhow!("{}", s)
+    anyhow::anyhow!("{s}")
 }

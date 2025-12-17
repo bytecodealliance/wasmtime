@@ -99,7 +99,7 @@ pub struct FooIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
 pub trait FooImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T: 'static>(
+    fn foo<T>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -184,8 +184,8 @@ const _: () = {
                     "foo",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as FooImportsWithStore>::foo(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as FooImportsWithStore>::foo(host).await;
                             Ok(r)
                         })
                     },

@@ -1,14 +1,14 @@
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::instantiate::CompiledModule;
-use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{AsContext, CallHook, Module};
+use crate::{Engine, prelude::*};
 use core::cmp::Ordering;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
-    CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocation, MarkerSchema,
-    MarkerTiming, Profile, ProfilerMarker, ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
+    CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocations, MarkerTiming,
+    Profile, ReferenceTimestamp, StaticSchemaMarker, StaticSchemaMarkerField, StringHandle, Symbol,
+    SymbolTable, Timestamp,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -79,6 +79,7 @@ pub struct GuestProfiler {
     process: fxprof_processed_profile::ProcessHandle,
     thread: fxprof_processed_profile::ThreadHandle,
     start: Instant,
+    marker: CallMarker,
 }
 
 #[derive(Debug)]
@@ -107,10 +108,20 @@ impl GuestProfiler {
     /// "Security" section of the [`GuestProfiler`] documentation for guidance
     /// on what modules should not be included in this list.
     pub fn new(
+        engine: &Engine,
         module_name: &str,
         interval: Duration,
         modules: impl IntoIterator<Item = (String, Module)>,
-    ) -> Self {
+    ) -> Result<Self> {
+        // Check that guest debugging is not enabled. The
+        // instrumentation would make profiling results unreliable,
+        // but more fundamentally, it means that code is cloned per
+        // instantiation (for breakpoint patching) so the logic below
+        // is incorrect.
+        if engine.tunables().debug_guest {
+            anyhow::bail!("Profiling cannot be performed when guest-debugging is enabled.");
+        }
+
         let zero = ReferenceTimestamp::from_millis_since_unix_epoch(0.0);
         let mut profile = Profile::new(module_name, zero, interval.into());
 
@@ -119,18 +130,21 @@ impl GuestProfiler {
         let mut modules: Vec<_> = modules
             .into_iter()
             .filter_map(|(name, module)| {
+                assert!(Engine::same(module.engine(), engine));
                 let compiled = module.compiled_module();
                 let text_range = {
                     // Assumption: within text, the code for a given module is packed linearly and
                     // is non-overlapping; if this is violated, it should be safe but might result
                     // in incorrect profiling results.
-                    let start =
-                        compiled.finished_functions().next()?.1.as_ptr_range().start as usize;
-                    let end = compiled.finished_functions().last()?.1.as_ptr_range().end as usize;
+                    let start = compiled.finished_function_ranges().next()?.1.start;
+                    let end = compiled.finished_function_ranges().last()?.1.end;
+
+                    let start = (module.engine_code().text_range().start + start).raw();
+                    let end = (module.engine_code().text_range().start + end).raw();
                     start..end
                 };
 
-                module_symbols(name, compiled).map(|lib| {
+                module_symbols(name, &module).map(|lib| {
                     let libhandle = profile.add_lib(lib);
                     ProfiledModule {
                         module,
@@ -147,13 +161,15 @@ impl GuestProfiler {
         let process = profile.add_process(module_name, 0, Timestamp::from_nanos_since_reference(0));
         let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
         let start = Instant::now();
-        Self {
+        let marker = CallMarker::new(&mut profile);
+        Ok(Self {
             profile,
             modules,
             process,
             thread,
             start,
-        }
+            marker,
+        })
     }
 
     /// Create a new profiler for the provided component
@@ -163,16 +179,17 @@ impl GuestProfiler {
     /// instrumentation to track calls in each of its constituent modules.
     #[cfg(feature = "component-model")]
     pub fn new_component(
+        engine: &Engine,
         component_name: &str,
         interval: Duration,
         component: Component,
         extra_modules: impl IntoIterator<Item = (String, Module)>,
-    ) -> Self {
+    ) -> Result<Self> {
         let modules = component
             .static_modules()
             .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
             .chain(extra_modules);
-        Self::new(component_name, interval, modules)
+        Self::new(engine, component_name, interval, modules)
     }
 
     /// Add a sample to the profile. This function collects a backtrace from
@@ -189,8 +206,11 @@ impl GuestProfiler {
         );
         let backtrace = Backtrace::new(store.as_context().0);
         let frames = lookup_frames(&self.modules, &backtrace);
+        let stack = self
+            .profile
+            .intern_stack_frames(self.thread, frames.into_iter());
         self.profile
-            .add_sample(self.thread, now, frames, delta.into(), 1);
+            .add_sample(self.thread, now, stack, delta.into(), 1);
     }
 
     /// Add a marker for transitions between guest and host to the profile.
@@ -206,21 +226,19 @@ impl GuestProfiler {
             CallHook::CallingHost => {
                 let backtrace = Backtrace::new(store.as_context().0);
                 let frames = lookup_frames(&self.modules, &backtrace);
-                self.profile.add_marker_with_stack(
+                let marker = self.profile.add_marker(
                     self.thread,
-                    "hostcall",
-                    CallMarker,
                     MarkerTiming::IntervalStart(now),
-                    frames,
+                    self.marker,
                 );
+                let stack = self
+                    .profile
+                    .intern_stack_frames(self.thread, frames.into_iter());
+                self.profile.set_marker_stack(self.thread, marker, stack);
             }
             CallHook::ReturningFromHost => {
-                self.profile.add_marker(
-                    self.thread,
-                    "hostcall",
-                    CallMarker,
-                    MarkerTiming::IntervalEnd(now),
-                );
+                self.profile
+                    .add_marker(self.thread, MarkerTiming::IntervalEnd(now), self.marker);
             }
         }
     }
@@ -243,23 +261,29 @@ impl GuestProfiler {
     }
 }
 
-fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo> {
-    let symbols = Vec::from_iter(compiled.finished_functions().map(|(defined_idx, _)| {
-        let loc = compiled.func_loc(defined_idx);
-        let func_idx = compiled.module().func_index(defined_idx);
-        let mut name = String::new();
-        demangle_function_name_or_index(
-            &mut name,
-            compiled.func_name(func_idx),
-            defined_idx.as_u32() as usize,
-        )
-        .unwrap();
-        Symbol {
-            address: loc.start,
-            size: Some(loc.length),
-            name,
-        }
-    }));
+fn module_symbols(name: String, module: &Module) -> Option<LibraryInfo> {
+    let compiled = module.compiled_module();
+    let symbols = Vec::from_iter(
+        module
+            .env_module()
+            .defined_func_indices()
+            .map(|defined_idx| {
+                let loc = compiled.func_loc(defined_idx);
+                let func_idx = compiled.module().func_index(defined_idx);
+                let mut name = String::new();
+                demangle_function_name_or_index(
+                    &mut name,
+                    compiled.func_name(func_idx),
+                    defined_idx.as_u32() as usize,
+                )
+                .unwrap();
+                Symbol {
+                    address: loc.start,
+                    size: Some(loc.length),
+                    name,
+                }
+            }),
+    );
     if symbols.is_empty() {
         return None;
     }
@@ -312,27 +336,34 @@ fn lookup_frames<'a>(
         })
 }
 
-struct CallMarker;
+#[derive(Debug, Clone, Copy)]
+struct CallMarker {
+    name: StringHandle,
+}
 
-impl ProfilerMarker for CallMarker {
-    const MARKER_TYPE_NAME: &'static str = "hostcall";
-
-    fn schema() -> MarkerSchema {
-        MarkerSchema {
-            type_name: Self::MARKER_TYPE_NAME,
-            locations: vec![
-                MarkerLocation::MarkerChart,
-                MarkerLocation::MarkerTable,
-                MarkerLocation::TimelineOverview,
-            ],
-            chart_label: None,
-            tooltip_label: None,
-            table_label: None,
-            fields: vec![],
-        }
+impl CallMarker {
+    fn new(profile: &mut Profile) -> Self {
+        let name = profile.intern_string(Self::UNIQUE_MARKER_TYPE_NAME);
+        Self { name }
     }
+}
 
-    fn json_marker_data(&self) -> serde_json::Value {
-        serde_json::json!({ "type": Self::MARKER_TYPE_NAME })
+impl StaticSchemaMarker for CallMarker {
+    const UNIQUE_MARKER_TYPE_NAME: &'static str = "hostcall";
+    const FIELDS: &'static [StaticSchemaMarkerField] = &[];
+    const LOCATIONS: MarkerLocations = MarkerLocations::MARKER_CHART
+        .union(MarkerLocations::MARKER_TABLE.union(MarkerLocations::TIMELINE_OVERVIEW));
+
+    fn name(&self, _profile: &mut Profile) -> StringHandle {
+        self.name
+    }
+    fn category(&self, _profile: &mut Profile) -> CategoryHandle {
+        CategoryHandle::OTHER
+    }
+    fn string_field_value(&self, _field_index: u32) -> StringHandle {
+        unreachable!("no fields")
+    }
+    fn number_field_value(&self, _field_index: u32) -> f64 {
+        unreachable!("no fields")
     }
 }

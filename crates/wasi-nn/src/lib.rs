@@ -23,9 +23,9 @@ pub fn preload(preload_graphs: &[(String, String)]) -> anyhow::Result<(Vec<Backe
         let backend = backends
             .iter_mut()
             .find(|b| b.encoding() == kind_)
-            .ok_or(anyhow!("unsupported backend: {}", kind))?
+            .ok_or(anyhow!("unsupported backend: {kind}"))?
             .as_dir_loadable()
-            .ok_or(anyhow!("{} does not support directory loading", kind))?;
+            .ok_or(anyhow!("{kind} does not support directory loading"))?;
         registry.load(backend, Path::new(path))?;
     }
     Ok((backends, Registry::from(registry)))

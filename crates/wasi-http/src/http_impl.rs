@@ -86,7 +86,7 @@ where
         let body = req.body.unwrap_or_else(|| {
             Empty::<Bytes>::new()
                 .map_err(|_| unreachable!("Infallible error"))
-                .boxed()
+                .boxed_unsync()
         });
 
         let request = builder

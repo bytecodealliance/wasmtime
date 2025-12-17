@@ -3,35 +3,39 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::code::EngineCode;
 use crate::prelude::*;
-use crate::runtime::vm::{CompiledModuleId, MmapVec};
-use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
+use crate::profiling_agent::ProfilingAgent;
+use crate::runtime::vm::CompiledModuleId;
 use alloc::sync::Arc;
+use core::ops::Range;
 use core::str;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FilePos, FuncIndex, FunctionLoc,
-    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap,
+    CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, EntityRef, FilePos, FuncIndex,
+    FuncKey, FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex,
+    StaticModuleIndex,
 };
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
-    module: Arc<Module>,
-    funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-    wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
-    meta: Metadata,
-    code_memory: Arc<CodeMemory>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
+    engine_code: Arc<EngineCode>,
+    module: Arc<Module>,
+    meta: Metadata,
+    index: Arc<CompiledFunctionsTable>,
+    /// Sorted list, by function index, of names we have for this module.
     func_names: Vec<FunctionName>,
 }
 
 impl CompiledModule {
     /// Creates `CompiledModule` directly from a precompiled artifact.
     ///
-    /// The `code_memory` argument is expected to be the result of a previous
-    /// call to `ObjectBuilder::finish` above. This is an ELF image, at this
-    /// time, which contains all necessary information to create a
-    /// `CompiledModule` from a compilation.
+    /// The `engine_code` argument is expected to be an EngineCode
+    /// wrapper around a CodeMemory containing the result of a
+    /// previous call to `ObjectBuilder::finish` above. This is an ELF
+    /// image, at this time, which contains all necessary information
+    /// to create a `CompiledModule` from a compilation.
     ///
     /// This method also takes `info`, an optionally-provided deserialization
     /// of the artifacts' compilation metadata section. If this information is
@@ -43,17 +47,17 @@ impl CompiledModule {
     /// The `profiler` argument here is used to inform JIT profiling runtimes
     /// about new code that is loaded.
     pub fn from_artifacts(
-        code_memory: Arc<CodeMemory>,
+        engine_code: Arc<EngineCode>,
         info: CompiledModuleInfo,
+        index: Arc<CompiledFunctionsTable>,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self> {
         let mut ret = Self {
-            module: Arc::new(info.module),
-            funcs: info.funcs,
-            wasm_to_array_trampolines: info.wasm_to_array_trampolines,
-            code_memory,
-            meta: info.meta,
             unique_id: CompiledModuleId::new(),
+            engine_code,
+            module: Arc::new(info.module),
+            meta: info.meta,
+            index,
             func_names: info.func_names,
         };
         ret.register_profiling(profiler)?;
@@ -64,8 +68,9 @@ impl CompiledModule {
     fn register_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         // TODO-Bug?: "code_memory" is not exclusive for this module in the case of components,
         // so we may be registering the same code range multiple times here.
-        profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
-            let (idx, _) = self.func_by_text_offset(addr)?;
+
+        profiler.register_module(self.engine_code.image(), &|addr| {
+            let idx = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
             let name = self.func_name(idx)?;
             let mut demangled = String::new();
@@ -81,28 +86,13 @@ impl CompiledModule {
         self.unique_id
     }
 
-    /// Returns the underlying memory which contains the compiled module's
-    /// image.
-    pub fn mmap(&self) -> &MmapVec {
-        self.code_memory.mmap()
-    }
-
-    /// Returns the underlying owned mmap of this compiled image.
-    pub fn code_memory(&self) -> &Arc<CodeMemory> {
-        &self.code_memory
-    }
-
-    /// Returns the text section of the ELF image for this compiled module.
-    ///
-    /// This memory should have the read/execute permissions.
-    #[inline]
-    pub fn text(&self) -> &[u8] {
-        self.code_memory.text()
-    }
-
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
         &self.module
+    }
+
+    fn module_index(&self) -> StaticModuleIndex {
+        self.module.module_index
     }
 
     /// Looks up the `name` section name for the function index `idx`, if one
@@ -116,111 +106,100 @@ impl CompiledModule {
         // `from_utf8_unchecked` if we really wanted since this section is
         // guaranteed to only have valid utf-8 data. Until it's a problem it's
         // probably best to double-check this though.
-        let data = self.code_memory().func_name_data();
+        let data = self.engine_code.func_name_data();
         Some(str::from_utf8(&data[name.offset as usize..][..name.len as usize]).unwrap())
     }
 
-    /// Return a reference to a mutable module (if possible).
-    pub fn module_mut(&mut self) -> Option<&mut Module> {
-        Arc::get_mut(&mut self.module)
-    }
-
     /// Returns an iterator over all functions defined within this module with
-    /// their index and their body in memory.
+    /// their index and their offset in the underlying code image.
     #[inline]
-    pub fn finished_functions(
+    pub fn finished_function_ranges(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .iter()
-            .map(move |(i, _)| (i, self.finished_function(i)))
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, Range<usize>)> + '_ {
+        self.module
+            .defined_func_indices()
+            .map(|i| (i, self.finished_function_range(i)))
     }
 
-    /// Returns the body of the function that `index` points to.
+    /// Returns the offset in the text section of the function that `index` points to.
     #[inline]
-    pub fn finished_function(&self, index: DefinedFuncIndex) -> &[u8] {
-        let loc = self.funcs[index].wasm_func_loc;
-        &self.text()[loc.start as usize..][..loc.length as usize]
+    pub fn finished_function_range(&self, def_func_index: DefinedFuncIndex) -> Range<usize> {
+        let loc = self.func_loc(def_func_index);
+        let start = usize::try_from(loc.start).unwrap();
+        let end = usize::try_from(loc.start + loc.length).unwrap();
+        start..end
     }
 
-    /// Get the array-to-Wasm trampoline for the function `index` points to.
+    /// Get the array-to-Wasm trampoline for the function `index`
+    /// points to, as a range in the text segment.
     ///
     /// If the function `index` points to does not escape, then `None` is
     /// returned.
     ///
     /// These trampolines are used for array callers (e.g. `Func::new`)
     /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
-        let loc = self.funcs[index].array_to_wasm_trampoline?;
-        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+    pub fn array_to_wasm_trampoline_range(
+        &self,
+        def_func_index: DefinedFuncIndex,
+    ) -> Option<Range<usize>> {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::ArrayToWasmTrampoline(self.module_index(), def_func_index);
+        let loc = self.index.func_loc(key)?;
+        let start = usize::try_from(loc.start).unwrap();
+        let end = usize::try_from(loc.start + loc.length).unwrap();
+        Some(start..end)
     }
 
-    /// Get the Wasm-to-array trampoline for the given signature.
+    /// Get the Wasm-to-array trampoline for the given signature, as a
+    /// range in the text segment.
     ///
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
-        let idx = match self
-            .wasm_to_array_trampolines
-            .binary_search_by_key(&signature, |entry| entry.0)
-        {
-            Ok(idx) => idx,
-            Err(_) => panic!("missing trampoline for {signature:?}"),
-        };
-
-        let (_, loc) = self.wasm_to_array_trampolines[idx];
-        &self.text()[loc.start as usize..][..loc.length as usize]
+    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> Option<&[u8]> {
+        let key = FuncKey::WasmToArrayTrampoline(signature);
+        let loc = self.index.func_loc(key)?;
+        let start = usize::try_from(loc.start).unwrap();
+        let end = usize::try_from(loc.start + loc.length).unwrap();
+        Some(
+            self.engine_code
+                .raw_wasm_to_array_trampoline_data(start..end),
+        )
     }
 
     /// Lookups a defined function by a program counter value.
     ///
     /// Returns the defined function index and the relative address of
     /// `text_offset` within the function itself.
-    pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
+    pub fn func_by_text_offset(&self, text_offset: usize) -> Option<DefinedFuncIndex> {
         let text_offset = u32::try_from(text_offset).unwrap();
-
-        let index = match self.funcs.binary_search_values_by_key(&text_offset, |e| {
-            debug_assert!(e.wasm_func_loc.length > 0);
-            // Return the inclusive "end" of the function
-            e.wasm_func_loc.start + e.wasm_func_loc.length - 1
-        }) {
-            Ok(k) => {
-                // Exact match, pc is at the end of this function
-                k
+        let key = self.index.func_by_text_offset(text_offset)?;
+        match key {
+            FuncKey::DefinedWasmFunction(module, def_func_index) => {
+                debug_assert_eq!(module, self.module_index());
+                Some(def_func_index)
             }
-            Err(k) => {
-                // Not an exact match, k is where `pc` would be "inserted"
-                // Since we key based on the end, function `k` might contain `pc`,
-                // so we'll validate on the range check below
-                k
-            }
-        };
-
-        let CompiledFunctionInfo { wasm_func_loc, .. } = self.funcs.get(index)?;
-        let start = wasm_func_loc.start;
-        let end = wasm_func_loc.start + wasm_func_loc.length;
-
-        if text_offset < start || end < text_offset {
-            return None;
+            _ => None,
         }
-
-        Some((index, text_offset - wasm_func_loc.start))
     }
 
     /// Gets the function location information for a given function index.
-    pub fn func_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
-        &self
-            .funcs
-            .get(index)
+    pub fn func_loc(&self, def_func_index: DefinedFuncIndex) -> &FunctionLoc {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+        self.index
+            .func_loc(key)
             .expect("defined function should be present")
-            .wasm_func_loc
     }
 
     /// Returns the original binary offset in the file that `index` was defined
     /// at.
-    pub fn func_start_srcloc(&self, index: DefinedFuncIndex) -> FilePos {
-        self.funcs[index].start_srcloc
+    pub fn func_start_srcloc(&self, def_func_index: DefinedFuncIndex) -> FilePos {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+        self.index
+            .src_loc(key)
+            .expect("defined function should be present")
     }
 
     /// Creates a new symbolication context which can be used to further
@@ -249,7 +228,7 @@ impl CompiledModule {
                     let (_, range) = &self.meta.dwarf[i];
                     let start = range.start.try_into().ok()?;
                     let end = range.end.try_into().ok()?;
-                    self.code_memory().wasm_dwarf().get(start..end)
+                    self.engine_code.wasm_dwarf().get(start..end)
                 })
                 .unwrap_or(&[]);
             Ok(EndianSlice::new(data, gimli::LittleEndian))
@@ -274,7 +253,7 @@ impl CompiledModule {
     /// If this function returns `false` then `lookup_file_pos` will always
     /// return `None`.
     pub fn has_address_map(&self) -> bool {
-        !self.code_memory.address_map_data().is_empty()
+        !self.engine_code.address_map_data().is_empty()
     }
 }
 

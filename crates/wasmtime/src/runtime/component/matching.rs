@@ -10,7 +10,8 @@ use alloc::sync::Arc;
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
-    TypeFutureTableIndex, TypeModule, TypeResourceTableIndex, TypeStreamTableIndex,
+    TypeFutureTableIndex, TypeModule, TypeResourceTable, TypeResourceTableIndex,
+    TypeStreamTableIndex,
 };
 
 pub struct TypeChecker<'a> {
@@ -59,7 +60,7 @@ impl TypeChecker<'_> {
             },
 
             TypeDef::Resource(i) => {
-                let i = self.types[i].ty;
+                let i = self.types[i].unwrap_concrete_ty();
                 let actual = match actual {
                     Some(Definition::Resource(actual, _dtor)) => actual,
 
@@ -193,11 +194,14 @@ impl<'a> InstanceType<'a> {
     }
 
     pub fn resource_type(&self, index: TypeResourceTableIndex) -> ResourceType {
-        let index = self.types[index].ty;
-        self.resources
-            .get(index)
-            .copied()
-            .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, index))
+        match self.types[index] {
+            TypeResourceTable::Concrete { ty, .. } => self
+                .resources
+                .get(ty)
+                .copied()
+                .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, ty)),
+            TypeResourceTable::Abstract(ty) => ResourceType::abstract_(&self.types, ty),
+        }
     }
 
     pub fn future_type(&self, index: TypeFutureTableIndex) -> FutureType {

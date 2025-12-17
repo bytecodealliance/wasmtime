@@ -6,6 +6,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::CompiledFunction;
+#[cfg(feature = "component-model")]
+use wasmtime_environ::component::ComponentTranslation;
 use wasmtime_environ::{
     CompileError, CompiledFunctionBody, DefinedFuncIndex, FuncKey, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StaticModuleIndex, Tunables, VMOffsets,
@@ -120,7 +122,7 @@ impl wasmtime_environ::Compiler for Compiler {
         log::trace!("compiling function: {key:?} = {symbol:?}");
 
         let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
-        debug_assert_eq!(module_index, translation.module_index);
+        debug_assert_eq!(module_index, translation.module_index());
 
         let index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[index]
@@ -189,7 +191,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, wasmtime_environ::FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.trampolines.append_code(obj, funcs, resolve_reloc)
@@ -334,7 +336,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.0.append_code(obj, funcs, resolve_reloc)
@@ -384,17 +386,36 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
         component: &wasmtime_environ::component::ComponentTranslation,
         types: &wasmtime_environ::component::ComponentTypesBuilder,
         key: FuncKey,
+        abi: wasmtime_environ::Abi,
         tunables: &Tunables,
         symbol: &str,
-    ) -> Result<wasmtime_environ::component::AllCallFunc<CompiledFunctionBody>> {
+    ) -> Result<CompiledFunctionBody> {
         let mut body = self
             .0
             .component_compiler()
-            .compile_trampoline(component, types, key, tunables, symbol)?;
+            .compile_trampoline(component, types, key, abi, tunables, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
-            c.finish_compiling(&mut body.array_call, None, symbol)
+            c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
-            c.finish_compiling(&mut body.wasm_call, None, symbol)
+        }
+        Ok(body)
+    }
+
+    fn compile_intrinsic(
+        &self,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        types: &wasmtime_environ::component::ComponentTypesBuilder,
+        intrinsic: wasmtime_environ::component::UnsafeIntrinsic,
+        abi: wasmtime_environ::Abi,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody> {
+        let mut body = self
+            .0
+            .component_compiler()
+            .compile_intrinsic(tunables, component, types, intrinsic, abi, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
         }
         Ok(body)

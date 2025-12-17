@@ -613,6 +613,21 @@ pub enum VectorSize {
 }
 
 impl VectorSize {
+    /// Get the vector operand of the same size but with 8-bit lane size.
+    pub fn as_scalar8_vector(&self) -> VectorSize {
+        match self {
+            // 64-bit vector
+            VectorSize::Size8x8 | VectorSize::Size16x4 | VectorSize::Size32x2 => {
+                VectorSize::Size8x8
+            }
+            // 128-bit vector
+            VectorSize::Size8x16
+            | VectorSize::Size16x8
+            | VectorSize::Size32x4
+            | VectorSize::Size64x2 => VectorSize::Size8x16,
+        }
+    }
+
     /// Get the vector operand size with the given scalar size as lane size.
     pub fn from_lane_size(size: ScalarSize, is_128bit: bool) -> VectorSize {
         match (size, is_128bit) {

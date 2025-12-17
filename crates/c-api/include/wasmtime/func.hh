@@ -63,9 +63,11 @@ template <typename T> struct WasmType {
     static const ValKind kind = ValKind::valkind;                              \
     static void store(Store::Context cx, wasmtime_val_raw_t *p,                \
                       const native &t) {                                       \
+      (void)cx;                                                                \
       p->field = t;                                                            \
     }                                                                          \
     static native load(Store::Context cx, wasmtime_val_raw_t *p) {             \
+      (void)cx;                                                                \
       return p->field;                                                         \
     }                                                                          \
   };
@@ -85,9 +87,17 @@ template <> struct WasmType<std::optional<ExternRef>> {
   static const bool valid = true;
   static const ValKind kind = ValKind::ExternRef;
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
+                    std::optional<ExternRef> &&ref) {
+    if (ref) {
+      p->externref = ref->take_raw(cx);
+    } else {
+      p->externref = 0;
+    }
+  }
+  static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     const std::optional<ExternRef> &ref) {
     if (ref) {
-      p->externref = wasmtime_externref_to_raw(cx.raw_context(), ref->raw());
+      p->externref = ref->borrow_raw(cx);
     } else {
       p->externref = 0;
     }
@@ -98,7 +108,7 @@ template <> struct WasmType<std::optional<ExternRef>> {
       return std::nullopt;
     }
     wasmtime_externref_t val;
-    wasmtime_externref_from_raw(cx.raw_context(), p->externref, &val);
+    wasmtime_externref_from_raw(cx.capi(), p->externref, &val);
     return ExternRef(val);
   }
 };
@@ -108,9 +118,13 @@ template <> struct WasmType<V128> {
   static const bool valid = true;
   static const ValKind kind = ValKind::V128;
   static void store(Store::Context cx, wasmtime_val_raw_t *p, const V128 &t) {
+    (void)cx;
     memcpy(&p->v128[0], &t.v128[0], sizeof(wasmtime_v128));
   }
-  static V128 load(Store::Context cx, wasmtime_val_raw_t *p) { return p->v128; }
+  static V128 load(Store::Context cx, wasmtime_val_raw_t *p) {
+    (void)cx;
+    return p->v128;
+  }
 };
 
 /// A "trait" for a list of types and operations on them, used for `Func::wrap`
@@ -122,6 +136,9 @@ template <typename T> struct WasmTypeList {
   static const size_t size = 1;
   static bool matches(ValType::ListRef types) {
     return WasmTypeList<std::tuple<T>>::matches(types);
+  }
+  static void store(Store::Context cx, wasmtime_val_raw_t *storage, T &&t) {
+    WasmType<T>::store(cx, storage, t);
   }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
                     const T &t) {
@@ -139,8 +156,14 @@ template <> struct WasmTypeList<std::monostate> {
   static const size_t size = 0;
   static bool matches(ValType::ListRef types) { return types.size() == 0; }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
-                    const std::monostate &t) {}
+                    const std::monostate &t) {
+    (void)cx;
+    (void)storage;
+    (void)t;
+  }
   static std::monostate load(Store::Context cx, wasmtime_val_raw_t *storage) {
+    (void)cx;
+    (void)storage;
     return std::monostate();
   }
   static std::vector<ValType> types() { return {}; }
@@ -158,6 +181,15 @@ template <typename... T> struct WasmTypeList<std::tuple<T...>> {
     return ((WasmType<T>::kind == types.begin()[n++].kind()) && ...);
   }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
+                    std::tuple<T...> &&t) {
+    size_t n = 0;
+    std::apply(
+        [&](auto &...val) {
+          (WasmType<T>::store(cx, &storage[n++], val), ...); // NOLINT
+        },
+        t);
+  }
+  static void store(Store::Context cx, wasmtime_val_raw_t *storage,
                     const std::tuple<T...> &t) {
     size_t n = 0;
     std::apply(
@@ -167,8 +199,8 @@ template <typename... T> struct WasmTypeList<std::tuple<T...>> {
         t);
   }
   static std::tuple<T...> load(Store::Context cx, wasmtime_val_raw_t *storage) {
-    size_t n = 0;
-    return std::tuple<T...>{WasmType<T>::load(cx, &storage[n++])...}; // NOLINT
+    (void)cx;
+    return std::tuple<T...>{WasmType<T>::load(cx, storage++)...}; // NOLINT
   }
   static std::vector<ValType> types() { return {WasmType<T>::kind...}; }
 };
@@ -195,6 +227,8 @@ template <> struct WasmHostRet<void> {
   template <typename F, typename... A>
   static std::optional<Trap> invoke(F f, Caller cx, wasmtime_val_raw_t *raw,
                                     A... args) {
+    (void)cx;
+    (void)raw;
     f(args...);
     return std::nullopt;
   }
@@ -321,7 +355,7 @@ class Func {
     Result<std::monostate, Trap> result =
         (*func)(Caller(caller), args_span, results_span);
     if (!result) {
-      return result.err().ptr.release();
+      return result.err().capi_release();
     }
     return nullptr;
   }
@@ -331,12 +365,13 @@ class Func {
   raw_callback_unchecked(void *env, wasmtime_caller_t *caller,
                          wasmtime_val_raw_t *args_and_results,
                          size_t nargs_and_results) {
+    (void)nargs_and_results;
     using HostFunc = WasmHostFunc<F>;
     Caller cx(caller);
     F *func = reinterpret_cast<F *>(env); // NOLINT
     auto trap = HostFunc::invoke(*func, cx, args_and_results);
     if (trap) {
-      return trap->ptr.release();
+      return trap->capi_release();
     }
     return nullptr;
   }
@@ -574,7 +609,7 @@ public:
    * Note that this function still may return a `Trap` indicating that calling
    * the WebAssembly function failed.
    */
-  TrapResult<Results> call(Store::Context cx, Params params) const {
+  TrapResult<Results> call(Store::Context cx, const Params &params) const {
     std::array<wasmtime_val_raw_t, std::max(WasmTypeList<Params>::size,
                                             WasmTypeList<Results>::size)>
         storage;
@@ -583,7 +618,7 @@ public:
       ptr = reinterpret_cast<wasmtime_val_raw_t *>(alignof(wasmtime_val_raw_t));
     WasmTypeList<Params>::store(cx, ptr, params);
     wasm_trap_t *trap = nullptr;
-    auto *error = wasmtime_func_call_unchecked(cx.raw_context(), &f.func, ptr,
+    auto *error = wasmtime_func_call_unchecked(cx.capi(), &f.func, ptr,
                                                storage.size(), &trap);
     if (error != nullptr) {
       return TrapError(Error(error));
@@ -631,7 +666,7 @@ template <> struct detail::WasmType<std::optional<Func>> {
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     const std::optional<Func> func) {
     if (func) {
-      p->funcref = wasmtime_func_to_raw(cx.raw_context(), &func->capi());
+      p->funcref = wasmtime_func_to_raw(cx.capi(), &func->capi());
     } else {
       p->funcref = 0;
     }
@@ -642,7 +677,7 @@ template <> struct detail::WasmType<std::optional<Func>> {
       return std::nullopt;
     }
     wasmtime_func_t ret;
-    wasmtime_func_from_raw(cx.raw_context(), p->funcref, &ret);
+    wasmtime_func_from_raw(cx.capi(), p->funcref, &ret);
     return ret;
   }
 };

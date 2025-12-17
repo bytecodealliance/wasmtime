@@ -1,9 +1,13 @@
+use std::ops::Range;
+
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachSrcLoc, ValueLabelsRanges, ir, isa::unwind::CfaUnwindInfo,
-    isa::unwind::UnwindInfo,
+    Final, MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
+    isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
-use wasmtime_environ::{FilePos, InstructionAddressMap, PrimaryMap, TrapInformation};
+use wasmtime_environ::{
+    FilePos, FrameStateSlotBuilder, InstructionAddressMap, PrimaryMap, TrapInformation,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Metadata to translate from binary offsets back to the original
@@ -44,8 +48,6 @@ pub struct CompiledFunctionMetadata {
     pub cfa_unwind_info: Option<CfaUnwindInfo>,
     /// Mapping of value labels and their locations.
     pub value_labels_ranges: ValueLabelsRanges,
-    /// Allocated stack slots.
-    pub sized_stack_slots: ir::StackSlots,
     /// Start source location.
     pub start_srcloc: FilePos,
     /// End source location.
@@ -63,6 +65,10 @@ pub struct CompiledFunction {
     /// The metadata for the compiled function, including unwind information
     /// the function address map.
     metadata: CompiledFunctionMetadata,
+    /// Debug metadata for the top-level function's state slot.
+    pub debug_slot_descriptor: Option<FrameStateSlotBuilder>,
+    /// Debug breakpoint patches: Wasm PC, offset range in buffer.
+    pub breakpoint_patch_points: Vec<(u32, Range<u32>)>,
 }
 
 impl CompiledFunction {
@@ -74,11 +80,58 @@ impl CompiledFunction {
         name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
         alignment: u32,
     ) -> Self {
-        Self {
+        let mut this = Self {
             buffer,
             name_map,
             alignment,
             metadata: Default::default(),
+            debug_slot_descriptor: None,
+            breakpoint_patch_points: vec![],
+        };
+        this.finalize_breakpoints();
+
+        this
+    }
+
+    /// Finalize breakpoint patches: edit the buffer to have NOPs by
+    /// default, and place patch data in the debug breakpoint data
+    /// tables.
+    fn finalize_breakpoints(&mut self) {
+        // Traverse debug tags and patchable callsites together. All
+        // patchable callsites should have debug tags. Given both, we
+        // can know the Wasm PC and we can emit a breakpoint record.
+        let mut tags = self.buffer.debug_tags().peekable();
+        let mut patchable_callsites = self.buffer.patchable_call_sites().peekable();
+
+        while let (Some(tag), Some(patchable_callsite)) = (tags.peek(), patchable_callsites.peek())
+        {
+            if tag.offset > patchable_callsite.ret_addr {
+                patchable_callsites.next();
+                continue;
+            }
+            if patchable_callsite.ret_addr > tag.offset {
+                tags.next();
+                continue;
+            }
+            assert_eq!(tag.offset, patchable_callsite.ret_addr);
+
+            // Tag format used by our Wasm-to-CLIF format is
+            // (stackslot, wasm_pc, stack_shape). Taking the
+            // second-to-last tag will get the innermost Wasm PC (if
+            // there are multiple nested frames due to inlining).
+            assert!(tag.tags.len() >= 3);
+            let ir::DebugTag::User(wasm_pc) = tag.tags[tag.tags.len() - 2] else {
+                panic!("invalid tag")
+            };
+
+            let patchable_start = patchable_callsite.ret_addr - patchable_callsite.len;
+            let patchable_end = patchable_callsite.ret_addr;
+
+            self.breakpoint_patch_points
+                .push((wasm_pc, patchable_start..patchable_end));
+
+            tags.next();
+            patchable_callsites.next();
         }
     }
 
@@ -155,9 +208,18 @@ impl CompiledFunction {
         self.metadata.cfa_unwind_info = Some(unwind);
     }
 
-    /// Set the sized stack slots.
-    pub fn set_sized_stack_slots(&mut self, slots: ir::StackSlots) {
-        self.metadata.sized_stack_slots = slots;
+    /// Returns the frame-layout metadata for this function.
+    pub fn frame_layout(&self) -> &MachBufferFrameLayout {
+        self.buffer
+            .frame_layout()
+            .expect("Single-function MachBuffer must have frame layout information")
+    }
+
+    /// Returns an iterator over breakpoint patches for this function.
+    ///
+    /// Each tuple is (wasm PC, buffer offset range).
+    pub fn breakpoint_patches(&self) -> impl Iterator<Item = (u32, Range<u32>)> + '_ {
+        self.breakpoint_patch_points.iter().cloned()
     }
 }
 

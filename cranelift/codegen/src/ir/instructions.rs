@@ -1061,6 +1061,9 @@ pub trait InstructionMapper {
     /// Map a function over a `BlockCall`.
     fn map_block_call(&mut self, block_call: BlockCall) -> BlockCall;
 
+    /// Map a function over a `Block`.
+    fn map_block(&mut self, block: Block) -> Block;
+
     /// Map a function over a `FuncRef`.
     fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef;
 
@@ -1109,6 +1112,10 @@ where
 
     fn map_block_call(&mut self, block_call: BlockCall) -> BlockCall {
         (**self).map_block_call(block_call)
+    }
+
+    fn map_block(&mut self, block: Block) -> Block {
+        (**self).map_block(block)
     }
 
     fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef {
@@ -1329,6 +1336,10 @@ mod tests {
                 BlockCall::new(block, [], &mut pool)
             }
 
+            fn map_block(&mut self, block: Block) -> Block {
+                Block::from_u32(block.as_u32() + 1)
+            }
+
             fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef {
                 FuncRef::from_u32(func_ref.as_u32() + 1)
             }
@@ -1444,6 +1455,20 @@ mod tests {
                 opcode: Opcode::Jump,
                 destination: BlockCall::new(Block::from_u32(42), [], &mut pool),
             })
+        );
+
+        // Mapping `Block`s.
+        assert_eq!(
+            map(InstructionData::ExceptionHandlerAddress {
+                opcode: Opcode::GetExceptionHandlerAddress,
+                block: Block::from_u32(1),
+                imm: 0.into(),
+            }),
+            InstructionData::ExceptionHandlerAddress {
+                opcode: Opcode::GetExceptionHandlerAddress,
+                block: Block::from_u32(2),
+                imm: 0.into(),
+            },
         );
 
         // Mapping `SigRef`s.

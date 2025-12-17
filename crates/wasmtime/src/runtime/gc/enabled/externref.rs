@@ -2,11 +2,11 @@
 
 use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
-use crate::runtime::vm::VMGcRef;
+use crate::runtime::vm::{self, VMGcRef, VMStore};
 use crate::{
-    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
+    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
-    store::{AutoAssertNoGc, StoreOpaque},
+    store::{AutoAssertNoGc, StoreOpaque, StoreResourceLimiter},
 };
 use core::any::Any;
 use core::mem;
@@ -31,7 +31,7 @@ use core::mem::MaybeUninit;
 /// the host into dereferencing it and segfaulting or worse.
 ///
 /// Note that you can also use `Rooted<ExternRef>` and
-/// `ManuallyRooted<ExternRef>` as a type parameter with
+/// `OwnedRooted<ExternRef>` as a type parameter with
 /// [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -140,10 +140,10 @@ impl ExternRef {
     ///
     /// The resulting value is automatically unrooted when the given `context`'s
     /// scope is exited. If you need to hold the reference past the `context`'s
-    /// scope, convert the result into a
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// scope, convert the result into an
+    /// [`OwnedRooted<T>`][crate::OwnedRooted]. See the documentation for
     /// [`Rooted<T>`][crate::Rooted] and
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
+    /// [`OwnedRooted<T>`][crate::OwnedRooted] for more details.
     ///
     /// # Automatic Garbage Collection
     ///
@@ -210,51 +210,23 @@ impl ExternRef {
     /// Panics if the `context` is configured for async; use
     /// [`ExternRef::new_async`][crate::ExternRef::new_async] to perform
     /// asynchronous allocation instead.
-    pub fn new<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+    pub fn new<T>(mut store: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
-        let ctx = context.as_context_mut().0;
-        Self::_new(ctx, value)
-    }
-
-    pub(crate) fn _new<T>(store: &mut StoreOpaque, value: T) -> Result<Rooted<ExternRef>>
-    where
-        T: 'static + Any + Send + Sync,
-    {
-        // Allocate the box once, regardless how many gc-and-retry attempts we
-        // make.
-        let value: Box<dyn Any + Send + Sync> = Box::new(value);
-
-        let gc_ref = store
-            .retry_after_gc(value, |store, value| {
-                store
-                    .require_gc_store_mut()?
-                    .alloc_externref(value)
-                    .context("unrecoverable error when allocating new `externref`")?
-                    .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
-            })
-            // Translate the `GcHeapOutOfMemory`'s inner value from the boxed
-            // trait object into `T`.
-            .map_err(
-                |e| match e.downcast::<GcHeapOutOfMemory<Box<dyn Any + Send + Sync>>>() {
-                    Ok(oom) => oom.map_inner(|x| *x.downcast::<T>().unwrap()).into(),
-                    Err(e) => e,
-                },
-            )?;
-
-        let mut ctx = AutoAssertNoGc::new(store);
-        Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), value))
     }
 
     /// Asynchronously allocates a new `ExternRef` wrapping the given value.
     ///
     /// The resulting value is automatically unrooted when the given `context`'s
     /// scope is exited. If you need to hold the reference past the `context`'s
-    /// scope, convert the result into a
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// scope, convert the result into an
+    /// [`OwnedRooted<T>`][crate::OwnedRooted]. See the documentation for
     /// [`Rooted<T>`][crate::Rooted] and
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
+    /// [`OwnedRooted<T>`][crate::OwnedRooted] for more details.
     ///
     /// # Automatic Garbage Collection
     ///
@@ -323,17 +295,17 @@ impl ExternRef {
     /// [`ExternRef::new`][crate::ExternRef::new] to perform synchronous
     /// allocation instead.
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+    pub async fn new_async<T>(mut store: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
-        let ctx = context.as_context_mut().0;
-        Self::_new_async(ctx, value).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), value).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async<T>(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         value: T,
     ) -> Result<Rooted<ExternRef>>
     where
@@ -344,7 +316,7 @@ impl ExternRef {
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
 
         let gc_ref = store
-            .retry_after_gc_async(value, |store, value| {
+            .retry_after_gc_async(limiter, value, |store, value| {
                 store
                     .require_gc_store_mut()?
                     .alloc_externref(value)
@@ -674,7 +646,7 @@ unsafe impl WasmTy for Option<Rooted<ExternRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<ExternRef> {
+unsafe impl WasmTy for OwnedRooted<ExternRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Extern))
@@ -704,7 +676,7 @@ unsafe impl WasmTy for ManuallyRooted<ExternRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<ExternRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::EXTERNREF
@@ -727,11 +699,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
+        <OwnedRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<ExternRef>>::wasm_ty_option_load(
+        <OwnedRooted<ExternRef>>::wasm_ty_option_load(
             store,
             ptr.get_externref(),
             ExternRef::from_cloned_gc_ref,

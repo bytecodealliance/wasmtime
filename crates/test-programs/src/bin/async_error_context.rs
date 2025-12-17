@@ -9,7 +9,7 @@ mod bindings {
 }
 use bindings::exports::local::local::run::Guest;
 
-use wit_bindgen_rt::async_support::ErrorContext;
+use wit_bindgen::rt::async_support::ErrorContext;
 
 struct Component;
 

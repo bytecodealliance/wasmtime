@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <wasm.h>
+#include <wasmtime/helpers.hh>
 
 namespace wasmtime {
 
@@ -14,8 +15,11 @@ namespace wasmtime {
  * \brief Type information about a WebAssembly export
  */
 class ExportType {
+/// bridge between wasm.h and wasmtime.h conventions
+#define wasm_exporttype_clone wasm_exporttype_copy
+  WASMTIME_CLONE_WRAPPER(ExportType, wasm_exporttype);
+#undef wasm_exporttype_clone
 
-public:
   /// \brief Non-owning reference to an `ExportType`.
   ///
   /// Note to get type information you can use `ExternType::from_export`.
@@ -36,6 +40,9 @@ public:
       return std::string_view(name->data, name->size);
     }
   };
+
+  /// Returns the `Ref` describing this export.
+  Ref ref() const { return Ref(ptr.get()); }
 
   /// An owned list of `ExportType` instances.
   class List {

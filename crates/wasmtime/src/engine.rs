@@ -51,7 +51,7 @@ struct EngineInner {
     features: WasmFeatures,
     tunables: Tunables,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compiler: Box<dyn wasmtime_environ::Compiler>,
+    compiler: Option<Box<dyn wasmtime_environ::Compiler>>,
     #[cfg(feature = "runtime")]
     allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
@@ -65,7 +65,6 @@ struct EngineInner {
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
 }
 
@@ -93,12 +92,11 @@ impl Engine {
     /// configurations are incompatible.
     ///
     /// For example, feature `reference_types` will need to set
-    /// the compiler setting `enable_safepoints` and `unwind_info`
-    /// to `true`, but explicitly disable these two compiler settings
-    /// will cause errors.
+    /// the compiler setting `unwind_info` to `true`, but explicitly
+    /// disable these two compiler settings will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
-        let (tunables, features) = config.validate()?;
+        let (mut tunables, features) = config.validate()?;
 
         #[cfg(feature = "runtime")]
         if tunables.signals_based_traps {
@@ -115,7 +113,14 @@ impl Engine {
         }
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler(&tunables, features)?;
+        let (config, compiler) = if config.has_compiler() {
+            let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+            (config, Some(compiler))
+        } else {
+            (config.clone(), None)
+        };
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        let _ = &mut tunables;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
@@ -141,7 +146,6 @@ impl Engine {
                 signatures: TypeRegistry::new(),
                 #[cfg(all(feature = "runtime", target_has_atomic = "64"))]
                 epoch: AtomicU64::new(0),
-                #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compatible_with_native_host: Default::default(),
                 config,
                 tunables,
@@ -293,7 +297,6 @@ impl Engine {
     /// engine can indeed load modules for the configured compiler (if any).
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
         self.inner
             .compatible_with_native_host
@@ -302,18 +305,16 @@ impl Engine {
             .map_err(anyhow::Error::msg)
     }
 
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         use target_lexicon::Triple;
 
-        let compiler = self.compiler();
-
-        let target = compiler.triple();
         let host = Triple::host();
+        let target = self.config().compiler_target();
+
         let target_matches_host = || {
             // If the host target and target triple match, then it's valid
             // to run results of compilation on this host.
-            if host == *target {
+            if host == target {
                 return true;
             }
 
@@ -337,12 +338,17 @@ impl Engine {
             ));
         }
 
-        // Also double-check all compiler settings
-        for (key, value) in compiler.flags().iter() {
-            self.check_compatible_with_shared_flag(key, value)?;
-        }
-        for (key, value) in compiler.isa_flags().iter() {
-            self.check_compatible_with_isa_flag(key, value)?;
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            if let Some(compiler) = self.compiler() {
+                // Also double-check all compiler settings
+                for (key, value) in compiler.flags().iter() {
+                    self.check_compatible_with_shared_flag(key, value)?;
+                }
+                for (key, value) in compiler.isa_flags().iter() {
+                    self.check_compatible_with_isa_flag(key, value)?;
+                }
+            }
         }
 
         // Double-check that this configuration isn't requesting capabilities
@@ -356,6 +362,22 @@ impl Engine {
         if !cfg!(target_has_atomic = "64") && self.tunables().epoch_interruption {
             return Err("epochs currently require 64-bit atomics".into());
         }
+
+        // Double-check that the host's float ABI matches Cranelift's float ABI.
+        // See `Config::x86_float_abi_ok` for some more
+        // information.
+        if target == target_lexicon::triple!("x86_64-unknown-none")
+            && self.config().x86_float_abi_ok != Some(true)
+        {
+            return Err("\
+the x86_64-unknown-none target by default uses a soft-float ABI that is \
+incompatible with Cranelift and Wasmtime -- use \
+`Config::x86_float_abi_ok` to disable this check and see more \
+information about this check\
+"
+            .into());
+        }
+
         Ok(())
     }
 
@@ -401,17 +423,6 @@ impl Engine {
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
-            // If reference types (or anything that depends on reference types,
-            // like typed function references and GC) are enabled this must be
-            // enabled, otherwise this setting can have any value.
-            "enable_safepoints" => {
-                if self.features().contains(WasmFeatures::REFERENCE_TYPES) {
-                    *value == FlagValue::Bool(true)
-                } else {
-                    return Ok(())
-                }
-            }
-
             // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
                 if target.operating_system == target_lexicon::OperatingSystem::Windows {
@@ -445,7 +456,6 @@ impl Engine {
             "enable_heap_access_spectre_mitigation"
             | "enable_table_access_spectre_mitigation"
             | "enable_nan_canonicalization"
-            | "enable_jump_tables"
             | "enable_float"
             | "enable_verifier"
             | "enable_pcc"
@@ -601,8 +611,8 @@ impl Engine {
                  available on the host",
             )),
             None => Err(format!(
-                "failed to detect if target-specific flag {flag:?} is \
-                 available at runtime"
+                "failed to detect if target-specific flag {host_feature:?} is \
+                 available at runtime (compile setting {flag:?})"
             )),
         }
     }
@@ -621,8 +631,13 @@ impl Engine {
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl Engine {
-    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
-        &*self.inner.compiler
+    pub(crate) fn compiler(&self) -> Option<&dyn wasmtime_environ::Compiler> {
+        self.inner.compiler.as_deref()
+    }
+
+    pub(crate) fn try_compiler(&self) -> Result<&dyn wasmtime_environ::Compiler> {
+        self.compiler()
+            .ok_or_else(|| anyhow!("Engine was not configured with a compiler"))
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.
@@ -668,8 +683,9 @@ impl Engine {
     ///
     /// The blob of bytes is inserted into the object file specified to become part
     /// of the final compiled artifact.
-    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
-        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) -> Result<()> {
+        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self)?);
+        Ok(())
     }
 
     #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -679,7 +695,10 @@ impl Engine {
             wasmtime_environ::obj::ELF_WASM_BTI.as_bytes().to_vec(),
             object::SectionKind::ReadOnlyData,
         );
-        let contents = if self.compiler().is_branch_protection_enabled() {
+        let contents = if self
+            .compiler()
+            .is_some_and(|c| c.is_branch_protection_enabled())
+        {
             1
         } else {
             0
@@ -718,6 +737,14 @@ impl Engine {
     /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() {
         crate::runtime::vm::tls_eager_initialize();
+    }
+
+    /// Returns a [`PoolingAllocatorMetrics`](crate::PoolingAllocatorMetrics) if
+    /// this engine was configured with
+    /// [`InstanceAllocationStrategy::Pooling`](crate::InstanceAllocationStrategy::Pooling).
+    #[cfg(feature = "pooling-allocator")]
+    pub fn pooling_allocator_metrics(&self) -> Option<crate::vm::PoolingAllocatorMetrics> {
+        crate::runtime::vm::PoolingAllocatorMetrics::new(self)
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
@@ -869,6 +896,9 @@ impl Engine {
         mmap: crate::runtime::vm::MmapVec,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
+        self.check_compatible_with_native_host()
+            .context("compilation settings are not compatible with the native host")?;
+
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = crate::CodeMemory::new(self, mmap)?;
         code.publish()?;

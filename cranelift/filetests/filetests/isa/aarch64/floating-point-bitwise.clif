@@ -1,0 +1,93 @@
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=true
+target aarch64
+            
+function %f1() -> f64 fast {
+
+block0:
+    v1 = f64const 0x1.11044b092d153p-1
+    v2 = bxor.f64 v1, v1
+    return v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr d1, [const(0)]
+;   eor v0.8b, v1.8b, v1.8b
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr d1, #0x18
+;   eor v0.8b, v1.8b, v1.8b
+;   ldp x29, x30, [sp], #0x10
+;   ret
+;   adrp x19, #0xffffffff25a29000
+;   .byte 0x44, 0x10, 0xe1, 0x3f
+
+function %f2() -> f32 fast {
+
+block0:
+    v1 = f32const 0x1.11044cp-1
+    v2 = bxor.f32 v1, v1
+    return v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz w2, #33318
+;   movk w2, w2, #16136, LSL #16
+;   fmov s5, w2
+;   eor v0.8b, v5.8b, v5.8b
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov w2, #0x8226
+;   movk w2, #0x3f08, lsl #16
+;   fmov s5, w2
+;   eor v0.8b, v5.8b, v5.8b
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %f3() -> f16 fast {
+
+block0:
+    v1 = f16const 0x1.11p-1
+    v2 = bxor.f16 v1, v1
+    return v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz w1, #14404
+;   fmov s3, w1
+;   eor v0.8b, v3.8b, v3.8b
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov w1, #0x3844
+;   fmov s3, w1
+;   eor v0.8b, v3.8b, v3.8b
+;   ldp x29, x30, [sp], #0x10
+;   ret

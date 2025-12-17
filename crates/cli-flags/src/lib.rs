@@ -264,6 +264,8 @@ wasmtime_option_group! {
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
+        /// Enable guest debugging insrumentation.
+        pub guest_debug: Option<bool>,
         /// Configure whether compiled code can map native addresses to wasm.
         pub address_map: Option<bool>,
         /// Configure whether logging is enabled.
@@ -371,6 +373,8 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure the ability to create a `shared` memory.
+        pub shared_memory: Option<bool>,
         /// Configure support for the shared-everything-threads proposal.
         pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
@@ -385,6 +389,9 @@ wasmtime_option_group! {
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚟 emoji in the component model specification.
         pub component_model_async_stackful: Option<bool>,
+        /// Component model support for threading: this corresponds
+        /// to the 🧵 emoji in the component model specification.
+        pub component_model_threading: Option<bool>,
         /// Component model support for `error-context`: this corresponds
         /// to the 📝 emoji in the component model specification.
         pub component_model_error_context: Option<bool>,
@@ -405,8 +412,8 @@ wasmtime_option_group! {
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
         pub exceptions: Option<bool>,
-        /// DEPRECATED: Configure support for the legacy exceptions proposal.
-        pub legacy_exceptions: Option<bool>,
+        /// Whether or not any GC infrastructure in Wasmtime is enabled or not.
+        pub gc_support: Option<bool>,
     }
 
     enum Wasm {
@@ -708,6 +715,11 @@ impl CommonOptions {
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
         }
+        match_feature! {
+            ["debug" : self.debug.guest_debug]
+            enable => config.guest_debug(enable),
+            _ => err,
+        }
         if self.debug.coredump.is_some() {
             #[cfg(feature = "coredump")]
             config.coredump_on_trap(true);
@@ -997,6 +1009,14 @@ impl CommonOptions {
             true => err,
         }
 
+        if let Some(enable) = self.wasm.gc_support {
+            config.gc_support(enable);
+        }
+
+        if let Some(enable) = self.wasm.shared_memory {
+            config.shared_memory(enable);
+        }
+
         Ok(config)
     }
 
@@ -1036,13 +1056,6 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
-        if let Some(enable) = self.wasm.exceptions.or(all) {
-            config.wasm_exceptions(enable);
-        }
-        if let Some(enable) = self.wasm.legacy_exceptions.or(all) {
-            #[expect(deprecated, reason = "forwarding CLI flag")]
-            config.wasm_legacy_exceptions(enable);
-        }
 
         macro_rules! handle_conditionally_compiled {
             ($(($feature:tt, $field:tt, $method:tt))*) => ($(
@@ -1062,11 +1075,13 @@ impl CommonOptions {
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
+            ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
+            ("gc", exceptions, wasm_exceptions)
             ("stack-switching", stack_switching, wasm_stack_switching)
         }
 
@@ -1143,6 +1158,7 @@ mod tests {
         // Regalloc algorithm
         for (regalloc_value, expected) in [
             ("\"backtracking\"", Some(RegallocAlgorithm::Backtracking)),
+            ("\"single-pass\"", Some(RegallocAlgorithm::SinglePass)),
             ("\"hello\"", None), // should fail
             ("3", None),         // should fail
             ("true", None),      // should fail

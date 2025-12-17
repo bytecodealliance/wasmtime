@@ -196,7 +196,7 @@
 (type UnwindInst (primitive UnwindInst))
 (type ExternalName (primitive ExternalName))
 (type BoxExternalName (primitive BoxExternalName))
-(type RelocDistance (primitive RelocDistance))
+(type RelocDistance extern (enum (Near) (Far)))
 (type VecArgPair extern (enum))
 (type VecRetPair extern (enum))
 (type CallArgList (primitive CallArgList))
@@ -380,6 +380,10 @@
 
 (decl sge (Value Value) Value)
 (extractor (sge x y) (icmp (IntCC.SignedGreaterThanOrEqual) x y))
+
+;; Get the MachLabel for a particular CLIF block's indexed exception-handling successor.
+(decl block_exn_successor_label (Block u64) MachLabel)
+(extern constructor block_exn_successor_label block_exn_successor_label)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -983,7 +987,7 @@
 
 ;; Accessor for `FuncRef`.
 
-(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(decl func_ref_data (SigRef ExternalName RelocDistance bool) FuncRef)
 (extern extractor infallible func_ref_data func_ref_data)
 
 ;; Accessor for `ExceptionTable`.
@@ -994,11 +998,6 @@
 
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
 (extern extractor symbol_value_data symbol_value_data)
-
-;; Accessor for `RelocDistance`.
-
-(decl reloc_distance_near () RelocDistance)
-(extern extractor reloc_distance_near reloc_distance_near)
 
 ;; Accessor for `Immediate` as a vector of u8 values.
 
@@ -1120,6 +1119,10 @@
 (decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
 (extern constructor abi_stackslot_addr abi_stackslot_addr)
 
+;; StackSlot raw offset into slot region
+(decl abi_stackslot_offset_into_slot_region (StackSlot Offset32 Offset32) i32)
+(extern constructor abi_stackslot_offset_into_slot_region abi_stackslot_offset_into_slot_region)
+
 ;; DynamicStackSlot addr
 (decl abi_dynamic_stackslot_addr (WritableReg DynamicStackSlot) MInst)
 (extern constructor abi_dynamic_stackslot_addr abi_dynamic_stackslot_addr)
@@ -1169,6 +1172,9 @@
 
 (decl gen_try_call_rets (Sig) CallRetList)
 (extern constructor gen_try_call_rets gen_try_call_rets)
+
+(decl gen_patchable_call_rets () CallRetList)
+(extern constructor gen_patchable_call_rets gen_patchable_call_rets)
 
 (type OptionTryCallInfo (primitive OptionTryCallInfo))
 (decl try_call_info (ExceptionTable MachLabelSlice) OptionTryCallInfo)

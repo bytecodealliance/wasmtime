@@ -1405,6 +1405,38 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "get_exception_handler_address",
+            r#"
+        Get the handler PC for the given exceptional edge for an
+        exception return from the given `try_call`-terminated block.
+
+        This instruction provides the PC for the handler resume point,
+        as defined by the exception-handling aspect of the given
+        callee ABI, for a return from the given calling block.  It can
+        be used when the exception unwind mechanism requires manual
+        plumbing for this information which must be set up before the call
+        itself: for example, if the resume address needs to be stored in
+        some context structure for a runtime to resume to on error.
+
+        The given caller block must end in a `try_call` and the given
+        exception-handling block must be one of its exceptional
+        successors in the associated exception-handling table. The
+        returned PC is *only* valid to resume to when the `try_call`
+        is on the stack having called the callee; in other words, when
+        a normal exception unwinder might otherwise resume to that
+        handler.
+        "#,
+            &formats.exception_handler_address,
+        )
+        .operands_in(vec![
+            Operand::new("block", &entities.raw_block),
+            Operand::new("index", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("addr", iAddr)]),
+    );
+
+    ig.push(
+        Inst::new(
             "iconst",
             r#"
         Integer constant.
@@ -3869,5 +3901,21 @@ pub(crate) fn define(
         .operands_out(vec![
             Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector"),
         ]),
+    );
+
+    ig.push(
+        Inst::new(
+            "sequence_point",
+            r#"
+         A compiler barrier that acts as an immovable marker from IR input to machine-code output.
+
+         This "sequence point" can have debug tags attached to it, and these tags will be
+         noted in the output `MachBuffer`.
+
+         It prevents motion of any other side-effects across this boundary.
+         "#,
+            &formats.nullary,
+        )
+        .other_side_effects(),
     );
 }

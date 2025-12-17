@@ -11,10 +11,14 @@ description = "Experimental HTTP library for WebAssembly in Wasmtime"
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["default-send-request"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
-p3 = ["wasmtime-wasi/p3"]
+p3 = ["wasmtime-wasi/p3", "dep:tokio-util"]
+component-model-async = ["futures/alloc", "wasmtime/component-model-async"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -27,6 +31,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "time",
 ] }
+tokio-util = { workspace = true, optional = true }
 http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
@@ -50,3 +55,4 @@ base64 = { workspace = true }
 flate2 = { workspace = true }
 wasm-compose = { workspace = true }
 tempfile = { workspace = true }
+env_logger = { workspace = true }

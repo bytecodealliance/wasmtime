@@ -918,7 +918,14 @@
         (rtmp2 WritableReg))
 
        ;; Load an inline symbol reference.
-       (LoadExtName
+       (LoadExtNameGot
+        (rd WritableReg)
+        (name BoxExternalName))
+       (LoadExtNameNear
+        (rd WritableReg)
+        (name BoxExternalName)
+        (offset i64))
+       (LoadExtNameFar
         (rd WritableReg)
         (name BoxExternalName)
         (offset i64))
@@ -985,6 +992,13 @@
        ;; A dummy use, useful to keep a value alive.
        (DummyUse
         (reg Reg))
+
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableReg)
+                     (label MachLabel))
+
+       ;; A pseudoinstruction that serves as a sequence point.
+       (SequencePoint)
 
        ;; Emits an inline stack probe loop.
        ;;
@@ -1399,6 +1413,12 @@
 (rule (vector_size (dynamic_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (dynamic_lane 64 2)) (VectorSize.Size64x2))
 
+;; Helper for converting the `ScalarSize` of a float value to the corresponding `VectorSize`
+(decl float_vector_size_in_64 (Type) VectorSize)
+(rule (float_vector_size_in_64 $F16) (VectorSize.Size16x4))
+(rule (float_vector_size_in_64 $F32) (VectorSize.Size32x2))
+(rule (float_vector_size_in_64 $F64) (VectorSize.Size8x8))
+
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum
@@ -1515,6 +1535,8 @@
     (Bic)
     ;; Bitwise inclusive or
     (Orr)
+    ;; Bitwise inclusive or not
+    (Orn)
     ;; Bitwise exclusive or
     (Eor)
     ;; Unsigned maximum pairwise
@@ -3211,6 +3233,9 @@
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
 
+(decl orn_vec (Reg Reg VectorSize) Reg)
+(rule (orn_vec x y size) (vec_rrr (VecALUOp.Orn) x y size))
+
 ;; Helpers for generating `and` instructions.
 (spec (and_reg ty a b)
   (provide
@@ -3808,11 +3833,51 @@
             (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
         dst))
 
-;; Helper for emitting `MInst.LoadExtName` instructions.
-(decl load_ext_name (BoxExternalName i64) Reg)
-(rule (load_ext_name extname offset)
+(decl pure is_pic () bool)
+(extern constructor is_pic is_pic)
+
+;; Helper loading an external name into a register via `MInst.LoadExt*`
+(decl load_ext_name (BoxExternalName i64 RelocDistance) Reg)
+
+;; When `is_pic` is true all names are referenced through the GOT. Note that
+;; the relocation is applied to the address of the GOT itself so the offset
+;; requested must be manually added in (or skipped if it's 0).
+(rule (load_ext_name name offset _)
+  (if-let true (is_pic))
+  (add $I64 (load_ext_name_got name) (imm $I64 (ImmExtend.Zero) (i64_cast_unsigned offset))))
+(rule 1 (load_ext_name name 0 _)
+  (if-let true (is_pic))
+  (load_ext_name_got name))
+
+;; Relocations that are "near" do an `adr;add` combo.
+(rule 1 (load_ext_name name offset (RelocDistance.Near))
+  (if-let false (is_pic))
+  (load_ext_name_near name offset))
+
+;; Relocations that are "far" do an `Abs8` relocation.
+(rule 1 (load_ext_name name offset (RelocDistance.Far))
+  (if-let false (is_pic))
+  (load_ext_name_far name offset))
+
+;; Helper for emitting `MInst.LoadExtNameGot` instructions.
+(decl load_ext_name_got (BoxExternalName) Reg)
+(rule (load_ext_name_got extname)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
+            (_ Unit (emit (MInst.LoadExtNameGot dst extname))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameNear` instructions.
+(decl load_ext_name_near (BoxExternalName i64) Reg)
+(rule (load_ext_name_near extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameNear dst extname offset))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameFar` instructions.
+(decl load_ext_name_far (BoxExternalName i64) Reg)
+(rule (load_ext_name_far extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameFar dst extname offset))))
         dst))
 
 ;; Lower the address of a load or a store.
@@ -3842,6 +3907,11 @@
 (rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
+
+(rule 3
+      (amode ty (stack_addr slot offset1) offset2)
+      (AMode.SlotOffset
+       (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
@@ -4408,7 +4478,7 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
 (extern constructor gen_call_info gen_call_info)
 
 (decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
@@ -5135,3 +5205,15 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
        dst))
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl a64_label_address (MachLabel) Reg)
+(rule (a64_label_address label)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl a64_sequence_point () SideEffectNoResult)
+(rule (a64_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))

@@ -146,6 +146,21 @@ WASI_API_EXTERN bool wasi_config_set_stdout_file(wasi_config_t *config,
 WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t *config);
 
 /**
+ * \brief Configures standard output to be directed to \p callback
+ *
+ * \param config The config to operate on
+ * \param callback A non-null callback must be provided, that will get called
+ * for each write with the buffer. A positive return value indicates the amount
+ * of bytes written. Negative return values are treated as OS error codes.
+ * \param data An optional user provided data that will be passed to \p callback
+ * \param finalizer An optional callback to be called to destroy \p data
+ */
+WASI_API_EXTERN void wasi_config_set_stdout_custom(
+    wasi_config_t *config,
+    ptrdiff_t (*callback)(void *, const unsigned char *, size_t), void *data,
+    void (*finalizer)(void *));
+
+/**
  * \brief Configures standard output to be written to the specified file.
  *
  * By default WASI programs have no stderr, but this configures the specified
@@ -162,6 +177,21 @@ WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t *config,
  * this WASI configuration.
  */
 WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
+
+/**
+ * \brief Configures standard error output to be directed to \p callback
+ *
+ * \param config The config to operate on
+ * \param callback A non-null callback must be provided, that will get called
+ * for each write with the buffer. A positive return value indicates the amount
+ * of bytes written. Negative return values are treated as OS error codes.
+ * \param data An optional user provided data that will be passed to \p callback
+ * \param finalizer An optional callback to be called to destroy \p data
+ */
+WASI_API_EXTERN void wasi_config_set_stderr_custom(
+    wasi_config_t *config,
+    ptrdiff_t (*callback)(void *, const unsigned char *, size_t), void *data,
+    void (*finalizer)(void *));
 
 /**
  * \brief The permissions granted for a directory when preopening it.

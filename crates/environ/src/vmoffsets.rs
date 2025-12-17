@@ -161,6 +161,12 @@ pub trait PtrSize {
         4
     }
 
+    /// This is the size of the largest value type (i.e. a V128).
+    #[inline]
+    fn maximum_value_size(&self) -> u8 {
+        self.size_of_vmglobal_definition()
+    }
+
     // Offsets within `VMStoreContext`
 
     /// Return the offset of the `fuel_consumed` field of `VMStoreContext`
@@ -196,35 +202,51 @@ pub trait PtrSize {
     /// Return the offset of the `gc_heap.base` field within a `VMStoreContext`.
     fn vmstore_context_gc_heap_base(&self) -> u8 {
         let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_base();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
         offset
     }
 
     /// Return the offset of the `gc_heap.current_length` field within a `VMStoreContext`.
     fn vmstore_context_gc_heap_current_length(&self) -> u8 {
         let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_current_length();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
         offset
     }
 
-    /// Return the offset of the `last_wasm_exit_fp` field of `VMStoreContext`.
-    fn vmstore_context_last_wasm_exit_fp(&self) -> u8 {
+    /// Return the offset of the `last_wasm_exit_trampoline_fp` field
+    /// of `VMStoreContext`.
+    fn vmstore_context_last_wasm_exit_trampoline_fp(&self) -> u8 {
         self.vmstore_context_gc_heap() + self.size_of_vmmemory_definition()
     }
 
     /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_exit_pc(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_fp() + self.size()
+        self.vmstore_context_last_wasm_exit_trampoline_fp() + self.size()
+    }
+
+    /// Return the offset of the `last_wasm_entry_sp` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_entry_sp(&self) -> u8 {
+        self.vmstore_context_last_wasm_exit_pc() + self.size()
     }
 
     /// Return the offset of the `last_wasm_entry_fp` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_entry_fp(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_pc() + self.size()
+        self.vmstore_context_last_wasm_entry_sp() + self.size()
+    }
+
+    /// Return the offset of the `last_wasm_entry_trap_handler` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_entry_trap_handler(&self) -> u8 {
+        self.vmstore_context_last_wasm_entry_fp() + self.size()
     }
 
     /// Return the offset of the `stack_chain` field of `VMStoreContext`.
     fn vmstore_context_stack_chain(&self) -> u8 {
-        self.vmstore_context_last_wasm_entry_fp() + self.size()
+        self.vmstore_context_last_wasm_entry_trap_handler() + self.size()
+    }
+
+    /// Return the offset of the `stack_chain` field of `VMStoreContext`.
+    fn vmstore_context_store_data(&self) -> u8 {
+        self.vmstore_context_stack_chain() + self.size_of_vmstack_chain()
     }
 
     // Offsets within `VMMemoryDefinition`
@@ -338,6 +360,28 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMContObj`
+
+    /// Return the offset of `VMContObj::contref`
+    fn vmcontobj_contref(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMContObj::revision`
+    fn vmcontobj_revision(&self) -> u8 {
+        self.size()
+    }
+
+    /// Return the size of `VMContObj`.
+    fn size_of_vmcontobj(&self) -> u8 {
+        u8::try_from(align(
+            u32::from(self.vmcontobj_revision())
+                + u32::try_from(core::mem::size_of::<usize>()).unwrap(),
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
     // Offsets within `VMContRef`
 
     /// Return the offset of `VMContRef::common_stack_information`.
@@ -367,7 +411,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContRef::stack`.
     fn vmcontref_stack(&self) -> u8 {
-        self.vmcontref_revision() + 8
+        self.vmcontref_revision() + self.size()
     }
 
     /// Return the offset of `VMContRef::args`.
@@ -817,6 +861,18 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
+    /// The offset of the `vmctx` field.
+    #[inline]
+    pub fn vmtag_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+
+    /// The offset of the `index` field.
+    #[inline]
+    pub fn vmtag_import_index(&self) -> u8 {
+        2 * self.pointer_size()
+    }
+
     /// Return the size of `VMTagImport`.
     #[inline]
     pub fn size_of_vmtag_import(&self) -> u8 {
@@ -1050,6 +1106,18 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmtag_import_from(&self, index: TagIndex) -> u32 {
         self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_from())
+    }
+
+    /// Return the offset to the `vmctx` field in `VMTagImport` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_import_vmctx(&self, index: TagIndex) -> u32 {
+        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_vmctx())
+    }
+
+    /// Return the offset to the `index` field in `VMTagImport` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_import_index(&self, index: TagIndex) -> u32 {
+        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_index())
     }
 }
 

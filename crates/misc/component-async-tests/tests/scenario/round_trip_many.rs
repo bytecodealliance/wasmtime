@@ -245,14 +245,13 @@ async fn test_round_trip_many(
         let mut store = make_store();
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
-        instance.enable_concurrent_state_debug(&mut store, true);
         let round_trip_many = component_async_tests::round_trip_many::bindings::RoundTripMany::new(
             &mut store, &instance,
         )?;
 
         if call_style == 0 {
-            instance
-                .run_concurrent(&mut store, {
+            store
+                .run_concurrent({
                     let c = c.clone();
                     let e = e.clone();
                     let f = f.clone();
@@ -294,7 +293,7 @@ async fn test_round_trip_many(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 1 {
@@ -330,7 +329,7 @@ async fn test_round_trip_many(
                 );
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 
@@ -342,7 +341,7 @@ async fn test_round_trip_many(
         linker
             .root()
             .instance("local:local/many")?
-            .func_new_concurrent("[async]foo", |_, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let mut params = params.into_iter();
@@ -365,7 +364,7 @@ async fn test_round_trip_many(
             .get_export_index(&mut store, None, "local:local/many")
             .ok_or_else(|| anyhow!("can't find `local:local/many` in instance"))?;
         let foo_function = instance
-            .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
+            .get_export_index(&mut store, Some(&baz_instance), "foo")
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
@@ -392,8 +391,8 @@ async fn test_round_trip_many(
         };
 
         if call_style == 2 {
-            instance
-                .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
+            store
+                .run_concurrent(async |store| -> wasmtime::Result<_> {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {
@@ -417,7 +416,7 @@ async fn test_round_trip_many(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 3 {
@@ -434,7 +433,7 @@ async fn test_round_trip_many(
                 foo_function.post_return_async(&mut store).await?;
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 

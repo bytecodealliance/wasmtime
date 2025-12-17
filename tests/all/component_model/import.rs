@@ -148,7 +148,7 @@ fn simple() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
         "a",
-        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
+        |mut store: StoreContextMut<'_, Option<String>>, _, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());
                 *store.data_mut() = Some(s.to_string());
@@ -249,7 +249,7 @@ fn functions_in_instances() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.instance("test:test/foo")?.func_new(
         "a",
-        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
+        |mut store: StoreContextMut<'_, Option<String>>, _, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());
                 *store.data_mut() = Some(s.to_string());
@@ -462,7 +462,7 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
         "thunk",
-        |mut store: StoreContextMut<'_, DynamicState>, _, _| {
+        |mut store: StoreContextMut<'_, DynamicState>, _, _, _| {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
             assert_eq!(
@@ -492,7 +492,7 @@ async fn stack_and_heap_args_and_rets_concurrent() -> Result<()> {
 }
 
 async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
-    let (body, async_lower_opts, async_lift_opts) = if concurrent {
+    let (body, async_lower_opts, async_lift_opts, async_type) = if concurrent {
         (
             r#"
     (import "host" "f1" (func $f1 (param i32 i32) (result i32)))
@@ -549,6 +549,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             "#,
             "async",
             r#"async (callback (func $m "callback"))"#,
+            "async",
         )
     } else {
         (
@@ -594,6 +595,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             "#,
             "",
             "",
+            "",
         )
     };
 
@@ -604,10 +606,10 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                       string string string string
                       string string string string
                       string))
-  (import "f1" (func $f1 (param "a" u32) (result u32)))
-  (import "f2" (func $f2 (param "a" $many_params) (result u32)))
-  (import "f3" (func $f3 (param "a" u32) (result string)))
-  (import "f4" (func $f4 (param "a" $many_params) (result string)))
+  (import "f1" (func $f1 {async_type} (param "a" u32) (result u32)))
+  (import "f2" (func $f2 {async_type} (param "a" $many_params) (result u32)))
+  (import "f3" (func $f3 {async_type} (param "a" u32) (result string)))
+  (import "f4" (func $f4 {async_type} (param "a" $many_params) (result string)))
 
   (core module $libc
     {REALLOC_AND_FREE}
@@ -710,7 +712,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     ))
   ))
 
-  (func (export "run")
+  (func (export "run") {async_type}
     (canon lift (core func $m "run") {async_lift_opts})
   )
 )
@@ -833,9 +835,9 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     if concurrent {
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
-                run.call_concurrent(accessor, ()).await
+        store
+            .run_concurrent(async move |accessor| {
+                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
     } else {
@@ -848,7 +850,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         linker
             .root()
-            .func_new_concurrent("f1", |_, args, results| {
+            .func_new_concurrent("f1", |_, _, args, results| {
                 if let Val::U32(x) = &args[0] {
                     assert_eq!(*x, 1);
                     Box::pin(async {
@@ -861,7 +863,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f2", |_, args, results| {
+            .func_new_concurrent("f2", |_, _, args, results| {
                 if let Val::Tuple(tuple) = &args[0] {
                     if let Val::String(s) = &tuple[0] {
                         assert_eq!(s.deref(), "abc");
@@ -878,7 +880,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f3", |_, args, results| {
+            .func_new_concurrent("f3", |_, _, args, results| {
                 if let Val::U32(x) = &args[0] {
                     assert_eq!(*x, 8);
                     Box::pin(async {
@@ -891,7 +893,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
             })?;
         linker
             .root()
-            .func_new_concurrent("f4", |_, args, results| {
+            .func_new_concurrent("f4", |_, _, args, results| {
                 if let Val::Tuple(tuple) = &args[0] {
                     if let Val::String(s) = &tuple[0] {
                         assert_eq!(s.deref(), "abc");
@@ -907,7 +909,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 }
             })?;
     } else {
-        linker.root().func_new("f1", |_, args, results| {
+        linker.root().func_new("f1", |_, _, args, results| {
             if let Val::U32(x) = &args[0] {
                 assert_eq!(*x, 1);
                 results[0] = Val::U32(2);
@@ -916,7 +918,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!()
             }
         })?;
-        linker.root().func_new("f2", |_, args, results| {
+        linker.root().func_new("f2", |_, _, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
                 if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
@@ -929,7 +931,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!()
             }
         })?;
-        linker.root().func_new("f3", |_, args, results| {
+        linker.root().func_new("f3", |_, _, args, results| {
             if let Val::U32(x) = &args[0] {
                 assert_eq!(*x, 8);
                 results[0] = Val::String("xyz".into());
@@ -938,7 +940,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 panic!();
             }
         })?;
-        linker.root().func_new("f4", |_, args, results| {
+        linker.root().func_new("f4", |_, _, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
                 if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
@@ -957,9 +959,10 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     let run = instance.get_func(&mut store, "run").unwrap();
 
     if concurrent {
-        instance
-            .run_concurrent(&mut store, async |store| {
-                run.call_concurrent(store, &[], &mut []).await
+        store
+            .run_concurrent(async |store| {
+                run.call_concurrent(store, &[], &mut []).await?;
+                anyhow::Ok(())
             })
             .await??;
     } else {
@@ -1125,7 +1128,7 @@ fn no_actual_wasm_code() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_new("f", |mut store: StoreContextMut<'_, u32>, _, _| {
+        .func_new("f", |mut store: StoreContextMut<'_, u32>, _, _, _| {
             *store.data_mut() += 1;
             Ok(())
         })?;

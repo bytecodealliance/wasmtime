@@ -94,7 +94,10 @@ int main() {
         wasmtime_trap_code_t code;
         assert(wasmtime_trap_code(trap, &code));
         assert(code == WASMTIME_TRAP_CODE_OUT_OF_FUEL);
+        wasm_trap_delete(trap);
       }
+      if (error != NULL)
+        wasmtime_error_delete(error);
       printf("Exhausted fuel computing fib(%d)\n", n);
       break;
     }

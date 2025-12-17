@@ -1,4 +1,4 @@
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface environment {
   /// Get the POSIX-style environment variables.
   ///
@@ -8,15 +8,15 @@ interface environment {
   /// Morally, these are a value import, but until value imports are available
   /// in the component model, this import function should return the same
   /// values each time it is called.
-  @since(version = 0.3.0-rc-2025-08-15)
+  @since(version = 0.3.0-rc-2025-09-16)
   get-environment: func() -> list<tuple<string, string>>;
 
   /// Get the POSIX-style arguments to the program.
-  @since(version = 0.3.0-rc-2025-08-15)
+  @since(version = 0.3.0-rc-2025-09-16)
   get-arguments: func() -> list<string>;
 
   /// Return a path that programs should use as their initial current working
   /// directory, interpreting `.` as shorthand for this.
-  @since(version = 0.3.0-rc-2025-08-15)
+  @since(version = 0.3.0-rc-2025-09-16)
   get-initial-cwd: func() -> option<string>;
 }

@@ -15,7 +15,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   retabsp
@@ -63,7 +63,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   mov x0, x2
 ;   blr x3
 ;   mov x2, x0
@@ -99,7 +99,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%g)+0
+;   load_ext_name_far x1, TestCase(%g)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:

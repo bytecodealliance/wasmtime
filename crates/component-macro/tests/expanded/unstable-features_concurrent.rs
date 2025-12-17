@@ -80,13 +80,13 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
 }
 pub enum Baz {}
 pub trait HostBazWithStore: wasmtime::component::HasData + Send {
-    fn drop<T: 'static>(
+    fn drop<T>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         rep: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
     where
         Self: Sized;
-    fn foo<T: 'static>(
+    fn foo<T>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         self_: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -194,7 +194,7 @@ pub struct TheWorldIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
 pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithStore + Send {
-    fn foo<T: 'static>(
+    fn foo<T>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -283,7 +283,7 @@ const _: () = {
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
+                                    let accessor = &caller.with_getter(host_getter);
                                     HostBazWithStore::drop(
                                             accessor,
                                             wasmtime::component::Resource::new_own(rep),
@@ -299,9 +299,8 @@ const _: () = {
                             "foo",
                             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
-                                    let r = <D as TheWorldImportsWithStore>::foo(accessor)
-                                        .await;
+                                    let host = &caller.with_getter(host_getter);
+                                    let r = <D as TheWorldImportsWithStore>::foo(host).await;
                                     Ok(r)
                                 })
                             },
@@ -316,8 +315,8 @@ const _: () = {
                                 (arg0,): (wasmtime::component::Resource<Baz>,)|
                             {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
-                                    let r = <D as HostBazWithStore>::foo(accessor, arg0).await;
+                                    let host = &caller.with_getter(host_getter);
+                                    let r = <D as HostBazWithStore>::foo(host, arg0).await;
                                     Ok(r)
                                 })
                             },
@@ -396,13 +395,13 @@ pub mod foo {
             }
             pub enum Bar {}
             pub trait HostBarWithStore: wasmtime::component::HasData + Send {
-                fn drop<T: 'static>(
+                fn drop<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
                 where
                     Self: Sized;
-                fn foo<T: 'static>(
+                fn foo<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -410,7 +409,7 @@ pub mod foo {
             pub trait HostBar: Send {}
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {}
             pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {
-                fn foo<T: 'static>(
+                fn foo<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -434,7 +433,7 @@ pub mod foo {
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
+                                    let accessor = &caller.with_getter(host_getter);
                                     HostBarWithStore::drop(
                                             accessor,
                                             wasmtime::component::Resource::new_own(rep),
@@ -449,8 +448,8 @@ pub mod foo {
                             "foo",
                             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
-                                    let r = <D as HostWithStore>::foo(accessor).await;
+                                    let host = &caller.with_getter(host_getter);
+                                    let r = <D as HostWithStore>::foo(host).await;
                                     Ok(r)
                                 })
                             },
@@ -464,8 +463,8 @@ pub mod foo {
                                 (arg0,): (wasmtime::component::Resource<Bar>,)|
                             {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
-                                    let r = <D as HostBarWithStore>::foo(accessor, arg0).await;
+                                    let host = &caller.with_getter(host_getter);
+                                    let r = <D as HostBarWithStore>::foo(host, arg0).await;
                                     Ok(r)
                                 })
                             },

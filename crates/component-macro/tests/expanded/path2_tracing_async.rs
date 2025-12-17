@@ -169,7 +169,7 @@ const _: () = {
         where
             D: paths::path2::test::HostWithStore,
             for<'a> D::Data<'a>: paths::path2::test::Host,
-            T: 'static,
+            T: 'static + Send,
         {
             paths::path2::test::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())

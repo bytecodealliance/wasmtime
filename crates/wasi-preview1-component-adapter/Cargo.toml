@@ -10,7 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
-wasi = { version = "0.11.0", default-features = false }
+wasip1 = { workspace = true }
 wit-bindgen-rust-macro = { workspace = true }
 byte-array-literals = { workspace = true }
 bitflags = { workspace = true }

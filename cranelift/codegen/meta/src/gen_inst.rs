@@ -87,6 +87,12 @@ fn gen_instruction_data(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) 
                     n => panic!("Too many block operands in instruction: {n}"),
                 }
 
+                match format.num_raw_block_operands {
+                    0 => (),
+                    1 => fmt.line("block: ir::Block,"),
+                    n => panic!("Too many block operands in instruction: {n}"),
+                }
+
                 for field in &format.imm_fields {
                     fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
                 }
@@ -249,6 +255,15 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         }
                     };
 
+                    let raw_blocks_eq = match format.num_raw_block_operands {
+                        0 => None,
+                        1 => {
+                            members.push("block");
+                            Some("block1 == block2")
+                        }
+                        _ => unreachable!("Not a valid format"),
+                    };
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -265,6 +280,9 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         }
                         if let Some(blocks_eq) = blocks_eq {
                             fmtln!(fmt, "&& {}", blocks_eq);
+                        }
+                        if let Some(raw_blocks_eq) = raw_blocks_eq {
+                            fmtln!(fmt, "&& {}", raw_blocks_eq);
                         }
                     });
                 }
@@ -314,6 +332,15 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         }
                     };
 
+                    let raw_block = match format.num_raw_block_operands {
+                        0 => None,
+                        1 => {
+                            members.push("block");
+                            Some("block")
+                        }
+                        _ => panic!("Too many raw block operands"),
+                    };
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -340,6 +367,10 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                                     fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
                                 });
                             });
+                        }
+
+                        if let Some(raw_block) = raw_block {
+                            fmtln!(fmt, "::core::hash::Hash::hash(&{raw_block}, state);");
                         }
                     });
                 }
@@ -378,6 +409,14 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         }
                     };
 
+                    match format.num_raw_block_operands {
+                        0 => {}
+                        1 => {
+                            members.push("block");
+                        }
+                        _ => panic!("Too many raw-block operands to format"),
+                    }
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -404,6 +443,14 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                                     fmtln!(fmt, "blocks: [blocks[0].deep_clone(pool), blocks[1].deep_clone(pool)],");
                                 }
                                 _ => panic!("Too many block targets in instruction"),
+                            }
+
+                            match format.num_raw_block_operands {
+                                0 => {}
+                                1 => {
+                                    fmtln!(fmt, "block,");
+                                }
+                                _ => panic!("Too many raw-block operands in instruction"),
                             }
 
                             for field in &format.imm_fields {
@@ -442,6 +489,14 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         }
                     };
 
+                    match format.num_raw_block_operands {
+                        0 => {}
+                        1 => {
+                            members.push("block");
+                        }
+                        _ => panic!("Too many raw-block operands"),
+                    }
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -472,6 +527,14 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                                     fmtln!(fmt, "blocks: [mapper.map_block_call(blocks[0]), mapper.map_block_call(blocks[1])],");
                                 }
                                 _ => panic!("Too many block targets in instruction"),
+                            }
+
+                            match format.num_raw_block_operands {
+                                0 => {}
+                                1 => {
+                                    fmtln!(fmt, "block: mapper.map_block(block),");
+                                }
+                                _ => panic!("Too many raw block arguments in instruction"),
                             }
 
                             for field in &format.imm_fields {
@@ -958,6 +1021,13 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
             fmtln!(fmt, "blocks: [{}],", blocks.join(", "));
         }
     }
+
+    // Raw block operands.
+    match format.num_raw_block_operands {
+        0 => (),
+        1 => fmt.line("block: block0,"),
+        _ => panic!("Too many raw block arguments"),
+    }
 }
 
 /// Emit a method for creating and inserting an instruction format.
@@ -971,6 +1041,9 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         "opcode: Opcode".into(),
         "ctrl_typevar: Type".into(),
     ];
+
+    // Raw block operands.
+    args.extend((0..format.num_raw_block_operands).map(|i| format!("block{i}: ir::Block")));
 
     // Normal operand arguments. Start with the immediate operands.
     for f in &format.imm_fields {
@@ -1074,6 +1147,9 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
             args_doc.push(format!("- {}_args: {}", op.name, "Block arguments"));
 
             block_args.push(op);
+        } else if op.kind.is_raw_block() {
+            args.push("block: ir::Block".into());
+            args_doc.push("- block: raw basic block".into());
         } else {
             let t = if op.is_immediate() {
                 let t = format!("T{}", tmpl_types.len() + 1);

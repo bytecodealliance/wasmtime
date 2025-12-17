@@ -142,6 +142,10 @@ fn gen_common_isle(
         fmt.empty_line();
     }
 
+    // Raw block entities.
+    fmtln!(fmt, "(type Block extern (enum))");
+    fmt.empty_line();
+
     // Generate the extern type declaration for `Opcode`.
     fmt.line(";;;; `Opcode` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
     fmt.empty_line();
@@ -182,6 +186,12 @@ fn gen_common_isle(
                     0 => (),
                     1 => write!(&mut s, " (destination BlockCall)").unwrap(),
                     n => write!(&mut s, " (blocks BlockArray{n})").unwrap(),
+                }
+
+                match format.num_raw_block_operands {
+                    0 => (),
+                    1 => write!(&mut s, "(block Block)").unwrap(),
+                    _ => panic!("Too many raw block arguments"),
                 }
 
                 for field in &format.imm_fields {
@@ -322,7 +332,9 @@ fn gen_common_isle(
             let imm_operands: Vec<_> = inst
                 .operands_in
                 .iter()
-                .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
+                .filter(|o| {
+                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
+                })
                 .collect();
             assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
             for op in imm_operands {
@@ -351,6 +363,15 @@ fn gen_common_isle(
                     )
                     .unwrap();
                 }
+            }
+
+            // Raw blocks.
+            match inst.format.num_raw_block_operands {
+                0 => {}
+                1 => {
+                    write!(&mut s, " block").unwrap();
+                }
+                _ => panic!("Too many raw block arguments"),
             }
 
             s.push_str("))");
@@ -441,12 +462,18 @@ fn gen_common_isle(
                     }
                 }
 
+                match inst.format.num_raw_block_operands {
+                    0 => {}
+                    1 => {
+                        write!(&mut s, " block").unwrap();
+                    }
+                    _ => panic!("Too many raw block arguments"),
+                }
+
                 // Immediates (non-value args).
-                for o in inst
-                    .operands_in
-                    .iter()
-                    .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
-                {
+                for o in inst.operands_in.iter().filter(|o| {
+                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
+                }) {
                     write!(&mut s, " {}", o.name).unwrap();
                 }
                 s.push_str("))");

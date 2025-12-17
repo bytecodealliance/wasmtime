@@ -64,8 +64,7 @@ impl ObjectBuilder {
             }
             other => {
                 return Err(ModuleError::Backend(anyhow!(
-                    "binary format {} not recognized",
-                    other
+                    "binary format {other} not recognized"
                 )));
             }
         };
@@ -77,8 +76,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::Riscv64(_) => {
                 if binary_format != object::BinaryFormat::Elf {
                     return Err(ModuleError::Backend(anyhow!(
-                        "binary format {:?} is not supported for riscv64",
-                        binary_format,
+                        "binary format {binary_format:?} is not supported for riscv64",
                     )));
                 }
 
@@ -105,8 +103,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
-                    "target architecture {:?} is unsupported",
-                    architecture,
+                    "target architecture {architecture:?} is unsupported",
                 )));
             }
         };
@@ -187,8 +184,7 @@ fn validate_symbol(name: &str) -> ModuleResult<()> {
     // crate to panic. Let's return a clean error instead.
     if name.contains("\0") {
         return Err(ModuleError::Backend(anyhow::anyhow!(
-            "Symbol {:?} has a null byte, which is disallowed",
-            name
+            "Symbol {name:?} has a null byte, which is disallowed"
         )));
     }
     Ok(())
@@ -536,6 +532,34 @@ impl ObjectModule {
 
     /// Finalize all relocations and output an object.
     pub fn finish(mut self) -> ObjectProduct {
+        if cfg!(debug_assertions) {
+            for (func_id, decl) in self.declarations.get_functions() {
+                if !decl.linkage.requires_definition() {
+                    continue;
+                }
+
+                assert!(
+                    self.functions[func_id].unwrap().1,
+                    "function \"{}\" with linkage {:?} must be defined but is not",
+                    decl.linkage_name(func_id),
+                    decl.linkage,
+                );
+            }
+
+            for (data_id, decl) in self.declarations.get_data_objects() {
+                if !decl.linkage.requires_definition() {
+                    continue;
+                }
+
+                assert!(
+                    self.data_objects[data_id].unwrap().1,
+                    "data object \"{}\" with linkage {:?} must be defined but is not",
+                    decl.linkage_name(data_id),
+                    decl.linkage,
+                );
+            }
+        }
+
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &ObjectRelocRecord {

@@ -32,6 +32,10 @@ extern "C" {
  * Anyref values are required to be explicitly unrooted via
  * #wasmtime_anyref_unroot to enable them to be garbage-collected.
  *
+ * If you do not unroot the value, *even if you free the corresponding
+ * Store*, there will be some memory leaked, because GC roots use a
+ * separate allocation to track liveness.
+ *
  * Null anyref values are represented by this structure and can be tested and
  * created with the `wasmtime_anyref_is_null` and `wasmtime_anyref_set_null`
  * functions.
@@ -44,6 +48,8 @@ typedef struct wasmtime_anyref {
   uint32_t __private1;
   /// Internal to Wasmtime.
   uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
 } wasmtime_anyref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null anyref
@@ -68,8 +74,7 @@ static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
  *
  * The returned reference is stored in `out`.
  */
-WASM_API_EXTERN void wasmtime_anyref_clone(wasmtime_context_t *context,
-                                           const wasmtime_anyref_t *anyref,
+WASM_API_EXTERN void wasmtime_anyref_clone(const wasmtime_anyref_t *anyref,
                                            wasmtime_anyref_t *out);
 
 /**
@@ -85,8 +90,7 @@ WASM_API_EXTERN void wasmtime_anyref_clone(wasmtime_context_t *context,
  * Note that null or i32 anyref values do not need to be unrooted but are still
  * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_context_t *context,
-                                            wasmtime_anyref_t *ref);
+WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_anyref_t *ref);
 
 /**
  * \brief Converts a raw `anyref` value coming from #wasmtime_val_raw_t into
@@ -179,6 +183,8 @@ typedef struct wasmtime_externref {
   uint32_t __private1;
   /// Internal to Wasmtime.
   uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
 } wasmtime_externref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null externref
@@ -214,6 +220,10 @@ static inline bool wasmtime_externref_is_null(const wasmtime_externref_t *ref) {
  * in the future with #wasmtime_externref_unroot. If `false` is returned then
  * the host wasn't able to create more GC values at this time. Performing a GC
  * may free up enough space to try again.
+ *
+ * If you do not unroot the value, *even if you free the corresponding
+ * Store*, there will be some memory leaked, because GC roots use a
+ * separate allocation to track liveness.
  */
 WASM_API_EXTERN bool wasmtime_externref_new(wasmtime_context_t *context,
                                             void *data,
@@ -238,8 +248,7 @@ WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_context_t *context,
  * eventually be unrooted with #wasmtime_externref_unroot in the future to
  * enable GC'ing it.
  */
-WASM_API_EXTERN void wasmtime_externref_clone(wasmtime_context_t *context,
-                                              const wasmtime_externref_t *ref,
+WASM_API_EXTERN void wasmtime_externref_clone(const wasmtime_externref_t *ref,
                                               wasmtime_externref_t *out);
 
 /**
@@ -253,8 +262,7 @@ WASM_API_EXTERN void wasmtime_externref_clone(wasmtime_context_t *context,
  * Note that null externref values do not need to be unrooted but are still
  * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_context_t *context,
-                                               wasmtime_externref_t *ref);
+WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_externref_t *ref);
 
 /**
  * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
@@ -418,7 +426,10 @@ typedef union wasmtime_val_raw {
 // Assert that the shape of this type is as expected since it needs to match
 // Rust.
 static inline void __wasmtime_val_assertions() {
-  static_assert(sizeof(wasmtime_valunion_t) == 16, "should be 16-bytes large");
+  static_assert(sizeof(wasmtime_valunion_t) >= 16 &&
+                    sizeof(wasmtime_valunion_t) <= 24,
+                "should be 16 bytes plus a pointer large (plus alignment on "
+                "some platforms)");
   static_assert(__alignof(wasmtime_valunion_t) == 8,
                 "should be 8-byte aligned");
   static_assert(sizeof(wasmtime_val_raw_t) == 16, "should be 16 bytes large");
@@ -437,6 +448,10 @@ static inline void __wasmtime_val_assertions() {
  * consume a #wasmtime_val_t do not take ownership, but APIs that return
  * #wasmtime_val_t require that #wasmtime_val_unroot is called to clean up
  * any possible GC roots in the value.
+ *
+ * If you do not unroot the value, *even if you free the corresponding
+ * Store*, there will be some memory leaked, because GC roots use a
+ * separate allocation to track liveness.
  */
 typedef struct wasmtime_val {
   /// Discriminant of which field of #of is valid.
@@ -456,8 +471,7 @@ typedef struct wasmtime_val {
  * This method does not need to be called for integers, floats, v128, or
  * funcref values.
  */
-WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_context_t *context,
-                                         wasmtime_val_t *val);
+WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_val_t *val);
 
 /**
  * \brief Clones the value pointed to by `src` into the `dst` provided.
@@ -466,8 +480,7 @@ WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_context_t *context,
  * newly rooted inside of `dst`. When using this API the `dst` should be
  * later unrooted with #wasmtime_val_unroot if it contains GC values.
  */
-WASM_API_EXTERN void wasmtime_val_clone(wasmtime_context_t *context,
-                                        const wasmtime_val_t *src,
+WASM_API_EXTERN void wasmtime_val_clone(const wasmtime_val_t *src,
                                         wasmtime_val_t *dst);
 
 #ifdef __cplusplus

@@ -3,6 +3,7 @@
 #ifndef WASMTIME_COMPONENT_FUNC_H
 #define WASMTIME_COMPONENT_FUNC_H
 
+#include <wasmtime/component/types/func.h>
 #include <wasmtime/component/val.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
@@ -32,6 +33,14 @@ typedef struct wasmtime_component_func {
   /// Private internal wasmtime information.
   uint32_t __private2;
 } wasmtime_component_func_t;
+
+/// \brief Returns the type of this function.
+///
+/// The caller must deallocate the returned pointer with
+/// `wasmtime_component_func_type_delete`.
+WASM_API_EXTERN wasmtime_component_func_type_t *
+wasmtime_component_func_type(const wasmtime_component_func_t *func,
+                             wasmtime_context_t *context);
 
 /**
  * \brief Invokes \p func with the \p args given and returns the result.

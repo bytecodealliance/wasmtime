@@ -19,8 +19,10 @@ cargo run -- wast --target pulley64 --precompile-save ./miri-wast "$@" \
   -O memory-reservation=$((1 << 20)) \
   -O memory-guard-size=0 \
   -O signals-based-traps=n \
-  -O memory-init-cow=n
+  -O memory-init-cow=n \
+  -W function-references,gc
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
   cargo miri run -- wast -Ccache=n --target pulley64 --precompile-load ./miri-wast "$@" \
-  -O memory-init-cow=n
+  -O memory-init-cow=n \
+  -W function-references,gc

@@ -392,20 +392,13 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arbitrary::{Arbitrary, Unstructured};
-    use rand::prelude::*;
+    use crate::test::test_n_times;
 
     #[test]
     fn smoke_test_memory_access() {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 1024];
-
-        for _ in 0..1024 {
-            rng.fill_bytes(&mut buf);
-            let u = Unstructured::new(&buf);
-            if let Ok(input) = MemoryAccesses::arbitrary_take_rest(u) {
-                check_memory_accesses(input);
-            }
-        }
+        test_n_times(50, |input: MemoryAccesses, _u| {
+            check_memory_accesses(input);
+            Ok(())
+        })
     }
 }

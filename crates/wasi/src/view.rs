@@ -39,7 +39,7 @@ pub trait WasiView: Send {
     fn ctx(&mut self) -> WasiCtxView<'_>;
 }
 
-/// Structure returned from [`WasiView::ctx`] which provides accesss to WASI
+/// Structure returned from [`WasiView::ctx`] which provides access to WASI
 /// state for host functions to be implemented with.
 pub struct WasiCtxView<'a> {
     /// The [`WasiCtx`], or configuration, of the guest.

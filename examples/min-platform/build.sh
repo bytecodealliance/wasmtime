@@ -26,6 +26,11 @@ if [ "$WASMTIME_SIGNALS_BASED_TRAPS" = "1" ]; then
   features="$features,custom"
 fi
 
+if [ "$WASMTIME_CUSTOM_SYNC" = "1" ]; then
+  cflags="$cflags -DWASMTIME_CUSTOM_SYNC"
+  features="$features,custom-sync-primitives"
+fi
+
 if [ "$MIN_PLATFORM_EXAMPLE_DISABLE_WASI" != "1" ]; then
   features="$features,wasi"
   cargo build \

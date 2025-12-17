@@ -233,12 +233,23 @@ macro_rules! foreach_builtin_function {
             // denote the continuation being `None`, `init_contref`
             // may be 0.
             #[cfg(feature = "stack-switching")]
-            table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: u64) -> pointer;
+            table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: size) -> pointer;
 
             // `value_contref` and `value_revision` together encode
             // the Option<VMContObj>, as in previous libcall.
             #[cfg(feature = "stack-switching")]
-            table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: u64, len: u64) -> bool;
+            table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: size, len: u64) -> bool;
+
+            // Return the instance ID for a given vmctx.
+            #[cfg(feature = "gc")]
+            get_instance_id(vmctx: vmctx) -> u32;
+
+            // Throw an exception.
+            #[cfg(feature = "gc")]
+            throw_ref(vmctx: vmctx, exnref: u32) -> bool;
+
+            // Process a debug breakpoint.
+            breakpoint(vmctx: vmctx) -> bool;
         }
     };
 }
@@ -247,10 +258,22 @@ macro_rules! foreach_builtin_function {
 /// `ComponentBuiltinFunctionIndex` using the iterator macro, e.g.
 /// `foreach_builtin_function`, as the way to generate accessor methods.
 macro_rules! declare_builtin_index {
-    ($index_name:ident, $iter:ident) => {
-        /// An index type for builtin functions.
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    (
+        $(#[$attr:meta])*
+        pub struct $index_name:ident : $for_each_builtin:ident ;
+    ) => {
+        $(#[$attr])*
+        #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $index_name(u32);
+
+        impl core::fmt::Debug for $index_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(stringify!($index_name))
+                    .field("index", &self.0)
+                    .field("ctor", &self.ctor_name())
+                    .finish()
+            }
+        }
 
         impl $index_name {
             /// Create a new builtin from its raw index
@@ -264,9 +287,40 @@ macro_rules! declare_builtin_index {
                 self.0
             }
 
-            $iter!(declare_builtin_index_constructors);
+            $for_each_builtin!(define_ctor_name);
+
+            $for_each_builtin!(declare_builtin_index_constructors);
+        }
+
+        #[cfg(test)]
+        impl arbitrary::Arbitrary<'_> for $index_name {
+            fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+                Ok(Self(u.int_in_range(0..=Self::len() - 1)?))
+            }
         }
     };
+}
+
+/// Helper macro used by the above macro.
+macro_rules! define_ctor_name {
+    (
+        $(
+            $( #[$attr:meta] )*
+                $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
+        )*
+    ) => {
+        /// Returns the name of the constructor that creates this index.
+        pub fn ctor_name(&self) -> &'static str {
+            let mut _i = self.0;
+            $(
+                if _i == 0 {
+                    return stringify!($name);
+                }
+                _i -= 1;
+            )*
+            unreachable!()
+        }
+    }
 }
 
 /// Helper macro used by the above macro.
@@ -332,7 +386,10 @@ macro_rules! declare_builtin_index_constructors {
 }
 
 // Define `struct BuiltinFunctionIndex`
-declare_builtin_index!(BuiltinFunctionIndex, foreach_builtin_function);
+declare_builtin_index! {
+    /// An index type for builtin functions.
+    pub struct BuiltinFunctionIndex : foreach_builtin_function;
+}
 
 /// Return value of [`BuiltinFunctionIndex::trap_sentinel`].
 pub enum TrapSentinel {
@@ -421,6 +478,8 @@ impl BuiltinFunctionIndex {
             (@get fma_f64x2 f64x2) => (return None);
 
             (@get cont_new pointer) => (TrapSentinel::Negative);
+
+            (@get get_instance_id u32) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

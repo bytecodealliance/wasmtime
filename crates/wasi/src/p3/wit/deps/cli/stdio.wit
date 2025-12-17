@@ -1,17 +1,65 @@
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
+interface types {
+  @since(version = 0.3.0-rc-2025-09-16)
+  enum error-code {
+    /// Input/output error
+    io,
+    /// Invalid or incomplete multibyte or wide character
+    illegal-byte-sequence,
+    /// Broken pipe
+    pipe,
+  }
+}
+
+@since(version = 0.3.0-rc-2025-09-16)
 interface stdin {
-  @since(version = 0.3.0-rc-2025-08-15)
-  get-stdin: func() -> stream<u8>;
+  use types.{error-code};
+
+  /// Return a stream for reading from stdin.
+  ///
+  /// This function returns a stream which provides data read from stdin,
+  /// and a future to signal read results.
+  ///
+  /// If the stream's readable end is dropped the future will resolve to success.
+  ///
+  /// If the stream's writable end is dropped the future will either resolve to
+  /// success if stdin was closed by the writer or to an error-code if reading
+  /// failed for some other reason.
+  ///
+  /// Multiple streams may be active at the same time. The behavior of concurrent
+  /// reads is implementation-specific.
+  @since(version = 0.3.0-rc-2025-09-16)
+  read-via-stream: func() -> tuple<stream<u8>, future<result<_, error-code>>>;
 }
 
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface stdout {
-  @since(version = 0.3.0-rc-2025-08-15)
-  set-stdout: func(data: stream<u8>);
+  use types.{error-code};
+
+  /// Write the given stream to stdout.
+  ///
+  /// If the stream's writable end is dropped this function will either return
+  /// success once the entire contents of the stream have been written or an
+  /// error-code representing a failure.
+  ///
+  /// Otherwise if there is an error the readable end of the stream will be
+  /// dropped and this function will return an error-code.
+  @since(version = 0.3.0-rc-2025-09-16)
+  write-via-stream: async func(data: stream<u8>) -> result<_, error-code>;
 }
 
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface stderr {
-  @since(version = 0.3.0-rc-2025-08-15)
-  set-stderr: func(data: stream<u8>);
+  use types.{error-code};
+
+  /// Write the given stream to stderr.
+  ///
+  /// If the stream's writable end is dropped this function will either return
+  /// success once the entire contents of the stream have been written or an
+  /// error-code representing a failure.
+  ///
+  /// Otherwise if there is an error the readable end of the stream will be
+  /// dropped and this function will return an error-code.
+  @since(version = 0.3.0-rc-2025-09-16)
+  write-via-stream: async func(data: stream<u8>) -> result<_, error-code>;
 }

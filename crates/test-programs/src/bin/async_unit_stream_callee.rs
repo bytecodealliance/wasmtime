@@ -10,7 +10,7 @@ mod bindings {
 
 use {
     bindings::{exports::local::local::unit_stream::Guest, wit_stream},
-    wit_bindgen_rt::async_support::{self, StreamReader},
+    wit_bindgen::StreamReader,
 };
 
 struct Component;
@@ -19,7 +19,7 @@ impl Guest for Component {
     async fn run(count: u32) -> StreamReader<()> {
         let (mut tx, rx) = wit_stream::new();
 
-        async_support::spawn(async move {
+        wit_bindgen::spawn(async move {
             let mut sent = 0;
             let mut chunk_size = 1;
             while sent < count {

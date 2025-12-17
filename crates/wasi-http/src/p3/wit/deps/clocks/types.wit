@@ -1,0 +1,8 @@
+package wasi:clocks@0.3.0-rc-2025-09-16;
+/// This interface common types used throughout wasi:clocks.
+@since(version = 0.3.0-rc-2025-09-16)
+interface types {
+    /// A duration of time, in nanoseconds.
+    @since(version = 0.3.0-rc-2025-09-16)
+    type duration = u64;
+}

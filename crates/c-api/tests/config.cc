@@ -51,6 +51,8 @@ TEST(Config, Smoke) {
   config.wasm_memory64(false);
   config.wasm_wide_arithmetic(false);
   config.wasm_component_model(false);
+  config.wasm_exceptions(false);
+  config.wasm_custom_page_sizes(false);
   config.strategy(Strategy::Auto);
   config.cranelift_debug_verifier(false);
   config.cranelift_opt_level(OptLevel::Speed);

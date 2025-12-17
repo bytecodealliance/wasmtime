@@ -55,7 +55,7 @@ pub fn run(options: &Options) -> anyhow::Result<()> {
     match errors {
         0 => Ok(()),
         1 => anyhow::bail!("1 failure"),
-        n => anyhow::bail!("{} failures", n),
+        n => anyhow::bail!("{n} failures"),
     }
 }
 

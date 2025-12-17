@@ -12,8 +12,7 @@
 
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
-use std::io;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::ptr;
 use std::string::String;
@@ -26,13 +25,13 @@ pub enum RecordId {
     /// Value 0: JIT_CODE_LOAD: record describing a jitted function
     JitCodeLoad = 0,
     /// Value 1: JIT_CODE_MOVE: record describing an already jitted function which is moved
-    _JitCodeMove = 1,
+    JitCodeMove = 1,
     /// Value 2: JIT_CODE_DEBUG_INFO: record describing the debug information for a jitted function
     JitCodeDebugInfo = 2,
     /// Value 3: JIT_CODE_CLOSE: record marking the end of the jit runtime (optional)
-    _JitCodeClose = 3,
+    JitCodeClose = 3,
     /// Value 4: JIT_CODE_UNWINDING_INFO: record describing a function unwinding information
-    _JitCodeUnwindingInfo = 4,
+    JitCodeUnwindingInfo = 4,
 }
 
 /// Each record starts with this fixed size record header which describes the record that follows
@@ -144,11 +143,16 @@ pub struct JitDumpFile {
 impl JitDumpFile {
     /// Initialize a JitDumpAgent and write out the header
     pub fn new(filename: impl AsRef<Path>, e_machine: u32) -> io::Result<Self> {
+        // Note that the file here is opened in `append` mode to handle the case
+        // that multiple JIT engines in the same process are all writing to the
+        // same jitdump file. In this situation we want to append new records
+        // with what Wasmtime reports and we ideally don't want to interfere
+        // with anything else.
         let jitdump_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .truncate(true)
+            .append(true)
             .open(filename.as_ref())?;
 
         // After we make our `*.dump` file we execute an `mmap` syscall,
@@ -172,14 +176,14 @@ impl JitDumpFile {
             )?;
             ptr as usize
         };
-        let mut state = JitDumpFile {
+        let state = JitDumpFile {
             jitdump_file,
             map_addr,
             map_len,
             code_index: 0,
             e_machine,
         };
-        state.write_file_header()?;
+        state.maybe_write_file_header()?;
         Ok(state)
     }
 }
@@ -203,7 +207,41 @@ impl JitDumpFile {
         code_index
     }
 
-    pub fn write_file_header(&mut self) -> io::Result<()> {
+    /// Helper function to write `bytes` to the jitdump file.
+    ///
+    /// This is effectively a workaround for the limitation of the jitdump file
+    /// format. Ideally Wasmtime would be writing to its own personal file and
+    /// wouldn't have to worry about concurrent modifications, but we don't have
+    /// the luxury of doing that. The jitdump file format requires that there's
+    /// a single file-per-process with records in it. Additionally there might
+    /// be multiple JIT engines in the same process all writing to this file.
+    ///
+    /// To handle this situation a best effort is made to write the entirety of
+    /// `bytes` to the file in one go. The file itself is opened with `O_APPEND`
+    /// meaning that this should work out just fine if the bytes are written in
+    /// one call to the `write` syscall. The problem though is what happens on a
+    /// partial write?
+    ///
+    /// If there are parallel actors in the same process then a partial write
+    /// may mean that the file is now corrupted. For example we could write most
+    /// of `bytes`, but not all, then some other thread writes to the file. The
+    /// question then is what to do in this situation? On one hand an error
+    /// could be returned to inform the user that it's corrupt. On the other
+    /// hand though it's a pretty niche case to have multiple JIT engines in one
+    /// process and it'd be a bummer if we failed to profile functions that
+    /// happened to be big enough to require two calls to `write`.
+    ///
+    /// In the end this for now uses the `write_all` helper in the standard
+    /// library. That means that this will produce corrupt files in the face of
+    /// partial writes when there are other engines also writing to the file. In
+    /// lieu of some actual synchronization protocol between engines though this
+    /// is about the best that we can do.
+    fn maybe_atomic_write_all(&self, bytes: &[u8]) -> io::Result<()> {
+        (&self.jitdump_file).write_all(bytes)?;
+        Ok(())
+    }
+
+    fn maybe_write_file_header(&self) -> io::Result<()> {
         let header = FileHeader {
             timestamp: self.get_time_stamp(),
             e_machine: self.e_machine,
@@ -215,43 +253,30 @@ impl JitDumpFile {
             flags: 0,
         };
 
-        self.jitdump_file.write_all(object::bytes_of(&header))?;
-        Ok(())
-    }
-
-    pub fn write_code_load_record(
-        &mut self,
-        record_name: &str,
-        cl_record: CodeLoadRecord,
-        code_buffer: &[u8],
-    ) -> io::Result<()> {
-        self.jitdump_file.write_all(object::bytes_of(&cl_record))?;
-        self.jitdump_file.write_all(record_name.as_bytes())?;
-        self.jitdump_file.write_all(b"\0")?;
-        self.jitdump_file.write_all(code_buffer)?;
-        Ok(())
-    }
-
-    /// Write DebugInfoRecord to open jit dump file.
-    /// Must be written before the corresponding CodeLoadRecord.
-    pub fn write_debug_info_record(&mut self, dir_record: DebugInfoRecord) -> io::Result<()> {
-        self.jitdump_file.write_all(object::bytes_of(&dir_record))?;
-        Ok(())
-    }
-
-    /// Write DebugInfoRecord to open jit dump file.
-    /// Must be written before the corresponding CodeLoadRecord.
-    pub fn write_debug_info_entries(&mut self, die_entries: Vec<DebugEntry>) -> io::Result<()> {
-        for entry in die_entries.iter() {
-            self.jitdump_file
-                .write_all(object::bytes_of(&entry.address))?;
-            self.jitdump_file.write_all(object::bytes_of(&entry.line))?;
-            self.jitdump_file
-                .write_all(object::bytes_of(&entry.discriminator))?;
-            self.jitdump_file.write_all(entry.filename.as_bytes())?;
-            self.jitdump_file.write_all(b"\0")?;
+        // If it looks like some other engine in the same process has opened the
+        // file and added data already then assume that they were the ones to
+        // add the file header. If it's empty, though, assume we're the ones to
+        // add the file header.
+        //
+        // This is subject to a TOCTOU-style race condition but there's not
+        // really anything we can do about that. That'd require higher-level
+        // coordination in the application to boot up profiling agents serially
+        // or something like that. Either that or a better dump format where we
+        // can place output in our own engine-specific file. Alas.
+        if self.jitdump_file.metadata()?.len() == 0 {
+            self.maybe_atomic_write_all(object::bytes_of(&header))?;
         }
         Ok(())
+    }
+
+    /// Get raw access to the underlying file that is being written to.
+    pub fn file(&self) -> &File {
+        &self.jitdump_file
+    }
+
+    /// Get raw mutable access to the underlying file that is being written to.
+    pub fn file_mut(&mut self) -> &mut File {
+        &mut self.jitdump_file
     }
 
     pub fn dump_code_load_record(
@@ -281,7 +306,13 @@ impl JitDumpFile {
             index: self.next_code_index(),
         };
 
-        self.write_code_load_record(method_name, clr, code)
+        let mut record = Vec::new();
+        record.extend_from_slice(object::bytes_of(&clr));
+        record.extend_from_slice(method_name.as_bytes());
+        record.push(0); // null terminator for the method name
+        record.extend_from_slice(code);
+        self.maybe_atomic_write_all(&record)?;
+        Ok(())
     }
 }
 

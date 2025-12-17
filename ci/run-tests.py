@@ -16,6 +16,8 @@
 # - wasm-spec-interpreter: brings in OCaml which is a pain to configure for all
 #   targets, tested as part of the wastime-fuzzing CI job.
 #
+# - calculator (under examples/wasip2-plugins): an example that's tested separately.
+#
 # - veri_engine: requires an SMT solver (z3)
 
 import subprocess
@@ -28,6 +30,7 @@ args.append('--exclude=wasmtime-wasi-tls-nativetls')
 args.append('--exclude=wasmtime-fuzzing')
 args.append('--exclude=wasm-spec-interpreter')
 args.append('--exclude=veri_engine')
+args.append('--exclude=calculator')
 args.extend(sys.argv[1:])
 
 result = subprocess.run(args)

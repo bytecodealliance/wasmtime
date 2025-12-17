@@ -1,7 +1,8 @@
 use crate::{
-    HeapType, Ref, RefType, Result, Uninhabited, Val, ValRaw, ValType, WasmTy,
+    HeapType, Ref, RefType, Result, Val, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
+use core::convert::Infallible;
 use core::mem::MaybeUninit;
 
 /// A reference to the abstract `noextern` heap value.
@@ -64,7 +65,7 @@ use core::mem::MaybeUninit;
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct NoExtern {
-    _inner: Uninhabited,
+    _inner: Infallible,
 }
 
 impl NoExtern {

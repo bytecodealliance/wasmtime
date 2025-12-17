@@ -1,5 +1,5 @@
 use crate::component::Instance;
-use crate::component::func::{Func, LiftContext, LowerContext, Options};
+use crate::component::func::{Func, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
@@ -11,11 +11,14 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, StringEncoding, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
+    StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
+#[cfg(feature = "component-model-async")]
+use crate::component::func::TaskExit;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -191,7 +194,7 @@ where
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, false, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, false, move |cx, ty, dst| {
                     // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -203,36 +206,40 @@ where
                     // through a `SendSyncPtr<u8>` to thwart the `'static` check
                     // of rustc and the signature of `prepare_call`.
                     //
-                    // Note the use of `RemoveOnDrop` in the code that follows
+                    // Note the use of `SignalOnDrop` in the code that follows
                     // this closure, which ensures that the task will be removed
                     // from the concurrent state to which it belongs when the
-                    // containing `Future` is dropped, thereby ensuring that
-                    // this closure will never be called if it hasn't already,
-                    // meaning it will never see a dangling pointer.
+                    // containing `Future` is dropped, so long as the parameters
+                    // have not yet been lowered. Since this closure is removed from
+                    // the task after the parameters are lowered, it will never be called
+                    // after the containing `Future` is dropped.
                     let params = unsafe { ptr.cast::<Params>().as_ref() };
                     Self::lower_args(cx, ty, dst, params)
                 })?;
 
-            struct RemoveOnDrop<'a, T: 'static> {
+            struct SignalOnDrop<'a, T: 'static> {
                 store: StoreContextMut<'a, T>,
                 task: TaskId,
             }
 
-            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+            impl<'a, T> Drop for SignalOnDrop<'a, T> {
                 fn drop(&mut self) {
-                    self.task.remove(self.store.as_context_mut()).unwrap();
+                    self.task
+                        .host_future_dropped(self.store.as_context_mut())
+                        .unwrap();
                 }
             }
 
-            let mut wrapper = RemoveOnDrop {
+            let mut wrapper = SignalOnDrop {
                 store,
                 task: prepared.task_id(),
             };
 
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            self.func
-                .instance
-                .run_concurrent(wrapper.store.as_context_mut(), async |_| result.await)
+            wrapper
+                .store
+                .as_context_mut()
+                .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -252,6 +259,18 @@ where
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
+    /// Besides the task's return value, this returns a [`TaskExit`]
+    /// representing the completion of the guest task and any transitive
+    /// subtasks it might create.
+    ///
+    /// # Progress and Cancellation
+    ///
+    /// For more information about how to make progress on the wasm task or how
+    /// to cancel the wasm task see the documentation for
+    /// [`Func::call_concurrent`].
+    ///
+    /// [`Func::call_concurrent`]: crate::component::Func::call_concurrent
+    ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
@@ -261,13 +280,12 @@ where
         self,
         accessor: impl AsAccessor<Data: Send>,
         params: Params,
-    ) -> Result<Return>
+    ) -> Result<(Return, TaskExit)>
     where
         Params: 'static,
         Return: 'static,
     {
-        let accessor = accessor.as_accessor();
-        let result = accessor.with(|mut store| {
+        let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
             assert!(
                 store.0.async_support(),
@@ -275,13 +293,13 @@ where
             );
 
             let prepared =
-                self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
         });
-
-        result?.await
+        let (result, rx) = result?.await?;
+        Ok((result, TaskExit(rx)))
     }
 
     fn lower_args<T>(
@@ -312,7 +330,7 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        remove_task_automatically: bool,
+        host_future_present: bool,
         call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
@@ -342,7 +360,7 @@ where
             store,
             self.func,
             param_count,
-            remove_task_automatically,
+            host_future_present,
             call_post_return_automatically,
             move |func, store, params_out| {
                 func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
@@ -978,12 +996,16 @@ macro_rules! forward_string_lifts {
         unsafe impl Lift for $a {
             #[inline]
             fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                Ok(<WasmStr as Lift>::linear_lift_from_flat(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
+                let s = <WasmStr as Lift>::linear_lift_from_flat(cx, ty, src)?;
+                let encoding = cx.options().string_encoding;
+                Ok(s.to_str_from_memory(encoding, cx.memory())?.into())
             }
 
             #[inline]
             fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                Ok(<WasmStr as Lift>::linear_lift_from_memory(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
+                let s = <WasmStr as Lift>::linear_lift_from_memory(cx, ty, bytes)?;
+                let encoding = cx.options().string_encoding;
+                Ok(s.to_str_from_memory(encoding, cx.memory())?.into())
             }
         }
     )*)
@@ -1464,7 +1486,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
     // to simd-accelerated helpers in the `encoding_rs` crate. This is ok though
     // because we can fake that the host string was already stored in latin1
     // format and follow that copy pattern instead.
-    match cx.options.string_encoding() {
+    match cx.options().string_encoding {
         // This corresponds to `store_string_copy` in the canonical ABI where
         // the host's representation is utf-8 and the wasm module wants utf-8 so
         // a copy is all that's needed (and the `realloc` can be precise for the
@@ -1597,12 +1619,13 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
 pub struct WasmStr {
     ptr: usize,
     len: usize,
-    options: Options,
+    options: OptionsIndex,
+    instance: Instance,
 }
 
 impl WasmStr {
     pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
-        let byte_len = match cx.options.string_encoding() {
+        let byte_len = match cx.options().string_encoding {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
             StringEncoding::CompactUtf16 => {
@@ -1620,7 +1643,8 @@ impl WasmStr {
         Ok(WasmStr {
             ptr,
             len,
-            options: *cx.options,
+            options: cx.options_index(),
+            instance: cx.instance_handle(),
         })
     }
 
@@ -1650,12 +1674,17 @@ impl WasmStr {
         store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Cow<'a, str>> {
         let store = store.into().0;
-        let memory = self.options.memory(store);
-        self.to_str_from_memory(memory)
+        let memory = self.instance.options_memory(store, self.options);
+        let encoding = self.instance.options(store, self.options).string_encoding;
+        self.to_str_from_memory(encoding, memory)
     }
 
-    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
-        match self.options.string_encoding() {
+    pub(crate) fn to_str_from_memory<'a>(
+        &self,
+        encoding: StringEncoding,
+        memory: &'a [u8],
+    ) -> Result<Cow<'a, str>> {
+        match encoding {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
             StringEncoding::CompactUtf16 => {
@@ -1849,7 +1878,7 @@ where
 pub struct WasmList<T> {
     ptr: usize,
     len: usize,
-    options: Options,
+    options: OptionsIndex,
     elem: InterfaceType,
     instance: Instance,
     _marker: marker::PhantomData<T>,
@@ -1875,7 +1904,7 @@ impl<T: Lift> WasmList<T> {
         Ok(WasmList {
             ptr,
             len,
-            options: *cx.options,
+            options: cx.options_index(),
             elem,
             instance: cx.instance_handle(),
             _marker: marker::PhantomData,
@@ -1904,8 +1933,7 @@ impl<T: Lift> WasmList<T> {
     // consumers should be validating through the iterator.
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
-        self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, self.instance);
+        let mut cx = LiftContext::new(store, self.options, self.instance);
         self.get_from_store(&mut cx, index)
     }
 
@@ -1932,8 +1960,7 @@ impl<T: Lift> WasmList<T> {
         store: impl Into<StoreContextMut<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
-        self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, self.instance);
+        let mut cx = LiftContext::new(store, self.options, self.instance);
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }
@@ -1959,7 +1986,7 @@ macro_rules! raw_wasm_list_accessors {
             /// Panics if the `store` provided is not the one from which this
             /// slice originated.
             pub fn as_le_slice<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [$i] {
-                let memory = self.options.memory(store.into().0);
+                let memory = self.instance.options_memory(store.into().0, self.options);
                 self._as_le_slice(memory)
             }
 
@@ -2167,7 +2194,7 @@ pub fn typecheck_enum(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected enum case named {}, found {}", expected, name);
+                    bail!("expected enum case named {expected}, found {name}");
                 }
             }
 
@@ -2198,7 +2225,7 @@ pub fn typecheck_flags(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected flag named {}, found {}", expected, name);
+                    bail!("expected flag named {expected}, found {name}");
                 }
             }
 

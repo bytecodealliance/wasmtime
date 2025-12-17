@@ -109,11 +109,11 @@ mod no_imports_concurrent {
                         (with "" (instance (export "task.return" (func $task-return))))
                     ))
 
-                    (func $f (export "[async]bar")
+                    (func $f (export "bar")
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "[async]foo" (func $f)))
+                    (instance $i (export "foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
@@ -121,10 +121,9 @@ mod no_imports_concurrent {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let no_imports = NoImports::new(&mut store, &instance)?;
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
+        let no_imports = NoImports::instantiate_async(&mut store, &component, &linker).await?;
+        store
+            .run_concurrent(async move |accessor| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(no_imports.call_bar(accessor).boxed());
                 futures.push(no_imports.foo().call_foo(accessor).boxed());
@@ -215,7 +214,7 @@ mod one_import_concurrent {
 
                 export bar: async func();
             }
-        ",
+        "
     });
 
     #[tokio::test]
@@ -230,7 +229,7 @@ mod one_import_concurrent {
             r#"
                 (component
                     (import "foo" (instance $foo-instance
-                        (export "[async]foo" (func))
+                        (export "foo" (func async))
                     ))
                     (core module $libc
                         (memory (export "memory") 1)
@@ -247,7 +246,7 @@ mod one_import_concurrent {
                         )
                         (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
                     )
-                    (core func $foo (canon lower (func $foo-instance "[async]foo") async (memory $libc-instance "memory")))
+                    (core func $foo (canon lower (func $foo-instance "foo") async (memory $libc-instance "memory")))
                     (core func $task-return (canon task.return))
                     (core instance $i (instantiate $m
                         (with "" (instance
@@ -256,11 +255,11 @@ mod one_import_concurrent {
                         ))
                     ))
 
-                    (func $f (export "[async]bar")
+                    (func $f (export "bar") async
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "[async]foo" (func $f)))
+                    (instance $i (export "foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
@@ -286,12 +285,9 @@ mod one_import_concurrent {
         let mut linker = Linker::new(&engine);
         foo::add_to_linker::<_, MyImports>(&mut linker, |x| x)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let no_imports = NoImports::new(&mut store, &instance)?;
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
-                no_imports.call_bar(accessor).await
-            })
+        let no_imports = NoImports::instantiate_async(&mut store, &component, &linker).await?;
+        store
+            .run_concurrent(async move |accessor| no_imports.call_bar(accessor).await)
             .await??;
         assert!(store.data().hit);
         Ok(())

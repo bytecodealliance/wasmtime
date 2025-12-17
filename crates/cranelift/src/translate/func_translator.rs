@@ -7,7 +7,6 @@
 use crate::func_environ::FuncEnvironment;
 use crate::translate::TargetEnvironment;
 use crate::translate::code_translator::{bitcast_wasm_returns, translate_operator};
-use crate::translate::stack::FuncTranslationStacks;
 use crate::translate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
@@ -23,7 +22,6 @@ use wasmtime_environ::{TypeConvert, WasmResult};
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
     func_ctx: FunctionBuilderContext,
-    state: FuncTranslationStacks,
 }
 
 impl FuncTranslator {
@@ -31,7 +29,6 @@ impl FuncTranslator {
     pub fn new() -> Self {
         Self {
             func_ctx: FunctionBuilderContext::new(),
-            state: FuncTranslationStacks::new(),
         }
     }
 
@@ -76,6 +73,8 @@ impl FuncTranslator {
         builder.switch_to_block(entry_block);
         builder.seal_block(entry_block); // Declare all predecessors known.
 
+        environ.create_state_slot(&mut builder);
+
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_block();
@@ -86,10 +85,12 @@ impl FuncTranslator {
         // function and its return values.
         let exit_block = builder.create_block();
         builder.append_block_params_for_function_returns(exit_block);
-        self.state.initialize(&builder.func.signature, exit_block);
+        environ
+            .stacks
+            .initialize(&builder.func.signature, exit_block);
 
         parse_local_decls(&mut reader, &mut builder, num_params, environ, validator)?;
-        parse_function_body(validator, reader, &mut builder, &mut self.state, environ)?;
+        parse_function_body(validator, reader, &mut builder, environ)?;
 
         builder.finalize();
         log::trace!("translated Wasm to CLIF:\n{}", func.display());
@@ -103,7 +104,7 @@ impl FuncTranslator {
 fn declare_wasm_parameters(
     builder: &mut FunctionBuilder,
     entry_block: Block,
-    environ: &FuncEnvironment<'_>,
+    environ: &mut FuncEnvironment<'_>,
 ) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
@@ -111,7 +112,7 @@ fn declare_wasm_parameters(
         let param_type = builder.func.signature.params[i];
         // There may be additional special-purpose parameters in addition to the normal WebAssembly
         // signature parameters. For example, a `vmctx` pointer.
-        if environ.is_wasm_parameter(&builder.func.signature, i) {
+        if let Some(wasm_type) = environ.clif_param_as_wasm_param(i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = builder.declare_var(param_type.value_type);
             debug_assert_eq!(local.index(), next_local);
@@ -123,6 +124,8 @@ fn declare_wasm_parameters(
 
             let param_value = builder.block_params(entry_block)[i];
             builder.def_var(local, param_value);
+
+            environ.add_state_slot_local(builder, wasm_type, Some(param_value));
         }
         if param_type.purpose == ir::ArgumentPurpose::VMContext {
             let param_value = builder.block_params(entry_block)[i];
@@ -221,6 +224,7 @@ fn declare_locals(
             builder.def_var(local, init);
             builder.set_val_label(init, ValueLabel::new(*next_local));
         }
+        environ.add_state_slot_local(builder, environ.convert_valtype(wasm_type)?, init);
         *next_local += 1;
     }
     Ok(())
@@ -234,13 +238,16 @@ fn parse_function_body(
     validator: &mut FuncValidator<impl WasmModuleResources>,
     reader: BinaryReader,
     builder: &mut FunctionBuilder,
-    stack: &mut FuncTranslationStacks,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
-    debug_assert_eq!(stack.control_stack.len(), 1, "State not initialized");
+    debug_assert_eq!(
+        environ.stacks.control_stack.len(),
+        1,
+        "State not initialized"
+    );
 
-    environ.before_translate_function(builder, stack)?;
+    environ.before_translate_function(builder)?;
 
     let mut reader = OperatorsReader::new(reader);
     let mut operand_types = vec![];
@@ -253,11 +260,12 @@ fn parse_function_body(
         let operand_types =
             validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
 
-        environ.before_translate_operator(&op, operand_types, builder, stack)?;
-        translate_operator(validator, &op, operand_types, builder, stack, environ)?;
-        environ.after_translate_operator(&op, operand_types, builder, stack)?;
+        environ.before_translate_operator(&op, operand_types, builder)?;
+        translate_operator(validator, &op, operand_types, builder, environ)?;
+        environ.after_translate_operator(&op, validator, builder)?;
     }
-    environ.after_translate_function(builder, stack)?;
+
+    environ.after_translate_function(builder)?;
     reader.finish()?;
 
     // The final `End` operator left us in the exit block where we need to manually add a return
@@ -265,17 +273,19 @@ fn parse_function_body(
     //
     // If the exit block is unreachable, it may not have the correct arguments, so we would
     // generate a return instruction that doesn't match the signature.
-    if stack.reachable {
+    if environ.is_reachable() {
         if !builder.is_unreachable() {
-            environ.handle_before_return(&stack.stack, builder);
-            bitcast_wasm_returns(&mut stack.stack, builder);
-            builder.ins().return_(&stack.stack);
+            let mut returns = core::mem::take(&mut environ.stacks.stack);
+            environ.handle_before_return(&returns, builder);
+            bitcast_wasm_returns(&mut returns, builder);
+            builder.ins().return_(&returns);
         }
     }
 
     // Discard any remaining values on the stack. Either we just returned them,
     // or the end of the function is unreachable.
-    stack.stack.clear();
+    environ.stacks.stack.clear();
+    environ.stacks.stack_shape.clear();
 
     Ok(())
 }

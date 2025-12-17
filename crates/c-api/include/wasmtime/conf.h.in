@@ -28,6 +28,8 @@
 #cmakedefine WASMTIME_FEATURE_DEBUG_BUILTINS
 #cmakedefine WASMTIME_FEATURE_POOLING_ALLOCATOR
 #cmakedefine WASMTIME_FEATURE_COMPONENT_MODEL
+#cmakedefine WASMTIME_FEATURE_PULLEY
+#cmakedefine WASMTIME_FEATURE_ALL_ARCH
 // ... if you add a line above this be sure to change the other locations
 // marked WASMTIME_FEATURE_LIST
 

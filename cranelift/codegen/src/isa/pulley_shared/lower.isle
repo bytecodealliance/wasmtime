@@ -141,17 +141,17 @@
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
             (_ Unit (emit_side_effect (call_impl info))))
         output))
 
 ;; Direct call to a host function.
-(rule (lower (call (func_ref_data sig_ref name _) args))
+(rule (lower (call (func_ref_data sig_ref name _ false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
@@ -174,16 +174,16 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to a host function.
-(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
@@ -205,11 +205,19 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
+
+;; Direct call to a pulley function.
+(rule (lower (return_call (func_ref_data sig_ref name dist false) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (target Reg (load_ext_name name 0 dist))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_indirect_call_impl info))))
 
 ;; Indirect call (assumed to be pulley->pulley).
 (rule (lower (return_call_indirect sig_ref ptr args))
@@ -1333,6 +1341,18 @@
 (rule (lower (has_type $I64 (uadd_overflow_trap a b tc)))
   (pulley_xadd64_uoverflow_trap a b tc))
 
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (uadd_overflow a b)))
+      (let ((sum XReg (pulley_xadd32 a b))
+            (is_overflow XReg (pulley_xult32 sum a)))
+        (output_pair sum is_overflow)))
+
+(rule (lower (has_type $I64 (uadd_overflow a b)))
+      (let ((sum XReg (pulley_xadd64 a b))
+            (is_overflow XReg (pulley_xult64 sum a)))
+        (output_pair  sum is_overflow)))
+
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (select c a b)))
@@ -1811,3 +1831,26 @@
 
 (rule (lower (has_type $F32X4 (fma a b c))) (pulley_vfma32x4 a b c))
 (rule (lower (has_type $F64X2 (fma a b c))) (pulley_vfma64x2 a b c))
+
+;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (symbol_value (symbol_value_data extname dist offset)))
+  (load_ext_name extname offset dist))
+
+;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (func_addr (func_ref_data _ extname dist _)))
+      (load_ext_name extname 0 dist))
+
+
+;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_exception_handler_address (u64_from_imm64 idx) block))
+      (let ((succ_label MachLabel (block_exn_successor_label block idx)))
+        (pulley_label_address succ_label)))
+
+;; Rules for `sequence_point` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sequence_point))
+      (side_effect
+       (pulley_sequence_point)))

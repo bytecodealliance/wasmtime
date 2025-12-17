@@ -1,0 +1,136 @@
+.langtabs {
+  margin: 0.5em 0 1.5em 0;
+  font-family: var(--fonts);
+}
+
+.langtabs-header {
+  display: flex;
+  overflow-x: auto;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--icons);
+  padding-bottom: 1px;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 2;
+}
+
+.langtabs-header {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.langtabs-header::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+.langtabs-tab {
+  padding: 0.6rem 1.1rem;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 400;
+  transition: all 0.15s ease;
+  position: relative;
+  top: 1px;
+}
+
+.langtabs-tab:hover {
+  color: var(--links);
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.langtabs-tab.active {
+  color: var(--links); /* Use theme link color */
+  border-color: var(--icons);
+  border-bottom: 1px solid var(--bg);
+  background-color: var(--bg);
+  font-weight: 500;
+}
+
+.langtabs-icon {
+  width: 1.4em;
+  height: 1.4em;
+  font-size: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* inactive tabs use text color, active tabs use theme link color */
+.langtabs-tab .langtabs-icon {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.langtabs-tab.active .langtabs-icon {
+  color: var(--links); /* Use theme link color */
+  opacity: 1;
+}
+
+.langtabs-content {
+  position: relative;
+  border: 1px solid var(--icons);
+  border-radius: 3px;
+  border-top-left-radius: 0;
+  overflow: hidden;
+}
+
+.langtabs-code {
+  display: none;
+}
+
+.langtabs-code.active {
+  display: block;
+}
+
+/* CodeBlock styling to match mdBook */
+.langtabs-code pre {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+}
+
+.langtabs-code pre code {
+  display: block;
+  padding: 1rem;
+  overflow-x: auto;
+  font-family: var(--mono-font);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+@media print {
+  .langtabs-tab:not(.active) {
+    display: none;
+  }
+  
+  .langtabs-content {
+    border: 1px solid #ddd;
+  }
+  
+  .langtabs-code.active {
+    display: block !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .langtabs-tab {
+    padding: 0.5rem 0.8rem;
+    font-size: 1.1rem;
+  }
+  
+  .langtabs-icon {
+    font-size: 1.3em;
+    width: 1.3em;
+    height: 1.3em;
+  }
+}

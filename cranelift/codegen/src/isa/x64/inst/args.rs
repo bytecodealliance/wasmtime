@@ -573,6 +573,21 @@ impl SyntheticAmode {
             | SyntheticAmode::ConstantOffset { .. } => true,
         }
     }
+
+    /// Offset the synthetic amode by a fixed offset.
+    pub(crate) fn offset(&self, offset: i32) -> Self {
+        let mut ret = self.clone();
+        match &mut ret {
+            SyntheticAmode::Real(amode) => *amode = amode.offset(offset),
+            SyntheticAmode::SlotOffset { simm32 } => *simm32 += offset,
+            // `amode_offset` is used only in i128.load/store which
+            // takes a synthetic amode from `to_amode`; `to_amode` can
+            // only produce Real or SlotOffset amodes, never
+            // IncomingArg or ConstantOffset.
+            _ => panic!("Cannot offset SyntheticAmode: {self:?}"),
+        }
+        ret
+    }
 }
 
 impl From<Amode> for SyntheticAmode {

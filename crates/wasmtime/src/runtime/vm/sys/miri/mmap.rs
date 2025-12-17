@@ -114,6 +114,10 @@ impl Mmap {
         Ok(())
     }
 
+    pub unsafe fn make_readwrite(&self, _range: Range<usize>) -> Result<()> {
+        Ok(())
+    }
+
     pub unsafe fn map_image_at(
         &self,
         image_source: &MemoryImageSource,

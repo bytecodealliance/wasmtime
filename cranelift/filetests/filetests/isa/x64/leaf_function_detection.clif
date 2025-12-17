@@ -1,0 +1,227 @@
+;; Test leaf function detection across different function types.
+;; This test verifies that the is_leaf detection works correctly for:
+;; - True leaf functions (no calls)
+;; - Non-leaf functions (with calls, call_indirect)
+;;
+;; NOTE: This test is included for completeness with respect to other ISAs,
+;; but x64 does not yet implement the leaf-function optimization, so frame
+;; setup is still present in the generated code below.
+
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=false
+target x86_64
+
+;; Test 1: Simple leaf function - just arithmetic operations
+function %simple_leaf(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 10
+    v2 = imul v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   imull $0xa, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imull $0xa, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test 2: Leaf function with multiple basic blocks and control flow
+function %leaf_with_branches(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sgt v0, v1
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i32 2
+    v4 = imul v0, v3
+    jump block3(v4)
+
+block2:
+    v5 = isub v1, v0
+    jump block3(v5)
+
+block3(v6: i32):
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   uninit  %rax
+;   xorl %eax, %eax
+;   testl %edi, %edi
+;   jnle    label2; j label1
+; block1:
+;   subl %edi, %eax
+;   jmp     label3
+; block2:
+;   imull $0x2, %edi, %eax
+;   jmp     label3
+; block3:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorl %eax, %eax
+;   testl %edi, %edi
+;   jg 0x15
+; block2: ; offset 0xe
+;   subl %edi, %eax
+;   jmp 0x18
+; block3: ; offset 0x15
+;   imull $2, %edi, %eax
+; block4: ; offset 0x18
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test 3: Non-leaf function with direct call
+function %non_leaf_with_call(i32) -> i32 {
+    sig0 = (i32) -> i32
+    fn0 = colocated %simple_leaf sig0
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   call    TestCase(%simple_leaf)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq 9 ; reloc_external CallPCRel4 %simple_leaf -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test 4: Non-leaf function with indirect call
+function %non_leaf_with_call_indirect(i32, i64) -> i32 {
+    sig0 = (i32) -> i32
+
+block0(v0: i32, v1: i64):
+    v2 = call_indirect sig0, v1(v0)
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   call    *%rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq *%rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test 5: Leaf function with memory operations (should still be leaf)
+function %leaf_with_memory(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+    store v0, v1
+    v2 = load.i32 v1
+    v3 = iconst.i32 1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movl %edi, (%rsi)
+;   movl $0x1, %eax
+;   addl (%rsi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl %edi, (%rsi) ; trap: heap_oob
+;   movl $1, %eax
+;   addl (%rsi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Test 6: Leaf function that looks like it might call but doesn't
+function %leaf_no_actual_calls(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 42
+    v2 = imul v0, v1
+    v3 = iconst.i32 7
+    v4 = udiv v2, v3
+    v5 = iconst.i32 3
+    v6 = band v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   imull $0x2a, %edi, %eax
+;   movl $0x7, %r11d
+;   uninit  %rdx
+;   xorq %rdx, %rdx
+;   divl %r11d ;; implicit: %eax, %edx, trap=254
+;   andl $0x3, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imull $0x2a, %edi, %eax
+;   movl $7, %r11d
+;   xorq %rdx, %rdx
+;   divl %r11d ; trap: int_divz
+;   andl $3, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq

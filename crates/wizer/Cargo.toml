@@ -1,0 +1,59 @@
+[package]
+description = "The WebAssembly Pre-Initializer"
+documentation = "https://docs.rs/wasmtime-wizer"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+name = "wasmtime-wizer"
+readme = "./README.md"
+repository = "https://github.com/bytecodealliance/wasmtime"
+version.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[[bench]]
+name = "regex"
+harness = false
+
+[[bench]]
+name = "uap"
+harness = false
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+rayon = { workspace = true }
+clap = { workspace = true, optional = true }
+wasm-encoder = { workspace = true, features = ['wasmparser'] }
+wasmparser = { workspace = true, features = ['validate', 'features'] }
+wasmprinter = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null', 'async'] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+env_logger = { workspace = true }
+wasmprinter = { workspace = true }
+wat = { workspace = true }
+wasmtime = { workspace = true, features = ['default'] }
+wasmtime-wasi = { workspace = true, features = ["p1"] }
+tokio = { workspace = true, features = ['macros'] }
+
+[features]
+# Enable this dependency to get messages with WAT disassemblies when certain
+# internal panics occur.
+wasmprinter = ['dep:wasmprinter']
+
+# Enables default runtime implementations based on the `wasmtime` crate.
+wasmtime = ['dep:wasmtime']
+
+# Enable support for wizening components.
+component-model = ['wasmtime?/component-model']
+
+[[test]]
+name = "all"
+required-features = ['wasmtime']

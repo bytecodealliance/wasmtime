@@ -114,7 +114,7 @@ void check_trap2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
   check_trap(store, func, args, 2, 0);
 }
 
-int main(int argc, const char *argv[]) {
+int main() {
   // Initialize.
   printf("Initializing...\n");
 

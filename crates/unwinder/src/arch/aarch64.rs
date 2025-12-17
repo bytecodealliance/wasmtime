@@ -57,14 +57,14 @@ pub unsafe fn resume_to_exception_handler(
 ) -> ! {
     unsafe {
         core::arch::asm!(
-            "mov sp, {}",
-            "mov fp, {}",
-            "br {}",
-            in(reg) sp,
-            in(reg) fp,
-            in(reg) pc,
+            "mov sp, x2",
+            "mov fp, x3",
+            "br x4",
             in("x0") payload1,
             in("x1") payload2,
+            in("x2") sp,
+            in("x3") fp,
+            in("x4") pc,
             options(nostack, nomem, noreturn),
         );
     }

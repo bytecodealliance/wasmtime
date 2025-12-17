@@ -22,7 +22,7 @@ struct TestVerifier;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "verifier");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed);
+        anyhow::bail!("No options allowed on {parsed}");
     }
     Ok(Box::new(TestVerifier))
 }
@@ -51,10 +51,10 @@ impl SubTest for TestVerifier {
 
         match verify_function(func, context.flags_or_isa()) {
             Ok(()) if expected.is_empty() => Ok(()),
-            Ok(()) => anyhow::bail!("passed, but expected errors: {:?}", expected),
+            Ok(()) => anyhow::bail!("passed, but expected errors: {expected:?}"),
 
             Err(ref errors) if expected.is_empty() => {
-                anyhow::bail!("expected no error, but got:\n{}", errors);
+                anyhow::bail!("expected no error, but got:\n{errors}");
             }
 
             Err(errors) => {
@@ -85,7 +85,7 @@ impl SubTest for TestVerifier {
                 if msg.is_empty() {
                     Ok(())
                 } else {
-                    anyhow::bail!("{}", msg);
+                    anyhow::bail!("{msg}");
                 }
             }
         }

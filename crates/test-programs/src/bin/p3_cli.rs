@@ -18,20 +18,37 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         assert!(terminal_stdout::get_terminal_stdout().is_none());
         assert!(terminal_stderr::get_terminal_stderr().is_none());
 
-        let mut stdin = stdin::get_stdin();
+        let (mut stdin, result) = stdin::read_via_stream();
         assert!(stdin.next().await.is_none());
 
         let (mut stdout_tx, stdout_rx) = wit_stream::new();
-        stdout::set_stdout(stdout_rx);
-        let (res, buf) = stdout_tx.write(b"hello stdout\n".into()).await;
-        assert_eq!(res, StreamResult::Complete(13));
-        assert_eq!(buf.into_vec(), []);
+        futures::join!(
+            async {
+                stdout::write_via_stream(stdout_rx).await.unwrap();
+            },
+            async {
+                let (res, buf) = stdout_tx.write(b"hello stdout\n".into()).await;
+                assert_eq!(res, StreamResult::Complete(13));
+                assert_eq!(buf.into_vec(), []);
+                drop(stdout_tx);
+            }
+        );
 
         let (mut stderr_tx, stderr_rx) = wit_stream::new();
-        stderr::set_stderr(stderr_rx);
-        let (res, buf) = stderr_tx.write(b"hello stderr\n".into()).await;
-        assert_eq!(res, StreamResult::Complete(13));
-        assert_eq!(buf.into_vec(), []);
+        futures::join!(
+            async {
+                stderr::write_via_stream(stderr_rx).await.unwrap();
+            },
+            async {
+                let (res, buf) = stderr_tx.write(b"hello stderr\n".into()).await;
+                assert_eq!(res, StreamResult::Complete(13));
+                assert_eq!(buf.into_vec(), []);
+                drop(stderr_tx);
+            }
+        );
+
+        drop(stdin);
+        result.await.unwrap();
 
         Ok(())
     }

@@ -37,6 +37,7 @@ fn main() -> Result<()> {
                         TypeRef::Global(_) => bail!("should not import globals"),
                         TypeRef::Memory(_) => {}
                         TypeRef::Tag(_) => bail!("unsupported `tag` type"),
+                        TypeRef::FuncExact(_) => bail!("unsupported exact `func` type"),
                     }
                 }
             }

@@ -1,12 +1,12 @@
 //! Working with GC `array` objects.
 
-use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{VMArrayRef, VMGcHeader};
+use crate::runtime::vm::{VMGcRef, VMStore};
+use crate::store::{StoreId, StoreResourceLimiter};
+use crate::vm::{self, VMArrayRef, VMGcHeader};
 use crate::{AnyRef, FieldType};
 use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
-    ManuallyRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
@@ -108,7 +108,7 @@ impl ArrayRefPre {
 /// `0x12345678` into a reference, pretend it is a valid `arrayref`, and trick
 /// the host into dereferencing it and segfaulting or worse.
 ///
-/// Note that you can also use `Rooted<ArrayRef>` and `ManuallyRooted<ArrayRef>`
+/// Note that you can also use `Rooted<ArrayRef>` and `OwnedRooted<ArrayRef>`
 /// as a type parameter with [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -213,16 +213,16 @@ impl Rooted<ArrayRef> {
     }
 }
 
-impl ManuallyRooted<ArrayRef> {
+impl OwnedRooted<ArrayRef> {
     /// Upcast this `arrayref` into an `anyref`.
     #[inline]
-    pub fn to_anyref(self) -> ManuallyRooted<AnyRef> {
+    pub fn to_anyref(self) -> OwnedRooted<AnyRef> {
         self.unchecked_cast()
     }
 
     /// Upcast this `arrayref` into an `eqref`.
     #[inline]
-    pub fn to_eqref(self) -> ManuallyRooted<EqRef> {
+    pub fn to_eqref(self) -> OwnedRooted<EqRef> {
         self.unchecked_cast()
     }
 }
@@ -297,18 +297,15 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new(store.as_context_mut().0, allocator, elem, len)
-    }
-
-    pub(crate) fn _new(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elem: &Val,
-        len: u32,
-    ) -> Result<Rooted<ArrayRef>> {
-        store.retry_after_gc((), |store, ()| {
-            Self::new_from_iter(store, allocator, RepeatN(elem, len))
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elem,
+            len,
+        ))
     }
 
     /// Asynchronously allocate a new `array` of the given length, with every
@@ -350,40 +347,22 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, elem, len).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, elem, len).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ArrayRefPre,
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
             .await
-    }
-
-    /// Like `ArrayRef::new` but when async is configured must only ever be
-    /// called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elem: &Val,
-        len: u32,
-    ) -> Result<Rooted<ArrayRef>> {
-        // Type check the initial element value against the element type.
-        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-            .context("element type mismatch")?;
-
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, RepeatN(elem, len))
-            })
-        }
     }
 
     /// Allocate a new array of the given elements.
@@ -474,17 +453,14 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_fixed(store.as_context_mut().0, allocator, elems)
-    }
-
-    pub(crate) fn _new_fixed(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elems: &[Val],
-    ) -> Result<Rooted<ArrayRef>> {
-        store.retry_after_gc((), |store, ()| {
-            Self::new_from_iter(store, allocator, elems.iter())
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_fixed_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elems,
+        ))
     }
 
     /// Asynchronously allocate a new `array` containing the given elements.
@@ -528,35 +504,21 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_fixed_async(store.as_context_mut().0, allocator, elems).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_fixed_async(store, limiter.as_mut(), allocator, elems).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_fixed_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_from_iter(store, allocator, elems.iter())
             })
             .await
-    }
-
-    /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
-    /// to ensure that when async is enabled, this is only called from on a
-    /// fiber stack.
-    pub(crate) unsafe fn new_fixed_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elems: &[Val],
-    ) -> Result<Rooted<ArrayRef>> {
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, elems.iter())
-            })
-        }
     }
 
     #[inline]
@@ -741,7 +703,6 @@ impl ArrayRef {
         match layout {
             GcLayout::Array(a) => Ok(a),
             GcLayout::Struct(_) => unreachable!(),
-            GcLayout::Exception(_) => unreachable!(),
         }
     }
 
@@ -962,7 +923,7 @@ unsafe impl WasmTy for Option<Rooted<ArrayRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
+unsafe impl WasmTy for OwnedRooted<ArrayRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Array))
@@ -1014,7 +975,7 @@ unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<ArrayRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::ARRAYREF
@@ -1034,9 +995,7 @@ unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
         ty: &HeapType,
     ) -> Result<()> {
         match self {
-            Some(s) => {
-                ManuallyRooted::<ArrayRef>::dynamic_concrete_type_check(s, store, nullable, ty)
-            }
+            Some(s) => OwnedRooted::<ArrayRef>::dynamic_concrete_type_check(s, store, nullable, ty),
             None => {
                 ensure!(
                     nullable,
@@ -1053,11 +1012,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<ArrayRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<ArrayRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<ArrayRef>>::wasm_ty_option_load(
+        <OwnedRooted<ArrayRef>>::wasm_ty_option_load(
             store,
             ptr.get_anyref(),
             ArrayRef::from_cloned_gc_ref,

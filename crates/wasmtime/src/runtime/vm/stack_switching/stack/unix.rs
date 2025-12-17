@@ -258,7 +258,7 @@ impl VMContinuationStack {
 
             let to_store = [
                 // Data near top of stack:
-                (0x08, wasmtime_continuation_start as usize),
+                (0x08, (wasmtime_continuation_start as *const ()).addr()),
                 (0x10, tos.sub(0x10).addr()),
                 (0x18, tos.sub(0x40 + args_data_size).addr()),
                 (0x20, usize::try_from(args_capacity).unwrap()),
@@ -291,10 +291,6 @@ impl Drop for VMContinuationStack {
             }
         }
     }
-}
-
-unsafe extern "C" {
-    fn wasmtime_continuation_start();
 }
 
 /// This function is responsible for actually running a wasm function inside a
@@ -344,6 +340,7 @@ unsafe extern "C" fn fiber_start(
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
+        use x86_64::*;
     } else {
         // Note that this should be unreachable: In stack.rs, we currently select
         // the module defined in the current file only if we are on unix AND

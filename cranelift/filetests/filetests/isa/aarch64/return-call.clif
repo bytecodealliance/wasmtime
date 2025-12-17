@@ -31,7 +31,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_i64)+0
+;   load_ext_name_far x1, TestCase(%callee_i64)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
@@ -101,7 +101,7 @@ block0(v0: f64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_f64)+0
+;   load_ext_name_far x1, TestCase(%callee_f64)+0
 ;   return_call_ind x1 new_stack_arg_size:0 v0=v0
 ;
 ; Disassembled:
@@ -150,7 +150,7 @@ block0(v0: i8):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_i8)+0
+;   load_ext_name_far x1, TestCase(%callee_i8)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
@@ -283,7 +283,7 @@ block0:
 ;   str x23, [sp, #232]
 ;   str x24, [sp, #240]
 ;   str x25, [sp, #248]
-;   load_ext_name x1, TestCase(%tail_callee_stack_args)+0
+;   load_ext_name_far x1, TestCase(%tail_callee_stack_args)+0
 ;   return_call_ind x1 new_stack_arg_size:160 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
 ;
 ; Disassembled:
@@ -514,7 +514,7 @@ block2:
 ;   str x15, [sp, #256]
 ;   str x14, [sp, #264]
 ;   str x2, [sp, #272]
-;   load_ext_name x1, TestCase(%different_callee2)+0
+;   load_ext_name_far x1, TestCase(%different_callee2)+0
 ;   ldr x2, [sp]
 ;   return_call_ind x1 new_stack_arg_size:176 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
 ; block2:
@@ -539,7 +539,7 @@ block2:
 ;   str x0, [sp, #264]
 ;   str x15, [sp, #272]
 ;   str x14, [sp, #280]
-;   load_ext_name x1, TestCase(%different_callee1)+0
+;   load_ext_name_far x1, TestCase(%different_callee1)+0
 ;   return_call_ind x1 new_stack_arg_size:160 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
 ;
 ; Disassembled:

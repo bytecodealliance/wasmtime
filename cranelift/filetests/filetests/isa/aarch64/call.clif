@@ -17,7 +17,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -47,7 +47,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -90,7 +90,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%g)+0
+;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -137,7 +137,7 @@ block0(v0: i8):
 ; block0:
 ;   movz w7, #42
 ;   strb w0, [sp]
-;   load_ext_name x8, TestCase(%g)+0
+;   load_ext_name_far x8, TestCase(%g)+0
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7
@@ -229,24 +229,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   load_ext_name x9, TestCase(%g0)+0
+;   load_ext_name_far x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   load_ext_name x9, TestCase(%g1)+0
+;   load_ext_name_far x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   load_ext_name x9, TestCase(%g1)+0
+;   load_ext_name_far x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp]
-;   load_ext_name x9, TestCase(%g2)+0
+;   load_ext_name_far x9, TestCase(%g2)+0
 ;   blr x9
-;   load_ext_name x10, TestCase(%g3)+0
+;   load_ext_name_far x10, TestCase(%g3)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   load_ext_name x11, TestCase(%g4)+0
+;   load_ext_name_far x11, TestCase(%g4)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   load_ext_name x12, TestCase(%g4)+0
+;   load_ext_name_far x12, TestCase(%g4)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -325,24 +325,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   load_ext_name x9, TestCase(%g0)+0
+;   load_ext_name_far x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   load_ext_name x9, TestCase(%g0)+0
+;   load_ext_name_far x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   load_ext_name x9, TestCase(%g0)+0
+;   load_ext_name_far x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp]
-;   load_ext_name x9, TestCase(%g1)+0
+;   load_ext_name_far x9, TestCase(%g1)+0
 ;   blr x9
-;   load_ext_name x10, TestCase(%g2)+0
+;   load_ext_name_far x10, TestCase(%g2)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   load_ext_name x11, TestCase(%g2)+0
+;   load_ext_name_far x11, TestCase(%g2)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   load_ext_name x12, TestCase(%g2)+0
+;   load_ext_name_far x12, TestCase(%g2)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -425,24 +425,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   load_ext_name x9, TestCase(%g0)+0
+;   load_ext_name_far x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   load_ext_name x9, TestCase(%g1)+0
+;   load_ext_name_far x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   load_ext_name x9, TestCase(%g2)+0
+;   load_ext_name_far x9, TestCase(%g2)+0
 ;   blr x9
 ;   str q0, [sp]
-;   load_ext_name x9, TestCase(%g3)+0
+;   load_ext_name_far x9, TestCase(%g3)+0
 ;   blr x9
-;   load_ext_name x10, TestCase(%g4)+0
+;   load_ext_name_far x10, TestCase(%g4)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   load_ext_name x11, TestCase(%g5)+0
+;   load_ext_name_far x11, TestCase(%g5)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   load_ext_name x12, TestCase(%g6)+0
+;   load_ext_name_far x12, TestCase(%g6)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -531,7 +531,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   movz x2, #42
-;   load_ext_name x4, TestCase(%f11)+0
+;   load_ext_name_far x4, TestCase(%f11)+0
 ;   mov x1, x0
 ;   mov x0, x2
 ;   blr x4
@@ -585,7 +585,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   movz x3, #42
-;   load_ext_name x4, TestCase(%f12)+0
+;   load_ext_name_far x4, TestCase(%f12)+0
 ;   mov x2, x0
 ;   mov x0, x3
 ;   blr x4
@@ -639,7 +639,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   movz x2, #42
-;   load_ext_name x4, TestCase(%f13)+0
+;   load_ext_name_far x4, TestCase(%f13)+0
 ;   mov x1, x0
 ;   mov x0, x2
 ;   blr x4
@@ -701,7 +701,7 @@ block0(v0: i128, v1: i64):
 ; block0:
 ;   str x0, [sp]
 ;   str x1, [sp, #8]
-;   load_ext_name x8, TestCase(%f14)+0
+;   load_ext_name_far x8, TestCase(%f14)+0
 ;   mov x4, x0
 ;   mov x5, x1
 ;   mov x6, x2
@@ -773,7 +773,7 @@ block0(v0: i128, v1: i64):
 ; block0:
 ;   str x0, [sp]
 ;   str x1, [sp, #8]
-;   load_ext_name x8, TestCase(%f15)+0
+;   load_ext_name_far x8, TestCase(%f15)+0
 ;   mov x4, x0
 ;   mov x5, x1
 ;   mov x6, x2
@@ -839,7 +839,7 @@ block0(v0: i64):
 ;   str x24, [sp, #-16]!
 ; block0:
 ;   mov x24, x0
-;   load_ext_name x2, TestCase(%g)+0
+;   load_ext_name_far x2, TestCase(%g)+0
 ;   mov x8, x24
 ;   blr x2
 ;   mov x0, x24
@@ -879,7 +879,7 @@ block0(v0: i64):
 ;   str x24, [sp, #-16]!
 ; block0:
 ;   mov x24, x8
-;   load_ext_name x2, TestCase(%g)+0
+;   load_ext_name_far x2, TestCase(%g)+0
 ;   blr x2
 ;   mov x8, x24
 ;   ldr x24, [sp], #16
@@ -915,7 +915,7 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x0, TestCase(%g)+0
+;   load_ext_name_far x0, TestCase(%g)+0
 ;   blr x0
 ;   ldp fp, lr, [sp], #16
 ;   ret

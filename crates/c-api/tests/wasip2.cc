@@ -1,46 +1,46 @@
-#include "component/utils.h"
-
 #include <gtest/gtest.h>
-#include <wasmtime.h>
+#include <string_view>
+#include <wasmtime/component.hh>
+#include <wasmtime/store.hh>
+
+using namespace wasmtime::component;
 
 TEST(wasip2, smoke) {
   static constexpr auto component_text = std::string_view{
       R"END(
-(component)
+(component
+  (import "wasi:cli/environment@0.2.0" (instance
+    (export "get-arguments" (func (result (list string))))
+  ))
+)
       )END",
   };
-  const auto engine = wasm_engine_new();
-  EXPECT_NE(engine, nullptr);
 
-  const auto store = wasmtime_store_new(engine, nullptr, nullptr);
-  const auto context = wasmtime_store_context(store);
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
+  auto context = store.context();
 
-  const auto cfg = wasmtime_wasip2_config_new();
-  wasmtime_wasip2_config_inherit_stdin(cfg);
-  wasmtime_wasip2_config_inherit_stdout(cfg);
-  wasmtime_wasip2_config_inherit_stderr(cfg);
-  wasmtime_wasip2_config_arg(cfg, "hello", strlen("hello"));
-  wasmtime_context_set_wasip2(context, cfg);
+  wasmtime::WasiConfig config;
 
-  wasmtime_component_t *component = nullptr;
+  wasi_config_set_stdout_custom(
+      config.capi(),
+      [](void *, const unsigned char *buf, size_t len) -> ptrdiff_t {
+        std::cout << std::string_view{(const char *)(buf), len};
+        return len;
+      },
+      nullptr, nullptr);
+  wasi_config_set_stderr_custom(
+      config.capi(),
+      [](void *, const unsigned char *buf, size_t len) -> ptrdiff_t {
+        std::cerr << std::string_view{(const char *)(buf), len};
+        return len;
+      },
+      nullptr, nullptr);
 
-  auto err = wasmtime_component_new(
-      engine, reinterpret_cast<const uint8_t *>(component_text.data()),
-      component_text.size(), &component);
+  context.set_wasi(std::move(config)).unwrap();
+  Component component = Component::compile(engine, component_text).unwrap();
 
-  CHECK_ERR(err);
-
-  const auto linker = wasmtime_component_linker_new(engine);
-
-  wasmtime_component_linker_add_wasip2(linker);
-
-  wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context, component,
-                                              &instance);
-  CHECK_ERR(err);
-
-  wasmtime_component_linker_delete(linker);
-
-  wasmtime_store_delete(store);
-  wasm_engine_delete(engine);
+  Linker linker(engine);
+  linker.add_wasip2().unwrap();
+  linker.instantiate(context, component).unwrap();
 }

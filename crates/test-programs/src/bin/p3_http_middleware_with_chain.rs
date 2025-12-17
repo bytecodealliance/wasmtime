@@ -6,13 +6,13 @@ mod bindings {
 package local:local;
 
 world middleware-with-chain {
-  include wasi:http/proxy@0.3.0-rc-2025-08-15;
+  include wasi:http/proxy@0.3.0-rc-2025-09-16;
 
   import chain-http;
 }
 
 interface chain-http {
-  use wasi:http/types@0.3.0-rc-2025-08-15.{request, response, error-code};
+  use wasi:http/types@0.3.0-rc-2025-09-16.{request, response, error-code};
 
   handle: async func(request: request) -> result<response, error-code>;
 }

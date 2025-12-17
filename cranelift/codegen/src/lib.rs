@@ -1,7 +1,7 @@
 //! Cranelift code generation library.
 #![deny(missing_docs)]
 // Display feature requirements in the documentation when building on docs.rs
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On
@@ -68,9 +68,10 @@ pub use crate::machinst::buffer::{
     OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
-    CallInfo, CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
-    MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder, VCodeConstant,
-    VCodeConstantData, VCodeConstants, VCodeInst, Writable,
+    CallInfo, CompiledCode, Final, MachBuffer, MachBufferDebugTagList, MachBufferFinalized,
+    MachBufferFrameLayout, MachDebugTagPos, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
+    RealReg, Reg, RelocDistance, TextSectionBuilder, VCodeConstant, VCodeConstantData,
+    VCodeConstants, VCodeInst, Writable,
 };
 
 mod alias_analysis;

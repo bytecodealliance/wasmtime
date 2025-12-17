@@ -39,8 +39,8 @@ pub use WASMTIME_PROT_WRITE as PROT_WRITE;
 /// meaning of a trap that's not handled by Wasmtime depends on the context in
 /// which the trap was generated.
 ///
-/// When this function does not return it's because `wasmtime_longjmp` is
-/// used to handle a Wasm-based trap.
+/// When this function does not return it's because a native exception handler
+/// was resumed to.
 #[cfg(has_native_signals)]
 #[expect(non_camel_case_types, reason = "matching C conventions")]
 pub type wasmtime_trap_handler_t =
@@ -102,40 +102,6 @@ unsafe extern "C" {
     /// Returns the page size, in bytes, of the current system.
     #[cfg(has_virtual_memory)]
     pub fn wasmtime_page_size() -> usize;
-
-    /// Used to setup a frame on the stack to longjmp back to in the future.
-    ///
-    /// This function is used for handling traps in WebAssembly and is paried
-    /// with `wasmtime_longjmp`.
-    ///
-    /// * `jmp_buf` - this argument is filled in with a pointer which if used
-    ///   will be passed to `wasmtime_longjmp` later on by the runtime.
-    /// * `callback` - this callback should be invoked after `jmp_buf` is
-    ///   configured.
-    /// * `payload` and `callee` - the two arguments to pass to `callback`.
-    ///
-    /// Returns false if `wasmtime_longjmp` was used to return to this function.
-    /// Returns true if `wasmtime_longjmp` was not called and `callback` returned.
-    #[cfg(has_host_compiler_backend)]
-    pub fn wasmtime_setjmp(
-        jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut u8) -> bool,
-        payload: *mut u8,
-        callee: *mut u8,
-    ) -> bool;
-
-    /// Paired with `wasmtime_setjmp` this is used to jump back to the `setjmp`
-    /// point.
-    ///
-    /// The argument here was originally passed to `wasmtime_setjmp` through its
-    /// out-param.
-    ///
-    /// This function cannot return.
-    ///
-    /// This function may be invoked from the `wasmtime_trap_handler_t`
-    /// configured by `wasmtime_init_traps`.
-    #[cfg(has_host_compiler_backend)]
-    pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
 
     /// Initializes trap-handling logic for this platform.
     ///
@@ -216,4 +182,54 @@ unsafe extern "C" {
     ///
     /// This value should be returned when later calling `wasmtime_tls_get`.
     pub fn wasmtime_tls_set(ptr: *mut u8);
+
+    /// Frees a synchronization lock.
+    ///
+    /// May be called on a lock that was never used (still has a zero pattern).
+    /// The implementor must handle this case gracefully.
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_free(lock: *mut usize);
+
+    /// Acquires an exclusive lock.
+    ///
+    /// If the lock is uninitialized (zero pattern), it will be initialized lazily.
+    /// This function blocks until the lock is acquired.
+    /// Must be paired with [`wasmtime_sync_lock_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_acquire(lock: *mut usize);
+
+    /// Releases an exclusive lock previously acquired with [`wasmtime_sync_lock_acquire`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_release(lock: *mut usize);
+
+    /// Acquires a read lock on an RwLock.
+    ///
+    /// If the lock is uninitialized (zero pattern), it will be initialized lazily.
+    /// Multiple readers can hold the lock simultaneously.
+    /// Must be paired with [`wasmtime_sync_rwlock_read_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_read(lock: *mut usize);
+
+    /// Releases a read lock previously acquired with [`wasmtime_sync_rwlock_read`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_read_release(lock: *mut usize);
+
+    /// Acquires a write lock on an RwLock.
+    ///
+    /// If the lock is uninitialized (zero pattern), it will be initialized lazily.
+    /// Only one writer can hold the lock, and no readers can be present.
+    /// Must be paired with [`wasmtime_sync_rwlock_write_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_write(lock: *mut usize);
+
+    /// Releases a write lock previously acquired with [`wasmtime_sync_rwlock_write`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_write_release(lock: *mut usize);
+
+    /// Frees an RwLock.
+    ///
+    /// May be called on a lock that was never used (still has a zero pattern).
+    /// The implementor must handle this case gracefully.
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_free(lock: *mut usize);
 }

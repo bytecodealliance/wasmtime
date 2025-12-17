@@ -564,3 +564,81 @@ pub mod _6_exported_resources;
 /// # fn main() {}
 /// ```
 pub mod _7_async;
+
+/// Example of using [`StoreContextMut`] in imported functions.
+///
+/// This is an example of using the `store` option to the `imports`
+/// configuration of the [`bindgen!`](crate::component::bindgen) macro. Like
+/// seen in previous examples a
+/// [`MyWorldImports`](_8_store_in_imports::MyWorldImports) trait is generated
+/// for `my-world`, but imports that have access to the store get added to a
+/// separate trait with a `*WithStore` suffix, in this case
+/// [`MyWorldImportsWithStore`](_8_store_in_imports::MyWorldImportsWithStore).
+/// This second trait provides access to a [`StoreContextMut`].
+///
+/// [`StoreContextMut`]: crate::StoreContextMut
+///
+/// ```rust
+/// use wasmtime::component::{bindgen, HasData, Access, Accessor};
+/// use wasmtime::{StoreContextMut, AsContextMut};
+///
+#[doc = include_str!("./_8_store_in_imports.rs")]
+///
+/// struct MyState {
+///     // ...
+/// }
+///
+/// impl HasData for MyState {
+///     type Data<'a> = &'a mut MyState;
+/// }
+///
+/// impl MyWorldImportsWithStore for MyState {
+///     /// Synchronous functions that have access to the store are defined in
+///     /// Rust as a normal `fn` with an `Access` as the first parameter.
+///     fn sync_with_store<T>(mut host: Access<'_, T, Self>) {
+///         // The `Access` type implements `AsContextMut` to manipulate and
+///         // operate on the store.
+///         let mut store: StoreContextMut<'_, T> = host.as_context_mut();
+///
+///         // The `Access` type can be used to get the `Data` projection of
+///         // the `HasData` trait implementation above, in this case
+///         // ourselves.
+///         let my_state: &mut MyState = host.get();
+///     }
+///
+///     /// Asynchronous functions that have access to the store are defined in
+///     /// Rust as an `async fn` with an `Accessor` as the first parameter.
+///     async fn async_with_store<T>(accessor: &Accessor<T, Self>) {
+///         // The `Accessor` type does not implement `AsContextMut` directly
+///         // and instead represents the ability to, synchronously, work with
+///         // the store. Notably borrows into the store or `Self` cannot be
+///         // persisted across await points
+///         accessor.with(|mut access| {
+///             // same as `sync_with_store` above
+///             let mut store: StoreContextMut<'_, T> = access.as_context_mut();
+///             let my_state: &mut MyState = access.get();
+///
+///             // ...
+///         });
+///
+///         some_function().await;
+/// #       async fn some_function() {}
+///
+///         accessor.with(|mut access| {
+///             // ...
+///         });
+///     }
+/// }
+///
+/// // Functions that don't have access to the store are defined with
+/// // `&mut self` indicating that they can only access data in `self`, not the
+/// // entire store.
+/// impl MyWorldImports for MyState {
+///     fn sync_without_store(&mut self) { /* ... */ }
+///     async fn async_without_store(&mut self) { /* ... */ }
+/// }
+///
+/// # fn main() {}
+/// ```
+#[cfg(feature = "component-model-async")]
+pub mod _8_store_in_imports;

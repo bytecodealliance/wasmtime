@@ -16,9 +16,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   movz x1, #1
-;   mov x2, sp
-;   str x1, [x2]
+;   movz x0, #1
+;   str x0, [sp]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -29,9 +28,8 @@ block0:
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x1, #1
-;   mov x2, sp
-;   str x1, [x2]
+;   mov x0, #1
+;   stur x0, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -51,9 +49,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   movz x1, #1
-;   mov x2, sp
-;   str x1, [x2]
+;   movz x0, #1
+;   str x0, [sp]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -64,9 +61,8 @@ block0:
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x1, #1
-;   mov x2, sp
-;   str x1, [x2]
+;   mov x0, #1
+;   stur x0, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

@@ -65,7 +65,7 @@ impl<'a> Disassembler<'a> {
         self
     }
 
-    /// Whether to include branche tables in the disassembly.
+    /// Whether to include branch tables in the disassembly.
     ///
     /// True by default.
     pub fn br_tables(&mut self, enable: bool) -> &mut Self {

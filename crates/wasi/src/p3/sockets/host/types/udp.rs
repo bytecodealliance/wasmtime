@@ -30,39 +30,6 @@ fn get_socket_mut<'a>(
 }
 
 impl HostUdpSocketWithStore for WasiSockets {
-    async fn bind<T>(
-        store: &Accessor<T, Self>,
-        socket: Resource<UdpSocket>,
-        local_address: IpSocketAddress,
-    ) -> SocketResult<()> {
-        let local_address = SocketAddr::from(local_address);
-        if !is_addr_allowed(store, local_address, SocketAddrUse::UdpBind).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
-            socket.bind(local_address)?;
-            socket.finish_bind()?;
-            Ok(())
-        })
-    }
-
-    async fn connect<T>(
-        store: &Accessor<T, Self>,
-        socket: Resource<UdpSocket>,
-        remote_address: IpSocketAddress,
-    ) -> SocketResult<()> {
-        let remote_address = SocketAddr::from(remote_address);
-        if !is_addr_allowed(store, remote_address, SocketAddrUse::UdpConnect).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
-            socket.connect(remote_address)?;
-            Ok(())
-        })
-    }
-
     async fn send<T>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
@@ -103,6 +70,35 @@ impl HostUdpSocketWithStore for WasiSockets {
 }
 
 impl HostUdpSocket for WasiSocketsCtxView<'_> {
+    async fn bind(
+        &mut self,
+        socket: Resource<UdpSocket>,
+        local_address: IpSocketAddress,
+    ) -> SocketResult<()> {
+        let local_address = SocketAddr::from(local_address);
+        if !(self.ctx.socket_addr_check)(local_address, SocketAddrUse::UdpBind).await {
+            return Err(ErrorCode::AccessDenied.into());
+        }
+        let socket = get_socket_mut(self.table, &socket)?;
+        socket.bind(local_address)?;
+        socket.finish_bind()?;
+        Ok(())
+    }
+
+    async fn connect(
+        &mut self,
+        socket: Resource<UdpSocket>,
+        remote_address: IpSocketAddress,
+    ) -> SocketResult<()> {
+        let remote_address = SocketAddr::from(remote_address);
+        if !(self.ctx.socket_addr_check)(remote_address, SocketAddrUse::UdpConnect).await {
+            return Err(ErrorCode::AccessDenied.into());
+        }
+        let socket = get_socket_mut(self.table, &socket)?;
+        socket.connect(remote_address)?;
+        Ok(())
+    }
+
     fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<UdpSocket>> {
         let socket = UdpSocket::new(self.ctx, address_family.into())?;
         self.table

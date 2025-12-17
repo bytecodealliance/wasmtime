@@ -18,8 +18,7 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-linking
 
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
-static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes,
-                          const char *file);
+static void read_wat_file(wasm_byte_vec_t *bytes, const char *file);
 
 int main() {
   // Set up our context
@@ -30,8 +29,8 @@ int main() {
   wasmtime_context_t *context = wasmtime_store_context(store);
 
   wasm_byte_vec_t linking1_wasm, linking2_wasm;
-  read_wat_file(engine, &linking1_wasm, "examples/linking1.wat");
-  read_wat_file(engine, &linking2_wasm, "examples/linking2.wat");
+  read_wat_file(&linking1_wasm, "examples/linking1.wat");
+  read_wat_file(&linking2_wasm, "examples/linking2.wat");
 
   // Compile our two modules
   wasmtime_error_t *error;
@@ -106,8 +105,7 @@ int main() {
   return 0;
 }
 
-static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes,
-                          const char *filename) {
+static void read_wat_file(wasm_byte_vec_t *bytes, const char *filename) {
   wasm_byte_vec_t wat;
   // Load our input file to parse it next
   FILE *file = fopen(filename, "r");

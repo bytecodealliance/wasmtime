@@ -21,11 +21,11 @@ pub enum DiscriminantSize {
 impl DiscriminantSize {
     /// Calculate the size of discriminant needed to represent a variant with the specified number of cases.
     pub const fn from_count(count: usize) -> Option<Self> {
-        if count <= 0xFF {
+        if count <= 1 << 8 {
             Some(Self::Size1)
-        } else if count <= 0xFFFF {
+        } else if count <= 1 << 16 {
             Some(Self::Size2)
-        } else if count <= 0xFFFF_FFFF {
+        } else if count as u64 <= 1 << 32 {
             Some(Self::Size4)
         } else {
             None

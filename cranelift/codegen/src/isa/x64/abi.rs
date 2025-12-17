@@ -33,13 +33,12 @@ impl X64ABIMachineSpec {
             // See: https://github.com/bytecodealliance/wasmtime/issues/7454
             insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
 
-            // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
-            // so store the stack pointer. Any register will do, since the stack is undefined at this point
-            insts.push(Inst::store(
-                I32,
-                regs::rsp(),
-                Amode::imm_reg(0, regs::rsp()),
-            ));
+            // Touch the current page by storing an immediate zero.
+            // mov  [rsp], 0
+            insts.push(Inst::External {
+                inst: asm::inst::movl_mi::new(Amode::imm_reg(0, regs::rsp()), 0i32.cast_unsigned())
+                    .into(),
+            });
         }
 
         // Restore the stack pointer to its original value
@@ -101,6 +100,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_fastcall = call_conv == CallConv::WindowsFastcall;
+        let is_tail = call_conv == CallConv::Tail;
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
@@ -181,6 +181,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             //   This is consistent with LLVM's behavior, and is needed for
             //   some uses of Cranelift (e.g., the rustc backend).
             //
+            // - Otherwise, if the calling convention is Tail, we behave as in
+            //   the previous case, even if `enable_llvm_abi_extensions` is not
+            //   set in the flags: This is a custom calling convention defined
+            //   by Cranelift, LLVM doesn't know about it.
+            //
             // - Otherwise, both SysV and Fastcall specify behavior (use of
             //   vector register, a register pair, or passing by reference
             //   depending on the case), but for simplicity, we will just panic if
@@ -194,6 +199,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             if param.value_type.bits() > 64
                 && !(param.value_type.is_vector() || param.value_type.is_float())
                 && !flags.enable_llvm_abi_extensions()
+                && !is_tail
             {
                 panic!(
                     "i128 args/return values not supported unless LLVM ABI extensions are enabled"
@@ -849,6 +855,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             callee_conv: call_conv,
             caller_conv: call_conv,
             try_call_info: None,
+            patchable: false,
         })));
         insts
     }
@@ -880,11 +887,20 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        match call_conv_of_callee {
-            CallConv::Winch => ALL_CLOBBERS,
-            CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
-            CallConv::Tail if is_exception => ALL_CLOBBERS,
-            _ => SYSV_CLOBBERS,
+        match (call_conv_of_callee, is_exception) {
+            (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, _) => ALL_CLOBBERS,
+            (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
+            (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
+            (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
+            (_, false) => SYSV_CLOBBERS,
+            (call_conv, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
     }
 
@@ -900,7 +916,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-        _is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -913,7 +929,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `winch` calling convention doesn't have any callee-save
             // registers.
             CallConv::Winch => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::Tail => regs
+            CallConv::Fast | CallConv::SystemV | CallConv::Tail => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -923,6 +939,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
+            // The `preserve_all` calling convention makes every reg a callee-save reg.
+            CallConv::PreserveAll => regs.iter().cloned().collect(),
             CallConv::Probestack => todo!("probestack?"),
             CallConv::AppleAarch64 => unreachable!(),
         };
@@ -947,6 +965,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            function_calls,
         }
     }
 
@@ -960,7 +979,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::rax(), regs::rdx()];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -1063,7 +1084,7 @@ fn get_intreg_for_retval(
             // NB: `r15` is reserved as a scratch register.
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             2 if flags.enable_llvm_abi_extensions() => Some(regs::rcx()),
@@ -1094,7 +1115,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             7 => Some(regs::xmm7()),
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
@@ -1110,14 +1131,15 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
 }
 
 fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
-    use regs::*;
+    use asm::gpr::enc::*;
+
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            RBX | RBP | R12 | R13 | R14 => true,
             // R15 is the pinned register; if we're using it that way,
             // it is effectively globally-allocated, and is not
             // callee-saved.
-            ENC_R15 => !enable_pinned_reg,
+            R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => false,
@@ -1126,16 +1148,18 @@ fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
 }
 
 fn is_callee_save_fastcall(r: RealReg, enable_pinned_reg: bool) -> bool {
-    use regs::*;
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_RSI | ENC_RDI | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            RBX | RBP | RSI | RDI | R12 | R13 | R14 => true,
             // See above for SysV: we must treat the pinned reg specially.
-            ENC_R15 => !enable_pinned_reg,
+            R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => match r.hw_enc() {
-            6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => true,
+            XMM6 | XMM7 | XMM8 | XMM9 | XMM10 | XMM11 | XMM12 | XMM13 | XMM14 | XMM15 => true,
             _ => false,
         },
         RegClass::Vector => unreachable!(),
@@ -1162,86 +1186,96 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
 pub(crate) const ALL_CLOBBERS: PRegSet = all_clobbers();
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 const fn windows_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
 }
 
 const fn sysv_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_RSI))
-        .with(regs::gpr_preg(regs::ENC_RDI))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
-        .with(regs::fpr_preg(6))
-        .with(regs::fpr_preg(7))
-        .with(regs::fpr_preg(8))
-        .with(regs::fpr_preg(9))
-        .with(regs::fpr_preg(10))
-        .with(regs::fpr_preg(11))
-        .with(regs::fpr_preg(12))
-        .with(regs::fpr_preg(13))
-        .with(regs::fpr_preg(14))
-        .with(regs::fpr_preg(15))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(RSI))
+        .with(regs::gpr_preg(RDI))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
+        .with(regs::fpr_preg(XMM6))
+        .with(regs::fpr_preg(XMM7))
+        .with(regs::fpr_preg(XMM8))
+        .with(regs::fpr_preg(XMM9))
+        .with(regs::fpr_preg(XMM10))
+        .with(regs::fpr_preg(XMM11))
+        .with(regs::fpr_preg(XMM12))
+        .with(regs::fpr_preg(XMM13))
+        .with(regs::fpr_preg(XMM14))
+        .with(regs::fpr_preg(XMM15))
 }
 
 /// For calling conventions that clobber all registers.
 const fn all_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_RBX))
-        .with(regs::gpr_preg(regs::ENC_RSI))
-        .with(regs::gpr_preg(regs::ENC_RDI))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::gpr_preg(regs::ENC_R12))
-        .with(regs::gpr_preg(regs::ENC_R13))
-        .with(regs::gpr_preg(regs::ENC_R14))
-        .with(regs::gpr_preg(regs::ENC_R15))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
-        .with(regs::fpr_preg(6))
-        .with(regs::fpr_preg(7))
-        .with(regs::fpr_preg(8))
-        .with(regs::fpr_preg(9))
-        .with(regs::fpr_preg(10))
-        .with(regs::fpr_preg(11))
-        .with(regs::fpr_preg(12))
-        .with(regs::fpr_preg(13))
-        .with(regs::fpr_preg(14))
-        .with(regs::fpr_preg(15))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(RBX))
+        .with(regs::gpr_preg(RSI))
+        .with(regs::gpr_preg(RDI))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::gpr_preg(R12))
+        .with(regs::gpr_preg(R13))
+        .with(regs::gpr_preg(R14))
+        .with(regs::gpr_preg(R15))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
+        .with(regs::fpr_preg(XMM6))
+        .with(regs::fpr_preg(XMM7))
+        .with(regs::fpr_preg(XMM8))
+        .with(regs::fpr_preg(XMM9))
+        .with(regs::fpr_preg(XMM10))
+        .with(regs::fpr_preg(XMM11))
+        .with(regs::fpr_preg(XMM12))
+        .with(regs::fpr_preg(XMM13))
+        .with(regs::fpr_preg(XMM14))
+        .with(regs::fpr_preg(XMM15))
 }
 
 fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {

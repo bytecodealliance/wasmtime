@@ -11,6 +11,7 @@
 #include <string>
 #include <variant>
 #include <wasmtime/error.h>
+#include <wasmtime/helpers.hh>
 
 namespace wasmtime {
 
@@ -23,17 +24,7 @@ class Trace;
  * description of the error that occurred.
  */
 class Error {
-  struct deleter {
-    void operator()(wasmtime_error_t *p) const { wasmtime_error_delete(p); }
-  };
-
-  std::unique_ptr<wasmtime_error_t, deleter> ptr;
-
-public:
-  /// \brief Creates an error from the raw C API representation
-  ///
-  /// Takes ownership of the provided `error`.
-  Error(wasmtime_error_t *error) : ptr(error) {}
+  WASMTIME_OWN_WRAPPER(Error, wasmtime_error);
 
   /// \brief Creates an error with the provided message.
   Error(const std::string &s) : ptr(wasmtime_error_new(s.c_str())) {}
@@ -61,9 +52,6 @@ public:
   ///
   /// Note that the `trace` cannot outlive this error object.
   Trace trace() const;
-
-  /// Release ownership of this error, acquiring the underlying C raw pointer.
-  wasmtime_error_t *release() { return ptr.release(); }
 };
 
 /// \brief Used to print an error.
@@ -101,6 +89,16 @@ public:
   T &&ok() { return std::get<T>(std::move(data)); }
   /// \brief Returns the success, if present, aborts if this is an error.
   const T &&ok() const { return std::get<T>(std::move(data)); }
+
+  /// \brief Returns the success, if present, aborts if this is an error.
+  T &ok_ref() { return std::get<T>(data); }
+  /// \brief Returns the success, if present, aborts if this is an error.
+  const T &ok_ref() const { return std::get<T>(data); }
+
+  /// \brief Returns the error, if present, aborts if this is not an error.
+  E &err_ref() { return std::get<T>(data); }
+  /// \brief Returns the error, if present, aborts if this is not an error.
+  const E &err_ref() const { return std::get<T>(data); }
 
   /// \brief Returns the success, if present, aborts if this is an error.
   T unwrap() {

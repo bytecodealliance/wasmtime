@@ -1351,15 +1351,14 @@
 ;; Note that bitwise negation is implemented here as
 ;;
 ;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
-(rule bnot_base_case -1 (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule bnot_base_case -3 (lower (has_type (fits_in_64 ty) (bnot x)))
       (orr_not ty (zero_reg) x))
 
-;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
-;; value.
-(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
-                       (bnot (ishl x (iconst k)))))
-      (if-let amt (lshl_from_imm64 ty k))
-      (orr_not_shift ty (zero_reg) x amt))
+;; Implementation of `bnot` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bnot x))) 
+      (not x (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bnot x))) 
+      (not x (vector_size ty)))
 
 ;; Implementation of `bnot` for `i128`.
 (rule (lower (has_type $I128 (bnot x)))
@@ -1370,9 +1369,12 @@
             (new_hi Reg (orr_not $I64 (zero_reg) x_hi)))
         (value_regs new_lo new_hi)))
 
-;; Implementation of `bnot` for vector types.
-(rule -2 (lower (has_type (ty_vec128 ty) (bnot x)))
-      (not x (vector_size ty)))
+;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
+;; value.
+(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
+                       (bnot (ishl x (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
+      (orr_not_shift ty (zero_reg) x amt))
 
 ;; Special-cases for fusing a bnot with bxor
 (rule 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
@@ -1381,13 +1383,19 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
+(rule band_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
       (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
 
-(rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (band x y)))
+      (and_vec x y (float_vector_size_in_64 ty)))
 
-(rule -2 (lower (has_type (ty_vec128 ty) (band x y)))
+;; Implementation of `band` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (band x y))) 
       (and_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (band x y))) 
+      (and_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
@@ -1400,20 +1408,31 @@
 (rule 3 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (band (bnot y) x))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
-(rule 5 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+(rule 5 (lower (has_type (ty_vec64 ty) (band x (bnot y))))
       (bic_vec x y (vector_size ty)))
-(rule 6 (lower (has_type (ty_vec128 ty) (band (bnot y) x)))
+(rule 6 (lower (has_type (ty_vec64 ty) (band (bnot y) x)))
+      (bic_vec x y (vector_size ty)))
+
+(rule 7 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+      (bic_vec x y (vector_size ty)))
+(rule 8 (lower (has_type (ty_vec128 ty) (band (bnot y) x)))
       (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bor_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule bor_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (bor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y))
 
-(rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bor x y)))
+      (orr_vec x y (float_vector_size_in_64 ty)))
 
-(rule -2 (lower (has_type (ty_vec128 ty) (bor x y)))
+;; Implementation of `bor` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bor x y))) 
       (orr_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bor x y))) 
+      (orr_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
@@ -1425,6 +1444,17 @@
 
 (rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (bor (bnot y) x))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
+
+(rule bor_not_right_vec64 5 (lower (has_type (ty_vec64 ty) (bor x (bnot y)))) 
+      (orn_vec x y (vector_size ty)))
+(rule bor_not_left_vec64 6 (lower (has_type (ty_vec64 ty) (bor (bnot y) x))) 
+      (orn_vec x y (vector_size ty)))
+
+(rule bor_not_right_vec128 7 (lower (has_type (ty_vec128 ty) (bor x (bnot y)))) 
+      (orn_vec x y (vector_size ty)))
+(rule bor_not_left_vec128 8 (lower (has_type (ty_vec128 ty) (bor (bnot y) x))) 
+      (orn_vec x y (vector_size ty)))
+
 
 ;; Specialized lowerings to generate the `extr` instruction.
 ;;
@@ -1448,13 +1478,19 @@
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bxor_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule bxor_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
-(rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bxor x y))) 
+      (eor_vec x y (float_vector_size_in_64 ty)))
 
-(rule -2 (lower (has_type (ty_vec128 ty) (bxor x y)))
+;; Implementation of `bxor` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bxor x y))) 
       (eor_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bxor x y))) 
+      (eor_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
 ;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
@@ -2484,13 +2520,13 @@
 
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (func_addr (func_ref_data _ extname _)))
-      (load_ext_name (box_external_name extname) 0))
+(rule (lower (func_addr (func_ref_data _ extname dist _)))
+      (load_ext_name (box_external_name extname) 0 dist))
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (symbol_value (symbol_value_data extname _ offset)))
-      (load_ext_name (box_external_name extname) offset))
+(rule (lower (symbol_value (symbol_value_data extname dist offset)))
+      (load_ext_name (box_external_name extname) offset dist))
 
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 
@@ -2506,22 +2542,22 @@
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
             (_ Unit (emit_side_effect (call_impl info))))
         output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (call (func_ref_data sig_ref name _) args))
+(rule (lower (call (func_ref_data sig_ref name dist false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
             (_ Unit (emit_side_effect (call_ind_impl info))))
         output))
@@ -2540,21 +2576,21 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist false) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
         (emit_side_effect (call_ind_impl info))))
 
@@ -2578,17 +2614,17 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (return_call (func_ref_data sig_ref name _) args))
+(rule (lower (return_call (func_ref_data sig_ref name dist false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
         (side_effect (return_call_ind_impl info))))
 
@@ -3238,3 +3274,15 @@
                   (emit_island (targets_jt_space targets))))
             (ridx Reg (put_in_reg_zext32 idx)))
        (br_table_impl jt_size ridx default targets)))
+
+;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_exception_handler_address (u64_from_imm64 idx) block))
+      (let ((succ_label MachLabel (block_exn_successor_label block idx)))
+        (a64_label_address succ_label)))
+
+;; Rules for `sequence_point` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sequence_point))
+      (side_effect
+       (a64_sequence_point)))

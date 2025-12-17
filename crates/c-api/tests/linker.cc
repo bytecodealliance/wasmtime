@@ -72,3 +72,37 @@ TEST(Linker, CallableCopy) {
   CallableFunc cf;
   linker.func_new("a", "f", FuncType({}, {}), cf).unwrap();
 }
+
+TEST(Linker, DefineUnknownImportsAsTraps) {
+  Engine engine;
+  Linker linker(engine);
+  Store store(engine);
+  Module mod =
+      Module::compile(
+          engine,
+          "(module (import \"\" \"\" (func)) (func (export \"x\") call 0))")
+          .unwrap();
+  linker.define_unknown_imports_as_traps(mod).unwrap();
+
+  auto instance = linker.instantiate(store.context(), mod).unwrap();
+  Func f = std::get<Func>(*instance.get(store.context(), "x"));
+  TrapError err = f.call(store.context(), {}).err();
+  std::get<Error>(err.data);
+}
+
+TEST(Linker, DefineUnknownImportsAsDefaultValues) {
+  Engine engine;
+  Linker linker(engine);
+  Store store(engine);
+  Module mod =
+      Module::compile(
+          engine,
+          "(module (import \"\" \"\" (func)) (func (export \"x\") call 0))")
+          .unwrap();
+  linker.define_unknown_imports_as_default_values(store.context(), mod)
+      .unwrap();
+
+  auto instance = linker.instantiate(store.context(), mod).unwrap();
+  Func f = std::get<Func>(*instance.get(store.context(), "x"));
+  f.call(store.context(), {}).unwrap();
+}

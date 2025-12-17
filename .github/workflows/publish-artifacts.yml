@@ -40,13 +40,21 @@ jobs:
       with:
         subject-path: 'dist/*'
 
-    - run: npm install --production
-      working-directory: .github/actions/github-release
-    - name: Publish Release
-      uses: ./.github/actions/github-release
-      with:
-        files: "dist/*"
-        token: ${{ github.token }}
+    - if: github.ref_name == 'main'
+      run: |
+          git tag -f dev
+          git push origin dev:dev -f
+          gh release create dev --prerelease dist/* ||
+            gh release upload dev --clobber dist/*
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - if: github.ref_name != 'main'
+      run: |
+        sed '/---------------/Q' RELEASES.md > relnotes.md
+        gh release create ${{ github.ref_name }} --notes-file relnotes.md dist/*
+      env:
+        GH_TOKEN: ${{ github.token }}
       continue-on-error: true
 
   # See https://github.com/actions/deploy-pages

@@ -1,0 +1,32 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %test1(i8, i8) -> i8 {
+block0(v0: i8, v2: i8):
+    v1 = bnot v0
+    v3 = bnot v2
+    v4 = icmp ult v1, v3
+    return v4
+}
+
+; function %test1(i8, i8) -> i8 fast {
+; block0(v0: i8, v2: i8):
+;     v5 = icmp ugt v0, v2
+;     return v5
+; }
+
+function %test1(i8, i8) -> i8 {
+block0(v0: i8, v2: i8):
+    v1 = bnot v0
+    v3 = bnot v2
+    v4 = icmp slt v1, v3
+    return v4
+}
+
+; function %test1(i8, i8) -> i8 fast {
+; block0(v0: i8, v2: i8):
+;     v5 = icmp sgt v0, v2
+;     return v5
+; }
+

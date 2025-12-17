@@ -1,9 +1,45 @@
 use crate::p3::bindings::http::types::{ErrorCode, Method, Scheme};
 use core::convert::Infallible;
+use core::error::Error as _;
+use tracing::warn;
 
 impl From<Infallible> for ErrorCode {
     fn from(x: Infallible) -> Self {
         match x {}
+    }
+}
+
+impl ErrorCode {
+    /// Translate a [`hyper::Error`] to a wasi-http [ErrorCode] in the context of a request.
+    pub fn from_hyper_request_error(err: hyper::Error) -> Self {
+        // If there's a source, we might be able to extract a wasi-http error from it.
+        if let Some(cause) = err.source() {
+            if let Some(err) = cause.downcast_ref::<Self>() {
+                return err.clone();
+            }
+        }
+
+        warn!("hyper request error: {err:?}");
+
+        Self::HttpProtocolError
+    }
+
+    /// Translate a [`hyper::Error`] to a wasi-http [ErrorCode] in the context of a response.
+    pub(crate) fn from_hyper_response_error(err: hyper::Error) -> Self {
+        if err.is_timeout() {
+            return ErrorCode::HttpResponseTimeout;
+        }
+
+        // If there's a source, we might be able to extract a wasi-http error from it.
+        if let Some(cause) = err.source() {
+            if let Some(err) = cause.downcast_ref::<Self>() {
+                return err.clone();
+            }
+        }
+
+        warn!("hyper response error: {err:?}");
+
+        ErrorCode::HttpProtocolError
     }
 }
 

@@ -42,7 +42,6 @@ where
     // unsafe operations are commented below.
     unsafe {
         Instance::enter_host_from_wasm(caller_vmctx, |store, instance| {
-            let instance = instance.id();
             // SAFETY: this function itself requires that the `vmctx` is valid to
             // use here.
             let state = {

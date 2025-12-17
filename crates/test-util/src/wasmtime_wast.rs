@@ -40,6 +40,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         component_model_async,
         component_model_async_builtins,
         component_model_async_stackful,
+        component_model_threading,
         component_model_error_context,
         component_model_gc,
         nan_canonicalization,
@@ -47,6 +48,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         exceptions,
         legacy_exceptions,
         stack_switching,
+        custom_descriptors,
 
         hogs_memory: _,
         gc_types: _,
@@ -67,6 +69,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let component_model_async = component_model_async.unwrap_or(false);
     let component_model_async_builtins = component_model_async_builtins.unwrap_or(false);
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
+    let component_model_threading = component_model_threading.unwrap_or(false);
     let component_model_error_context = component_model_error_context.unwrap_or(false);
     let component_model_gc = component_model_gc.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
@@ -85,6 +88,9 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
 
     let exceptions = stack_switching || exceptions.unwrap_or(false);
 
+    // Not implemented in Wasmtime yet.
+    let _custom_descriptors = custom_descriptors.unwrap_or(false);
+
     config
         .wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
@@ -102,6 +108,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_async(component_model_async)
         .wasm_component_model_async_builtins(component_model_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
+        .wasm_component_model_threading(component_model_threading)
         .wasm_component_model_error_context(component_model_error_context)
         .wasm_component_model_gc(component_model_gc)
         .wasm_exceptions(exceptions)

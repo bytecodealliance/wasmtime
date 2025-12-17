@@ -1,0 +1,71 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %fold_xor_xor11(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bxor v0, v1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; function %fold_xor_xor11(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     return v0
+; }
+
+
+
+function %fold_xor_xor12(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = bxor v0, v1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; function %fold_xor_xor12(i16, i16) -> i16 fast {
+; block0(v0: i16, v1: i16):
+;     return v0
+; }
+
+
+
+function %fold_xor_xor13(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; function %fold_xor_xor13(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v0
+; }
+
+
+
+function %fold_xor_xor14(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bxor v0, v1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; function %fold_xor_xor14(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     return v0
+; }
+
+
+function %fold_xor_xor15(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bxor v0, v1
+    v3 = bxor v1, v2
+    return v3
+}
+
+; function %fold_xor_xor15(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     return v0
+; }
+

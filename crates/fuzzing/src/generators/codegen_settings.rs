@@ -120,7 +120,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"bmi2" => clif:"has_bmi2",
                     std:"lzcnt" => clif:"has_lzcnt",
 
-                    // not a lot of of cpus support avx512 so these are weighted
+                    // not a lot of cpus support avx512 so these are weighted
                     // to get enabled much less frequently.
                     std:"avx512bitalg" => clif:"has_avx512bitalg" ratio:1 in 1000,
                     std:"avx512dq" => clif:"has_avx512dq" ratio: 1 in 1000,

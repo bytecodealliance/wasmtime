@@ -5,7 +5,7 @@ use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCa
 use crate::sync::OnceLock;
 use crate::{
     Engine,
-    code::CodeObject,
+    code::EngineCode,
     code_memory::CodeMemory,
     instantiate::CompiledModule,
     resources::ResourcesRequired,
@@ -18,10 +18,14 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
+#[cfg(feature = "debug")]
+use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
-    CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
-    VMSharedTypeIndex,
+    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
+    TypeTrace, VMOffsets, VMSharedTypeIndex,
 };
+#[cfg(feature = "gc")]
+use wasmtime_unwinder::ExceptionTable;
 mod registry;
 
 pub use registry::*;
@@ -140,7 +144,7 @@ struct ModuleInner {
     /// Note that this `Arc` is used to share information between compiled
     /// modules within a component. For bare core wasm modules created with
     /// `Module::new`, for example, this is a uniquely owned `Arc`.
-    code: Arc<CodeObject>,
+    code: Arc<EngineCode>,
 
     /// A set of initialization images for memories, if any.
     ///
@@ -493,13 +497,13 @@ impl Module {
     pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
-        info_and_types: Option<(CompiledModuleInfo, ModuleTypes)>,
+        info_and_types: Option<(CompiledModuleInfo, CompiledFunctionsTable, ModuleTypes)>,
     ) -> Result<Self> {
         // Acquire this module's metadata and type information, deserializing
         // it from the provided artifact if it wasn't otherwise provided
         // already.
-        let (mut info, mut types) = match info_and_types {
-            Some((info, types)) => (info, types),
+        let (mut info, index, mut types) = match info_and_types {
+            Some((info, index, types)) => (info, index, types),
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
 
@@ -514,20 +518,21 @@ impl Module {
         let signatures =
             engine.register_and_canonicalize_types(&mut types, core::iter::once(&mut info.module));
 
-        // Package up all our data into a `CodeObject` and delegate to the final
+        // Package up all our data into an `EngineCode` and delegate to the final
         // step of module compilation.
-        let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
-        Module::from_parts_raw(engine, code, info, true)
+        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into()));
+        let index = Arc::new(index);
+        Module::from_parts_raw(engine, code, info, index, true)
     }
 
     pub(crate) fn from_parts_raw(
         engine: &Engine,
-        code: Arc<CodeObject>,
+        code: Arc<EngineCode>,
         info: CompiledModuleInfo,
+        index: Arc<CompiledFunctionsTable>,
         serializable: bool,
     ) -> Result<Self> {
-        let module =
-            CompiledModule::from_artifacts(code.code_memory().clone(), info, engine.profiler())?;
+        let module = CompiledModule::from_artifacts(code.clone(), info, index, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());
@@ -626,14 +631,14 @@ impl Module {
         if !self.inner.serializable {
             bail!("cannot serialize a module exported from a component");
         }
-        Ok(self.compiled_module().mmap().to_vec())
+        Ok(self.engine_code().image().to_vec())
     }
 
     pub(crate) fn compiled_module(&self) -> &CompiledModule {
         &self.inner.module
     }
 
-    pub(crate) fn code_object(&self) -> &Arc<CodeObject> {
+    pub(crate) fn engine_code(&self) -> &Arc<EngineCode> {
         &self.inner.code
     }
 
@@ -963,8 +968,14 @@ impl Module {
     ///
     /// It is not safe to modify the memory in this range, nor is it safe to
     /// modify the protections of memory in this range.
+    ///
+    /// Note that depending on the engine configuration, this image
+    /// range may not actually be the code that is directly executed.
     pub fn image_range(&self) -> Range<*const u8> {
-        self.compiled_module().mmap().image_range()
+        let range = self.engine_code().text_range();
+        let start = range.start.raw() as *const u8;
+        let end = range.end.raw() as *const u8;
+        start..end
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
@@ -1033,17 +1044,15 @@ impl Module {
     /// ```
     pub fn address_map<'a>(&'a self) -> Option<impl Iterator<Item = (usize, Option<u32>)> + 'a> {
         Some(
-            wasmtime_environ::iterate_address_map(
-                self.code_object().code_memory().address_map_data(),
-            )?
-            .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
+            wasmtime_environ::iterate_address_map(self.engine_code().address_map_data())?
+                .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
         )
     }
 
     /// Get this module's code object's `.text` section, containing its compiled
     /// executable code.
     pub fn text(&self) -> &[u8] {
-        self.code_object().code_memory().text()
+        self.engine_code().text()
     }
 
     /// Get information about functions in this module's `.text` section: their
@@ -1052,7 +1061,7 @@ impl Module {
     /// Results are yielded in a ModuleFunction struct.
     pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
         let module = self.compiled_module();
-        module.finished_functions().map(|(idx, _)| {
+        self.env_module().defined_func_indices().map(|idx| {
             let loc = module.func_loc(idx);
             let idx = module.module().func_index(idx);
             ModuleFunction {
@@ -1074,6 +1083,11 @@ impl Module {
 
     /// Return the address, in memory, of the trampoline that allows Wasm to
     /// call a array function of the given signature.
+    ///
+    /// Note that unlike all other code-pointer-returning functions,
+    /// this *can* be present on `Module` (without a `StoreCode`)
+    /// because we can execute the `EngineCode` for trampolines that
+    /// leave the store to call the host.
     pub(crate) fn wasm_to_array_trampoline(
         &self,
         signature: VMSharedTypeIndex,
@@ -1104,6 +1118,7 @@ impl Module {
         let ptr = self
             .compiled_module()
             .wasm_to_array_trampoline(trampoline_module_ty)
+            .expect("always have a trampoline for the trampoline type")
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();
@@ -1119,12 +1134,43 @@ impl Module {
         Ok(images)
     }
 
-    /// Lookup the stack map at a program counter value.
+    /// Obtain an exception-table parser on this module's exception metadata.
     #[cfg(feature = "gc")]
-    pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<wasmtime_environ::StackMap<'_>> {
-        let text_offset = u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap();
-        let info = self.inner.code.code_memory().stack_map_data();
-        wasmtime_environ::StackMap::lookup(text_offset, info)
+    pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
+        ExceptionTable::parse(self.inner.code.exception_tables())
+            .expect("Exception tables were validated on module load")
+    }
+
+    /// Obtain a frame-table parser on this module's frame state slot
+    /// (debug instrumentation) metadata.
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table<'a>(&'a self) -> Option<FrameTable<'a>> {
+        let data = self.inner.code.frame_tables();
+        if data.is_empty() {
+            None
+        } else {
+            let orig_text = self.inner.code.text();
+            Some(
+                FrameTable::parse(data, orig_text)
+                    .expect("Frame tables were validated on module load"),
+            )
+        }
+    }
+
+    /// Is this `Module` the same as another?
+    ///
+    /// Ordinarily, module identity does not matter: a Wasmtime user
+    /// will create or obtain a module from some source and
+    /// instantiate it, and any two `Module` objects created from the
+    /// same source module are interchangeable. However, introspecting
+    /// module identity may be useful when examining Wasm VM state,
+    /// e.g. via debug APIs. It is guaranteed that `Module::same`
+    /// returns true for `Module` objects that reference the same
+    /// underlying module (e.g., one created via a `clone` of the
+    /// other).
+    #[inline]
+    pub fn same(a: &Module, b: &Module) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
     }
 }
 
@@ -1176,7 +1222,7 @@ fn memory_images(inner: &Arc<ModuleInner>) -> Result<Option<ModuleMemoryImages>>
     ModuleMemoryImages::new(
         &inner.engine,
         inner.module.module(),
-        inner.code.code_memory(),
+        inner.code.module_memory_image_source(),
     )
 }
 

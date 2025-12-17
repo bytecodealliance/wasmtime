@@ -1,0 +1,138 @@
+name: Release
+on:
+  push:
+    branches: [main]
+    tags-ignore: [dev]
+  pull_request:
+defaults:
+  run:
+    shell: bash
+
+permissions: write-all
+
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+          target: x86_64-apple-darwin
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+        - build: aarch64-linux
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+        - build: s390x-linux
+          os: ubuntu-latest
+          target: s390x-unknown-linux-gnu
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/binary-compatible-builds
+      with:
+        name: ${{ matrix.build }}
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
+
+    # Build `wizer` and executables
+    - run: $CENTOS cargo build --release --locked --bin wizer --all-features
+
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: bins-${{ matrix.build }}
+        path: dist
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Download all the artifacts that we'll be publishing. Should keep an eye on
+      # the `download-artifact` repository to see if we can ever get something
+      # like "download all artifacts" or "download this list of artifacts"
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-x86_64-macos
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-aarch64-macos
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-x86_64-windows
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-x86_64-mingw
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-x86_64-linux
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-aarch64-linux
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: bins-s390x-linux
+          path: dist
+
+      - name: Calculate tag name
+        run: |
+          name=dev
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            name=${GITHUB_REF:10}
+          fi
+          echo ::set-output name=val::$name
+          echo TAG=$name >> $GITHUB_ENV
+        id: tagname
+
+      # ... and if this was an actual push (tag or `main`) then we publish a
+      # new release. This'll automatically publish a tag release or update `dev`
+      # with this `sha`. Note that `continue-on-error` is set here so if this hits
+      # a bug we can go back and fetch and upload the release ourselves.
+      - run: cd .github/actions/github-release && npm install --production
+      - name: Publish Release
+        uses: ./.github/actions/github-release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        with:
+          files: "dist/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ steps.tagname.outputs.val }}
+        continue-on-error: true
+      - name: Update npm packages to latest version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        working-directory: ./npm/wizer
+        run: npm install && node update.js "${{ steps.tagname.outputs.val }}"
+      - name: Setup npm auth
+        run: sudo npm config --global set '//registry.npmjs.org/:_authToken'='${NODE_AUTH_TOKEN}'
+      - name: Publish npm packages
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        working-directory: ./npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: for dir in *; do (echo $dir && cd $dir && npm publish); done

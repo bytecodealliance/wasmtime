@@ -137,11 +137,13 @@ impl Config {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_threading,
             component_model_error_context,
             component_model_gc,
             simd,
             exceptions,
-            legacy_exceptions,
+            legacy_exceptions: _,
+            custom_descriptors: _,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -159,9 +161,9 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
-        self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
@@ -284,6 +286,7 @@ impl Config {
             Some(self.module_config.component_model_async_builtins);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_threading = Some(self.module_config.component_model_threading);
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
@@ -305,7 +308,7 @@ impl Config {
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
-        cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);
+        cfg.wasm.shared_memory = Some(self.module_config.shared_memory);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }
@@ -446,6 +449,15 @@ impl Config {
             self.wasmtime.async_config.configure(&mut cfg);
         }
 
+        // Fuzzing on macOS with mach ports seems to sometimes bypass the mach
+        // port handling thread entirely and go straight to asan's or fuzzing's
+        // signal handler. No idea why and for me at least it's just easier to
+        // disable mach ports when fuzzing because there's no need to use that
+        // over signal handlers.
+        if cfg!(target_vendor = "apple") {
+            cfg.macos_use_mach_ports(false);
+        }
+
         return cfg;
     }
 
@@ -461,7 +473,12 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
+        self.configure_store_epoch_and_fuel(store);
+    }
 
+    /// Configures everything unrelated to `T` in a store, such as epochs and
+    /// fuel.
+    pub fn configure_store_epoch_and_fuel<T>(&self, store: &mut Store<T>) {
         // Configure the store to never abort by default, that is it'll have
         // max fuel or otherwise trap on an epoch change but the epoch won't
         // ever change.
@@ -570,7 +587,7 @@ pub struct WasmtimeConfig {
     regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
     canonicalize_nans: bool,
-    interruptable: bool,
+    interruptible: bool,
     pub(crate) consume_fuel: bool,
     pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
@@ -664,6 +681,7 @@ impl WasmtimeConfig {
                 config.config.gc_enabled = false;
                 config.config.tail_call_enabled = false;
                 config.config.reference_types_enabled = false;
+                config.config.exceptions_enabled = false;
                 config.function_references_enabled = false;
 
                 // Winch's SIMD implementations require AVX and AVX2.
@@ -841,13 +859,15 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            // Note: we have disabled `single_pass` for now because of
-            // its limitations w.r.t. exception handling
-            // (https://github.com/bytecodealliance/regalloc2/issues/217). To
-            // avoid breaking all existing fuzzbugs by changing the
-            // `arbitrary` mappings, we keep the `RegallocAlgorithm`
-            // enum as it is and remap here to `Backtracking`.
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+            RegallocAlgorithm::SinglePass => {
+                // FIXME(#11850)
+                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = true;
+                if SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME {
+                    wasmtime::RegallocAlgorithm::Backtracking
+                } else {
+                    wasmtime::RegallocAlgorithm::SinglePass
+                }
+            }
         }
     }
 }

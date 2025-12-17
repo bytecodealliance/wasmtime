@@ -305,3 +305,10 @@
 (rule (simplify (rotl ty x (iconst_u kty k)))
       (if-let false (u64_eq k (u64_and k (ty_shift_mask ty))))
       (rotl ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
+
+(rule (simplify (band ty (ishl ty x z) (ishl ty y z))) (ishl ty (band ty x y) z))
+(rule (simplify (isub ty (ishl ty x z) (ishl ty y z))) (ishl ty (isub ty x y) z))
+(rule (simplify (iadd ty (ishl ty x z) (ishl ty y z))) (ishl ty (iadd ty x y) z))
+
+(rule (simplify (ushr ty (band ty (ishl ty x y) z) y)) (band ty x (ushr ty z y)))
+

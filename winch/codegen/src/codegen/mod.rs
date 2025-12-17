@@ -569,10 +569,7 @@ where
         assert!(self.tunables.table_lazy_init, "unsupported eager init");
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
-        let builtin = self
-            .env
-            .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.table_get_lazy_init_func_ref::<M::ABI>()?;
 
         // Request the builtin's  result register and use it to hold the table
         // element value. We preemptively spill and request this register to
@@ -695,6 +692,8 @@ where
             .can_elide_bounds_check(self.tunables, self.env.page_size_log2);
 
         let addr = if offset_with_access_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX)
+            || (!self.tunables.memory_may_move
+                && offset_with_access_size > self.tunables.memory_reservation)
         {
             // Detect at compile time if the access is out of bounds.
             // Doing so will put the compiler in an unreachable code state,
@@ -706,7 +705,80 @@ where
             self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS)?;
             self.context.reachable = false;
             None
-        } else if !can_elide_bounds_check {
+
+        // Account for the case in which we can completely elide the bounds
+        // checks.
+        //
+        // This case, makes use of the fact that if a memory access uses
+        // a 32-bit index, then we be certain that
+        //
+        //      index <= u32::MAX
+        //
+        // Therefore if any 32-bit index access occurs in the region
+        // represented by
+        //
+        //      bound + guard_size - (offset + access_size)
+        //
+        // We are certain that it's in bounds or that the underlying virtual
+        // memory subsystem will report an illegal access at runtime.
+        //
+        // Note:
+        //
+        // * bound - (offset + access_size) cannot wrap, because it's checked
+        // in the condition above.
+        // * bound + heap.offset_guard_size is guaranteed to not overflow if
+        // the heap configuration is correct, given that it's address must
+        // fit in 64-bits.
+        // * If the heap type is 32-bits, the offset is at most u32::MAX, so
+        // no  adjustment is needed as part of
+        // [bounds::ensure_index_and_offset].
+        } else if can_elide_bounds_check
+            && u64::from(u32::MAX)
+                <= self.tunables.memory_reservation + self.tunables.memory_guard_size
+                    - offset_with_access_size
+        {
+            assert!(can_elide_bounds_check);
+            assert!(heap.index_type() == WasmValType::I32);
+            let addr = self.context.any_gpr(self.masm)?;
+            bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size)?;
+            Some(addr)
+
+        // Account for the case of a static memory size. The access is out
+        // of bounds if:
+        //
+        // index > bound - (offset + access_size)
+        //
+        // bound - (offset + access_size) cannot wrap, because we already
+        // checked that (offset + access_size) > bound, above.
+        } else if let Some(static_size) = heap.memory.static_heap_size() {
+            let bounds = Bounds::from_u64(static_size);
+            let addr = bounds::load_heap_addr_checked(
+                self.masm,
+                &mut self.context,
+                ptr_size,
+                &heap,
+                enable_spectre_mitigation,
+                bounds,
+                index,
+                offset,
+                |masm, bounds, index| {
+                    let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
+                    let index_reg = index.as_typed_reg().reg;
+                    masm.cmp(
+                        index_reg,
+                        RegImm::i64(adjusted_bounds as i64),
+                        // Similar to the dynamic heap case, even though the
+                        // offset and access size are bound through the heap
+                        // type, when added they can overflow, resulting in
+                        // an erroneous comparison, therefore we rely on the
+                        // target pointer size.
+                        ptr_size,
+                    )?;
+                    Ok(IntCmpKind::GtU)
+                },
+            )?;
+            Some(addr)
+        } else {
             // Account for the general case for bounds-checked memories. The
             // access is out of bounds if:
             // * index + offset + access_size overflows
@@ -783,80 +855,6 @@ where
             )?;
             self.context.free_reg(bounds.as_typed_reg().reg);
             self.context.free_reg(index_offset_and_access_size);
-            Some(addr)
-
-        // Account for the case in which we can completely elide the bounds
-        // checks.
-        //
-        // This case, makes use of the fact that if a memory access uses
-        // a 32-bit index, then we be certain that
-        //
-        //      index <= u32::MAX
-        //
-        // Therefore if any 32-bit index access occurs in the region
-        // represented by
-        //
-        //      bound + guard_size - (offset + access_size)
-        //
-        // We are certain that it's in bounds or that the underlying virtual
-        // memory subsystem will report an illegal access at runtime.
-        //
-        // Note:
-        //
-        // * bound - (offset + access_size) cannot wrap, because it's checked
-        // in the condition above.
-        // * bound + heap.offset_guard_size is guaranteed to not overflow if
-        // the heap configuration is correct, given that it's address must
-        // fit in 64-bits.
-        // * If the heap type is 32-bits, the offset is at most u32::MAX, so
-        // no  adjustment is needed as part of
-        // [bounds::ensure_index_and_offset].
-        } else if u64::from(u32::MAX)
-            <= self.tunables.memory_reservation + self.tunables.memory_guard_size
-                - offset_with_access_size
-        {
-            assert!(can_elide_bounds_check);
-            assert!(heap.index_type() == WasmValType::I32);
-            let addr = self.context.any_gpr(self.masm)?;
-            bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size)?;
-            Some(addr)
-
-        // Account for the all remaining cases, aka. The access is out
-        // of bounds if:
-        //
-        // index > bound - (offset + access_size)
-        //
-        // bound - (offset + access_size) cannot wrap, because we already
-        // checked that (offset + access_size) > bound, above.
-        } else {
-            assert!(can_elide_bounds_check);
-            assert!(heap.index_type() == WasmValType::I32);
-            let bounds = Bounds::from_u64(self.tunables.memory_reservation);
-            let addr = bounds::load_heap_addr_checked(
-                self.masm,
-                &mut self.context,
-                ptr_size,
-                &heap,
-                enable_spectre_mitigation,
-                bounds,
-                index,
-                offset,
-                |masm, bounds, index| {
-                    let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
-                    let index_reg = index.as_typed_reg().reg;
-                    masm.cmp(
-                        index_reg,
-                        RegImm::i64(adjusted_bounds as i64),
-                        // Similar to the dynamic heap case, even though the
-                        // offset and access size are bound through the heap
-                        // type, when added they can overflow, resulting in
-                        // an erroneous comparison, therfore we rely on the
-                        // target pointer size.
-                        ptr_size,
-                    )?;
-                    Ok(IntCmpKind::GtU)
-                },
-            )?;
             Some(addr)
         };
 
@@ -1115,7 +1113,7 @@ where
         }
 
         self.emit_fuel_increment()?;
-        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>()?;
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI>()?;
         let fuel_reg = self.context.without::<Result<Reg>, M, _>(
             &out_of_fuel.sig().regs,
             self.masm,
@@ -1184,7 +1182,7 @@ where
         // The continuation branch if the current epoch hasn't reached the
         // configured deadline.
         let cont = self.masm.get_label()?;
-        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>()?;
+        let new_epoch = self.env.builtins.new_epoch::<M::ABI>()?;
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
         // require inserting arbitrary function calls and control flow.
@@ -1477,8 +1475,8 @@ where
         // Put the target memory index as the first argument.
         let stack_len = self.context.stack.len();
         let builtin = match kind {
-            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
-            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
+            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI>()?,
+            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI>()?,
         };
         let builtin = self.prepare_builtin_defined_memory_arg(
             MemoryIndex::from_u32(arg.memory),
@@ -1528,7 +1526,7 @@ where
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
         // Put the target memory index as the first argument.
-        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI>()?;
         let stack_len = self.context.stack.len();
         let builtin = self.prepare_builtin_defined_memory_arg(
             MemoryIndex::from_u32(arg.memory),

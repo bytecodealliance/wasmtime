@@ -1,16 +1,50 @@
 use cap_rand::{Rng as _, RngCore, SeedableRng as _};
 use wasmtime::component::HasData;
 
-pub(crate) struct WasiRandom;
+/// A helper struct which implements [`HasData`] for the `wasi:random` APIs.
+///
+/// This can be useful when directly calling `add_to_linker` functions directly,
+/// such as [`wasmtime_wasi::p2::bindings::random::random::add_to_linker`] as
+/// the `D` type parameter. See [`HasData`] for more information about the type
+/// parameter's purpose.
+///
+/// When using this type you can skip the [`WasiRandomView`] trait, for
+/// example.
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::Linker;
+/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime_wasi::random::*;
+///
+/// struct MyStoreState {
+///     random: WasiRandomCtx,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///     let mut linker = Linker::new(&engine);
+///
+///     wasmtime_wasi::p2::bindings::random::random::add_to_linker::<MyStoreState, WasiRandom>(
+///         &mut linker,
+///         |state| &mut state.random,
+///     )?;
+///     Ok(())
+/// }
+/// ```
+pub struct WasiRandom;
 
 impl HasData for WasiRandom {
     type Data<'a> = &'a mut WasiRandomCtx;
 }
 
 pub struct WasiRandomCtx {
-    pub random: Box<dyn RngCore + Send>,
-    pub insecure_random: Box<dyn RngCore + Send>,
-    pub insecure_random_seed: u128,
+    pub(crate) random: Box<dyn RngCore + Send>,
+    pub(crate) insecure_random: Box<dyn RngCore + Send>,
+    pub(crate) insecure_random_seed: u128,
 }
 
 impl Default for WasiRandomCtx {

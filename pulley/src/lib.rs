@@ -1,6 +1,6 @@
 //! The pulley bytecode for fast interpreters.
 
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(pulley_tail_calls, feature(explicit_tail_calls))]
 #![cfg_attr(pulley_tail_calls, allow(incomplete_features, unstable_features))]
 #![deny(missing_docs)]
@@ -86,6 +86,9 @@ extern crate alloc;
 macro_rules! for_each_op {
     ( $macro:ident ) => {
         $macro! {
+            /// No-operation.
+            nop = Nop;
+
             /// Transfer control the address in the `lr` register.
             ret = Ret;
 
@@ -623,9 +626,6 @@ macro_rules! for_each_extended_op {
             /// Raise a trap.
             trap = Trap;
 
-            /// Do nothing.
-            nop = Nop;
-
             /// A special opcode to halt interpreter execution and yield control
             /// back to the host.
             ///
@@ -645,6 +645,10 @@ macro_rules! for_each_extended_op {
             /// is resolved at link-time when raw bytecode from Cranelift is
             /// assembled into the final object that Wasmtime will interpret.
             call_indirect_host = CallIndirectHost { id: u8 };
+
+            /// Adds `offset` to the pc of this instruction and stores it in
+            /// `dst`.
+            xpcadd = Xpcadd { dst: XReg, offset: PcRelOffset };
 
             /// Gets the special "fp" register and moves it into `dst`.
             xmov_fp = XmovFp { dst: XReg };
@@ -1408,7 +1412,7 @@ pub mod opcode;
 pub use opcode::*;
 
 #[cfg(any(feature = "encode", feature = "decode"))]
-pub(crate) unsafe fn unreachable_unchecked<T>() -> T {
+pub(crate) unsafe fn unreachable_unchecked() -> ! {
     #[cfg(debug_assertions)]
     unreachable!();
 

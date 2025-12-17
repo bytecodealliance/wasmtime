@@ -6,7 +6,7 @@ use crate::entity::SecondaryMap;
 use crate::entity::entity_impl;
 use crate::entity::{Keys, PrimaryMap};
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{Block, Function, Layout};
+use crate::ir::{Block, Function};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -166,8 +166,8 @@ impl LoopAnalysis {
         self.loops.clear();
         self.block_loop_map.clear();
         self.block_loop_map.resize(func.dfg.num_blocks());
-        self.find_loop_headers(cfg, domtree, &func.layout);
-        self.discover_loop_blocks(cfg, domtree, &func.layout);
+        self.find_loop_headers(cfg, domtree);
+        self.discover_loop_blocks(cfg, domtree);
         self.assign_loop_levels();
         self.valid = true;
     }
@@ -192,28 +192,18 @@ impl LoopAnalysis {
 
     // Determines if a block dominates any predecessor
     // and thus is a loop header.
-    fn is_block_loop_header(
-        block: Block,
-        cfg: &ControlFlowGraph,
-        domtree: &DominatorTree,
-        layout: &Layout,
-    ) -> bool {
+    fn is_block_loop_header(block: Block, cfg: &ControlFlowGraph, domtree: &DominatorTree) -> bool {
         // A block is a loop header if it dominates any of its predecessors.
         cfg.pred_iter(block)
-            .any(|pred| domtree.dominates(block, pred.inst, layout))
+            .any(|pred| domtree.block_dominates(block, pred.block))
     }
 
     // Traverses the CFG in reverse postorder and create a loop object for every block having a
     // back edge.
-    fn find_loop_headers(
-        &mut self,
-        cfg: &ControlFlowGraph,
-        domtree: &DominatorTree,
-        layout: &Layout,
-    ) {
+    fn find_loop_headers(&mut self, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
         for &block in domtree
             .cfg_rpo()
-            .filter(|&&block| Self::is_block_loop_header(block, cfg, domtree, layout))
+            .filter(|&&block| Self::is_block_loop_header(block, cfg, domtree))
         {
             // This block is a loop header, so we create its associated loop
             let lp = self.loops.push(LoopData::new(block, None));
@@ -224,12 +214,7 @@ impl LoopAnalysis {
     // Intended to be called after `find_loop_headers`. For each detected loop header,
     // discovers all the block belonging to the loop and its inner loops. After a call to this
     // function, the loop tree is fully constructed.
-    fn discover_loop_blocks(
-        &mut self,
-        cfg: &ControlFlowGraph,
-        domtree: &DominatorTree,
-        layout: &Layout,
-    ) {
+    fn discover_loop_blocks(&mut self, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
         let mut stack: Vec<Block> = Vec::new();
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
@@ -239,7 +224,7 @@ impl LoopAnalysis {
                 cfg.pred_iter(self.loops[lp].header)
                     .filter(|pred| {
                         // We follow the back edges
-                        domtree.dominates(self.loops[lp].header, pred.inst, layout)
+                        domtree.block_dominates(self.loops[lp].header, pred.block)
                     })
                     .map(|pred| pred.block),
             );

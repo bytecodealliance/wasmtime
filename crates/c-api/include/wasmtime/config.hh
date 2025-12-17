@@ -8,6 +8,7 @@
 #include <wasmtime/conf.h>
 #include <wasmtime/config.h>
 #include <wasmtime/error.hh>
+#include <wasmtime/helpers.hh>
 #include <wasmtime/types/memory.hh>
 
 namespace wasmtime {
@@ -50,17 +51,9 @@ enum class ProfilingStrategy {
  * documentation](https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html).
  */
 class PoolAllocationConfig {
-  friend class Config;
+  WASMTIME_OWN_WRAPPER(PoolAllocationConfig,
+                       wasmtime_pooling_allocation_config);
 
-  struct deleter {
-    void operator()(wasmtime_pooling_allocation_config_t *p) const {
-      wasmtime_pooling_allocation_config_delete(p);
-    }
-  };
-
-  std::unique_ptr<wasmtime_pooling_allocation_config_t, deleter> ptr;
-
-public:
   PoolAllocationConfig() : ptr(wasmtime_pooling_allocation_config_new()) {}
 
   /// \brief Configures the maximum number of “unused warm slots” to retain in
@@ -251,15 +244,8 @@ public:
  * documentation](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html).
  */
 class Config {
-  friend class Engine;
+  WASMTIME_OWN_WRAPPER(Config, wasm_config);
 
-  struct deleter {
-    void operator()(wasm_config_t *p) const { wasm_config_delete(p); }
-  };
-
-  std::unique_ptr<wasm_config_t, deleter> ptr;
-
-public:
   /// \brief Creates configuration with all the default settings.
   Config() : ptr(wasm_config_new()) {}
 
@@ -302,6 +288,13 @@ public:
     wasmtime_config_wasm_threads_set(ptr.get(), enable);
   }
 #endif // WASMTIME_FEATURE_THREADS
+
+  /// \brief Configures whether wasm shared memories can be created.
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.shared_memory
+  void shared_memory(bool enable) {
+    wasmtime_config_shared_memory_set(ptr.get(), enable);
+  }
 
   /// \brief Configures whether the WebAssembly tail call proposal is enabled
   ///
@@ -388,6 +381,22 @@ public:
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_wide_arithmetic
   void wasm_wide_arithmetic(bool enable) {
     wasmtime_config_wasm_wide_arithmetic_set(ptr.get(), enable);
+  }
+
+  /// \brief Configures whether the WebAssembly exceptions proposal will be
+  /// enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_exceptions
+  void wasm_exceptions(bool enable) {
+    wasmtime_config_wasm_exceptions_set(ptr.get(), enable);
+  }
+
+  /// \brief Configures whether the WebAssembly custom-page-sizes proposal will
+  /// be enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_custom_page_sizes
+  void wasm_custom_page_sizes(bool enable) {
+    wasmtime_config_wasm_custom_page_sizes_set(ptr.get(), enable);
   }
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
@@ -515,6 +524,12 @@ public:
     wasmtime_config_macos_use_mach_ports_set(ptr.get(), enable);
   }
 
+  /// \brief Configures Wasmtime to not use signals-based trap handlers
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.signals_based_traps
+  void signals_based_traps(bool enable) {
+    wasmtime_config_signals_based_traps_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_CACHE
   /// \brief Loads the default cache configuration present on the system.
   ///
@@ -556,7 +571,7 @@ private:
     M *memory = reinterpret_cast<M *>(env);
     Result<std::monostate> result = memory->grow_memory(new_size);
     if (!result)
-      return result.err().release();
+      return result.err().capi_release();
     return nullptr;
   }
 
@@ -572,7 +587,7 @@ private:
         creator->new_memory(MemoryType::Ref(ty), minimum, maximum,
                             reserved_size_in_bytes, guard_size_in_bytes);
     if (!result) {
-      return result.err().release();
+      return result.err().capi_release();
     }
     Memory memory = result.unwrap();
     memory_ret->env = std::make_unique<Memory>(memory).release();
@@ -601,7 +616,7 @@ public:
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.allocation_strategy
   void pooling_allocation_strategy(const PoolAllocationConfig &config) {
-    wasmtime_pooling_allocation_strategy_set(ptr.get(), config.ptr.get());
+    wasmtime_pooling_allocation_strategy_set(ptr.get(), config.capi());
   }
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 };

@@ -37,22 +37,34 @@ impl ComponentStoreData {
     pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
-        for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
-            let Some(instance) = instance.as_mut() else {
-                continue;
-            };
-
-            instance
-                .get_mut()
-                .concurrent_state_mut()
-                .take_fibers_and_futures(&mut fibers, &mut futures);
-        }
+        store
+            .concurrent_state_mut()
+            .take_fibers_and_futures(&mut fibers, &mut futures);
 
         for mut fiber in fibers {
             fiber.dispose(store);
         }
 
         crate::component::concurrent::tls::set(store, move || drop(futures));
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn assert_instance_states_empty(&mut self) {
+        for (_, instance) in self.instances.iter_mut() {
+            let Some(instance) = instance.as_mut() else {
+                continue;
+            };
+
+            assert!(
+                instance
+                    .get_mut()
+                    .instance_states()
+                    .0
+                    .iter_mut()
+                    .all(|(_, state)| state.handle_table().is_empty()
+                        && state.concurrent_state().pending_is_empty())
+            );
+        }
     }
 }
 
@@ -132,6 +144,25 @@ impl StoreComponentInstanceId {
     /// Panics if `self` does not belong to `store`.
     pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut ComponentInstance> {
         self.from_data_get_mut(store.store_data_mut())
+    }
+
+    /// Return a mutable `ComponentInstance` and a `ModuleRegistry`
+    /// from the store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn get_mut_and_registry<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (
+        Pin<&'a mut ComponentInstance>,
+        &'a crate::module::ModuleRegistry,
+    ) {
+        let (store_data, registry) = store.store_data_mut_and_registry();
+        let instance = self.from_data_get_mut(store_data);
+        (instance, registry)
     }
 
     /// Same as `get_mut`, but borrows less of a store.

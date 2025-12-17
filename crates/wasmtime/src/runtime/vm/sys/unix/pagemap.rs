@@ -239,7 +239,7 @@ pub unsafe fn reset_with_pagemap(
     mut keep_resident: HostAlignedByteCount,
     mut reset_manually: impl FnMut(&mut [u8]),
     mut decommit: impl FnMut(*mut u8, usize),
-) {
+) -> usize {
     keep_resident = keep_resident.min(len);
     let host_page_size = host_page_size();
 
@@ -327,12 +327,14 @@ pub unsafe fn reset_with_pagemap(
 
     // For all regions that were written in the scan reset them manually, then
     // afterwards decommit everything else.
+    let mut bytes_resident = 0;
     for region in result.regions() {
         // SAFETY: we're relying on Linux to pass in valid region ranges within
         // the `ptr/len` we specified to the original syscall.
         unsafe {
             reset_manually(&mut *region.region().cast_mut());
         }
+        bytes_resident += region.len();
     }
 
     // Report everything after `walk_end` to the end of memory as memory that
@@ -341,6 +343,8 @@ pub unsafe fn reset_with_pagemap(
     // memory here will be 0 meaning that this is a noop.
     let scan_size = result.walk_end().addr() - ptr.addr();
     decommit(result.walk_end().cast_mut(), len.byte_count() - scan_size);
+
+    bytes_resident
 }
 
 mod ioctl {

@@ -49,6 +49,7 @@
 use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
+use cranelift_entity::packed_option::PackedOption;
 use serde_derive::{Deserialize, Serialize};
 
 /// Metadata as a result of compiling a component.
@@ -161,6 +162,10 @@ pub struct Component {
 
     /// WebAssembly type signature of all trampolines.
     pub trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
+
+    /// A map from a `UnsafeIntrinsic::index()` to that intrinsic's
+    /// module-interned type.
+    pub unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
 
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
@@ -286,7 +291,7 @@ pub enum GlobalInitializer {
     /// from its `export` and stored into the `VMComponentContext` at the
     /// `index` specified. During this extraction, we will also capture the
     /// table's containing instance pointer to access the table at runtime. This
-    /// extraction is useful for `thread.spawn_indirect`.
+    /// extraction is useful for `thread.spawn-indirect`.
     ExtractTable(ExtractTable),
 
     /// Declares a new defined resource within this component.
@@ -382,6 +387,8 @@ pub enum CoreDef {
     /// This is a reference to a Cranelift-generated trampoline which is
     /// described in the `trampolines` array.
     Trampoline(TrampolineIndex),
+    /// An intrinsic for compile-time builtins.
+    UnsafeIntrinsic(UnsafeIntrinsic),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -521,12 +528,26 @@ pub struct CanonicalOptions {
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
 
+    /// Whether or not this function can consume a task cancellation
+    /// notification.
+    pub cancellable: bool,
+
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
 
     /// The data model (GC objects or linear memory) used with these canonical
     /// options.
     pub data_model: CanonicalOptionsDataModel,
+}
+
+impl CanonicalOptions {
+    /// Returns the memory referred to by these options, if any.
+    pub fn memory(&self) -> Option<RuntimeMemoryIndex> {
+        match self.data_model {
+            CanonicalOptionsDataModel::Gc {} => None,
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts.memory,
+        }
+    }
 }
 
 /// Possible encodings of strings within the component model.
@@ -715,17 +736,37 @@ pub enum Trampoline {
 
     /// A `resource.new` intrinsic which will inject a new resource into the
     /// table specified.
-    ResourceNew(TypeResourceTableIndex),
+    ResourceNew {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The type of the resource.
+        ty: TypeResourceTableIndex,
+    },
 
     /// Same as `ResourceNew`, but for the `resource.rep` intrinsic.
-    ResourceRep(TypeResourceTableIndex),
+    ResourceRep {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The type of the resource.
+        ty: TypeResourceTableIndex,
+    },
 
     /// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
-    ResourceDrop(TypeResourceTableIndex),
+    ResourceDrop {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The type of the resource.
+        ty: TypeResourceTableIndex,
+    },
 
-    /// A `backpressure.set` intrinsic, which tells the host to enable or
-    /// disable backpressure for the caller's instance.
-    BackpressureSet {
+    /// A `backpressure.inc` intrinsic.
+    BackpressureInc {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `backpressure.dec` intrinsic.
+    BackpressureDec {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
     },
@@ -734,9 +775,10 @@ pub enum Trampoline {
     /// lifted export function.  This allows the callee to continue executing
     /// after returning a result.
     TaskReturn {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// Tuple representing the result types this intrinsic accepts.
         results: TypeTupleIndex,
-
         /// The canonical ABI options specified for this intrinsic.
         options: OptionsIndex,
     },
@@ -759,6 +801,8 @@ pub enum Trampoline {
     /// outstanding async task/stream/future to make progress, returning the
     /// first such event.
     WaitableSetWait {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
     },
@@ -767,6 +811,8 @@ pub enum Trampoline {
     /// async task/stream/future has made progress.  Unlike `task.wait`, this
     /// does not block and may return nothing if no such event has occurred.
     WaitableSetPoll {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
     },
@@ -783,11 +829,14 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
-    /// A `yield` intrinsic, which yields control to the host so that other
+    /// A `thread.yield` intrinsic, which yields control to the host so that other
     /// tasks are able to make progress, if any.
-    Yield {
-        /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
+    ThreadYield {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
     },
 
     /// A `subtask.drop` intrinsic to drop a specified task which has completed.
@@ -808,15 +857,18 @@ pub enum Trampoline {
     /// A `stream.new` intrinsic to create a new `stream` handle of the
     /// specified type.
     StreamNew {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
 
     /// A `stream.read` intrinsic to read from a `stream` of the specified type.
     StreamRead {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
-
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: OptionsIndex,
@@ -824,9 +876,10 @@ pub enum Trampoline {
 
     /// A `stream.write` intrinsic to write to a `stream` of the specified type.
     StreamWrite {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
-
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: OptionsIndex,
@@ -835,6 +888,8 @@ pub enum Trampoline {
     /// A `stream.cancel-read` intrinsic to cancel an in-progress read from a
     /// `stream` of the specified type.
     StreamCancelRead {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
         /// If `false`, block until cancellation completes rather than return
@@ -845,6 +900,8 @@ pub enum Trampoline {
     /// A `stream.cancel-write` intrinsic to cancel an in-progress write from a
     /// `stream` of the specified type.
     StreamCancelWrite {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
         /// If `false`, block until cancellation completes rather than return
@@ -855,6 +912,8 @@ pub enum Trampoline {
     /// A `stream.drop-readable` intrinsic to drop the readable end of a
     /// `stream` of the specified type.
     StreamDropReadable {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
@@ -862,6 +921,8 @@ pub enum Trampoline {
     /// A `stream.drop-writable` intrinsic to drop the writable end of a
     /// `stream` of the specified type.
     StreamDropWritable {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
@@ -869,15 +930,18 @@ pub enum Trampoline {
     /// A `future.new` intrinsic to create a new `future` handle of the
     /// specified type.
     FutureNew {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
 
     /// A `future.read` intrinsic to read from a `future` of the specified type.
     FutureRead {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
-
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: OptionsIndex,
@@ -885,9 +949,10 @@ pub enum Trampoline {
 
     /// A `future.write` intrinsic to write to a `future` of the specified type.
     FutureWrite {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
-
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: OptionsIndex,
@@ -896,6 +961,8 @@ pub enum Trampoline {
     /// A `future.cancel-read` intrinsic to cancel an in-progress read from a
     /// `future` of the specified type.
     FutureCancelRead {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
         /// If `false`, block until cancellation completes rather than return
@@ -906,6 +973,8 @@ pub enum Trampoline {
     /// A `future.cancel-write` intrinsic to cancel an in-progress write from a
     /// `future` of the specified type.
     FutureCancelWrite {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
         /// If `false`, block until cancellation completes rather than return
@@ -916,6 +985,8 @@ pub enum Trampoline {
     /// A `future.drop-readable` intrinsic to drop the readable end of a
     /// `future` of the specified type.
     FutureDropReadable {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
@@ -923,6 +994,8 @@ pub enum Trampoline {
     /// A `future.drop-writable` intrinsic to drop the writable end of a
     /// `future` of the specified type.
     FutureDropWritable {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
@@ -930,6 +1003,8 @@ pub enum Trampoline {
     /// A `error-context.new` intrinsic to create a new `error-context` with a
     /// specified debug message.
     ErrorContextNew {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the `error-context` type in the caller instance.
         ty: TypeComponentLocalErrorContextTableIndex,
         /// String encoding, memory, etc. to use when loading debug message.
@@ -942,6 +1017,8 @@ pub enum Trampoline {
     /// Note that the debug message might not necessarily match what was passed
     /// to `error.new`.
     ErrorContextDebugMessage {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the `error-context` type in the caller instance.
         ty: TypeComponentLocalErrorContextTableIndex,
         /// String encoding, memory, etc. to use when storing debug message.
@@ -950,6 +1027,8 @@ pub enum Trampoline {
 
     /// A `error-context.drop` intrinsic to drop a specified `error-context`.
     ErrorContextDrop {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The table index for the `error-context` type in the caller instance.
         ty: TypeComponentLocalErrorContextTableIndex,
     },
@@ -998,7 +1077,6 @@ pub enum Trampoline {
     AsyncStartCall {
         /// The callee's callback, if any.
         callback: Option<RuntimeCallbackIndex>,
-
         /// The callee's post-return function, if any.
         post_return: Option<RuntimePostReturnIndex>,
     },
@@ -1027,17 +1105,77 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
+    /// An intrinsic used by FACT-generated modules to check whether an
+    /// async-typed function may be called via a sync lower.
+    CheckBlocking,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
     /// storage.
-    ContextGet(u32),
+    ContextGet {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// Which slot to access.
+        slot: u32,
+    },
 
     /// Intrinsic used to implement the `context.set` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
     /// storage.
-    ContextSet(u32),
+    ContextSet {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// Which slot to update.
+        slot: u32,
+    },
+
+    /// Intrinsic used to implement the `thread.index` component model builtin.
+    ThreadIndex,
+
+    /// Intrinsic used to implement the `thread.new-indirect` component model builtin.
+    ThreadNewIndirect {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The type index for the start function of the thread.
+        start_func_ty_idx: ComponentTypeIndex,
+        /// The index of the table that stores the start function.
+        start_func_table_idx: RuntimeTableIndex,
+    },
+
+    /// Intrinsic used to implement the `thread.switch-to` component model builtin.
+    ThreadSwitchTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.suspend` component model builtin.
+    ThreadSuspend {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.resume-later` component model builtin.
+    ThreadResumeLater {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// Intrinsic used to implement the `thread.yield-to` component model builtin.
+    ThreadYieldTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
 }
 
 impl Trampoline {
@@ -1058,10 +1196,11 @@ impl Trampoline {
                 format!("component-transcode-{op}-m{from}-m{to}")
             }
             AlwaysTrap => format!("component-always-trap"),
-            ResourceNew(i) => format!("component-resource-new[{}]", i.as_u32()),
-            ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
-            ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
-            BackpressureSet { .. } => format!("backpressure-set"),
+            ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
+            ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
+            ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
+            BackpressureInc { .. } => format!("backpressure-inc"),
+            BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),
             TaskCancel { .. } => format!("task-cancel"),
             WaitableSetNew { .. } => format!("waitable-set-new"),
@@ -1069,7 +1208,7 @@ impl Trampoline {
             WaitableSetPoll { .. } => format!("waitable-set-poll"),
             WaitableSetDrop { .. } => format!("waitable-set-drop"),
             WaitableJoin { .. } => format!("waitable-join"),
-            Yield { .. } => format!("yield"),
+            ThreadYield { .. } => format!("thread-yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
             SubtaskCancel { .. } => format!("subtask-cancel"),
             StreamNew { .. } => format!("stream-new"),
@@ -1099,8 +1238,15 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
-            ContextGet(_) => format!("context-get"),
-            ContextSet(_) => format!("context-set"),
+            CheckBlocking => format!("check-blocking"),
+            ContextGet { .. } => format!("context-get"),
+            ContextSet { .. } => format!("context-set"),
+            ThreadIndex => format!("thread-index"),
+            ThreadNewIndirect { .. } => format!("thread-new-indirect"),
+            ThreadSwitchTo { .. } => format!("thread-switch-to"),
+            ThreadSuspend { .. } => format!("thread-suspend"),
+            ThreadResumeLater { .. } => format!("thread-resume-later"),
+            ThreadYieldTo { .. } => format!("thread-yield-to"),
         }
     }
 }

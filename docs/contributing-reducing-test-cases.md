@@ -7,7 +7,7 @@ need to wade through megabytes of unrelated Wasm that isn't necessary to
 showcase the bug. The process of taking a large test case and stripping out the
 unnecessary bits is called *test case reduction*.
 
-[The `wasm-tools shrink` tool](github.com/bytecodealliance/wasm-tools) can
+[The `wasm-tools shrink` tool](https://github.com/bytecodealliance/wasm-tools) can
 automatically reduce Wasm test cases when given
 
 1. the original, unreduced test case, and

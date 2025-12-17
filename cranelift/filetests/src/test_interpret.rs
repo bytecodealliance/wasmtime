@@ -24,7 +24,7 @@ struct TestInterpret;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "interpret");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed);
+        anyhow::bail!("No options allowed on {parsed}");
     }
     Ok(Box::new(TestInterpret))
 }
@@ -113,7 +113,7 @@ fn run_test(func_store: &FunctionStore, func: &Function, details: &Details) -> a
                         Err(t) => Err(format!("unexpected trap: {t:?}")),
                     }
                 })
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
     }
     Ok(())

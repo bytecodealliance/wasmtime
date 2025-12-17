@@ -5,19 +5,19 @@ You can compile and run this example on Linux with:
 
    cmake examples/
    cargo build --release -p wasmtime-c-api
-   cc examples/wasi/main.c \
+   cc examples/wasip1/main.c \
        -I crates/c-api/include \
        target/release/libwasmtime.a \
        -lpthread -ldl -lm \
-       -o wasi
-   ./wasi
+       -o wasip1
+   ./wasip1
 
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
 
 You can also build using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-wasi
+mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-wasip1
 */
 
 #include <assert.h>
@@ -99,6 +99,7 @@ int main() {
     exit_with_error("error calling default export", error, trap);
 
   // Clean up after ourselves at this point
+  wasmtime_linker_delete(linker);
   wasmtime_module_delete(module);
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

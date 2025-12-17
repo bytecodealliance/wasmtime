@@ -19,6 +19,8 @@ pub enum Token<'a> {
     RBrace,                 // '}'
     LBracket,               // '['
     RBracket,               // ']'
+    LAngle,                 // '<'
+    RAngle,                 // '>'
     Minus,                  // '-'
     Plus,                   // '+'
     Multiply,               // '*'
@@ -482,6 +484,8 @@ impl<'a> Lexer<'a> {
                 Some('}') => Some(self.scan_char(Token::RBrace)),
                 Some('[') => Some(self.scan_char(Token::LBracket)),
                 Some(']') => Some(self.scan_char(Token::RBracket)),
+                Some('<') => Some(self.scan_char(Token::LAngle)),
+                Some('>') => Some(self.scan_char(Token::RAngle)),
                 Some(',') => Some(self.scan_char(Token::Comma)),
                 Some('.') => Some(self.scan_char(Token::Dot)),
                 Some(':') => Some(self.scan_char(Token::Colon)),

@@ -2,7 +2,7 @@
 
 We're excited to work on Wasmtime and/or Cranelift together with you! This guide
 should help you get up and running with Wasmtime and Cranelift development. But
-first, make sure you've read the [Code of Conduct](./contributing-coc.html)!
+first, make sure you've read the [Code of Conduct](./contributing-coc.md)!
 
 Wasmtime and Cranelift are very ambitious projects with many goals, and while
 we're confident we can achieve some of them, we see many opportunities for
@@ -67,6 +67,19 @@ See also the [full list of Cranelift labels].
 Also, we encourage people to just look around and find things they're
 interested in. This a good time to get involved, as there aren't a lot of
 things set in stone yet.
+
+### Avoiding Trivial Pull Requests
+
+Merging a Pull Request comes at a fundamental cost, from adding to the volume
+of notifications maintainers receive, to at least one maintainer having to
+review the proposed changes, to the many hours of machine time our CI consumes
+before greenlighting a PR.
+
+As such, we request that contributors don't open Pull Requests with trivial
+changes, such as typo fixes in documentation. Instead, those changes should be
+included, as separate commits, in more substantive Pull Requests. Wasmtime
+maintainers will close Pull Requests containing only trivial changes with a
+reference to this section of the docs.
 
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
 [E-easy]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-easy

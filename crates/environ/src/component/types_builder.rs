@@ -60,6 +60,12 @@ pub struct ComponentTypesBuilder {
     type_info: TypeInformationCache,
 
     resources: ResourcesBuilder,
+
+    // Total number of abstract resources allocated.
+    //
+    // These are only allocated within component and instance types when
+    // translating them.
+    abstract_resources: u32,
 }
 
 impl<T> Index<T> for ComponentTypesBuilder
@@ -111,6 +117,7 @@ impl ComponentTypesBuilder {
             component_types: ComponentTypes::default(),
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
+            abstract_resources: 0,
         }
     }
 
@@ -247,6 +254,7 @@ impl ComponentTypesBuilder {
         let params = self.new_tuple_type(params);
         let results = self.new_tuple_type(results);
         let ty = TypeFunc {
+            async_: ty.async_,
             param_names,
             params,
             results,
@@ -313,12 +321,14 @@ impl ComponentTypesBuilder {
         let ty = &types[id];
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
+            self.register_abstract_component_entity_type(types, *ty);
             result.imports.insert(
                 name.clone(),
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
         for (name, ty) in ty.exports.iter() {
+            self.register_abstract_component_entity_type(types, *ty);
             result.exports.insert(
                 name.clone(),
                 self.convert_component_entity_type(types, *ty)?,
@@ -336,12 +346,30 @@ impl ComponentTypesBuilder {
         let ty = &types[id];
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
+            self.register_abstract_component_entity_type(types, *ty);
             result.exports.insert(
                 name.clone(),
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
         Ok(self.component_types.component_instances.push(result))
+    }
+
+    fn register_abstract_component_entity_type(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: ComponentEntityType,
+    ) {
+        let mut path = Vec::new();
+        self.resources.register_abstract_component_entity_type(
+            &types,
+            ty,
+            &mut path,
+            &mut |_path| {
+                self.abstract_resources += 1;
+                AbstractResourceIndex::from_u32(self.abstract_resources)
+            },
+        );
     }
 
     pub(crate) fn convert_module(
@@ -383,7 +411,17 @@ impl ComponentTypesBuilder {
             Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             Memory(ty) => EntityType::Memory((*ty).into()),
             Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
-            Tag(_) => bail!("exceptions proposal not implemented"),
+            Tag(id) => {
+                let func = self.module_types_builder_mut().intern_type(types, *id)?;
+                let exc = self
+                    .module_types_builder_mut()
+                    .define_exception_type_for_tag(func);
+                EntityType::Tag(crate::types::Tag {
+                    signature: func.into(),
+                    exception: exc.into(),
+                })
+            }
+            FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
     }
 

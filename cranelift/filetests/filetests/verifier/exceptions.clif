@@ -131,3 +131,177 @@ function %f5(i32) -> i32 {
         v10 = iconst.i32 3
         return v10
 }
+
+;; Use the payloads of the callee, not the caller
+function %f5() windows_fastcall {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0():
+        try_call fn0(), sig0, block1(), [ tag1: block2(exn0), default: block3(exn1) ]
+
+    block1():
+        return
+
+    block2(v0: i64):
+        return
+
+    block3(v1: i64):
+        return
+}
+
+;; Out-of-bounds `exnN` paylaod
+function %f5() {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0():
+        try_call fn0(), sig0, block1(), [ default: block2(exn2) ] ; error: out-of-bounds `exnN` block argument
+
+    block1():
+        return
+
+    block2(v1: i64):
+        return
+}
+
+;; `exnN` only allowed in exceptional blocks
+function %f5() {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0():
+        try_call fn0(), sig0, block1(exn0), [ default: block2() ] ; error: `exnN` block argument used outside normal-return target of `try_call`
+
+    block1(v1: i64):
+        return
+
+    block2():
+        return
+}
+
+;; `retN` only allowed in normal return
+function %f5() {
+    sig0 = () -> i32 tail
+    fn0 = %g() -> i32 tail
+
+    block0():
+        try_call fn0(), sig0, block1(ret0), [ default: block2(ret0) ] ; error: `retN` block argument used outside normal-return target of `try_call`
+
+    block1(v1: i32):
+        return
+
+    block2(v2: i32):
+        return
+}
+
+;; `system_v` has two payload slots
+function %f5() {
+    sig0 = () system_v
+    fn0 = %g() system_v
+
+    block0():
+        try_call fn0(), sig0, block1(), [ default: block2(exn0, exn1) ]
+
+    block1():
+        return
+
+    block2(v1: i64, v2: i64):
+        return
+}
+
+;; invalid successor index on `get_exception_handler_address`
+function %f6() -> i64 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i64 block1, 1 ; error: exception handler index 1 is out-of-range
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), [ default: block3() ]
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}
+
+;; invalid successor index on `get_exception_handler_address`
+function %f7() -> i64 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i64 block1, -1 ; error: exception handler index -1 cannot be negative
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), [ default: block3() ]
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}
+
+;; invalid block on `get_exception_handler_address`
+function %f8() -> i64 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i64 block17, 0 ; error: invalid block reference block17
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), [ default: block3() ]
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}
+
+;; invalid block terminator on `get_exception_handler_address`
+function %f8() -> i64 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i64 block2, 0 ; error: referenced block block2 does not end in a try_call
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), [ default: block3() ]
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}
+
+
+;; invalid block terminator on `get_exception_handler_address`
+function %f9() -> i64 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i64 block1, 0 ; error: exception handler index 0 is out-of-range
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), []
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}

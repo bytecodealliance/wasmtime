@@ -47,6 +47,8 @@ wat = { workspace = true }
 # feature we don't require anything to be aligned so it doesn't matter the
 # alignment of the bytes that we're reading.
 object = { workspace = true, features = ['unaligned'] }
+arbtest = { workspace = true }
+arbitrary = { workspace = true, features = ["derive"] }
 
 [[example]]
 name = "factc"

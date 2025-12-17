@@ -1,0 +1,60 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+target aarch64
+
+function %f1(i32, i64, f32, f64, i8x16) -> i32, i64, f32, f64, i8x16 {
+  ss0 = explicit_slot 40
+
+block0(v0: i32, v1: i64, v2: f32, v3: f64, v4: i8x16):
+  stack_store v0, ss0+0
+  stack_store v1, ss0+4
+  stack_store v2, ss0+12
+  stack_store v3, ss0+16
+  stack_store v4, ss0+24
+  v5 = stack_load.i32 ss0+0
+  v6 = stack_load.i64 ss0+4
+  v7 = stack_load.f32 ss0+12
+  v8 = stack_load.f64 ss0+16
+  v9 = stack_load.i8x16 ss0+24
+  return v5, v6, v7, v8, v9
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #48
+; block0:
+;   str w0, [sp]
+;   str x1, [sp, #4]
+;   str s0, [sp, #12]
+;   str d1, [sp, #16]
+;   str q2, [sp, #24]
+;   ldr w0, [sp]
+;   ldr x1, [sp, #4]
+;   ldr s0, [sp, #12]
+;   ldr d1, [sp, #16]
+;   ldr q2, [sp, #24]
+;   add sp, sp, #48
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x30
+; block1: ; offset 0xc
+;   stur w0, [sp]
+;   stur x1, [sp, #4]
+;   stur s0, [sp, #0xc]
+;   stur d1, [sp, #0x10]
+;   stur q2, [sp, #0x18]
+;   ldur w0, [sp]
+;   ldur x1, [sp, #4]
+;   ldur s0, [sp, #0xc]
+;   ldur d1, [sp, #0x10]
+;   ldur q2, [sp, #0x18]
+;   add sp, sp, #0x30
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

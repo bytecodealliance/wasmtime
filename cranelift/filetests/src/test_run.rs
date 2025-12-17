@@ -22,7 +22,7 @@ struct TestRun;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "run");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed);
+        anyhow::bail!("No options allowed on {parsed}");
     }
     Ok(Box::new(TestRun))
 }
@@ -193,7 +193,7 @@ fn run_test(
                     let trampoline = testfile.get_trampoline(func).unwrap();
                     Ok(trampoline.call(&testfile, &args))
                 })
-                .map_err(|s| anyhow::anyhow!("{}", s))?;
+                .map_err(|s| anyhow::anyhow!("{s}"))?;
         }
     }
     Ok(())

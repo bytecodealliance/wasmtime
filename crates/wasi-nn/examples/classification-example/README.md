@@ -4,7 +4,7 @@ This example project demonstrates using the `wasi-nn` API to perform machine
 learning (ML) inference. It shows how to collect and use the various parts of a
 wasi-nn program:
 - an ML __framework__ ("backend" in wasi-nn terms)
-- an ML __model__ ("graph" terms in wasi-nn terms)
+- an ML __model__ ("graph" in wasi-nn terms)
 - a WebAssembly __program__
 - a wasi-nn-compatible __engine__
 
@@ -31,7 +31,7 @@ wget https://download.01.org/openvinotoolkit/fixtures/mobilenet/tensor-1x224x224
 ```
 
 The `.bgr` file is a tensor representation of an image file (more details
-[here]).
+[here]) which is the input to this model, i.e., the image to be classified.
 
 [here]: https://download.01.org/openvinotoolkit/fixtures/mobilenet
 

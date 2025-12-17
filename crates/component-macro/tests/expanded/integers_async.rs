@@ -571,6 +571,7 @@ pub mod exports {
             pub mod integers {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
+                #[derive(Clone)]
                 pub struct Guest {
                     a1: wasmtime::component::Func,
                     a2: wasmtime::component::Func,

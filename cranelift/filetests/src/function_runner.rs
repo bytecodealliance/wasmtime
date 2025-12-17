@@ -99,17 +99,7 @@ impl TestFileCompiler {
     /// [TestFileCompiler::with_host_isa]).
     pub fn new(isa: OwnedTargetIsa) -> Self {
         let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
-        let _ = &mut builder; // require mutability on all architectures
-        #[cfg(target_arch = "x86_64")]
-        {
-            builder.symbol_lookup_fn(Box::new(|name| {
-                if name == "__cranelift_x86_pshufb" {
-                    Some(__cranelift_x86_pshufb as *const u8)
-                } else {
-                    None
-                }
-            }));
-        }
+        builder.symbol_lookup_fn(Box::new(lookup_libcall));
 
         // On Unix platforms force `libm` to get linked into this executable
         // because tests that use libcalls rely on this library being present.
@@ -302,7 +292,7 @@ impl TestFileCompiler {
                         let ext_func = &cursor.func.dfg.ext_funcs[*func_ref];
                         let hostcall_addr = match &ext_func.name {
                             ExternalName::TestCase(tc) if tc.raw() == b"__cranelift_throw" => {
-                                Some(__cranelift_throw as usize)
+                                Some((__cranelift_throw as *const ()).addr())
                             }
                             _ => None,
                         };
@@ -648,26 +638,42 @@ extern "C-unwind" fn __cranelift_throw(
 ) -> ! {
     let compiled_test_file = unsafe { &*COMPILED_TEST_FILE.get() };
     let unwind_host = wasmtime_unwinder::UnwindHost;
-    let module_lookup = |pc| {
-        compiled_test_file
+    let frame_handler = |frame: &wasmtime_unwinder::Frame| -> Option<(usize, usize)> {
+        let (base, table) = compiled_test_file
             .module
             .as_ref()
             .unwrap()
-            .lookup_wasmtime_exception_data(pc)
+            .lookup_wasmtime_exception_data(frame.pc())?;
+        let relative_pc = u32::try_from(
+            frame
+                .pc()
+                .checked_sub(base)
+                .expect("module lookup did not return a module base below the PC"),
+        )
+        .expect("module larger than 4GiB");
+
+        table
+            .lookup_pc_tag(relative_pc, tag)
+            .map(|(frame_offset, handler)| {
+                let handler_sp = frame
+                    .fp()
+                    .wrapping_sub(usize::try_from(frame_offset).unwrap());
+                let handler_pc = base
+                    .checked_add(usize::try_from(handler).unwrap())
+                    .expect("Handler address computation overflowed");
+                (handler_pc, handler_sp)
+            })
     };
     unsafe {
-        match wasmtime_unwinder::compute_throw_action(
+        match wasmtime_unwinder::Handler::find(
             &unwind_host,
-            module_lookup,
+            frame_handler,
             exit_pc,
             exit_fp,
             entry_fp,
-            tag,
         ) {
-            wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
-                wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);
-            }
-            wasmtime_unwinder::ThrowAction::None => {
+            Some(handler) => handler.resume_tailcc(payload1, payload2),
+            None => {
                 panic!("Expected a handler to exit for throw of tag {tag} at pc {exit_pc:x}");
             }
         }
@@ -689,6 +695,92 @@ extern "C-unwind" fn __cranelift_throw(
     _payload2: usize,
 ) -> ! {
     panic!("Throw not implemented on platforms without native backends.");
+}
+
+// Manually define all libcalls here to avoid relying on `libm` or diverging
+// behavior across platforms from libm-like functionality. Note that this also
+// serves as insurance that the libcall implementation in the Cranelift
+// interpreter is the same as the libcall implementation used by compiled code.
+// This is important for differential fuzzing where manual invocations of
+// libcalls are expected to return the same result, so here they get identical
+// implementations.
+fn lookup_libcall(name: &str) -> Option<*const u8> {
+    match name {
+        "ceil" => {
+            extern "C" fn ceil(a: f64) -> f64 {
+                a.ceil()
+            }
+            Some(ceil as *const u8)
+        }
+        "ceilf" => {
+            extern "C" fn ceilf(a: f32) -> f32 {
+                a.ceil()
+            }
+            Some(ceilf as *const u8)
+        }
+        "trunc" => {
+            extern "C" fn trunc(a: f64) -> f64 {
+                a.trunc()
+            }
+            Some(trunc as *const u8)
+        }
+        "truncf" => {
+            extern "C" fn truncf(a: f32) -> f32 {
+                a.trunc()
+            }
+            Some(truncf as *const u8)
+        }
+        "floor" => {
+            extern "C" fn floor(a: f64) -> f64 {
+                a.floor()
+            }
+            Some(floor as *const u8)
+        }
+        "floorf" => {
+            extern "C" fn floorf(a: f32) -> f32 {
+                a.floor()
+            }
+            Some(floorf as *const u8)
+        }
+        "nearbyint" => {
+            extern "C" fn nearbyint(a: f64) -> f64 {
+                a.round_ties_even()
+            }
+            Some(nearbyint as *const u8)
+        }
+        "nearbyintf" => {
+            extern "C" fn nearbyintf(a: f32) -> f32 {
+                a.round_ties_even()
+            }
+            Some(nearbyintf as *const u8)
+        }
+        "fma" => {
+            // The `fma` function for `x86_64-pc-windows-gnu` is incorrect. Use
+            // `libm`'s instead.  See:
+            // https://github.com/bytecodealliance/wasmtime/issues/4512
+            extern "C" fn fma(a: f64, b: f64, c: f64) -> f64 {
+                #[cfg(all(target_os = "windows", target_env = "gnu"))]
+                return libm::fma(a, b, c);
+                #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+                return a.mul_add(b, c);
+            }
+            Some(fma as *const u8)
+        }
+        "fmaf" => {
+            extern "C" fn fmaf(a: f32, b: f32, c: f32) -> f32 {
+                #[cfg(all(target_os = "windows", target_env = "gnu"))]
+                return libm::fmaf(a, b, c);
+                #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+                return a.mul_add(b, c);
+            }
+            Some(fmaf as *const u8)
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        "__cranelift_x86_pshufb" => Some(__cranelift_x86_pshufb as *const u8),
+
+        _ => panic!("unknown libcall {name}"),
+    }
 }
 
 #[cfg(target_arch = "x86_64")]

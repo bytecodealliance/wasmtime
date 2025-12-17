@@ -1,0 +1,27 @@
+[package]
+name = "wizer-fuzz"
+version = "0.0.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+env_logger = { workspace = true }
+libfuzzer-sys = { workspace = true }
+log = { workspace = true }
+wasm-smith = { workspace = true }
+wasmprinter = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wizer = { workspace = true, features = ["wasmtime"] }
+
+[[bin]]
+name = "same_result"
+path = "fuzz_targets/same_result.rs"
+test = false
+doc = false

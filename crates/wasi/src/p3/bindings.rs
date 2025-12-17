@@ -23,7 +23,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.3.0-rc-2025-08-15;
+//!             include wasi:cli/command@0.3.0-rc-2025-09-16;
 //!
 //!             import custom-host;
 //!         }
@@ -79,28 +79,28 @@ mod generated {
         path: "src/p3/wit",
         world: "wasi:cli/command",
         imports: {
-            "wasi:cli/stdin": async | store | tracing | trappable,
-            "wasi:cli/stdout": async | store | tracing | trappable,
-            "wasi:cli/stderr": async | store | tracing | trappable,
-            "wasi:filesystem/types/[method]descriptor.read-via-stream": async | store | tracing | trappable,
-            "wasi:sockets/types/[method]tcp-socket.bind": async | store | tracing | trappable,
-            "wasi:sockets/types/[method]tcp-socket.listen": async | store | tracing | trappable,
-            "wasi:sockets/types/[method]tcp-socket.receive": async | store | tracing | trappable,
-            "wasi:sockets/types/[method]udp-socket.bind": async | store | tracing | trappable,
-            "wasi:sockets/types/[method]udp-socket.connect": async | store | tracing | trappable,
+            "wasi:cli/stdin": store | tracing | trappable,
+            "wasi:cli/stdout": store | tracing | trappable,
+            "wasi:cli/stderr": store | tracing | trappable,
+            "wasi:filesystem/types.[method]descriptor.read-via-stream": store | tracing | trappable,
+            "wasi:sockets/types.[method]tcp-socket.bind": async | tracing | trappable,
+            "wasi:sockets/types.[method]tcp-socket.listen":  store | tracing | trappable,
+            "wasi:sockets/types.[method]tcp-socket.receive": store | tracing | trappable,
+            "wasi:sockets/types.[method]udp-socket.bind": async | tracing | trappable,
+            "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
             default: tracing | trappable,
         },
         exports: { default: async | store },
         with: {
-            "wasi:cli/terminal-input/terminal-input": crate::p3::cli::TerminalInput,
-            "wasi:cli/terminal-output/terminal-output": crate::p3::cli::TerminalOutput,
-            "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
-            "wasi:sockets/types/tcp-socket": crate::sockets::TcpSocket,
-            "wasi:sockets/types/udp-socket": crate::sockets::UdpSocket,
+            "wasi:cli/terminal-input.terminal-input": crate::p3::cli::TerminalInput,
+            "wasi:cli/terminal-output.terminal-output": crate::p3::cli::TerminalOutput,
+            "wasi:filesystem/types.descriptor": crate::filesystem::Descriptor,
+            "wasi:sockets/types.tcp-socket": crate::sockets::TcpSocket,
+            "wasi:sockets/types.udp-socket": crate::sockets::UdpSocket,
         },
         trappable_error_type: {
-            "wasi:filesystem/types/error-code" => crate::p3::filesystem::FilesystemError,
-            "wasi:sockets/types/error-code" => crate::p3::sockets::SocketError,
+            "wasi:filesystem/types.error-code" => crate::p3::filesystem::FilesystemError,
+            "wasi:sockets/types.error-code" => crate::p3::sockets::SocketError,
         },
     });
 }
@@ -156,9 +156,8 @@ pub use self::generated::wasi::*;
 ///     );
 ///
 ///     // Instantiate the component and we're off to the races.
-///     let instance = linker.instantiate_async(&mut store, &component).await?;
-///     let command = Command::new(&mut store, &instance)?;
-///     let program_result = instance.run_concurrent(&mut store, async move |store| {
+///     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+///     let program_result = store.run_concurrent(async move |store| {
 ///         command.wasi_cli_run().call_run(store).await
 ///     }).await??;
 ///     match program_result {

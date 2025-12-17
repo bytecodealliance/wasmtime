@@ -3,10 +3,10 @@
 /// In the future, this may include functions for disabling echoing,
 /// disabling input buffering so that keyboard events are sent through
 /// immediately, querying supported features, and so on.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface terminal-input {
     /// The input side of a terminal.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     resource terminal-input;
 }
 
@@ -15,48 +15,48 @@ interface terminal-input {
 /// In the future, this may include functions for querying the terminal
 /// size, being notified of terminal size changes, querying supported
 /// features, and so on.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface terminal-output {
     /// The output side of a terminal.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     resource terminal-output;
 }
 
 /// An interface providing an optional `terminal-input` for stdin as a
 /// link-time authority.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface terminal-stdin {
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     use terminal-input.{terminal-input};
 
     /// If stdin is connected to a terminal, return a `terminal-input` handle
     /// allowing further interaction with it.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     get-terminal-stdin: func() -> option<terminal-input>;
 }
 
 /// An interface providing an optional `terminal-output` for stdout as a
 /// link-time authority.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface terminal-stdout {
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     use terminal-output.{terminal-output};
 
     /// If stdout is connected to a terminal, return a `terminal-output` handle
     /// allowing further interaction with it.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     get-terminal-stdout: func() -> option<terminal-output>;
 }
 
 /// An interface providing an optional `terminal-output` for stderr as a
 /// link-time authority.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface terminal-stderr {
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     use terminal-output.{terminal-output};
 
     /// If stderr is connected to a terminal, return a `terminal-output` handle
     /// allowing further interaction with it.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     get-terminal-stderr: func() -> option<terminal-output>;
 }

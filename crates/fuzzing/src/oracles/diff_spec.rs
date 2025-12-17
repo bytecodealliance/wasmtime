@@ -28,6 +28,7 @@ impl SpecInterpreter {
         config.custom_page_sizes_enabled = false;
         config.wide_arithmetic_enabled = false;
         config.extended_const_enabled = false;
+        config.exceptions_enabled = false;
 
         Self
     }
@@ -40,7 +41,7 @@ impl DiffEngine for SpecInterpreter {
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let instance = wasm_spec_interpreter::instantiate(wasm)
-            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {}", e))?;
+            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {e}"))?;
         Ok(Box::new(SpecInstance { instance }))
     }
 
@@ -106,7 +107,8 @@ impl From<&DiffValue> for SpecValue {
             DiffValue::FuncRef { .. }
             | DiffValue::ExternRef { .. }
             | DiffValue::AnyRef { .. }
-            | DiffValue::ExnRef { .. } => {
+            | DiffValue::ExnRef { .. }
+            | DiffValue::ContRef { .. } => {
                 unimplemented!()
             }
         }

@@ -3,10 +3,9 @@
 
 use crate::prelude::*;
 use crate::{
-    DefinedFuncIndex, FlagValue, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex, TripleExt,
-    WasmError, WasmFuncType,
+    DefinedFuncIndex, FlagValue, FuncKey, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex,
+    TripleExt, Tunables, WasmError, WasmFuncType, obj,
 };
-use crate::{Tunables, obj};
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
@@ -17,7 +16,7 @@ use std::path;
 use std::sync::Arc;
 
 mod address_map;
-mod key;
+mod frame_table;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
@@ -25,7 +24,7 @@ mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
-pub use self::key::*;
+pub use self::frame_table::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
@@ -131,6 +130,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     /// Set the tunables for this compiler.
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()>;
 
+    /// Get the tunables used by this compiler.
+    fn tunables(&self) -> Option<&Tunables>;
+
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
 
@@ -180,7 +182,7 @@ pub struct CompiledFunctionBody {
 ///
 /// The diagram below depicts typical usage of this trait:
 ///
-/// ```ignore
+/// ```text
 ///                     +------+
 ///                     | Wasm |
 ///                     +------+
@@ -331,7 +333,7 @@ pub trait Compiler: Send + Sync {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>>;
 
@@ -362,7 +364,7 @@ pub trait Compiler: Send + Sync {
             Pulley32 | Pulley32be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY32),
             Pulley64 | Pulley64be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY64),
             architecture => {
-                anyhow::bail!("target architecture {:?} is unsupported", architecture,);
+                anyhow::bail!("target architecture {architecture:?} is unsupported");
             }
         };
         let mut obj = Object::new(

@@ -14,7 +14,7 @@
 
 use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, run_filecheck};
-use cranelift_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use cranelift_codegen::dominator_tree::DominatorTree;
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -28,7 +28,7 @@ struct TestDomtree;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "domtree");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed)
+        anyhow::bail!("No options allowed on {parsed}")
     }
     Ok(Box::new(TestDomtree))
 }
@@ -61,36 +61,31 @@ impl SubTest for TestDomtree {
 
                 let expected_block = match func.layout.inst_block(inst) {
                     Some(expected_block) => expected_block,
-                    _ => anyhow::bail!("instruction {} is not in layout", inst),
+                    _ => anyhow::bail!("instruction {inst} is not in layout"),
                 };
                 for src_block in tail.split_whitespace() {
                     let block = match context.details.map.lookup_str(src_block) {
                         Some(AnyEntity::Block(block)) => block,
-                        _ => anyhow::bail!("expected defined block, got {}", src_block),
+                        _ => anyhow::bail!("expected defined block, got {src_block}"),
                     };
 
                     // Annotations say that `expected_block` is the idom of `block`.
                     if expected.insert(block, expected_block).is_some() {
-                        anyhow::bail!("multiple dominators for {}", src_block);
+                        anyhow::bail!("multiple dominators for {src_block}");
                     }
 
                     // Compare to computed domtree.
                     match domtree.idom(block) {
                         Some(got_block) if got_block != expected_block => {
                             anyhow::bail!(
-                                "mismatching idoms for {}:\n\
-                                 want: {}, got: {}",
-                                src_block,
-                                inst,
-                                got_block
+                                "mismatching idoms for {src_block}:\n\
+                                 want: {inst}, got: {got_block}"
                             );
                         }
                         None => {
                             anyhow::bail!(
-                                "mismatching idoms for {}:\n\
-                                 want: {}, got: unreachable",
-                                src_block,
-                                inst
+                                "mismatching idoms for {src_block}:\n\
+                                 want: {inst}, got: unreachable"
                             );
                         }
                         _ => {}
@@ -109,10 +104,8 @@ impl SubTest for TestDomtree {
         {
             if let Some(got_block) = domtree.idom(block) {
                 anyhow::bail!(
-                    "mismatching idoms for renumbered {}:\n\
-                     want: unreachable, got: {}",
-                    block,
-                    got_block
+                    "mismatching idoms for renumbered {block}:\n\
+                     want: unreachable, got: {got_block}"
                 );
             }
         }
@@ -134,14 +127,12 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
 
     // Compute and print out a pre-order of the dominator tree.
     writeln!(s, "domtree_preorder {{")?;
-    let mut dtpo = DominatorTreePreorder::new();
-    dtpo.compute(domtree);
     let mut stack = Vec::new();
     stack.extend(func.layout.entry_block());
     while let Some(block) = stack.pop() {
         write!(s, "    {block}:")?;
         let i = stack.len();
-        for ch in dtpo.children(block) {
+        for ch in domtree.children(block) {
             write!(s, " {ch}")?;
             stack.push(ch);
         }

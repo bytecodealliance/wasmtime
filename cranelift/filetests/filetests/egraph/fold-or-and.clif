@@ -1,0 +1,71 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %fold_or_and11(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; function %fold_or_and11(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     return v0
+; }
+
+
+
+function %fold_or_and12(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = band v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; function %fold_or_and12(i16, i16) -> i16 fast {
+; block0(v0: i16, v1: i16):
+;     return v0
+; }
+
+
+
+function %fold_or_and13(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; function %fold_or_and13(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v0
+; }
+
+
+
+function %fold_or_and14(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; function %fold_or_and14(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     return v0
+; }
+
+
+function %fold_or_and14(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; function %fold_or_and14(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     return v0
+; }
+

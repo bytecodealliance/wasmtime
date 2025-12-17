@@ -299,6 +299,34 @@ pub trait Cursor {
         self.set_position(CursorPosition::After(block));
     }
 
+    /// Get the next position that a forwards traversal will move to, but do not
+    /// move this cursor.
+    fn next_position(&self) -> CursorPosition {
+        self.next_inst_position()
+            .unwrap_or_else(|| self.next_block_position())
+    }
+
+    /// Get the next position that a backwards traversal will move to, but do
+    /// not move this cursor.
+    fn prev_position(&self) -> CursorPosition {
+        self.prev_inst_position()
+            .unwrap_or_else(|| self.prev_block_position())
+    }
+
+    /// Get the position that a `cursor.next_block()` call would move this
+    /// cursor to, but do not update this cursor's position.
+    fn next_block_position(&self) -> CursorPosition {
+        let next = if let Some(block) = self.current_block() {
+            self.layout().next_block(block)
+        } else {
+            self.layout().entry_block()
+        };
+        match next {
+            Some(block) => CursorPosition::Before(block),
+            None => CursorPosition::Nowhere,
+        }
+    }
+
     /// Go to the top of the next block in layout order and return it.
     ///
     /// - If the cursor wasn't pointing at anything, go to the top of the first block in the
@@ -320,16 +348,23 @@ pub trait Cursor {
     /// }
     /// ```
     fn next_block(&mut self) -> Option<ir::Block> {
-        let next = if let Some(block) = self.current_block() {
-            self.layout().next_block(block)
+        let pos = self.next_block_position();
+        self.set_position(pos);
+        self.current_block()
+    }
+
+    /// Get the position that a `cursor.prev_block()` call would move this
+    /// cursor to, but do not update this cursor's position.
+    fn prev_block_position(&self) -> CursorPosition {
+        let prev = if let Some(block) = self.current_block() {
+            self.layout().prev_block(block)
         } else {
-            self.layout().entry_block()
+            self.layout().last_block()
         };
-        self.set_position(match next {
-            Some(block) => CursorPosition::Before(block),
+        match prev {
+            Some(block) => CursorPosition::After(block),
             None => CursorPosition::Nowhere,
-        });
-        next
+        }
     }
 
     /// Go to the bottom of the previous block in layout order and return it.
@@ -353,16 +388,36 @@ pub trait Cursor {
     /// }
     /// ```
     fn prev_block(&mut self) -> Option<ir::Block> {
-        let prev = if let Some(block) = self.current_block() {
-            self.layout().prev_block(block)
-        } else {
-            self.layout().last_block()
-        };
-        self.set_position(match prev {
-            Some(block) => CursorPosition::After(block),
-            None => CursorPosition::Nowhere,
-        });
-        prev
+        let pos = self.prev_block_position();
+        self.set_position(pos);
+        self.current_block()
+    }
+
+    /// Get the position that a `cursor.next_inst()` call would move this cursor
+    /// to, but do not update this cursor's position.
+    fn next_inst_position(&self) -> Option<CursorPosition> {
+        use self::CursorPosition::*;
+        match self.position() {
+            Nowhere | After(..) => None,
+            At(inst) => {
+                if let Some(next) = self.layout().next_inst(inst) {
+                    Some(At(next))
+                } else {
+                    Some(After(
+                        self.layout()
+                            .inst_block(inst)
+                            .expect("current instruction removed?"),
+                    ))
+                }
+            }
+            Before(block) => {
+                if let Some(next) = self.layout().first_inst(block) {
+                    Some(At(next))
+                } else {
+                    Some(After(block))
+                }
+            }
+        }
     }
 
     /// Move to the next instruction in the same block and return it.
@@ -406,30 +461,33 @@ pub trait Cursor {
     /// }
     /// ```
     fn next_inst(&mut self) -> Option<ir::Inst> {
+        let pos = self.next_inst_position()?;
+        self.set_position(pos);
+        self.current_inst()
+    }
+
+    /// Get the position that a `cursor.prev_inst()` call would move this cursor
+    /// to, but do not update this cursor's position.
+    fn prev_inst_position(&self) -> Option<CursorPosition> {
         use self::CursorPosition::*;
         match self.position() {
-            Nowhere | After(..) => None,
+            Nowhere | Before(..) => None,
             At(inst) => {
-                if let Some(next) = self.layout().next_inst(inst) {
-                    self.set_position(At(next));
-                    Some(next)
+                if let Some(prev) = self.layout().prev_inst(inst) {
+                    Some(At(prev))
                 } else {
-                    let pos = After(
+                    Some(Before(
                         self.layout()
                             .inst_block(inst)
                             .expect("current instruction removed?"),
-                    );
-                    self.set_position(pos);
-                    None
+                    ))
                 }
             }
-            Before(block) => {
-                if let Some(next) = self.layout().first_inst(block) {
-                    self.set_position(At(next));
-                    Some(next)
+            After(block) => {
+                if let Some(prev) = self.layout().last_inst(block) {
+                    Some(At(prev))
                 } else {
-                    self.set_position(After(block));
-                    None
+                    Some(Before(block))
                 }
             }
         }
@@ -460,33 +518,9 @@ pub trait Cursor {
     /// }
     /// ```
     fn prev_inst(&mut self) -> Option<ir::Inst> {
-        use self::CursorPosition::*;
-        match self.position() {
-            Nowhere | Before(..) => None,
-            At(inst) => {
-                if let Some(prev) = self.layout().prev_inst(inst) {
-                    self.set_position(At(prev));
-                    Some(prev)
-                } else {
-                    let pos = Before(
-                        self.layout()
-                            .inst_block(inst)
-                            .expect("current instruction removed?"),
-                    );
-                    self.set_position(pos);
-                    None
-                }
-            }
-            After(block) => {
-                if let Some(prev) = self.layout().last_inst(block) {
-                    self.set_position(At(prev));
-                    Some(prev)
-                } else {
-                    self.set_position(Before(block));
-                    None
-                }
-            }
-        }
+        let pos = self.prev_inst_position()?;
+        self.set_position(pos);
+        self.current_inst()
     }
 
     /// Insert an instruction at the current position.

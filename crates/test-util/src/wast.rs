@@ -32,12 +32,55 @@ pub mod limits {
 /// of the wasmtime repository.
 pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
     let mut tests = Vec::new();
-    add_tests(&mut tests, &root.join("tests/spec_testsuite"), false)?;
-    add_tests(&mut tests, &root.join("tests/misc_testsuite"), true)?;
+
+    let spec_tests = root.join("tests/spec_testsuite");
+    add_tests(
+        &mut tests,
+        &spec_tests,
+        &FindConfig::Infer(spec_test_config),
+    )
+    .with_context(|| format!("failed to add tests from `{}`", spec_tests.display()))?;
+
+    let misc_tests = root.join("tests/misc_testsuite");
+    add_tests(&mut tests, &misc_tests, &FindConfig::InTest)
+        .with_context(|| format!("failed to add tests from `{}`", misc_tests.display()))?;
+
+    let cm_tests = root.join("tests/component-model/test");
+    add_tests(
+        &mut tests,
+        &cm_tests,
+        &FindConfig::Infer(component_test_config),
+    )
+    .with_context(|| format!("failed to add tests from `{}`", cm_tests.display()))?;
+
+    // Temporarily work around upstream tests that loop forever.
+    //
+    // Now that `thread.yield` and `CALLBACK_CODE_YIELD` are both no-ops in
+    // non-blocking contexts, these tests need to be updated; meanwhile, we skip
+    // them.
+    //
+    // TODO: remove this once
+    // https://github.com/WebAssembly/component-model/pull/578 has been merged:
+    {
+        let skip_list = &["drop-subtask.wast", "async-calls-sync.wast"];
+        tests.retain(|test| {
+            test.path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| !skip_list.contains(&name))
+                .unwrap_or(true)
+        });
+    }
+
     Ok(tests)
 }
 
-fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result<()> {
+enum FindConfig {
+    InTest,
+    Infer(fn(&Path) -> TestConfig),
+}
+
+fn add_tests(tests: &mut Vec<WastTest>, path: &Path, config: &FindConfig) -> Result<()> {
     for entry in path.read_dir().context("failed to read directory")? {
         let entry = entry.context("failed to read directory entry")?;
         let path = entry.path();
@@ -46,7 +89,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result
             .context("failed to get file type")?
             .is_dir()
         {
-            add_tests(tests, &path, has_config).context("failed to read sub-directory")?;
+            add_tests(tests, &path, config).context("failed to read sub-directory")?;
             continue;
         }
 
@@ -56,11 +99,10 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result
 
         let contents =
             fs::read_to_string(&path).with_context(|| format!("failed to read test: {path:?}"))?;
-        let config = if has_config {
-            parse_test_config(&contents, ";;!")
-                .with_context(|| format!("failed to parse test configuration: {path:?}"))?
-        } else {
-            spec_test_config(&path)
+        let config = match config {
+            FindConfig::InTest => parse_test_config(&contents, ";;!")
+                .with_context(|| format!("failed to parse test configuration: {path:?}"))?,
+            FindConfig::Infer(f) => f(&path),
         };
         tests.push(WastTest {
             path,
@@ -82,9 +124,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.threads = Some(true);
             ret.reference_types = Some(false);
         }
-        Some("relaxed-simd") => {
-            ret.relaxed_simd = Some(true);
-        }
         Some("custom-page-sizes") => {
             ret.custom_page_sizes = Some(true);
             ret.multi_memory = Some(true);
@@ -96,10 +135,13 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 ret.hogs_memory = Some(true);
             }
         }
-        Some("annotations") => {
-            ret.simd = Some(true);
+        Some("custom-descriptors") => {
+            ret.custom_descriptors = Some(true);
         }
-        Some("wasm-3.0") => {
+        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
+        None => {
+            ret.reference_types = Some(true);
+            ret.simd = Some(true);
             ret.simd = Some(true);
             ret.relaxed_simd = Some(true);
             ret.multi_memory = Some(true);
@@ -108,22 +150,8 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.memory64 = Some(true);
             ret.tail_call = Some(true);
             ret.extended_const = Some(true);
+            ret.exceptions = Some(true);
 
-            // Wasmtime, at the current date, has incomplete support for the
-            // exceptions proposal. Instead of flagging the entire test suite
-            // as needing this proposal try to filter down per-test to what
-            // exactly needs this. Other tests aren't expected to need
-            // exceptions.
-            if test.ends_with("tag.wast")
-                || test.ends_with("instance.wast")
-                || test.ends_with("throw.wast")
-                || test.ends_with("throw_ref.wast")
-                || test.ends_with("try_table.wast")
-                || test.ends_with("ref_null.wast")
-                || test.ends_with("imports.wast")
-            {
-                ret.exceptions = Some(true);
-            }
             if test.parent().unwrap().ends_with("legacy") {
                 ret.legacy_exceptions = Some(true);
             }
@@ -139,14 +167,36 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test.ends_with("memory.wast")
                 || test.ends_with("table.wast")
                 || test.ends_with("memory64.wast")
+                || test.ends_with("table64.wast")
             {
                 ret.hogs_memory = Some(true);
             }
         }
-        Some(proposal) => panic!("unsuported proposal {proposal:?}"),
-        None => {
-            ret.reference_types = Some(true);
-            ret.simd = Some(true);
+    }
+
+    ret
+}
+
+fn component_test_config(test: &Path) -> TestConfig {
+    let mut ret = TestConfig::default();
+    ret.spec_test = Some(true);
+    ret.reference_types = Some(true);
+    ret.multi_memory = Some(true);
+
+    if let Some(parent) = test.parent() {
+        if parent.ends_with("async") {
+            ret.component_model_async = Some(true);
+            ret.component_model_async_builtins = Some(true);
+        }
+        if parent.ends_with("wasm-tools") {
+            ret.memory64 = Some(true);
+            ret.threads = Some(true);
+            ret.exceptions = Some(true);
+            ret.gc = Some(true);
+        }
+        if parent.ends_with("wasmtime") {
+            ret.exceptions = Some(true);
+            ret.gc = Some(true);
         }
     }
 
@@ -209,6 +259,7 @@ macro_rules! foreach_config_option {
             component_model_async
             component_model_async_builtins
             component_model_async_stackful
+            component_model_threading
             component_model_error_context
             component_model_gc
             simd
@@ -217,6 +268,7 @@ macro_rules! foreach_config_option {
             legacy_exceptions
             stack_switching
             spec_test
+            custom_descriptors
         }
     };
 }
@@ -310,7 +362,7 @@ impl Compiler {
             Compiler::CraneliftNative => config.legacy_exceptions(),
 
             Compiler::Winch => {
-                let unsupported_base = config.gc()
+                if config.gc()
                     || config.tail_call()
                     || config.function_references()
                     || config.gc()
@@ -319,20 +371,19 @@ impl Compiler {
                     || config.exceptions()
                     || config.legacy_exceptions()
                     || config.stack_switching()
-                    || config.legacy_exceptions();
-
-                if cfg!(target_arch = "x86_64") {
-                    return unsupported_base;
+                    || config.legacy_exceptions()
+                    || config.component_model_async()
+                {
+                    return true;
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return unsupported_base
-                        || config.wide_arithmetic()
+                    return config.wide_arithmetic()
                         || (config.simd() && !config.spec_test())
                         || config.threads();
                 }
 
-                true
+                !cfg!(target_arch = "x86_64")
             }
 
             Compiler::CraneliftPulley => {
@@ -390,6 +441,7 @@ impl WastTest {
                 "misc_testsuite/memory64/more-than-4gb.wast",
                 // shared memories + pooling allocator aren't supported yet
                 "misc_testsuite/memory-combos.wast",
+                "misc_testsuite/threads/atomics-end-of-memory.wast",
                 "misc_testsuite/threads/LB.wast",
                 "misc_testsuite/threads/LB_atomic.wast",
                 "misc_testsuite/threads/MP.wast",
@@ -642,20 +694,48 @@ impl WastTest {
             }
         }
 
-        // For the exceptions proposal these tests use instructions and such
-        // which aren't implemented yet so these are expected to fail.
-        if self.config.exceptions() {
-            let unsupported = [
-                "ref_null.wast",
-                "throw.wast",
-                "rethrow.wast",
-                "throw_ref.wast",
-                "try_table.wast",
-                "instance.wast",
-            ];
-            if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                return true;
+        let failing_component_model_tests = [
+            // FIXME(#11683)
+            "component-model/test/values/trap-in-post-return.wast",
+            "component-model/test/wasmtime/resources.wast",
+            "component-model/test/wasm-tools/naming.wast",
+            // TODO: remove these once
+            // https://github.com/WebAssembly/component-model/pull/578 has been
+            // merged:
+            "component-model/test/async/async-calls-sync.wast",
+            "component-model/test/async/backpressure-deadlock.wast",
+            "component-model/test/async/cancel-stream.wast",
+            "component-model/test/async/cancel-subtask.wast",
+            "component-model/test/async/deadlock.wast",
+            "component-model/test/async/drop-subtask.wast",
+            "component-model/test/async/drop-waitable-set.wast",
+            "component-model/test/async/empty-wait.wast",
+            "component-model/test/async/fused.wast",
+            "component-model/test/async/future-read.wast",
+            "component-model/test/async/partial-stream-copies.wast",
+            "component-model/test/async/passing-resources.wast",
+            "component-model/test/async/stackful.wast",
+            "component-model/test/async/trap-if-block-and-sync.wast",
+            "component-model/test/async/trap-if-done.wast",
+            "component-model/test/async/wait-during-callback.wast",
+            "component-model/test/async/zero-length.wast",
+        ];
+        if failing_component_model_tests
+            .iter()
+            .any(|part| self.path.ends_with(part))
+        {
+            return true;
+        }
+
+        // Not implemented in Wasmtime anywhere yet.
+        if self.config.custom_descriptors() {
+            let happens_to_work =
+                ["spec_testsuite/proposals/custom-descriptors/binary-leb128.wast"];
+
+            if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
+                return false;
             }
+            return true;
         }
 
         false

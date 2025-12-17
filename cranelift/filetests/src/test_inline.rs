@@ -47,7 +47,7 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<dyn SubTest>> {
         match option {
             TestOption::Flag("precise-output") => test.precise_output = true,
             TestOption::Flag("optimize") => test.optimize = true,
-            _ => anyhow::bail!("unknown option on {}", parsed),
+            _ => anyhow::bail!("unknown option on {parsed}"),
         }
     }
     Ok(Box::new(test))
@@ -136,12 +136,18 @@ impl<'a> Inline for Inliner<'a> {
                 .and_then(|name| self.0.get(&ir::UserFuncName::User(name.clone())))
             {
                 None => InlineCommand::KeepCall,
-                Some(f) => InlineCommand::Inline(Cow::Borrowed(f)),
+                Some(f) => InlineCommand::Inline {
+                    callee: Cow::Borrowed(f),
+                    visit_callee: true,
+                },
             },
             ir::ExternalName::TestCase(name) => {
                 match self.0.get(&ir::UserFuncName::Testcase(name.clone())) {
                     None => InlineCommand::KeepCall,
-                    Some(f) => InlineCommand::Inline(Cow::Borrowed(f)),
+                    Some(f) => InlineCommand::Inline {
+                        callee: Cow::Borrowed(f),
+                        visit_callee: true,
+                    },
                 }
             }
             ir::ExternalName::LibCall(_) | ir::ExternalName::KnownSymbol(_) => {

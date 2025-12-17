@@ -9,6 +9,7 @@ use crate::component::ComponentBuiltinFunctionIndex;
 /// is used by Pulley for example to identify how transitions from the guest to
 /// the host are performed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum HostCall {
     /// An "array call" is being done which means that the wasm is calling the
     /// host using the array calling convention (e.g. `VMArrayCallNative`).

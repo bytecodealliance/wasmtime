@@ -121,14 +121,14 @@ pub(crate) mod generated_ {
         with: {
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
-            "wasi:nn/graph/graph": crate::Graph,
-            "wasi:nn/tensor/tensor": crate::Tensor,
-            "wasi:nn/inference/graph-execution-context": crate::ExecutionContext,
-            "wasi:nn/errors/error": super::Error,
+            "wasi:nn/graph.graph": crate::Graph,
+            "wasi:nn/tensor.tensor": crate::Tensor,
+            "wasi:nn/inference.graph-execution-context": crate::ExecutionContext,
+            "wasi:nn/errors.error": super::Error,
         },
         imports: { default: trappable },
         trappable_error_type: {
-            "wasi:nn/errors/error" => super::Error,
+            "wasi:nn/errors.error" => super::Error,
         },
     });
 }
@@ -249,12 +249,9 @@ impl generated::inference::HostGraphExecutionContext for WasiNnView<'_> {
         tracing::debug!("compute with {} inputs", inputs.len());
 
         let mut named_tensors = Vec::new();
-        for (name, tensor_resopurce) in inputs.iter() {
-            let tensor = self.table.get(&tensor_resopurce)?;
-            named_tensors.push(crate::backend::NamedTensor {
-                name: name.clone(),
-                tensor: tensor.clone(),
-            });
+        for (name, tensor_resopurce) in inputs.into_iter() {
+            let tensor = self.table.delete(tensor_resopurce)?;
+            named_tensors.push(crate::backend::NamedTensor { name, tensor });
         }
 
         let exec_context = &mut self.table.get_mut(&exec_context)?;
