@@ -13,7 +13,7 @@ use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
-use cranelift_entity::{SecondaryMap, packed_option::ReservedValue};
+use cranelift_entity::{EntitySet, SecondaryMap, packed_option::ReservedValue};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
 
@@ -219,7 +219,72 @@ impl<'a> Elaborator<'a> {
         self.cur_block = block;
     }
 
+    fn topo_sorted_values(&self) -> Vec<Value> {
+        #[derive(Debug)]
+        enum Event {
+            Enter,
+            Exit,
+        }
+        let mut stack = Vec::<(Event, Value)>::new();
+
+        // Traverse the CFG in pre-order so that, when we look at the
+        // instructions and operands inside each block, we see value defs before
+        // uses.
+        for block in crate::traversals::Dfs::new().pre_order_iter(&self.func) {
+            for inst in self.func.layout.block_insts(block) {
+                stack.extend(self.func.dfg.inst_values(inst).map(|v| (Event::Enter, v)));
+            }
+        }
+
+        // We pushed in the desired order, so popping would implicitly reverse
+        // that. Avoid that by reversing the initial stack before we start
+        // traversing the DFG.
+        stack.reverse();
+
+        let mut sorted = Vec::with_capacity(self.func.dfg.values().len());
+        let mut seen = EntitySet::<Value>::with_capacity(self.func.dfg.values().len());
+
+        // Post-order traversal of the DFG, visiting value defs before uses.
+        while let Some((event, value)) = stack.pop() {
+            match event {
+                Event::Enter => {
+                    if seen.insert(value) {
+                        stack.push((Event::Exit, value));
+                        match self.func.dfg.value_def(value) {
+                            ValueDef::Result(inst, _) => {
+                                stack.extend(
+                                    self.func
+                                        .dfg
+                                        .inst_values(inst)
+                                        .rev()
+                                        .filter(|v| !seen.contains(*v))
+                                        .map(|v| (Event::Enter, v)),
+                                );
+                            }
+                            ValueDef::Union(a, b) => {
+                                if !seen.contains(b) {
+                                    stack.push((Event::Enter, b));
+                                }
+                                if !seen.contains(a) {
+                                    stack.push((Event::Enter, a));
+                                }
+                            }
+                            ValueDef::Param(..) => {}
+                        }
+                    }
+                }
+                Event::Exit => {
+                    sorted.push(value);
+                }
+            }
+        }
+
+        sorted
+    }
+
     fn compute_best_values(&mut self) {
+        let sorted_values = self.topo_sorted_values();
+
         let best = &mut self.value_to_best_value;
 
         // We can't make random decisions inside the fixpoint loop below because
@@ -250,106 +315,86 @@ impl<'a> Elaborator<'a> {
                 "best"
             }
         );
-        let mut keep_going = true;
-        while keep_going {
-            keep_going = false;
-            trace!(
-                "fixpoint iteration {}",
-                self.stats.elaborate_best_cost_fixpoint_iters
-            );
-            self.stats.elaborate_best_cost_fixpoint_iters += 1;
 
-            for (value, def) in self.func.dfg.values_and_defs() {
-                trace!("computing best for value {:?} def {:?}", value, def);
-                let orig_best_value = best[value];
+        for value in sorted_values.iter().copied() {
+            let def = self.func.dfg.value_def(value);
+            trace!("computing best for value {:?} def {:?}", value, def);
 
-                match def {
-                    ValueDef::Union(x, y) => {
-                        // Pick the best of the two options based on
-                        // min-cost. This works because each element of `best`
-                        // is a `(cost, value)` tuple; `cost` comes first so
-                        // the natural comparison works based on cost, and
-                        // breaks ties based on value number.
-                        best[value] = if use_worst {
-                            if best[x].1.is_reserved_value() {
-                                best[y]
-                            } else if best[y].1.is_reserved_value() {
-                                best[x]
-                            } else {
-                                std::cmp::max(best[x], best[y])
-                            }
+            match def {
+                // Pick the best of the two options based on min-cost. This
+                // works because each element of `best` is a `(cost, value)`
+                // tuple; `cost` comes first so the natural comparison works
+                // based on cost, and breaks ties based on value number.
+                ValueDef::Union(x, y) => {
+                    best[value] = if use_worst {
+                        if best[x].1.is_reserved_value() {
+                            best[y]
+                        } else if best[y].1.is_reserved_value() {
+                            best[x]
                         } else {
-                            std::cmp::min(best[x], best[y])
-                        };
-                        trace!(
-                            " -> best of union({:?}, {:?}) = {:?}",
-                            best[x], best[y], best[value]
-                        );
-                    }
-                    ValueDef::Param(_, _) => {
-                        best[value] = BestEntry(Cost::zero(), value);
-                    }
-                    // If the Inst is inserted into the layout (which is,
-                    // at this point, only the side-effecting skeleton),
-                    // then it must be computed and thus we give it zero
-                    // cost.
-                    ValueDef::Result(inst, _) => {
-                        if let Some(_) = self.func.layout.inst_block(inst) {
-                            best[value] = BestEntry(Cost::zero(), value);
-                        } else {
-                            let inst_data = &self.func.dfg.insts[inst];
-                            // N.B.: at this point we know that the opcode is
-                            // pure, so `pure_op_cost`'s precondition is
-                            // satisfied.
-                            let cost = Cost::of_pure_op(
-                                inst_data.opcode(),
-                                self.func.dfg.inst_values(inst).map(|value| best[value].0),
-                            );
-                            best[value] = BestEntry(cost, value);
-                            trace!(" -> cost of value {} = {:?}", value, cost);
+                            std::cmp::max(best[x], best[y])
                         }
+                    } else {
+                        std::cmp::min(best[x], best[y])
+                    };
+                    trace!(
+                        " -> best of union({:?}, {:?}) = {:?}",
+                        best[x], best[y], best[value]
+                    );
+                }
+
+                ValueDef::Param(_, _) => {
+                    best[value] = BestEntry(Cost::zero(), value);
+                }
+
+                // If the Inst is inserted into the layout (which is,
+                // at this point, only the side-effecting skeleton),
+                // then it must be computed and thus we give it zero
+                // cost.
+                ValueDef::Result(inst, _) => {
+                    if let Some(_) = self.func.layout.inst_block(inst) {
+                        best[value] = BestEntry(Cost::zero(), value);
+                    } else {
+                        let inst_data = &self.func.dfg.insts[inst];
+                        // N.B.: at this point we know that the opcode is
+                        // pure, so `pure_op_cost`'s precondition is
+                        // satisfied.
+                        let cost = Cost::of_pure_op(
+                            inst_data.opcode(),
+                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                        );
+                        best[value] = BestEntry(cost, value);
+                        trace!(" -> cost of value {} = {:?}", value, cost);
                     }
-                };
+                }
+            };
 
-                // Keep on iterating the fixpoint loop while we are finding new
-                // best values.
-                keep_going |= orig_best_value != best[value];
-            }
-        }
-
-        if cfg!(any(feature = "trace-log", debug_assertions)) {
-            trace!("finished fixpoint loop to compute best value for each eclass");
-            for value in self.func.dfg.values() {
-                trace!("-> best for eclass {:?}: {:?}", value, best[value]);
-                debug_assert_ne!(best[value].1, Value::reserved_value());
-                // You might additionally be expecting an assert that the best
-                // cost is not infinity, however infinite cost *can* happen in
-                // practice. First, note that our cost function doesn't know
-                // about any shared structure in the dataflow graph, it only
-                // sums operand costs. (And trying to avoid that by deduping a
-                // single operation's operands is a losing game because you can
-                // always just add one indirection and go from `add(x, x)` to
-                // `add(foo(x), bar(x))` to hide the shared structure.) Given
-                // that blindness to sharing, we can make cost grow
-                // exponentially with a linear sequence of operations:
-                //
-                //     v0 = iconst.i32 1    ;; cost = 1
-                //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
-                //     v2 = iadd v1, v1     ;; cost = 3 + 5 + 5
-                //     v3 = iadd v2, v2     ;; cost = 3 + 13 + 13
-                //     v4 = iadd v3, v3     ;; cost = 3 + 29 + 29
-                //     v5 = iadd v4, v4     ;; cost = 3 + 61 + 61
-                //     v6 = iadd v5, v5     ;; cost = 3 + 125 + 125
-                //     ;; etc...
-                //
-                // Such a chain can cause cost to saturate to infinity. How do
-                // we choose which e-node is best when there are multiple that
-                // have saturated to infinity? It doesn't matter. As long as
-                // invariant (2) for optimization rules is upheld by our rule
-                // set (see `cranelift/codegen/src/opts/README.md`) it is safe
-                // to choose *any* e-node in the e-class. At worst we will
-                // produce suboptimal code, but never an incorrectness.
-            }
+            // You might be expecting an assert that the best cost is not
+            // infinity, however infinite cost *can* happen in practice. First,
+            // note that our cost function doesn't know about any shared
+            // structure in the dataflow graph, it only sums operand costs. (And
+            // trying to avoid that by deduping a single operation's operands is
+            // a losing game because you can always just add one indirection and
+            // go from `add(x, x)` to `add(foo(x), bar(x))` to hide the shared
+            // structure.) Given that blindness to sharing, we can make cost
+            // grow exponentially with a linear sequence of operations:
+            //
+            //     v0 = iconst.i32 1    ;; cost = 1
+            //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
+            //     v2 = iadd v1, v1     ;; cost = 3 + 5 + 5
+            //     v3 = iadd v2, v2     ;; cost = 3 + 13 + 13
+            //     v4 = iadd v3, v3     ;; cost = 3 + 29 + 29
+            //     v5 = iadd v4, v4     ;; cost = 3 + 61 + 61
+            //     v6 = iadd v5, v5     ;; cost = 3 + 125 + 125
+            //     ;; etc...
+            //
+            // Such a chain can cause cost to saturate to infinity. How do we
+            // choose which e-node is best when there are multiple that have
+            // saturated to infinity? It doesn't matter. As long as invariant
+            // (2) for optimization rules is upheld by our rule set (see
+            // `cranelift/codegen/src/opts/README.md`) it is safe to choose
+            // *any* e-node in the e-class. At worst we will produce suboptimal
+            // code, but never an incorrectness.
         }
     }
 
