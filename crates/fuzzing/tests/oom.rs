@@ -1,5 +1,10 @@
-use std::alloc::{Layout, alloc};
-use wasmtime::{Config, Result};
+use std::{
+    alloc::{Layout, alloc},
+    fmt::{self, Write},
+    sync::atomic::{AtomicU32, Ordering::SeqCst},
+};
+use wasmtime::Config;
+use wasmtime_error::{Error, OutOfMemory, Result, anyhow};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -32,5 +37,108 @@ fn config_new() -> Result<()> {
         let mut config = Config::new();
         config.enable_compiler(false);
         Ok(())
+    })
+}
+
+fn ok_if_not_oom(error: Error) -> Result<()> {
+    if error.is::<OutOfMemory>() {
+        Err(error)
+    } else {
+        Ok(())
+    }
+}
+
+#[test]
+fn error_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::new(u8::try_from(u32::MAX).unwrap_err());
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn error_msg() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("ouch");
+        ok_if_not_oom(error)
+    })
+}
+
+static X: AtomicU32 = AtomicU32::new(42);
+
+#[test]
+fn error_fmt() -> Result<()> {
+    OomTest::new().test(|| {
+        let x = X.load(SeqCst);
+        let error = anyhow!("ouch: {x}");
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn error_context() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn error_chain() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        for _ in error.chain() {
+            // Nothing to do here, just exercising the iteration.
+        }
+        ok_if_not_oom(error)
+    })
+}
+
+struct Null;
+impl Write for Null {
+    fn write_str(&mut self, _s: &str) -> fmt::Result {
+        Ok(())
+    }
+}
+
+#[test]
+fn display_fmt_error() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        write!(&mut Null, "{error}").unwrap();
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn alternate_display_fmt_error() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        write!(&mut Null, "{error:?}").unwrap();
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn debug_fmt_error() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        write!(&mut Null, "{error:?}").unwrap();
+        ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn alternate_debug_fmt_error() -> Result<()> {
+    OomTest::new().test(|| {
+        let error = Error::msg("hello");
+        let error = error.context("goodbye");
+        write!(&mut Null, "{error:#?}").unwrap();
+        ok_if_not_oom(error)
     })
 }

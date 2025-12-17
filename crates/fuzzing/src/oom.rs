@@ -3,10 +3,9 @@
 //! Inspired by SpiderMonkey's `oomTest()` helper:
 //! https://firefox-source-docs.mozilla.org/js/hacking_tips.html#how-to-debug-oomtest-failures
 
-use anyhow::bail;
 use backtrace::Backtrace;
 use std::{alloc::GlobalAlloc, cell::Cell, mem, ptr, time};
-use wasmtime::{Error, Result};
+use wasmtime_error::{Error, OutOfMemory, Result, bail};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -154,6 +153,12 @@ impl OomTest {
     /// until the pass (or fail).
     pub fn new() -> Self {
         let _ = env_logger::try_init();
+
+        // NB: `std::backtrace::Backtrace` doesn't have ways to handle
+        // OOM. Ideally we would just disable the `"backtrace"` cargo feature,
+        // but workspace feature resolution doesn't play nice with that.
+        wasmtime_error::disable_backtrace();
+
         OomTest {
             max_iters: None,
             max_duration: None,
@@ -236,9 +241,7 @@ impl OomTest {
         Ok(())
     }
 
-    fn is_oom_error(&self, _: &Error) -> bool {
-        // TODO: We don't have an OOM error yet. Will likely need to make it so
-        // that `wasmtime::Error != anyhow::Error` as a first step here.
-        false
+    fn is_oom_error(&self, e: &Error) -> bool {
+        e.is::<OutOfMemory>()
     }
 }

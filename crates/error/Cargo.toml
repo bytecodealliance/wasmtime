@@ -1,0 +1,23 @@
+[package]
+authors.workspace = true
+description = "INTERNAL: Wasmtime's universal error type's implementation"
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+name = "wasmtime-internal-error"
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[features]
+# Enable the use of the `std` crate.
+std = []
+# Enable backtraces.
+backtrace = ["std"]
+# Enable the `From<Error> for anyhow::Error` implementation and
+# `Error::from_anyhow` constructor.
+anyhow = ["dep:anyhow"]
