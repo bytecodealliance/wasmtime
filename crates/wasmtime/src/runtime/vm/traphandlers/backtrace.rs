@@ -496,19 +496,7 @@ impl<'a, T> StoreBacktrace<'a, T> {
     /// This serves as an alternative to `Backtrace::trace()` and
     /// friends: it allows external iteration (and e.g. lazily walking
     /// through frames in a stack) rather than visiting via a closure.
-    ///
-    /// # Safety
-    ///
-    /// Although the iterator provides mutable store as a public
-    /// field, this *must not* be used to mutate the stack itself that
-    /// this iterator is visiting. While the `store` technically owns
-    /// the stack in question, the only way to do this with the
-    /// current API would be to return back into the Wasm
-    /// activation. As long as this iterator is held and used while
-    /// within host code called from that activation (which will
-    /// ordinarily be ensured if the `store`'s lifetime came from the
-    /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(store: StoreContextMut<'a, T>) -> StoreBacktrace<'a, T> {
+    pub(crate) fn new(store: StoreContextMut<'a, T>) -> StoreBacktrace<'a, T> {
         // Get all activations, in innermost-to-outermost order.
         use crate::store::AsStoreOpaque;
         let mut activations = Backtrace::activations(store.0.as_store_opaque());
@@ -538,7 +526,14 @@ impl<'a, T> StoreBacktrace<'a, T> {
     }
 
     /// Get the Store underlying this iteration.
-    pub fn store_mut(&mut self) -> StoreContextMut<'_, T> {
+    ///
+    /// # Safety
+    ///
+    /// This mutable store access *must not* be used to mutate the
+    /// stack itself that this iterator is visiting by removing
+    /// frames, even though the `store` technically owns the stack in
+    /// question.
+    pub unsafe fn store_mut(&mut self) -> StoreContextMut<'_, T> {
         match self.current.as_mut().unwrap() {
             StoreOrActivationBacktrace::Activation(activation) => {
                 StoreContextMut(activation.store.0)

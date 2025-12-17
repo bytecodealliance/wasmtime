@@ -43,11 +43,7 @@ impl<'a, T> StoreContextMut<'a, T> {
             return None;
         }
 
-        // SAFETY: This takes a mutable borrow of `self` (the
-        // `StoreOpaque`), which owns all active stacks in the
-        // store. We do not provide any API that could mutate the
-        // frames that we are walking on the `DebugFrameCursor`.
-        let iter = unsafe { StoreBacktrace::new(self) };
+        let iter = StoreBacktrace::new(self);
         let mut view = DebugFrameCursor {
             iter,
             is_trapping_frame: false,
@@ -157,7 +153,12 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
             };
             self.frames = match next_frame {
                 FrameOrHostCode::Frame(frame) => VirtualFrame::decode(
-                    self.iter.store_mut().0.as_store_opaque(),
+                    // SAFETY: we are using the Store only to decode
+                    // frames; the only mutable aspect used here is
+                    // rooting any new GC values that are read out,
+                    // and we do not remove frames that we may be
+                    // visiting.
+                    unsafe { self.iter.store_mut() }.0.as_store_opaque(),
                     frame,
                     self.is_trapping_frame,
                 ),
@@ -202,7 +203,14 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Get the instance associated with the current frame.
     pub fn instance(&mut self) -> Instance {
         let instance = self.raw_instance();
-        Instance::from_wasmtime(instance.id(), self.iter.store_mut().0.as_store_opaque())
+        Instance::from_wasmtime(
+            instance.id(),
+            // SAFETY: we are using the Store only
+            // to read the instance reference; we
+            // do not remove frames that we may be
+            // visiting.
+            unsafe { self.iter.store_mut() }.0.as_store_opaque(),
+        )
     }
 
     /// Get the module associated with the current frame, if any
@@ -497,7 +505,12 @@ impl<'a, T: 'static> AsContext for DebugFrameCursor<'a, T> {
 }
 impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
-        StoreContextMut(self.iter.store_mut().0)
+        // SAFETY: `StoreContextMut` does not provide any methods that
+        // could remove frames from the stack, so the iterator remains
+        // valid.
+        unsafe {
+            StoreContextMut(self.iter.store_mut().0)
+        }
     }
 }
 
