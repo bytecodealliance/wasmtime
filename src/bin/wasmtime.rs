@@ -167,6 +167,7 @@ impl CompletionCommand {
     }
 }
 
+#[allow(unreachable_code, reason = "empty enum with all features disabled")]
 fn main() -> Result<()> {
     return Wasmtime::parse().execute();
 }
