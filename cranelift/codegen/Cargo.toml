@@ -49,6 +49,8 @@ wasmtime-math = { workspace = true }
 # machine code. Integration tests that need external dependencies can be
 # accommodated in `tests`.
 
+im-rc = "15" # TODO FITZGEN
+
 [dev-dependencies]
 criterion = { workspace = true }
 similar = "2.1.0"

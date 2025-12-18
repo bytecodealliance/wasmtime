@@ -108,7 +108,7 @@ impl Cost {
     }
 
     /// Return the cost of an opcode.
-    fn of_opcode(op: Opcode) -> Cost {
+    pub(crate) fn of_opcode(op: Opcode) -> Cost {
         match op {
             // Constants.
             Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1, 0),
