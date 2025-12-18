@@ -181,6 +181,7 @@ macro_rules! host_result_no_catch {
         $(
             impl HostResult for $t {
                 type Abi = $t;
+                #[allow(unreachable_code, reason = "some types uninhabited on some platforms")]
                 fn maybe_catch_unwind(
                     store: &mut dyn VMStore,
                     f: impl FnOnce(&mut dyn VMStore) -> $t,
