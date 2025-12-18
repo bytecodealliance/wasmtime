@@ -3042,9 +3042,9 @@ impl Instance {
 
                 let payload = types[types[write_ty].ty].payload;
 
-                if write_caller == read_caller && payload.is_some() {
+                if write_caller == read_caller && !allow_intra_component_read_write(payload) {
                     bail!(
-                        "cannot read from and write to intra-component future with non-unit payload"
+                        "cannot read from and write to intra-component future with non-numeric payload"
                     )
                 }
 
@@ -3084,13 +3084,15 @@ impl Instance {
                 }
             }
             (TransmitIndex::Stream(write_ty), TransmitIndex::Stream(read_ty)) => {
-                if let Some(flat_abi) = flat_abi {
-                    if write_caller == read_caller && types[types[write_ty].ty].payload.is_some() {
-                        bail!(
-                            "cannot read from and write to intra-component stream with non-unit payload"
-                        )
-                    }
+                if write_caller == read_caller
+                    && !allow_intra_component_read_write(types[types[write_ty].ty].payload)
+                {
+                    bail!(
+                        "cannot read from and write to intra-component stream with non-numeric payload"
+                    )
+                }
 
+                if let Some(flat_abi) = flat_abi {
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let length_in_bytes = usize::try_from(flat_abi.size).unwrap() * count;
                     if length_in_bytes > 0 {
@@ -3122,7 +3124,20 @@ impl Instance {
                                 .as_mut_ptr();
                             // SAFETY: Both `src` and `dst` have been validated
                             // above.
-                            unsafe { src.copy_to(dst, length_in_bytes) };
+                            unsafe {
+                                if write_caller == read_caller {
+                                    // If the same instance owns both ends of
+                                    // the stream, the source and destination
+                                    // buffers might overlap.
+                                    src.copy_to(dst, length_in_bytes)
+                                } else {
+                                    // Since the read and write ends of the
+                                    // stream are owned by distinct instances,
+                                    // the buffers cannot possibly belong to the
+                                    // same memory and thus cannot overlap.
+                                    src.copy_to_nonoverlapping(dst, length_in_bytes)
+                                }
+                            }
                         }
                     }
                 } else {
@@ -4531,6 +4546,27 @@ impl Waitable {
             _ => {}
         }
     }
+}
+
+/// Determine whether an intra-component read/write is allowed for the specified
+/// `stream` or `future` payload type according to the component model
+/// specification.
+fn allow_intra_component_read_write(ty: Option<InterfaceType>) -> bool {
+    matches!(
+        ty,
+        None | Some(
+            InterfaceType::S8
+                | InterfaceType::U8
+                | InterfaceType::S16
+                | InterfaceType::U16
+                | InterfaceType::S32
+                | InterfaceType::U32
+                | InterfaceType::S64
+                | InterfaceType::U64
+                | InterfaceType::Float32
+                | InterfaceType::Float64
+        )
+    )
 }
 
 #[cfg(test)]
