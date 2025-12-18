@@ -103,14 +103,14 @@
 (rule (simplify (select ty d (select ty d x _) a)) (select ty d x a))
 
 ;; min x y < x => false and its commutative versions
-(rule (simplify (sgt ty (smin _ x y) x)) (iconst_u ty 0))
-(rule (simplify (sgt ty (smin _ x y) y)) (iconst_u ty 0))
-(rule (simplify (slt ty x (smin _ x z))) (iconst_u ty 0))
-(rule (simplify (slt ty x (smin _ y x))) (iconst_u ty 0))
-(rule (simplify (ugt ty (umin _ x y) x)) (iconst_u ty 0))
-(rule (simplify (ugt ty (umin _ x y) y)) (iconst_u ty 0))
-(rule (simplify (ult ty x (umin _ x z))) (iconst_u ty 0))
-(rule (simplify (ult ty x (umin _ y x))) (iconst_u ty 0))
+(rule (simplify (sgt (fits_in_64 ty) (smin _ x y) x)) (iconst_u ty 0))
+(rule (simplify (sgt (fits_in_64 ty) (smin _ x y) y)) (iconst_u ty 0))
+(rule (simplify (slt (fits_in_64 ty) x (smin _ x z))) (iconst_u ty 0))
+(rule (simplify (slt (fits_in_64 ty) x (smin _ y x))) (iconst_u ty 0))
+(rule (simplify (ugt (fits_in_64 ty) (umin _ x y) x)) (iconst_u ty 0))
+(rule (simplify (ugt (fits_in_64 ty) (umin _ x y) y)) (iconst_u ty 0))
+(rule (simplify (ult (fits_in_64 ty) x (umin _ x z))) (iconst_u ty 0))
+(rule (simplify (ult (fits_in_64 ty) x (umin _ y x))) (iconst_u ty 0))
 
 
 
