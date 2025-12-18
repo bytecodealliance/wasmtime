@@ -701,8 +701,6 @@ impl WastTest {
             "component-model/test/values/trap-in-post-return.wast",
             "component-model/test/wasmtime/resources.wast",
             "component-model/test/wasm-tools/naming.wast",
-            // FIXME(#12129)
-            "component-model/test/async/trap-if-block-and-sync.wast",
             // TODO: Remove this once
             // https://github.com/bytecodealliance/wasm-tools/pull/2406 is
             // merged and released, and Wasmtime has been updated to use it:
