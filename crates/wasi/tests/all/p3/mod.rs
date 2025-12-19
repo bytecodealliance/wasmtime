@@ -41,6 +41,7 @@ async fn run_allow_blocking_current_thread(
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
+        .0
         .map_err(|()| anyhow!("`wasi:cli/run#run` failed"))
 }
 
@@ -156,6 +157,12 @@ async fn p3_file_write_blocking() -> anyhow::Result<()> {
     reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
 )]
 fn p3_cli_hello_stdout() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_hello_stdout_post_return() {}
 
 #[expect(
     dead_code,
