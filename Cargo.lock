@@ -4834,6 +4834,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-internal-debugger"
+version = "41.0.0"
+dependencies = [
+ "anyhow",
+ "env_logger 0.11.5",
+ "log",
+ "tokio",
+ "wasmtime",
+]
+
+[[package]]
 name = "wasmtime-internal-error"
 version = "41.0.0"
 dependencies = [

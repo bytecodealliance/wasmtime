@@ -164,6 +164,7 @@ members = [
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/wasi-tls-nativetls",
+  "crates/debugger",
   "crates/wizer/fuzz",
   "crates/wizer/tests/regex-test",
   "crates/wizer/benches/regex-bench",
@@ -276,6 +277,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=41.0.0", package = 'wasmtime-internal-wit-bindgen' }
 wasmtime-math = { path = "crates/math", version = "=41.0.0", package = 'wasmtime-internal-math'  }
 wasmtime-unwinder = { path = "crates/unwinder", version = "=41.0.0", package = 'wasmtime-internal-unwinder' }
+wasmtime-debugger = { path = "crates/debugger", version = "=41.0.0", package = "wasmtime-internal-debugger" }
 wasmtime-wizer = { path = "crates/wizer", version = "41.0.0" }
 
 # Miscellaneous crates without a `wasmtime-*` prefix in their name but still
