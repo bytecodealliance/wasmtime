@@ -37,23 +37,38 @@ use wasmtime::{
 /// true. `Debugger::finish` continues execution ignoring all further
 /// events to allow clean completion if needed.
 pub struct Debugger<T: Send + 'static> {
+    /// The inner task that this debugger wraps.
+    inner: Option<JoinHandle<Result<Store<T>>>>,
     /// State: either a task handle or the store when passed out of
     /// the complete task.
-    state: DebuggerState<T>,
+    state: DebuggerState,
     in_tx: mpsc::Sender<Command<T>>,
     out_rx: mpsc::Receiver<Response>,
 }
 
-enum DebuggerState<T: Send + 'static> {
-    /// Inner body is running in an async task.
-    Running(JoinHandle<Result<Store<T>>>),
-    /// Temporary state while we are joining.
-    Joining,
-    /// Inner body is complete and has passed the store back.
-    Complete(Store<T>),
-    /// Debugger has been disassembled via `into_store()`. Allows the
-    /// `Drop` impl to verify that the debugger is complete.
-    Destructed,
+/// State machine from the perspective of the outer logic.
+///
+/// The intermediate states here, and the separation of these states
+/// from the `JoinHandle` above, are what allow us to implement a
+/// cancel-safe version of `Debugger::run` below.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DebuggerState {
+    /// Inner body is running in an async task and not in a debugger
+    /// callback. Outer logic is waiting for a `Response::Stopped` or
+    /// `Response::Complete`.
+    Running,
+    /// Inner body is running in an async task and at a debugger
+    /// callback (or in the initial trampoline waiting for the first
+    /// `Continue`). `Response::Stopped` has been received. Outer
+    /// logic has not sent any commands.
+    Stopped,
+    /// We have sent a command to the inner body and are waiting for a
+    /// response.
+    Queried,
+    /// Inner body is complete (has sent `Response::Finished` and we
+    /// have received it). We may or may not have joined yet; if so,
+    /// the `Option<JoinHandle<...>>` will be `None`.
+    Complete,
 }
 
 /// Message from "outside" to the debug hook.
@@ -203,7 +218,8 @@ impl<T: Send + 'static> Debugger<T> {
         });
 
         Debugger {
-            state: DebuggerState::Running(inner),
+            inner: Some(inner),
+            state: DebuggerState::Stopped,
             in_tx,
             out_rx,
         }
@@ -211,24 +227,69 @@ impl<T: Send + 'static> Debugger<T> {
 
     /// Is the inner body done running?
     pub fn is_complete(&self) -> bool {
-        match &self.state {
-            DebuggerState::Running(_) | DebuggerState::Joining => false,
-            DebuggerState::Complete(_) => true,
-            DebuggerState::Destructed => {
-                panic!("Should not see this state outside of `into_store()`")
-            }
+        match self.state {
+            DebuggerState::Complete => true,
+            _ => false,
         }
     }
 
     /// Run the inner body until the next debug event.
+    ///
+    /// This method is cancel-safe, and no events will be lost.
     pub async fn run(&mut self) -> Result<DebugRunResult> {
-        anyhow::ensure!(!self.is_complete(), "Debugger body is already complete");
+        log::trace!("running: state is {:?}", self.state);
+        match self.state {
+            DebuggerState::Stopped => {
+                log::trace!("sending Continue");
+                self.in_tx
+                    .send(Command::Continue)
+                    .await
+                    .map_err(|_| anyhow::anyhow!("Failed to send over debug channel"))?;
+                log::trace!("sent Continue");
 
-        self.in_tx
-            .send(Command::Continue)
-            .await
-            .map_err(|_| anyhow::anyhow!("Failed to send over debug channel"))?;
+                // If that `send` was canceled, the command was not
+                // sent, so it's fine to remain in `Stopped`. If it
+                // succeeded and we reached here, transition to
+                // `Running` so we don't re-send.
+                self.state = DebuggerState::Running;
+            }
+            DebuggerState::Running => {
+                // Previous `run()` must have been canceled; no action
+                // to take here.
+            }
+            DebuggerState::Queried => {
+                // We expect to receive a `QueryResponse`; drop it if
+                // the query was canceled, then transition back to
+                // `Stopped`.
+                log::trace!("in Queried; receiving");
+                let response = self
+                    .out_rx
+                    .recv()
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+                log::trace!("in Queried; received, dropping");
+                assert!(matches!(response, Response::QueryResponse(_)));
+                self.state = DebuggerState::Stopped;
 
+                // Now send a `Continue`, as above.
+                log::trace!("in Stopped; sending Continue");
+                self.in_tx
+                    .send(Command::Continue)
+                    .await
+                    .map_err(|_| anyhow::anyhow!("Failed to send over debug channel"))?;
+                self.state = DebuggerState::Running;
+            }
+            DebuggerState::Complete => {
+                panic!("Cannot `run()` an already-complete Debugger");
+            }
+        }
+
+        // At this point, the inner task is in Running state. We
+        // expect to receive a message when it next stops or
+        // completes. If this `recv()` is canceled, no message is
+        // lost, and the state above accurately reflects what must be
+        // done on the next `run()`.
+        log::trace!("waiting for response");
         let response = self
             .out_rx
             .recv()
@@ -237,18 +298,17 @@ impl<T: Send + 'static> Debugger<T> {
 
         match response {
             Response::Finished => {
-                let DebuggerState::Running(joinhandle) =
-                    std::mem::replace(&mut self.state, DebuggerState::Joining)
-                else {
-                    panic!("State was verified to be `Running` above");
-                };
-                let store = joinhandle.await??;
-                self.state = DebuggerState::Complete(store);
+                log::trace!("got Finished");
+                self.state = DebuggerState::Complete;
                 Ok(DebugRunResult::Finished)
             }
-            Response::Stopped(result) => Ok(result),
+            Response::Stopped(result) => {
+                log::trace!("got Stopped");
+                self.state = DebuggerState::Stopped;
+                Ok(result)
+            }
             Response::QueryResponse(_) => {
-                anyhow::bail!("Invalid debug response");
+                panic!("Invalid debug response");
             }
         }
     }
@@ -271,6 +331,16 @@ impl<T: Send + 'static> Debugger<T> {
     }
 
     /// Perform some action on the contained `Store` while not running.
+    ///
+    /// This may only be invoked before the inner body finishes and
+    /// when it is stopped; that is, when the `Debugger` is initially
+    /// created and after any call to `run()` returns a result other
+    /// than `DebugRunResult::Finished`. If an earlier `run()`
+    /// invocation was canceled, it must be re-invoked and return
+    /// successfully before a query is made.
+    ///
+    /// This is cancel-safe; if canceled, the result of the query will
+    /// be dropped.
     pub async fn with_store<
         F: FnOnce(StoreContextMut<'_, T>) -> R + Send + 'static,
         R: Send + 'static,
@@ -278,40 +348,71 @@ impl<T: Send + 'static> Debugger<T> {
         &mut self,
         f: F,
     ) -> Result<R> {
-        match &mut self.state {
-            DebuggerState::Running(_) => {
-                self.in_tx
-                    .send(Command::Query(Box::new(|store| Box::new(f(store)))))
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Premature close of debugger channel"))?;
+        assert!(!self.is_complete());
+
+        match self.state {
+            DebuggerState::Queried => {
+                // Earlier query canceled; drop its response first.
                 let response = self
                     .out_rx
                     .recv()
                     .await
                     .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
-                let Response::QueryResponse(resp) = response else {
-                    anyhow::bail!("Incorrect response from debugger task");
-                };
-                Ok(*resp.downcast::<R>().expect("type mismatch"))
+                assert!(matches!(response, Response::QueryResponse(_)));
+                self.state = DebuggerState::Stopped;
             }
-            DebuggerState::Joining => anyhow::bail!("Join failed with error and Store is lost"),
-            DebuggerState::Complete(store) => Ok(f(store.as_context_mut())),
-            DebuggerState::Destructed => {
-                panic!("Should not see `Destructed` state outside of `into_store`")
+            DebuggerState::Running => {
+                // Results from a canceled `run()`; `run()` must
+                // complete before this can be invoked.
+                panic!("Cannot query in Running state");
+            }
+            DebuggerState::Complete => {
+                panic!("Cannot query when complete");
+            }
+            DebuggerState::Stopped => {
+                // OK -- this is the state we want.
             }
         }
+
+        self.in_tx
+            .send(Command::Query(Box::new(|store| Box::new(f(store)))))
+            .await
+            .map_err(|_| anyhow::anyhow!("Premature close of debugger channel"))?;
+        self.state = DebuggerState::Queried;
+
+        let response = self
+            .out_rx
+            .recv()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+        let Response::QueryResponse(resp) = response else {
+            anyhow::bail!("Incorrect response from debugger task");
+        };
+        self.state = DebuggerState::Stopped;
+
+        Ok(*resp.downcast::<R>().expect("type mismatch"))
     }
 
     /// Drop the Debugger once complete, returning the inner `Store`
     /// around which it was wrapped.
-    pub fn into_store(mut self) -> Store<T> {
-        let state = std::mem::replace(&mut self.state, DebuggerState::Destructed);
-        let mut store = match state {
-            DebuggerState::Complete(store) => store,
-            _ => panic!("Cannot invoke into_store() on a non-complete Debugger"),
-        };
-        store.clear_debug_handler();
-        store
+    ///
+    /// Only valid to invoke once `run()` returns
+    /// `DebugRunResult::Finished`.
+    ///
+    /// This is cancel-safe, but if canceled, the Store is lost.
+    pub async fn take_store(&mut self) -> Result<Option<Store<T>>> {
+        match self.state {
+            DebuggerState::Complete => {
+                let inner = match self.inner.take() {
+                    Some(inner) => inner,
+                    None => return Ok(None),
+                };
+                let mut store = inner.await??;
+                store.clear_debug_handler();
+                Ok(Some(store))
+            }
+            _ => panic!("Invalid state: debugger not yet complete"),
+        }
     }
 }
 
@@ -322,9 +423,8 @@ impl<T: Send + 'static> Drop for Debugger<T> {
         // -- in general, Wasmtime's futures that embody Wasm
         // execution are not cancel-safe, so we have to wait for the
         // inner body to finish before the Debugger is dropped.
-        match &self.state {
-            DebuggerState::Complete(_) | DebuggerState::Destructed => {}
-            _ => panic!("Dropping Debugger before inner body is complete"),
+        if self.state != DebuggerState::Complete {
+            panic!("Dropping Debugger before inner body is complete");
         }
     }
 }
@@ -486,7 +586,7 @@ mod test {
 
         // Ensure the store still works and the debug handler is
         // removed.
-        let mut store = debugger.into_store();
+        let mut store = debugger.take_store().await?.unwrap();
         let mut results = [Val::I32(0)];
         main.call_async(&mut store, &[Val::I32(10), Val::I32(20)], &mut results[..])
             .await?;
