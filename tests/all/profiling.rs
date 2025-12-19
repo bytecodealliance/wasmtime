@@ -3,6 +3,7 @@ use wasmtime::{Config, Engine, Module, Result};
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(windows, ignore)] // perfmap not supported on Windows
 fn perfmap() -> Result<()> {
     let mut config = Config::new();
     config.profiler(wasmtime::ProfilingStrategy::PerfMap);
