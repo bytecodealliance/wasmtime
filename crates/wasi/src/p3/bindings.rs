@@ -90,7 +90,7 @@ mod generated {
             "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
             default: tracing | trappable,
         },
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
         with: {
             "wasi:cli/terminal-input.terminal-input": crate::p3::cli::TerminalInput,
             "wasi:cli/terminal-output.terminal-output": crate::p3::cli::TerminalOutput,
@@ -159,7 +159,7 @@ pub use self::generated::wasi::*;
 ///     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
 ///     let program_result = store.run_concurrent(async move |store| {
 ///         command.wasi_cli_run().call_run(store).await
-///     }).await??;
+///     }).await??.0;
 ///     match program_result {
 ///         Ok(()) => Ok(()),
 ///         Err(()) => std::process::exit(1),

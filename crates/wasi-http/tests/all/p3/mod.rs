@@ -144,6 +144,7 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
+        .0
         .map_err(|()| anyhow!("`wasi:cli/run#run` failed"))
 }
 

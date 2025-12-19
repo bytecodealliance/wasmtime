@@ -645,7 +645,11 @@ impl RunCommand {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
                     store
-                        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+                        .run_concurrent(async |store| {
+                            let (result, task) = command.wasi_cli_run().call_run(store).await?;
+                            task.block(store).await;
+                            Ok(result)
+                        })
                         .await?,
                 );
             }
