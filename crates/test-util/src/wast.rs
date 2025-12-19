@@ -186,7 +186,9 @@ fn component_test_config(test: &Path) -> TestConfig {
     if let Some(parent) = test.parent() {
         if parent.ends_with("async") {
             ret.component_model_async = Some(true);
+            ret.component_model_async_stackful = Some(true);
             ret.component_model_async_builtins = Some(true);
+            ret.component_model_threading = Some(true);
         }
         if parent.ends_with("wasm-tools") {
             ret.memory64 = Some(true);
@@ -699,26 +701,12 @@ impl WastTest {
             "component-model/test/values/trap-in-post-return.wast",
             "component-model/test/wasmtime/resources.wast",
             "component-model/test/wasm-tools/naming.wast",
-            // TODO: remove these once
-            // https://github.com/WebAssembly/component-model/pull/578 has been
-            // merged:
-            "component-model/test/async/async-calls-sync.wast",
-            "component-model/test/async/backpressure-deadlock.wast",
-            "component-model/test/async/cancel-stream.wast",
-            "component-model/test/async/cancel-subtask.wast",
-            "component-model/test/async/deadlock.wast",
-            "component-model/test/async/drop-subtask.wast",
-            "component-model/test/async/drop-waitable-set.wast",
-            "component-model/test/async/empty-wait.wast",
-            "component-model/test/async/fused.wast",
-            "component-model/test/async/future-read.wast",
-            "component-model/test/async/partial-stream-copies.wast",
-            "component-model/test/async/passing-resources.wast",
-            "component-model/test/async/stackful.wast",
+            // FIXME(#12129)
             "component-model/test/async/trap-if-block-and-sync.wast",
-            "component-model/test/async/trap-if-done.wast",
-            "component-model/test/async/wait-during-callback.wast",
-            "component-model/test/async/zero-length.wast",
+            // TODO: Remove this once
+            // https://github.com/bytecodealliance/wasm-tools/pull/2406 is
+            // merged and released, and Wasmtime has been updated to use it:
+            "component-model/test/async/same-component-stream-future.wast",
         ];
         if failing_component_model_tests
             .iter()
