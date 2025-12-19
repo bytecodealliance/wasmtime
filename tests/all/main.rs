@@ -43,6 +43,7 @@ mod native_debug;
 mod noextern;
 mod piped_tests;
 mod pooling_allocator;
+mod profiling;
 mod pulley;
 mod relocs;
 mod stack_creator;

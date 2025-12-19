@@ -176,8 +176,14 @@ impl CompiledModule {
         let key = self.index.func_by_text_offset(text_offset)?;
         match key {
             FuncKey::DefinedWasmFunction(module, def_func_index) => {
-                debug_assert_eq!(module, self.module_index());
-                Some(def_func_index)
+                // If this function is for `self` then pass it through,
+                // otherwise it's for some other module in this image so
+                // there's no `DefinedFuncIndex` for this offset.
+                if module == self.module_index() {
+                    Some(def_func_index)
+                } else {
+                    None
+                }
             }
             _ => None,
         }
