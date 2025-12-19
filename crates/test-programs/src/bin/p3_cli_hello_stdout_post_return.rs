@@ -14,7 +14,11 @@ impl exports::wasi::cli::run::Guest for Component {
             async {
                 tx.write_all(b"hello, world\n".to_vec()).await;
                 wit_bindgen::spawn(async move {
-                    wasi::clocks::monotonic_clock::wait_for(10_000_000).await;
+                    // Yield a few times to allow the host to accept and process
+                    // the `run` result.
+                    for _ in 0..10 {
+                        wit_bindgen::yield_async().await;
+                    }
                     tx.write_all(b"hello again, after return\n".to_vec()).await;
                     drop(tx);
                 });
