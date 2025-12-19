@@ -87,6 +87,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wizer",
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
+    "wasmtime-internal-debugger",
     "wasmtime-cli",
 ];
 
