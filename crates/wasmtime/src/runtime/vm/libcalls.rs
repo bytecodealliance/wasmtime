@@ -1256,6 +1256,11 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch> {
     use crate::UpdateDeadline;
 
+    #[cfg(feature = "debug")]
+    {
+        store.block_on_debug_handler(crate::DebugEvent::EpochYield)?;
+    }
+
     let update_deadline = store.new_epoch_updated_deadline()?;
     block_on!(store, async move |store| {
         let delta = match update_deadline {
