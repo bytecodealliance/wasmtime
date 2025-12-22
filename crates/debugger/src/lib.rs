@@ -166,6 +166,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             }
             DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
+            DebugEvent::EpochYield => DebugRunResult::EpochYield,
         };
         self.0
             .out_tx
@@ -460,6 +461,8 @@ pub enum DebugRunResult {
     Finished,
     /// An error was raised by a hostcall.
     HostcallError,
+    /// Wasm execution was interrupted by an epoch change.
+    EpochYield,
     /// An exception is thrown and caught by Wasm. The current state
     /// is at the throw-point.
     CaughtExceptionThrown(OwnedRooted<ExnRef>),
