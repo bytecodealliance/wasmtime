@@ -29,9 +29,8 @@ pub(crate) fn try_new_uninit_box<T>() -> Result<Box<MaybeUninit<T>>, OutOfMemory
     let layout = alloc::alloc::Layout::new::<MaybeUninit<T>>();
 
     if layout.size() == 0 {
-        // Safety: `Box` explicitly allows construction from dangling pointers
-        // (which are guaranteed non-null and aligned) for zero-sized types.
-        return Ok(unsafe { Box::from_raw(core::ptr::dangling::<MaybeUninit<T>>().cast_mut()) });
+        // NB: no actual allocation takes place when boxing zero-sized types.
+        return Ok(Box::new(MaybeUninit::uninit()));
     }
 
     // Safety: layout size is non-zero.

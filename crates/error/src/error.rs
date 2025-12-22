@@ -1514,6 +1514,7 @@ impl<'a> OomOrDynErrorMut<'a> {
 
 /// Bit packed version of `enum { BoxedDynError, OutOfMemory }` that relies on
 /// implicit pointer tagging and `OutOfMemory` being zero-sized.
+#[repr(transparent)]
 pub(crate) struct OomOrDynError {
     // Safety: this must always be the casted-to-`u8` version of either (a)
     // `0x1`, or (b) a valid, owned `DynError` pointer. (Note that these cases
