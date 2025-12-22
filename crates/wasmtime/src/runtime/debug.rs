@@ -527,6 +527,8 @@ pub enum DebugEvent<'a> {
     Trap(Trap),
     /// A breakpoint was reached.
     Breakpoint,
+    /// An epoch yield occurred.
+    EpochYield,
 }
 
 /// A handler for debug events.
