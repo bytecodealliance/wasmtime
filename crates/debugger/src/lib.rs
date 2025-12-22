@@ -51,6 +51,34 @@ pub struct Debugger<T: Send + 'static> {
 /// The intermediate states here, and the separation of these states
 /// from the `JoinHandle` above, are what allow us to implement a
 /// cancel-safe version of `Debugger::run` below.
+///
+/// The state diagram for the outer logic is:
+///
+/// ```plain
+///              (start)
+///                 v
+///                 |
+/// .--->---------. v
+/// |     .----<  Paused  <-----------------------------------------------.
+/// |     |         v                                                     |
+/// |     |         | (async fn run() starts, sends Command::Continue)    |
+/// |     |         |                                                     |
+/// |     |         v                                                     ^
+/// |     |      Running                                                  |
+/// |     |       v v (async fn run() receives Response::Paused, returns) |
+/// |     |       | |_____________________________________________________|
+/// |     |       |
+/// |     |       | (async fn run() receives Response::Finished, returns)
+/// |     |       v
+/// |     |     Complete
+/// |     |
+/// ^     | (async fn with_store() starts, sends Command::Query)
+/// |     v
+/// |   Queried
+/// |     |
+/// |     | (async fn with_store() receives Response::QueryResponse, returns)
+/// `---<-'
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DebuggerState {
     /// Inner body is running in an async task and not in a debugger
