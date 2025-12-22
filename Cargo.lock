@@ -4923,7 +4923,6 @@ dependencies = [
 name = "wasmtime-internal-winch"
 version = "41.0.0"
 dependencies = [
- "anyhow",
  "cranelift-codegen",
  "gimli 0.32.3",
  "log",
