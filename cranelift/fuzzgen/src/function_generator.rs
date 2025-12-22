@@ -199,10 +199,6 @@ fn insert_cmp(
             // https://github.com/bytecodealliance/wasmtime/issues/4850
             (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
             (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
 
             // These are not implemented on x86_64, for vectors.
             (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
