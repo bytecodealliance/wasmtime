@@ -80,5 +80,9 @@ pub mod fact;
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
 
+// Temporarily re-export `anyhow` as `wasmtime_environ::error` to ease the
+// migration to the `wasmtime-internal-error` crate.
+pub use anyhow as error;
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
