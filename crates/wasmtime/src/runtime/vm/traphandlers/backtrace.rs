@@ -514,14 +514,7 @@ impl<'a, T> StoreBacktrace<'a, T> {
     }
 
     /// Get the Store underlying this iteration.
-    ///
-    /// # Safety
-    ///
-    /// This mutable store access *must not* be used to mutate the
-    /// stack itself that this iterator is visiting by removing
-    /// frames, even though the `store` technically owns the stack in
-    /// question.
-    pub unsafe fn store_mut(&mut self) -> StoreContextMut<'_, T> {
+    pub fn store_mut(&mut self) -> StoreContextMut<'_, T> {
         match self.current.as_mut().unwrap() {
             StoreOrActivationBacktrace::Activation(activation) => {
                 StoreContextMut(activation.store.0)
