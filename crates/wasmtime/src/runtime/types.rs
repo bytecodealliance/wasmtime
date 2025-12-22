@@ -3041,6 +3041,19 @@ impl GlobalType {
             _ => false,
         }
     }
+
+    /// Is global type `a` precisely equal to global type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same global type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &GlobalType, b: &GlobalType) -> bool {
+        ValType::eq(&a.content, &b.content) && a.mutability == b.mutability
+    }
 }
 
 // Tag Types
@@ -3092,6 +3105,19 @@ impl TagType {
     /// other.
     pub fn matches(&self, other: &TagType) -> bool {
         self.ty.matches(&other.ty) && other.ty.matches(&self.ty)
+    }
+
+    /// Is tag type `a` precisely equal to tag type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same tag type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &TagType, b: &TagType) -> bool {
+        FuncType::eq(&a.ty, &b.ty)
     }
 }
 
@@ -3223,6 +3249,21 @@ impl TableType {
             (other.minimum(), other.maximum()),
         ) && self.element.matches(other.element())
             && other.element().matches(self.element());
+    }
+
+    /// Is table type `a` precisely equal to table type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same table type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &TableType, b: &TableType) -> bool {
+        a.minimum() == b.minimum()
+            && a.maximum() == b.maximum()
+            && RefType::eq(&a.element, &b.element)
     }
 }
 
@@ -3607,6 +3648,19 @@ impl MemoryType {
             (self.minimum(), self.maximum()),
             (other.minimum(), other.maximum()),
         );
+    }
+
+    /// Is memory type `a` precisely equal to memory type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same memory type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &MemoryType, b: &MemoryType) -> bool {
+        a.maximum() == b.maximum() && a.minimum() == b.minimum()
     }
 }
 
