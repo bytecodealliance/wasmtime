@@ -1529,6 +1529,53 @@ impl ExternType {
             ExternType::Tag(tag_ty) => tag_ty.default_value(store).map(Extern::Tag),
         }
     }
+
+    /// Does this extern type match the other extern type?
+    ///
+    /// That is, is this extern type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &ExternType) -> bool {
+        match (self, other) {
+            (ExternType::Func(a), ExternType::Func(b)) => a.matches(b),
+            (ExternType::Func(_), _) => false,
+            (ExternType::Global(a), ExternType::Global(b)) => a.matches(b),
+            (ExternType::Global(_), _) => false,
+            (ExternType::Memory(a), ExternType::Memory(b)) => a.matches(b),
+            (ExternType::Memory(_), _) => false,
+            (ExternType::Tag(a), ExternType::Tag(b)) => a.matches(b),
+            (ExternType::Tag(_), _) => false,
+            (ExternType::Table(a), ExternType::Table(b)) => a.matches(b),
+            (ExternType::Table(_), _) => false,
+        }
+    }
+
+    /// Is extern type `a` precisely equal to extern type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same extern type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &ExternType, b: &ExternType) -> bool {
+        match (a, b) {
+            (ExternType::Func(a), ExternType::Func(b)) => FuncType::eq(a, b),
+            (ExternType::Func(_), _) => false,
+            (ExternType::Global(a), ExternType::Global(b)) => GlobalType::eq(a, b),
+            (ExternType::Global(_), _) => false,
+            (ExternType::Memory(a), ExternType::Memory(b)) => MemoryType::eq(a, b),
+            (ExternType::Memory(_), _) => false,
+            (ExternType::Tag(a), ExternType::Tag(b)) => TagType::eq(a, b),
+            (ExternType::Tag(_), _) => false,
+            (ExternType::Table(a), ExternType::Table(b)) => TableType::eq(a, b),
+            (ExternType::Table(_), _) => false,
+        }
+    }
 }
 
 impl From<FuncType> for ExternType {
