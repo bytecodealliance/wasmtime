@@ -2165,6 +2165,23 @@ start a print 1234
         Ok(())
     }
 
+    #[test]
+    fn p2_cli_p3_hello_stdout_post_return() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "-Sp3",
+            P3_CLI_HELLO_STDOUT_POST_RETURN_COMPONENT,
+        ]);
+        if cfg!(feature = "component-model-async") {
+            let output = output?;
+            assert_eq!(output, "hello, world\nhello again, after return\n");
+        } else {
+            assert!(output.is_err());
+        }
+        Ok(())
+    }
+
     mod invoke {
         use super::*;
 

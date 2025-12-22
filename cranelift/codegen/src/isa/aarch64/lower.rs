@@ -97,14 +97,14 @@ pub(crate) fn lower_fp_condcode(cc: FloatCC) -> Cond {
         FloatCC::GreaterThan => Cond::Gt,
         // GT | EQ. Ge => N = V.
         FloatCC::GreaterThanOrEqual => Cond::Ge,
-        // UN | LT
-        FloatCC::UnorderedOrLessThan => unimplemented!(),
-        // UN | LT | EQ
-        FloatCC::UnorderedOrLessThanOrEqual => unimplemented!(),
-        // UN | GT
-        FloatCC::UnorderedOrGreaterThan => unimplemented!(),
-        // UN | GT | EQ
-        FloatCC::UnorderedOrGreaterThanOrEqual => unimplemented!(),
+        // UN | LT. Lt => N != V.
+        FloatCC::UnorderedOrLessThan => Cond::Lt,
+        // UN | LT | EQ. Le => not (Z clear, N = V).
+        FloatCC::UnorderedOrLessThanOrEqual => Cond::Le,
+        // UN | GT. Hi => C set, Z clear.
+        FloatCC::UnorderedOrGreaterThan => Cond::Hi,
+        // UN | GT | EQ. Pl => N clear.
+        FloatCC::UnorderedOrGreaterThanOrEqual => Cond::Pl,
     }
 }
 

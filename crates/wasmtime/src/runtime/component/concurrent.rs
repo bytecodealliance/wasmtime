@@ -1774,8 +1774,15 @@ impl Instance {
             }
             callback_code::YIELD => {
                 let task = state.get_mut(guest_thread.task)?;
-                assert!(task.event.is_none());
-                task.event = Some(Event::None);
+                // If an `Event::Cancelled` is pending, we'll deliver that;
+                // otherwise, we'll deliver `Event::None`.  Note that
+                // `GuestTask::event` is only ever set to one of those two
+                // `Event` variants.
+                if let Some(event) = task.event {
+                    assert!(matches!(event, Event::None | Event::Cancelled));
+                } else {
+                    task.event = Some(Event::None);
+                }
                 let call = GuestCall {
                     thread: guest_thread,
                     kind: GuestCallKind::DeliverEvent {

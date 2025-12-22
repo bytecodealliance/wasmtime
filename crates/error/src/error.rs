@@ -1,4 +1,4 @@
-use super::boxed::try_box;
+use super::boxed::try_new_uninit_box;
 use super::context::ContextError;
 use super::ptr::{MutPtr, OwnedPtr, SharedPtr};
 use super::vtable::Vtable;
@@ -18,8 +18,10 @@ use std::backtrace::{Backtrace, BacktraceStatus};
 ///
 /// # Safety
 ///
-/// Implementations must correctly report their type (or a type `T` where `*mut
-/// Self` can be cast to `*mut T` and safely accessed) in `ext_is`.
+/// Safety relies on `ext_is` being implemented correctly. Implementations must
+/// not lie about whether they are or are not an instance of the given type id's
+/// associated type (or a newtype wrapper around that type). Violations will
+/// lead to unsafety.
 pub(crate) unsafe trait ErrorExt: core::error::Error + Send + Sync + 'static {
     /// Get a shared borrow of the next error in the chain.
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>>;
@@ -30,7 +32,8 @@ pub(crate) unsafe trait ErrorExt: core::error::Error + Send + Sync + 'static {
     /// Take ownership of the next error in the chain.
     fn ext_take_source(&mut self) -> Option<OomOrDynError>;
 
-    /// Is this error an instance of `T`, where `type_id == TypeId::of::<T>()`?
+    /// Is this error an instance of `T`, where `type_id == TypeId::of::<T>()`
+    /// or a newtype wrapper around that type?
     ///
     /// # Safety
     ///
@@ -137,12 +140,16 @@ impl BoxedDynError {
             None => crate::backtrace::capture(),
         };
 
-        let error = try_box(ConcreteError {
-            vtable: Vtable::of::<E>(),
-            #[cfg(feature = "backtrace")]
-            backtrace: Some(backtrace),
-            error,
-        })?;
+        let boxed = try_new_uninit_box()?;
+        let error = Box::write(
+            boxed,
+            ConcreteError {
+                vtable: Vtable::of::<E>(),
+                #[cfg(feature = "backtrace")]
+                backtrace: Some(backtrace),
+                error,
+            },
+        );
 
         // We are going to pun the `ConcreteError<E>` pointer into a `DynError`
         // pointer. Debug assert that their layouts are compatible first.
@@ -179,7 +186,8 @@ impl BoxedDynError {
         // Safety: `Box::into_raw` always returns a non-null pointer.
         let ptr = unsafe { NonNull::new_unchecked(ptr) };
         let ptr = OwnedPtr::new(ptr);
-        Ok(Self::from_owned_ptr(ptr))
+        // Safety: points to a valid `DynError`.
+        Ok(unsafe { Self::from_owned_ptr(ptr) })
     }
 
     fn into_owned_ptr(self) -> OwnedPtr<DynError> {
@@ -188,7 +196,12 @@ impl BoxedDynError {
         ptr
     }
 
-    fn from_owned_ptr(inner: OwnedPtr<DynError>) -> Self {
+    /// # Safety
+    ///
+    /// The given pointer must be a valid `DynError` pointer: punning a
+    /// `ConcreteError<?>` and is safe to drop and deallocate with its
+    /// `DynError::vtable` methods.
+    unsafe fn from_owned_ptr(inner: OwnedPtr<DynError>) -> Self {
         BoxedDynError { inner }
     }
 }
@@ -398,6 +411,7 @@ impl BoxedDynError {
 /// assert_eq!(error.to_string(), "oops I ate worms");
 /// # }
 /// ```
+#[repr(transparent)]
 pub struct Error {
     pub(crate) inner: OomOrDynError,
 }
@@ -1500,6 +1514,7 @@ impl<'a> OomOrDynErrorMut<'a> {
 
 /// Bit packed version of `enum { BoxedDynError, OutOfMemory }` that relies on
 /// implicit pointer tagging and `OutOfMemory` being zero-sized.
+#[repr(transparent)]
 pub(crate) struct OomOrDynError {
     // Safety: this must always be the casted-to-`u8` version of either (a)
     // `0x1`, or (b) a valid, owned `DynError` pointer. (Note that these cases
@@ -1526,7 +1541,8 @@ impl Drop for OomOrDynError {
         if self.is_boxed_dyn_error() {
             let inner = self.inner.cast::<DynError>();
             let inner = OwnedPtr::new(inner);
-            let _ = BoxedDynError::from_owned_ptr(inner);
+            // Safety: the pointer is a valid `DynError` pointer.
+            let _ = unsafe { BoxedDynError::from_owned_ptr(inner) };
         } else {
             debug_assert!(self.is_oom());
         }
@@ -1640,11 +1656,9 @@ impl OomOrDynError {
         self,
     ) -> Box<dyn core::error::Error + Send + Sync + 'static> {
         let box_dyn_error_of_oom = || {
-            let ptr = NonNull::<OutOfMemory>::dangling().as_ptr();
-            // Safety: it is always safe to call `Box::<T>::from_raw` on `T`'s
-            // dangling pointer if `T` is a unit type.
-            let boxed = unsafe { Box::from_raw(ptr) };
-            boxed as _
+            // NB: `Box::new` will never actually allocate for zero-sized types
+            // like `OutOfMemory`.
+            Box::new(OutOfMemory::new()) as _
         };
 
         if self.is_oom() {

@@ -856,17 +856,19 @@ impl<'a> TrampolineCompiler<'a> {
     /// Determine whether the specified type can be optimized as a stream
     /// payload by lifting and lowering with a simple `memcpy`.
     ///
-    /// Any type containing only "flat", primitive data (i.e. no pointers or
-    /// handles) should qualify for this optimization, but it's also okay to
-    /// conservatively return `None` here; the fallback slow path will always
-    /// work -- it just won't be as efficient.
+    /// Any type containing only "flat", primitive data for which all bit
+    /// patterns are valid (i.e. no pointers, handles, bools, or chars) should
+    /// qualify for this optimization, but it's also okay to conservatively
+    /// return `None` here; the fallback slow path will always work -- it just
+    /// won't be as efficient.
     fn flat_stream_element_info(&self, ty: TypeStreamTableIndex) -> Option<&CanonicalAbiInfo> {
         let payload = self.types[self.types[ty].ty].payload;
         match payload {
             None => Some(&CanonicalAbiInfo::ZERO),
             Some(
-                payload @ (InterfaceType::Bool
-                | InterfaceType::S8
+                // Note that we exclude `Bool` and `Char` from this list because
+                // not all bit patterns are valid for those types.
+                payload @ (InterfaceType::S8
                 | InterfaceType::U8
                 | InterfaceType::S16
                 | InterfaceType::U16
@@ -875,8 +877,7 @@ impl<'a> TrampolineCompiler<'a> {
                 | InterfaceType::S64
                 | InterfaceType::U64
                 | InterfaceType::Float32
-                | InterfaceType::Float64
-                | InterfaceType::Char),
+                | InterfaceType::Float64),
             ) => Some(self.types.canonical_abi(&payload)),
             // TODO: Recursively check for other "flat" types (i.e. those without pointers or handles),
             // e.g. `record`s, `variant`s, etc. which contain only flat types.

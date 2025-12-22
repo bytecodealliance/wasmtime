@@ -753,3 +753,48 @@ async fn breakpoints_in_inlined_code() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn epoch_events() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.epoch_interruption(true);
+        },
+        r#"
+    (module
+      (func $f (export "f") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::EpochYield => {}
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_async_yield_and_update(1);
+    store.engine().increment_epoch();
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func_f = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::I32(0)];
+    func_f
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}

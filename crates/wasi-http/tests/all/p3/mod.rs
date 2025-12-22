@@ -144,6 +144,7 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
+        .0
         .map_err(|()| anyhow!("`wasi:cli/run#run` failed"))
 }
 
@@ -333,7 +334,7 @@ async fn p3_http_middleware() -> Result<()> {
 async fn p3_http_middleware_host_to_host() {
     let error = format!("{:?}", test_http_middleware(true).await.unwrap_err());
 
-    let expected = "cannot read from and write to intra-component stream with non-unit payload";
+    let expected = "cannot read from and write to intra-component future with non-numeric payload";
 
     assert!(
         error.contains(expected),

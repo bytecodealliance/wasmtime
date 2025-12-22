@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static ENABLED: AtomicBool = AtomicBool::new(true);
 
 fn enabled() -> bool {
-    ENABLED.load(Ordering::Acquire)
+    ENABLED.load(Ordering::Relaxed)
 }
 
 /// Forcibly disable capturing backtraces dynamically.
@@ -15,7 +15,7 @@ fn enabled() -> bool {
 /// `backtrace` cargo feature.
 #[doc(hidden)]
 pub fn disable_backtrace() {
-    ENABLED.store(false, Ordering::Release)
+    ENABLED.store(false, Ordering::Relaxed)
 }
 
 #[track_caller]
