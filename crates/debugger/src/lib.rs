@@ -30,12 +30,6 @@ use wasmtime::{
 /// `StoreContextMut` and can allow examining the paused execution's
 /// state. One runs until the next event suspends execution by
 /// invoking `Debugger::run`.
-///
-/// Note that because of limitations in Wasmtime's future cancelation
-/// handling, all events must be consumed until the inner body
-/// completes and `Debugger::is_complete` returns
-/// true. `Debugger::finish` continues execution ignoring all further
-/// events to allow clean completion if needed.
 pub struct Debugger<T: Send + 'static> {
     /// The inner task that this debugger wraps.
     inner: Option<JoinHandle<Result<Store<T>>>>,
@@ -418,7 +412,8 @@ impl<T: Send + 'static> Debugger<T> {
     /// around which it was wrapped.
     ///
     /// Only valid to invoke once `run()` returns
-    /// `DebugRunResult::Finished`.
+    /// `DebugRunResult::Finished` or after calling `finish()` (which
+    /// finishes execution while dropping all further debug events).
     ///
     /// This is cancel-safe, but if canceled, the Store is lost.
     pub async fn take_store(&mut self) -> Result<Option<Store<T>>> {
@@ -433,19 +428,6 @@ impl<T: Send + 'static> Debugger<T> {
                 Ok(Some(store))
             }
             _ => panic!("Invalid state: debugger not yet complete"),
-        }
-    }
-}
-
-impl<T: Send + 'static> Drop for Debugger<T> {
-    fn drop(&mut self) {
-        // We cannot allow this because the fiber implementation will
-        // panic if a `Func::call_async` future is dropped prematurely
-        // -- in general, Wasmtime's futures that embody Wasm
-        // execution are not cancel-safe, so we have to wait for the
-        // inner body to finish before the Debugger is dropped.
-        if self.state != DebuggerState::Complete {
-            panic!("Dropping Debugger before inner body is complete");
         }
     }
 }
@@ -653,6 +635,48 @@ mod test {
 
         debugger.finish().await?;
         assert!(debugger.is_complete());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg_attr(miri, ignore)]
+    async fn drop_debugger_and_store() -> Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut config = Config::new();
+        config.guest_debug(true);
+        config.async_support(true);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                  (func (export "main") (param i32 i32) (result i32)
+                    local.get 0
+                    local.get 1
+                    i32.add))
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let main = instance.get_func(&mut store, "main").unwrap();
+
+        let mut debugger = Debugger::new(store, move |mut store| async move {
+            let mut results = [Val::I32(0)];
+            store.edit_breakpoints().unwrap().single_step(true).unwrap();
+            main.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+                .await?;
+            assert_eq!(results[0].unwrap_i32(), 3);
+            Ok(store)
+        });
+
+        // Step once, then drop everything at the end of this
+        // function. Wasmtime's fiber cleanup should safely happen
+        // without attempting to raise debug async handler calls with
+        // missing async context.
+        let _ = debugger.run().await?;
 
         Ok(())
     }

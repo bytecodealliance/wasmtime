@@ -358,7 +358,7 @@ impl StoreOpaque {
     }
 
     /// Returns whether `block_on` will succeed or panic.
-    #[cfg(feature = "call-hook")]
+    #[cfg(any(feature = "call-hook", feature = "debug"))]
     pub(crate) fn can_block(&mut self) -> bool {
         self.fiber_async_state_mut().current_future_cx.is_some()
     }

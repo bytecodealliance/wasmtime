@@ -2839,6 +2839,9 @@ unsafe impl<T> VMStore for StoreInner<T> {
     #[cfg(feature = "debug")]
     fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
         if let Some(handler) = self.debug_handler.take() {
+            if !self.can_block() {
+                bail!("could not invoke debug handler without async context");
+            }
             log::trace!("about to raise debug event {event:?}");
             StoreContextMut(self).with_blocking(|store, cx| {
                 cx.block_on(Pin::from(handler.handle(store, event)).as_mut())
