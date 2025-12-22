@@ -32,7 +32,7 @@ fn emit_dwarf_sections(
     isa: &dyn TargetIsa,
     mut dwarf: Dwarf,
     frames: Option<FrameTable>,
-) -> anyhow::Result<Vec<DwarfSection>> {
+) -> wasmtime_environ::error::Result<Vec<DwarfSection>> {
     let endian = match isa.endianness() {
         Endianness::Little => RunTimeEndian::Little,
         Endianness::Big => RunTimeEndian::Big,
@@ -48,7 +48,7 @@ fn emit_dwarf_sections(
     }
 
     let mut result = Vec::new();
-    sections.for_each_mut(|id, s| -> anyhow::Result<()> {
+    sections.for_each_mut(|id, s| -> wasmtime_environ::error::Result<()> {
         let name = id.name();
         let body = s.writer.take();
         if body.is_empty() {
@@ -165,7 +165,7 @@ fn create_frame_table(
 pub fn emit_dwarf(
     isa: &dyn TargetIsa,
     compilation: &mut Compilation<'_>,
-) -> anyhow::Result<Vec<DwarfSection>> {
+) -> wasmtime_environ::error::Result<Vec<DwarfSection>> {
     let dwarf = transform_dwarf(isa, compilation)?;
     let frame_table = create_frame_table(isa, compilation);
     let sections = emit_dwarf_sections(isa, dwarf, frame_table)?;

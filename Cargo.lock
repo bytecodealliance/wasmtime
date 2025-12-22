@@ -4811,7 +4811,6 @@ version = "41.0.0"
 name = "wasmtime-internal-cranelift"
 version = "41.0.0"
 dependencies = [
- "anyhow",
  "cfg-if",
  "cranelift-codegen",
  "cranelift-control",

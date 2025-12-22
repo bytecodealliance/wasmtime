@@ -12,13 +12,13 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::synthetic::ModuleSyntheticUnit;
 use super::utils::{append_vmctx_info, resolve_die_ref};
 use crate::debug::{Compilation, Reader};
-use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, UnitRef};
 use std::collections::HashSet;
 use wasmtime_environ::StaticModuleIndex;
+use wasmtime_environ::error::{Context, Error};
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
 
 #[derive(Debug)]

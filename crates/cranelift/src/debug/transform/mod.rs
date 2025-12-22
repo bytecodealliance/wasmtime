@@ -4,12 +4,12 @@ use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
 use crate::debug::{Compilation, Reader};
-use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{Dwarf, DwarfPackage, LittleEndian, Section, Unit, UnitRef, UnitSectionOffset, write};
 use std::{collections::HashSet, fmt::Debug};
 use synthetic::ModuleSyntheticUnit;
 use thiserror::Error;
+use wasmtime_environ::error::Error;
 use wasmtime_environ::{
     DefinedFuncIndex, ModuleTranslation, PrimaryMap, StaticModuleIndex, Tunables,
 };
@@ -54,11 +54,11 @@ pub(crate) struct DebugInputContext<'a> {
 fn load_dwp<'data>(
     translation: ModuleTranslation<'data>,
     buffer: &'data [u8],
-) -> anyhow::Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
+) -> wasmtime_environ::error::Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
 
     let dwarf_package = DwarfPackage::load(
-        |id| -> anyhow::Result<_> {
+        |id| -> wasmtime_environ::error::Result<_> {
             let slice = match id {
                 gimli::SectionId::DebugAbbrev => {
                     translation.debuginfo.dwarf.debug_abbrev.reader().slice()
