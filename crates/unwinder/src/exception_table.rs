@@ -127,7 +127,7 @@ impl ExceptionTableBuilder {
         &mut self,
         start_offset: CodeOffset,
         call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime_environ::error::Result<()> {
         // Ensure that we see functions in offset order.
         assert!(start_offset >= self.last_start_offset);
         self.last_start_offset = start_offset;
@@ -252,36 +252,37 @@ pub struct ExceptionHandler {
 impl<'a> ExceptionTable<'a> {
     /// Parse exception tables from a byte-slice as produced by
     /// [`ExceptionTableBuilder::serialize`].
-    pub fn parse(data: &'a [u8]) -> anyhow::Result<ExceptionTable<'a>> {
+    pub fn parse(data: &'a [u8]) -> wasmtime_environ::error::Result<ExceptionTable<'a>> {
         let mut data = Bytes(data);
-        let callsite_count = data
-            .read::<U32Bytes<LittleEndian>>()
-            .map_err(|_| anyhow::anyhow!("Unable to read callsite count prefix"))?;
+        let callsite_count = data.read::<U32Bytes<LittleEndian>>().map_err(|_| {
+            wasmtime_environ::error::anyhow!("Unable to read callsite count prefix")
+        })?;
         let callsite_count = usize::try_from(callsite_count.get(LittleEndian))?;
         let handler_count = data
             .read::<U32Bytes<LittleEndian>>()
-            .map_err(|_| anyhow::anyhow!("Unable to read handler count prefix"))?;
+            .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read handler count prefix"))?;
         let handler_count = usize::try_from(handler_count.get(LittleEndian))?;
         let (callsites, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data.0, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read callsites slice"))?;
+                .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read callsites slice"))?;
         let (frame_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read frame_offsets slice"))?;
+            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, callsite_count).map_err(
+                |_| wasmtime_environ::error::anyhow!("Unable to read frame_offsets slice"),
+            )?;
         let (ranges, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read ranges slice"))?;
+                .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read ranges slice"))?;
         let (tags, data) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-            .map_err(|_| anyhow::anyhow!("Unable to read tags slice"))?;
+            .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read tags slice"))?;
         let (contexts, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read contexts slice"))?;
+                .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read contexts slice"))?;
         let (handlers, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read handlers slice"))?;
+                .map_err(|_| wasmtime_environ::error::anyhow!("Unable to read handlers slice"))?;
 
         if !data.is_empty() {
-            anyhow::bail!("Unexpected data at end of serialized exception table");
+            wasmtime_environ::error::bail!("Unexpected data at end of serialized exception table");
         }
 
         Ok(ExceptionTable {
