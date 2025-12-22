@@ -3007,6 +3007,40 @@ impl GlobalType {
     pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
         self.content.into_registered_type()
     }
+
+    /// Does this global type match the other?
+    ///
+    /// That is, is this global type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &GlobalType) -> bool {
+        match (self, other) {
+            (
+                GlobalType {
+                    content: a,
+                    mutability: Mutability::Const,
+                },
+                GlobalType {
+                    content: b,
+                    mutability: Mutability::Const,
+                },
+            ) => a.matches(b),
+            (
+                GlobalType {
+                    content: a,
+                    mutability: Mutability::Var,
+                },
+                GlobalType {
+                    content: b,
+                    mutability: Mutability::Var,
+                },
+            ) => a.matches(b) && b.matches(a),
+            _ => false,
+        }
+    }
 }
 
 // Tag Types
@@ -3046,6 +3080,18 @@ impl TagType {
     /// is identical to ordinary host tag allocation.
     pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTag> {
         RuntimeTag::new(store, self)
+    }
+
+    /// Does this tag type match the other?
+    ///
+    /// That is, is this tag type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &TagType) -> bool {
+        self.ty.matches(&other.ty) && other.ty.matches(&self.ty)
     }
 }
 
@@ -3161,6 +3207,39 @@ impl TableType {
             .ref_()
             .unwrap();
         RuntimeTable::new(store, self.clone(), init_val)
+    }
+
+    /// Does this table type match the other?
+    ///
+    /// That is, is this table type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &TableType) -> bool {
+        return limit_matches(
+            (self.minimum(), self.maximum()),
+            (other.minimum(), other.maximum()),
+        ) && self.element.matches(other.element())
+            && other.element().matches(self.element());
+    }
+}
+
+/// Does this limit match the other?
+///
+/// That is, is this limit contained in the other?
+fn limit_matches(this: (u64, Option<u64>), other: (u64, Option<u64>)) -> bool {
+    if this.0 < other.0 {
+        false
+    } else if let Some(b) = other.1 {
+        if let Some(a) = this.1 {
+            if a > b { false } else { true }
+        } else {
+            false
+        }
+    } else {
+        true
     }
 }
 
@@ -3513,6 +3592,21 @@ impl MemoryType {
         } else {
             Extern::Memory(crate::Memory::new(store, self.clone())?)
         })
+    }
+
+    /// Does this memory type match the other?
+    ///
+    /// That is, is this memory type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &MemoryType) -> bool {
+        return limit_matches(
+            (self.minimum(), self.maximum()),
+            (other.minimum(), other.maximum()),
+        );
     }
 }
 
