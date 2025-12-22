@@ -1,8 +1,8 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
-use anyhow::Error;
 use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
+use wasmtime_environ::error::Error;
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,

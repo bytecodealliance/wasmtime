@@ -1,11 +1,11 @@
 //! Compilation support for the component model.
 
 use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
-use anyhow::{Result, bail};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
+use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
     Abi, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PtrSize, TrapSentinel, Tunables,
     WasmFuncType, WasmValType, component::*, fact::PREPARE_CALL_FIXED_PARAMS,

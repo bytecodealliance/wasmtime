@@ -7,11 +7,11 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::unit::InheritedAttr;
 use super::{TransformError, dbi_log};
-use anyhow::{Error, bail};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     AttributeValue, DebugLineOffset, DebuggingInformationEntry, UnitOffset, UnitRef, write,
 };
+use wasmtime_environ::error::{Error, bail};
 
 #[derive(Debug)]
 pub(crate) enum EntryAttributesContext<'a> {

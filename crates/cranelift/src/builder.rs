@@ -4,7 +4,6 @@
 //! well as providing a function to return the default configuration to build.
 
 use crate::isa_builder::IsaBuilder;
-use anyhow::Result;
 use cranelift_codegen::{
     CodegenResult,
     isa::{self, OwnedTargetIsa},
@@ -13,6 +12,7 @@ use std::fmt;
 use std::path;
 use std::sync::Arc;
 use target_lexicon::Triple;
+use wasmtime_environ::error::Result;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
 
 struct Builder {
