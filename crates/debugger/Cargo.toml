@@ -6,7 +6,6 @@ description = "INTERNAL: Wasmtime's guest-debugger functionality"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/wasmtime-debugger"
 repository = "https://github.com/bytecodealliance/wasmtime"
-categories = ["no-std"]
 readme = "README.md"
 keywords = ["debugger"]
 edition.workspace = true
@@ -22,9 +21,9 @@ anyhow = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
-# Depend on `wasmtime` again to get `cranelift` so we can write unit
-# tests that build modules.
-wasmtime = { workspace = true, features = ["debug", "std", "async", "cranelift", "wat"] }
+# Depend on `wasmtime` again to get `cranelift` and `wat` so we can
+# write unit tests that build modules from textual WAT.
+wasmtime = { workspace = true, features = ["cranelift", "wat"] }
 env_logger = { workspace = true }
 
 [features]

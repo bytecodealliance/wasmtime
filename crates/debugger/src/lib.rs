@@ -26,8 +26,8 @@ use wasmtime::{
 /// performs some actions on a store. Those actions are subject to the
 /// debugger, and debugger events will be raised as appropriate. From
 /// the "outside" of this combinator, it is always in one of two
-/// states: running or stopped. When stopped, it acts as a
-/// `StoreContextMut` and can allow examining the stopped execution's
+/// states: running or paused. When paused, it acts as a
+/// `StoreContextMut` and can allow examining the paused execution's
 /// state. One runs until the next event suspends execution by
 /// invoking `Debugger::run`.
 ///
@@ -54,14 +54,14 @@ pub struct Debugger<T: Send + 'static> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DebuggerState {
     /// Inner body is running in an async task and not in a debugger
-    /// callback. Outer logic is waiting for a `Response::Stopped` or
+    /// callback. Outer logic is waiting for a `Response::Paused` or
     /// `Response::Complete`.
     Running,
     /// Inner body is running in an async task and at a debugger
     /// callback (or in the initial trampoline waiting for the first
-    /// `Continue`). `Response::Stopped` has been received. Outer
+    /// `Continue`). `Response::Paused` has been received. Outer
     /// logic has not sent any commands.
-    Stopped,
+    Paused,
     /// We have sent a command to the inner body and are waiting for a
     /// response.
     Queried,
@@ -107,7 +107,7 @@ enum Command<T: 'static> {
 }
 
 enum Response {
-    Stopped(DebugRunResult),
+    Paused(DebugRunResult),
     QueryResponse(Box<dyn Any + Send>),
     Finished,
 }
@@ -127,44 +127,36 @@ impl<T: Send + 'static> std::clone::Clone for Handler<T> {
 
 impl<T: Send + 'static> DebugHandler for Handler<T> {
     type Data = T;
-    fn handle(
-        &self,
-        mut store: StoreContextMut<'_, T>,
-        event: DebugEvent<'_>,
-    ) -> impl Future<Output = ()> + Send {
-        async move {
-            let mut in_rx = self.0.in_rx.lock().await;
+    async fn handle(&self, mut store: StoreContextMut<'_, T>, event: DebugEvent<'_>) {
+        let mut in_rx = self.0.in_rx.lock().await;
 
-            let result = match event {
-                DebugEvent::HostcallError(_) => DebugRunResult::HostcallError,
-                DebugEvent::CaughtExceptionThrown(exn) => {
-                    DebugRunResult::CaughtExceptionThrown(exn)
-                }
-                DebugEvent::UncaughtExceptionThrown(exn) => {
-                    DebugRunResult::UncaughtExceptionThrown(exn)
-                }
-                DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
-                DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
-            };
-            self.0
-                .out_tx
-                .send(Response::Stopped(result))
-                .await
-                .expect("outbound channel closed prematurely");
+        let result = match event {
+            DebugEvent::HostcallError(_) => DebugRunResult::HostcallError,
+            DebugEvent::CaughtExceptionThrown(exn) => DebugRunResult::CaughtExceptionThrown(exn),
+            DebugEvent::UncaughtExceptionThrown(exn) => {
+                DebugRunResult::UncaughtExceptionThrown(exn)
+            }
+            DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
+            DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
+        };
+        self.0
+            .out_tx
+            .send(Response::Paused(result))
+            .await
+            .expect("outbound channel closed prematurely");
 
-            while let Some(cmd) = in_rx.recv().await {
-                match cmd {
-                    Command::Query(closure) => {
-                        let result = closure(store.as_context_mut());
-                        self.0
-                            .out_tx
-                            .send(Response::QueryResponse(result))
-                            .await
-                            .expect("outbound channel closed prematurely");
-                    }
-                    Command::Continue => {
-                        break;
-                    }
+        while let Some(cmd) = in_rx.recv().await {
+            match cmd {
+                Command::Query(closure) => {
+                    let result = closure(store.as_context_mut());
+                    self.0
+                        .out_tx
+                        .send(Response::QueryResponse(result))
+                        .await
+                        .expect("outbound channel closed prematurely");
+                }
+                Command::Continue => {
+                    break;
                 }
             }
         }
@@ -176,15 +168,15 @@ impl<T: Send + 'static> Debugger<T> {
     /// runs the given inner body.
     ///
     /// The debugger is always in one of two states: running or
-    /// stopped.
+    /// paused.
     ///
-    /// When stopped, the holder of this object can invoke
+    /// When paused, the holder of this object can invoke
     /// `Debugger::run` to enter the running state. The inner body
-    /// will run until stopped by a debug event. While running, the
+    /// will run until paused by a debug event. While running, the
     /// future returned by either of these methods owns the `Debugger`
     /// and hence no other methods can be invoked.
     ///
-    /// When stopped, the holder of this object can access the `Store`
+    /// When paused, the holder of this object can access the `Store`
     /// indirectly by providing a closure
     pub fn new<F, I>(mut store: Store<T>, inner: F) -> Debugger<T>
     where
@@ -219,7 +211,7 @@ impl<T: Send + 'static> Debugger<T> {
 
         Debugger {
             inner: Some(inner),
-            state: DebuggerState::Stopped,
+            state: DebuggerState::Paused,
             in_tx,
             out_rx,
         }
@@ -239,7 +231,7 @@ impl<T: Send + 'static> Debugger<T> {
     pub async fn run(&mut self) -> Result<DebugRunResult> {
         log::trace!("running: state is {:?}", self.state);
         match self.state {
-            DebuggerState::Stopped => {
+            DebuggerState::Paused => {
                 log::trace!("sending Continue");
                 self.in_tx
                     .send(Command::Continue)
@@ -248,7 +240,7 @@ impl<T: Send + 'static> Debugger<T> {
                 log::trace!("sent Continue");
 
                 // If that `send` was canceled, the command was not
-                // sent, so it's fine to remain in `Stopped`. If it
+                // sent, so it's fine to remain in `Paused`. If it
                 // succeeded and we reached here, transition to
                 // `Running` so we don't re-send.
                 self.state = DebuggerState::Running;
@@ -260,7 +252,7 @@ impl<T: Send + 'static> Debugger<T> {
             DebuggerState::Queried => {
                 // We expect to receive a `QueryResponse`; drop it if
                 // the query was canceled, then transition back to
-                // `Stopped`.
+                // `Paused`.
                 log::trace!("in Queried; receiving");
                 let response = self
                     .out_rx
@@ -269,10 +261,10 @@ impl<T: Send + 'static> Debugger<T> {
                     .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
                 log::trace!("in Queried; received, dropping");
                 assert!(matches!(response, Response::QueryResponse(_)));
-                self.state = DebuggerState::Stopped;
+                self.state = DebuggerState::Paused;
 
                 // Now send a `Continue`, as above.
-                log::trace!("in Stopped; sending Continue");
+                log::trace!("in Paused; sending Continue");
                 self.in_tx
                     .send(Command::Continue)
                     .await
@@ -285,7 +277,7 @@ impl<T: Send + 'static> Debugger<T> {
         }
 
         // At this point, the inner task is in Running state. We
-        // expect to receive a message when it next stops or
+        // expect to receive a message when it next pauses or
         // completes. If this `recv()` is canceled, no message is
         // lost, and the state above accurately reflects what must be
         // done on the next `run()`.
@@ -302,9 +294,9 @@ impl<T: Send + 'static> Debugger<T> {
                 self.state = DebuggerState::Complete;
                 Ok(DebugRunResult::Finished)
             }
-            Response::Stopped(result) => {
-                log::trace!("got Stopped");
-                self.state = DebuggerState::Stopped;
+            Response::Paused(result) => {
+                log::trace!("got Paused");
+                self.state = DebuggerState::Paused;
                 Ok(result)
             }
             Response::QueryResponse(_) => {
@@ -333,7 +325,7 @@ impl<T: Send + 'static> Debugger<T> {
     /// Perform some action on the contained `Store` while not running.
     ///
     /// This may only be invoked before the inner body finishes and
-    /// when it is stopped; that is, when the `Debugger` is initially
+    /// when it is paused; that is, when the `Debugger` is initially
     /// created and after any call to `run()` returns a result other
     /// than `DebugRunResult::Finished`. If an earlier `run()`
     /// invocation was canceled, it must be re-invoked and return
@@ -359,7 +351,7 @@ impl<T: Send + 'static> Debugger<T> {
                     .await
                     .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
                 assert!(matches!(response, Response::QueryResponse(_)));
-                self.state = DebuggerState::Stopped;
+                self.state = DebuggerState::Paused;
             }
             DebuggerState::Running => {
                 // Results from a canceled `run()`; `run()` must
@@ -369,7 +361,7 @@ impl<T: Send + 'static> Debugger<T> {
             DebuggerState::Complete => {
                 panic!("Cannot query when complete");
             }
-            DebuggerState::Stopped => {
+            DebuggerState::Paused => {
                 // OK -- this is the state we want.
             }
         }
@@ -388,7 +380,7 @@ impl<T: Send + 'static> Debugger<T> {
         let Response::QueryResponse(resp) = response else {
             anyhow::bail!("Incorrect response from debugger task");
         };
-        self.state = DebuggerState::Stopped;
+        self.state = DebuggerState::Paused;
 
         Ok(*resp.downcast::<R>().expect("type mismatch"))
     }
