@@ -201,6 +201,14 @@ fn is() {
 }
 
 #[test]
+fn is_for_root_cause_with_initial_error_source() {
+    let error = std::fmt::Error;
+    let error = ChainError::new("whoops", Some(Box::new(error)));
+    let error = Error::new(error);
+    assert!(error.root_cause().is::<std::fmt::Error>());
+}
+
+#[test]
 #[cfg(feature = "backtrace")]
 fn backtrace() {
     // Backtrace on OOM.
