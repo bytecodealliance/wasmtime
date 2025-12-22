@@ -23,7 +23,6 @@ mod frame_table;
 #[macro_use]
 mod builtin;
 mod demangling;
-mod error;
 mod ext;
 mod gc;
 mod hostcall;
@@ -40,12 +39,12 @@ mod trap_encoding;
 mod tunables;
 mod types;
 mod vmoffsets;
+mod wasm_error;
 
 pub use self::ext::*;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;
-pub use crate::error::*;
 pub use crate::frame_table::*;
 pub use crate::gc::*;
 pub use crate::hostcall::*;
@@ -61,6 +60,7 @@ pub use crate::trap_encoding::*;
 pub use crate::tunables::*;
 pub use crate::types::*;
 pub use crate::vmoffsets::*;
+pub use crate::wasm_error::*;
 pub use object;
 
 pub use wasmparser;
