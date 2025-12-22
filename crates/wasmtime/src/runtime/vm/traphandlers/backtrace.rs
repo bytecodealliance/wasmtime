@@ -407,19 +407,7 @@ impl<'a, T: 'static> ActivationBacktrace<'a, T> {
     /// This serves as an alternative to `Backtrace::trace()` and
     /// friends: it allows external iteration (and e.g. lazily walking
     /// through frames in a stack) rather than visiting via a closure.
-    ///
-    /// # Safety
-    ///
-    /// Although the iterator provides mutable store as a public
-    /// field, this *must not* be used to mutate the stack activation
-    /// itself that this iterator is visiting. While the `store`
-    /// technically owns the stack in question, the only way to do
-    /// this with the current API would be to return back into the
-    /// Wasm activation. As long as this iterator is held and used
-    /// while within host code called from that activation (which will
-    /// ordinarily be ensured if the `store`'s lifetime came from the
-    /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(
+    pub(crate) fn new(
         store: StoreContextMut<'a, T>,
         activation: Activation,
     ) -> ActivationBacktrace<'a, T> {
@@ -506,9 +494,9 @@ impl<'a, T> StoreBacktrace<'a, T> {
         // the innermost activation that owns the store, or a sentinel
         // if there are no activations.
         let current = match activations.pop() {
-            Some(innermost) => unsafe {
+            Some(innermost) => {
                 StoreOrActivationBacktrace::Activation(ActivationBacktrace::new(store, innermost))
-            },
+            }
             None => StoreOrActivationBacktrace::Store(store),
         };
         StoreBacktrace {
@@ -526,14 +514,7 @@ impl<'a, T> StoreBacktrace<'a, T> {
     }
 
     /// Get the Store underlying this iteration.
-    ///
-    /// # Safety
-    ///
-    /// This mutable store access *must not* be used to mutate the
-    /// stack itself that this iterator is visiting by removing
-    /// frames, even though the `store` technically owns the stack in
-    /// question.
-    pub unsafe fn store_mut(&mut self) -> StoreContextMut<'_, T> {
+    pub fn store_mut(&mut self) -> StoreContextMut<'_, T> {
         match self.current.as_mut().unwrap() {
             StoreOrActivationBacktrace::Activation(activation) => {
                 StoreContextMut(activation.store.0)
@@ -554,9 +535,9 @@ impl<'a, T> StoreBacktrace<'a, T> {
         let activation = self.activations.pop();
         let store = self.take_store();
         self.current = Some(match activation {
-            Some(activation) => StoreOrActivationBacktrace::Activation(unsafe {
-                ActivationBacktrace::new(store, activation)
-            }),
+            Some(activation) => {
+                StoreOrActivationBacktrace::Activation(ActivationBacktrace::new(store, activation))
+            }
             None => StoreOrActivationBacktrace::Store(store),
         });
     }
