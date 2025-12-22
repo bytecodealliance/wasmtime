@@ -1,16 +1,16 @@
 use crate::Abi;
 use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
+use crate::error::Context;
+use crate::error::anyhow;
+use crate::error::ensure;
+use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, FuncKey, ModuleEnvironment, ModuleInternedTypeIndex,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex, Tunables, TypeConvert,
     WasmHeapType, WasmResult, WasmValType,
 };
-use anyhow::Context;
-use anyhow::anyhow;
-use anyhow::ensure;
-use anyhow::{Result, bail};
 use core::str::FromStr;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;

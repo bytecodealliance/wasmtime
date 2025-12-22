@@ -28,9 +28,9 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
+use crate::error::Result;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
-use anyhow::Result;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;

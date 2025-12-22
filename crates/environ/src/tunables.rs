@@ -1,5 +1,5 @@
+use crate::error::{Error, Result, anyhow, bail};
 use crate::{IndexType, Limits, Memory, TripleExt};
-use anyhow::{Error, Result, anyhow, bail};
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};

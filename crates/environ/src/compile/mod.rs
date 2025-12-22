@@ -1,12 +1,12 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::error::Result;
 use crate::prelude::*;
 use crate::{
     DefinedFuncIndex, FlagValue, FuncKey, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex,
     TripleExt, Tunables, WasmError, WasmFuncType, obj,
 };
-use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
 use std::any::Any;

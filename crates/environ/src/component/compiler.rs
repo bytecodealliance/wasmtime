@@ -1,6 +1,6 @@
 use crate::component::{ComponentTranslation, ComponentTypesBuilder, UnsafeIntrinsic};
+use crate::error::Result;
 use crate::{Abi, CompiledFunctionBody, FuncKey, Tunables};
-use anyhow::Result;
 
 /// Compilation support necessary for components.
 pub trait ComponentCompiler: Send + Sync {

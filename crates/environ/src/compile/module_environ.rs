@@ -1,3 +1,4 @@
+use crate::error::{Result, bail};
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
@@ -11,7 +12,6 @@ use crate::{
     TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
-use anyhow::{Result, bail};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
