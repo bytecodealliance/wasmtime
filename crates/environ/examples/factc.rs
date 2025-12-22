@@ -1,9 +1,12 @@
-use anyhow::{Context, Result, bail};
 use clap::Parser;
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use wasmparser::{Validator, WasmFeatures};
-use wasmtime_environ::{ScopeVec, Tunables, component::*};
+use wasmtime_environ::{
+    ScopeVec, Tunables,
+    component::*,
+    error::{Context, Result, bail},
+};
 
 /// A small helper utility to explore generated adapter modules from Wasmtime's
 /// adapter fusion compiler.

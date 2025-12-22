@@ -1,12 +1,12 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
 //! with `postcard` as part of a module's compilation process.
 
+use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
     CompiledModuleInfo, DebugInfoData, FunctionName, MemoryInitialization, Metadata,
     ModuleTranslation, Tunables, obj,
 };
-use anyhow::{Result, bail};
 use object::SectionKind;
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use std::ops::Range;
