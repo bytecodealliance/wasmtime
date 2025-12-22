@@ -1,5 +1,4 @@
 use super::{ConcreteError, DynError, ErrorExt, OomOrDynErrorMut, OomOrDynErrorRef, OutOfMemory};
-use crate::boxed::try_new_uninit_box;
 use crate::ptr::{MutPtr, OwnedPtr, SharedPtr};
 use alloc::boxed::Box;
 use core::{any::TypeId, fmt, ptr::NonNull};
@@ -73,7 +72,7 @@ where
     let error = error.cast::<ConcreteError<E>>();
     // Safety: implied by all vtable functions' safety contract.
     let error = unsafe { error.as_ref() };
-    fmt::Display::fmt(&error.error, f)
+    fmt::Display::fmt(error.error.ext_as_dyn_core_error(), f)
 }
 
 unsafe fn debug<E>(error: SharedPtr<'_, DynError>, f: &mut fmt::Formatter<'_>) -> fmt::Result
@@ -83,7 +82,7 @@ where
     let error = error.cast::<ConcreteError<E>>();
     // Safety: implied by all vtable functions' safety contract.
     let error = unsafe { error.as_ref() };
-    fmt::Debug::fmt(&error.error, f)
+    fmt::Debug::fmt(error.error.ext_as_dyn_core_error(), f)
 }
 
 unsafe fn source<E>(error: SharedPtr<'_, DynError>) -> Option<OomOrDynErrorRef<'_>>
@@ -125,7 +124,7 @@ where
     let error = error.cast::<ConcreteError<E>>();
     // Safety: implied by all vtable functions' safety contract.
     let error = unsafe { error.as_ref() };
-    &error.error as _
+    error.error.ext_as_dyn_core_error()
 }
 
 unsafe fn into_boxed_dyn_core_error<E>(
@@ -137,11 +136,7 @@ where
     let error = error.cast::<ConcreteError<E>>();
     // Safety: implied by all vtable functions' safety contract.
     let error = unsafe { error.into_box() };
-
-    let boxed = try_new_uninit_box()?;
-    let error = Box::write(boxed, error.error);
-
-    Ok(error as _)
+    error.error.ext_into_boxed_dyn_core_error()
 }
 
 unsafe fn drop_and_deallocate<E>(error: OwnedPtr<DynError>)
