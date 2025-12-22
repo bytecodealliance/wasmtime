@@ -1,6 +1,6 @@
 ## 40.0.0
 
-Unreleased.
+Released 2025-12-20.
 
 ### Added
 
