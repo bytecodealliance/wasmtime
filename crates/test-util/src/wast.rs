@@ -1,10 +1,10 @@
-use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use wasmtime_environ::error::{Context, Result};
 
 /// Limits for running wast tests.
 ///
