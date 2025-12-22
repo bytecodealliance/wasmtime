@@ -4,7 +4,7 @@ use std::ffi::c_void;
 pub use std::io::Result;
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
-pub use anyhow::Result;
+pub use wasmtime_environ::error::Result;
 
 #[cfg(all(
     target_arch = "aarch64",
@@ -93,7 +93,7 @@ mod details {
     any(target_os = "linux", target_os = "android")
 )))]
 mod details {
-    // NB: this uses `anyhow::Result` instead of `std::io::Result` to compile on
+    // NB: this uses `wasmtime_environ::error::Result` instead of `std::io::Result` to compile on
     // `no_std`.
     pub(crate) fn pipeline_flush_mt() -> super::Result<()> {
         Ok(())
