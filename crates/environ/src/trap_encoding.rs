@@ -113,8 +113,48 @@ pub enum Trap {
     /// when it wasn't allowed to, e.g. from a post-return function.
     CannotLeaveComponent,
 
-    /// A synchronous task attempted to make a potentially blocking call.
+    /// A synchronous task attempted to make a potentially blocking call prior
+    /// to returning.
     CannotBlockSyncTask,
+
+    /// A component tried to lift a `char` with an invalid bit pattern.
+    InvalidChar,
+
+    /// Debug assertion generated for a fused adapter regarding the expected
+    /// completion of a string encoding operation.
+    DebugAssertStringEncodingFinished,
+
+    /// Debug assertion generated for a fused adapter regarding a string
+    /// encoding operation.
+    DebugAssertEqualCodeUnits,
+
+    /// Debug assertion generated for a fused adapter regarding the expected
+    /// value of the `may_enter` flag for an instance.
+    ///
+    /// TODO: Remove this once
+    /// https://github.com/bytecodealliance/wasmtime/pull/12153 has been merged.
+    DebugAssertMayEnterUnset,
+
+    /// Debug assertion generated for a fused adapter regarding the alignment of
+    /// a pointer.
+    DebugAssertPointerAligned,
+
+    /// Debug assertion generated for a fused adapter regarding the upper bits
+    /// of a 64-bit value.
+    DebugAssertUpperBitsUnset,
+
+    /// A component tried to lift or lower a string past the end of its memory.
+    StringOutOfBounds,
+
+    /// A component tried to lift or lower a list past the end of its memory.
+    ListOutOfBounds,
+
+    /// A component used an invalid discriminant when lowering a variant value.
+    InvalidDiscriminant,
+
+    /// A component passed an unaligned pointer when lifting or lowering a
+    /// value.
+    UnalignedPointer,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -158,6 +198,16 @@ impl Trap {
             AsyncDeadlock
             CannotLeaveComponent
             CannotBlockSyncTask
+            InvalidChar
+            DebugAssertStringEncodingFinished
+            DebugAssertEqualCodeUnits
+            DebugAssertMayEnterUnset
+            DebugAssertPointerAligned
+            DebugAssertUpperBitsUnset
+            StringOutOfBounds
+            ListOutOfBounds
+            InvalidDiscriminant
+            UnalignedPointer
         }
 
         None
@@ -195,6 +245,16 @@ impl fmt::Display for Trap {
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
             CannotLeaveComponent => "cannot leave component instance",
             CannotBlockSyncTask => "cannot block a synchronous task before returning",
+            InvalidChar => "invalid `char` bit pattern",
+            DebugAssertStringEncodingFinished => "should have finished string encoding",
+            DebugAssertEqualCodeUnits => "code units should be equal",
+            DebugAssertMayEnterUnset => "`may_enter` flag should be unset",
+            DebugAssertPointerAligned => "pointer should be aligned",
+            DebugAssertUpperBitsUnset => "upper bits should be unset",
+            StringOutOfBounds => "string content out-of-bounds",
+            ListOutOfBounds => "list content out-of-bounds",
+            InvalidDiscriminant => "invalid variant discriminant",
+            UnalignedPointer => "unaligned pointer",
         };
         write!(f, "wasm trap: {desc}")
     }

@@ -250,7 +250,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .err()
             .unwrap()
             .downcast::<Trap>()?;
-        assert_eq!(trap, Trap::UnreachableCodeReached);
+        assert_eq!(trap, Trap::StringOutOfBounds);
         Ok(())
     };
 
@@ -324,7 +324,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .call(&mut store, (size,))
             .unwrap_err()
             .downcast::<Trap>()?;
-        assert_eq!(trap, Trap::UnreachableCodeReached);
+        assert_eq!(trap, Trap::StringOutOfBounds);
         Ok(())
     };
 
@@ -424,7 +424,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
     let trap = func.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap, Trap::UnreachableCodeReached);
+    assert_eq!(trap, Trap::StringOutOfBounds);
     Ok(())
 }
 
