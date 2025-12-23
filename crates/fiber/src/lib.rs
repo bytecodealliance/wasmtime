@@ -13,10 +13,10 @@ extern crate std;
 extern crate alloc;
 
 use alloc::boxed::Box;
-use anyhow::Error;
 use core::cell::Cell;
 use core::marker::PhantomData;
 use core::ops::Range;
+use wasmtime_environ::error::Error;
 
 cfg_if::cfg_if! {
     if #[cfg(not(feature = "std"))] {

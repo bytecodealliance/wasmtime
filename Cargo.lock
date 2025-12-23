@@ -4858,12 +4858,12 @@ dependencies = [
 name = "wasmtime-internal-fiber"
 version = "41.0.0"
 dependencies = [
- "anyhow",
  "backtrace",
  "cc",
  "cfg-if",
  "libc",
  "rustix 1.0.8",
+ "wasmtime-environ",
  "wasmtime-internal-versioned-export-macros",
  "windows-sys 0.61.2",
 ]
