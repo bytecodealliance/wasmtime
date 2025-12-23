@@ -45,7 +45,8 @@ impl WasmType for component::Type {
             | Self::Borrow(_)
             | Self::Stream(_)
             | Self::Future(_)
-            | Self::ErrorContext => WasmTypeKind::Unsupported,
+            | Self::ErrorContext
+            | Self::Map(_) => WasmTypeKind::Unsupported,
         }
     }
 
@@ -138,9 +139,11 @@ impl WasmValue for component::Val {
             Self::Option(_) => WasmTypeKind::Option,
             Self::Result(_) => WasmTypeKind::Result,
             Self::Flags(_) => WasmTypeKind::Flags,
-            Self::Resource(_) | Self::Stream(_) | Self::Future(_) | Self::ErrorContext(_) => {
-                WasmTypeKind::Unsupported
-            }
+            Self::Resource(_)
+            | Self::Stream(_)
+            | Self::Future(_)
+            | Self::ErrorContext(_)
+            | Self::Map(_) => WasmTypeKind::Unsupported,
         }
     }
 

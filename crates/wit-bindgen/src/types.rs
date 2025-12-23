@@ -148,6 +148,11 @@ impl Types {
                 info = self.type_info(resolve, ty);
                 info.has_list = true;
             }
+            TypeDefKind::Map(k, v) => {
+                info = self.type_info(resolve, k);
+                info |= self.type_info(resolve, v);
+                info.has_list = true;
+            }
             TypeDefKind::Type(ty) | TypeDefKind::Option(ty) => {
                 info = self.type_info(resolve, ty);
             }
@@ -163,7 +168,6 @@ impl Types {
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedLengthList(..) => todo!(),
-            TypeDefKind::Map(..) => todo!(),
         }
         self.type_info.insert(ty, info);
         info

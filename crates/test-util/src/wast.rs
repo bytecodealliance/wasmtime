@@ -268,6 +268,7 @@ macro_rules! foreach_config_option {
             component_model_threading
             component_model_error_context
             component_model_gc
+            component_model_map
             component_model_fixed_length_lists
             simd
             gc_types

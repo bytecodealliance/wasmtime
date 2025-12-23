@@ -43,6 +43,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         component_model_threading,
         component_model_error_context,
         component_model_gc,
+        component_model_map,
         component_model_fixed_length_lists,
         nan_canonicalization,
         simd,
@@ -73,6 +74,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let component_model_threading = component_model_threading.unwrap_or(false);
     let component_model_error_context = component_model_error_context.unwrap_or(false);
     let component_model_gc = component_model_gc.unwrap_or(false);
+    let component_model_map = component_model_map.unwrap_or(false);
     let component_model_fixed_length_lists = component_model_fixed_length_lists.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
@@ -113,6 +115,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_threading(component_model_threading)
         .wasm_component_model_error_context(component_model_error_context)
         .wasm_component_model_gc(component_model_gc)
+        .wasm_component_model_map(component_model_map)
         .wasm_component_model_fixed_length_lists(component_model_fixed_length_lists)
         .wasm_exceptions(exceptions)
         .wasm_stack_switching(stack_switching)

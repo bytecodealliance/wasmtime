@@ -137,6 +137,347 @@ fn lists() -> Result<()> {
 }
 
 #[test]
+fn maps() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![
+        (Val::U32(1), Val::String("one".into())),
+        (Val::U32(2), Val::String("two".into())),
+        (Val::U32(3), Val::String("three".into())),
+    ];
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+
+    // Maps should round-trip correctly
+    match &output[0] {
+        Val::Map(output_map) => {
+            assert_eq!(output_map.len(), 3);
+            assert!(
+                output_map
+                    .iter()
+                    .any(|(k, v)| *k == Val::U32(1) && *v == Val::String("one".into()))
+            );
+            assert!(
+                output_map
+                    .iter()
+                    .any(|(k, v)| *k == Val::U32(2) && *v == Val::String("two".into()))
+            );
+            assert!(
+                output_map
+                    .iter()
+                    .any(|(k, v)| *k == Val::U32(3) && *v == Val::String("three".into()))
+            );
+        }
+        _ => panic!("expected map"),
+    }
+
+    // Sad path: type mismatch (wrong key type)
+    // Need to create a fresh instance because errors can leave the instance in a bad state
+    let mut store2 = Store::new(&engine, ());
+    let instance2 = Linker::new(&engine).instantiate(&mut store2, &component)?;
+    let func2 = instance2.get_func(&mut store2, "echo").unwrap();
+
+    let err_map = vec![(Val::String("key".into()), Val::String("value".into()))];
+    let err = Val::Map(err_map);
+    let err = func2
+        .call_and_post_return(&mut store2, &[err], &mut output)
+        .unwrap_err();
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    // Sad path: type mismatch (wrong value type)
+    let mut store3 = Store::new(&engine, ());
+    let instance3 = Linker::new(&engine).instantiate(&mut store3, &component)?;
+    let func3 = instance3.get_func(&mut store3, "echo").unwrap();
+
+    let err_map2 = vec![(Val::U32(1), Val::U32(42))];
+    let err = Val::Map(err_map2);
+    let err = func3
+        .call_and_post_return(&mut store3, &[err], &mut output)
+        .unwrap_err();
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    // Test empty map
+    let empty_map = vec![];
+    let input = Val::Map(empty_map);
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    match &output[0] {
+        Val::Map(output_map) => assert_eq!(output_map.len(), 0),
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn maps_complex_types() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    // Test map<string, list<u32>>
+    let component = Component::new(&engine, make_echo_component("(map string (list u32))", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![
+        (
+            Val::String("first".into()),
+            Val::List(vec![Val::U32(1), Val::U32(2), Val::U32(3)]),
+        ),
+        (
+            Val::String("second".into()),
+            Val::List(vec![Val::U32(4), Val::U32(5)]),
+        ),
+    ];
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+
+    // Verify round-trip
+    match &output[0] {
+        Val::Map(output_map) => {
+            assert_eq!(output_map.len(), 2);
+            // Check first entry
+            let first_entry = output_map
+                .iter()
+                .find(|(k, _)| *k == Val::String("first".into()));
+            match first_entry {
+                Some((_, Val::List(list))) => {
+                    assert_eq!(list.len(), 3);
+                    assert_eq!(list[0], Val::U32(1));
+                    assert_eq!(list[1], Val::U32(2));
+                    assert_eq!(list[2], Val::U32(3));
+                }
+                _ => panic!("expected list"),
+            }
+            // Check second entry
+            let second_entry = output_map
+                .iter()
+                .find(|(k, _)| *k == Val::String("second".into()));
+            match second_entry {
+                Some((_, Val::List(list))) => {
+                    assert_eq!(list.len(), 2);
+                    assert_eq!(list[0], Val::U32(4));
+                    assert_eq!(list[1], Val::U32(5));
+                }
+                _ => panic!("expected list"),
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn maps_equality() -> Result<()> {
+    let map1 = vec![
+        (Val::U32(1), Val::String("one".into())),
+        (Val::U32(2), Val::String("two".into())),
+    ];
+
+    let map2 = vec![
+        (Val::U32(1), Val::String("one".into())),
+        (Val::U32(2), Val::String("two".into())),
+    ];
+
+    // Maps with same content in same order should be equal
+    assert_eq!(Val::Map(map1.clone()), Val::Map(map2));
+
+    // Different values should not be equal
+    let map3 = vec![
+        (Val::U32(1), Val::String("different".into())),
+        (Val::U32(2), Val::String("two".into())),
+    ];
+    assert_ne!(Val::Map(map1.clone()), Val::Map(map3));
+
+    // Different keys should not be equal
+    let map4 = vec![
+        (Val::U32(3), Val::String("one".into())),
+        (Val::U32(2), Val::String("two".into())),
+    ];
+    assert_ne!(Val::Map(map1), Val::Map(map4));
+
+    // Empty maps should be equal
+    let empty1: Vec<(Val, Val)> = vec![];
+    let empty2: Vec<(Val, Val)> = vec![];
+    assert_eq!(Val::Map(empty1), Val::Map(empty2));
+
+    Ok(())
+}
+
+#[test]
+fn maps_duplicate_keys() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    // Create a map with duplicate keys - Vec preserves all entries
+    let input_map = vec![
+        (Val::U32(1), Val::String("first".into())),
+        (Val::U32(1), Val::String("last".into())), // Duplicate key
+        (Val::U32(2), Val::String("two".into())),
+    ];
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+
+    // Verify all entries are preserved (Vec doesn't deduplicate)
+    match &output[0] {
+        Val::Map(output_map) => {
+            // Should have 3 entries (Vec preserves duplicates)
+            assert_eq!(output_map.len(), 3);
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn maps_all_primitive_types() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    // Test map<u32, u32>
+    let component = Component::new(&engine, make_echo_component("(map u32 u32)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![(Val::U32(1), Val::U32(100)), (Val::U32(2), Val::U32(200))];
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    // Test map<string, u32>
+    let component = Component::new(&engine, make_echo_component("(map string u32)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![
+        (Val::String("one".into()), Val::U32(1)),
+        (Val::String("two".into()), Val::U32(2)),
+    ];
+    let input = Val::Map(input_map);
+
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    Ok(())
+}
+
+#[test]
+fn maps_alignment() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    // Test map<u8, u64> - key_size=1, value_align=8
+    // This would fail with the alignment bug because value would be at offset 1 instead of 8
+    let component = Component::new(&engine, make_echo_component("(map u8 u64)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![
+        (Val::U8(1), Val::U64(100)),
+        (Val::U8(2), Val::U64(200)),
+        (Val::U8(3), Val::U64(300)),
+    ];
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    // Test map<u32, u64> - key_size=4, value_align=8
+    // This would fail with the alignment bug because value would be at offset 4 instead of 8
+    let component = Component::new(&engine, make_echo_component("(map u32 u64)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![(Val::U32(1), Val::U64(1000)), (Val::U32(2), Val::U64(2000))];
+    let input = Val::Map(input_map);
+
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    // Test map<u8, u32> - key_size=1, value_align=4
+    // This would fail with the alignment bug because value would be at offset 1 instead of 4
+    let component = Component::new(&engine, make_echo_component("(map u8 u32)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![(Val::U8(10), Val::U32(100)), (Val::U8(20), Val::U32(200))];
+    let input = Val::Map(input_map);
+
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    // Test map<u16, u64> - key_size=2, value_align=8
+    // This would fail with the alignment bug because value would be at offset 2 instead of 8
+    let component = Component::new(&engine, make_echo_component("(map u16 u64)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let input_map = vec![
+        (Val::U16(1), Val::U64(10000)),
+        (Val::U16(2), Val::U64(20000)),
+    ];
+    let input = Val::Map(input_map);
+
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    assert_eq!(input, output[0]);
+
+    Ok(())
+}
+
+#[test]
+fn maps_large() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    // Create a map with many entries
+    let input_map: Vec<(Val, Val)> = (0..100)
+        .map(|i| (Val::U32(i), Val::String(format!("value_{i}"))))
+        .collect();
+    let input = Val::Map(input_map);
+
+    let mut output = [Val::Bool(false)];
+    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+
+    // Verify all entries are present
+    match &output[0] {
+        Val::Map(output_map) => {
+            assert_eq!(output_map.len(), 100);
+            for i in 0..100 {
+                assert!(output_map.iter().any(|(k, v)| {
+                    *k == Val::U32(i) && *v == Val::String(format!("value_{i}"))
+                }));
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn records() -> Result<()> {
     let engine = super::engine();
     let mut store = Store::new(&engine, ());
