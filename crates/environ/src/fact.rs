@@ -26,7 +26,6 @@ use crate::component::{
 use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
 use crate::{ModuleInternedTypeIndex, prelude::*};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use wasm_encoder::*;
 
@@ -34,7 +33,6 @@ mod core_types;
 mod signature;
 mod trampoline;
 mod transcode;
-mod traps;
 
 /// Fixed parameter types for the `prepare_call` built-in function.
 ///
@@ -91,6 +89,8 @@ pub struct Module<'a> {
     imported_error_context_transfer: Option<FuncIndex>,
 
     imported_check_blocking: Option<FuncIndex>,
+
+    imported_trap: Option<FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -263,6 +263,7 @@ impl<'a> Module<'a> {
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
             imported_check_blocking: None,
+            imported_trap: None,
             exports: Vec::new(),
         }
     }
@@ -727,6 +728,17 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_trap(&mut self) -> FuncIndex {
+        self.import_simple(
+            "runtime",
+            "trap",
+            &[ValType::I32],
+            &[],
+            Import::Trap,
+            |me| &mut me.imported_trap,
+        )
+    }
+
     fn translate_helper(&mut self, helper: Helper) -> FunctionId {
         *self.helper_funcs.entry(helper).or_insert_with(|| {
             // Generate a fresh `Function` with a unique id for what we're about to
@@ -765,9 +777,7 @@ impl<'a> Module<'a> {
         // With all functions numbered the fragments of the body of each
         // function can be assigned into one final adapter function.
         let mut code = CodeSection::new();
-        let mut traps = traps::TrapSection::default();
-        for (id, func) in self.funcs.iter() {
-            let mut func_traps = Vec::new();
+        for (_, func) in self.funcs.iter() {
             let mut body = Vec::new();
 
             // Encode all locals used for this function
@@ -783,12 +793,8 @@ impl<'a> Module<'a> {
             // here to the final function index.
             for chunk in func.body.iter() {
                 match chunk {
-                    Body::Raw(code, traps) => {
-                        let start = body.len();
+                    Body::Raw(code) => {
                         body.extend_from_slice(code);
-                        for (offset, trap) in traps {
-                            func_traps.push((start + offset, *trap));
-                        }
                     }
                     Body::Call(id) => {
                         Instruction::Call(id_to_index[*id].as_u32()).encode(&mut body);
@@ -799,10 +805,7 @@ impl<'a> Module<'a> {
                 }
             }
             code.raw(&body);
-            traps.append(id_to_index[id].as_u32(), func_traps);
         }
-
-        let traps = traps.finish();
 
         let mut result = wasm_encoder::Module::new();
         result.section(&self.core_types.section);
@@ -810,12 +813,6 @@ impl<'a> Module<'a> {
         result.section(&funcs);
         result.section(&exports);
         result.section(&code);
-        if self.debug {
-            result.section(&CustomSection {
-                name: "wasmtime-trampoline-traps".into(),
-                data: Cow::Borrowed(&traps),
-            });
-        }
         result.finish()
     }
 
@@ -888,6 +885,8 @@ pub enum Import {
     /// An intrinsic used by FACT-generated modules to check whether an
     /// async-typed function may be called via a sync lower.
     CheckBlocking,
+    /// An intrinsic for trapping the instance with a specific trap code.
+    Trap,
 }
 
 impl Options {
@@ -954,8 +953,6 @@ struct Function {
 ///
 /// 1. First a `Raw` variant is used to contain general instructions for the
 ///    wasm function. This is populated by `Compiler::instruction` primarily.
-///    This also comes with a list of traps. and the byte offset within the
-///    first vector of where the trap information applies to.
 ///
 /// 2. A `Call` instruction variant for a `FunctionId` where the final
 ///    `FuncIndex` isn't known until emission time.
@@ -971,7 +968,7 @@ struct Function {
 /// easier to represent. A 5-byte leb may be more efficient at compile-time if
 /// necessary, however.
 enum Body {
-    Raw(Vec<u8>, Vec<(usize, traps::Trap)>),
+    Raw(Vec<u8>),
     Call(FunctionId),
     RefFunc(FunctionId),
 }

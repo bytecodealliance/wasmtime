@@ -1109,6 +1109,10 @@ pub enum Trampoline {
     /// async-typed function may be called via a sync lower.
     CheckBlocking,
 
+    /// An intrinsic used by FACT-generated modules to trap with a specified
+    /// code.
+    Trap,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
@@ -1239,6 +1243,7 @@ impl Trampoline {
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
             CheckBlocking => format!("check-blocking"),
+            Trap => format!("trap"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),

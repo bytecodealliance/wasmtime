@@ -203,7 +203,7 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             thread_yield_to(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
 
-            trap(vmctx: vmctx, code: u8) -> bool;
+            trap(vmctx: vmctx, code: u32) -> bool;
 
             utf8_to_utf8(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8) -> bool;
             utf16_to_utf16(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u16) -> bool;

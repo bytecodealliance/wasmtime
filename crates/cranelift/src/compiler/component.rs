@@ -171,7 +171,7 @@ impl<'a> TrampolineCompiler<'a> {
                     WasmArgs::InRegisters,
                     |me, params| {
                         let code = wasmtime_environ::Trap::AlwaysTrapAdapter as u8;
-                        params.push(me.builder.ins().iconst(ir::types::I8, i64::from(code)));
+                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(code)));
                     },
                 );
             }
@@ -735,6 +735,14 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::CheckBlocking => {
                 self.translate_libcall(
                     host::check_blocking,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::Trap => {
+                self.translate_libcall(
+                    host::trap,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |_, _| {},

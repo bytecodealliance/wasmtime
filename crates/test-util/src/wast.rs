@@ -184,7 +184,11 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.multi_memory = Some(true);
 
     if let Some(parent) = test.parent() {
-        if parent.ends_with("async") {
+        if parent.ends_with("async")
+            || ["trap-in-post-return.wast"]
+                .into_iter()
+                .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
+        {
             ret.component_model_async = Some(true);
             ret.component_model_async_stackful = Some(true);
             ret.component_model_async_builtins = Some(true);
@@ -697,8 +701,7 @@ impl WastTest {
         }
 
         let failing_component_model_tests = [
-            // FIXME(#11683)
-            "component-model/test/values/trap-in-post-return.wast",
+            // FIXME(#12214)
             "component-model/test/wasmtime/resources.wast",
             "component-model/test/wasm-tools/naming.wast",
             // FIXME(#12129)

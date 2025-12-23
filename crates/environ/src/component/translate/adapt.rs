@@ -346,6 +346,7 @@ fn fact_import_to_core_def(
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
         fact::Import::CheckBlocking => simple_intrinsic(dfg::Trampoline::CheckBlocking),
+        fact::Import::Trap => simple_intrinsic(dfg::Trampoline::Trap),
     }
 }
 
