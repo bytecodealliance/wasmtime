@@ -1296,6 +1296,16 @@ impl Config {
         self
     }
 
+    /// Configures whether the component model map type is enabled or not.
+    ///
+    /// This is part of the component model specification and enables the
+    /// `map<k, v>` type in WIT and the component binary format.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_map(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_MAP, enable);
+        self
+    }
+
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
@@ -2264,7 +2274,8 @@ impl Config {
             | WasmFeatures::CM_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
-            | WasmFeatures::CM_GC;
+            | WasmFeatures::CM_GC
+            | WasmFeatures::CM_MAP;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
