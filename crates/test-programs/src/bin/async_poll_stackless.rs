@@ -10,8 +10,9 @@ mod bindings {
 use {
     bindings::local::local::ready,
     test_programs::async_::{
-        CALLBACK_CODE_EXIT, CALLBACK_CODE_POLL, EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED,
+        CALLBACK_CODE_EXIT, CALLBACK_CODE_YIELD, EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED,
         context_get, context_set, subtask_drop, waitable_join, waitable_set_drop, waitable_set_new,
+        waitable_set_poll,
     },
 };
 
@@ -59,7 +60,7 @@ unsafe extern "C" fn export_run() -> u32 {
 }
 
 #[unsafe(export_name = "[callback][async-lift]local:local/run#run")]
-unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 {
+unsafe extern "C" fn callback_run(event0: u32, _: u32, _: u32) -> u32 {
     let state = &mut *(usize::try_from(context_get()).unwrap() as *mut State);
     match state {
         State::S0 => {
@@ -71,13 +72,14 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
             *state = State::S1 { set };
 
-            CALLBACK_CODE_POLL | (set << 4)
+            CALLBACK_CODE_YIELD
         }
 
-        State::S1 { set } => {
+        &mut State::S1 { set } => {
+            let (event0, _, _) = waitable_set_poll(set);
+
             assert_eq!(event0, EVENT_NONE);
 
-            let set = *set;
             let result = async_when_ready();
             let status = result & 0xf;
             let call = result >> 4;
@@ -86,52 +88,55 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
             *state = State::S2 { set, call };
 
-            CALLBACK_CODE_POLL | (set << 4)
+            CALLBACK_CODE_YIELD
         }
 
-        State::S2 { set, call } => {
+        &mut State::S2 { set, call } => {
+            let (event0, _, _) = waitable_set_poll(set);
+
             assert_eq!(event0, EVENT_NONE);
 
-            let set = *set;
-            let call = *call;
             ready::set_ready(true);
 
             *state = State::S3 { set, call };
 
-            CALLBACK_CODE_POLL | (set << 4)
+            CALLBACK_CODE_YIELD
         }
 
-        State::S3 { set, call } => {
-            let set = *set;
+        &mut State::S3 { set, call } => {
+            let (event0, event1, event2) = waitable_set_poll(set);
 
             if event0 != EVENT_NONE {
                 assert_eq!(event0, EVENT_SUBTASK);
-                assert_eq!(event1, *call);
+                assert_eq!(event1, call);
                 assert_eq!(event2, STATUS_RETURNED);
 
-                subtask_drop(*call);
+                subtask_drop(call);
 
                 *state = State::S4 { set };
             }
 
-            CALLBACK_CODE_POLL | (set << 4)
+            CALLBACK_CODE_YIELD
         }
 
-        State::S4 { set } => {
+        &mut State::S4 { set } => {
+            let (event0, _, _) = waitable_set_poll(set);
+
             assert_eq!(event0, EVENT_NONE);
 
-            let set = *set;
             assert_eq!(async_when_ready(), STATUS_RETURNED);
 
             *state = State::S5 { set };
 
-            CALLBACK_CODE_POLL | (set << 4)
+            CALLBACK_CODE_YIELD
         }
 
-        State::S5 { set } => {
+        &mut State::S5 { set } => {
+            let (event0, _, _) = waitable_set_poll(set);
+
             assert_eq!(event0, EVENT_NONE);
 
-            waitable_set_drop(*set);
+            waitable_set_drop(set);
 
             drop(Box::from_raw(state));
 

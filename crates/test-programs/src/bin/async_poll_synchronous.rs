@@ -12,8 +12,8 @@ mod bindings {
 use {
     bindings::{exports::local::local::run::Guest, local::local::ready},
     test_programs::async_::{
-        EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED, subtask_drop, waitable_join, waitable_set_drop,
-        waitable_set_new, waitable_set_poll,
+        EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED, SUSPEND_RESULT_NOT_CANCELLED, subtask_drop,
+        thread_yield, waitable_join, waitable_set_drop, waitable_set_new, waitable_set_poll,
     },
 };
 
@@ -54,6 +54,8 @@ impl Guest for Component {
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
             ready::set_ready(true);
+
+            assert_eq!(thread_yield(), SUSPEND_RESULT_NOT_CANCELLED);
 
             let (event, task, code) = waitable_set_poll(set);
             assert_eq!(event, EVENT_SUBTASK);

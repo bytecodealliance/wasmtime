@@ -125,6 +125,17 @@ pub unsafe extern "C" fn task_cancel() {
     unreachable!()
 }
 
+#[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "$root")]
+unsafe extern "C" {
+    #[link_name = "[thread-yield]"]
+    pub fn thread_yield() -> u32;
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn thread_yield() -> u32 {
+    unreachable!()
+}
+
 pub const STATUS_STARTING: u32 = 0;
 pub const STATUS_STARTED: u32 = 1;
 pub const STATUS_RETURNED: u32 = 2;
@@ -142,8 +153,10 @@ pub const EVENT_CANCELLED: u32 = 6;
 pub const CALLBACK_CODE_EXIT: u32 = 0;
 pub const CALLBACK_CODE_YIELD: u32 = 1;
 pub const CALLBACK_CODE_WAIT: u32 = 2;
-pub const CALLBACK_CODE_POLL: u32 = 3;
 
 pub const BLOCKED: u32 = 0xffff_ffff;
 pub const DROPPED: u32 = 1;
 pub const COMPLETED: u32 = 0;
+
+pub const SUSPEND_RESULT_NOT_CANCELLED: u32 = 0;
+pub const SUSPEND_RESULT_CANCELLED: u32 = 1;

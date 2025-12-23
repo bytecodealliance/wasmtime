@@ -195,7 +195,6 @@ mod callback_code {
     pub const EXIT: u32 = 0;
     pub const YIELD: u32 = 1;
     pub const WAIT: u32 = 2;
-    pub const POLL: u32 = 3;
 }
 
 /// A flag indicating that the callee is an async-lowered export.
@@ -674,18 +673,6 @@ enum WorkerItem {
     Function(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send>>),
 }
 
-/// Represents state related to an in-progress poll operation (e.g. `task.poll`
-/// or `CallbackCode.POLL`).
-#[derive(Debug)]
-struct PollParams {
-    /// The instance to which the polling thread belongs.
-    instance: Instance,
-    /// The polling thread.
-    thread: QualifiedThreadId,
-    /// The waitable set being polled.
-    set: TableId<WaitableSet>,
-}
-
 /// Represents a pending work item to be handled by the event loop for a given
 /// component instance.
 enum WorkItem {
@@ -695,8 +682,6 @@ enum WorkItem {
     ResumeFiber(StoreFiber<'static>),
     /// A pending call into guest code for a given guest task.
     GuestCall(GuestCall),
-    /// A pending `task.poll` or `CallbackCode.POLL` operation.
-    Poll(PollParams),
     /// A job to run on a worker fiber.
     WorkerFunction(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send>>),
 }
@@ -707,7 +692,6 @@ impl fmt::Debug for WorkItem {
             Self::PushFuture(_) => f.debug_tuple("PushFuture").finish(),
             Self::ResumeFiber(_) => f.debug_tuple("ResumeFiber").finish(),
             Self::GuestCall(call) => f.debug_tuple("GuestCall").field(call).finish(),
-            Self::Poll(params) => f.debug_tuple("Poll").field(params).finish(),
             Self::WorkerFunction(_) => f.debug_tuple("WorkerFunction").finish(),
         }
     }
@@ -1345,33 +1329,6 @@ impl<T> StoreContextMut<'_, T> {
                         .insert(call.thread, call.kind);
                 }
             }
-            WorkItem::Poll(params) => {
-                let state = self.0.concurrent_state_mut();
-                if state.get_mut(params.thread.task)?.event.is_some()
-                    || !state.get_mut(params.set)?.ready.is_empty()
-                {
-                    // There's at least one event immediately available; deliver
-                    // it to the guest ASAP.
-                    state.push_high_priority(WorkItem::GuestCall(GuestCall {
-                        thread: params.thread,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance: params.instance,
-                            set: Some(params.set),
-                        },
-                    }));
-                } else {
-                    // There are no events immediately available; deliver
-                    // `Event::None` to the guest.
-                    state.get_mut(params.thread.task)?.event = Some(Event::None);
-                    state.push_high_priority(WorkItem::GuestCall(GuestCall {
-                        thread: params.thread,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance: params.instance,
-                            set: Some(params.set),
-                        },
-                    }));
-                }
-            }
             WorkItem::WorkerFunction(fun) => {
                 self.run_on_worker(WorkerItem::Function(fun)).await?;
             }
@@ -1802,9 +1759,9 @@ impl Instance {
                     Some(call)
                 }
             }
-            callback_code::WAIT | callback_code::POLL => {
-                // The task may only return `WAIT` or `POLL` if it was created
-                // for a call to an async export).  Otherwise, we'll trap.
+            callback_code::WAIT => {
+                // The task may only return `WAIT` if it was created for a call
+                // to an async export).  Otherwise, we'll trap.
                 state.check_blocking_for(guest_thread.task)?;
 
                 let set = get_set(store, set)?;
@@ -1823,36 +1780,22 @@ impl Instance {
                     }));
                 } else {
                     // No event is immediately available.
-                    match code {
-                        callback_code::POLL => {
-                            // We're polling, so just yield and check whether an
-                            // event has arrived after that.
-                            state.push_low_priority(WorkItem::Poll(PollParams {
-                                instance: self,
-                                thread: guest_thread,
-                                set,
-                            }));
-                        }
-                        callback_code::WAIT => {
-                            // We're waiting, so register to be woken up when an
-                            // event is published for this waitable set.
-                            //
-                            // Here we also set `GuestTask::wake_on_cancel`
-                            // which allows `subtask.cancel` to interrupt the
-                            // wait.
-                            let old = state
-                                .get_mut(guest_thread.thread)?
-                                .wake_on_cancel
-                                .replace(set);
-                            assert!(old.is_none());
-                            let old = state
-                                .get_mut(set)?
-                                .waiting
-                                .insert(guest_thread, WaitMode::Callback(self));
-                            assert!(old.is_none());
-                        }
-                        _ => unreachable!(),
-                    }
+                    //
+                    // We're waiting, so register to be woken up when an event
+                    // is published for this waitable set.
+                    //
+                    // Here we also set `GuestTask::wake_on_cancel` which allows
+                    // `subtask.cancel` to interrupt the wait.
+                    let old = state
+                        .get_mut(guest_thread.thread)?
+                        .wake_on_cancel
+                        .replace(set);
+                    assert!(old.is_none());
+                    let old = state
+                        .get_mut(set)?
+                        .waiting
+                        .insert(guest_thread, WaitMode::Callback(self));
+                    assert!(old.is_none());
                 }
                 None
             }
@@ -3081,11 +3024,12 @@ impl Instance {
         self.waitable_check(
             store,
             cancellable,
-            WaitableCheck::Wait(WaitableCheckParams {
+            WaitableCheck::Wait,
+            WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
                 payload,
-            }),
+            },
         )
     }
 
@@ -3099,13 +3043,6 @@ impl Instance {
         payload: u32,
     ) -> Result<u32> {
         self.id().get(store).check_may_leave(caller)?;
-
-        if !self.options(store, options).async_ {
-            // The caller may only call `waitable-set.poll` from an async task
-            // (i.e. a task created via a call to an async export).
-            // Otherwise, we'll trap.
-            store.concurrent_state_mut().check_blocking()?;
-        }
 
         let &CanonicalOptions {
             cancellable,
@@ -3122,11 +3059,12 @@ impl Instance {
         self.waitable_check(
             store,
             cancellable,
-            WaitableCheck::Poll(WaitableCheckParams {
+            WaitableCheck::Poll,
+            WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
                 payload,
-            }),
+            },
         )
     }
 
@@ -3353,91 +3291,83 @@ impl Instance {
         store: &mut StoreOpaque,
         cancellable: bool,
         check: WaitableCheck,
+        params: WaitableCheckParams,
     ) -> Result<u32> {
         let guest_thread = store.concurrent_state_mut().guest_thread.unwrap();
 
-        let (wait, set) = match &check {
-            WaitableCheck::Wait(params) => (true, Some(params.set)),
-            WaitableCheck::Poll(params) => (false, Some(params.set)),
-        };
-
-        log::trace!("waitable check for {guest_thread:?}; set {set:?}");
-        // First, suspend this fiber, allowing any other threads to run.
-        store.suspend(SuspendReason::Yielding {
-            thread: guest_thread,
-        })?;
-
-        log::trace!("waitable check for {guest_thread:?}; set {set:?}");
+        log::trace!("waitable check for {guest_thread:?}; set {:?}", params.set);
 
         let state = store.concurrent_state_mut();
         let task = state.get_mut(guest_thread.task)?;
 
         // If we're waiting, and there are no events immediately available,
         // suspend the fiber until that changes.
-        if wait {
-            let set = set.unwrap();
+        match &check {
+            WaitableCheck::Wait => {
+                let set = params.set;
 
-            if (task.event.is_none()
-                || (matches!(task.event, Some(Event::Cancelled)) && !cancellable))
-                && state.get_mut(set)?.ready.is_empty()
-            {
-                if cancellable {
-                    let old = state
-                        .get_mut(guest_thread.thread)?
-                        .wake_on_cancel
-                        .replace(set);
-                    assert!(old.is_none());
+                if (task.event.is_none()
+                    || (matches!(task.event, Some(Event::Cancelled)) && !cancellable))
+                    && state.get_mut(set)?.ready.is_empty()
+                {
+                    if cancellable {
+                        let old = state
+                            .get_mut(guest_thread.thread)?
+                            .wake_on_cancel
+                            .replace(set);
+                        assert!(old.is_none());
+                    }
+
+                    store.suspend(SuspendReason::Waiting {
+                        set,
+                        thread: guest_thread,
+                        skip_may_block_check: false,
+                    })?;
                 }
-
-                store.suspend(SuspendReason::Waiting {
-                    set,
-                    thread: guest_thread,
-                    skip_may_block_check: false,
-                })?;
             }
+            WaitableCheck::Poll => {}
         }
 
-        log::trace!("waitable check for {guest_thread:?}; set {set:?}, part two");
+        log::trace!(
+            "waitable check for {guest_thread:?}; set {:?}, part two",
+            params.set
+        );
 
-        let result = match check {
-            // Deliver any pending events to the guest and return.
-            WaitableCheck::Wait(params) | WaitableCheck::Poll(params) => {
-                let event =
-                    self.get_event(store, guest_thread.task, Some(params.set), cancellable)?;
+        // Deliver any pending events to the guest and return.
+        let event = self.get_event(store, guest_thread.task, Some(params.set), cancellable)?;
 
-                let (ordinal, handle, result) = if wait {
-                    let (event, waitable) = event.unwrap();
+        let (ordinal, handle, result) = match &check {
+            WaitableCheck::Wait => {
+                let (event, waitable) = event.unwrap();
+                let handle = waitable.map(|(_, v)| v).unwrap_or(0);
+                let (ordinal, result) = event.parts();
+                (ordinal, handle, result)
+            }
+            WaitableCheck::Poll => {
+                if let Some((event, waitable)) = event {
                     let handle = waitable.map(|(_, v)| v).unwrap_or(0);
                     let (ordinal, result) = event.parts();
                     (ordinal, handle, result)
                 } else {
-                    if let Some((event, waitable)) = event {
-                        let handle = waitable.map(|(_, v)| v).unwrap_or(0);
-                        let (ordinal, result) = event.parts();
-                        (ordinal, handle, result)
-                    } else {
-                        log::trace!(
-                            "no events ready to deliver via waitable-set.poll to {:?}; set {:?}",
-                            guest_thread.task,
-                            params.set
-                        );
-                        let (ordinal, result) = Event::None.parts();
-                        (ordinal, 0, result)
-                    }
-                };
-                let memory = self.options_memory_mut(store, params.options);
-                let ptr = func::validate_inbounds_dynamic(
-                    &CanonicalAbiInfo::POINTER_PAIR,
-                    memory,
-                    &ValRaw::u32(params.payload),
-                )?;
-                memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
-                memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
-                Ok(ordinal)
+                    log::trace!(
+                        "no events ready to deliver via waitable-set.poll to {:?}; set {:?}",
+                        guest_thread.task,
+                        params.set
+                    );
+                    let (ordinal, result) = Event::None.parts();
+                    (ordinal, 0, result)
+                }
             }
         };
-
-        result
+        let memory = self.options_memory_mut(store, params.options);
+        let ptr = func::validate_inbounds_dynamic(
+            &CanonicalAbiInfo::POINTER_PAIR,
+            memory,
+            &ValRaw::u32(params.payload),
+        )?;
+        memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
+        memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
+        Ok(ordinal)
     }
 
     /// Implements the `subtask.cancel` intrinsic.
@@ -5085,10 +5015,11 @@ struct WaitableCheckParams {
     payload: u32,
 }
 
-/// Helper enum for passing parameters to `ComponentInstance::waitable_check`.
+/// Indicates whether `ComponentInstance::waitable_check` is being called for
+/// `waitable-set.wait` or `waitable-set.poll`.
 enum WaitableCheck {
-    Wait(WaitableCheckParams),
-    Poll(WaitableCheckParams),
+    Wait,
+    Poll,
 }
 
 /// Represents a guest task called from the host, prepared using `prepare_call`.
