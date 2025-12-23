@@ -10,9 +10,9 @@ use core::ops::Deref;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
     TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
-    TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeModuleIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex, TypeStreamIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
+    TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeModuleIndex,
+    TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
 use wasmtime_environ::{PanicOnOom, PrimaryMap};
 
@@ -108,6 +108,8 @@ impl TypeChecker<'_> {
             (InterfaceType::Borrow(_), _) => false,
             (InterfaceType::List(l1), InterfaceType::List(l2)) => self.lists_equal(l1, l2),
             (InterfaceType::List(_), _) => false,
+            (InterfaceType::Map(m1), InterfaceType::Map(m2)) => self.maps_equal(m1, m2),
+            (InterfaceType::Map(_), _) => false,
             (InterfaceType::Record(r1), InterfaceType::Record(r2)) => self.records_equal(r1, r2),
             (InterfaceType::Record(_), _) => false,
             (InterfaceType::Variant(v1), InterfaceType::Variant(v2)) => self.variants_equal(v1, v2),
@@ -166,6 +168,12 @@ impl TypeChecker<'_> {
         let a = &self.a_types[l1];
         let b = &self.b_types[l2];
         self.interface_types_equal(a.element, b.element)
+    }
+
+    fn maps_equal(&self, m1: TypeMapIndex, m2: TypeMapIndex) -> bool {
+        let a = &self.a_types[m1];
+        let b = &self.b_types[m2];
+        self.interface_types_equal(a.key, b.key) && self.interface_types_equal(a.value, b.value)
     }
 
     fn resources_equal(&self, o1: TypeResourceTableIndex, o2: TypeResourceTableIndex) -> bool {
@@ -322,6 +330,34 @@ impl List {
     /// Retrieve the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].element, &self.0.instance())
+    }
+}
+
+/// A `map` interface type
+#[derive(Clone, Debug)]
+pub struct Map(Handle<TypeMapIndex>);
+
+impl PartialEq for Map {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.equivalent(&other.0, TypeChecker::maps_equal)
+    }
+}
+
+impl Eq for Map {}
+
+impl Map {
+    pub(crate) fn from(index: TypeMapIndex, ty: &InstanceType<'_>) -> Self {
+        Map(Handle::new(index, ty))
+    }
+
+    /// Retrieve the key type of this `map`.
+    pub fn key(&self) -> Type {
+        Type::from(&self.0.types[self.0.index].key, &self.0.instance())
+    }
+
+    /// Retrieve the value type of this `map`.
+    pub fn value(&self) -> Type {
+        Type::from(&self.0.types[self.0.index].value, &self.0.instance())
     }
 }
 
@@ -684,6 +720,7 @@ pub enum Type {
     Char,
     String,
     List(List),
+    Map(Map),
     Record(Record),
     Tuple(Tuple),
     Variant(Variant),
@@ -844,6 +881,7 @@ impl Type {
             InterfaceType::Char => Type::Char,
             InterfaceType::String => Type::String,
             InterfaceType::List(index) => Type::List(List::from(*index, instance)),
+            InterfaceType::Map(index) => Type::Map(Map::from(*index, instance)),
             InterfaceType::Record(index) => Type::Record(Record::from(*index, instance)),
             InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, instance)),
             InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, instance)),
@@ -876,6 +914,7 @@ impl Type {
             Type::Char => "char",
             Type::String => "string",
             Type::List(_) => "list",
+            Type::Map(_) => "map",
             Type::Record(_) => "record",
             Type::Tuple(_) => "tuple",
             Type::Variant(_) => "variant",
