@@ -380,7 +380,7 @@ block0(v0: i64):
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [XReg(p0i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [] }, uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [0, 0, 0, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   pop_frame
 ;   ret
 ;
