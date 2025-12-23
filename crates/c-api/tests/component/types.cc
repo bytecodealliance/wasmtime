@@ -187,6 +187,15 @@ TEST(types, valtype_list) {
   EXPECT_TRUE(elem.is_u8());
 }
 
+TEST(types, valtype_map) {
+  auto ty =
+      result("(component (import \"f\" (func (result (map u32 string)))))");
+  EXPECT_TRUE(ty.is_map());
+  auto map_ty = ty.map();
+  EXPECT_TRUE(map_ty.key().is_u32());
+  EXPECT_TRUE(map_ty.value().is_string());
+}
+
 TEST(types, valtype_record) {
   auto ty = result(R"(
   (component

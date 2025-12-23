@@ -38,6 +38,7 @@ const MAX_TYPE_DEPTH: u32 = 100;
 pub struct ComponentTypesBuilder {
     functions: HashMap<TypeFunc, TypeFuncIndex>,
     lists: HashMap<TypeList, TypeListIndex>,
+    maps: HashMap<TypeMap, TypeMapIndex>,
     records: HashMap<TypeRecord, TypeRecordIndex>,
     variants: HashMap<TypeVariant, TypeVariantIndex>,
     tuples: HashMap<TypeTuple, TypeTupleIndex>,
@@ -103,6 +104,7 @@ impl ComponentTypesBuilder {
 
             functions: HashMap::default(),
             lists: HashMap::default(),
+            maps: HashMap::default(),
             records: HashMap::default(),
             variants: HashMap::default(),
             tuples: HashMap::default(),
@@ -441,6 +443,9 @@ impl ComponentTypesBuilder {
                 InterfaceType::Variant(self.variant_type(types, e)?)
             }
             ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
+            ComponentDefinedType::Map(key, value) => {
+                InterfaceType::Map(self.map_type(types, key, value)?)
+            }
             ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(types, e)?),
             ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
             ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
@@ -460,9 +465,6 @@ impl ComponentTypesBuilder {
             }
             ComponentDefinedType::FixedLengthList(ty, size) => {
                 InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
-            }
-            ComponentDefinedType::Map(..) => {
-                bail!("support not implemented for map type");
             }
         };
         let info = self.type_information(&ret);
@@ -690,6 +692,21 @@ impl ComponentTypesBuilder {
         Ok(self.add_list_type(TypeList { element }))
     }
 
+    fn map_type(
+        &mut self,
+        types: TypesRef<'_>,
+        key: &ComponentValType,
+        value: &ComponentValType,
+    ) -> Result<TypeMapIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
+        let key_ty = self.valtype(types, key)?;
+        let value_ty = self.valtype(types, value)?;
+        Ok(self.add_map_type(TypeMap {
+            key: key_ty,
+            value: value_ty,
+        }))
+    }
+
     /// Converts a wasmparser `id`, which must point to a resource, to its
     /// corresponding `TypeResourceTableIndex`.
     pub fn resource_id(&mut self, id: ResourceId) -> TypeResourceTableIndex {
@@ -747,6 +764,11 @@ impl ComponentTypesBuilder {
     /// Interns a new list type within this type information.
     pub fn add_list_type(&mut self, ty: TypeList) -> TypeListIndex {
         intern_and_fill_flat_types!(self, lists, ty)
+    }
+
+    /// Interns a new map type within this type information.
+    pub fn add_map_type(&mut self, ty: TypeMap) -> TypeMapIndex {
+        intern_and_fill_flat_types!(self, maps, ty)
     }
 
     /// Interns a new future type within this type information.
@@ -852,6 +874,7 @@ impl ComponentTypesBuilder {
             }
 
             InterfaceType::List(i) => &self.type_info.lists[*i],
+            InterfaceType::Map(i) => &self.type_info.maps[*i],
             InterfaceType::Record(i) => &self.type_info.records[*i],
             InterfaceType::Variant(i) => &self.type_info.variants[*i],
             InterfaceType::Tuple(i) => &self.type_info.tuples[*i],
@@ -969,6 +992,7 @@ struct TypeInformationCache {
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
+    maps: PrimaryMap<TypeMapIndex, TypeInformation>,
     fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeInformation>,
 }
 
@@ -1181,5 +1205,16 @@ impl TypeInformation {
         let info = types.type_information(&ty.element);
         self.depth += info.depth;
         self.has_borrow = info.has_borrow;
+    }
+
+    fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
+        // Maps are represented as list<tuple<k, v>> in canonical ABI
+        // So we use POINTER_PAIR like lists, and calculate depth/borrow from key and value
+        *self = TypeInformation::string();
+        let key_info = types.type_information(&ty.key);
+        let value_info = types.type_information(&ty.value);
+        // Depth is max of key/value depths, plus 1 for tuple, plus 1 for list
+        self.depth = key_info.depth.max(value_info.depth) + 2;
+        self.has_borrow = key_info.has_borrow || value_info.has_borrow;
     }
 }
