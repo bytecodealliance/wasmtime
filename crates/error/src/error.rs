@@ -22,7 +22,16 @@ use std::backtrace::{Backtrace, BacktraceStatus};
 /// not lie about whether they are or are not an instance of the given type id's
 /// associated type (or a newtype wrapper around that type). Violations will
 /// lead to unsafety.
-pub(crate) unsafe trait ErrorExt: core::error::Error + Send + Sync + 'static {
+pub(crate) unsafe trait ErrorExt: Send + Sync + 'static {
+    /// Get this error as a shared reference to a `dyn core::error::Error` trait
+    /// object.
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static);
+
+    /// Get this error as a boxed `dyn core::error::Error` trait object.
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory>;
+
     /// Get a shared borrow of the next error in the chain.
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>>;
 
@@ -488,6 +497,20 @@ impl From<Error> for Box<dyn core::error::Error + Send + Sync + 'static> {
     }
 }
 
+impl From<Error> for Box<dyn core::error::Error + Send + 'static> {
+    #[inline]
+    fn from(error: Error) -> Self {
+        error.into_boxed_dyn_error()
+    }
+}
+
+impl From<Error> for Box<dyn core::error::Error + 'static> {
+    #[inline]
+    fn from(error: Error) -> Self {
+        error.into_boxed_dyn_error()
+    }
+}
+
 /// Convert a [`Error`] into an [`anyhow::Error`].
 ///
 /// # Example
@@ -514,6 +537,28 @@ impl From<Error> for anyhow::Error {
     #[inline]
     fn from(e: Error) -> Self {
         anyhow::Error::from_boxed(e.into_boxed_dyn_error())
+    }
+}
+
+impl core::ops::Deref for Error {
+    type Target = dyn core::error::Error + Send + Sync + 'static;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+impl AsRef<dyn core::error::Error> for Error {
+    #[inline]
+    fn as_ref(&self) -> &(dyn core::error::Error + 'static) {
+        self.inner.unpack().as_dyn_core_error()
+    }
+}
+
+impl AsRef<dyn core::error::Error + Send + Sync> for Error {
+    #[inline]
+    fn as_ref(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        self.inner.unpack().as_dyn_core_error()
     }
 }
 
@@ -1107,38 +1152,22 @@ impl Error {
 #[repr(transparent)]
 struct ForeignError<E>(E);
 
-impl<E> fmt::Debug for ForeignError<E>
-where
-    E: core::error::Error + Send + Sync + 'static,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl<E> fmt::Display for ForeignError<E>
-where
-    E: core::error::Error + Send + Sync + 'static,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl<E> core::error::Error for ForeignError<E>
-where
-    E: core::error::Error + Send + Sync + 'static,
-{
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        self.0.source()
-    }
-}
-
 // Safety: `ext_is` is correct, `ext_move` always writes to `dest`.
 unsafe impl<E> ErrorExt for ForeignError<E>
 where
     E: core::error::Error + Send + Sync + 'static,
 {
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        &self.0
+    }
+
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
+        let boxed = try_new_uninit_box()?;
+        Ok(Box::write(boxed, self.0) as _)
+    }
+
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
         None
     }
@@ -1206,6 +1235,17 @@ unsafe impl<M> ErrorExt for MessageError<M>
 where
     M: fmt::Debug + fmt::Display + Send + Sync + 'static,
 {
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        self
+    }
+
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
+        let boxed = try_new_uninit_box()?;
+        Ok(Box::write(boxed, self) as _)
+    }
+
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
         None
     }
@@ -1247,27 +1287,19 @@ where
 #[repr(transparent)]
 struct BoxedError(Box<dyn core::error::Error + Send + Sync + 'static>);
 
-impl fmt::Debug for BoxedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl fmt::Display for BoxedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl core::error::Error for BoxedError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        self.0.source()
-    }
-}
-
 // Safety: `ext_is` is implemented correctly and `ext_move` always
 // writes to its pointer.
 unsafe impl ErrorExt for BoxedError {
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        &*self.0
+    }
+
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
+        Ok(self.0)
+    }
+
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
         None
     }
@@ -1311,31 +1343,20 @@ unsafe impl ErrorExt for BoxedError {
 #[cfg(feature = "anyhow")]
 struct AnyhowError(anyhow::Error);
 
-#[cfg(feature = "anyhow")]
-impl fmt::Debug for AnyhowError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-#[cfg(feature = "anyhow")]
-impl fmt::Display for AnyhowError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-#[cfg(feature = "anyhow")]
-impl core::error::Error for AnyhowError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        self.0.source()
-    }
-}
-
 // Safety: `ext_is` is implemented correctly and `ext_move` always
 // writes to its pointer.
 #[cfg(feature = "anyhow")]
 unsafe impl ErrorExt for AnyhowError {
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        self.0.as_ref()
+    }
+
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
+        Ok(self.0.into_boxed_dyn_error())
+    }
+
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
         None
     }

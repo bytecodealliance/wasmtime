@@ -19,6 +19,7 @@
 //!
 //! and then `use crate::*` works as usual.
 
+pub use crate::error::{Context, Error, Result, anyhow, bail, ensure};
 pub use alloc::borrow::ToOwned;
 pub use alloc::boxed::Box;
 pub use alloc::format;

@@ -4,7 +4,6 @@ use crate::func_environ::FuncEnvironment;
 use crate::translate::FuncTranslator;
 use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
 use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
-use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::inline::InlineCommand;
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -32,6 +31,7 @@ use std::ops::Range;
 use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
+use wasmtime_environ::error::{Context as _, Result};
 use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
@@ -1579,7 +1579,7 @@ fn clif_to_env_exception_tables<'a>(
     builder: &mut ExceptionTableBuilder,
     range: Range<u64>,
     call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
-) -> anyhow::Result<()> {
+) -> wasmtime_environ::error::Result<()> {
     builder.add_func(CodeOffset::try_from(range.start).unwrap(), call_sites)
 }
 
@@ -1591,7 +1591,7 @@ fn clif_to_env_frame_tables<'a>(
     tag_sites: impl Iterator<Item = MachBufferDebugTagList<'a>>,
     frame_layout: &MachBufferFrameLayout,
     frame_descriptors: &HashMap<FuncKey, Vec<u8>>,
-) -> anyhow::Result<()> {
+) -> wasmtime_environ::error::Result<()> {
     let mut frame_descriptor_indices = HashMap::new();
     for tag_site in tag_sites {
         // Split into frames; each has three debug tags.
@@ -1647,7 +1647,7 @@ fn clif_to_env_breakpoints(
     range: Range<u64>,
     breakpoint_patches: impl Iterator<Item = (u32, Range<u32>)>,
     patch_table: &mut Vec<(u32, Range<u32>)>,
-) -> anyhow::Result<()> {
+) -> wasmtime_environ::error::Result<()> {
     patch_table.extend(breakpoint_patches.map(|(wasm_pc, offset_range)| {
         let start = offset_range.start + u32::try_from(range.start).unwrap();
         let end = offset_range.end + u32::try_from(range.start).unwrap();

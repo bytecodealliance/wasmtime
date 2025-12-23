@@ -1,7 +1,7 @@
-use anyhow::Result;
 use cranelift_codegen::isa::IsaBuilder as Builder;
 use cranelift_codegen::settings::{self, Configurable, Flags, SetError};
 use target_lexicon::Triple;
+use wasmtime_environ::error::Result;
 use wasmtime_environ::{Setting, SettingKind};
 
 /// A helper to build an Isa for a compiler implementation.

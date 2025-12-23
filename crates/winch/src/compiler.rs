@@ -1,4 +1,3 @@
-use anyhow::Result;
 use cranelift_codegen::isa::unwind::UnwindInfoKind;
 use object::write::{Object, SymbolId};
 use std::any::Any;
@@ -8,6 +7,7 @@ use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::CompiledFunction;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTranslation;
+use wasmtime_environ::error::Result;
 use wasmtime_environ::{
     CompileError, CompiledFunctionBody, DefinedFuncIndex, FuncKey, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StaticModuleIndex, Tunables, VMOffsets,

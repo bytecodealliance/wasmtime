@@ -2,7 +2,7 @@
 
 use core::str::FromStr;
 
-use anyhow::{Result, bail};
+use crate::error::{Result, bail};
 use serde_derive::{Deserialize, Serialize};
 
 /// Invoke a macro for each of our unsafe intrinsics.

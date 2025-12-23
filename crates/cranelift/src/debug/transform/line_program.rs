@@ -1,9 +1,9 @@
 use super::TransformError;
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
-use anyhow::{Error, bail};
 use gimli::{DebugLineOffset, LineEncoding, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
+use wasmtime_environ::error::{Error, bail};
 
 #[derive(Debug)]
 enum SavedLineProgramRow {

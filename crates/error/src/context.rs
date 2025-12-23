@@ -1,7 +1,9 @@
 use crate::{
-    Error, ErrorExt, Result,
+    Error, ErrorExt, OutOfMemory, Result,
+    boxed::try_new_uninit_box,
     error::{OomOrDynError, OomOrDynErrorMut, OomOrDynErrorRef},
 };
+use alloc::boxed::Box;
 use core::any::TypeId;
 use core::fmt;
 use core::ptr::NonNull;
@@ -252,6 +254,17 @@ unsafe impl<C> ErrorExt for ContextError<C>
 where
     C: fmt::Display + Send + Sync + 'static,
 {
+    fn ext_as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        self
+    }
+
+    fn ext_into_boxed_dyn_core_error(
+        self,
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
+        let boxed = try_new_uninit_box()?;
+        Ok(Box::write(boxed, self) as _)
+    }
+
     fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
         let error = self.error.as_ref()?;
         Some(error.inner.unpack())

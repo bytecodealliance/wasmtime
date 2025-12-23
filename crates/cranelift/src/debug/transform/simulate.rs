@@ -3,13 +3,13 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::append_vmctx_info;
 use crate::debug::Compilation;
 use crate::translate::get_vmctx_value_label;
-use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::LineEncoding;
 use gimli::write;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasmtime_environ::error::{Context, Error};
 use wasmtime_environ::{
     DebugInfoData, EntityRef, FunctionMetadata, PrimaryMap, StaticModuleIndex, WasmFileInfo,
     WasmValType,

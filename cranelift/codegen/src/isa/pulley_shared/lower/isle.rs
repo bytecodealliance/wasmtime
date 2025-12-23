@@ -7,6 +7,7 @@ use inst::InstAndKind;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::ir::{condcodes::*, immediates::*, types::*, *};
+use crate::isa::CallConv;
 use crate::isa::pulley_shared::{
     inst::{
         FReg, OperandSize, PulleyCall, ReturnCallInfo, VReg, WritableFReg, WritableVReg,
@@ -85,6 +86,7 @@ where
         self.lower_ctx
             .abi_mut()
             .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+        let call_conv = self.lower_ctx.sigs()[sig].call_conv();
 
         // The first four integer arguments to a call can be handled via
         // special pulley call instructions. Assert here that
@@ -92,19 +94,25 @@ where
         // they're present and move them from `uses` to
         // `dest.args` to be handled differently during register
         // allocation.
+        //
+        // We don't perform this optimization for callsites with the
+        // PreserveAll ABI because argument registers are not
+        // clobbered on those ISAs.
         let mut args = SmallVec::new();
         uses.sort_by_key(|arg| arg.preg);
-        uses.retain(|arg| {
-            if arg.preg != regs::x0()
-                && arg.preg != regs::x1()
-                && arg.preg != regs::x2()
-                && arg.preg != regs::x3()
-            {
-                return true;
-            }
-            args.push(XReg::new(arg.vreg).unwrap());
-            false
-        });
+        if call_conv != CallConv::PreserveAll {
+            uses.retain(|arg| {
+                if arg.preg != regs::x0()
+                    && arg.preg != regs::x1()
+                    && arg.preg != regs::x2()
+                    && arg.preg != regs::x3()
+                {
+                    return true;
+                }
+                args.push(XReg::new(arg.vreg).unwrap());
+                false
+            });
+        }
         let dest = PulleyCall { name, args };
         Box::new(
             self.lower_ctx
