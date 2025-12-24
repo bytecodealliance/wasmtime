@@ -41,6 +41,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
+    "wasmtime-internal-component-util",
+    "wasmtime-environ",
     "wasmtime-internal-jit-icache-coherence",
     // Wasmtime unwinder, used by both `cranelift-jit` (optionally) and filetests, and by Wasmtime.
     "wasmtime-internal-unwinder",
@@ -56,8 +58,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-internal-error",
     "wasmtime-internal-versioned-export-macros",
     "wasmtime-internal-slab",
-    "wasmtime-internal-component-util",
-    "wasmtime-environ",
     "wasmtime-internal-wit-bindgen",
     "wasmtime-internal-component-macro",
     "wasmtime-internal-jit-debug",
