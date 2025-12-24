@@ -1076,3 +1076,67 @@ block0(v0: i32x4, v1: i32x4):
 ;   vnx %v24, %v24, %v25
 ;   br %r14
 
+function %bnot_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = bnot v0
+  return  v1
+}
+
+; VCode:
+; block0:
+;   vno %v0, %v0, %v0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vno %v0, %v0, %v0
+;   br %r14
+
+function %band_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = band v0, v1
+  return  v2
+}
+
+; VCode:
+; block0:
+;   vn %v0, %v0, %v2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vn %v0, %v0, %v2
+;   br %r14
+
+function %bor_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = bor v0, v1
+  return  v2
+}
+
+; VCode:
+; block0:
+;   vo %v0, %v0, %v2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vo %v0, %v0, %v2
+;   br %r14
+
+function %bxor_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = bxor v0, v1
+  return  v2
+}
+
+; VCode:
+; block0:
+;   vx %v0, %v0, %v2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vx %v0, %v0, %v2
+;   br %r14
+
