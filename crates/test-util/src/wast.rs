@@ -268,6 +268,7 @@ macro_rules! foreach_config_option {
             component_model_threading
             component_model_error_context
             component_model_gc
+            component_model_map
             simd
             gc_types
             exceptions
@@ -708,6 +709,8 @@ impl WastTest {
             // https://github.com/bytecodealliance/wasm-tools/pull/2406 is
             // merged and released, and Wasmtime has been updated to use it:
             "component-model/test/async/same-component-stream-future.wast",
+            // FIXME(#12129)
+            "component-model/test/async/trap-if-block-and-sync.wast",
         ];
         if failing_component_model_tests
             .iter()

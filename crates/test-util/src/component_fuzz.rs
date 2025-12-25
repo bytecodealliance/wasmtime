@@ -125,6 +125,7 @@ pub enum Type {
     Char,
     String,
     List(Box<Type>),
+    Map(Box<Type>, Box<Type>),
 
     // Give records the ability to generate a generous amount of fields but
     // don't let the fuzzer go too wild since `wasmparser`'s validator currently
@@ -158,7 +159,7 @@ impl Type {
         fuel: &mut u32,
     ) -> arbitrary::Result<Type> {
         *fuel = fuel.saturating_sub(1);
-        let max = if depth == 0 || *fuel == 0 { 12 } else { 20 };
+        let max = if depth == 0 || *fuel == 0 { 12 } else { 21 };
         Ok(match u.int_in_range(0..=max)? {
             0 => Type::Bool,
             1 => Type::S8,
@@ -195,6 +196,10 @@ impl Type {
                 *fuel -= amt;
                 Type::Flags(amt)
             }
+            21 => Type::Map(
+                Box::new(Type::generate(u, depth - 1, fuel)?),
+                Box::new(Type::generate(u, depth - 1, fuel)?),
+            ),
             // ^-- if you add something here update the `depth != 0` case above
             _ => unreachable!(),
         })
@@ -247,7 +252,7 @@ impl Type {
             Type::S64 | Type::U64 => Kind::Primitive("i64.store"),
             Type::Float32 => Kind::Primitive("f32.store"),
             Type::Float64 => Kind::Primitive("f64.store"),
-            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::String | Type::List(_) | Type::Map(_, _) => Kind::PointerPair,
             Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.store8"),
             Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.store16"),
             Type::Enum(_) => Kind::Primitive("i32.store"),
@@ -414,7 +419,7 @@ impl Type {
             Type::U64 | Type::S64 => Kind::Primitive("i64.load"),
             Type::Float32 => Kind::Primitive("f32.load"),
             Type::Float64 => Kind::Primitive("f64.load"),
-            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::String | Type::List(_) | Type::Map(_, _) => Kind::PointerPair,
             Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.load8_u"),
             Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.load16_u"),
             Type::Enum(_) => Kind::Primitive("i32.load"),
@@ -667,7 +672,7 @@ impl Type {
             Type::S64 | Type::U64 => vec.push(CoreType::I64),
             Type::Float32 => vec.push(CoreType::F32),
             Type::Float64 => vec.push(CoreType::F64),
-            Type::String | Type::List(_) => {
+            Type::String | Type::List(_) | Type::Map(_, _) => {
                 vec.push(CoreType::I32);
                 vec.push(CoreType::I32);
             }
@@ -706,7 +711,7 @@ impl Type {
                 alignment: 8,
             },
 
-            Type::String | Type::List(_) => SizeAndAlignment {
+            Type::String | Type::List(_) | Type::Map(_, _) => SizeAndAlignment {
                 size: 8,
                 alignment: 4,
             },
@@ -1161,6 +1166,11 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let ty = rust_type(ty, name_counter, declarations);
             quote!(Vec<#ty>)
         }
+        Type::Map(key_ty, value_ty) => {
+            let key_ty = rust_type(key_ty, name_counter, declarations);
+            let value_ty = rust_type(value_ty, name_counter, declarations);
+            quote!(std::collections::HashMap<#key_ty, #value_ty>)
+        }
         Type::Record(types) => {
             let fields = types
                 .iter()
@@ -1330,6 +1340,7 @@ impl<'a> TypesBuilder<'a> {
             // Otherwise emit a reference to the type and remember to generate
             // the corresponding type alias later.
             Type::List(_)
+            | Type::Map(_, _)
             | Type::Record(_)
             | Type::Tuple(_)
             | Type::Variant(_)
@@ -1365,6 +1376,13 @@ impl<'a> TypesBuilder<'a> {
             Type::List(ty) => {
                 decl.push_str("(list ");
                 self.write_ref(ty, &mut decl);
+                decl.push_str(")");
+            }
+            Type::Map(key_ty, value_ty) => {
+                decl.push_str("(map ");
+                self.write_ref(key_ty, &mut decl);
+                decl.push_str(" ");
+                self.write_ref(value_ty, &mut decl);
                 decl.push_str(")");
             }
             Type::Record(types) => {

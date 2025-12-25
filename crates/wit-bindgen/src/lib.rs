@@ -1625,6 +1625,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Stream(t) => self.type_stream(id, name, t.as_ref(), &ty.docs),
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
+            TypeDefKind::Map(k, v) => self.type_map(id, name, k, v, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedSizeList(..) => todo!(),
         }
@@ -2190,6 +2191,22 @@ impl<'a> InterfaceGenerator<'a> {
             self.print_generics(lt);
             self.push_str(" = ");
             self.print_list(ty, mode);
+            self.push_str(";\n");
+            self.assert_type(id, &name);
+        }
+    }
+
+    fn type_map(&mut self, id: TypeId, _name: &str, key: &Type, value: &Type, docs: &Docs) {
+        let info = self.info(id);
+        for (name, mode) in self.modes_of(id) {
+            let lt = self.lifetime_for(&info, mode);
+            self.rustdoc(docs);
+            self.push_str(&format!("pub type {name}"));
+            self.print_generics(lt);
+            self.push_str(" = ");
+            let key_ty = self.ty(key, mode);
+            let value_ty = self.ty(value, mode);
+            self.push_str(&format!("std::collections::HashMap<{key_ty}, {value_ty}>"));
             self.push_str(";\n");
             self.assert_type(id, &name);
         }
@@ -3415,6 +3432,9 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
+            TypeDefKind::Map(k, v) => {
+                type_contains_lists(*k, resolve) || type_contains_lists(*v, resolve)
+            }
             TypeDefKind::FixedSizeList(..) => todo!(),
         },
 

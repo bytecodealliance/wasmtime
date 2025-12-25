@@ -343,18 +343,20 @@ wit-bindgen = { version = "0.50.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.50.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.243.0", default-features = false, features = ['simd'] }
-wat = "1.243.0"
-wast = "243.0.0"
-wasmprinter = "0.243.0"
-wasm-encoder = "0.243.0"
-wasm-smith = "0.243.0"
-wasm-mutate = "0.243.0"
-wit-parser = "0.243.0"
-wit-component = "0.243.0"
-wasm-wave = "0.243.0"
-wasm-compose = "0.243.0"
-json-from-wast = "0.243.0"
+# TODO: well, these are not published to crates.io yet, so we need to use the git repository.
+# I am gonna remove this once the feature is "completed" and the crates are published to crates.io.
+wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", default-features = false, features = ['simd'] }
+wat = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wast = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasmprinter = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-encoder = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-smith = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-mutate = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wit-parser = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-wave = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools" }
+json-from-wast = { git = "https://github.com/bytecodealliance/wasm-tools" }
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

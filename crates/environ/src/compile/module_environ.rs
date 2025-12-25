@@ -331,10 +331,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ImportSection(imports) => {
                 self.validator.import_section(&imports)?;
 
-                let cnt = usize::try_from(imports.count()).unwrap();
-                self.result.module.initializers.reserve(cnt);
-
-                for entry in imports {
+                for entry in imports.into_imports() {
                     let import = entry?;
                     let ty = match import.ty {
                         TypeRef::Func(index) => {

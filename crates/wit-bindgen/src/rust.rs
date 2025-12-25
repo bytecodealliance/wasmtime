@@ -121,6 +121,7 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Future(_)
                     | TypeDefKind::Stream(_)
                     | TypeDefKind::List(_)
+                    | TypeDefKind::Map(_, _)
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
@@ -187,6 +188,11 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Resource => unreachable!(),
 
             TypeDefKind::Type(t) => self.ty(t, mode),
+            TypeDefKind::Map(k, v) => {
+                let key = self.ty(k, mode);
+                let value = self.ty(v, mode);
+                format!("std::collections::HashMap<{key}, {value}>")
+            }
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedSizeList(..) => todo!(),
         }

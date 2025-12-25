@@ -89,6 +89,8 @@ indices! {
     pub struct TypeResultIndex(u32);
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
+    /// Index pointing to a map type in the component model.
+    pub struct TypeMapIndex(u32);
     /// Index pointing to a future type in the component model.
     pub struct TypeFutureIndex(u32);
 
@@ -281,6 +283,7 @@ pub struct ComponentTypes {
     pub(super) component_instances: PrimaryMap<TypeComponentInstanceIndex, TypeComponentInstance>,
     pub(super) functions: PrimaryMap<TypeFuncIndex, TypeFunc>,
     pub(super) lists: PrimaryMap<TypeListIndex, TypeList>,
+    pub(super) maps: PrimaryMap<TypeMapIndex, TypeMap>,
     pub(super) records: PrimaryMap<TypeRecordIndex, TypeRecord>,
     pub(super) variants: PrimaryMap<TypeVariantIndex, TypeVariant>,
     pub(super) tuples: PrimaryMap<TypeTupleIndex, TypeTuple>,
@@ -360,7 +363,9 @@ impl ComponentTypes {
                 &CanonicalAbiInfo::SCALAR8
             }
 
-            InterfaceType::String | InterfaceType::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
+            InterfaceType::String | InterfaceType::List(_) | InterfaceType::Map(_) => {
+                &CanonicalAbiInfo::POINTER_PAIR
+            }
 
             InterfaceType::Record(i) => &self[*i].abi,
             InterfaceType::Variant(i) => &self[*i].abi,
@@ -412,6 +417,7 @@ impl_index! {
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
+    impl Index<TypeMapIndex> for ComponentTypes { TypeMap => maps }
     impl Index<TypeResourceTableIndex> for ComponentTypes { TypeResourceTable => resource_tables }
     impl Index<TypeFutureIndex> for ComponentTypes { TypeFuture => futures }
     impl Index<TypeStreamIndex> for ComponentTypes { TypeStream => streams }
@@ -586,6 +592,7 @@ pub enum InterfaceType {
     Variant(TypeVariantIndex),
     List(TypeListIndex),
     Tuple(TypeTupleIndex),
+    Map(TypeMapIndex),
     Flags(TypeFlagsIndex),
     Enum(TypeEnumIndex),
     Option(TypeOptionIndex),
@@ -1173,6 +1180,15 @@ impl TypeResourceTable {
 pub struct TypeList {
     /// The element type of the list.
     pub element: InterfaceType,
+}
+
+/// Shape of a "map" interface type.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeMap {
+    /// The key type of the map.
+    pub key: InterfaceType,
+    /// The value type of the map.
+    pub value: InterfaceType,
 }
 
 /// Maximum number of flat types, for either params or results.
