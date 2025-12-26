@@ -4631,7 +4631,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "similar",
- "smallvec",
+ "smallvec 1.15.1",
  "target-lexicon",
  "tempfile",
  "termcolor",
