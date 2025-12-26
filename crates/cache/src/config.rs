@@ -1,6 +1,5 @@
 //! Module for configuring the cache system.
 
-use anyhow::{Context, Result, anyhow, bail};
 use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
@@ -11,6 +10,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use wasmtime_environ::error::{Context, Result, anyhow, bail};
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility

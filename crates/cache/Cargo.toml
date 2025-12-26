@@ -13,7 +13,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, features = ['std'] }
 base64 = { workspace = true }
 postcard = { workspace = true }
 directories-next = "2.0"
@@ -23,6 +22,7 @@ serde_derive = { workspace = true }
 sha2 = "0.10.2"
 toml = { workspace = true }
 zstd = { version = "0.13.0", default-features = false }
+wasmtime-environ = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
