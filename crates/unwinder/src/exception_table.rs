@@ -19,7 +19,6 @@ use alloc::vec::Vec;
 use cranelift_codegen::{
     ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, binemit::CodeOffset,
 };
-#[cfg(feature = "cranelift")]
 use wasmtime_environ::prelude::*;
 
 /// Collector struct for exception handlers per call site.
