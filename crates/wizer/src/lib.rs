@@ -24,6 +24,7 @@ pub use crate::info::ModuleContext;
 pub use crate::snapshot::SnapshotVal;
 use ::wasmtime::{Result, bail, error::Context as _};
 use std::collections::{HashMap, HashSet};
+pub use wasmparser::ValType;
 
 const DEFAULT_KEEP_INIT_FUNC: bool = false;
 
@@ -377,7 +378,11 @@ pub trait InstanceState {
     ///
     /// This function panics if `name` isn't an exported global or if the type
     /// of the global doesn't fit in `SnapshotVal`.
-    fn global_get(&mut self, name: &str) -> impl Future<Output = SnapshotVal> + Send;
+    fn global_get(
+        &mut self,
+        name: &str,
+        type_hint: ValType,
+    ) -> impl Future<Output = SnapshotVal> + Send;
 
     /// Loads the contents of the memory specified by `name`, returning the
     /// entier contents as a `Vec<u8>`.
