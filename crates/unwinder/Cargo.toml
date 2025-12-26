@@ -20,7 +20,7 @@ cranelift-codegen = { workspace = true, optional = true }
 log = { workspace = true }
 cfg-if = { workspace = true }
 object = { workspace = true }
-anyhow = { workspace = true }
+wasmtime-environ = { workspace = true }
 
 [features]
 default = []

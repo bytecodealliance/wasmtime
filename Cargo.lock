@@ -4914,11 +4914,11 @@ version = "41.0.0"
 name = "wasmtime-internal-unwinder"
 version = "41.0.0"
 dependencies = [
- "anyhow",
  "cfg-if",
  "cranelift-codegen",
  "log",
  "object 0.37.3",
+ "wasmtime-environ",
 ]
 
 [[package]]
