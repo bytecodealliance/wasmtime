@@ -65,6 +65,10 @@ make_vendor "wasi-tls" "
   tls@v0.2.0-draft+505fc98
 "
 
+make_vendor "wasi-tls/src/p3" "
+  tls@v0.3.0-draft@wit-0.3.0-draft
+"
+
 make_vendor "wasi-config" "config@v0.2.0-rc.1"
 
 make_vendor "wasi-keyvalue" "keyvalue@219ea36"
