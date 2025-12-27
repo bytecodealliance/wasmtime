@@ -1584,3 +1584,4 @@ fn create_constants(allocs: &mut InliningAllocs, func: &mut ir::Function, callee
         allocs.constants[*callee_constant] = Some(inlined_constant).into();
     }
 }
+use crate::prelude::*;

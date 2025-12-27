@@ -2193,3 +2193,4 @@ fn emit_lea<S>(
         _ => lea(*dst.as_ref(), addr, sink),
     }
 }
+use crate::prelude::*;

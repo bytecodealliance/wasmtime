@@ -280,3 +280,4 @@ mod tests {
             .Trap(Opcode::Return, I32, TrapCode::BAD_CONVERSION_TO_INTEGER);
     }
 }
+use crate::prelude::*;

@@ -1110,3 +1110,4 @@ pub(crate) struct Stats {
     pub(crate) elaborate_func_post_insts: u64,
     pub(crate) eclass_size_limit: u64,
 }
+use crate::prelude::*;

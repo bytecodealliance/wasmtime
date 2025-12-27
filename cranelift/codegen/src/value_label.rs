@@ -30,3 +30,4 @@ pub enum LabelValueLoc {
 
 /// Resulting map of Value labels and their ranges/locations.
 pub type ValueLabelsRanges = HashMap<ValueLabel, Vec<ValueLocRange>>;
+use crate::prelude::*;

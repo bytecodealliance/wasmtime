@@ -43,6 +43,8 @@ include!(concat!(env!("ISLE_DIR"), "/isle_numerics.rs"));
 #[macro_use]
 mod machinst;
 
+mod prelude;
+
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
@@ -122,3 +124,4 @@ macro_rules! trace_log_enabled {
 }
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
+use crate::prelude::*;

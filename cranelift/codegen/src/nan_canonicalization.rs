@@ -124,3 +124,4 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
 
     pos.prev_inst(); // Step backwards so the pass does not skip instructions.
 }
+use crate::prelude::*;

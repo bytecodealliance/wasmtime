@@ -749,3 +749,4 @@ pub(crate) fn lower_branch(
     let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, targets)
 }
+use crate::prelude::*;

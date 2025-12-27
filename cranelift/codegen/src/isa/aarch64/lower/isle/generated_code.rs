@@ -14,3 +14,4 @@
 )]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_aarch64.rs"));
+use crate::prelude::*;

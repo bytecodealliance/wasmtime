@@ -1632,3 +1632,4 @@ fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
 
     env
 }
+use crate::prelude::*;

@@ -418,3 +418,4 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         n_consts
     );
 }
+use crate::prelude::*;
