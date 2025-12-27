@@ -45,3 +45,4 @@ mod tests {
         assert_eq!("CoffTlsIndex".parse(), Ok(KnownSymbol::CoffTlsIndex));
     }
 }
+use crate::prelude::*;

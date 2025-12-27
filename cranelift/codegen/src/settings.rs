@@ -567,3 +567,4 @@ enable_incremental_compilation_cache_checks = false
         assert_eq!(f.opt_level(), super::OptLevel::Speed);
     }
 }
+use crate::prelude::*;

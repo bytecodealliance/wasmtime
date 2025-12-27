@@ -280,3 +280,4 @@ pub fn pretty_print_vreg_vector(reg: Reg, size: VectorSize) -> String {
 pub fn pretty_print_vreg_element(reg: Reg, idx: usize, size: ScalarSize) -> String {
     show_vreg_element(reg, idx as u8, size)
 }
+use crate::prelude::*;

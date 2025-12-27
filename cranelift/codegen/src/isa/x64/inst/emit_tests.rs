@@ -383,3 +383,4 @@ fn test_x64_emit() {
         assert_eq!(expected_encoding, actual_encoding, "{expected_printing}");
     }
 }
+use crate::prelude::*;
