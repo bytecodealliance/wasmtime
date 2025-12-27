@@ -164,4 +164,3 @@ pub(crate) enum LoadOrStore<'a> {
         stored_fact: Option<&'a Fact>,
     },
 }
-use crate::prelude::*;

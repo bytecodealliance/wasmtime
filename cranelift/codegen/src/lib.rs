@@ -21,7 +21,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{HashMap, HashSet, hash_map};
+use hashbrown::{HashMap, hash_map};
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet, hash_map};
 
@@ -131,4 +131,3 @@ macro_rules! trace_log_enabled {
 }
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
-use crate::prelude::*;

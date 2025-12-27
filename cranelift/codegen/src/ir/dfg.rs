@@ -1882,4 +1882,3 @@ mod tests {
         assert_eq!(v1, func.dfg.inst_args(call_inst_dup)[0]);
     }
 }
-use crate::prelude::*;

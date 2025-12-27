@@ -96,4 +96,3 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
     Ok((vcode, regalloc_result))
 }
-use crate::prelude::*;
