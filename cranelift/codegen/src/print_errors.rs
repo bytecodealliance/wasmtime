@@ -221,4 +221,3 @@ pub fn pretty_error(func: &ir::Function, err: CodegenError) -> String {
         err.to_string()
     }
 }
-use crate::prelude::*;

@@ -52,4 +52,3 @@ pub fn dynamic_to_fixed(ty: Type) -> Type {
         _ => unreachable!("unhandled type: {}", ty),
     }
 }
-use crate::prelude::*;
