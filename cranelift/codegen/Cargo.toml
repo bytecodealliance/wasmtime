@@ -72,7 +72,7 @@ std = ["serde?/std", "rustc-hash/std", "cranelift-control/fuzz"]
 # deprecated (we (i) always use hashbrown, and (ii) don't support a
 # no_std build anymore). The feature remains for backward
 # compatibility as a no-op.
-core = []
+core = ["cranelift-assembler-x64/core"]
 
 # Enable the `to_capstone` method on TargetIsa, for constructing a Capstone
 # context, and the `disassemble` method on `MachBufferFinalized`.
