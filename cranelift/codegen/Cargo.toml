@@ -30,7 +30,7 @@ cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
@@ -71,7 +71,7 @@ std = ["serde?/std", "rustc-hash/std", "cranelift-control/fuzz"]
 # deprecated (we (i) always use hashbrown, and (ii) don't support a
 # no_std build anymore). The feature remains for backward
 # compatibility as a no-op.
-core = []
+core = ["cranelift-assembler-x64/core"]
 
 # Enable the `to_capstone` method on TargetIsa, for constructing a Capstone
 # context, and the `disassemble` method on `MachBufferFinalized`.
