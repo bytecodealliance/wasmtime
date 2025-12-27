@@ -139,7 +139,7 @@ pub use self::values::Val;
 
 pub(crate) use self::instance::RuntimeImport;
 pub(crate) use self::resources::HostResourceData;
-pub(crate) use self::store::ComponentInstanceId;
+pub(crate) use self::store::{ComponentInstanceId, RuntimeInstance};
 
 // Re-export wasm_wave crate so the compatible version of this dep doesn't have to be
 // tracked separately from wasmtime.

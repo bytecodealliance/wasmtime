@@ -614,6 +614,9 @@ pub(crate) fn lookup_vmdef(
             // within that store, so it's safe to create a `Func`.
             vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
         }
+        CoreDef::TaskMayBlock => vm::Export::Global(crate::Global::from_task_may_block(
+            StoreComponentInstanceId::new(store.id(), id),
+        )),
     }
 }
 

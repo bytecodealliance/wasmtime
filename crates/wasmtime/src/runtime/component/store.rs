@@ -6,6 +6,7 @@ use crate::store::{StoreData, StoreId, StoreOpaque};
 use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
@@ -15,6 +16,13 @@ pub struct ComponentStoreData {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ComponentInstanceId(u32);
 wasmtime_environ::entity_impl!(ComponentInstanceId);
+
+/// Represents a (`ComponentInstanceId`, `RuntimeComponentInstanceIndex`) pair.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct RuntimeInstance {
+    pub instance: ComponentInstanceId,
+    pub index: RuntimeComponentInstanceIndex,
+}
 
 impl StoreData {
     pub(crate) fn push_component_instance(

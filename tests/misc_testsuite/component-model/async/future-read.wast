@@ -25,7 +25,7 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run")))
   )
   (instance $child (instantiate $child))

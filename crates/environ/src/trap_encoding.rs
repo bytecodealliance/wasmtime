@@ -128,13 +128,6 @@ pub enum Trap {
     /// encoding operation.
     DebugAssertEqualCodeUnits,
 
-    /// Debug assertion generated for a fused adapter regarding the expected
-    /// value of the `may_enter` flag for an instance.
-    ///
-    /// TODO: Remove this once
-    /// https://github.com/bytecodealliance/wasmtime/pull/12153 has been merged.
-    DebugAssertMayEnterUnset,
-
     /// Debug assertion generated for a fused adapter regarding the alignment of
     /// a pointer.
     DebugAssertPointerAligned,
@@ -201,7 +194,6 @@ impl Trap {
             InvalidChar
             DebugAssertStringEncodingFinished
             DebugAssertEqualCodeUnits
-            DebugAssertMayEnterUnset
             DebugAssertPointerAligned
             DebugAssertUpperBitsUnset
             StringOutOfBounds
@@ -248,7 +240,6 @@ impl fmt::Display for Trap {
             InvalidChar => "invalid `char` bit pattern",
             DebugAssertStringEncodingFinished => "should have finished string encoding",
             DebugAssertEqualCodeUnits => "code units should be equal",
-            DebugAssertMayEnterUnset => "`may_enter` flag should be unset",
             DebugAssertPointerAligned => "pointer should be aligned",
             DebugAssertUpperBitsUnset => "upper bits should be unset",
             StringOutOfBounds => "string content out-of-bounds",

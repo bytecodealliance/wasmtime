@@ -79,6 +79,14 @@ pub struct Translator<'a, 'data> {
 
     /// The top-level import name for Wasmtime's unsafe intrinsics, if any.
     unsafe_intrinsics_import: Option<&'a str>,
+
+    /// Whether this component contains any module instantiations outside of
+    /// leaf components.
+    ///
+    /// We'll use this when generating fused adapters; if it's false, then we
+    /// know that no guest-to-guest call can reenter a runtime instance
+    /// recursively.
+    has_nonleaf_module_instantiations: bool,
 }
 
 /// Representation of the syntactic scope of a component meaning where it is
@@ -171,6 +179,14 @@ struct Translation<'data> {
     /// component has finished, e.g. for the `inline` pass, but beforehand this
     /// is set to `None`.
     types: Option<Types>,
+
+    /// Whether we've encountered a module instantiation while parsing this
+    /// component (disregarding instantiations in subcomponents).
+    saw_module_instantiation: bool,
+
+    /// Whether we've encountered a component instantation while parsing this
+    /// component (disregarding instantiations in subcomponents).
+    saw_component_instantiation: bool,
 }
 
 // NB: the type information contained in `LocalInitializer` should always point
@@ -455,6 +471,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             static_modules: Default::default(),
             scope_vec,
             unsafe_intrinsics_import: None,
+            has_nonleaf_module_instantiations: false,
         }
     }
 
@@ -606,6 +623,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
 
                     // We could in theory inline these trampolines, so it could
                     // potentially make sense to record that we know this
@@ -693,6 +711,9 @@ impl<'a, 'data> Translator<'a, 'data> {
             Payload::End(offset) => {
                 assert!(self.result.types.is_none());
                 self.result.types = Some(self.validator.end(offset)?);
+
+                self.has_nonleaf_module_instantiations |=
+                    self.result.saw_module_instantiation && self.result.saw_component_instantiation;
 
                 // Exit the current lexical scope. If there is no parent (no
                 // frame currently on the stack) then translation is finished.
@@ -1251,6 +1272,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             // largely just records the arguments given from wasmparser into a
             // `HashMap` for processing later during inlining.
             Payload::InstanceSection(s) => {
+                self.result.saw_module_instantiation = true;
                 self.validator.instance_section(&s)?;
                 for instance in s {
                     let init = match instance? {
@@ -1266,6 +1288,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 }
             }
             Payload::ComponentInstanceSection(s) => {
+                self.result.saw_component_instantiation = true;
                 let mut index = self.validator.types(0).unwrap().component_instance_count();
                 self.validator.component_instance_section(&s)?;
                 for instance in s {

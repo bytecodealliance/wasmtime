@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::{TRAP_ALWAYS, TRAP_INTERNAL_ASSERT, compiler::Compiler};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -732,9 +732,17 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::CheckBlocking => {
+            Trampoline::EnterSyncCall => {
                 self.translate_libcall(
-                    host::check_blocking,
+                    host::enter_sync_call,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ExitSyncCall => {
+                self.translate_libcall(
+                    host::exit_sync_call,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |_, _| {},
@@ -1138,11 +1146,9 @@ impl<'a> TrampolineCompiler<'a> {
         //      brif should_run_destructor, run_destructor_block, return_block
         //
         //    run_destructor_block:
-        //      ;; test may_enter, but only if the component instances
+        //      ;; call `enter_sync_call`, but only if the component instances
         //      ;; differ
-        //      flags = load.i32 vmctx+$offset
-        //      masked = band flags, $FLAG_MAY_ENTER
-        //      trapz masked, CANNOT_ENTER_CODE
+        //      ...
         //
         //      ;; ============================================================
         //      ;; this is conditionally emitted based on whether the resource
@@ -1155,6 +1161,9 @@ impl<'a> TrampolineCompiler<'a> {
         //      callee_vmctx = load.ptr dtor+$offset
         //      call_indirect func_addr, callee_vmctx, vmctx, rep
         //      ;; ============================================================
+        //
+        //      ;; call `exit_sync_call` if the component instances differ
+        //      ...
         //
         //      jump return_block
         //
@@ -1186,25 +1195,32 @@ impl<'a> TrampolineCompiler<'a> {
         self.builder.switch_to_block(run_destructor_block);
 
         // If this is a defined resource within the component itself then a
-        // check needs to be emitted for the `may_enter` flag. Note though
+        // check needs to be emitted for recursive reentrance. Note though
         // that this check can be elided if the resource table resides in
         // the same component instance that defined the resource as the
         // component is calling itself.
-        if let Some(def) = resource_def {
+        let emit_exit = if let Some(def) = resource_def {
             if self.types[resource].unwrap_concrete_instance() != def.instance {
-                let flags = self.builder.ins().load(
-                    ir::types::I32,
-                    trusted,
+                let host_args = vec![
                     vmctx,
-                    i32::try_from(self.offsets.instance_flags(def.instance)).unwrap(),
-                );
-                let masked = self
-                    .builder
-                    .ins()
-                    .band_imm(flags, i64::from(FLAG_MAY_ENTER));
-                self.builder.ins().trapz(masked, TRAP_CANNOT_ENTER);
+                    self.builder
+                        .ins()
+                        .iconst(ir::types::I32, i64::from(instance.as_u32())),
+                    self.builder.ins().iconst(ir::types::I32, i64::from(0)),
+                    self.builder
+                        .ins()
+                        .iconst(ir::types::I32, i64::from(def.instance.as_u32())),
+                ];
+                let call = self.call_libcall(vmctx, host::enter_sync_call, &host_args);
+                let result = self.builder.func.dfg.inst_results(call).get(0).copied();
+                self.raise_if_host_trapped(result.unwrap());
+                true
+            } else {
+                false
             }
-        }
+        } else {
+            false
+        };
 
         // Conditionally emit destructor-execution code based on whether we
         // statically know that a destructor exists or not.
@@ -1253,6 +1269,13 @@ impl<'a> TrampolineCompiler<'a> {
                 &[callee_vmctx, caller_vmctx, rep],
             );
         }
+
+        if emit_exit {
+            let call = self.call_libcall(vmctx, host::exit_sync_call, &[vmctx]);
+            let result = self.builder.func.dfg.inst_results(call).get(0).copied();
+            self.raise_if_host_trapped(result.unwrap());
+        }
+
         self.builder.ins().jump(return_block, &[]);
         self.builder.seal_block(run_destructor_block);
 

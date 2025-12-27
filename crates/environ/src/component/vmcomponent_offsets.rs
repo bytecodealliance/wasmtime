@@ -28,13 +28,9 @@ pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
 /// canonical ABI flag `may_leave`
 pub const FLAG_MAY_LEAVE: i32 = 1 << 0;
 
-/// Flag for the `VMComponentContext::flags` field which corresponds to the
-/// canonical ABI flag `may_enter`
-pub const FLAG_MAY_ENTER: i32 = 1 << 1;
-
 /// Flag for the `VMComponentContext::flags` field which is set whenever a
 /// function is called to indicate that `post_return` must be called next.
-pub const FLAG_NEEDS_POST_RETURN: i32 = 1 << 2;
+pub const FLAG_NEEDS_POST_RETURN: i32 = 1 << 1;
 
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +66,7 @@ pub struct VMComponentOffsets<P> {
     builtins: u32,
     vm_store_context: u32,
     flags: u32,
+    task_may_block: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
     lowerings: u32,
@@ -129,6 +126,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             builtins: 0,
             vm_store_context: 0,
             flags: 0,
+            task_may_block: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
             lowerings: 0,
@@ -172,6 +170,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(vm_store_context) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
+            size(task_may_block) = ret.ptr.size(),
             align(u32::from(ret.ptr.size())),
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(intrinsic_func_refs) = cmul(ret.num_unsafe_intrinsics, ret.ptr.size_of_vm_func_ref()),
@@ -217,6 +216,11 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn instance_flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_component_instances);
         self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
+    }
+
+    /// The offset of the `task_may_block` field.
+    pub fn task_may_block(&self) -> u32 {
+        self.task_may_block
     }
 
     /// The offset of the `vm_store_context` field.

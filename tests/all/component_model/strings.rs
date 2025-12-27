@@ -314,10 +314,10 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     );
 
     let component = Component::new(engine, &component)?;
-    let mut store = Store::new(engine, ());
 
-    let mut test_overflow = |size: u32| -> Result<()> {
+    let test_overflow = |size: u32| -> Result<()> {
         println!("src={src} dst={dst} size={size:#x}");
+        let mut store = Store::new(engine, ());
         let instance = Linker::new(engine).instantiate(&mut store, &component)?;
         let func = instance.get_typed_func::<(u32,), ()>(&mut store, "f")?;
         let trap = func
