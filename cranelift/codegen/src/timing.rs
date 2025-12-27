@@ -303,4 +303,3 @@ mod tests {
         assert_eq!(Pass::regalloc.to_string(), "Register allocation");
     }
 }
-use crate::prelude::*;

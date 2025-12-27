@@ -324,4 +324,3 @@ fn compute_addr(ctx: &FactContext, vcode: &VCode<Inst>, amode: &Amode, bits: u16
         Amode::RipRelative { .. } => None,
     }
 }
-use crate::prelude::*;

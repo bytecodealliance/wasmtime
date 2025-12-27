@@ -20,4 +20,3 @@ pub(super) fn reverse_stack(mut args: ArgsAccumulator, next_stack: u32, uses_ext
         }
     }
 }
-use crate::prelude::*;
