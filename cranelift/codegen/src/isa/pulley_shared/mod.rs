@@ -22,6 +22,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
+use alloc::string::String;
 use target_lexicon::{Architecture, Triple};
 
 pub use settings::Flags as PulleyFlags;

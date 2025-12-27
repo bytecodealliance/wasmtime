@@ -18,6 +18,9 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
+use alloc::boxed::Box;
+use core::fmt::Write;
+use alloc::string::{String, ToString};
 
 pub mod regs;
 pub use self::regs::*;

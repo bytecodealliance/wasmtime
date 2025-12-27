@@ -79,6 +79,7 @@ use crate::machinst::{BlockIndex, LowerBackend, VCode};
 use crate::trace;
 use core::fmt;
 use regalloc2::Function as _;
+use core::fmt;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
