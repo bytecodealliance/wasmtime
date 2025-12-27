@@ -27,7 +27,7 @@ fn test_aarch64_binemit() {
     //
     //      #!/bin/sh
     //      tmp=`mktemp /tmp/XXXXXXXX.o`
-    //      aarch64-linux-gnu-as /dev/stdin -o $tmp
+    //      aarch64-linux-gnu-as /dev/corein -o $tmp
     //      aarch64-linux-gnu-objdump -d $tmp
     //      rm -f $tmp
     //

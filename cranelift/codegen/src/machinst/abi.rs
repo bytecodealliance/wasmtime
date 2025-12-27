@@ -111,6 +111,7 @@ use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
 use core::marker::PhantomData;
+use hashbrown::HashMap;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::smallvec;
 

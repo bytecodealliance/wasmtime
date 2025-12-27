@@ -6,6 +6,7 @@ use crate::machinst::abi::StackAMode;
 use core::fmt;
 use pulley_interpreter::encode;
 use pulley_interpreter::regs::Reg as _;
+use core::fmt;
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).

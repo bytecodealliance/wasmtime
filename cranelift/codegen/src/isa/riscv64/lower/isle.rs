@@ -24,6 +24,8 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::PReg;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;

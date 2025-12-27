@@ -14,6 +14,7 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use std::sync::OnceLock;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};

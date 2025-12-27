@@ -2,7 +2,7 @@
 //!
 //! See comments at the top of `fn x64_emit` for advice on how to create reliable test cases.
 //!
-//! to see stdout: cargo test -- --nocapture
+//! to see coreout: cargo test -- --nocapture
 //!
 //! for this specific case, as of 24 Aug 2020:
 //!

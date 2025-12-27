@@ -12,6 +12,8 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::Write;
 use smallvec::SmallVec;
+use core::fmt::Write;
+use alloc::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
 pub mod imms;
@@ -2969,7 +2971,7 @@ impl Inst {
                     (&Inst::VecStoreLane { .. }, 8) => ("vsteb", None, None),
                     (&Inst::VecStoreLane { .. }, 16) => ("vsteh", None, None),
                     (&Inst::VecStoreLane { .. }, 32) => ("vstef", Some("ste"), Some("stey")),
-                    (&Inst::VecStoreLane { .. }, 64) => ("vsteg", Some("std"), Some("stdy")),
+                    (&Inst::VecStoreLane { .. }, 64) => ("vsteg", Some("core"), Some("corey")),
                     (&Inst::VecStoreLaneRev { .. }, 16) => ("vstebrh", None, None),
                     (&Inst::VecStoreLaneRev { .. }, 32) => ("vstebrf", None, None),
                     (&Inst::VecStoreLaneRev { .. }, 64) => ("vstebrg", None, None),
