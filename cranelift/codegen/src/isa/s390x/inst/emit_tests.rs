@@ -12039,7 +12039,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "60102000",
-        "std %f1, 0(%r2)",
+        "core %f1, 0(%r2)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12054,7 +12054,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "60102FFF",
-        "std %f1, 4095(%r2)",
+        "core %f1, 4095(%r2)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12069,7 +12069,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "ED1020008067",
-        "stdy %f1, -524288(%r2)",
+        "corey %f1, -524288(%r2)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12084,7 +12084,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "ED102FFF7F67",
-        "stdy %f1, 524287(%r2)",
+        "corey %f1, 524287(%r2)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12129,7 +12129,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "60123000",
-        "std %f1, 0(%r2,%r3)",
+        "core %f1, 0(%r2,%r3)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12144,7 +12144,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "60123FFF",
-        "std %f1, 4095(%r2,%r3)",
+        "core %f1, 4095(%r2,%r3)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12159,7 +12159,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "ED1230008067",
-        "stdy %f1, -524288(%r2,%r3)",
+        "corey %f1, -524288(%r2,%r3)",
     ));
     insns.push((
         Inst::VecStoreLane {
@@ -12174,7 +12174,7 @@ fn test_s390x_binemit() {
             lane_imm: 0,
         },
         "ED123FFF7F67",
-        "stdy %f1, 524287(%r2,%r3)",
+        "corey %f1, 524287(%r2,%r3)",
     ));
     insns.push((
         Inst::VecStoreLane {

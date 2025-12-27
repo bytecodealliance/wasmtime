@@ -5,7 +5,7 @@ use crate::ir::ExternalName;
 use crate::machinst::abi::StackAMode;
 use pulley_interpreter::encode;
 use pulley_interpreter::regs::Reg as _;
-use std::fmt;
+use core::fmt;
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).
@@ -61,7 +61,7 @@ macro_rules! newtype_of_reg {
         // NB: We cannot implement `DerefMut` because that would let people do
         // nasty stuff like `*my_xreg.deref_mut() = some_freg`, breaking the
         // invariants that `XReg` provides.
-        impl std::ops::Deref for $newtype_reg {
+        impl core::ops::Deref for $newtype_reg {
             type Target = Reg;
 
             fn deref(&self) -> &Reg {

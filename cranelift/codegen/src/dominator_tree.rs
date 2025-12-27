@@ -94,7 +94,7 @@ impl SpanningTree {
     }
 }
 
-impl std::ops::Index<u32> for SpanningTree {
+impl core::ops::Index<u32> for SpanningTree {
     type Output = SpanningTreeNode;
 
     fn index(&self, idx: u32) -> &Self::Output {
@@ -102,7 +102,7 @@ impl std::ops::Index<u32> for SpanningTree {
     }
 }
 
-impl std::ops::IndexMut<u32> for SpanningTree {
+impl core::ops::IndexMut<u32> for SpanningTree {
     fn index_mut(&mut self, idx: u32) -> &mut Self::Output {
         &mut self.nodes[idx as usize]
     }
@@ -439,7 +439,7 @@ impl DominatorTree {
                 }
 
                 let semi_candidate = self.eval(self.nodes[pred].pre_number, last_linked);
-                semi = std::cmp::min(semi, semi_candidate);
+                semi = core::cmp::min(semi, semi_candidate);
             }
 
             let w_node = &mut self.stree[w];

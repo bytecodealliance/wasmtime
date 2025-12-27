@@ -99,7 +99,7 @@ pub struct VerifierError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierError {}
+impl core::error::Error for VerifierError {}
 
 impl Display for VerifierError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -178,7 +178,7 @@ pub struct VerifierErrors(pub Vec<VerifierError>);
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierErrors {}
+impl core::error::Error for VerifierErrors {}
 
 impl VerifierErrors {
     /// Return a new `VerifierErrors` struct.
@@ -2130,9 +2130,9 @@ mod tests {
                 None => panic!("Expected an error"),
                 Some(&VerifierError { ref message, .. }) => {
                     if !message.contains($msg) {
-                        #[cfg(feature = "std")]
+                        #[cfg(feature = "core")]
                         panic!("'{}' did not contain the substring '{}'", message, $msg);
-                        #[cfg(not(feature = "std"))]
+                        #[cfg(not(feature = "core"))]
                         panic!("error message did not contain the expected substring");
                     }
                 }

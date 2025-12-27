@@ -22,10 +22,10 @@ use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, VCodeConstant,
     VCodeConstantData,
 };
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_assembler_x64 as asm;
 use regalloc2::PReg;
-use std::boxed::Box;
 
 /// Type representing out-of-line data for calls. This type optional because the
 /// call instruction is also used by Winch to emit calls, but the

@@ -78,7 +78,7 @@ pub struct BlockLoweringOrder {
     lowered_succ_indices: Vec<BlockIndex>,
     /// Ranges in `lowered_succ_indices` giving the successor lists for each lowered
     /// block. Indexed by lowering-order index (`BlockIndex`).
-    lowered_succ_ranges: Vec<(Option<Inst>, std::ops::Range<usize>)>,
+    lowered_succ_ranges: Vec<(Option<Inst>, core::ops::Range<usize>)>,
     /// BlockIndex for each original Block.
     blockindex_by_block: SecondaryMap<Block, BlockIndex>,
     /// Cold blocks. These blocks are not reordered in the

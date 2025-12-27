@@ -22,8 +22,8 @@ use crate::{
     machinst::{ArgPair, CallArgList, CallRetList, InstOutput},
 };
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::vec::Vec;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;

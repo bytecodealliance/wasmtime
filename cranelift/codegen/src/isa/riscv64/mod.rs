@@ -16,7 +16,7 @@ use crate::{CodegenError, ir};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
+use alloc::string::String;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;

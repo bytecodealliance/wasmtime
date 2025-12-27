@@ -290,7 +290,7 @@ pub enum SetError {
     BadValue(String),
 }
 
-impl std::error::Error for SetError {}
+impl core::error::Error for SetError {}
 
 impl fmt::Display for SetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

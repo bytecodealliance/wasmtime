@@ -7,7 +7,7 @@ use super::{
 use crate::{Reg, Writable, ir::TrapCode};
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
-use std::string::String;
+use alloc::string::String;
 
 /// Define the types of registers Cranelift will use.
 #[derive(Clone, Debug)]
