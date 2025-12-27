@@ -2970,7 +2970,7 @@ impl Inst {
                     (&Inst::VecStoreLane { .. }, 8) => ("vsteb", None, None),
                     (&Inst::VecStoreLane { .. }, 16) => ("vsteh", None, None),
                     (&Inst::VecStoreLane { .. }, 32) => ("vstef", Some("ste"), Some("stey")),
-                    (&Inst::VecStoreLane { .. }, 64) => ("vsteg", Some("core"), Some("corey")),
+                    (&Inst::VecStoreLane { .. }, 64) => ("vsteg", Some("std"), Some("stdy")),
                     (&Inst::VecStoreLaneRev { .. }, 16) => ("vstebrh", None, None),
                     (&Inst::VecStoreLaneRev { .. }, 32) => ("vstebrf", None, None),
                     (&Inst::VecStoreLaneRev { .. }, 64) => ("vstebrg", None, None),
