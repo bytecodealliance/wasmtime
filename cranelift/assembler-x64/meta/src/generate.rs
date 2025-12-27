@@ -53,11 +53,11 @@ fn match_variants(f: &mut Formatter, insts: &[dsl::Inst], invoke: &str) {
     });
 }
 
-/// `impl std::fmt::Display for Inst { ... }`
+/// `impl core::fmt::Display for Inst { ... }`
 fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
-    f.add_block("impl<R: Registers> std::fmt::Display for Inst<R>", |f| {
+    f.add_block("impl<R: Registers> core::fmt::Display for Inst<R>", |f| {
         f.add_block(
-            "fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+            "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result",
             |f| {
                 match_variants(f, insts, "fmt(f)");
             },
