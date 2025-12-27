@@ -41,10 +41,8 @@
     non_camel_case_types,
     reason = "all of the generated struct names use snake case"
 )]
-#![no_std]
+#![cfg_attr(feature = "core", no_std)]
 extern crate alloc;
-#[cfg(any(test, feature = "fuzz"))]
-extern crate std;
 
 mod api;
 mod custom;
