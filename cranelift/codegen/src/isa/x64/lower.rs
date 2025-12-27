@@ -16,7 +16,7 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use std::boxed::Box;
+use alloc::boxed::Box;
 use target_lexicon::Triple;
 
 /// Identifier for a particular input of an instruction.

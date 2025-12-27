@@ -707,3 +707,4 @@ fn patch_pc_rel_offset<P>(
     assert_eq!(*chunk, [0, 0, 0, 0]);
     *chunk = (end - start - 4).to_le_bytes();
 }
+use crate::prelude::*;

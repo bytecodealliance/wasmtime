@@ -5,7 +5,7 @@
 //! an array or pool of shared data).
 
 use hashbrown::hash_table::HashTable;
-use std::hash::{Hash, Hasher};
+use core::hash::{Hash, Hasher};
 
 /// Trait that allows for equality comparison given some external
 /// context.
@@ -92,7 +92,7 @@ impl<K, V> CtxHashMap<K, V> {
         match self.raw.find_mut(hash as u64, |bucket| {
             hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
         }) {
-            Some(bucket) => Some(std::mem::replace(&mut bucket.v, v)),
+            Some(bucket) => Some(core::mem::replace(&mut bucket.v, v)),
             None => {
                 let data = BucketData { hash, k, v };
                 self.raw

@@ -1,6 +1,7 @@
 //! Pure register operands; see [`Gpr`].
 
 use crate::AsReg;
+use alloc::string::String;
 
 /// A general purpose x64 register (e.g., `%rax`).
 ///

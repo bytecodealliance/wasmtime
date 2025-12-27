@@ -290,7 +290,7 @@ pub enum SetError {
     BadValue(String),
 }
 
-impl std::error::Error for SetError {}
+impl core::error::Error for SetError {}
 
 impl fmt::Display for SetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -566,3 +566,4 @@ enable_incremental_compilation_cache_checks = false
         assert_eq!(f.opt_level(), super::OptLevel::Speed);
     }
 }
+use crate::prelude::*;

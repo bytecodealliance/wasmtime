@@ -562,3 +562,4 @@ mod tests {
         assert_eq!(Constant::with_number(1).unwrap().to_string(), "const1");
     }
 }
+use crate::prelude::*;

@@ -1,3 +1,4 @@
+
 //! Immediate operands for Cranelift instructions
 //!
 //! This module defines the types of immediate operands that can appear on Cranelift instructions.
@@ -1958,3 +1959,4 @@ mod tests {
         }
     }
 }
+use crate::prelude::*;

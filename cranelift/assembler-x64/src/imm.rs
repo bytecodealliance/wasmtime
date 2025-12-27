@@ -1,7 +1,10 @@
 //! Immediate operands to instructions.
 
 use crate::api::CodeSink;
-use std::fmt;
+use core::fmt;
+
+#[cfg(feature = "core")]
+use alloc::{format, string::String};
 
 /// This helper function prints the unsigned hexadecimal representation of the
 /// immediate value: e.g., this prints `$0xfe` to represent both the signed `-2`
@@ -49,7 +52,7 @@ impl From<u8> for Imm8 {
 }
 
 impl TryFrom<i32> for Imm8 {
-    type Error = std::num::TryFromIntError;
+    type Error = core::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
         Ok(Self(u8::try_from(simm32)?))
     }
@@ -100,7 +103,7 @@ impl From<i8> for Simm8 {
 }
 
 impl TryFrom<i32> for Simm8 {
-    type Error = std::num::TryFromIntError;
+    type Error = core::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
         Ok(Self(i8::try_from(simm32)?))
     }
@@ -134,7 +137,7 @@ impl From<u16> for Imm16 {
 }
 
 impl TryFrom<i32> for Imm16 {
-    type Error = std::num::TryFromIntError;
+    type Error = core::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
         Ok(Self(u16::try_from(simm32)?))
     }
@@ -185,7 +188,7 @@ impl From<i16> for Simm16 {
 }
 
 impl TryFrom<i32> for Simm16 {
-    type Error = std::num::TryFromIntError;
+    type Error = core::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
         Ok(Self(i16::try_from(simm32)?))
     }

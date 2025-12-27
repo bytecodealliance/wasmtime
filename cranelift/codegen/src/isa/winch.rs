@@ -8,7 +8,7 @@ pub(super) fn reverse_stack(mut args: ArgsAccumulator, next_stack: u32, uses_ext
             for slot in slots.iter_mut() {
                 if let ABIArgSlot::Stack { offset, ty, .. } = slot {
                     let size = if uses_extension {
-                        i64::from(std::cmp::max(ty.bytes(), 8))
+                        i64::from(core::cmp::max(ty.bytes(), 8))
                     } else {
                         i64::from(ty.bytes())
                     };

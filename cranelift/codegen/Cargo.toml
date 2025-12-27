@@ -30,7 +30,7 @@ cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
@@ -65,13 +65,13 @@ default = ["std", "unwind", "host-arch", "timing"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = ["serde?/std"]
+std = ["serde?/std", "rustc-hash/std", "cranelift-control/fuzz"]
 
 # The "core" feature used to enable a hashmap workaround, but is now
 # deprecated (we (i) always use hashbrown, and (ii) don't support a
 # no_std build anymore). The feature remains for backward
 # compatibility as a no-op.
-core = []
+core = ["cranelift-assembler-x64/core"]
 
 # Enable the `to_capstone` method on TargetIsa, for constructing a Capstone
 # context, and the `disassemble` method on `MachBufferFinalized`.

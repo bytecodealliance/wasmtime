@@ -1148,3 +1148,4 @@ pub trait VecInstOverlapInfo {
         self.forbids_src_dst_overlaps() || (mask.is_enabled() && self.forbids_mask_dst_overlaps())
     }
 }
+use crate::prelude::*;

@@ -622,3 +622,4 @@ mod tests {
         assert_eq!(Type::int_with_byte_size(evil), None);
     }
 }
+use crate::prelude::*;

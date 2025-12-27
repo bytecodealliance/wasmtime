@@ -312,7 +312,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         (Some("args.as_slice(pool)"), "args.len(pool)")
                     } else if format.num_value_operands == 1 {
                         members.push("ref arg");
-                        (Some("std::slice::from_ref(arg)"), "1")
+                        (Some("core::slice::from_ref(arg)"), "1")
                     } else if format.num_value_operands > 0 {
                         members.push("ref args");
                         (Some("args"), "args.len()")
@@ -324,7 +324,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         0 => None,
                         1 => {
                             members.push("ref destination");
-                            Some(("std::slice::from_ref(destination)", "1"))
+                            Some(("core::slice::from_ref(destination)", "1"))
                         }
                         _ => {
                             members.push("ref blocks");

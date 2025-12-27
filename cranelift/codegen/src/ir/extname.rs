@@ -99,7 +99,7 @@ pub struct TestcaseName(Box<[u8]>);
 impl fmt::Display for TestcaseName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_char('%')?;
-        f.write_str(std::str::from_utf8(&self.0).unwrap())
+        f.write_str(core::str::from_utf8(&self.0).unwrap())
     }
 }
 

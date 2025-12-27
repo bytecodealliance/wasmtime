@@ -14,3 +14,4 @@ use core::fmt;
 include!(concat!(env!("OUT_DIR"), "/settings-pulley.rs"));
 
 impl IsaFlags for Flags {}
+use crate::prelude::*;

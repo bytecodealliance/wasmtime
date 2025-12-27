@@ -1,6 +1,6 @@
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::FpuOPWidth;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 fn fa7() -> Reg {
     f_reg(17)
@@ -2283,3 +2283,4 @@ fn riscv64_worst_case_instruction_size() {
     println!("calculate max size is {} , inst is {:?}", max.0, max.1);
     assert!(max.0 <= Inst::worst_case_size());
 }
+use crate::prelude::*;

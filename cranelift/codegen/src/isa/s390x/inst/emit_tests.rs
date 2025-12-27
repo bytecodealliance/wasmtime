@@ -13496,3 +13496,4 @@ fn test_s390x_binemit() {
         assert_eq!(expected_encoding, actual_encoding);
     }
 }
+use crate::prelude::*;

@@ -111,7 +111,7 @@ pub trait CacheKvStore {
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CacheKeyHash([u8; 32]);
 
-impl std::fmt::Display for CacheKeyHash {
+impl core::fmt::Display for CacheKeyHash {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "CacheKeyHash:{:?}", self.0)
     }
@@ -239,3 +239,4 @@ pub fn try_finish_recompile(func: &Function, bytes: &[u8]) -> Result<CompiledCod
         Err(err) => Err(RecompileError::Deserialize(err)),
     }
 }
+use crate::prelude::*;

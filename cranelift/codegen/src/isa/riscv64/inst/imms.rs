@@ -2,7 +2,7 @@
 
 // Some variants are never constructed, but we still want them as options in the future.
 use super::Inst;
-use std::fmt::{Debug, Display, Formatter, Result};
+use core::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {
@@ -371,3 +371,4 @@ mod test {
         assert!(Inst::imm_min() == i32::MIN as i64 - 2048);
     }
 }
+use crate::prelude::*;

@@ -3559,3 +3559,4 @@ impl Inst {
         state.clear_post_insn();
     }
 }
+use crate::prelude::*;
