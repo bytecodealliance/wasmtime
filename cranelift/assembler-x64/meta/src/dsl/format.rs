@@ -535,7 +535,7 @@ impl Default for Mutability {
 }
 
 impl core::fmt::Display for Mutability {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Read => write!(f, "r"),
             Self::ReadWrite => write!(f, "rw"),
@@ -576,7 +576,7 @@ impl Default for Extension {
 }
 
 impl core::fmt::Display for Extension {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Extension::None => write!(f, ""),
             Extension::SignExtendQuad => write!(f, "sxq"),
@@ -627,7 +627,7 @@ impl Default for Eflags {
 }
 
 impl core::fmt::Display for Eflags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::None => write!(f, ""),
             Self::R => write!(f, "r"),
