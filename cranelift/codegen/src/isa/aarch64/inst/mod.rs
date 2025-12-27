@@ -3114,3 +3114,4 @@ mod tests {
         assert_eq!(expected, core::mem::size_of::<Inst>());
     }
 }
+use crate::prelude::*;

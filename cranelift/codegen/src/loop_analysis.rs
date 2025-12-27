@@ -430,3 +430,4 @@ mod tests {
         assert_eq!(loop_analysis.loop_level(block5).level(), 1);
     }
 }
+use crate::prelude::*;

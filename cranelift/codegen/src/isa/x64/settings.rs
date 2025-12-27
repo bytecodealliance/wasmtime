@@ -7,3 +7,4 @@ use core::fmt;
 // public `Flags` struct with an impl for all of the settings defined in
 // `cranelift/codegen/meta/src/isa/x86/settings.rs`.
 include!(concat!(env!("OUT_DIR"), "/settings-x86.rs"));
+use crate::prelude::*;

@@ -1628,3 +1628,4 @@ fn tail_create_machine_env() -> MachineEnv {
         scratch_by_class: [None, None, None],
     }
 }
+use crate::prelude::*;

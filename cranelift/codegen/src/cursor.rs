@@ -687,3 +687,4 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         &mut self.func.dfg
     }
 }
+use crate::prelude::*;

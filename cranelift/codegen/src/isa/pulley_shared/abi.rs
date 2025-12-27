@@ -986,3 +986,4 @@ fn create_reg_environment() -> MachineEnv {
         scratch_by_class: [None, None, None],
     }
 }
+use crate::prelude::*;

@@ -151,3 +151,4 @@ pub const fn pf_reg(enc: usize) -> PReg {
 pub const fn pv_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Vector)
 }
+use crate::prelude::*;

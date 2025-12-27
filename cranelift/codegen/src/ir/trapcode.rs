@@ -145,3 +145,4 @@ mod tests {
         assert_eq!("users".parse::<TrapCode>(), Err(()));
     }
 }
+use crate::prelude::*;

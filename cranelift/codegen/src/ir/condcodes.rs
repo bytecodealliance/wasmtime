@@ -402,3 +402,4 @@ mod tests {
         assert_eq!("bogus".parse::<FloatCC>(), Err(()));
     }
 }
+use crate::prelude::*;

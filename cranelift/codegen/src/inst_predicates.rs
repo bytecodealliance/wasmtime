@@ -215,3 +215,4 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
         }
     }
 }
+use crate::prelude::*;

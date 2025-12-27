@@ -1056,3 +1056,4 @@ impl Riscv64MachineDeps {
         insts.extend(Self::gen_sp_reg_adjust((guard_size * probe_count) as i32));
     }
 }
+use crate::prelude::*;
