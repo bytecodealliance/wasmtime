@@ -10,7 +10,7 @@ use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
 use rustix::net::connect;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tracing::debug;
 
@@ -177,36 +177,57 @@ impl UdpSocket {
     }
 
     #[cfg(feature = "p3")]
-    pub(crate) fn send(&self, buf: Vec<u8>) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
-        let socket = if let UdpState::Connected(..) = self.udp_state {
-            Ok(Arc::clone(&self.socket))
-        } else {
-            Err(ErrorCode::InvalidArgument)
-        };
-        async move {
-            let socket = socket?;
-            send(&socket, &buf).await
-        }
-    }
-
-    #[cfg(feature = "p3")]
-    pub(crate) fn send_to(
-        &self,
+    pub(crate) fn send_p3(
+        &mut self,
         buf: Vec<u8>,
-        addr: SocketAddr,
+        addr: Option<SocketAddr>,
     ) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
         enum Mode {
             Send(Arc<tokio::net::UdpSocket>),
             SendTo(Arc<tokio::net::UdpSocket>, SocketAddr),
         }
-        let socket = match &self.udp_state {
-            UdpState::BindStarted => Err(ErrorCode::InvalidState),
-            UdpState::Default | UdpState::Bound => Ok(Mode::SendTo(Arc::clone(&self.socket), addr)),
-            UdpState::Connected(caddr) if addr == *caddr => {
-                Ok(Mode::Send(Arc::clone(&self.socket)))
+        let mut socket = match (&self.udp_state, addr) {
+            (UdpState::BindStarted, _) => Err(ErrorCode::InvalidState),
+            (UdpState::Default | UdpState::Bound, None) => Err(ErrorCode::InvalidArgument),
+            (UdpState::Default | UdpState::Bound, Some(addr)) => {
+                Ok(Mode::SendTo(Arc::clone(&self.socket), addr))
             }
-            UdpState::Connected(..) => Err(ErrorCode::InvalidArgument),
+            (UdpState::Connected(..), None) => Ok(Mode::Send(Arc::clone(&self.socket))),
+            (UdpState::Connected(caddr), Some(addr)) => {
+                if addr == *caddr {
+                    Ok(Mode::Send(Arc::clone(&self.socket)))
+                } else {
+                    Err(ErrorCode::InvalidArgument)
+                }
+            }
         };
+
+        // Send may be called without a prior bind or connect. In that case, the
+        // first send will automatically assign a free local port. This is
+        // normally performed by the OS itself. However, if the `send` syscall
+        // failed, we can't reliably know which state the socket is in at the
+        // kernel level and our own `udp_state` bookkeeping may have become
+        // out-of-sync.
+        // To avoid that, we perform the implicit bind ourselves here. This way,
+        // we always leave the socket in a consistent state: Bound.
+        if socket.is_ok()
+            && let UdpState::Default = self.udp_state
+        {
+            let ip_addr = match self.family {
+                SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+            };
+            let sock_addr = SocketAddr::new(ip_addr, 0);
+            match udp_bind(&self.socket, sock_addr) {
+                Ok(()) => {
+                    self.udp_state = UdpState::Bound;
+                }
+                Err(e) => {
+                    socket = Err(e);
+                }
+            }
+        }
+
         async move {
             match socket? {
                 Mode::Send(socket) => send(&socket, &buf).await,
@@ -216,7 +237,7 @@ impl UdpSocket {
     }
 
     #[cfg(feature = "p3")]
-    pub(crate) fn receive(
+    pub(crate) fn receive_p3(
         &self,
     ) -> impl Future<Output = Result<(Vec<u8>, SocketAddr), ErrorCode>> + use<> {
         enum Mode {
