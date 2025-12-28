@@ -10,7 +10,7 @@ use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
 use rustix::net::connect;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -217,6 +217,8 @@ impl UdpSocket {
         if socket.is_ok()
             && let UdpState::Default = self.udp_state
         {
+            use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
             let ip_addr = match self.family {
                 SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                 SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
