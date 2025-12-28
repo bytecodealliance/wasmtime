@@ -123,6 +123,11 @@ async fn p3_sockets_udp_connect() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_receive() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_RECEIVE_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_sockets_udp_sample_application() -> anyhow::Result<()> {
     run(P3_SOCKETS_UDP_SAMPLE_APPLICATION_COMPONENT).await
 }
