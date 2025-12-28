@@ -288,6 +288,10 @@ fn p2_tcp_connect() {
     run(P2_TCP_CONNECT_COMPONENT, false).unwrap()
 }
 #[test_log::test]
+fn p2_tcp_listen() {
+    run(P2_TCP_LISTEN_COMPONENT, false).unwrap()
+}
+#[test_log::test]
 fn p2_udp_sockopts() {
     run(P2_UDP_SOCKOPTS_COMPONENT, false).unwrap()
 }

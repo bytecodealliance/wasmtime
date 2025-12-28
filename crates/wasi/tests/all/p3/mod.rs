@@ -88,6 +88,11 @@ async fn p3_sockets_tcp_connect() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_listen() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_LISTEN_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_sockets_tcp_sample_application() -> anyhow::Result<()> {
     run(P3_SOCKETS_TCP_SAMPLE_APPLICATION_COMPONENT).await
 }

@@ -267,8 +267,7 @@ impl HostTcpSocketWithStore for WasiSockets {
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
         let getter = store.getter();
         let socket = get_socket_mut(store.get().table, &socket)?;
-        socket.start_listen()?;
-        socket.finish_listen()?;
+        socket.listen_p3()?;
         let listener = socket.tcp_listener_arc().unwrap().clone();
         let family = socket.address_family();
         let options = socket.non_inherited_options().clone();

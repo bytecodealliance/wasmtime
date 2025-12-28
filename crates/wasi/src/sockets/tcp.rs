@@ -381,7 +381,7 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn start_listen(&mut self) -> Result<(), ErrorCode> {
+    pub(crate) fn start_listen_p2(&mut self) -> Result<(), ErrorCode> {
         match mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::Bound(tokio_socket) => {
                 self.tcp_state = TcpState::ListenStarted(tokio_socket);
@@ -394,7 +394,7 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn finish_listen(&mut self) -> Result<(), ErrorCode> {
+    pub(crate) fn finish_listen_p2(&mut self) -> Result<(), ErrorCode> {
         let tokio_socket = match mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::ListenStarted(tokio_socket) => tokio_socket,
             previous_state => {
@@ -403,6 +403,22 @@ impl TcpSocket {
             }
         };
 
+        self.listen_common(tokio_socket)
+    }
+
+    pub(crate) fn listen_p3(&mut self) -> Result<(), ErrorCode> {
+        let tokio_socket = match mem::replace(&mut self.tcp_state, TcpState::Closed) {
+            TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket) => tokio_socket,
+            previous_state => {
+                self.tcp_state = previous_state;
+                return Err(ErrorCode::InvalidState);
+            }
+        };
+
+        self.listen_common(tokio_socket)
+    }
+
+    fn listen_common(&mut self, tokio_socket: tokio::net::TcpSocket) -> Result<(), ErrorCode> {
         match with_ambient_tokio_runtime(|| tokio_socket.listen(self.listen_backlog_size)) {
             Ok(listener) => {
                 self.tcp_state = TcpState::Listening {
