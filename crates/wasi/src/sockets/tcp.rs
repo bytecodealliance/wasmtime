@@ -406,6 +406,7 @@ impl TcpSocket {
         self.listen_common(tokio_socket)
     }
 
+    #[cfg(feature = "p3")]
     pub(crate) fn listen_p3(&mut self) -> Result<(), ErrorCode> {
         let tokio_socket = match mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket) => tokio_socket,

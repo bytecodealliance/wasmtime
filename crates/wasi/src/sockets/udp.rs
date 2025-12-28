@@ -138,6 +138,7 @@ impl UdpSocket {
         self.connect_common(addr)
     }
 
+    #[cfg(feature = "p3")]
     pub(crate) fn connect_p3(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         match self.udp_state {
             UdpState::Default | UdpState::Bound | UdpState::Connected(_) => {}
