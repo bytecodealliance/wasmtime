@@ -95,7 +95,7 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
             return Err(ErrorCode::AccessDenied.into());
         }
         let socket = get_socket_mut(self.table, &socket)?;
-        socket.connect(remote_address)?;
+        socket.connect_p3(remote_address)?;
         Ok(())
     }
 

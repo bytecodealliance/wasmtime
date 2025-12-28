@@ -79,7 +79,7 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
                 return Err(ErrorCode::InvalidState.into());
             };
             check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
-            socket.connect(connect_addr)?;
+            socket.connect_p2(connect_addr)?;
         }
 
         let incoming_stream = IncomingDatagramStream {

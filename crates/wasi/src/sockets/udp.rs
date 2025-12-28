@@ -129,14 +129,27 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub(crate) fn connect(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
-        if !is_valid_address_family(addr.ip(), self.family) || !is_valid_remote_address(addr) {
-            return Err(ErrorCode::InvalidArgument);
-        }
-
+    pub(crate) fn connect_p2(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         match self.udp_state {
             UdpState::Bound | UdpState::Connected(_) => {}
             _ => return Err(ErrorCode::InvalidState),
+        }
+
+        self.connect_common(addr)
+    }
+
+    pub(crate) fn connect_p3(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+        match self.udp_state {
+            UdpState::Default | UdpState::Bound | UdpState::Connected(_) => {}
+            _ => return Err(ErrorCode::InvalidState),
+        }
+
+        self.connect_common(addr)
+    }
+
+    fn connect_common(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+        if !is_valid_address_family(addr.ip(), self.family) || !is_valid_remote_address(addr) {
+            return Err(ErrorCode::InvalidArgument);
         }
 
         // We disconnect & (re)connect in two distinct steps for two reasons:
