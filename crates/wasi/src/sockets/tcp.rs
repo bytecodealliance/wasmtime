@@ -381,6 +381,7 @@ impl TcpSocket {
         }
     }
 
+    /// Start listening using p2 semantics. (no implicit bind)
     pub(crate) fn start_listen_p2(&mut self) -> Result<(), ErrorCode> {
         match mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::Bound(tokio_socket) => {
@@ -406,6 +407,7 @@ impl TcpSocket {
         self.listen_common(tokio_socket)
     }
 
+    /// Start listening using p3 semantics. (with implicit bind)
     #[cfg(feature = "p3")]
     pub(crate) fn listen_p3(&mut self) -> Result<(), ErrorCode> {
         let tokio_socket = match mem::replace(&mut self.tcp_state, TcpState::Closed) {

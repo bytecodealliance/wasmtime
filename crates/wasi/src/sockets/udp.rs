@@ -129,6 +129,7 @@ impl UdpSocket {
         Ok(())
     }
 
+    /// Connect using p2 semantics. (no implicit bind)
     pub(crate) fn connect_p2(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         match self.udp_state {
             UdpState::Bound | UdpState::Connected(_) => {}
@@ -138,6 +139,7 @@ impl UdpSocket {
         self.connect_common(addr)
     }
 
+    /// Connect using p3 semantics. (with implicit bind)
     #[cfg(feature = "p3")]
     pub(crate) fn connect_p3(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         match self.udp_state {
@@ -177,6 +179,7 @@ impl UdpSocket {
         Ok(())
     }
 
+    /// Send data using p3 semantics. (with implicit bind)
     #[cfg(feature = "p3")]
     pub(crate) fn send_p3(
         &mut self,
@@ -237,6 +240,7 @@ impl UdpSocket {
         }
     }
 
+    /// Receive data using p3 semantics.
     #[cfg(feature = "p3")]
     pub(crate) fn receive_p3(
         &self,

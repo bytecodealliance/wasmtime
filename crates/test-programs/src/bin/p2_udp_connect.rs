@@ -76,7 +76,7 @@ fn test_udp_connect_wrong_family(net: &Network, family: IpAddressFamily) {
     ));
 }
 
-/// Connect without an explicit bind should fail.
+/// Socket must be explicitly bound before connecting.
 fn test_udp_connect_without_bind(family: IpAddressFamily) {
     let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
 
