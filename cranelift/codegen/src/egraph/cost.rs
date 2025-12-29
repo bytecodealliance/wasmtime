@@ -1,6 +1,97 @@
 //! Cost functions for egraph representation.
 
-use crate::ir::Opcode;
+use crate::ir::{DataFlowGraph, Inst, Opcode};
+use cranelift_entity::ImmutableEntitySet;
+
+/// The compound cost of an expression.
+///
+/// Tracks the set instructions that make up this expression and sums their
+/// costs, avoiding "double counting" the costs of values that were defined by
+/// the same instruction and values that appear multiple times within the
+/// expression (i.e. the expression is a DAG and not a tree).
+#[derive(Clone, Debug)]
+pub(crate) struct ExprCost {
+    // The total cost of this expression.
+    total: ScalarCost,
+    // The set of instructions that must be evaluated to produce the associated
+    // expression.
+    insts: ImmutableEntitySet<Inst>,
+}
+
+impl Ord for ExprCost {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.total.cmp(&other.total)
+    }
+}
+
+impl PartialOrd for ExprCost {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.total.partial_cmp(&other.total)
+    }
+}
+
+impl PartialEq for ExprCost {
+    fn eq(&self, other: &Self) -> bool {
+        self.total == other.total
+    }
+}
+
+impl Eq for ExprCost {}
+
+impl ExprCost {
+    /// Create an `ExprCost` with zero total cost and an empty set of
+    /// instructions.
+    pub fn zero() -> Self {
+        Self {
+            total: ScalarCost::zero(),
+            insts: ImmutableEntitySet::default(),
+        }
+    }
+
+    /// Create the cost for just the given instruction.
+    pub fn for_inst(dfg: &DataFlowGraph, inst: Inst) -> Self {
+        Self {
+            total: ScalarCost::of_opcode(dfg.insts[inst].opcode()),
+            insts: ImmutableEntitySet::unit(inst),
+        }
+    }
+
+    /// Add the other cost into this cost, unioning its set of instructions into
+    /// this cost's set, and only incrementing the total cost for new
+    /// instructions.
+    pub fn add(&mut self, dfg: &DataFlowGraph, other: &Self) {
+        match (self.insts.len(), other.insts.len()) {
+            // Nothing to do in this case.
+            (_, 0) => {}
+
+            // Clone `other` into `self` so that we reuse its set allocations.
+            (0, _) => {
+                *self = other.clone();
+            }
+
+            // Commute the addition so that we are (a) iterating over the
+            // smaller of the two sets, and (b) maximizing reuse of existing set
+            // allocations.
+            (a, b) if a < b => {
+                let mut other = other.clone();
+                for inst in self.insts.iter() {
+                    if other.insts.insert(inst) {
+                        other.total = other.total + ScalarCost::of_opcode(dfg.insts[inst].opcode());
+                    }
+                }
+                *self = other;
+            }
+
+            _ => {
+                for inst in other.insts.iter() {
+                    if self.insts.insert(inst) {
+                        self.total = self.total + ScalarCost::of_opcode(dfg.insts[inst].opcode());
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// A cost of computing some value in the program.
 ///
@@ -157,18 +248,10 @@ impl ScalarCost {
         }
     }
 
-    /// Compute the cost of the operation and its given operands.
-    ///
-    /// Caller is responsible for checking that the opcode came from an instruction
-    /// that satisfies `inst_predicates::is_pure_for_egraph()`.
-    pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
-        let c = Self::of_opcode(op) + operand_costs.into_iter().sum();
-        ScalarCost::new(c.op_cost(), c.depth().saturating_add(1))
-    }
-
     /// Compute the cost of an operation in the side-effectful skeleton.
     pub(crate) fn of_skeleton_op(op: Opcode, arity: usize) -> Self {
-        ScalarCost::of_opcode(op) + ScalarCost::new(u32::try_from(arity).unwrap(), (arity != 0) as _)
+        ScalarCost::of_opcode(op)
+            + ScalarCost::new(u32::try_from(arity).unwrap(), (arity != 0) as _)
     }
 }
 
@@ -197,6 +280,16 @@ impl core::ops::Add<ScalarCost> for ScalarCost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl ScalarCost {
+        fn of_opcode_and_operands(
+            op: Opcode,
+            operand_costs: impl IntoIterator<Item = Self>,
+        ) -> Self {
+            let c = Self::of_opcode(op) + operand_costs.into_iter().sum();
+            ScalarCost::new(c.op_cost(), c.depth().saturating_add(1))
+        }
+    }
 
     #[test]
     fn add_cost() {
@@ -227,11 +320,11 @@ mod tests {
         let a = ScalarCost::new(10, u8::MAX);
         let b = ScalarCost::new(10, 1);
         assert_eq!(
-            ScalarCost::of_pure_op(Opcode::Iconst, [a, b]),
+            ScalarCost::of_opcode_and_operands(Opcode::Iconst, [a, b]),
             ScalarCost::new(21, u8::MAX)
         );
         assert_eq!(
-            ScalarCost::of_pure_op(Opcode::Iconst, [b, a]),
+            ScalarCost::of_opcode_and_operands(Opcode::Iconst, [b, a]),
             ScalarCost::new(21, u8::MAX)
         );
     }

@@ -2,12 +2,12 @@
 //! in CFG nodes.
 
 use super::Stats;
-use super::cost::ScalarCost;
+use super::cost::ExprCost;
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
-use crate::ir::{Block, DataFlowGraph, Function, Inst, Value, ValueDef};
+use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
@@ -71,38 +71,8 @@ pub(crate) struct Elaborator<'a> {
     ctrl_plane: &'a mut ControlPlane,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct ImmCostMap {
-    cost: ScalarCost,
-    insts: im_rc::OrdSet<Inst>,
-}
-
-impl ImmCostMap {
-    pub fn zero() -> Self {
-        Self {
-            cost: ScalarCost::zero(),
-            insts: im_rc::OrdSet::default(),
-        }
-    }
-
-    pub fn for_inst(dfg: &DataFlowGraph, inst: Inst) -> Self {
-        Self {
-            cost: ScalarCost::of_opcode(dfg.insts[inst].opcode()),
-            insts: im_rc::OrdSet::unit(inst),
-        }
-    }
-
-    pub fn union(&mut self, dfg: &DataFlowGraph, other: &ImmCostMap) {
-        for inst in other.insts.iter() {
-            if self.insts.insert(*inst).is_none() {
-                self.cost = self.cost + ScalarCost::of_opcode(dfg.insts[*inst].opcode())
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct BestEntry(ImmCostMap, Value);
+struct BestEntry(ExprCost, Value);
 
 impl PartialOrd for BestEntry {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
@@ -178,7 +148,7 @@ impl<'a> Elaborator<'a> {
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut value_to_best_value =
-            SecondaryMap::with_default(BestEntry(ImmCostMap::zero(), Value::reserved_value()));
+            SecondaryMap::with_default(BestEntry(ExprCost::zero(), Value::reserved_value()));
         value_to_best_value.resize(num_values);
         Self {
             func,
@@ -362,7 +332,7 @@ impl<'a> Elaborator<'a> {
                 }
 
                 ValueDef::Param(_, _) => {
-                    best[value] = BestEntry(ImmCostMap::zero(), value);
+                    best[value] = BestEntry(ExprCost::zero(), value);
                 }
 
                 // If the Inst is inserted into the layout (which is,
@@ -371,19 +341,19 @@ impl<'a> Elaborator<'a> {
                 // cost.
                 ValueDef::Result(inst, _) => {
                     if let Some(_) = self.func.layout.inst_block(inst) {
-                        best[value] = BestEntry(ImmCostMap::zero(), value);
+                        best[value] = BestEntry(ExprCost::zero(), value);
                     } else {
                         // N.B.: at this point we know that the opcode is
                         // pure, so `pure_op_cost`'s precondition is
                         // satisfied.
-                        let mut cost = ImmCostMap::for_inst(&self.func.dfg, inst);
+                        let mut cost = ExprCost::for_inst(&self.func.dfg, inst);
 
                         for val in self.func.dfg.inst_values(inst) {
                             let BestEntry(val_cost, _val) = &best[val];
-                            cost.union(&self.func.dfg, val_cost);
+                            cost.add(&self.func.dfg, val_cost);
                         }
 
-                        trace!(" -> cost of value {} = {:?}", value, cost.cost);
+                        trace!(" -> cost of value {} = {:?}", value, cost);
                         best[value] = BestEntry(cost, value);
                     }
                 }
