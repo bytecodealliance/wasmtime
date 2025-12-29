@@ -8,7 +8,6 @@ use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTa
 use crate::runtime::vm::{Export, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
-use anyhow::Context as _;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -103,7 +102,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, store: &mut Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, store: &mut Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(), ()>(&store)?;
     /// typed.call(store, ())?;
     /// # Ok(())
@@ -116,7 +115,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, mut store: Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(&str,), (String,)>(&store)?;
     /// let ret = typed.call(&mut store, ("Hello, ",))?.0;
     /// println!("returned string was: {}", ret);
@@ -129,7 +128,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, mut store: Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(u32, Option<&str>, &[u8]), (bool,)>(&store)?;
     /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?.0;
     /// println!("return value was: {ok}");
@@ -881,7 +880,7 @@ impl Func {
             .memory()
             .get(ptr..)
             .and_then(|b| b.get(..usize::try_from(results_ty.abi.size32).unwrap()))
-            .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
+            .ok_or_else(|| crate::format_err!("pointer out of bounds of memory"))?;
 
         let mut offset = 0;
         Ok(results_ty.types.iter().map(move |ty| {

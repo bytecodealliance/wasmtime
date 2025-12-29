@@ -345,7 +345,7 @@ impl StoreResourceLimiter<'_> {
         }
     }
 
-    pub(crate) fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+    pub(crate) fn memory_grow_failed(&mut self, error: crate::Error) -> Result<()> {
         match self {
             Self::Sync(s) => s.memory_grow_failed(error),
             #[cfg(feature = "async")]
@@ -366,7 +366,7 @@ impl StoreResourceLimiter<'_> {
         }
     }
 
-    pub(crate) fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+    pub(crate) fn table_grow_failed(&mut self, error: crate::Error) -> Result<()> {
         match self {
             Self::Sync(s) => s.table_grow_failed(error),
             #[cfg(feature = "async")]
@@ -2288,7 +2288,7 @@ impl StoreOpaque {
     }
 
     pub fn get_fuel(&self) -> Result<u64> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
@@ -2306,7 +2306,7 @@ impl StoreOpaque {
     }
 
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
@@ -2321,15 +2321,15 @@ impl StoreOpaque {
     }
 
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().config().async_support,
             "async support is not configured in this store"
         );
-        anyhow::ensure!(
+        crate::ensure!(
             interval != Some(0),
             "fuel_async_yield_interval must not be 0"
         );
@@ -2837,7 +2837,7 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> crate::Result<()> {
         if let Some(handler) = self.debug_handler.take() {
             if !self.can_block() {
                 bail!("could not invoke debug handler without async context");

@@ -73,7 +73,7 @@ pub use registry::*;
 ///
 /// ```no_run
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// let module = Module::from_file(&engine, "path/to/foo.wasm")?;
 /// # Ok(())
@@ -84,7 +84,7 @@ pub use registry::*;
 ///
 /// ```no_run
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// // Now we're using the WebAssembly text extension: `.wat`!
 /// let module = Module::from_file(&engine, "path/to/foo.wat")?;
@@ -97,7 +97,7 @@ pub use registry::*;
 ///
 /// ```no_run
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// # let wasm_bytes: Vec<u8> = Vec::new();
 /// let module = Module::new(&engine, &wasm_bytes)?;
@@ -112,7 +112,7 @@ pub use registry::*;
 ///
 /// ```no_run
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// # let wasm_bytes: Vec<u8> = Vec::new();
 /// let module = Module::new(&engine, &wasm_bytes)?;
@@ -225,7 +225,7 @@ impl Module {
     ///
     /// ```no_run
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let wasm_bytes: Vec<u8> = Vec::new();
     /// let module = Module::new(&engine, &wasm_bytes)?;
@@ -238,7 +238,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::new(&engine, "(module (func))")?;
     /// # Ok(())
@@ -262,7 +262,7 @@ impl Module {
     ///
     /// ```no_run
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let module = Module::from_file(&engine, "./path/to/foo.wasm")?;
     /// # Ok(())
@@ -273,7 +273,7 @@ impl Module {
     ///
     /// ```no_run
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::from_file(&engine, "./path/to/foo.wat")?;
     /// # Ok(())
@@ -299,7 +299,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let wasm = b"\0asm\x01\0\0\0";
     /// let module = Module::from_binary(&engine, wasm)?;
@@ -311,7 +311,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// assert!(Module::from_binary(&engine, b"(module)").is_err());
     /// # Ok(())
@@ -666,7 +666,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::new(&engine, "(module $foo)")?;
     /// assert_eq!(module.name(), Some("foo"));
@@ -699,7 +699,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::new(&engine, "(module)")?;
     /// assert_eq!(module.imports().len(), 0);
@@ -711,7 +711,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module
@@ -760,7 +760,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::new(&engine, "(module)")?;
     /// assert!(module.exports().next().is_none());
@@ -772,7 +772,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module
@@ -821,7 +821,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let module = Module::new(&engine, "(module)")?;
     /// assert!(module.get_export("foo").is_none());
@@ -833,7 +833,7 @@ impl Module {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module

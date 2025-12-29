@@ -535,7 +535,7 @@ impl Eq for Flags {}
 pub(crate) fn typecheck_payload<T>(
     payload: Option<&InterfaceType>,
     types: &InstanceType<'_>,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     T: ComponentType,
 {
@@ -545,7 +545,7 @@ where
             if T::IS_RUST_UNIT_TYPE {
                 Ok(())
             } else {
-                anyhow::bail!("future payload types differ")
+                crate::bail!("future payload types differ")
             }
         }
     }
@@ -589,7 +589,7 @@ impl FutureType {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
+    pub(crate) fn equivalent_payload_host<T>(&self) -> crate::Result<()>
     where
         T: ComponentType,
     {
@@ -646,7 +646,7 @@ impl StreamType {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn equivalent_payload_host<T>(&self) -> anyhow::Result<()>
+    pub(crate) fn equivalent_payload_host<T>(&self) -> crate::Result<()>
     where
         T: ComponentType,
     {
@@ -924,7 +924,7 @@ impl ComponentFunc {
     }
 
     #[doc(hidden)]
-    pub fn typecheck<Params, Return>(&self, cx: &InstanceType) -> anyhow::Result<()>
+    pub fn typecheck<Params, Return>(&self, cx: &InstanceType) -> crate::Result<()>
     where
         Params: crate::component::ComponentNamedList + crate::component::Lower,
         Return: crate::component::ComponentNamedList + crate::component::Lift,

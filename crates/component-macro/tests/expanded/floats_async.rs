@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::floats::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod floats {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -299,7 +297,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod floats {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(Clone)]
                 pub struct Guest {
                     f32_param: wasmtime::component::Func,
@@ -328,7 +326,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/floats")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::error::format_err!(
                                     "no exported instance named `foo:foo/floats`"
                                 )
                             })?;
@@ -337,7 +335,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::error::format_err!(
                                         "instance export `foo:foo/floats` does \
                         not have export `{name}`"
                                     )

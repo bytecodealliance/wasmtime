@@ -278,7 +278,7 @@ impl VMArrayRef {
             }
             Val::ContRef(_) => {
                 // TODO(#10248): Implement array continuation reference element handling
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "setting continuation references in array elements not yet supported"
                 ));
             }
@@ -391,7 +391,7 @@ impl VMArrayRef {
             }
             Val::ContRef(_) => {
                 // TODO(#10248): Implement array continuation reference init handling
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "initializing continuation references in array elements not yet supported"
                 ));
             }

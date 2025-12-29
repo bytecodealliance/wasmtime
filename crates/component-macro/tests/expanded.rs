@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use wasmtime::error::{Context, Result, bail};
 
 macro_rules! genexpand {
     ($id:ident $name:tt $path:tt) => {

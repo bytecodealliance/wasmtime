@@ -1,8 +1,8 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, Val};
+use crate::error::{Result, anyhow, bail};
 use crate::runtime::vm::VMStore;
-use anyhow::{Result, anyhow, bail};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};

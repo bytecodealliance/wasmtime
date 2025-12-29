@@ -201,8 +201,6 @@ pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithSt
 pub trait TheWorldImports: HostBaz + Send {}
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -353,7 +351,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod the_interface {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {

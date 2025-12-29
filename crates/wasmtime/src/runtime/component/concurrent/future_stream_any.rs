@@ -9,8 +9,8 @@ use crate::component::types::{self, FutureType, StreamType};
 use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader,
 };
+use crate::error::{Context, Result, bail};
 use crate::store::StoreOpaque;
-use anyhow::{Context, Result, bail};
 use std::any::TypeId;
 use std::mem::MaybeUninit;
 use wasmtime_environ::component::{

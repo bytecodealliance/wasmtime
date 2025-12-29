@@ -231,7 +231,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Invoke a debug handler, if present, at a debug event.
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> crate::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {
@@ -354,10 +354,7 @@ impl ModuleRuntimeInfo {
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
-    fn memory_image(
-        &self,
-        memory: DefinedMemoryIndex,
-    ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
+    fn memory_image(&self, memory: DefinedMemoryIndex) -> crate::Result<Option<&Arc<MemoryImage>>> {
         match self {
             ModuleRuntimeInfo::Module(m) => {
                 let images = m.memory_images()?;

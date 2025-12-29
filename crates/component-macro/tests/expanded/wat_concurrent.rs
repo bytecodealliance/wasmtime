@@ -103,8 +103,6 @@ pub struct Example {
     interface0: exports::same::name::this_name_is_duplicated::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl ExampleIndices {
         /// Creates a new copy of `ExampleIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -183,7 +181,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod this_name_is_duplicated {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type ThisNameIsDuplicated = wasmtime::component::ResourceAny;
                 pub struct GuestThisNameIsDuplicated<'a> {
                     funcs: &'a Guest,
@@ -206,7 +204,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "same:name/this-name-is-duplicated")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::error::format_err!(
                                     "no exported instance named `same:name/this-name-is-duplicated`"
                                 )
                             })?;
@@ -215,7 +213,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::error::format_err!(
                                         "instance export `same:name/this-name-is-duplicated` does \
                 not have export `{name}`"
                                     )

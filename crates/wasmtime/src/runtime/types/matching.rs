@@ -100,11 +100,7 @@ pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) ->
     }
 }
 
-fn concrete_type_mismatch(
-    msg: &str,
-    expected: &WasmSubType,
-    actual: &WasmSubType,
-) -> anyhow::Error {
+fn concrete_type_mismatch(msg: &str, expected: &WasmSubType, actual: &WasmSubType) -> crate::Error {
     anyhow!("{msg}: expected type `{expected}`, found type `{actual}`")
 }
 

@@ -1,9 +1,9 @@
+use crate::error::{Result, anyhow};
 use crate::prelude::*;
 use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
 use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
-use anyhow::{Result, anyhow};
 use core::mem;
 use core::ops::Range;
 use core::pin::Pin;

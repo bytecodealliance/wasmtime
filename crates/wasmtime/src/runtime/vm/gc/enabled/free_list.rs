@@ -153,7 +153,7 @@ impl FreeList {
 
         let alloc_size = u32::try_from(layout.size()).map_err(|e| {
             let trap = crate::Trap::AllocationTooLarge;
-            let err = anyhow::Error::from(trap);
+            let err = crate::Error::from(trap);
             err.context(e)
                 .context("requested allocation's size does not fit in a u32")
         })?;
@@ -161,7 +161,7 @@ impl FreeList {
             .checked_next_multiple_of(ALIGN_U32)
             .ok_or_else(|| {
                 let trap = crate::Trap::AllocationTooLarge;
-                let err = anyhow::Error::from(trap);
+                let err = crate::Error::from(trap);
                 let err = err.context(format!(
                     "failed to round allocation size of {alloc_size} up to next \
                      multiple of {ALIGN_USIZE}"

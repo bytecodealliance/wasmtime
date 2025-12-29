@@ -101,7 +101,7 @@ impl ResourceAny {
         let store = store.as_context_mut();
         let mut tables = HostResourceTables::new_host(store.0);
         let ResourceAny { idx, ty, owned } = self;
-        let ty = T::typecheck(ty).ok_or_else(|| anyhow::anyhow!("resource type mismatch"))?;
+        let ty = T::typecheck(ty).ok_or_else(|| crate::format_err!("resource type mismatch"))?;
         if owned {
             let rep = tables.host_resource_lift_own(idx)?;
             Ok(HostResource::new_own(rep, ty))

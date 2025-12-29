@@ -225,7 +225,7 @@ impl Metadata<'_> {
         for (name, val) in self.shared_flags.iter() {
             engine
                 .check_compatible_with_shared_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())
@@ -235,7 +235,7 @@ impl Metadata<'_> {
         for (name, val) in self.isa_flags.iter() {
             engine
                 .check_compatible_with_isa_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())

@@ -543,7 +543,7 @@ where
             .memory()
             .get(ptr..)
             .and_then(|b| b.get(..Return::SIZE32))
-            .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
+            .ok_or_else(|| crate::format_err!("pointer out of bounds of memory"))?;
         Return::linear_lift_from_memory(cx, ty, bytes)
     }
 

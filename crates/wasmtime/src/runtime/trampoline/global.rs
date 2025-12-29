@@ -76,7 +76,7 @@ pub fn generate_global_export(
             }
             Val::ContRef(Some(_)) => {
                 // TODO(#10248): Implement non-null trampoline continuation reference handling
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "non-null continuation references in trampoline globals not yet supported"
                 ));
             }

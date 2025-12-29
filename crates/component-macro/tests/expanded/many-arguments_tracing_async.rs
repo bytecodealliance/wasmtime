@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::manyarg::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod manyarg {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -497,7 +495,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod manyarg {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -607,7 +605,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/manyarg")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::error::format_err!(
                                     "no exported instance named `foo:foo/manyarg`"
                                 )
                             })?;
@@ -616,7 +614,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::error::format_err!(
                                         "instance export `foo:foo/manyarg` does \
                     not have export `{name}`"
                                     )

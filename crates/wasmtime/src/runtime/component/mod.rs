@@ -161,7 +161,6 @@ pub mod __internal {
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
-    pub use anyhow;
     pub use core::cell::RefCell;
     pub use core::future::Future;
     pub use core::mem::transmute;

@@ -55,6 +55,7 @@ use crate::component::store::StoreComponentInstanceId;
 use crate::component::{
     ComponentInstanceId, HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError,
 };
+use crate::error::{Context as _, Result, anyhow, bail};
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
@@ -62,7 +63,6 @@ use crate::vm::component::{
 };
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
-use anyhow::{Context as _, Result, anyhow, bail};
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
 use futures::future::{self, Either, FutureExt};
@@ -1028,8 +1028,8 @@ impl<T> StoreContextMut<'_, T> {
     ///
     /// ```
     /// # use {
-    /// #   anyhow::{Result},
     /// #   wasmtime::{
+    /// #     error::{Result},
     /// #     component::{ Component, Linker, Resource, ResourceTable},
     /// #     Config, Engine, Store
     /// #   },
@@ -5199,7 +5199,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
         rx.map(move |result| {
             result
                 .map(|v| (*v.downcast().unwrap(), exit_rx))
-                .map_err(anyhow::Error::from)
+                .map_err(crate::Error::from)
         }),
     ))
 }

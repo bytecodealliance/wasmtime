@@ -310,8 +310,7 @@ extern crate std;
 extern crate alloc;
 
 pub(crate) mod prelude {
-    pub use crate::{Error, Result};
-    pub use anyhow::{Context, anyhow, bail, ensure, format_err};
+    pub use crate::error::{Context, Error, Result, anyhow, bail, ensure, format_err};
     pub use wasmtime_environ::prelude::*;
 }
 
@@ -409,14 +408,10 @@ mod sync_nostd;
 #[cfg(not(feature = "std"))]
 use sync_nostd as sync;
 
-/// A convenience wrapper for `Result<T, anyhow::Error>`.
-///
-/// This type can be used to interact with `wasmtimes`'s extensive use
-/// of `anyhow::Error` while still not directly depending on `anyhow`.
-///
-/// This type alias is identical to `anyhow::Result`.
-#[doc(no_inline)]
-pub use anyhow::{Error, Result};
+#[doc(inline)]
+pub use wasmtime_environ::error;
+
+pub use self::error::{Error, Result, bail, ensure, format_err};
 
 /// A re-exported instance of Wasmtime's `wasmparser` dependency.
 ///

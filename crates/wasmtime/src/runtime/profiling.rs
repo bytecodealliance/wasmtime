@@ -119,7 +119,7 @@ impl GuestProfiler {
         // instantiation (for breakpoint patching) so the logic below
         // is incorrect.
         if engine.tunables().debug_guest {
-            anyhow::bail!("Profiling cannot be performed when guest-debugging is enabled.");
+            crate::bail!("Profiling cannot be performed when guest-debugging is enabled.");
         }
 
         let zero = ReferenceTimestamp::from_millis_since_unix_epoch(0.0);

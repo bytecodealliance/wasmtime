@@ -1,12 +1,12 @@
 use crate::Engine;
 use crate::Module;
+use crate::Result;
 use crate::module::ModuleRegistry;
 use crate::vm::ModuleMemoryImageSource;
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 #[cfg(feature = "debug")]
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::ops::{Add, Range, Sub};
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::ModuleTypes;

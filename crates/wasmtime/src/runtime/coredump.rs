@@ -9,9 +9,9 @@ use std::fmt;
 /// Representation of a core dump of a WebAssembly module
 ///
 /// When the Config::coredump_on_trap option is enabled this structure is
-/// attached to the [`anyhow::Error`] returned from many Wasmtime functions that
-/// execute WebAssembly such as [`Instance::new`] or [`Func::call`]. This can be
-/// acquired with the [`anyhow::Error::downcast`] family of methods to
+/// attached to the [`wasmtime::Error`] returned from many Wasmtime functions
+/// that execute WebAssembly such as [`Instance::new`] or [`Func::call`]. This
+/// can be acquired with the [`wasmtime::Error::downcast`] family of methods to
 /// programmatically inspect the coredump. Otherwise since it's part of the
 /// error returned this will get printed along with the rest of the error when
 /// the error is logged.

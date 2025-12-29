@@ -302,7 +302,7 @@ impl Engine {
             .compatible_with_native_host
             .get_or_init(|| self._check_compatible_with_native_host())
             .clone()
-            .map_err(anyhow::Error::msg)
+            .map_err(crate::Error::msg)
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {

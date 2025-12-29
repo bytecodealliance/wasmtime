@@ -41,7 +41,8 @@
 #[derive(Debug)]
 pub struct ThrownException;
 
-/// We need to implement Error for `ThrownException` so it can be boxed up into an `anyhow::Error`.
+/// We need to implement Error for `ThrownException` so it can be boxed up into
+/// a `wasmtime::Error`.
 impl core::error::Error for ThrownException {}
 
 /// `Error` requires `Display`.

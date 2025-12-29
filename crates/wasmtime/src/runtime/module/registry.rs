@@ -333,7 +333,7 @@ pub fn unregister_code(address: Range<usize>) {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn test_frame_info() -> Result<(), anyhow::Error> {
+fn test_frame_info() -> Result<(), crate::Error> {
     use crate::*;
 
     let mut store = Store::<()>::default();
