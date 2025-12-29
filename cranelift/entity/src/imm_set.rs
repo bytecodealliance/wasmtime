@@ -45,7 +45,7 @@ where
     #[inline]
     fn key_from_word_and_bit(word: u32, bit: u8) -> K {
         let word = usize::try_from(word).unwrap();
-        let bit = usize::try_from(bit).unwrap();
+        let bit = usize::from(bit);
         K::new(word * Self::BITS_PER_WORD + bit)
     }
 
