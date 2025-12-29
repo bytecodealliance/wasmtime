@@ -603,7 +603,7 @@ where
         // The initial best choice is "no simplification, just use the original
         // instruction" which has the original instruction's cost.
         let mut best = None;
-        let mut best_cost = cost::Cost::of_skeleton_op(
+        let mut best_cost = cost::ScalarCost::of_skeleton_op(
             ctx.func.dfg.insts[inst].opcode(),
             ctx.func.dfg.inst_args(inst).len(),
         );
@@ -682,7 +682,7 @@ where
 
             // Our best simplification is the one with the least cost. Update
             // `best` if necessary.
-            let cost = cost::Cost::of_skeleton_op(
+            let cost = cost::ScalarCost::of_skeleton_op(
                 ctx.func.dfg.insts[new_inst].opcode(),
                 ctx.func.dfg.inst_args(new_inst).len(),
             );

@@ -2,7 +2,7 @@
 //! in CFG nodes.
 
 use super::Stats;
-use super::cost::Cost;
+use super::cost::ScalarCost;
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
@@ -73,21 +73,21 @@ pub(crate) struct Elaborator<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ImmCostMap {
-    cost: Cost,
+    cost: ScalarCost,
     insts: im_rc::OrdSet<Inst>,
 }
 
 impl ImmCostMap {
     pub fn zero() -> Self {
         Self {
-            cost: Cost::zero(),
+            cost: ScalarCost::zero(),
             insts: im_rc::OrdSet::default(),
         }
     }
 
     pub fn for_inst(dfg: &DataFlowGraph, inst: Inst) -> Self {
         Self {
-            cost: Cost::of_opcode(dfg.insts[inst].opcode()),
+            cost: ScalarCost::of_opcode(dfg.insts[inst].opcode()),
             insts: im_rc::OrdSet::unit(inst),
         }
     }
@@ -95,7 +95,7 @@ impl ImmCostMap {
     pub fn union(&mut self, dfg: &DataFlowGraph, other: &ImmCostMap) {
         for inst in other.insts.iter() {
             if self.insts.insert(*inst).is_none() {
-                self.cost = self.cost + Cost::of_opcode(dfg.insts[*inst].opcode())
+                self.cost = self.cost + ScalarCost::of_opcode(dfg.insts[*inst].opcode())
             }
         }
     }
