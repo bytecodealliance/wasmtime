@@ -810,6 +810,7 @@ name = "cranelift-entity"
 version = "0.129.0"
 dependencies = [
  "cranelift-bitset",
+ "im-rc",
  "serde",
  "serde_derive",
 ]
