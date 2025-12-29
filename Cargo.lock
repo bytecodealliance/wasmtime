@@ -3814,6 +3814,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-openssl"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59df6849caa43bb7567f9a36f863c447d95a11d5903c9cc334ba32576a27eadd"
+dependencies = [
+ "openssl",
+ "openssl-sys",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-rustls"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5209,6 +5220,21 @@ dependencies = [
  "test-programs-artifacts",
  "tokio",
  "tokio-native-tls",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-tls",
+]
+
+[[package]]
+name = "wasmtime-wasi-tls-openssl"
+version = "42.0.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "openssl",
+ "test-programs-artifacts",
+ "tokio",
+ "tokio-openssl",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-tls",
