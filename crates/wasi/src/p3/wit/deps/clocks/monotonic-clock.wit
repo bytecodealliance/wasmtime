@@ -11,11 +11,11 @@ package wasi:clocks@0.3.0-rc-2025-09-16;
 interface monotonic-clock {
     use types.{duration};
 
-    /// An instant in time, in nanoseconds. An instant is relative to an
+    /// A mark on a monotonic clock is a number of nanoseconds since an
     /// unspecified initial value, and can only be compared to instances from
     /// the same monotonic-clock.
     @since(version = 0.3.0-rc-2025-09-16)
-    type instant = u64;
+    type mark = u64;
 
     /// Read the current value of the clock.
     ///
@@ -23,21 +23,21 @@ interface monotonic-clock {
     /// produce a sequence of non-decreasing values.
     ///
     /// For completeness, this function traps if it's not possible to represent
-    /// the value of the clock in an `instant`. Consequently, implementations
+    /// the value of the clock in a `mark`. Consequently, implementations
     /// should ensure that the starting time is low enough to avoid the
     /// possibility of overflow in practice.
     @since(version = 0.3.0-rc-2025-09-16)
-    now: func() -> instant;
+    now: func() -> mark;
 
     /// Query the resolution of the clock. Returns the duration of time
     /// corresponding to a clock tick.
     @since(version = 0.3.0-rc-2025-09-16)
     get-resolution: func() -> duration;
 
-    /// Wait until the specified instant has occurred.
+    /// Wait until the specified mark has occurred.
     @since(version = 0.3.0-rc-2025-09-16)
     wait-until: async func(
-        when: instant,
+        when: mark,
     );
 
     /// Wait for the specified duration to elapse.

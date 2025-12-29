@@ -4,13 +4,13 @@
 @since(version = 0.2.0)
 interface types {
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.6.{duration};
+  use wasi:clocks/monotonic-clock@0.2.9.{duration};
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.6.{input-stream, output-stream};
+  use wasi:io/streams@0.2.9.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/error@0.2.6.{error as io-error};
+  use wasi:io/error@0.2.9.{error as io-error};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.6.{pollable};
+  use wasi:io/poll@0.2.9.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.2.0)
@@ -110,8 +110,8 @@ interface types {
   /// provided.
   ///
   /// Stream operations which return
-  /// `wasi:io/stream/stream-error::last-operation-failed` have a payload of
-  /// type `wasi:io/error/error` with more information about the operation
+  /// `wasi:io/stream.stream-error.last-operation-failed` have a payload of
+  /// type `wasi:io/error.error` with more information about the operation
   /// that failed. This payload can be passed through to this function to see
   /// if there's http-related information about the error to return.
   ///
