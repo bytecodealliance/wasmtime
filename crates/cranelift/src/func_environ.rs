@@ -3,8 +3,8 @@ pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
-    TargetEnvironment,
+    FuncTranslationStacks, GlobalConstValue, GlobalVariable, Heap, HeapData, StructFieldsVec,
+    TableData, TableSize, TargetEnvironment,
 };
 use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
@@ -1424,6 +1424,15 @@ impl FuncEnvironment<'_> {
             // `GlobalVariable` for which translation supports custom
             // access translation.
             return GlobalVariable::Custom;
+        }
+
+        if !self.module.globals[index].mutability {
+            if let Some(index) = self.module.defined_global_index(index) {
+                let init = &self.module.global_initializers[index];
+                if let Some(value) = GlobalConstValue::const_eval(init) {
+                    return GlobalVariable::Constant { value };
+                }
+            }
         }
 
         let (gv, offset) = self.get_global_location(func, index);
@@ -3128,6 +3137,21 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { value } => match value {
+                GlobalConstValue::I32(x) => Ok(builder.ins().iconst(ir::types::I32, i64::from(x))),
+                GlobalConstValue::I64(x) => Ok(builder.ins().iconst(ir::types::I64, x)),
+                GlobalConstValue::F32(x) => {
+                    Ok(builder.ins().f32const(ir::immediates::Ieee32::with_bits(x)))
+                }
+                GlobalConstValue::F64(x) => {
+                    Ok(builder.ins().f64const(ir::immediates::Ieee64::with_bits(x)))
+                }
+                GlobalConstValue::V128(x) => {
+                    let data = x.to_le_bytes().to_vec().into();
+                    let handle = builder.func.dfg.constants.insert(data);
+                    Ok(builder.ins().vconst(ir::types::I8X16, handle))
+                }
+            },
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
@@ -3178,6 +3202,9 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { .. } => {
+                unreachable!("validation checks that Wasm cannot `global.set` constant globals")
+            }
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
