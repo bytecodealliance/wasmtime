@@ -211,6 +211,11 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         // https://github.com/rust-lang/rust/issues/47995.)
         options.exclude_global_allow_pragmas = true;
 
+        // When `cranelift-codegen` is built with detailed tracing enabled, also
+        // ask the ISLE compiler to emit `log::{debug,trace}!` invocations in
+        // the generated code to help debug rule matching.
+        options.emit_logging = std::env::var("CARGO_FEATURE_TRACE_LOG").is_ok();
+
         if let Ok(out_dir) = std::env::var("OUT_DIR") {
             options.prefixes.push(isle::codegen::Prefix {
                 prefix: out_dir,
