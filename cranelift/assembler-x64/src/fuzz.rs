@@ -4,6 +4,10 @@
 //! throughout this crate to avoid depending on the `arbitrary` crate
 //! unconditionally (use the `fuzz` feature instead).
 
+use std::string::{String, ToString};
+use std::vec::Vec;
+use std::{format, println};
+
 use crate::{
     AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, DeferredTarget, Fixed, Gpr, Inst,
     KnownOffset, NonRspGpr, Registers, TrapCode, Xmm,
