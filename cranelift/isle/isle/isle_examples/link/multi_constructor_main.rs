@@ -1,3 +1,6 @@
+extern crate alloc;
+extern crate core;
+
 mod multi_constructor;
 use multi_constructor::{ContextIter, IntoContextIter};
 
