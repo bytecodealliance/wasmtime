@@ -191,8 +191,8 @@ pub mod mnemonic {
 pub mod display {
     use crate::inst;
     use crate::{Amode, Gpr, GprMem, Registers, Size};
-    use core::fmt;
     use alloc::string::ToString;
+    use core::fmt;
 
     pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
         let inst::callq_d { imm32 } = inst;
