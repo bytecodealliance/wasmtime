@@ -6,9 +6,6 @@ use crate::api::{AsReg, CodeSink, Constant, KnownOffset, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 
-#[cfg(feature = "core")]
-use alloc::string::{String, ToString};
-
 /// x64 memory addressing modes.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]

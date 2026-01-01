@@ -23,4 +23,3 @@ workspace = true
 
 [features]
 fuzz = ['dep:arbitrary', 'dep:capstone']
-core = []
