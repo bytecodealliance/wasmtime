@@ -3,9 +3,10 @@
 use crate::gpr;
 use crate::xmm;
 use crate::{Amode, DeferredTarget, GprMem, XmmMem};
-use std::fmt;
-use std::{num::NonZeroU8, vec::Vec};
-
+use alloc::vec::Vec;
+use core::fmt;
+use core::num::NonZeroU8;
+use alloc::string::String;
 /// Describe how an instruction is emitted into a code buffer.
 pub trait CodeSink {
     /// Add 1 byte to the code section.
@@ -113,7 +114,7 @@ pub trait Registers {
 }
 
 /// Describe how to interact with an external register type.
-pub trait AsReg: Copy + Clone + std::fmt::Debug + PartialEq {
+pub trait AsReg: Copy + Clone + core::fmt::Debug + PartialEq {
     /// Create a register from its hardware encoding.
     ///
     /// This is primarily useful for fuzzing, though it is also useful for

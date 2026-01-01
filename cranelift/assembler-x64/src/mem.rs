@@ -4,6 +4,8 @@ use crate::api::{AsReg, CodeSink, Constant, KnownOffset, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 
+use alloc::string::{String, ToString};
+
 /// x64 memory addressing modes.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
@@ -99,8 +101,8 @@ impl From<i32> for AmodeOffset {
     }
 }
 
-impl std::fmt::LowerHex for AmodeOffset {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::LowerHex for AmodeOffset {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         // This rather complex implementation is necessary to match how
         // `capstone` pretty-prints memory immediates.
         if self.0 == 0 {
@@ -116,7 +118,7 @@ impl std::fmt::LowerHex for AmodeOffset {
             Some(i) => i,
             None => -2_147_483_648,
         };
-        std::fmt::LowerHex::fmt(&abs, f)
+        core::fmt::LowerHex::fmt(&abs, f)
     }
 }
 
@@ -154,12 +156,12 @@ impl AmodeOffsetPlusKnownOffset {
     }
 }
 
-impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if let Some(offset) = self.offset {
             write!(f, "<offset:{offset}>+")?;
         }
-        std::fmt::LowerHex::fmt(&self.simm32, f)
+        core::fmt::LowerHex::fmt(&self.simm32, f)
     }
 }
 
@@ -172,8 +174,8 @@ pub enum DeferredTarget {
     None,
 }
 
-impl<R: AsReg> std::fmt::Display for Amode<R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<R: AsReg> core::fmt::Display for Amode<R> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let pointer_width = Size::Quadword;
         match self {
             Amode::ImmReg { simm32, base, .. } => {

@@ -75,7 +75,7 @@ pub mod encode {
 pub mod mnemonic {
     use crate::inst;
     use crate::{Registers, XmmMem};
-    use std::borrow::Cow;
+    use alloc::borrow::Cow;
 
     macro_rules! lock {
         ($name:tt => $mnemonic:expr) => {
@@ -191,7 +191,8 @@ pub mod mnemonic {
 pub mod display {
     use crate::inst;
     use crate::{Amode, Gpr, GprMem, Registers, Size};
-    use std::fmt;
+    use core::fmt;
+    use alloc::string::ToString;
 
     pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
         let inst::callq_d { imm32 } = inst;
