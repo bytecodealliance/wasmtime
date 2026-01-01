@@ -1,10 +1,8 @@
 //! Immediate operands to instructions.
 
 use crate::api::CodeSink;
-use core::fmt;
-
-#[cfg(feature = "core")]
 use alloc::{format, string::String};
+use core::fmt;
 
 /// This helper function prints the unsigned hexadecimal representation of the
 /// immediate value: e.g., this prints `$0xfe` to represent both the signed `-2`
