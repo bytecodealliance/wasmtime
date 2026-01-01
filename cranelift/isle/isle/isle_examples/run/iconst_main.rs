@@ -1,3 +1,6 @@
+extern crate alloc;
+extern crate core;
+
 mod iconst;
 
 struct Context;
