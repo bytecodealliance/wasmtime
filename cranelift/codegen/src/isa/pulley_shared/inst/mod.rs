@@ -611,7 +611,7 @@ const TRAP_OPCODE: &'static [u8] = &[
 
 #[test]
 fn test_trap_encoding() {
-    let mut dst = std::vec::Vec::new();
+    let mut dst = alloc::vec::Vec::new();
     pulley_interpreter::encode::trap(&mut dst);
     assert_eq!(dst, TRAP_OPCODE);
 }

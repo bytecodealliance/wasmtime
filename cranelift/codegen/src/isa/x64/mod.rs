@@ -19,7 +19,7 @@ use crate::{Final, MachBufferFinalized};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
+use alloc::string::String;
 use target_lexicon::Triple;
 
 mod abi;

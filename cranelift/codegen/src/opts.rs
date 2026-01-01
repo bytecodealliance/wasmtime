@@ -17,7 +17,7 @@ use crate::machinst::isle::*;
 use crate::trace;
 use cranelift_entity::packed_option::ReservedValue;
 use smallvec::{SmallVec, smallvec};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 pub type Unit = ();
 pub type ValueArray2 = [Value; 2];

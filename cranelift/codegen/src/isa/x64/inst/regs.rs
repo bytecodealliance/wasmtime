@@ -9,7 +9,7 @@ use crate::machinst::Reg;
 use alloc::string::ToString;
 use cranelift_assembler_x64::{gpr, xmm};
 use regalloc2::{PReg, RegClass, VReg};
-use std::string::String;
+use alloc::string::String;
 
 // Constructors for Regs.
 

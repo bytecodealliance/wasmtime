@@ -110,8 +110,8 @@ use alloc::boxed::Box;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
-use std::collections::HashMap;
-use std::marker::PhantomData;
+use crate::HashMap;
+use core::marker::PhantomData;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
 /// a small fixed sequence implementing one operation.
@@ -1022,7 +1022,7 @@ impl SigSet {
 
 // NB: we do _not_ implement `IndexMut` because these signatures are
 // deduplicated and shared!
-impl std::ops::Index<Sig> for SigSet {
+impl core::ops::Index<Sig> for SigSet {
     type Output = SigData;
 
     fn index(&self, sig: Sig) -> &Self::Output {
@@ -1244,7 +1244,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             // We always at least machine-word-align slots, but also
             // satisfy the user's requested alignment.
             debug_assert!(data.align_shift < 32);
-            let align = std::cmp::max(M::word_bytes(), 1u32 << data.align_shift);
+            let align = core::cmp::max(M::word_bytes(), 1u32 << data.align_shift);
             let mask = align - 1;
             let start_offset = checked_round_up(unaligned_start_offset, mask)
                 .ok_or(CodegenError::ImplLimitExceeded)?;
@@ -2183,7 +2183,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             // establishes live-ranges for in-register arguments and
             // constrains them at the start of the function to the
             // locations defined by the ABI.
-            Some(M::gen_args(std::mem::take(&mut self.reg_args)))
+            Some(M::gen_args(core::mem::take(&mut self.reg_args)))
         } else {
             None
         }
@@ -2612,6 +2612,6 @@ mod tests {
     fn sig_data_size() {
         // The size of `SigData` is performance sensitive, so make sure
         // we don't regress it unintentionally.
-        assert_eq!(std::mem::size_of::<SigData>(), 24);
+        assert_eq!(core::mem::size_of::<SigData>(), 24);
     }
 }
