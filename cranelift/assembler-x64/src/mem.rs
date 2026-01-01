@@ -1,10 +1,10 @@
 //! Memory operands to instructions.
 
+use alloc::string::{String, ToString};
+
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
-
-use alloc::string::{String, ToString};
 
 /// x64 memory addressing modes.
 #[derive(Copy, Clone, Debug, PartialEq)]
