@@ -16,10 +16,10 @@ use crate::machinst::{
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use crate::{Final, MachBufferFinalized};
+use alloc::string::String;
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use alloc::string::String;
 use target_lexicon::Triple;
 
 mod abi;

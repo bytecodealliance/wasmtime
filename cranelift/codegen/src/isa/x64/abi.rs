@@ -9,13 +9,13 @@ use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x6
 use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use alloc::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).

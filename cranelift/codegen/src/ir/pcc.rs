@@ -77,8 +77,8 @@ use crate::ir::types::*;
 use crate::isa::TargetIsa;
 use crate::machinst::{BlockIndex, LowerBackend, VCode};
 use crate::trace;
-use regalloc2::Function as _;
 use core::fmt;
+use regalloc2::Function as _;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};

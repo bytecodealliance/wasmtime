@@ -114,8 +114,8 @@ mod tests {
     use crate::entity::EntityRef;
     use crate::ir::instructions::ValueListPool;
     use crate::ir::{Block, BlockArg, BlockCall, Value};
-    use alloc::vec::Vec;
     use alloc::string::ToString;
+    use alloc::vec::Vec;
 
     #[test]
     fn empty() {

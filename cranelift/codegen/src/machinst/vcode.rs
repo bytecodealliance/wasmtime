@@ -31,14 +31,13 @@ use regalloc2::{
 };
 use rustc_hash::FxHashMap;
 
-
+use crate::HashMap;
+use crate::hash_map::Entry;
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
 use core::ops::Range;
 use cranelift_entity::{Keys, entity_impl};
-use crate::HashMap;
-use crate::hash_map::Entry;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;

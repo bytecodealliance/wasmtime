@@ -9,11 +9,11 @@ use crate::{CodegenError, CodegenResult, settings};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use core::slice;
 use smallvec::{SmallVec, smallvec};
-use core::fmt::Write;
-use alloc::string::{String, ToString};
 
 pub(crate) mod regs;
 pub(crate) use self::regs::*;

@@ -9,12 +9,12 @@ use crate::{
     machinst::*,
     settings,
 };
+use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use alloc::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Pulley ABI from the callee side (within a function body).

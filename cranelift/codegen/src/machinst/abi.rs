@@ -99,6 +99,7 @@
 //! ABI. See each platform's `abi.rs` implementation for details.
 
 use crate::CodegenError;
+use crate::HashMap;
 use crate::entity::SecondaryMap;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
 use crate::ir::{StackSlotKey, types::*};
@@ -107,11 +108,10 @@ use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
+use core::marker::PhantomData;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
-use crate::HashMap;
-use core::marker::PhantomData;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
 /// a small fixed sequence implementing one operation.

@@ -13,10 +13,10 @@ use crate::machinst::{
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use crate::{CodegenError, ir};
+use alloc::string::String;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use alloc::string::String;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;

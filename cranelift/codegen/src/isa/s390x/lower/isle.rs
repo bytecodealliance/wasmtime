@@ -23,10 +23,10 @@ use crate::{
         ArgPair, CallArgList, CallRetList, InstOutput, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
-use regalloc2::PReg;
 use alloc::boxed::Box;
-use core::cell::Cell;
 use alloc::vec::Vec;
+use core::cell::Cell;
+use regalloc2::PReg;
 
 type BoxCallInfo = Box<CallInfo<CallInstDest>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<CallInstDest>>;

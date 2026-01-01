@@ -55,11 +55,11 @@ use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
 use crate::{Reg, flowgraph};
+use alloc::string::String;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
-use alloc::string::String;
 use target_lexicon::{Architecture, PointerWidth, Triple, triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
