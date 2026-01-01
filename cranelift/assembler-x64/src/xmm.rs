@@ -3,7 +3,6 @@
 use crate::{AsReg, CodeSink, rex::encode_modrm};
 
 use alloc::string::String;
-//use core::convert::{AsMut, AsRef, From};
 
 /// An x64 SSE register (e.g., `%xmm0`).
 #[derive(Clone, Copy, Debug)]
