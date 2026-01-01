@@ -7,6 +7,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 use core::num::NonZeroU8;
+
 /// Describe how an instruction is emitted into a code buffer.
 pub trait CodeSink {
     /// Add 1 byte to the code section.
