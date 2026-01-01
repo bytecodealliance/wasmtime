@@ -166,8 +166,6 @@ impl<'a> Codegen<'a> {
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
-        writeln!(code, "#[allow(unused_imports)]").unwrap();
-        writeln!(code, "extern crate alloc;").unwrap();
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
