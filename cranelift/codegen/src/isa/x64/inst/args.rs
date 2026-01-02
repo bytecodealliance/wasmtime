@@ -7,6 +7,7 @@ use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::machinst::*;
+use crate::prelude::*;
 use alloc::string::String;
 use core::fmt;
 
