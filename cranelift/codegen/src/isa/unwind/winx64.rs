@@ -310,4 +310,3 @@ fn ensure_unwind_offset(offset: u32) -> CodegenResult<u8> {
     }
     Ok(offset as u8)
 }
-use crate::prelude::*;

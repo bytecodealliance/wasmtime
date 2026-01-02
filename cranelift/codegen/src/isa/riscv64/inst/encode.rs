@@ -718,4 +718,3 @@ pub fn encode_fp_rrrr(
         funct7,
     )
 }
-use crate::prelude::*;

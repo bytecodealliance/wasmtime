@@ -11,8 +11,6 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::Write;
 use smallvec::SmallVec;
-use core::fmt::Write;
-use alloc::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
 pub mod imms;
@@ -3552,4 +3550,3 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 }
-use crate::prelude::*;

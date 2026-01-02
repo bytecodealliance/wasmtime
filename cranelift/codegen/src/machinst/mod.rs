@@ -60,7 +60,6 @@ use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
 use smallvec::{SmallVec, smallvec};
-use alloc::string::String;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};

@@ -18,6 +18,7 @@
 //! backend pipeline.
 
 use crate::CodegenError;
+use crate::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
 use crate::ranges::Ranges;
@@ -29,11 +30,9 @@ use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, Operand,
     OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
-use rustc_hash::FxHashMap;
 
 use crate::HashMap;
 use crate::hash_map::Entry;
-
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
@@ -2058,4 +2057,3 @@ mod test {
         // least 48 bytes, making an empty `VCodeConstants` cost 120 bytes.
     }
 }
-use crate::prelude::*;

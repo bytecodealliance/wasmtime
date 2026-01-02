@@ -99,6 +99,7 @@
 //! ABI. See each platform's `abi.rs` implementation for details.
 
 use crate::CodegenError;
+use crate::FxHashMap;
 use crate::HashMap;
 use crate::entity::SecondaryMap;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
@@ -109,9 +110,7 @@ use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
 use core::marker::PhantomData;
-use hashbrown::HashMap;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
@@ -2616,4 +2615,3 @@ mod tests {
         assert_eq!(core::mem::size_of::<SigData>(), 24);
     }
 }
-use crate::prelude::*;

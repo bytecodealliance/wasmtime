@@ -14,4 +14,3 @@ pub struct InsnInput {
     pub(crate) insn: IRInst,
     pub(crate) input: usize,
 }
-use crate::prelude::*;

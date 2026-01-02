@@ -8,7 +8,6 @@ use crate::{Reg, Writable, ir::TrapCode};
 use alloc::string::String;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
-use alloc::string::String;
 
 /// Define the types of registers Cranelift will use.
 #[derive(Clone, Debug)]
@@ -563,4 +562,3 @@ mod tests {
         assert_eq!(pair.to_string(None), "(%v500 <- %v400)");
     }
 }
-use crate::prelude::*;

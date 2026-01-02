@@ -11,10 +11,10 @@ use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
+use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{EntitySet, SecondaryMap, packed_option::ReservedValue};
-use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
 
 pub(crate) struct Elaborator<'a> {
@@ -865,4 +865,3 @@ impl<'a> Elaborator<'a> {
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }
-use crate::prelude::*;

@@ -18,8 +18,6 @@ use core::fmt::{self, Write};
 use core::slice;
 use cranelift_assembler_x64 as asm;
 use smallvec::{SmallVec, smallvec};
-use core::fmt::{self, Write};
-use alloc::string::{String, ToString};
 
 pub mod args;
 mod emit;
@@ -1680,4 +1678,3 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 }
-use crate::prelude::*;

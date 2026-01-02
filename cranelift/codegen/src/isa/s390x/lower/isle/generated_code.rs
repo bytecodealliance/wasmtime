@@ -13,4 +13,3 @@
 )]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_s390x.rs"));
-use crate::prelude::*;

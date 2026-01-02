@@ -10,7 +10,6 @@ use alloc::string::String;
 use alloc::string::ToString;
 use cranelift_assembler_x64::{gpr, xmm};
 use regalloc2::{PReg, RegClass, VReg};
-use alloc::string::String;
 
 // Constructors for Regs.
 
@@ -175,4 +174,3 @@ pub fn pretty_print_reg(reg: Reg, size: u8) -> String {
         name
     }
 }
-use crate::prelude::*;

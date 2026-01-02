@@ -64,8 +64,8 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::SecondaryMap;
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
+use crate::{FxHashMap, FxHashSet};
 use crate::{machinst::*, trace};
-use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Mapping from CLIF BBs to VCode BBs.
 #[derive(Debug)]

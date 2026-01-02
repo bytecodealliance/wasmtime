@@ -189,11 +189,6 @@ use core::ops::Range;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use smallvec::SmallVec;
-use core::cmp::Ordering;
-use alloc::collections::BinaryHeap;
-use core::mem;
-use alloc::string::String;
-use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -2915,4 +2910,3 @@ mod test {
         );
     }
 }
-use crate::prelude::*;
