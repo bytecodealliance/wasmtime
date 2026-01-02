@@ -11,6 +11,7 @@ use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
+use libm::Libm;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -683,28 +684,28 @@ macro_rules! ieee_float {
             $(
                 /// Returns the square root of `self`.
                 pub fn sqrt(self) -> Self {
-                    Self::with_float(self.$as_float().sqrt())
+                    Self::with_float(Libm::<$float_ty>::sqrt(self.$as_float()))
                 }
 
                 /// Returns the smallest integer greater than or equal to `self`.
                 pub fn ceil(self) -> Self {
-                    Self::with_float(self.$as_float().ceil())
+                    Self::with_float(Libm::<$float_ty>::ceil(self.$as_float()))
                 }
 
                 /// Returns the largest integer less than or equal to `self`.
                 pub fn floor(self) -> Self {
-                    Self::with_float(self.$as_float().floor())
+                    Self::with_float(Libm::<$float_ty>::floor(self.$as_float()))
                 }
 
                 /// Returns the integer part of `self`. This means that non-integer numbers are always truncated towards zero.
                 pub fn trunc(self) -> Self {
-                    Self::with_float(self.$as_float().trunc())
+                    Self::with_float(Libm::<$float_ty>::trunc(self.$as_float()))
                 }
 
                 /// Returns the nearest integer to `self`. Rounds half-way cases to the number
                 /// with an even least significant digit.
                 pub fn round_ties_even(self) -> Self {
-                    Self::with_float(self.$as_float().round_ties_even())
+                    Self::with_float(libm::generic::rint_round(self.$as_float(), libm::support::Round::Nearest).val)
                 }
             )?
         }
