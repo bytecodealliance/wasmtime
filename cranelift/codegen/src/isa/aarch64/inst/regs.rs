@@ -5,6 +5,7 @@ use crate::isa::aarch64::inst::ScalarSize;
 use crate::isa::aarch64::inst::VectorSize;
 use crate::machinst::RealReg;
 use crate::machinst::{Reg, RegClass, Writable};
+use crate::prelude::*;
 use regalloc2::PReg;
 use regalloc2::VReg;
 
