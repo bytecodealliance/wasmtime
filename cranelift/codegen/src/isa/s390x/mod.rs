@@ -185,7 +185,7 @@ impl TargetIsa for S390xBackend {
         true
     }
 
-    fn has_x86_blendv_lowering(&self, _: Type) -> bool {
+    fn has_blendv_lowering(&self, _: Type) -> bool {
         self.isa_flags.has_vxrs_ext3()
     }
 
