@@ -10,6 +10,7 @@ use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
 };
+use crate::prelude::*;
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::string::String;
