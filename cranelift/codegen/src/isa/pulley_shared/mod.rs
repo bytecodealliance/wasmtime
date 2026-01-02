@@ -232,7 +232,7 @@ where
         true
     }
 
-    fn has_x86_blendv_lowering(&self, _ty: ir::Type) -> bool {
+    fn has_blendv_lowering(&self, _ty: ir::Type) -> bool {
         false
     }
 
