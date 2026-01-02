@@ -8,6 +8,7 @@ use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{CallConv, FunctionAlignment};
+use crate::prelude::*;
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;

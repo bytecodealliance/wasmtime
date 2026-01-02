@@ -45,6 +45,8 @@ pub use gimli;
 // Pull in generated the `isle_numerics_methods` macro.
 include!(concat!(env!("ISLE_DIR"), "/isle_numerics.rs"));
 
+mod prelude;
+
 #[macro_use]
 mod machinst;
 
