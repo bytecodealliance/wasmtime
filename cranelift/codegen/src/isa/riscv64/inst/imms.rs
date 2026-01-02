@@ -371,4 +371,3 @@ mod test {
         assert!(Inst::imm_min() == i32::MIN as i64 - 2048);
     }
 }
-use crate::prelude::*;

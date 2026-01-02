@@ -61,7 +61,6 @@
 //! must be correct likely reduce the potential benefit, we don't yet
 //! do this.
 
-use crate::prelude::*;
 use crate::{FxHashMap, FxHashSet};
 use crate::{
     cursor::{Cursor, FuncCursor},
@@ -401,4 +400,3 @@ fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
         _ => Some(op),
     }
 }
-use crate::prelude::*;

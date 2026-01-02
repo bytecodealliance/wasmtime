@@ -6,7 +6,6 @@
 
 use core::hash::{Hash, Hasher};
 use hashbrown::hash_table::HashTable;
-use core::hash::{Hash, Hasher};
 
 /// Trait that allows for equality comparison given some external
 /// context.

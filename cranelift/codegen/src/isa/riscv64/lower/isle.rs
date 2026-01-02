@@ -24,8 +24,6 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::PReg;
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
@@ -751,4 +749,3 @@ pub(crate) fn lower_branch(
     let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, targets)
 }
-use crate::prelude::*;

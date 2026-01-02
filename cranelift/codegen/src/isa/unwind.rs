@@ -16,7 +16,6 @@ pub mod winarm64;
 
 #[cfg(feature = "unwind")]
 /// CFA-based unwind information used on SystemV.
-#[cfg(feature = "unwind")]
 pub type CfaUnwindInfo = systemv::UnwindInfo;
 
 /// Expected unwind info type.

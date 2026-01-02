@@ -866,4 +866,3 @@ impl<'a> Elaborator<'a> {
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }
-use crate::prelude::*;

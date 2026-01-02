@@ -34,7 +34,6 @@ use regalloc2::{
 
 use crate::HashMap;
 use crate::hash_map::Entry;
-
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
@@ -2062,4 +2061,3 @@ mod test {
         // least 48 bytes, making an empty `VCodeConstants` cost 120 bytes.
     }
 }
-use crate::prelude::*;

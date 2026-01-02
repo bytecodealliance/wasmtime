@@ -21,7 +21,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{HashMap, hash_map};
+use hashbrown::{HashMap, HashSet, hash_map};
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet, hash_map};
 
@@ -49,8 +49,6 @@ mod prelude;
 
 #[macro_use]
 mod machinst;
-
-mod prelude;
 
 pub mod binemit;
 pub mod cfg_printer;

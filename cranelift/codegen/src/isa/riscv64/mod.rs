@@ -18,7 +18,6 @@ use alloc::string::String;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use alloc::string::String;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
@@ -294,4 +293,3 @@ fn isa_constructor(
     let backend = Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags);
     Ok(backend.wrapped())
 }
-use crate::prelude::*;

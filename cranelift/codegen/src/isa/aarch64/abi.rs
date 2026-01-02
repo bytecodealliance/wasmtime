@@ -18,7 +18,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use alloc::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -1632,4 +1631,3 @@ fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
 
     env
 }
-use crate::prelude::*;

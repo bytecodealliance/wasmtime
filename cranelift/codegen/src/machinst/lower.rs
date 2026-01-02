@@ -28,7 +28,6 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use smallvec::{SmallVec, smallvec};
-use core::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 
@@ -40,7 +39,7 @@ pub type InstOutput = SmallVec<[ValueRegs<Reg>; 2]>;
 /// any side-effecting op (for this purpose, loads are also considered
 /// side-effecting, to avoid subtle questions w.r.t. the memory model), and
 /// furthermore, it is guaranteed that for any two instructions A and B such
-/// that color(A) == color(B), either A dominates B and B pocoreominates A, or
+/// that color(A) == color(B), either A dominates B and B postdominates A, or
 /// vice-versa. (For now, in practice, only ops in the same basic block can ever
 /// have the same color, trivially providing the second condition.) Intuitively,
 /// this means that the ops of the same color must always execute "together", as
@@ -1391,7 +1390,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
 /// Instruction input/output queries.
 impl<'func, I: VCodeInst> Lower<'func, I> {
-    /// Get the incoreata for a given IR instruction.
+    /// Get the instdata for a given IR instruction.
     pub fn data(&self, ir_inst: Inst) -> &InstructionData {
         &self.f.dfg.insts[ir_inst]
     }
@@ -1799,4 +1798,3 @@ mod tests {
         assert_eq!(uses[v5], ValueUseState::Unused);
     }
 }
-use crate::prelude::*;

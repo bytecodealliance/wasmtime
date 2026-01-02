@@ -18,7 +18,6 @@ use crate::trace;
 use core::marker::PhantomData;
 use cranelift_entity::packed_option::ReservedValue;
 use smallvec::{SmallVec, smallvec};
-use core::marker::PhantomData;
 
 pub type Unit = ();
 pub type ValueArray2 = [Value; 2];

@@ -327,4 +327,3 @@ where
     let mut isle_ctx = PulleyIsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, targets)
 }
-use crate::prelude::*;

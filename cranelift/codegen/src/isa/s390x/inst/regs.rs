@@ -185,4 +185,3 @@ pub fn pretty_print_regpair_mod_lo(rd: WritableRegPair, ri: Reg) -> String {
 pub fn pretty_print_fpr(reg: Reg) -> (String, Option<String>) {
     (show_reg(reg), maybe_show_fpr(reg))
 }
-use crate::prelude::*;

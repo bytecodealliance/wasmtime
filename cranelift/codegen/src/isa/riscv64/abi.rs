@@ -22,7 +22,6 @@ use regalloc2::{MachineEnv, PReg, PRegSet};
 
 use alloc::borrow::ToOwned;
 use smallvec::{SmallVec, smallvec};
-use alloc::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
@@ -1056,4 +1055,3 @@ impl Riscv64MachineDeps {
         insts.extend(Self::gen_sp_reg_adjust((guard_size * probe_count) as i32));
     }
 }
-use crate::prelude::*;

@@ -149,7 +149,6 @@ use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use alloc::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -1623,4 +1622,3 @@ fn tail_create_machine_env() -> MachineEnv {
         scratch_by_class: [None, None, None],
     }
 }
-use crate::prelude::*;

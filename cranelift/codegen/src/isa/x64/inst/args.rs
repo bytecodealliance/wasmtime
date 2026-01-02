@@ -7,8 +7,8 @@ use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::machinst::*;
-use core::fmt;
 use alloc::string::String;
+use core::fmt;
 
 /// An extension trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
@@ -1061,4 +1061,3 @@ impl OperandSize {
         self.to_bytes() * 8
     }
 }
-use crate::prelude::*;

@@ -14,10 +14,10 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use std::sync::OnceLock;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
+use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -1345,4 +1345,3 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
 
     env
 }
-use crate::prelude::*;
