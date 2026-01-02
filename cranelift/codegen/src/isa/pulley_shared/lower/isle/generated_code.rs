@@ -13,4 +13,3 @@
 )]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_pulley_shared.rs"));
-use crate::prelude::*;

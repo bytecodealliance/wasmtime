@@ -7,10 +7,10 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult, settings};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
-use smallvec::SmallVec;
-use core::fmt::Write;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::fmt::Write;
+use smallvec::SmallVec;
 pub mod regs;
 pub use self::regs::*;
 pub mod imms;
@@ -3550,4 +3550,3 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 }
-use crate::prelude::*;

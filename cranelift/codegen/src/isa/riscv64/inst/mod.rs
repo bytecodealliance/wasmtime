@@ -12,12 +12,12 @@ use crate::{CodegenError, CodegenResult, settings};
 
 pub use crate::ir::condcodes::FloatCC;
 
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
-use alloc::boxed::Box;
-use core::fmt::Write;
-use alloc::string::{String, ToString};
 
 pub mod regs;
 pub use self::regs::*;
@@ -1940,4 +1940,3 @@ mod test {
         assert!(LabelUse::B12.max_pos_range() == ((1 << 11) - 1) * 2);
     }
 }
-use crate::prelude::*;

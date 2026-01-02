@@ -12,10 +12,10 @@ use crate::machinst::{
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
+use alloc::string::String;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use alloc::string::String;
 use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
@@ -278,4 +278,3 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         },
     }
 }
-use crate::prelude::*;

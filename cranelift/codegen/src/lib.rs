@@ -21,9 +21,14 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{HashMap, hash_map};
+use hashbrown::{HashMap, HashSet, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{HashMap, hash_map};
+use std::collections::{HashMap, HashSet, hash_map};
+
+/// Type alias for a hash map that uses the Fx hashing algorithm.
+pub type FxHashMap<K, V> = HashMap<K, V, rustc_hash::FxBuildHasher>;
+/// Type alias for a hash set that uses the Fx hashing algorithm.
+pub type FxHashSet<V> = HashSet<V, rustc_hash::FxBuildHasher>;
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -42,8 +47,6 @@ include!(concat!(env!("ISLE_DIR"), "/isle_numerics.rs"));
 
 #[macro_use]
 mod machinst;
-
-mod prelude;
 
 pub mod binemit;
 pub mod cfg_printer;

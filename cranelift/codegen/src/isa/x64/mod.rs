@@ -10,7 +10,7 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
-    CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -264,4 +264,3 @@ fn isa_constructor(
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags)?;
     Ok(backend.wrapped())
 }
-use crate::prelude::*;

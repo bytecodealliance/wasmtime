@@ -53,13 +53,13 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
 use smallvec::{SmallVec, smallvec};
-use alloc::string::String;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};

@@ -61,6 +61,7 @@
 //! must be correct likely reduce the potential benefit, we don't yet
 //! do this.
 
+use crate::{FxHashMap, FxHashSet};
 use crate::{
     cursor::{Cursor, FuncCursor},
     dominator_tree::DominatorTree,
@@ -71,7 +72,6 @@ use crate::{
     trace,
 };
 use cranelift_entity::{EntityRef, packed_option::PackedOption};
-use rustc_hash::{FxHashMap, FxHashSet};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
@@ -400,4 +400,3 @@ fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
         _ => Some(op),
     }
 }
-use crate::prelude::*;

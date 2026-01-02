@@ -31,10 +31,10 @@ use crate::{
         abi::ArgPair, ty_bits,
     },
 };
-use core::u32;
-use regalloc2::PReg;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::u32;
+use regalloc2::PReg;
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<Reg>>;
@@ -858,4 +858,3 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         self.backend.flags.is_pic()
     }
 }
-use crate::prelude::*;

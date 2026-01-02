@@ -50,7 +50,7 @@ use crate::CodegenResult;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::{UnwindInfoKind, systemv::RegisterMappingError};
-use crate::machinst::{CompiledCodeStencil, TextSectionBuilder};
+use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
@@ -499,4 +499,3 @@ impl Debug for &dyn TargetIsa {
         )
     }
 }
-use crate::prelude::*;
