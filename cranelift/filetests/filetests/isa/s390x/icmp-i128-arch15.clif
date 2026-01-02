@@ -243,7 +243,7 @@ block0(v0: i128, v1: i128):
 
 function %f4(i8x16, i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16, v2: i8x16):
-   v3 = x86_blendv v0, v1, v2
+   v3 = blendv v0, v1, v2
    return v3
 }
 

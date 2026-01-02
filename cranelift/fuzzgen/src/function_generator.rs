@@ -912,7 +912,7 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::GetFramePointer),
                 (Opcode::GetStackPointer),
                 (Opcode::GetReturnAddress),
-                (Opcode::X86Blendv),
+                (Opcode::Blendv),
                 (Opcode::IcmpImm),
                 (Opcode::X86Pmulhrsw),
                 (Opcode::IaddImm),

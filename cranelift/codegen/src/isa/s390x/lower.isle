@@ -2606,7 +2606,7 @@
 
 ;;;; Rules for `blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type (and (ty_vec128 ty) (vxrs_ext3_enabled)) (x86_blendv p x y)))
+(rule 1 (lower (has_type (and (ty_vec128 ty) (vxrs_ext3_enabled)) (blendv p x y)))
   (vec_blend ty p x y))
 
 

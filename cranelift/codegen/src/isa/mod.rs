@@ -391,9 +391,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns whether this ISA has instructions for `ceil`, `floor`, etc.
     fn has_round(&self) -> bool;
 
-    /// Returns whether the CLIF `x86_blendv` instruction is implemented for
+    /// Returns whether the CLIF `blendv` instruction is implemented for
     /// this ISA for the specified type.
-    fn has_x86_blendv_lowering(&self, ty: Type) -> bool;
+    fn has_blendv_lowering(&self, ty: Type) -> bool;
 
     /// Returns whether the CLIF `x86_pshufb` instruction is implemented for
     /// this ISA.
