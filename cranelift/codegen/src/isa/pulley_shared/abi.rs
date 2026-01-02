@@ -15,7 +15,6 @@ use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::sync::OnceLock;
 
 /// Support for the Pulley ABI from the callee side (within a function body).
 pub(crate) type PulleyCallee<P> = Callee<PulleyMachineDeps<P>>;

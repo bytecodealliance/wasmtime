@@ -149,7 +149,6 @@ use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
 
