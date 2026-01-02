@@ -29,6 +29,7 @@ mod lower;
 mod pcc;
 pub mod settings;
 
+#[cfg(feature = "unwind")]
 pub use inst::unwind::systemv::create_cie;
 
 /// An X64 backend.
@@ -218,6 +219,7 @@ pub fn emit_unwind_info(
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
     use crate::isa::unwind::{UnwindInfo, UnwindInfoKind};
     Ok(match kind {
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::SystemV => {
             let mapper = self::inst::unwind::systemv::RegisterMapper;
             Some(UnwindInfo::SystemV(
@@ -228,6 +230,7 @@ pub fn emit_unwind_info(
                 )?,
             ))
         }
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::Windows => Some(UnwindInfo::WindowsX64(
             crate::isa::unwind::winx64::create_unwind_info_from_insts::<
                 self::inst::unwind::winx64::RegisterMapper,

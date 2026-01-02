@@ -1278,6 +1278,9 @@ impl<I: VCodeInst> VCode<I> {
                 let slot = alloc.as_stack().unwrap();
                 let slot_offset = self.abi.get_spillslot_offset(slot);
                 let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
+                #[cfg(not(feature = "unwind"))]
+                let caller_sp_to_cfa_offset = 0;
+                #[cfg(feature = "unwind")]
                 let caller_sp_to_cfa_offset =
                     crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
                 // NOTE: this is a negative offset because it's relative to the caller's SP

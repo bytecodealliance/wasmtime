@@ -766,6 +766,7 @@ dependencies = [
  "env_logger 0.11.5",
  "gimli 0.32.3",
  "hashbrown 0.15.2",
+ "libm",
  "log",
  "postcard",
  "proptest",
