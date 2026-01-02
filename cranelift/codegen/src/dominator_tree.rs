@@ -4,6 +4,7 @@ use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{Block, Function, Layout, ProgramPoint};
 use crate::packed_option::PackedOption;
+use crate::prelude::*;
 use crate::timing;
 use alloc::vec::Vec;
 use core::cmp;

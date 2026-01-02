@@ -9,6 +9,7 @@ use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
+use crate::prelude::*;
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use crate::{FxHashMap, FxHashSet};

@@ -22,6 +22,7 @@
 
 use crate::constant_hash::{probe, simple_hash};
 use crate::isa::TargetIsa;
+use crate::prelude::*;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use core::fmt;

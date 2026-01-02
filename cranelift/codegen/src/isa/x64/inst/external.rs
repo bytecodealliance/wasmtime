@@ -4,6 +4,7 @@ use super::{
     Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
     SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg,
 };
+use crate::prelude::*;
 use crate::{Reg, Writable, ir::TrapCode};
 use alloc::string::String;
 use cranelift_assembler_x64 as asm;

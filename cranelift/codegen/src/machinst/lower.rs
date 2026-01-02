@@ -20,6 +20,7 @@ use crate::machinst::{
     VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
     writable_value_regs,
 };
+use crate::prelude::*;
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
 use crate::{FxHashMap, FxHashSet};
