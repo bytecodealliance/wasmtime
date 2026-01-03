@@ -407,7 +407,7 @@ impl JITModule {
         let data = self.compiled_functions[func]
             .as_ref()
             .unwrap()
-            .exception_data
+            .wasmtime_exception_data
             .as_ref()?;
         let exception_table = wasmtime_unwinder::ExceptionTable::parse(data).ok()?;
         Some((start, exception_table))
@@ -509,22 +509,8 @@ impl Module for JITModule {
             .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func, id))
             .collect();
 
-        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs,
-            #[cfg(feature = "wasmtime-unwinder")]
-            exception_data: None,
-        });
-
-        let range_start = ptr as usize;
-        let range_end = range_start + size;
-        // These will be sorted when we finalize.
-        self.code_ranges.push((range_start, range_end, id));
-
         #[cfg(feature = "wasmtime-unwinder")]
-        {
+        let wasmtime_exception_data = {
             let mut exception_builder = wasmtime_unwinder::ExceptionTableBuilder::default();
             exception_builder
                 .add_func(0, compiled_code.buffer.call_sites())
@@ -533,9 +519,22 @@ impl Module for JITModule {
                         "Invalid exception data".into(),
                     ))
                 })?;
-            self.compiled_functions[id].as_mut().unwrap().exception_data =
-                Some(exception_builder.to_vec());
-        }
+            Some(exception_builder.to_vec())
+        };
+
+        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
+        self.compiled_functions[id] = Some(CompiledBlob {
+            ptr,
+            size,
+            relocs,
+            #[cfg(feature = "wasmtime-unwinder")]
+            wasmtime_exception_data,
+        });
+
+        let range_start = ptr as usize;
+        let range_end = range_start + size;
+        // These will be sorted when we finalize.
+        self.code_ranges.push((range_start, range_end, id));
 
         self.functions_to_finalize.push(id);
 
@@ -585,7 +584,7 @@ impl Module for JITModule {
             size,
             relocs: relocs.to_owned(),
             #[cfg(feature = "wasmtime-unwinder")]
-            exception_data: None,
+            wasmtime_exception_data: None,
         });
 
         self.functions_to_finalize.push(id);
@@ -678,7 +677,7 @@ impl Module for JITModule {
             size: init.size(),
             relocs,
             #[cfg(feature = "wasmtime-unwinder")]
-            exception_data: None,
+            wasmtime_exception_data: None,
         });
         self.data_objects_to_finalize.push(id);
 
