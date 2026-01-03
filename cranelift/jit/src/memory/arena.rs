@@ -4,7 +4,7 @@ use std::ptr;
 
 use cranelift_module::ModuleResult;
 
-use super::{BranchProtection, JITMemoryProvider};
+use super::{BranchProtection, JITMemoryKind, JITMemoryProvider};
 
 fn align_up(addr: usize, align: usize) -> usize {
     debug_assert!(align.is_power_of_two());
@@ -123,7 +123,7 @@ impl ArenaMemoryProvider {
         })
     }
 
-    fn allocate(
+    fn allocate_inner(
         &mut self,
         size: usize,
         align: u64,
@@ -221,16 +221,16 @@ impl Drop for ArenaMemoryProvider {
 }
 
 impl JITMemoryProvider for ArenaMemoryProvider {
-    fn allocate_readexec(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align, region::Protection::READ_EXECUTE)
-    }
-
-    fn allocate_readwrite(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align, region::Protection::READ_WRITE)
-    }
-
-    fn allocate_readonly(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align, region::Protection::READ)
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8> {
+        self.allocate_inner(
+            size,
+            align,
+            match kind {
+                JITMemoryKind::Executable => region::Protection::READ_EXECUTE,
+                JITMemoryKind::Writable => region::Protection::READ_WRITE,
+                JITMemoryKind::ReadOnly => region::Protection::READ,
+            },
+        )
     }
 
     unsafe fn free_memory(&mut self) {
@@ -254,7 +254,9 @@ mod tests {
         for align_log2 in 0..8 {
             let align = 1usize << align_log2;
             for size in 1..128 {
-                let ptr = arena.allocate_readwrite(size, align as u64).unwrap();
+                let ptr = arena
+                    .allocate(size, align as u64, JITMemoryKind::Writable)
+                    .unwrap();
                 // assert!(ptr.is_aligned_to(align));
                 assert_eq!(ptr.addr() % align, 0);
             }
@@ -269,7 +271,7 @@ mod tests {
         // platforms. Physical memory should be committed as we go.
         let reserve_size = 1 << 40;
         let mut arena = ArenaMemoryProvider::new_with_size(reserve_size).unwrap();
-        let ptr = arena.allocate_readwrite(1, 1).unwrap();
+        let ptr = arena.allocate(1, 1, JITMemoryKind::Writable).unwrap();
         assert_eq!(ptr.addr(), arena.ptr.addr());
         arena.finalize(BranchProtection::None);
         unsafe { ptr.write_volatile(42) };
@@ -280,8 +282,10 @@ mod tests {
     fn over_capacity() {
         let mut arena = ArenaMemoryProvider::new_with_size(1 << 20).unwrap(); // 1 MB
 
-        let _ = arena.allocate_readwrite(900_000, 1).unwrap();
-        let _ = arena.allocate_readwrite(200_000, 1).unwrap_err();
+        let _ = arena.allocate(900_000, 1, JITMemoryKind::Writable).unwrap();
+        let _ = arena
+            .allocate(200_000, 1, JITMemoryKind::Writable)
+            .unwrap_err();
     }
 
     #[test]
