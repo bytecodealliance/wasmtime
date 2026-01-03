@@ -1,6 +1,10 @@
+use std::ptr;
+
 use cranelift_codegen::binemit::Reloc;
-use cranelift_module::ModuleReloc;
-use cranelift_module::ModuleRelocTarget;
+use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult};
+
+use crate::JITMemoryProvider;
+use crate::memory::JITMemoryKind;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -12,16 +16,77 @@ unsafe fn modify_inst32(iptr: *mut u32, modifier: impl FnOnce(u32) -> u32) {
 
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
-    pub(crate) ptr: *mut u8,
-    pub(crate) size: usize,
-    pub(crate) relocs: Vec<ModuleReloc>,
+    ptr: *mut u8,
+    size: usize,
+    relocs: Vec<ModuleReloc>,
     #[cfg(feature = "wasmtime-unwinder")]
-    pub(crate) wasmtime_exception_data: Option<Vec<u8>>,
+    wasmtime_exception_data: Option<Vec<u8>>,
 }
 
 unsafe impl Send for CompiledBlob {}
 
 impl CompiledBlob {
+    pub(crate) fn new(
+        memory: &mut dyn JITMemoryProvider,
+        data: &[u8],
+        align: u64,
+        relocs: Vec<ModuleReloc>,
+        #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
+        kind: JITMemoryKind,
+    ) -> ModuleResult<Self> {
+        let ptr = memory
+            .allocate(data.len(), align, kind)
+            .map_err(|e| ModuleError::Allocation { err: e })?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+        }
+
+        Ok(CompiledBlob {
+            ptr,
+            size: data.len(),
+            relocs,
+            #[cfg(feature = "wasmtime-unwinder")]
+            wasmtime_exception_data,
+        })
+    }
+
+    pub(crate) fn new_zeroed(
+        memory: &mut dyn JITMemoryProvider,
+        size: usize,
+        align: u64,
+        relocs: Vec<ModuleReloc>,
+        #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
+        kind: JITMemoryKind,
+    ) -> ModuleResult<Self> {
+        let ptr = memory
+            .allocate(size, align, kind)
+            .map_err(|e| ModuleError::Allocation { err: e })?;
+
+        unsafe { ptr::write_bytes(ptr, 0, size) };
+
+        Ok(CompiledBlob {
+            ptr,
+            size,
+            relocs,
+            #[cfg(feature = "wasmtime-unwinder")]
+            wasmtime_exception_data,
+        })
+    }
+
+    pub(crate) fn ptr(&self) -> *const u8 {
+        self.ptr
+    }
+
+    pub(crate) fn size(&self) -> usize {
+        self.size
+    }
+
+    #[cfg(feature = "wasmtime-unwinder")]
+    pub(crate) fn wasmtime_exception_data(&self) -> Option<&[u8]> {
+        self.wasmtime_exception_data.as_deref()
+    }
+
     pub(crate) fn perform_relocations(
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,

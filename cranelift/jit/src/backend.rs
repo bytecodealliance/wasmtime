@@ -2,7 +2,7 @@
 
 use crate::{
     compiled_blob::CompiledBlob,
-    memory::{BranchProtection, JITMemoryProvider, SystemMemoryProvider},
+    memory::{BranchProtection, JITMemoryKind, JITMemoryProvider, SystemMemoryProvider},
 };
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
@@ -19,7 +19,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;
-use std::ptr;
 use target_lexicon::PointerWidth;
 
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
@@ -217,7 +216,7 @@ impl JITModule {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
                     match &self.compiled_functions[func_id] {
-                        Some(compiled) => return compiled.ptr,
+                        Some(compiled) => return compiled.ptr(),
                         None => {
                             let decl = self.declarations.get_function_decl(func_id);
                             (&decl.name, decl.linkage)
@@ -226,7 +225,7 @@ impl JITModule {
                 } else {
                     let data_id = DataId::from_name(name);
                     match &self.compiled_data_objects[data_id] {
-                        Some(compiled) => return compiled.ptr,
+                        Some(compiled) => return compiled.ptr(),
                         None => {
                             let decl = self.declarations.get_data_decl(data_id);
                             (&decl.name, decl.linkage)
@@ -251,7 +250,7 @@ impl JITModule {
             }
             ModuleRelocTarget::FunctionOffset(func_id, offset) => {
                 match &self.compiled_functions[*func_id] {
-                    Some(compiled) => return compiled.ptr.wrapping_add(*offset as usize),
+                    Some(compiled) => return compiled.ptr().wrapping_add(*offset as usize),
                     None => todo!(),
                 }
             }
@@ -271,7 +270,7 @@ impl JITModule {
         );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
-            .ptr
+            .ptr()
     }
 
     /// Returns the address and size of a finalized data object.
@@ -288,10 +287,10 @@ impl JITModule {
             .as_ref()
             .expect("data object must be compiled before it can be finalized");
 
-        (compiled.ptr, compiled.size)
+        (compiled.ptr(), compiled.size())
     }
 
-    fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
+    fn record_function_for_perf(&self, ptr: *const u8, size: usize, name: &str) {
         // The Linux perf tool supports JIT code via a /tmp/perf-$PID.map file,
         // which contains memory regions and their associated names.  If we
         // are profiling with perf and saving binaries to PERF_BUILDID_DIR
@@ -407,8 +406,7 @@ impl JITModule {
         let data = self.compiled_functions[func]
             .as_ref()
             .unwrap()
-            .wasmtime_exception_data
-            .as_ref()?;
+            .wasmtime_exception_data()?;
         let exception_table = wasmtime_unwinder::ExceptionTable::parse(data).ok()?;
         Some((start, exception_table))
     }
@@ -485,22 +483,9 @@ impl Module for JITModule {
         let alignment = res.buffer.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
-        let size = compiled_code.code_info().total_size as usize;
         let align = alignment
             .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
-        let ptr =
-            self.memory
-                .allocate_readexec(size, align)
-                .map_err(|e| ModuleError::Allocation {
-                    message: "unable to alloc function",
-                    err: e,
-                })?;
-
-        {
-            let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
-            mem.copy_from_slice(compiled_code.code_buffer());
-        }
 
         let relocs = compiled_code
             .buffer
@@ -522,16 +507,19 @@ impl Module for JITModule {
             Some(exception_builder.to_vec())
         };
 
-        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
+        let blob = self.compiled_functions[id].insert(CompiledBlob::new(
+            &mut *self.memory,
+            compiled_code.code_buffer(),
+            align,
             relocs,
             #[cfg(feature = "wasmtime-unwinder")]
             wasmtime_exception_data,
-        });
+            JITMemoryKind::Executable,
+        )?);
+        let (ptr, size) = (blob.ptr(), blob.size());
+        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
 
-        let range_start = ptr as usize;
+        let range_start = ptr.addr();
         let range_end = range_start + size;
         // These will be sorted when we finalize.
         self.code_ranges.push((range_start, range_end, id));
@@ -562,30 +550,21 @@ impl Module for JITModule {
             ));
         }
 
-        let size = bytes.len();
         let align = alignment
             .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
-        let ptr =
-            self.memory
-                .allocate_readexec(size, align)
-                .map_err(|e| ModuleError::Allocation {
-                    message: "unable to alloc function bytes",
-                    err: e,
-                })?;
 
-        unsafe {
-            ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
-        }
-
-        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs: relocs.to_owned(),
+        let blob = self.compiled_functions[id].insert(CompiledBlob::new(
+            &mut *self.memory,
+            bytes,
+            align,
+            relocs.to_owned(),
             #[cfg(feature = "wasmtime-unwinder")]
-            wasmtime_exception_data: None,
-        });
+            None,
+            JITMemoryKind::Executable,
+        )?);
+        let (ptr, size) = (blob.ptr(), blob.size());
+        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
 
         self.functions_to_finalize.push(id);
 
@@ -619,51 +598,17 @@ impl Module for JITModule {
             used: _,
         } = data;
 
-        // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously a dummy
-        // value was used, however as it turns out this will cause pc-relative relocations to
-        // fail on architectures where pc-relative offsets are range restricted as the dummy
-        // value is not close enough to the code that has the pc-relative relocation.
-        let alloc_size = std::cmp::max(init.size(), 1);
-
-        let ptr = if decl.writable {
-            self.memory
-                .allocate_readwrite(alloc_size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
-                .map_err(|e| ModuleError::Allocation {
-                    message: "unable to alloc writable data",
-                    err: e,
-                })?
+        let (align, kind) = if decl.writable {
+            (
+                align.unwrap_or(WRITABLE_DATA_ALIGNMENT),
+                JITMemoryKind::Writable,
+            )
         } else {
-            self.memory
-                .allocate_readonly(alloc_size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
-                .map_err(|e| ModuleError::Allocation {
-                    message: "unable to alloc readonly data",
-                    err: e,
-                })?
+            (
+                align.unwrap_or(READONLY_DATA_ALIGNMENT),
+                JITMemoryKind::ReadOnly,
+            )
         };
-
-        if ptr.is_null() {
-            // FIXME pass a Layout to allocate and only compute the layout once.
-            std::alloc::handle_alloc_error(
-                std::alloc::Layout::from_size_align(
-                    alloc_size,
-                    align.unwrap_or(READONLY_DATA_ALIGNMENT).try_into().unwrap(),
-                )
-                .unwrap(),
-            );
-        }
-
-        match *init {
-            Init::Uninitialized => {
-                panic!("data is not initialized yet");
-            }
-            Init::Zeros { size } => {
-                unsafe { ptr::write_bytes(ptr, 0, size) };
-            }
-            Init::Bytes { ref contents } => {
-                let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, ptr, contents.len()) };
-            }
-        }
 
         let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => panic!(),
@@ -672,13 +617,39 @@ impl Module for JITModule {
         };
         let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
-        self.compiled_data_objects[id] = Some(CompiledBlob {
-            ptr,
-            size: init.size(),
-            relocs,
-            #[cfg(feature = "wasmtime-unwinder")]
-            wasmtime_exception_data: None,
+        self.compiled_data_objects[id] = Some(match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { size } => CompiledBlob::new_zeroed(
+                &mut *self.memory,
+                size.max(1),
+                align,
+                relocs,
+                #[cfg(feature = "wasmtime-unwinder")]
+                None,
+                kind,
+            )?,
+            Init::Bytes { ref contents } => CompiledBlob::new(
+                &mut *self.memory,
+                if contents.is_empty() {
+                    // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously
+                    // a dummy value was used, however as it turns out this will cause pc-relative
+                    // relocations to fail on architectures where pc-relative offsets are range
+                    // restricted as the dummy value is not close enough to the code that has the
+                    // pc-relative relocation.
+                    &[0]
+                } else {
+                    &contents[..]
+                },
+                align,
+                relocs,
+                #[cfg(feature = "wasmtime-unwinder")]
+                None,
+                kind,
+            )?,
         });
+
         self.data_objects_to_finalize.push(id);
 
         Ok(())
@@ -700,6 +671,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 #[cfg(windows)]
 fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     use std::os::windows::io::RawHandle;
+    use std::ptr;
     use windows_sys::Win32::Foundation::HMODULE;
     use windows_sys::Win32::System::LibraryLoader;
 
@@ -735,13 +707,7 @@ fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
         .map_or(false, |f| f.as_bool().unwrap_or(false))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_jit_module_is_send() {
-        fn assert_is_send<T: Send>() {}
-        assert_is_send::<JITModule>();
-    }
-}
+const _: () = {
+    const fn assert_is_send<T: Send>() {}
+    assert_is_send::<JITModule>();
+};
