@@ -684,33 +684,6 @@ impl Module for JITModule {
 
         Ok(())
     }
-
-    fn get_name(&self, name: &str) -> Option<cranelift_module::FuncOrDataId> {
-        self.declarations().get_name(name)
-    }
-
-    fn target_config(&self) -> cranelift_codegen::isa::TargetFrontendConfig {
-        self.isa().frontend_config()
-    }
-
-    fn make_context(&self) -> cranelift_codegen::Context {
-        let mut ctx = cranelift_codegen::Context::new();
-        ctx.func.signature.call_conv = self.isa().default_call_conv();
-        ctx
-    }
-
-    fn clear_context(&self, ctx: &mut cranelift_codegen::Context) {
-        ctx.clear();
-        ctx.func.signature.call_conv = self.isa().default_call_conv();
-    }
-
-    fn make_signature(&self) -> ir::Signature {
-        ir::Signature::new(self.isa().default_call_conv())
-    }
-
-    fn clear_signature(&self, sig: &mut ir::Signature) {
-        sig.clear(self.isa().default_call_conv());
-    }
 }
 
 #[cfg(not(windows))]
