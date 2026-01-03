@@ -140,11 +140,12 @@ impl CompiledBlob {
                 }
                 Reloc::Arm64Call => {
                     let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     // The instruction is 32 bits long.
                     let iptr = at as *mut u32;
                     // The offset encoded in the `bl` instruction is the
                     // number of bytes divided by 4.
-                    let diff = ((base as isize) - (at as isize)) >> 2;
+                    let diff = ((what as isize) - (at as isize)) >> 2;
                     // Sign propagating right shift disposes of the
                     // included bits, so the result is expected to be
                     // either all sign bits or 0, depending on if the original
