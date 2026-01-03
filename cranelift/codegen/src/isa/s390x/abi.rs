@@ -144,10 +144,10 @@ use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
+use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -399,11 +399,11 @@ impl ABIMachineSpec for S390xMachineDeps {
                 // Compute size. Every argument or return value takes a slot of
                 // at least 8 bytes.
                 let size = (ty_bits(param.value_type) / 8) as u32;
-                let slot_size = std::cmp::max(size, 8);
+                let slot_size = core::cmp::max(size, 8);
 
                 // Align the stack slot.
                 debug_assert!(slot_size.is_power_of_two());
-                let slot_align = std::cmp::min(slot_size, 8);
+                let slot_align = core::cmp::min(slot_size, 8);
                 next_stack = align_to(next_stack, slot_align);
 
                 // If the type is actually of smaller size (and the argument

@@ -82,7 +82,7 @@ impl PartialOrd for BestEntry {
 
 impl Ord for BestEntry {
     #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.cmp(&other.0).then_with(|| {
             // Note that this comparison is reversed. When costs are equal,
             // prefer the value with the bigger index. This is a heuristic that
@@ -321,9 +321,9 @@ impl<'a> Elaborator<'a> {
                     debug_assert!(!best[x].1.is_reserved_value());
                     debug_assert!(!best[y].1.is_reserved_value());
                     best[value] = if use_worst {
-                        std::cmp::max(best[x], best[y])
+                        core::cmp::max(best[x], best[y])
                     } else {
-                        std::cmp::min(best[x], best[y])
+                        core::cmp::min(best[x], best[y])
                     };
                     trace!(
                         " -> best of union({:?}, {:?}) = {:?}",

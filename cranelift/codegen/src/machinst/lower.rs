@@ -23,10 +23,10 @@ use crate::machinst::{
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
-use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 

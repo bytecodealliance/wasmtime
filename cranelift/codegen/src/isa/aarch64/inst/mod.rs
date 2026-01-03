@@ -9,11 +9,11 @@ use crate::{CodegenError, CodegenResult, settings};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use core::slice;
 use smallvec::{SmallVec, smallvec};
-use std::fmt::Write;
-use std::string::{String, ToString};
 
 pub(crate) mod regs;
 pub(crate) use self::regs::*;
@@ -3109,6 +3109,6 @@ mod tests {
         } else {
             32
         };
-        assert_eq!(expected, std::mem::size_of::<Inst>());
+        assert_eq!(expected, core::mem::size_of::<Inst>());
     }
 }

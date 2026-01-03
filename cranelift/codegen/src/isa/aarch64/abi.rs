@@ -12,11 +12,11 @@ use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -348,7 +348,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             } else {
                 // Every arg takes a minimum slot of 8 bytes. (16-byte stack
                 // alignment happens separately after all args.)
-                std::cmp::max(size, 8)
+                core::cmp::max(size, 8)
             };
 
             if !is_winch_return {

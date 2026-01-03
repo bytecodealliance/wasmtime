@@ -23,7 +23,7 @@
 //! # #[macro_use] extern crate target_lexicon;
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
-//! use std::str::FromStr;
+//! use core::str::FromStr;
 //! use target_lexicon::Triple;
 //!
 //! let shared_builder = settings::builder();
@@ -55,11 +55,11 @@ use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
 use crate::{Reg, flowgraph};
+use alloc::string::String;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::{Architecture, PointerWidth, Triple, triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -146,7 +146,7 @@ pub enum LookupError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for LookupError {}
+impl core::error::Error for LookupError {}
 
 impl fmt::Display for LookupError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

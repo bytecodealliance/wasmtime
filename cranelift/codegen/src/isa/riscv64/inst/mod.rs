@@ -12,12 +12,12 @@ use crate::{CodegenError, CodegenResult, settings};
 
 pub use crate::ir::condcodes::FloatCC;
 
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
-use std::boxed::Box;
-use std::fmt::Write;
-use std::string::{String, ToString};
 
 pub mod regs;
 pub use self::regs::*;
@@ -38,7 +38,7 @@ use crate::isa::riscv64::abi::Riscv64MachineDeps;
 #[cfg(test)]
 mod emit_tests;
 
-use std::fmt::{Display, Formatter};
+use core::fmt::{Display, Formatter};
 
 pub(crate) type VecU8 = Vec<u8>;
 
@@ -85,7 +85,7 @@ impl CondBrTarget {
 }
 
 impl Display for CondBrTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             CondBrTarget::Label(l) => write!(f, "{}", l.to_string()),
             CondBrTarget::Fallthrough => write!(f, "0"),

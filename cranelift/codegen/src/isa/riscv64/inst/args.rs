@@ -8,7 +8,7 @@ use crate::isa::riscv64::lower::isle::generated_code::{
 };
 use crate::machinst::isle::WritableReg;
 
-use std::fmt::Result;
+use core::fmt::Result;
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).
@@ -53,7 +53,7 @@ macro_rules! newtype_of_reg {
         // NB: We cannot implement `DerefMut` because that would let people do
         // nasty stuff like `*my_xreg.deref_mut() = some_freg`, breaking the
         // invariants that `XReg` provides.
-        impl std::ops::Deref for $newtype_reg {
+        impl core::ops::Deref for $newtype_reg {
             type Target = Reg;
 
             fn deref(&self) -> &Reg {
@@ -651,7 +651,7 @@ impl Display for FpuOPWidth {
 impl TryFrom<Type> for FpuOPWidth {
     type Error = &'static str;
 
-    fn try_from(value: Type) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Type) -> core::result::Result<Self, Self::Error> {
         match value {
             F16 => Ok(FpuOPWidth::H),
             F32 => Ok(FpuOPWidth::S),
