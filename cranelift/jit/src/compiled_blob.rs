@@ -84,7 +84,7 @@ impl CompiledBlob {
                     // included bits, so the result is expected to be
                     // either all sign bits or 0, depending on if the original
                     // value was negative or positive.
-                    assert!((diff >> 26 == -1) || (diff >> 26 == 0));
+                    assert!((diff >> 25 == -1) || (diff >> 25 == 0));
                     // The lower 26 bits of the `bl` instruction form the
                     // immediate offset argument.
                     let chop = 32 - 26;
