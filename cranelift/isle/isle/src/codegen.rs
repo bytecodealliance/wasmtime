@@ -685,7 +685,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 let pp = pos.pretty_print_line(&self.files);
                                 writeln!(
                                     ctx.out,
-                                    "{}#[cfg(feature = \"trace-log\")] log::debug!(\"ISLE {{}} {{}}\", \"{}\", \"{}\");",
+                                    "{}log::debug!(\"ISLE {{}} {{}}\", \"{}\", \"{}\");",
                                     &ctx.indent, ctx.term_name, pp
                                 )?;
                             }
