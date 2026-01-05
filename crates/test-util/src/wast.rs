@@ -701,8 +701,9 @@ impl WastTest {
         }
 
         let failing_component_model_tests = [
-            // FIXME(#12214)
-            "component-model/test/wasmtime/resources.wast",
+            // TODO: Remove this once
+            // https://github.com/WebAssembly/component-model/issues/345 has
+            // been addressed and the test updated accordingly:
             "component-model/test/wasm-tools/naming.wast",
             // TODO: Remove this once
             // https://github.com/bytecodealliance/wasm-tools/pull/2406 is
