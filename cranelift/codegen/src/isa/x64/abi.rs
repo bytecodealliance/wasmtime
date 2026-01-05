@@ -16,6 +16,7 @@ use args::*;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
+use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -872,11 +873,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> MachineEnv {
+    fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            create_reg_env_systemv(true)
+            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
         } else {
-            create_reg_env_systemv(false)
+            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
         }
     }
 

@@ -574,7 +574,7 @@ pub trait ABIMachineSpec {
     ) -> u32;
 
     /// Get the ABI-dependent MachineEnv for managing register allocation.
-    fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> MachineEnv;
+    fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv;
 
     /// Get all caller-save registers, that is, registers that we expect
     /// not to be saved across a call to a callee with the given ABI.
@@ -1539,7 +1539,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Get the ABI-dependent MachineEnv for managing register allocation.
-    pub fn machine_env(&self) -> MachineEnv {
+    pub fn machine_env(&self) -> &MachineEnv {
         M::get_machine_env(&self.flags, self.call_conv)
     }
 

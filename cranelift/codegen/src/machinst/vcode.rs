@@ -515,7 +515,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn collect_operands(&mut self, vregs: &VRegAllocator<I>) {
-        let allocatable = PRegSet::from(&self.vcode.abi.machine_env());
+        let allocatable = PRegSet::from(self.vcode.abi.machine_env());
         for (i, insn) in self.vcode.insts.iter_mut().enumerate() {
             // Push operands from the instruction onto the operand list.
             //

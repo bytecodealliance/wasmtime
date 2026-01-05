@@ -69,7 +69,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             RegallocAlgorithm::SinglePass => Algorithm::Fastalloc,
         };
 
-        regalloc2::run(&vcode, &vcode.abi.machine_env(), &options)
+        regalloc2::run(&vcode, vcode.abi.machine_env(), &options)
             .map_err(|err| {
                 log::error!(
                     "Register allocation error for vcode\n{vcode:?}\nError: {err:?}\nCLIF for error:\n{f:?}",
@@ -82,8 +82,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     // Run the regalloc checker, if requested.
     if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
-        let machine_env = vcode.abi.machine_env();
-        let mut checker = regalloc2::checker::Checker::new(&vcode, &machine_env);
+        let mut checker = regalloc2::checker::Checker::new(&vcode, &vcode.abi.machine_env());
         checker.prepare(&regalloc_result);
         checker
             .run()
