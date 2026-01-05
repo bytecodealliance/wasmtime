@@ -2,7 +2,7 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{self, Method, Scheme},
+    bindings::http::types::{self, ErrorCode, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
 use anyhow::bail;
@@ -92,11 +92,12 @@ pub trait WasiHttpView {
         req: hyper::Request<B>,
     ) -> wasmtime::Result<Resource<HostIncomingRequest>>
     where
-        B: Body<Data = Bytes, Error = hyper::Error> + Send + 'static,
+        B: Body<Data = Bytes> + Send + 'static,
+        B::Error: Into<ErrorCode>,
         Self: Sized,
     {
         let (parts, body) = req.into_parts();
-        let body = body.map_err(crate::hyper_response_error).boxed_unsync();
+        let body = body.map_err(Into::into).boxed_unsync();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
