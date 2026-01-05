@@ -50,10 +50,7 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
-wasi-common = { workspace = true, default-features = true, features = [
-  "exit",
-  "tokio",
-], optional = true }
+wasi-common = { workspace = true, default-features = true, features = ["exit", "tokio"], optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-config = { workspace = true, optional = true }
@@ -62,10 +59,7 @@ wasmtime-wasi-keyvalue = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
 wasmtime-unwinder = { workspace = true }
-wasmtime-wizer = { workspace = true, optional = true, features = [
-  'clap',
-  'wasmtime',
-] }
+wasmtime-wizer = { workspace = true, optional = true, features = ['clap', 'wasmtime'] }
 clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 anyhow = { workspace = true, features = ['std'] }
@@ -90,7 +84,7 @@ smallvec = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 cfg-if = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["signal", "macros"] }
+tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
@@ -101,25 +95,12 @@ rustix = { workspace = true, features = ["mm", "process"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = [
-  'default',
-  'winch',
-  'pulley',
-  'all-arch',
-  'call-hook',
-  'memory-protection-keys',
-  'component-model-async',
-] }
+wasmtime = { workspace = true, features = ['default', 'winch', 'pulley', 'all-arch', 'call-hook', 'memory-protection-keys', 'component-model-async'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = [
-  "rt",
-  "time",
-  "macros",
-  "rt-multi-thread",
-] }
+tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
 criterion = { workspace = true }
 num_cpus = "1.17.0"
@@ -129,10 +110,7 @@ wat = { workspace = true }
 rayon = "1.5.0"
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime-component-util = { workspace = true }
-wasmtime-test-util = { workspace = true, features = [
-  'wasmtime-wast',
-  'component',
-] }
+wasmtime-test-util = { workspace = true, features = ['wasmtime-wast', 'component'] }
 bstr = "1.6.0"
 libc = { workspace = true }
 serde = { workspace = true }
@@ -142,11 +120,7 @@ test-programs-artifacts = { workspace = true }
 bytesize = "2.0.1"
 wit-component = { workspace = true }
 cranelift-filetests = { workspace = true }
-cranelift-codegen = { workspace = true, features = [
-  "disas",
-  "trace-log",
-  "timing",
-] }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
 cranelift-reader = { workspace = true }
 toml = { workspace = true }
 similar = { workspace = true }
@@ -206,7 +180,9 @@ members = [
   "fuzz",
   "winch/codegen",
 ]
-exclude = ['docs/rust_wasi_markdown_parser']
+exclude = [
+  'docs/rust_wasi_markdown_parser',
+]
 
 [workspace.package]
 version = "42.0.0"
@@ -367,9 +343,7 @@ wit-bindgen = { version = "0.50.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.50.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.243.0", default-features = false, features = [
-  'simd',
-] }
+wasmparser = { version = "0.243.0", default-features = false, features = ['simd'] }
 wat = "1.243.0"
 wast = "243.0.0"
 wasmprinter = "0.243.0"
@@ -388,20 +362,14 @@ arbitrary = "1.4.2"
 backtrace = "0.3.75"
 mutatis = "0.3.2"
 cc = "1.2.41"
-object = { version = "0.37.3", default-features = false, features = [
-  'read_core',
-  'elf',
-] }
+object = { version = "0.37.3", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.32.3", default-features = false, features = ['read'] }
 addr2line = { version = "0.25.1", default-features = false }
 anyhow = { version = "1.0.100", default-features = false }
 windows-sys = "0.61.2"
 env_logger = "0.11.5"
 log = { version = "0.4.28", default-features = false }
-clap = { version = "4.5.48", default-features = false, features = [
-  "std",
-  "derive",
-] }
+clap = { version = "4.5.48", default-features = false, features = ["std", "derive"] }
 clap_complete = "4.5.58"
 hashbrown = { version = "0.15", default-features = false }
 capstone = "0.13.0"
@@ -430,7 +398,7 @@ tempfile = "3.23.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.177", default-features = true }
 file-per-thread-logger = "0.2.0"
-tokio = { version = "1.48.0", features = ["rt", "time"] }
+tokio = { version = "1.48.0", features = [ "rt", "time" ] }
 hyper = "1.7.0"
 http = "1.3.1"
 http-body = "1.0.1"
@@ -441,21 +409,11 @@ indexmap = { version = "2.11.4", default-features = false }
 syn = "2.0.106"
 quote = "1.0.41"
 proc-macro2 = "1.0.101"
-test-log = { version = "0.2.18", default-features = false, features = [
-  "trace",
-] }
-tracing-subscriber = { version = "0.3.20", default-features = false, features = [
-  'fmt',
-  'env-filter',
-  'ansi',
-  'tracing-log',
-] }
+test-log = { version = "0.2.18", default-features = false, features = ["trace"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.5.7"
 postcard = { version = "1.1.3", default-features = false, features = ['alloc'] }
-criterion = { version = "0.7.0", default-features = false, features = [
-  "html_reports",
-  "rayon",
-] }
+criterion = { version = "0.7.0", default-features = false, features = ["html_reports", "rayon"] }
 rustc-hash = { version = "2.1.1", default-features = false }
 libtest-mimic = "0.8.1"
 semver = { version = "1.0.27", default-features = false }
@@ -571,19 +529,10 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-tls = ["dep:wasmtime-wasi-tls"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
-wasi-http = [
-  "component-model",
-  "dep:wasmtime-wasi-http",
-  "dep:tokio",
-  "dep:hyper",
-  "wasmtime-wasi-http/default-send-request",
-]
+wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http/default-send-request"]
 wasi-config = ["dep:wasmtime-wasi-config"]
 wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue"]
-pooling-allocator = [
-  "wasmtime/pooling-allocator",
-  "wasmtime-cli-flags/pooling-allocator",
-]
+pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast?/component-model",
@@ -605,10 +554,7 @@ gc = ["wasmtime-cli-flags/gc", "wasmtime/gc"]
 gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 pulley = ["wasmtime-cli-flags/pulley"]
-stack-switching = [
-  "wasmtime/stack-switching",
-  "wasmtime-cli-flags/stack-switching",
-]
+stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
 debug = ["wasmtime-cli-flags/debug", "wasmtime/debug"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
