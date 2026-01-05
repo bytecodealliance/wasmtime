@@ -4,7 +4,6 @@ use crate::ir::types::*;
 use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
 use crate::machinst::PrettyPrint;
 
-
 use alloc::string::String;
 
 /// An immediate that represents the NZCV flags.

@@ -6,7 +6,6 @@ use regalloc2::PReg;
 use crate::isa::s390x::inst::{RegPair, WritableRegPair};
 use crate::machinst::*;
 
-
 //=============================================================================
 // Registers, the Universe thereof, and printing
 
