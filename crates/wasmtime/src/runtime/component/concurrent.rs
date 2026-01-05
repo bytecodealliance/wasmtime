@@ -585,7 +585,10 @@ enum SuspendReason {
     NeedWork,
     /// The fiber is yielding and should be resumed once other tasks have had a
     /// chance to run.
-    Yielding { thread: QualifiedThreadId },
+    Yielding {
+        thread: QualifiedThreadId,
+        skip_may_block_check: bool,
+    },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
     ExplicitlySuspending {
         thread: QualifiedThreadId,
@@ -1555,6 +1558,9 @@ impl StoreOpaque {
                     skip_may_block_check: true,
                     ..
                 } | SuspendReason::Waiting {
+                    skip_may_block_check: true,
+                    ..
+                } | SuspendReason::Yielding {
                     skip_may_block_check: true,
                     ..
                 }
@@ -3265,6 +3271,7 @@ impl Instance {
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
+                skip_may_block_check: to_thread.is_some(),
             }
         } else {
             SuspendReason::ExplicitlySuspending {
@@ -3477,7 +3484,10 @@ impl Instance {
                         };
                         concurrent_state.push_high_priority(item);
 
-                        store.suspend(SuspendReason::Yielding { thread: caller })?;
+                        store.suspend(SuspendReason::Yielding {
+                            thread: caller,
+                            skip_may_block_check: false,
+                        })?;
                         break;
                     }
                 }
