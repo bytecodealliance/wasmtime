@@ -3271,6 +3271,9 @@ impl Instance {
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
+                // Tell `StoreOpaque::suspend` it's okay to suspend here since
+                // we're handling a `thread.yield-to` call; otherwise it would
+                // panic if we called it in a non-blocking context.
                 skip_may_block_check: to_thread.is_some(),
             }
         } else {
@@ -3486,6 +3489,8 @@ impl Instance {
 
                         store.suspend(SuspendReason::Yielding {
                             thread: caller,
+                            // `subtask.cancel` is not allowed to be called in a
+                            // sync context, so we cannot skip the may-block check.
                             skip_may_block_check: false,
                         })?;
                         break;
