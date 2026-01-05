@@ -411,7 +411,39 @@ impl TcpSocket {
     #[cfg(feature = "p3")]
     pub(crate) fn listen_p3(&mut self) -> Result<(), ErrorCode> {
         let tokio_socket = match mem::replace(&mut self.tcp_state, TcpState::Closed) {
-            TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket) => tokio_socket,
+            TcpState::Bound(tokio_socket) => tokio_socket,
+            TcpState::Default(tokio_socket) => {
+                // Some platforms automatically perform an implicit bind as part
+                // of the `listen` syscall. However this is not ubiquitous
+                // behavior:
+                // - Linux mentions it in their docs [0] that they perform an
+                //   implicit bind. This behavior has been experimentally verified.
+                // - Windows requires a `bind` before `listen`. This is both
+                //   documented [1] and experimentally verified.
+                // - Other platforms (e.g. macOS, FreeBSD) do not explicitly
+                //   document it either way and instead leave it up to the
+                //   individual protocol to decide [2]. However, experiments
+                //   show that MacOS in fact _does_ perform an implicit bind.
+                //
+                // To ensure consistent behavior across all platforms, we
+                // perform the implicit bind ourselves here.
+                //
+                // [0]: https://man7.org/linux/man-pages/man7/ip.7.html
+                // > An ephemeral port is allocated to a socket in the following
+                // > circumstances: (...) listen(2) is called on a stream socket
+                // > that was not previously bound;
+                //
+                // [1]: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen
+                // > WSAEINVAL: The socket has not been bound with bind.
+                //
+                // [2]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/listen.html
+                // > EDESTADDRREQ: The socket is not bound to a local address,
+                // > and the protocol does not support listening on an unbound
+                // > socket.
+                let implicit_addr = crate::sockets::util::implicit_bind_addr(self.family);
+                tcp_bind(&tokio_socket, implicit_addr)?;
+                tokio_socket
+            }
             previous_state => {
                 self.tcp_state = previous_state;
                 return Err(ErrorCode::InvalidState);

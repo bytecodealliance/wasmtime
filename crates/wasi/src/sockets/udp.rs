@@ -217,14 +217,8 @@ impl UdpSocket {
         if socket.is_ok()
             && let UdpState::Default = self.udp_state
         {
-            use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-
-            let ip_addr = match self.family {
-                SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
-            };
-            let sock_addr = SocketAddr::new(ip_addr, 0);
-            match udp_bind(&self.socket, sock_addr) {
+            let implicit_addr = crate::sockets::util::implicit_bind_addr(self.family);
+            match udp_bind(&self.socket, implicit_addr) {
                 Ok(()) => {
                     self.udp_state = UdpState::Bound;
                 }
