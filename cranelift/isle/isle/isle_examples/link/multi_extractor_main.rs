@@ -1,3 +1,6 @@
+extern crate alloc;
+extern crate core;
+
 mod multi_extractor;
 
 use multi_extractor::{ContextIter, IntoContextIter};

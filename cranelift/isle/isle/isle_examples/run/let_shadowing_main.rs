@@ -1,3 +1,6 @@
+extern crate alloc;
+extern crate core;
+
 mod let_shadowing;
 
 struct Context;
