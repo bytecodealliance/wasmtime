@@ -1930,13 +1930,6 @@ when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.web-sys]]
-version = "0.3.57"
-when = "2022-04-07"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
 [[publisher.wiggle]]
 version = "40.0.0"
 when = "2025-12-22"
