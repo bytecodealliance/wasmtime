@@ -212,11 +212,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "41.0.0"
+#define WASMTIME_VERSION "42.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 41
+#define WASMTIME_VERSION_MAJOR 42
 /**
  * \brief Wasmtime minor version number.
  */
