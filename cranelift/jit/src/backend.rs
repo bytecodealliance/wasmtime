@@ -707,7 +707,7 @@ fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
         .map_or(false, |f| f.as_bool().unwrap_or(false))
 }
 
-const _: () = {
+const _ASSERT_JIT_MODULE_IS_SEND: () = {
     const fn assert_is_send<T: Send>() {}
     assert_is_send::<JITModule>();
 };
