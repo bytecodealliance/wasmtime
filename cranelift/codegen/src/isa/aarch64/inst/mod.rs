@@ -5,7 +5,7 @@ use crate::ir::types::{F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
 use crate::ir::{MemFlags, Type, types};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::prelude::*;
+
 use crate::{CodegenError, CodegenResult, settings};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};

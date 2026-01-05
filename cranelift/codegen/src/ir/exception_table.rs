@@ -19,7 +19,7 @@
 use crate::ir::entities::{ExceptionTag, SigRef};
 use crate::ir::instructions::ValueListPool;
 use crate::ir::{BlockCall, Value};
-use crate::prelude::*;
+
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 #[cfg(feature = "enable-serde")]

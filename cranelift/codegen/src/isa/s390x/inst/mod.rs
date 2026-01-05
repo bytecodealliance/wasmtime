@@ -5,7 +5,7 @@ use crate::ir::{ExternalName, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::prelude::*;
+
 use crate::{CodegenError, CodegenResult, settings};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};

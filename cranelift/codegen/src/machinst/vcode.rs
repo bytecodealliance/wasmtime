@@ -21,7 +21,7 @@ use crate::CodegenError;
 use crate::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
-use crate::prelude::*;
+
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;

@@ -177,7 +177,7 @@ use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
 };
-use crate::prelude::*;
+
 use crate::trace;
 use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
