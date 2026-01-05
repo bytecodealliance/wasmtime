@@ -14,7 +14,7 @@
     allow(dead_code, reason = "see comment above")
 )]
 
-#[macro_use]
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 
 #[cfg(feature = "std")]
