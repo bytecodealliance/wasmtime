@@ -77,7 +77,6 @@ use crate::ir::{
     ValueList, types,
 };
 use crate::isa::TargetIsa;
-
 use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;

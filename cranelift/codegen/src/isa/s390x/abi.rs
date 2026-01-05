@@ -143,7 +143,6 @@ use crate::isa;
 use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
-
 use crate::settings;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;

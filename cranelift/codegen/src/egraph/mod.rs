@@ -15,7 +15,6 @@ use crate::ir::{
 use crate::loop_analysis::LoopAnalysis;
 use crate::opts::IsleContext;
 use crate::opts::generated_code::SkeletonInstSimplification;
-
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::settings::Flags;
 use crate::take_and_replace::TakeAndReplace;

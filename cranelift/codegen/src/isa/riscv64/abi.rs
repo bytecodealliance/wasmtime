@@ -14,7 +14,6 @@ use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::riscv64::settings::Flags as RiscvFlags;
 use crate::isa::unwind::UnwindInst;
-
 use crate::settings;
 use alloc::boxed::Box;
 use alloc::vec::Vec;

@@ -11,7 +11,6 @@ use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
-
 use crate::settings;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;

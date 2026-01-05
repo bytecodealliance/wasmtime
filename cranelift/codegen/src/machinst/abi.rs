@@ -105,7 +105,6 @@ use crate::entity::SecondaryMap;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
 use crate::ir::{StackSlotKey, types::*};
 use crate::isa::TargetIsa;
-
 use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};

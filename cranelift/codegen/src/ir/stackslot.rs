@@ -6,7 +6,6 @@
 use crate::entity::PrimaryMap;
 use crate::ir::StackSlot;
 use crate::ir::entities::{DynamicStackSlot, DynamicType};
-
 use core::fmt;
 use core::str::FromStr;
 

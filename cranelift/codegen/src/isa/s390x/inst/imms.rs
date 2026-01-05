@@ -1,7 +1,6 @@
 //! S390x ISA definitions: immediate constants.
 
 use crate::machinst::PrettyPrint;
-
 use alloc::string::String;
 
 /// An unsigned 12-bit immediate.

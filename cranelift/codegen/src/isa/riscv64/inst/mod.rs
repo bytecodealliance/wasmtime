@@ -8,7 +8,6 @@ use crate::ir::types::{self, F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128
 pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-
 use crate::{CodegenError, CodegenResult, settings};
 
 pub use crate::ir::condcodes::FloatCC;

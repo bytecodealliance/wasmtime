@@ -5,7 +5,6 @@ use crate::isa::riscv64::lower::isle::generated_code::{
     VecElementWidth, VecLmul, VecMaskMode, VecOpCategory, VecOpMasking, VecTailMode,
 };
 use crate::machinst::{OperandVisitor, RegClass};
-
 use core::fmt;
 
 use super::{Type, UImm5};

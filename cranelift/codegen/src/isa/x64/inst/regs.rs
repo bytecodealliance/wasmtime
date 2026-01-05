@@ -6,7 +6,6 @@
 //! Note also that we make use of pinned VRegs to refer to PRegs.
 
 use crate::machinst::Reg;
-
 use alloc::string::String;
 use alloc::string::ToString;
 use cranelift_assembler_x64::{gpr, xmm};
