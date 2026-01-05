@@ -129,14 +129,30 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub(crate) fn connect(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
-        if !is_valid_address_family(addr.ip(), self.family) || !is_valid_remote_address(addr) {
-            return Err(ErrorCode::InvalidArgument);
-        }
-
+    /// Connect using p2 semantics. (no implicit bind)
+    pub(crate) fn connect_p2(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         match self.udp_state {
             UdpState::Bound | UdpState::Connected(_) => {}
             _ => return Err(ErrorCode::InvalidState),
+        }
+
+        self.connect_common(addr)
+    }
+
+    /// Connect using p3 semantics. (with implicit bind)
+    #[cfg(feature = "p3")]
+    pub(crate) fn connect_p3(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+        match self.udp_state {
+            UdpState::Default | UdpState::Bound | UdpState::Connected(_) => {}
+            _ => return Err(ErrorCode::InvalidState),
+        }
+
+        self.connect_common(addr)
+    }
+
+    fn connect_common(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+        if !is_valid_address_family(addr.ip(), self.family) || !is_valid_remote_address(addr) {
+            return Err(ErrorCode::InvalidArgument);
         }
 
         // We disconnect & (re)connect in two distinct steps for two reasons:
@@ -163,37 +179,55 @@ impl UdpSocket {
         Ok(())
     }
 
+    /// Send data using p3 semantics. (with implicit bind)
     #[cfg(feature = "p3")]
-    pub(crate) fn send(&self, buf: Vec<u8>) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
-        let socket = if let UdpState::Connected(..) = self.udp_state {
-            Ok(Arc::clone(&self.socket))
-        } else {
-            Err(ErrorCode::InvalidArgument)
-        };
-        async move {
-            let socket = socket?;
-            send(&socket, &buf).await
-        }
-    }
-
-    #[cfg(feature = "p3")]
-    pub(crate) fn send_to(
-        &self,
+    pub(crate) fn send_p3(
+        &mut self,
         buf: Vec<u8>,
-        addr: SocketAddr,
+        addr: Option<SocketAddr>,
     ) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
         enum Mode {
             Send(Arc<tokio::net::UdpSocket>),
             SendTo(Arc<tokio::net::UdpSocket>, SocketAddr),
         }
-        let socket = match &self.udp_state {
-            UdpState::BindStarted => Err(ErrorCode::InvalidState),
-            UdpState::Default | UdpState::Bound => Ok(Mode::SendTo(Arc::clone(&self.socket), addr)),
-            UdpState::Connected(caddr) if addr == *caddr => {
-                Ok(Mode::Send(Arc::clone(&self.socket)))
+        let mut socket = match (&self.udp_state, addr) {
+            (UdpState::BindStarted, _) => Err(ErrorCode::InvalidState),
+            (UdpState::Default | UdpState::Bound, None) => Err(ErrorCode::InvalidArgument),
+            (UdpState::Default | UdpState::Bound, Some(addr)) => {
+                Ok(Mode::SendTo(Arc::clone(&self.socket), addr))
             }
-            UdpState::Connected(..) => Err(ErrorCode::InvalidArgument),
+            (UdpState::Connected(..), None) => Ok(Mode::Send(Arc::clone(&self.socket))),
+            (UdpState::Connected(caddr), Some(addr)) => {
+                if addr == *caddr {
+                    Ok(Mode::Send(Arc::clone(&self.socket)))
+                } else {
+                    Err(ErrorCode::InvalidArgument)
+                }
+            }
         };
+
+        // Send may be called without a prior bind or connect. In that case, the
+        // first send will automatically assign a free local port. This is
+        // normally performed by the OS itself. However, if the `send` syscall
+        // failed, we can't reliably know which state the socket is in at the
+        // kernel level and our own `udp_state` bookkeeping may have become
+        // out-of-sync.
+        // To avoid that, we perform the implicit bind ourselves here. This way,
+        // we always leave the socket in a consistent state: Bound.
+        if socket.is_ok()
+            && let UdpState::Default = self.udp_state
+        {
+            let implicit_addr = crate::sockets::util::implicit_bind_addr(self.family);
+            match udp_bind(&self.socket, implicit_addr) {
+                Ok(()) => {
+                    self.udp_state = UdpState::Bound;
+                }
+                Err(e) => {
+                    socket = Err(e);
+                }
+            }
+        }
+
         async move {
             match socket? {
                 Mode::Send(socket) => send(&socket, &buf).await,
@@ -202,8 +236,9 @@ impl UdpSocket {
         }
     }
 
+    /// Receive data using p3 semantics.
     #[cfg(feature = "p3")]
-    pub(crate) fn receive(
+    pub(crate) fn receive_p3(
         &self,
     ) -> impl Future<Output = Result<(Vec<u8>, SocketAddr), ErrorCode>> + use<> {
         enum Mode {

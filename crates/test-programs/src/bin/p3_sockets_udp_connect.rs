@@ -9,12 +9,10 @@ test_programs::p3::export!(Component);
 const SOME_PORT: u16 = 47; // If the tests pass, this will never actually be connected to.
 
 fn test_udp_connect_disconnect_reconnect(family: IpAddressFamily) {
-    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
     let remote1 = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
     let remote2 = IpSocketAddress::new(IpAddress::new_loopback(family), 4320);
 
     let client = UdpSocket::create(family).unwrap();
-    client.bind(unspecified_addr).unwrap();
 
     assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
     assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
@@ -43,7 +41,6 @@ fn test_udp_connect_unspec(family: IpAddressFamily) {
     let ip = IpAddress::new_unspecified(family);
     let addr = IpSocketAddress::new(ip, SOME_PORT);
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(addr),
@@ -55,7 +52,6 @@ fn test_udp_connect_unspec(family: IpAddressFamily) {
 fn test_udp_connect_port_0(family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(addr),
@@ -72,12 +68,35 @@ fn test_udp_connect_wrong_family(family: IpAddressFamily) {
     let remote_addr = IpSocketAddress::new(wrong_ip, SOME_PORT);
 
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(remote_addr),
         Err(ErrorCode::InvalidArgument)
     ));
+}
+
+/// Connect should perform implicit bind.
+fn test_udp_connect_without_bind(family: IpAddressFamily) {
+    let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
+
+    let sock = UdpSocket::create(family).unwrap();
+
+    assert!(matches!(sock.get_local_address(), Err(_)));
+    assert!(matches!(sock.connect(remote_addr), Ok(_)));
+    assert!(matches!(sock.get_local_address(), Ok(_)));
+}
+
+/// Connect should work in combination with an explicit bind.
+fn test_udp_connect_with_bind(family: IpAddressFamily) {
+    let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
+
+    let sock = UdpSocket::create(family).unwrap();
+
+    sock.bind_unspecified().unwrap();
+
+    assert!(matches!(sock.get_local_address(), Ok(_)));
+    assert!(matches!(sock.connect(remote_addr), Ok(_)));
+    assert!(matches!(sock.get_local_address(), Ok(_)));
 }
 
 fn test_udp_connect_dual_stack() {
@@ -122,6 +141,12 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
 
         test_udp_connect_wrong_family(IpAddressFamily::Ipv4);
         test_udp_connect_wrong_family(IpAddressFamily::Ipv6);
+
+        test_udp_connect_without_bind(IpAddressFamily::Ipv4);
+        test_udp_connect_without_bind(IpAddressFamily::Ipv6);
+
+        test_udp_connect_with_bind(IpAddressFamily::Ipv4);
+        test_udp_connect_with_bind(IpAddressFamily::Ipv6);
 
         test_udp_connect_dual_stack();
         Ok(())

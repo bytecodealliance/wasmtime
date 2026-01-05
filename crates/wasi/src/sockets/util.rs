@@ -431,3 +431,12 @@ pub fn parse_host(name: &str) -> Result<url::Host, ErrorCode> {
         }
     }
 }
+
+#[cfg(feature = "p3")]
+pub fn implicit_bind_addr(family: SocketAddressFamily) -> SocketAddr {
+    let ip = match family {
+        SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+    SocketAddr::new(ip, 0)
+}
