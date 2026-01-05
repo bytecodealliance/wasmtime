@@ -2147,6 +2147,12 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 version = "0.1.3"
 
+[[audits.der]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.10"
+notes = "No unsafe code aside from transmutes for transparent newtypes."
+
 [[audits.derive_arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -3426,6 +3432,12 @@ criteria = "safe-to-deploy"
 delta = "2.0.0-rc.0 -> 2.0.0-rc.2"
 notes = "Same as previous audit: the crate inherently uses `unsafe` FFI calls for using ONNX through `ort-sys` (e.g., logging C error strings). The changes are relatively uninteresting: a lot of documentation, some `must_use`, and general refactoring due to changes in the underlying API."
 
+[[audits.ort]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.0.0-rc.2 -> 2.0.0-rc.10"
+notes = "A bunch of unsafe code inherent to FFI, but nothing that looks malicious."
+
 [[audits.ort-sys]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -3438,6 +3450,12 @@ criteria = "safe-to-deploy"
 delta = "2.0.0-rc.0 -> 2.0.0-rc.2"
 notes = "This crate still downloads the ONNX libraries as a part of the `build.rs` script; now with more platform options for pre-built binaries stored in a `dist.txt` file. Otherwise largely unchanged since the previous audit."
 
+[[audits.ort-sys]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.0.0-rc.2 -> 2.0.0-rc.10"
+notes = "Large build.rs script that downloads a binary distribution, so inherently somewhat dangerous; but it appears that the URLs are from the distributor of this library (`ort` at `pyke.io`). The file contents are verified by hash, so could not be swapped out later without a version bump."
+
 [[audits.overload]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3449,6 +3467,12 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
+
+[[audits.pem-rfc7468]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.0"
+notes = "Only `unsafe` around a `from_utf8_unchecked`, and no IO."
 
 [[audits.percent-encoding]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3485,6 +3509,11 @@ notes = """
 No `unsafe` additions or anything outside of the purview of the crate in this
 change.
 """
+
+[[audits.pkg-config]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.29 -> 0.3.32"
 
 [[audits.postcard]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3706,6 +3735,11 @@ criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.7"
 notes = "No new unsafe code."
 
+[[audits.rustls-pki-types]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "1.3.1 -> 1.13.1"
+
 [[audits.rustls-webpki]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3820,6 +3854,12 @@ criteria = "safe-to-deploy"
 delta = "1.13.2 -> 1.14.0"
 notes = "Minor new feature, nothing out of the ordinary."
 
+[[audits.smallvec]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "1.15.1 -> 2.0.0-alpha.10"
+notes = "Nothing obviously malicious in the (large) diff. There is a lot of unsafe code, as expected for an optimized core data structure library; I didn't internalize all the invariants or review the code in detail for correctness line-by-line. The library is widely used in the ecosystem and well-tested/fuzzed so I trust that basic data structure invariant violations will be found."
+
 [[audits.socket2]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3842,6 +3882,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.6.0 -> 0.6.1"
 notes = "Minor new changes and windows updates, all looks reasonable."
+
+[[audits.socks]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.3.4"
+notes = "SOCKS protocol library with `unsafe` only inside a custom readv/writev wrapper, and no IO aside from network IO to the specified endpoint. Unit tests ping Google on the Internet to test functionality."
 
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4206,6 +4252,18 @@ criteria = "safe-to-deploy"
 delta = "2.9.6 -> 2.10.0"
 notes = "No `unsafe` changes; this audit observed mainly license and documentation changes."
 
+[[audits.ureq]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.10.0 -> 3.1.4"
+notes = "Network protocol library with no unsafe code."
+
+[[audits.ureq-proto]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.5.3"
+notes = "Network protocol library with no unsafe code."
+
 [[audits.url]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4218,6 +4276,12 @@ and suss out bugs. I've historically reviewed this crate in the past and it
 is similar to what it once was back then. Skimming over the crate there is
 nothing suspicious and it's everything you'd expect a Rust URL parser to be.
 """
+
+[[audits.utf-8]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.6"
+notes = "Small library that uses `unsafe` only around `str::from_utf8_unchecked` after explicitly verifying UTF-8."
 
 [[audits.vcpkg]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -5283,6 +5347,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.242.2 -> 1.243.0"
 notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.webpki-root-certs]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "1.0.4"
+notes = "Purely a data crate."
 
 [[audits.webpki-roots]]
 who = "Pat Hickey <phickey@fastly.com>"

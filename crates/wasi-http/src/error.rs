@@ -112,3 +112,9 @@ pub fn hyper_response_error(err: hyper::Error) -> ErrorCode {
 
     ErrorCode::HttpProtocolError
 }
+
+impl From<hyper::Error> for ErrorCode {
+    fn from(err: hyper::Error) -> Self {
+        hyper_response_error(err)
+    }
+}
