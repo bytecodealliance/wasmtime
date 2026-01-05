@@ -641,7 +641,7 @@ macro_rules! isle_lower_prelude_methods {
             et: ExceptionTable,
             labels: &MachLabelSlice,
         ) -> OptionTryCallInfo {
-            let mut exception_handlers = alloc::vec![];
+            let mut exception_handlers = vec![];
             let mut labels = labels.iter().cloned();
             for item in self.lower_ctx.dfg().exception_tables[et].clone().items() {
                 match item {
