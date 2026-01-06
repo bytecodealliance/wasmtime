@@ -2,7 +2,7 @@
 //! in CFG nodes.
 
 use super::Stats;
-use super::cost::Cost;
+use super::cost::ExprCost;
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
@@ -71,8 +71,8 @@ pub(crate) struct Elaborator<'a> {
     ctrl_plane: &'a mut ControlPlane,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct BestEntry(Cost, Value);
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct BestEntry(ExprCost, Value);
 
 impl PartialOrd for BestEntry {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
@@ -148,7 +148,7 @@ impl<'a> Elaborator<'a> {
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut value_to_best_value =
-            SecondaryMap::with_default(BestEntry(Cost::infinity(), Value::reserved_value()));
+            SecondaryMap::with_default(BestEntry(ExprCost::zero(), Value::reserved_value()));
         value_to_best_value.resize(num_values);
         Self {
             func,
@@ -321,9 +321,9 @@ impl<'a> Elaborator<'a> {
                     debug_assert!(!best[x].1.is_reserved_value());
                     debug_assert!(!best[y].1.is_reserved_value());
                     best[value] = if use_worst {
-                        core::cmp::max(best[x], best[y])
+                        core::cmp::max(&best[x], &best[y]).clone()
                     } else {
-                        core::cmp::min(best[x], best[y])
+                        core::cmp::min(&best[x], &best[y]).clone()
                     };
                     trace!(
                         " -> best of union({:?}, {:?}) = {:?}",
@@ -332,7 +332,7 @@ impl<'a> Elaborator<'a> {
                 }
 
                 ValueDef::Param(_, _) => {
-                    best[value] = BestEntry(Cost::zero(), value);
+                    best[value] = BestEntry(ExprCost::zero(), value);
                 }
 
                 // If the Inst is inserted into the layout (which is,
@@ -341,21 +341,20 @@ impl<'a> Elaborator<'a> {
                 // cost.
                 ValueDef::Result(inst, _) => {
                     if let Some(_) = self.func.layout.inst_block(inst) {
-                        best[value] = BestEntry(Cost::zero(), value);
+                        best[value] = BestEntry(ExprCost::zero(), value);
                     } else {
-                        let inst_data = &self.func.dfg.insts[inst];
                         // N.B.: at this point we know that the opcode is
                         // pure, so `pure_op_cost`'s precondition is
                         // satisfied.
-                        let cost = Cost::of_pure_op(
-                            inst_data.opcode(),
-                            self.func.dfg.inst_values(inst).map(|value| {
-                                debug_assert!(!best[value].1.is_reserved_value());
-                                best[value].0
-                            }),
-                        );
-                        best[value] = BestEntry(cost, value);
+                        let mut cost = ExprCost::for_inst(&self.func.dfg, inst);
+
+                        for val in self.func.dfg.inst_values(inst) {
+                            let BestEntry(val_cost, _val) = &best[val];
+                            cost.add(&self.func.dfg, val_cost);
+                        }
+
                         trace!(" -> cost of value {} = {:?}", value, cost);
+                        best[value] = BestEntry(cost, value);
                     }
                 }
             };
@@ -680,7 +679,7 @@ impl<'a> Elaborator<'a> {
                                 value: new_result,
                                 in_block: insert_block,
                             };
-                            let best_result = self.value_to_best_value[result];
+                            let best_result = &self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
                                 &NullCtx,
                                 best_result.1,
@@ -688,7 +687,7 @@ impl<'a> Elaborator<'a> {
                                 scope_depth,
                             );
 
-                            self.value_to_best_value[new_result] = best_result;
+                            self.value_to_best_value[new_result] = best_result.clone();
 
                             trace!(
                                 " -> cloned inst has new result {} for orig {}",
@@ -706,7 +705,7 @@ impl<'a> Elaborator<'a> {
                                 value: result,
                                 in_block: insert_block,
                             };
-                            let best_result = self.value_to_best_value[result];
+                            let best_result = &self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
                                 &NullCtx,
                                 best_result.1,
@@ -801,7 +800,7 @@ impl<'a> Elaborator<'a> {
             // map now.
             for &result in self.func.dfg.inst_results(inst) {
                 trace!(" -> result {}", result);
-                let best_result = self.value_to_best_value[result];
+                let best_result = &self.value_to_best_value[result];
                 self.value_to_elaborated_value.insert_if_absent(
                     &NullCtx,
                     best_result.1,

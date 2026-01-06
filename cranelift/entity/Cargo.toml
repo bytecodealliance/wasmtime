@@ -17,6 +17,7 @@ workspace = true
 
 [dependencies]
 cranelift-bitset = { workspace=true }
+im-rc = "15.1.0"
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 

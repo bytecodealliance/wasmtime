@@ -271,6 +271,7 @@ macro_rules! entity_impl {
 pub mod packed_option;
 
 mod boxed_slice;
+mod imm_set;
 mod iter;
 mod keys;
 mod list;
@@ -280,6 +281,7 @@ mod set;
 mod sparse;
 
 pub use self::boxed_slice::BoxedSlice;
+pub use self::imm_set::{ImmutableEntitySet, ImmutableEntitySetIter};
 pub use self::iter::{Iter, IterMut};
 pub use self::keys::Keys;
 pub use self::list::{EntityList, ListPool};
