@@ -258,7 +258,7 @@ impl VMContinuationStack {
 
             let to_store = [
                 // Data near top of stack:
-                (0x08, (wasmtime_continuation_start as *const ()).addr()),
+                (0x08, wasmtime_continuation_start_address().addr()),
                 (0x10, tos.sub(0x10).addr()),
                 (0x18, tos.sub(0x40 + args_data_size).addr()),
                 (0x20, usize::try_from(args_capacity).unwrap()),
