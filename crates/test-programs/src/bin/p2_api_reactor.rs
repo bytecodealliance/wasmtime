@@ -4,6 +4,7 @@ wit_bindgen::generate!({
     world: "test-reactor",
     path: "../wasi/src/p2/wit",
     generate_all,
+    features: ["cli-exit-with-code", "clocks-timezone"],
 });
 
 struct T;
