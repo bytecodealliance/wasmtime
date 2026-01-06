@@ -430,7 +430,7 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
-        let instance = match wasmtime_wasi_http::p3::bindings::ProxyPre::new(instance.clone()) {
+        let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
             Ok(pre) => ProxyPre::P3(pre),
             Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
         };

@@ -1,96 +1,119 @@
 #!/usr/bin/env bash
 
-# Script to re-vendor the WIT files that Wasmtime uses as defined by a
-# particular tag in upstream repositories.
+# Script to re-vendor the WIT files that Wasmtime uses using wkg to fetch
+# packages from the OCI registry.
 #
 # This script is executed on CI to ensure that everything is up-to-date.
 set -ex
 
-# The make_vendor function takes a base path (e.g., "wasi") and a list
-# of packages in the format "name@tag". It constructs the full destination
-# path, downloads the tarballs from GitHub, extracts the relevant files, and
-# removes any unwanted directories.
-make_vendor() {
+# Temporary directory for downloads
+cache_dir=$(mktemp -d)
+trap "rm -rf $cache_dir" EXIT
+
+# vendor_wkg fetches packages from the OCI registry using wkg.
+# Using --format wit preserves @unstable annotations.
+# Each package is placed in its own directory for wit-bindgen compatibility.
+#
+# Arguments:
+#   $1 - Base path for the crate (e.g., "wasi/src/p2")
+#   $2 - Space-separated list of packages in format "name@version"
+vendor_wkg() {
   local name=$1
   local packages=$2
   local path="crates/$name/wit/deps"
 
-  rm -rf $path
-  mkdir -p $path
+  rm -rf "$path"
+  mkdir -p "$path"
+
+  for package in $packages; do
+    IFS='@' read -r pkg_name version <<< "$package"
+    wkg get "wasi:${pkg_name}@${version}" --format wit --overwrite -o "$path/${pkg_name}.wit"
+  done
+}
+
+# vendor_github fetches packages from GitHub tarballs for packages not
+# available in the OCI registry.
+#
+# Arguments:
+#   $1 - Base path for the crate (e.g., "wasi-tls")
+#   $2 - Space-separated list of packages in format "name@tag[@subdir]"
+vendor_github() {
+  local name=$1
+  local packages=$2
+  local path="crates/$name/wit/deps"
+
+  rm -rf "$path"
+  mkdir -p "$path"
 
   for package in $packages; do
     IFS='@' read -r repo tag subdir <<< "$package"
     mkdir -p "$path/$repo"
-    cached_extracted_dir="$cache_dir/$repo-$tag"
+    local extracted_dir="$cache_dir/$repo-$tag"
 
-    if [[ ! -d $cached_extracted_dir ]]; then
-      mkdir -p $cached_extracted_dir
-      curl --retry 5 --retry-all-errors -sLO https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz
-      tar xzf $tag.tar.gz --strip-components=1 -C $cached_extracted_dir
-      rm $tag.tar.gz
-      rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
+    if [[ ! -d $extracted_dir ]]; then
+      mkdir -p "$extracted_dir"
+      curl --retry 5 --retry-all-errors -sLO "https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz"
+      tar xzf "$tag.tar.gz" --strip-components=1 -C "$extracted_dir"
+      rm "$tag.tar.gz"
+      rm -rf "$extracted_dir/${subdir:-wit}/deps"*
     fi
 
-    cp -r $cached_extracted_dir/${subdir:-"wit"}/* $path/$repo
+    cp -r "$extracted_dir/${subdir:-wit}"/* "$path/$repo"
   done
 }
 
-cache_dir=$(mktemp -d)
+# WASI Preview 2 packages (0.2.6)
+vendor_wkg "wasi-io" "io@0.2.6"
 
-make_vendor "wasi-io" "
-  io@v0.2.6
+vendor_wkg "wasi/src/p2" "
+  cli@0.2.6
+  clocks@0.2.6
+  filesystem@0.2.6
+  io@0.2.6
+  random@0.2.6
+  sockets@0.2.6
 "
 
-make_vendor "wasi/src/p2" "
-  cli@v0.2.6
-  clocks@v0.2.6
-  filesystem@v0.2.6
-  io@v0.2.6
-  random@v0.2.6
-  sockets@v0.2.6
+vendor_wkg "wasi-http" "
+  cli@0.2.6
+  clocks@0.2.6
+  filesystem@0.2.6
+  io@0.2.6
+  random@0.2.6
+  sockets@0.2.6
+  http@0.2.6
 "
 
-make_vendor "wasi-http" "
-  cli@v0.2.6
-  clocks@v0.2.6
-  filesystem@v0.2.6
-  io@v0.2.6
-  random@v0.2.6
-  sockets@v0.2.6
-  http@v0.2.6
-"
-
-make_vendor "wasi-tls" "
+# wasi-tls is not yet published to OCI registry, use GitHub
+vendor_github "wasi-tls" "
   io@v0.2.6
   tls@v0.2.0-draft+505fc98
 "
 
-make_vendor "wasi-config" "config@v0.2.0-rc.1"
+# wasi-config and wasi-keyvalue from OCI registry
+vendor_wkg "wasi-config" "config@0.2.0-rc.1"
+vendor_wkg "wasi-keyvalue" "keyvalue@0.2.0-draft"
 
-make_vendor "wasi-keyvalue" "keyvalue@219ea36"
-
-make_vendor "wasi/src/p3" "
-    cli@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    clocks@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    filesystem@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    random@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    sockets@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+# WASI Preview 3 packages (0.3.0-rc-2026-01-06)
+vendor_wkg "wasi/src/p3" "
+  cli@0.3.0-rc-2026-01-06
+  clocks@0.3.0-rc-2026-01-06
+  filesystem@0.3.0-rc-2026-01-06
+  random@0.3.0-rc-2026-01-06
+  sockets@0.3.0-rc-2026-01-06
 "
 
-make_vendor "wasi-http/src/p3" "
-    cli@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    clocks@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    filesystem@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    http@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    random@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
-    sockets@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+vendor_wkg "wasi-http/src/p3" "
+  cli@0.3.0-rc-2026-01-06
+  clocks@0.3.0-rc-2026-01-06
+  filesystem@0.3.0-rc-2026-01-06
+  http@0.3.0-rc-2026-01-06
+  random@0.3.0-rc-2026-01-06
+  sockets@0.3.0-rc-2026-01-06
 "
 
-rm -rf $cache_dir
-
-# Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
-# slightly different than above.
+# wasi-nn is fetched separately since it's not in the standard WASI registry
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=0.2.0-rc-2024-10-28
-curl --retry 5 --retry-all-errors -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
-curl --retry 5 --retry-all-errors -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
+curl --retry 5 --retry-all-errors -L "$repo/$revision/wasi-nn.witx" -o crates/wasi-nn/witx/wasi-nn.witx
+curl --retry 5 --retry-all-errors -L "$repo/$revision/wit/wasi-nn.wit" -o crates/wasi-nn/wit/wasi-nn.wit

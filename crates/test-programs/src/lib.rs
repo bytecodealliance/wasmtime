@@ -25,7 +25,7 @@ wit_bindgen::generate!({
         "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
-    features: ["cli-exit-with-code", "tls"],
+    features: ["cli-exit-with-code", "clocks-timezone", "tls"],
     generate_all,
 });
 
@@ -35,6 +35,7 @@ pub mod proxy {
         world: "wasi:http/proxy",
         default_bindings_module: "test_programs::proxy",
         pub_export_macro: true,
+        features: ["cli-exit-with-code", "clocks-timezone"],
         with: {
             "wasi:http/types@0.2.6": crate::wasi::http::types,
             "wasi:http/outgoing-handler@0.2.6": crate::wasi::http::outgoing_handler,
