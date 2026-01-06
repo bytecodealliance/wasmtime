@@ -8,11 +8,15 @@ wit_bindgen::generate!({
         world testp3 {
             include wasi:cli/imports@0.3.0-rc-2025-09-16;
             include wasi:http/imports@0.3.0-rc-2025-09-16;
+            include wasi:tls/imports@0.3.0-draft;
 
             export wasi:cli/run@0.3.0-rc-2025-09-16;
         }
     ",
-    path: "../wasi-http/src/p3/wit",
+    path: [
+        "../wasi-http/src/p3/wit",
+        "../wasi-tls/src/p3/wit",
+    ],
     world: "wasmtime:test/testp3",
     default_bindings_module: "test_programs::p3",
     pub_export_macro: true,
