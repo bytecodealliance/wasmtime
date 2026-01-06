@@ -7,6 +7,11 @@
 
 use core::arch::naked_asm;
 
+#[inline(never)] // FIXME(rust-lang/rust#148307)
+pub fn wasmtime_continuation_start_address() -> *const () {
+    wasmtime_continuation_start as *const ()
+}
+
 // This is a pretty special function that has no real signature. Its use is to
 // be the "base" function of all fibers. This entrypoint is used in
 // `wasmtime_continuation_init` to bootstrap the execution of a new fiber.
