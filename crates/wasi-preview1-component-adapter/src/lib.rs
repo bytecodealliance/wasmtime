@@ -69,6 +69,8 @@ pub mod bindings {
         ],
         generate_all,
         disable_custom_section_link_helpers: true,
+        // Enable @unstable features present in OCI packages
+        features: ["clocks-timezone", "cli-exit-with-code"],
     });
 
     #[cfg(feature = "reactor")]
@@ -90,6 +92,8 @@ pub mod bindings {
         ],
         generate_all,
         disable_custom_section_link_helpers: true,
+        // Enable @unstable features present in OCI packages
+        features: ["clocks-timezone", "cli-exit-with-code"],
     });
 
     #[cfg(feature = "proxy")]
@@ -113,6 +117,8 @@ pub mod bindings {
         skip: ["poll", "[method]outgoing-datagram-stream.send"],
         generate_all,
         disable_custom_section_link_helpers: true,
+        // Enable @unstable features present in OCI packages
+        features: ["clocks-timezone", "cli-exit-with-code"],
     });
 
     pub mod wit_bindgen_rt_shim {
