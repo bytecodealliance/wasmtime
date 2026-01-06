@@ -43,8 +43,8 @@ macro_rules! gentest {
 component_macro_test_helpers::foreach!(gentest);
 
 mod with_key_and_resources {
-    use wasmtime::component::Resource;
     use wasmtime::Result;
+    use wasmtime::component::Resource;
 
     wasmtime::component::bindgen!({
         inline: "
