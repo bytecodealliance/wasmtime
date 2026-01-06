@@ -326,7 +326,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple-export")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple-export`"
                                 )
                             })?;
@@ -335,7 +335,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple-export` does \
                   not have export `{name}`"
                                     )
@@ -487,7 +487,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-import")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-import`"
                                 )
                             })?;
@@ -496,7 +496,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-import` does \
                   not have export `{name}`"
                                     )
@@ -651,7 +651,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-export1")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-export1`"
                                 )
                             })?;
@@ -660,7 +660,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export1` does \
                   not have export `{name}`"
                                     )
@@ -749,7 +749,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-export2")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-export2`"
                                 )
                             })?;
@@ -758,7 +758,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export2` does \
                   not have export `{name}`"
                                     )

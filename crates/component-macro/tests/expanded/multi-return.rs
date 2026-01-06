@@ -318,7 +318,7 @@ pub mod exports {
                         let (_, instance) = component
                             .export_index(None, "foo:foo/multi-return")
                             .ok_or_else(|| {
-                                wasmtime::error::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/multi-return`"
                                 )
                             })?;
@@ -335,7 +335,7 @@ pub mod exports {
                         let instance_export = instance
                             .get_export(&mut store, None, "foo:foo/multi-return")
                             .ok_or_else(|| {
-                                wasmtime::error::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/multi-return`"
                                 )
                             })?;
@@ -351,7 +351,7 @@ pub mod exports {
                         let mut lookup = move |name| {
                             lookup(name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/multi-return` does \
                 not have export `{name}`"
                                     )

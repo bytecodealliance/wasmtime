@@ -117,7 +117,7 @@ const _: () = {
             let y = {
                 let (item, index) = _component
                     .get_export(None, "y")
-                    .ok_or_else(|| wasmtime::error::format_err!("no export `y` found"))?;
+                    .ok_or_else(|| wasmtime::format_err!("no export `y` found"))?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
                         wasmtime::error::Context::context(
@@ -126,11 +126,7 @@ const _: () = {
                         )?;
                         index
                     }
-                    _ => {
-                        Err(
-                            wasmtime::error::format_err!("export `y` is not a function"),
-                        )?
-                    }
+                    _ => Err(wasmtime::format_err!("export `y` is not a function"))?,
                 }
             };
             Ok(TheWorldIndices { y })

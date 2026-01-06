@@ -198,16 +198,14 @@ pub mod exports {
                     .component()
                     .get_export_index(None, "the-name")
                     .ok_or_else(|| {
-                        wasmtime::error::format_err!(
-                            "no exported instance named `the-name`"
-                        )
+                        wasmtime::format_err!("no exported instance named `the-name`")
                     })?;
                 let mut lookup = move |name| {
                     _instance_pre
                         .component()
                         .get_export_index(Some(&instance), name)
                         .ok_or_else(|| {
-                            wasmtime::error::format_err!(
+                            wasmtime::format_err!(
                                 "instance export `the-name` does \
             not have export `{name}`"
                             )

@@ -509,13 +509,13 @@ impl Wasmtime {
                                 )?;
                                 index
                             }}
-                            _ => Err({wt}::error::format_err!(\"export `{0}` is not a function\"))?,
+                            _ => Err({wt}::format_err!(\"export `{0}` is not a function\"))?,
                         }}",
                     func.name
                 );
                 get_index = format!(
                     "{{ let (item, index) = _component.get_export(None, \"{}\")
-                        .ok_or_else(|| {wt}::error::format_err!(\"no export `{0}` found\"))?;
+                        .ok_or_else(|| {wt}::format_err!(\"no export `{0}` found\"))?;
                         {typecheck}
                      }}",
                     func.name
@@ -573,10 +573,10 @@ pub fn new<_T>(
     _instance_pre: &{wt}::component::InstancePre<_T>,
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
-        .ok_or_else(|| {wt}::error::format_err!(\"no exported instance named `{instance_name}`\"))?;
+        .ok_or_else(|| {wt}::format_err!(\"no exported instance named `{instance_name}`\"))?;
     let mut lookup = move |name| {{
         _instance_pre.component().get_export_index(Some(&instance), name).ok_or_else(|| {{
-            {wt}::error::format_err!(
+            {wt}::format_err!(
                 \"instance export `{instance_name}` does \\
                   not have export `{{name}}`\"
             )

@@ -204,7 +204,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "same:name/this-name-is-duplicated")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `same:name/this-name-is-duplicated`"
                                 )
                             })?;
@@ -213,7 +213,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `same:name/this-name-is-duplicated` does \
                 not have export `{name}`"
                                     )

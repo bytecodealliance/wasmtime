@@ -328,7 +328,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/strings")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/strings`"
                                 )
                             })?;
@@ -337,7 +337,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/strings` does \
                       not have export `{name}`"
                                     )

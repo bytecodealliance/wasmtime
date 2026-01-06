@@ -117,9 +117,7 @@ const _: () = {
             let new = {
                 let (item, index) = _component
                     .get_export(None, "new")
-                    .ok_or_else(|| {
-                        wasmtime::error::format_err!("no export `new` found")
-                    })?;
+                    .ok_or_else(|| wasmtime::format_err!("no export `new` found"))?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
                         wasmtime::error::Context::context(
@@ -128,13 +126,7 @@ const _: () = {
                         )?;
                         index
                     }
-                    _ => {
-                        Err(
-                            wasmtime::error::format_err!(
-                                "export `new` is not a function"
-                            ),
-                        )?
-                    }
+                    _ => Err(wasmtime::format_err!("export `new` is not a function"))?,
                 }
             };
             Ok(FooIndices { new })

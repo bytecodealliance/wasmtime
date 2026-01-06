@@ -155,9 +155,7 @@ const _: () = {
                 let (item, index) = _component
                     .get_export(None, "some-world-func2")
                     .ok_or_else(|| {
-                        wasmtime::error::format_err!(
-                            "no export `some-world-func2` found"
-                        )
+                        wasmtime::format_err!("no export `some-world-func2` found")
                     })?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
@@ -173,7 +171,7 @@ const _: () = {
                     }
                     _ => {
                         Err(
-                            wasmtime::error::format_err!(
+                            wasmtime::format_err!(
                                 "export `some-world-func2` is not a function"
                             ),
                         )?
@@ -1129,7 +1127,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/uses-resource-transitively")
                             .ok_or_else(|| {
-                                wasmtime::error::format_err!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
@@ -1138,7 +1136,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    wasmtime::error::format_err!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
                 not have export `{name}`"
                                     )
