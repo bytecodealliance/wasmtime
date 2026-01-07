@@ -183,7 +183,7 @@ impl<'a> Arbitrary<'a> for TestCase {
 }
 
 impl TestCase {
-    pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
+    pub fn generate(u: &mut Unstructured) -> wasmtime::Result<Self> {
         let mut generator = FuzzGen::new(u);
 
         let compare_against_host = generator.u.arbitrary()?;

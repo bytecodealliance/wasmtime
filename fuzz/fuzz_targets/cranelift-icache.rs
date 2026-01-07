@@ -43,7 +43,7 @@ pub struct FunctionWithIsa {
 }
 
 impl FunctionWithIsa {
-    pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
+    pub fn generate(u: &mut Unstructured) -> wasmtime::Result<Self> {
         let _ = env_logger::try_init();
 
         // We filter out targets that aren't supported in the current build
@@ -77,7 +77,7 @@ impl FunctionWithIsa {
                 let sig = generator.generate_signature(&*isa)?;
                 Ok((name, sig))
             })
-            .collect::<anyhow::Result<Vec<(UserExternalName, Signature)>>>()
+            .collect::<wasmtime::Result<Vec<(UserExternalName, Signature)>>>()
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let func = generator
