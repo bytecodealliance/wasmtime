@@ -64,6 +64,25 @@ use core::fmt::{self, write};
 /// assert_eq!(error.to_string(), "some other error (code 36)");
 /// # }
 /// ```
+///
+/// # From an `anyhow::Error`
+///
+/// The `format_err!` macro can always convert an `anyhow::Error` into a
+/// `wasmtime::Error`, but when the `"anyhow"` cargo feature is enabled the
+/// resulting error will also return true for
+/// [`error.is::<anyhow::Error>()`][crate::Error::is] invocations.
+///
+/// ```
+/// # fn _foo() {
+/// #![cfg(feature = "anyhow")]
+/// # use wasmtime_internal_error as wasmtime;
+/// use wasmtime::format_err;
+///
+/// let anyhow_error: anyhow::Error = anyhow::anyhow!("aw crap");
+/// let wasmtime_error: wasmtime::Error = format_err!(anyhow_error);
+/// assert!(wasmtime_error.is::<anyhow::Error>());
+/// # }
+/// ```
 #[macro_export]
 macro_rules! format_err {
     // Format-style invocation without explicit format arguments.
@@ -81,7 +100,7 @@ macro_rules! format_err {
     ( $error:expr $(,)? ) => {{
         use $crate::macros::ctor_specialization::*;
         let error = $error;
-        (&&error).wasmtime_error_choose_ctor().construct(error)
+        (&&&error).wasmtime_error_choose_ctor().construct(error)
     }};
 }
 
@@ -204,14 +223,16 @@ macro_rules! ensure {
 ///   well-typed at the trait method call site `(&&&&&t).method()`, then
 ///   `Specialization1` will be prioritized over `Specialization3`.
 ///
-/// In our specific case here of choosing an `Error` constructor, we only have
-/// two specializations:
+/// In our specific case here of choosing an `Error` constructor, we have
+/// three specializations:
 ///
-/// 1. When the type implements `core::error::Error`, we want to use the
+/// 1. For `anyhow::Error`, we want to use the `Error::from_anyhow` constructor.
+///
+/// 2. When the type implements `core::error::Error`, we want to use the
 ///    `Error::new` constructor, which will preserve
 ///    `core::error::Error::source` chains.
 ///
-/// 2. Otherwise, we want to use the `Error::msg` constructor.
+/// 3. Otherwise, we want to use the `Error::msg` constructor.
 ///
 /// The `*CtorTrait`s are our `n` specialization traits. Their
 /// `wasmtime_error_choose_ctor` methods will return different types, each of
@@ -222,6 +243,31 @@ macro_rules! ensure {
 pub mod ctor_specialization {
     use super::*;
 
+    #[cfg(feature = "anyhow")]
+    pub use anyhow::*;
+    #[cfg(feature = "anyhow")]
+    mod anyhow {
+        use super::*;
+
+        pub trait AnyhowCtorTrait {
+            #[inline]
+            fn wasmtime_error_choose_ctor(&self) -> AnyhowCtor {
+                AnyhowCtor
+            }
+        }
+
+        impl AnyhowCtorTrait for &anyhow::Error {}
+
+        pub struct AnyhowCtor;
+
+        impl AnyhowCtor {
+            #[inline]
+            pub fn construct(&self, anyhow_error: ::anyhow::Error) -> Error {
+                Error::from_anyhow(anyhow_error)
+            }
+        }
+    }
+
     pub trait NewCtorTrait {
         #[inline]
         fn wasmtime_error_choose_ctor(&self) -> NewCtor {
@@ -229,7 +275,7 @@ pub mod ctor_specialization {
         }
     }
 
-    impl<E: core::error::Error + Send + Sync + 'static> NewCtorTrait for &E {}
+    impl<E: core::error::Error + Send + Sync + 'static> NewCtorTrait for &&E {}
 
     pub struct NewCtor;
 
@@ -250,7 +296,7 @@ pub mod ctor_specialization {
         }
     }
 
-    impl<M: fmt::Debug + fmt::Display + Send + Sync + 'static> MsgCtorTrait for &&M {}
+    impl<M: fmt::Debug + fmt::Display + Send + Sync + 'static> MsgCtorTrait for &&&M {}
 
     pub struct MsgCtor;
 

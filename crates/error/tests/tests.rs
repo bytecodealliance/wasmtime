@@ -302,6 +302,15 @@ fn format_err_macro_msg() {
 }
 
 #[test]
+#[cfg(feature = "anyhow")]
+fn format_err_is_anyhow() {
+    let error: anyhow::Error = anyhow::anyhow!("oof");
+    let error: Error = format_err!(error);
+    assert!(error.is::<anyhow::Error>());
+    assert_eq!(error.to_string(), "oof");
+}
+
+#[test]
 fn bail_macro() {
     fn bail_string_literal() -> Result<()> {
         bail!("whoops")
