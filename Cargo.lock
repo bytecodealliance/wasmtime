@@ -5196,7 +5196,6 @@ dependencies = [
 name = "wasmtime-wasi-tls"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "bytes",
  "futures",
  "rustls",

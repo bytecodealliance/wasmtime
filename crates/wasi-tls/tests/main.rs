@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow};
 use wasmtime::{
-    Store,
+    Result, Store,
     component::{Component, Linker, ResourceTable},
+    format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
 use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
@@ -52,7 +52,7 @@ async fn run_test(path: &str) -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow!("command returned with failing exit status"))
+        .map_err(|()| format_err!("command returned with failing exit status"))
 }
 
 macro_rules! assert_test_exists {
