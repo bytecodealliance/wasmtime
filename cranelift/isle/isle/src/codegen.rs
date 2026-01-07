@@ -21,6 +21,13 @@ pub struct CodegenOptions {
     /// Prefixes to remove when printing file names in generaed files. This
     /// helps keep codegen deterministic.
     pub prefixes: Vec<Prefix>,
+
+    /// Emit `log::debug!` and `log::trace!` invocations in the generated code to help
+    /// debug rule matching and execution.
+    ///
+    /// In Cranelift this is typically controlled by a cargo feature on the
+    /// crate that includes the generated code (e.g. `cranelift-codegen`).
+    pub emit_logging: bool,
 }
 
 /// A path prefix which should be replaced when printing file names.
@@ -63,16 +70,20 @@ struct BodyContext<'a, W> {
     indent: String,
     is_ref: StableSet<BindingId>,
     is_bound: StableSet<BindingId>,
+    term_name: &'a str,
+    emit_logging: bool,
 }
 
 impl<'a, W: Write> BodyContext<'a, W> {
-    fn new(out: &'a mut W, ruleset: &'a RuleSet) -> Self {
+    fn new(out: &'a mut W, ruleset: &'a RuleSet, term_name: &'a str, emit_logging: bool) -> Self {
         Self {
             out,
             ruleset,
             indent: Default::default(),
             is_ref: Default::default(),
             is_bound: Default::default(),
+            term_name,
+            emit_logging,
         }
     }
 
@@ -130,7 +141,8 @@ impl<'a> Codegen<'a> {
         self.generate_header(&mut code, options);
         self.generate_ctx_trait(&mut code);
         self.generate_internal_types(&mut code);
-        self.generate_internal_term_constructors(&mut code).unwrap();
+        self.generate_internal_term_constructors(&mut code, options)
+            .unwrap();
 
         code
     }
@@ -404,13 +416,17 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         }
     }
 
-    fn generate_internal_term_constructors(&self, code: &mut String) -> std::fmt::Result {
+    fn generate_internal_term_constructors(
+        &self,
+        code: &mut String,
+        options: &CodegenOptions,
+    ) -> std::fmt::Result {
         for &(termid, ref ruleset) in self.terms.iter() {
             let root = crate::serialize::serialize(ruleset);
-            let mut ctx = BodyContext::new(code, ruleset);
 
             let termdata = &self.termenv.terms[termid.index()];
             let term_name = &self.typeenv.syms[termdata.name.index()];
+            let mut ctx = BodyContext::new(code, ruleset, term_name, options.emit_logging);
             writeln!(ctx.out)?;
             writeln!(
                 ctx.out,
@@ -664,6 +680,15 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 &ctx.indent,
                                 pos.pretty_print_line(&self.files)
                             )?;
+                            if ctx.emit_logging {
+                                // Produce a valid Rust string literal with escapes.
+                                let pp = pos.pretty_print_line(&self.files);
+                                writeln!(
+                                    ctx.out,
+                                    "{}log::debug!(\"ISLE {{}} {{}}\", {:?}, {:?});",
+                                    &ctx.indent, ctx.term_name, pp
+                                )?;
+                            }
                             write!(ctx.out, "{}", &ctx.indent)?;
                             match ret_kind {
                                 ReturnKind::Plain | ReturnKind::Option => {
