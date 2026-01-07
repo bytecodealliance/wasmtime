@@ -5,7 +5,6 @@ use std::task::{self, Context, Poll};
 use std::time::Duration;
 
 use super::util::{config, make_component, test_run, test_run_with_count};
-use anyhow::{Result, anyhow};
 use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
 use component_async_tests::util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer};
@@ -20,7 +19,7 @@ use wasmtime::component::{
     Instance, Linker, ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader,
     StreamResult, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
+use wasmtime::{AsContextMut, Engine, Result, Store, StoreContextMut, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 struct BufferStreamProducer {
@@ -648,13 +647,13 @@ impl TransmitTest for DynamicTransmitTest {
         let exchange_function = accessor.with(|mut store| {
             let transmit_instance = instance
                 .get_export_index(store.as_context_mut(), None, "local:local/transmit")
-                .ok_or_else(|| anyhow!("can't find `local:local/transmit` in instance"))?;
+                .ok_or_else(|| format_err!("can't find `local:local/transmit` in instance"))?;
             let exchange_function = instance
                 .get_export_index(store.as_context_mut(), Some(&transmit_instance), "exchange")
-                .ok_or_else(|| anyhow!("can't find `exchange` in instance"))?;
+                .ok_or_else(|| format_err!("can't find `exchange` in instance"))?;
             instance
                 .get_func(store.as_context_mut(), exchange_function)
-                .ok_or_else(|| anyhow!("can't find `exchange` in instance"))
+                .ok_or_else(|| format_err!("can't find `exchange` in instance"))
         })?;
 
         let mut results = vec![Val::Bool(false)];
@@ -822,7 +821,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                                 &mut store,
                                 OneshotConsumer::new(callee_future1_tx.take().unwrap()),
                             );
-                            anyhow::Ok(())
+                            wasmtime::error::Ok(())
                         })?;
                     }
                     Event::ControlWriteA(mut control_tx) => {
@@ -892,7 +891,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
             assert!(complete);
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await??;
     Ok(())

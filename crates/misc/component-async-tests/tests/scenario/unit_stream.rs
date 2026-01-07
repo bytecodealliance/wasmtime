@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 
 use super::util::test_run_with_count;
 
