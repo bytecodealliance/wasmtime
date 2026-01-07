@@ -1,8 +1,8 @@
 use crate::core;
-use anyhow::{Context, Result, bail};
 use json_from_wast::{ComponentConst, FloatConst};
 use std::collections::BTreeSet;
 use std::fmt::Debug;
+use wasmtime::{Result, bail, error::Context as _};
 
 pub use wasmtime::component::*;
 
