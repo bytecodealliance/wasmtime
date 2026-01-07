@@ -13,7 +13,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 capstone = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

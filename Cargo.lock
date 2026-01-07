@@ -4926,7 +4926,6 @@ dependencies = [
 name = "wasmtime-internal-explorer"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "capstone",
  "serde",
  "serde_derive",
