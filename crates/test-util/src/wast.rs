@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use wasmtime_environ::error::{Context, Result};
+use wasmtime_environ::prelude::*;
 
 /// Limits for running wast tests.
 ///
