@@ -4629,7 +4629,6 @@ dependencies = [
 name = "wasmtime-cli"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bstr",
  "bytes",
@@ -4796,7 +4795,6 @@ dependencies = [
 name = "wasmtime-fuzzing"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "arbitrary",
  "backtrace",
  "env_logger 0.11.5",

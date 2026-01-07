@@ -1,10 +1,9 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{Error, Result, bail};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Once;
-use wasmtime::Trap;
+use wasmtime::{Trap, Error, Result, bail};
 
 pub struct V8Engine {
     isolate: Rc<RefCell<v8::OwnedIsolate>>,

@@ -1,5 +1,5 @@
 use crate::generators::Stacks;
-use anyhow::bail;
+use wasmtime::bail;
 use wasmtime::*;
 
 /// Run the given `Stacks` test case and assert that the host's view of the Wasm

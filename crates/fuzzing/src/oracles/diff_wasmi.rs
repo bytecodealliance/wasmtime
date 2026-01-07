@@ -2,8 +2,7 @@
 
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{Context, Error, Result};
-use wasmtime::Trap;
+use wasmtime::{Error, Result, Trap, error::Context as _};
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine {
