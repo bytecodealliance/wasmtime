@@ -3,7 +3,7 @@ use crate::oracles::engine::{DiffEngine, DiffInstance};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Once;
-use wasmtime::{Trap, Error, Result, bail};
+use wasmtime::{Error, Result, Trap, bail};
 
 pub struct V8Engine {
     isolate: Rc<RefCell<v8::OwnedIsolate>>,

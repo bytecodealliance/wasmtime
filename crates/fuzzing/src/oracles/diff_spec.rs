@@ -4,7 +4,7 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use wasm_spec_interpreter::SpecValue;
-use wasmtime::{Trap, Error, Result, format_err};
+use wasmtime::{Error, Result, Trap, format_err};
 
 /// A wrapper for `wasm-spec-interpreter` as a [`DiffEngine`].
 pub struct SpecInterpreter;
