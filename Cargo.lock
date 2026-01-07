@@ -5234,7 +5234,6 @@ dependencies = [
 name = "wasmtime-wast"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "json-from-wast",
  "log",
  "object 0.37.3",
