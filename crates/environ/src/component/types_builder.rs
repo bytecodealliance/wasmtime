@@ -594,7 +594,7 @@ impl ComponentTypesBuilder {
         size: u32,
     ) -> TypeFixedSizeListIndex {
         let element_abi = self.component_types.canonical_abi(&element);
-        let abi = CanonicalAbiInfo::record((0..size).into_iter().map(|_| element_abi));
+        let abi = CanonicalAbiInfo::record((0..size).map(|_| element_abi));
         self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
     }
 
@@ -1115,11 +1115,7 @@ impl TypeInformation {
     }
 
     fn fixed_size_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedSizeList) {
-        self.build_record(
-            (0..ty.size)
-                .into_iter()
-                .map(|_| types.type_information(&ty.element)),
-        );
+        self.build_record((0..ty.size).map(|_| types.type_information(&ty.element)));
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
