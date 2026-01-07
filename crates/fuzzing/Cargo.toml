@@ -15,7 +15,6 @@ workspace = true
 wasmtime-test-util = { workspace = true, features = ['wast'] }
 
 [dependencies]
-anyhow = { workspace = true }
 backtrace = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }

@@ -226,7 +226,7 @@ where
     fn host_function<P, R>(
         cx: StoreContextMut<'_, Box<dyn Any + Send>>,
         params: P,
-    ) -> anyhow::Result<R>
+    ) -> wasmtime::Result<R>
     where
         P: Debug + PartialEq + 'static,
         R: Debug + Clone + 'static,

@@ -4793,7 +4793,6 @@ dependencies = [
 name = "wasmtime-fuzzing"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "arbitrary",
  "backtrace",
  "env_logger 0.11.5",

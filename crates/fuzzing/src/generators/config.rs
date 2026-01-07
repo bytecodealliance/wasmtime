@@ -2,9 +2,9 @@
 
 use super::{AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig};
 use crate::oracles::{StoreLimits, Timeout};
-use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use std::time::Duration;
+use wasmtime::Result;
 use wasmtime::{Enabled, Engine, Module, Store};
 use wasmtime_test_util::wast::{WastConfig, WastTest, limits};
 

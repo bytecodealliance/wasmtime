@@ -90,7 +90,7 @@ mod test {
     use rand::prelude::*;
 
     pub fn gen_until_pass<T: for<'a> Arbitrary<'a>>(
-        mut f: impl FnMut(T, &mut Unstructured<'_>) -> anyhow::Result<bool>,
+        mut f: impl FnMut(T, &mut Unstructured<'_>) -> wasmtime::Result<bool>,
     ) -> bool {
         let mut rng = SmallRng::seed_from_u64(0);
         let mut buf = vec![0; 2048];
