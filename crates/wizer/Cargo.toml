@@ -25,14 +25,13 @@ name = "uap"
 harness = false
 
 [dependencies]
-anyhow = { workspace = true }
 log = { workspace = true }
 rayon = { workspace = true }
 clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, features = ['wasmparser'] }
 wasmparser = { workspace = true, features = ['validate', 'features'] }
 wasmprinter = { workspace = true, optional = true }
-wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null', 'async'] }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -49,10 +48,19 @@ tokio = { workspace = true, features = ['macros'] }
 wasmprinter = ['dep:wasmprinter']
 
 # Enables default runtime implementations based on the `wasmtime` crate.
-wasmtime = ['dep:wasmtime']
+wasmtime = [
+  'wasmtime/std',
+  'wasmtime/runtime',
+  'wasmtime/cranelift',
+  'wasmtime/cache',
+  'wasmtime/threads',
+  'wasmtime/gc',
+  'wasmtime/gc-null',
+  'wasmtime/async',
+]
 
 # Enable support for wizening components.
-component-model = ['wasmtime?/component-model']
+component-model = ['wasmtime/component-model']
 
 [[test]]
 name = "all"

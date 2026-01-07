@@ -1,10 +1,9 @@
 use crate::Wizer;
 use crate::component::ComponentInstanceState;
-use anyhow::{Context, anyhow};
 use wasmtime::component::{
     Component, ComponentExportIndex, Instance, Lift, WasmList, types::ComponentItem,
 };
-use wasmtime::{Result, Store};
+use wasmtime::{Result, Store, error::Context as _, format_err};
 
 impl Wizer {
     /// Same as [`Wizer::run`], except for components.
@@ -13,7 +12,7 @@ impl Wizer {
         store: &mut Store<T>,
         wasm: &[u8],
         instantiate: impl AsyncFnOnce(&mut Store<T>, &Component) -> Result<Instance>,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> wasmtime::Result<Vec<u8>> {
         let (cx, instrumented_wasm) = self.instrument_component(wasm)?;
 
         #[cfg(feature = "wasmprinter")]
@@ -36,19 +35,19 @@ impl Wizer {
     fn validate_component_init_func(
         &self,
         component: &Component,
-    ) -> anyhow::Result<ComponentExportIndex> {
+    ) -> wasmtime::Result<ComponentExportIndex> {
         let init_func = self.get_init_func();
         let (ty, index) = component
             .get_export(None, init_func)
-            .ok_or_else(|| anyhow!("the component does export the function `{init_func}`"))?;
+            .ok_or_else(|| format_err!("the component does export the function `{init_func}`"))?;
 
         let ty = match ty {
             ComponentItem::ComponentFunc(ty) => ty,
-            _ => anyhow::bail!("the component's `{init_func}` export is not a function",),
+            _ => wasmtime::bail!("the component's `{init_func}` export is not a function",),
         };
 
         if ty.params().len() != 0 || ty.results().len() != 0 {
-            anyhow::bail!(
+            wasmtime::bail!(
                 "the component's `{init_func}` function export does not have type `[] -> []`",
             );
         }
@@ -60,7 +59,7 @@ impl Wizer {
         store: &mut Store<T>,
         instance: &Instance,
         index: ComponentExportIndex,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         let init_func = instance
             .get_typed_func::<(), ()>(&mut *store, index)
             .expect("checked by `validate_init_func`");

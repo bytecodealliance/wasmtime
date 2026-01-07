@@ -5247,7 +5247,6 @@ dependencies = [
 name = "wasmtime-wizer"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "clap",
  "criterion",
  "env_logger 0.11.5",
