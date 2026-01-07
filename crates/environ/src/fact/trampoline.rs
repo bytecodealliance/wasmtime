@@ -2879,14 +2879,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // TODO: subtyping
         assert_eq!(src_ty.size, dst_ty.size);
 
-        let srcs = src.record_field_srcs(
-            self.types,
-            (0..src_ty.size).into_iter().map(|_| src_ty.element),
-        );
-        let dsts = dst.record_field_dsts(
-            self.types,
-            (0..dst_ty.size).into_iter().map(|_| dst_ty.element),
-        );
+        let srcs = src.record_field_srcs(self.types, (0..src_ty.size).map(|_| src_ty.element));
+        let dsts = dst.record_field_dsts(self.types, (0..dst_ty.size).map(|_| dst_ty.element));
         for (src, dst) in srcs.zip(dsts) {
             self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
         }
