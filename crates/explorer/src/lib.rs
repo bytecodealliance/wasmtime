@@ -5,7 +5,6 @@
 //! > Wasmtime repository to start a discussion about doing so, but otherwise
 //! > be aware that your usage of this crate is not supported.
 
-use anyhow::Result;
 use capstone::arch::BuildsCapstone;
 use serde_derive::Serialize;
 use std::{
@@ -14,6 +13,7 @@ use std::{
     path::Path,
     str::FromStr,
 };
+use wasmtime::Result;
 use wasmtime_environ::demangle_function_name;
 
 pub fn generate(
@@ -33,7 +33,7 @@ pub fn generate(
     let asm = annotate_asm(config, &target, wasm)?;
     let asm_json = serde_json::to_string(&asm)?;
     let clif_json = clif_dir
-        .map::<anyhow::Result<String>, _>(|clif_dir| {
+        .map::<wasmtime::Result<String>, _>(|clif_dir| {
             let clif = annotate_clif(clif_dir, &asm)?;
             Ok(serde_json::to_string(&clif)?)
         })
@@ -151,7 +151,7 @@ fn annotate_asm(
     let text = module.text();
     let address_map: Vec<_> = module
         .address_map()
-        .ok_or_else(|| anyhow::anyhow!("address maps must be enabled in the config"))?
+        .ok_or_else(|| wasmtime::format_err!("address maps must be enabled in the config"))?
         .collect();
 
     let mut address_map_iter = address_map.into_iter().peekable();
@@ -183,23 +183,23 @@ fn annotate_asm(
                     .arm64()
                     .mode(capstone::arch::arm64::ArchMode::Arm)
                     .build()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?,
+                    .map_err(|e| wasmtime::format_err!("{e}"))?,
                 target_lexicon::Architecture::Riscv64(_) => capstone::Capstone::new()
                     .riscv()
                     .mode(capstone::arch::riscv::ArchMode::RiscV64)
                     .build()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?,
+                    .map_err(|e| wasmtime::format_err!("{e}"))?,
                 target_lexicon::Architecture::S390x => capstone::Capstone::new()
                     .sysz()
                     .mode(capstone::arch::sysz::ArchMode::Default)
                     .build()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?,
+                    .map_err(|e| wasmtime::format_err!("{e}"))?,
                 target_lexicon::Architecture::X86_64 => capstone::Capstone::new()
                     .x86()
                     .mode(capstone::arch::x86::ArchMode::Mode64)
                     .build()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?,
-                _ => anyhow::bail!("Unsupported target: {target}"),
+                    .map_err(|e| wasmtime::format_err!("{e}"))?,
+                _ => wasmtime::bail!("Unsupported target: {target}"),
             };
 
             // This tells capstone to skip over anything that looks like data,
@@ -210,7 +210,7 @@ fn annotate_asm(
 
             let instructions = cs
                 .disasm_all(body, function.offset as u64)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
+                .map_err(|e| wasmtime::format_err!("{e}"))?;
             let instructions = instructions
                 .iter()
                 .map(|inst| {
