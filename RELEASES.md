@@ -4,7 +4,60 @@ Unreleased.
 
 ### Added
 
+* Support for `{Future,Stream}Any` in the component model has improved.
+  [#12142](https://github.com/bytecodealliance/wasmtime/pull/12142)
+
+* Wasmtime has initial support for breakpoints and single-stepping with the
+  `debug` feature for guest programs.
+  [#12133](https://github.com/bytecodealliance/wasmtime/pull/12133)
+
+* Wasmtime has begun adding a new `Error` type which is similar to
+  `anyhow::Error` but supports gracefully handling OOM. Wasmtime still uses
+  `anyhow::Error` but this will change in the future to `wasmtime::Error` which
+  will be a distinct type.
+  [#12163](https://github.com/bytecodealliance/wasmtime/pull/12163)
+
+* An initial top-level crate for async-debugging guest programs has been added.
+  [#12183](https://github.com/bytecodealliance/wasmtime/pull/12183)
+
 ### Changed
+
+* Cranelift now optimizes redundant `select` + `icmp` instructions.
+  [#12135](https://github.com/bytecodealliance/wasmtime/pull/12135)
+
+* Synchronous component model functions can no longer block before returning.
+  This implements a change in the upstream specification to the upcoming `async`
+  support in the component model which places stricter restrictions on
+  non-`async` functions and their ability to perform blocking operations.
+  [#12043](https://github.com/bytecodealliance/wasmtime/pull/12043)
+
+* Frame iteration in `debug` mode now visits all activations which enables
+  seeing all frames from recursive wasm calls.
+  [#12176](https://github.com/bytecodealliance/wasmtime/pull/12176)
+
+* Wasmtime now requires Rust 1.90.0 or later.
+  [#12167](https://github.com/bytecodealliance/wasmtime/pull/12167)
+
+* Intra-component stream/future reads/writes are now allowed for simple data
+  types.
+  [#12181](https://github.com/bytecodealliance/wasmtime/pull/12181)
+
+* The `POLL` callback code has been removed from the canonical ABI for async
+  functions and the `waitable-set.poll` function no longer yields.
+  [#12182](https://github.com/bytecodealliance/wasmtime/pull/12182)
+
+* Guest-to-guest adapters injected by Wasmtime now have improved trapping error
+  messages.
+  [#12215](https://github.com/bytecodealliance/wasmtime/pull/12215)
+
+### Fixed
+
+* `#[derive(Lift)]` for enums with exactly 256 cases has been fixed.
+  [#12140](https://github.com/bytecodealliance/wasmtime/pull/12140)
+
+* With component-model-async support recursively calling a guest from a host
+  function has now been fixed.
+  [#12152](https://github.com/bytecodealliance/wasmtime/pull/12152)
 
 --------------------------------------------------------------------------------
 
