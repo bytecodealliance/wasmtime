@@ -1,7 +1,6 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
-use anyhow::{Error, anyhow};
 use std::cell::OnceCell;
-use wasmtime::{Trap, WasmBacktrace};
+use wasmtime::{Error, Trap, WasmBacktrace, format_err};
 
 #[repr(C)]
 pub struct wasm_trap_t {
@@ -15,7 +14,7 @@ pub struct wasm_trap_t {
 impl Clone for wasm_trap_t {
     fn clone(&self) -> wasm_trap_t {
         wasm_trap_t {
-            error: anyhow!("{:?}", self.error),
+            error: format_err!("{:?}", self.error),
         }
     }
 }

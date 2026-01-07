@@ -439,7 +439,7 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
                 }))
             }
             Some(err) => {
-                let err: anyhow::Error = (*err).into();
+                let err: wasmtime::Error = (*err).into();
                 Err(format!("{err}"))
             }
         }
