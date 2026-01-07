@@ -1,5 +1,6 @@
 //! Support for egraphs represented in the DataFlowGraph.
 
+use crate::FxHashSet;
 use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
@@ -24,7 +25,6 @@ use core::hash::Hasher;
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
-use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 mod cost;

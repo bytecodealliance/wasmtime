@@ -18,6 +18,7 @@
 //! backend pipeline.
 
 use crate::CodegenError;
+use crate::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
 use crate::ranges::Ranges;
@@ -29,7 +30,6 @@ use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, Operand,
     OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
-use rustc_hash::FxHashMap;
 
 use crate::HashMap;
 use crate::hash_map::Entry;
@@ -1274,15 +1274,21 @@ impl<I: VCodeInst> VCode<I> {
             let loc = if let Some(preg) = alloc.as_reg() {
                 LabelValueLoc::Reg(Reg::from(preg))
             } else {
-                let slot = alloc.as_stack().unwrap();
-                let slot_offset = self.abi.get_spillslot_offset(slot);
-                let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
-                let caller_sp_to_cfa_offset =
-                    crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
-                // NOTE: this is a negative offset because it's relative to the caller's SP
-                let cfa_to_sp_offset =
-                    -((slot_base_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
-                LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
+                #[cfg(not(feature = "unwind"))]
+                continue;
+
+                #[cfg(feature = "unwind")]
+                {
+                    let slot = alloc.as_stack().unwrap();
+                    let slot_offset = self.abi.get_spillslot_offset(slot);
+                    let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
+                    let caller_sp_to_cfa_offset =
+                        crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
+                    // NOTE: this is a negative offset because it's relative to the caller's SP
+                    let cfa_to_sp_offset =
+                        -((slot_base_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
+                    LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
+                }
             };
 
             // Coalesce adjacent ranges that for the same location

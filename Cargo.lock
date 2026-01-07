@@ -766,6 +766,7 @@ dependencies = [
  "env_logger 0.11.5",
  "gimli 0.32.3",
  "hashbrown 0.15.2",
+ "libm",
  "log",
  "postcard",
  "proptest",
@@ -2988,9 +2989,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e249c660440317032a71ddac302f25f1d5dff387667bcc3978d1f77aa31ac34"
+checksum = "919cc500365f55230d2e2230cb813dd7c6fa5f907ad332d83ad3b862112cb69e"
 dependencies = [
  "allocator-api2",
  "bumpalo",

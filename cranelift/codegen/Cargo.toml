@@ -30,20 +30,21 @@ cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 pulley-interpreter = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
-gimli = { workspace = true, features = ["write", "std"], optional = true }
+gimli = { workspace = true, features = ["write"], optional = true }
 smallvec = { workspace = true }
 regalloc2 = { workspace = true, features = ["checker"] }
 souper-ir = { version = "2.1.0", optional = true }
 sha2 = { version = "0.10.2", optional = true }
 rustc-hash = { workspace = true }
 wasmtime-math = { workspace = true }
+libm = { workspace = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
@@ -65,7 +66,7 @@ default = ["std", "unwind", "host-arch", "timing"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = ["serde?/std"]
+std = ["serde?/std", "rustc-hash/std", "gimli/std", "cranelift-control/fuzz"]
 
 # The "core" feature used to enable a hashmap workaround, but is now
 # deprecated (we (i) always use hashbrown, and (ii) don't support a
