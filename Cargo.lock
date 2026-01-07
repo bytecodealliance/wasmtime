@@ -4586,7 +4586,6 @@ dependencies = [
 name = "wasmtime-bench-api"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "cap-std",
  "clap",
  "shuffling-allocator",
