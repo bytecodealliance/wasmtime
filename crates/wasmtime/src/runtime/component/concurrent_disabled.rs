@@ -1,7 +1,7 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, Val};
-use crate::runtime::vm::VMStore;
+use crate::store::StoreOpaque;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -17,10 +17,6 @@ fn should_have_failed_validation<T>(what: &str) -> Result<T> {
         "{what} should have failed validation \
          when `component-model-async` feature disabled"
     ))
-}
-
-pub(crate) fn check_blocking(_: &mut dyn VMStore) -> Result<()> {
-    Ok(())
 }
 
 pub(crate) fn lower_error_context_to_index<U>(
@@ -152,5 +148,11 @@ unsafe impl Lower for StreamAny {
         _offset: usize,
     ) -> Result<()> {
         match self.0 {}
+    }
+}
+
+impl StoreOpaque {
+    pub(crate) fn check_blocking(&mut self) -> Result<()> {
+        Ok(())
     }
 }

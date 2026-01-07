@@ -732,14 +732,6 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::CheckBlocking => {
-                self.translate_libcall(
-                    host::check_blocking,
-                    TrapSentinel::Falsy,
-                    WasmArgs::InRegisters,
-                    |_, _| {},
-                );
-            }
             Trampoline::Trap => {
                 self.translate_libcall(
                     host::trap,
@@ -1140,9 +1132,13 @@ impl<'a> TrampolineCompiler<'a> {
         //    run_destructor_block:
         //      ;; test may_enter, but only if the component instances
         //      ;; differ
-        //      flags = load.i32 vmctx+$offset
+        //      flags = load.i32 vmctx+$instance_flags_offset
         //      masked = band flags, $FLAG_MAY_ENTER
         //      trapz masked, CANNOT_ENTER_CODE
+        //
+        //      ;; set may_block to false, saving the old value to restore later
+        //      old_may_block = load.i32 vmctx+$may_block_offset
+        //      store 0, vmctx+$may_block_offset
         //
         //      ;; ============================================================
         //      ;; this is conditionally emitted based on whether the resource
@@ -1155,6 +1151,9 @@ impl<'a> TrampolineCompiler<'a> {
         //      callee_vmctx = load.ptr dtor+$offset
         //      call_indirect func_addr, callee_vmctx, vmctx, rep
         //      ;; ============================================================
+        //
+        //      ;; restore old value of may_block
+        //      store old_may_block, vmctx+$may_block_offset
         //
         //      jump return_block
         //
@@ -1190,7 +1189,7 @@ impl<'a> TrampolineCompiler<'a> {
         // that this check can be elided if the resource table resides in
         // the same component instance that defined the resource as the
         // component is calling itself.
-        if let Some(def) = resource_def {
+        let old_may_block = if let Some(def) = resource_def {
             if self.types[resource].unwrap_concrete_instance() != def.instance {
                 let flags = self.builder.ins().load(
                     ir::types::I32,
@@ -1203,8 +1202,29 @@ impl<'a> TrampolineCompiler<'a> {
                     .ins()
                     .band_imm(flags, i64::from(FLAG_MAY_ENTER));
                 self.builder.ins().trapz(masked, TRAP_CANNOT_ENTER);
+
+                // Stash the old value of `may_block` and then set it to false.
+                let old_may_block = self.builder.ins().load(
+                    ir::types::I32,
+                    trusted,
+                    vmctx,
+                    i32::try_from(self.offsets.task_may_block()).unwrap(),
+                );
+                let zero = self.builder.ins().iconst(ir::types::I32, i64::from(0));
+                self.builder.ins().store(
+                    ir::MemFlags::trusted(),
+                    zero,
+                    vmctx,
+                    i32::try_from(self.offsets.task_may_block()).unwrap(),
+                );
+
+                Some(old_may_block)
+            } else {
+                None
             }
-        }
+        } else {
+            None
+        };
 
         // Conditionally emit destructor-execution code based on whether we
         // statically know that a destructor exists or not.
@@ -1253,6 +1273,16 @@ impl<'a> TrampolineCompiler<'a> {
                 &[callee_vmctx, caller_vmctx, rep],
             );
         }
+
+        if let Some(old_may_block) = old_may_block {
+            self.builder.ins().store(
+                ir::MemFlags::trusted(),
+                old_may_block,
+                vmctx,
+                i32::try_from(self.offsets.task_may_block()).unwrap(),
+            );
+        }
+
         self.builder.ins().jump(return_block, &[]);
         self.builder.seal_block(run_destructor_block);
 

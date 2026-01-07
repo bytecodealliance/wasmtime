@@ -753,10 +753,22 @@ impl<'a, 'b> Compiler<'a, 'b> {
             );
         }
 
-        if self.types[adapter.lift.ty].async_ {
-            let check_blocking = self.module.import_check_blocking();
-            self.instruction(Call(check_blocking.as_u32()));
-        }
+        let task_may_block = self.module.import_task_may_block();
+        let old_task_may_block = if self.types[adapter.lift.ty].async_ {
+            self.instruction(GlobalGet(task_may_block.as_u32()));
+            self.instruction(I32Eqz);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::CannotBlockSyncTask);
+            self.instruction(End);
+            None
+        } else {
+            let task_may_block = self.module.import_task_may_block();
+            self.instruction(GlobalGet(task_may_block.as_u32()));
+            let old_task_may_block = self.local_set_new_tmp(ValType::I32);
+            self.instruction(I32Const(0));
+            self.instruction(GlobalSet(task_may_block.as_u32()));
+            Some(old_task_may_block)
+        };
 
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
@@ -829,6 +841,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
         if self.emit_resource_call {
             let exit = self.module.import_resource_exit_call();
             self.instruction(Call(exit.as_u32()));
+        }
+
+        if let Some(old_task_may_block) = old_task_may_block {
+            let task_may_block = self.module.import_task_may_block();
+            self.instruction(LocalGet(old_task_may_block.idx));
+            self.instruction(GlobalSet(task_may_block.as_u32()));
+            self.free_temp_local(old_task_may_block);
         }
 
         self.finish()

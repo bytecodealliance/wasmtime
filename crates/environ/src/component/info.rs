@@ -389,6 +389,10 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
+    /// Reference to a wasm global which represents a runtime-managed boolean
+    /// indicating whether the currently-running task may perform a blocking
+    /// operation.
+    TaskMayBlock,
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -1105,10 +1109,6 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
-    /// An intrinsic used by FACT-generated modules to check whether an
-    /// async-typed function may be called via a sync lower.
-    CheckBlocking,
-
     /// An intrinsic used by FACT-generated modules to trap with a specified
     /// code.
     Trap,
@@ -1242,7 +1242,6 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
-            CheckBlocking => format!("check-blocking"),
             Trap => format!("trap"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),

@@ -1594,7 +1594,7 @@ impl<'a> Inliner<'a> {
         }
     }
 
-    /// Translatees an `AdapterOptions` into a `CanonicalOptions` where
+    /// Translates an `AdapterOptions` into a `CanonicalOptions` where
     /// memories/functions are inserted into the global initializer list for
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.

@@ -700,19 +700,6 @@ impl WastTest {
             }
         }
 
-        let failing_component_model_tests = [
-            // TODO: Remove this once
-            // https://github.com/WebAssembly/component-model/issues/345 has
-            // been addressed and the test updated accordingly:
-            "component-model/test/wasm-tools/naming.wast",
-        ];
-        if failing_component_model_tests
-            .iter()
-            .any(|part| self.path.ends_with(part))
-        {
-            return true;
-        }
-
         // Not implemented in Wasmtime anywhere yet.
         if self.config.custom_descriptors() {
             let happens_to_work =

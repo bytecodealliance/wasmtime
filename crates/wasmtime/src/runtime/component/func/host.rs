@@ -1,5 +1,6 @@
 //! Implementation of calling Rust-defined functions from components.
 
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{Accessor, Status};
@@ -327,7 +328,7 @@ where
             // The caller has synchronously lowered an async function, meaning
             // the caller can only call it from an async task (i.e. a task
             // created via a call to an async export).  Otherwise, we'll trap.
-            concurrent::check_blocking(store.0)?;
+            store.0.check_blocking()?;
         }
 
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);

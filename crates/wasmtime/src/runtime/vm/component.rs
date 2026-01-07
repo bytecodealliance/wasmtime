@@ -365,6 +365,14 @@ impl ComponentInstance {
         }
     }
 
+    pub fn task_may_block(&self) -> TaskMayBlock {
+        unsafe {
+            let ptr =
+                self.vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.task_may_block());
+            TaskMayBlock(SendSyncPtr::new(ptr))
+        }
+    }
+
     /// Returns the runtime memory definition corresponding to the index of the
     /// memory provided.
     ///
@@ -871,8 +879,8 @@ impl ComponentInstance {
     pub fn instance_state(
         self: Pin<&mut Self>,
         instance: RuntimeComponentInstanceIndex,
-    ) -> Option<&mut InstanceState> {
-        self.instance_states().0.get_mut(instance)
+    ) -> &mut InstanceState {
+        &mut self.instance_states().0[instance]
     }
 
     /// Returns the destructor and instance flags for the specified resource
@@ -1140,6 +1148,26 @@ impl InstanceFlags {
     }
 
     #[inline]
+    pub fn as_raw(&self) -> NonNull<VMGlobalDefinition> {
+        self.0.as_non_null()
+    }
+}
+
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct TaskMayBlock(SendSyncPtr<VMGlobalDefinition>);
+
+impl TaskMayBlock {
+    pub unsafe fn get(&self) -> bool {
+        unsafe { *self.as_raw().as_ref().as_i32() != 0 }
+    }
+
+    pub unsafe fn set(&mut self, val: bool) {
+        unsafe {
+            *self.as_raw().as_mut().as_i32_mut() = if val { 1 } else { 0 };
+        }
+    }
+
     pub fn as_raw(&self) -> NonNull<VMGlobalDefinition> {
         self.0.as_non_null()
     }
