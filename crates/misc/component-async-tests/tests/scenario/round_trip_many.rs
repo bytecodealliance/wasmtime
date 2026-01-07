@@ -6,7 +6,6 @@ use std::sync::{
 use std::time::Duration;
 
 use super::util::{config, make_component};
-use anyhow::{Result, anyhow};
 use component_async_tests::Ctx;
 use component_async_tests::util::sleep;
 use futures::{
@@ -14,7 +13,7 @@ use futures::{
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{Linker, ResourceTable, Val};
-use wasmtime::{Engine, Store};
+use wasmtime::error::{Engine, Result, Store, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
@@ -288,7 +287,7 @@ async fn test_round_trip_many(
                             );
                         }
 
-                        anyhow::Ok(())
+                        wasmtime::error::Ok(())
                     }
                 })
                 .await??;
@@ -362,13 +361,13 @@ async fn test_round_trip_many(
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let baz_instance = instance
             .get_export_index(&mut store, None, "local:local/many")
-            .ok_or_else(|| anyhow!("can't find `local:local/many` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `local:local/many` in instance"))?;
         let foo_function = instance
             .get_export_index(&mut store, Some(&baz_instance), "foo")
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
 
         let make = |input: &str| {
             let stuff = Val::Record(vec![
@@ -402,7 +401,7 @@ async fn test_round_trip_many(
                             foo_function
                                 .call_concurrent(store, &make(input), &mut result)
                                 .await?;
-                            anyhow::Ok((result, output))
+                            wasmtime::error::Ok((result, output))
                         });
                     }
 

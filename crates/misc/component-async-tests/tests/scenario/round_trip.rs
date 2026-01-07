@@ -5,7 +5,6 @@ use std::sync::{
 use std::time::Duration;
 
 use super::util::{config, make_component};
-use anyhow::{Result, anyhow};
 use component_async_tests::Ctx;
 use component_async_tests::util::sleep;
 use futures::{
@@ -14,7 +13,7 @@ use futures::{
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{Accessor, AccessorTask, HasSelf, Instance, Linker, ResourceTable, Val};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
@@ -378,13 +377,13 @@ pub async fn test_round_trip(
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let baz_instance = instance
             .get_export_index(&mut store, None, "local:local/baz")
-            .ok_or_else(|| anyhow!("can't find `local:local/baz` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `local:local/baz` in instance"))?;
         let foo_function = instance
             .get_export_index(&mut store, Some(&baz_instance), "foo")
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
             store
@@ -402,7 +401,7 @@ pub async fn test_round_trip(
                                     &mut results,
                                 )
                                 .await?;
-                            anyhow::Ok((results, output))
+                            wasmtime::error::Ok((results, output))
                         });
                     }
 
@@ -412,7 +411,7 @@ pub async fn test_round_trip(
                         };
                         assert_eq!(expected, actual);
                     }
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
 

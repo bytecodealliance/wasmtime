@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex, Once};
 use std::time::Duration;
 
-use anyhow::Result;
+use wasmtime::Result;
 use tokio::fs;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::component::{Component, Linker, PromisesUnordered, ResourceTable};

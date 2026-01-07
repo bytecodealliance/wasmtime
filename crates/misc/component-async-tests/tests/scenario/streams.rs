@@ -1,6 +1,5 @@
 use {
     super::util::{config, make_component},
-    anyhow::Result,
     component_async_tests::{
         Ctx, closed_streams,
         util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
@@ -18,6 +17,7 @@ use {
         task::{self, Context, Poll},
         time::Duration,
     },
+    wasmtime::Result,
     wasmtime::{
         Engine, Store, StoreContextMut,
         component::{
@@ -164,7 +164,7 @@ pub async fn async_closed_streams() -> Result<()> {
                                 input_tx.send(value).await?;
                             }
                             drop(input_tx);
-                            anyhow::Ok(())
+                            wasmtime::error::Ok(())
                         },
                         async {
                             for &value in &values {
@@ -193,7 +193,7 @@ pub async fn async_closed_streams() -> Result<()> {
             .run_concurrent(async |_| {
                 _ = input_tx.send(value);
                 assert_eq!(value, output_rx.await?);
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             })
             .await??;
     }
@@ -464,7 +464,7 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
                     .collect::<Vec<_>>()
             );
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await?
 }

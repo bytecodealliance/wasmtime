@@ -1,6 +1,5 @@
 use super::util::test_run;
 use crate::scenario::util::{config, make_component};
-use anyhow::Result;
 use component_async_tests::util;
 use component_async_tests::{Ctx, sleep};
 use std::future;
@@ -8,6 +7,7 @@ use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
+use wasmtime::Result;
 use wasmtime::component::{Accessor, Linker, ResourceTable};
 use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
@@ -90,7 +90,7 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
         // The function has returned, now we wait for it (and any subtasks
         // it may have spawned) to exit.
         exit.block(accessor).await;
-        anyhow::Ok(())
+        wasmtime::error::Ok(())
     }
 
     async fn run(
@@ -110,7 +110,7 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
 
                 run_with(accessor, guest).await?;
 
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             })
             .await?
     }
