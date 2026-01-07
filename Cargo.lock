@@ -5212,7 +5212,6 @@ dependencies = [
 name = "wasmtime-wasi-tls-nativetls"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "futures",
  "native-tls",
  "test-programs-artifacts",
