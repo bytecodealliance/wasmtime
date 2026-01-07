@@ -5184,7 +5184,6 @@ dependencies = [
 name = "wasmtime-wasi-threads"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "log",
  "rand 0.8.5",
  "wasi-common",
