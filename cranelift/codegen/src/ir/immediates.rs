@@ -704,7 +704,8 @@ macro_rules! ieee_float {
                 /// Returns the nearest integer to `self`. Rounds half-way cases to the number
                 /// with an even least significant digit.
                 pub fn round_ties_even(self) -> Self {
-                    // TODO: when libm v0.2.16 is published Libm::roundeven can be used
+                    // TODO: when libm v0.2.16 is published line below can be used instead
+                    // Self::with_float(Libm::<$float_ty>::roundeven(self.$as_float()))
                     Self::with_float(self.$as_float().round_ties_even())
                 }
             )?
