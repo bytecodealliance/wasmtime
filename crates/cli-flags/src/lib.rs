@@ -1,6 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
 use std::{
@@ -8,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use wasmtime::Config;
+use wasmtime::{Config, Result, bail, error::Context as _};
 
 pub mod opt;
 
@@ -606,7 +605,7 @@ macro_rules! match_feature {
         #[cfg(not(feature = $feat))]
         {
             if let Some($p) = $config {
-                anyhow::bail!(concat!("support for ", $feat, " disabled at compile time"));
+                bail!(concat!("support for ", $feat, " disabled at compile time"));
             }
         }
     };
@@ -681,7 +680,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "logging"))]
         if self.debug.log_to_files == Some(true) || self.debug.logging == Some(true) {
-            anyhow::bail!("support for logging disabled at compile time");
+            bail!("support for logging disabled at compile time");
         }
         Ok(())
     }
@@ -720,7 +719,7 @@ impl CommonOptions {
             #[cfg(feature = "coredump")]
             config.coredump_on_trap(true);
             #[cfg(not(feature = "coredump"))]
-            anyhow::bail!("support for coredumps disabled at compile time");
+            bail!("support for coredumps disabled at compile time");
         }
         match_feature! {
             ["cranelift" : self.opts.opt_level]
@@ -761,7 +760,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "cranelift"))]
         if !self.codegen.cranelift.is_empty() {
-            anyhow::bail!("support for cranelift disabled at compile time");
+            bail!("support for cranelift disabled at compile time");
         }
 
         #[cfg(feature = "cache")]
@@ -775,7 +774,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "cache"))]
         if self.codegen.cache == Some(true) {
-            anyhow::bail!("support for caching disabled at compile time");
+            bail!("support for caching disabled at compile time");
         }
 
         match_feature! {
@@ -860,7 +859,7 @@ impl CommonOptions {
         #[cfg(not(any(feature = "async", feature = "stack-switching")))]
         {
             if let Some(_size) = self.wasm.async_stack_size {
-                anyhow::bail!(concat!(
+                bail!(concat!(
                     "support for async/stack-switching disabled at compile time"
                 ));
             }
@@ -963,15 +962,13 @@ impl CommonOptions {
         if self.opts.pooling_memory_protection_keys.is_some()
             && !self.opts.pooling_allocator.unwrap_or(false)
         {
-            anyhow::bail!("memory protection keys require the pooling allocator");
+            bail!("memory protection keys require the pooling allocator");
         }
 
         if self.opts.pooling_max_memory_protection_keys.is_some()
             && !self.opts.pooling_memory_protection_keys.is_some()
         {
-            anyhow::bail!(
-                "max memory protection keys requires memory protection keys to be enabled"
-            );
+            bail!("max memory protection keys requires memory protection keys to be enabled");
         }
 
         match_feature! {
@@ -1057,7 +1054,7 @@ impl CommonOptions {
                     config.$method(enable);
                     #[cfg(not(feature = $feature))]
                     if enable && all.is_none() {
-                        anyhow::bail!("support for {} was disabled at compile-time", $feature);
+                        bail!("support for {} was disabled at compile-time", $feature);
                     }
                 }
             )*)
@@ -1083,7 +1080,7 @@ impl CommonOptions {
             config.wasm_component_model_gc(enable);
             #[cfg(not(all(feature = "component-model", feature = "gc")))]
             if enable && all.is_none() {
-                anyhow::bail!("support for `component-model-gc` was disabled at compile time")
+                bail!("support for `component-model-gc` was disabled at compile time")
             }
         }
 

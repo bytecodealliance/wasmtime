@@ -4703,7 +4703,6 @@ dependencies = [
 name = "wasmtime-cli-flags"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "clap",
  "file-per-thread-logger",
  "rayon",
