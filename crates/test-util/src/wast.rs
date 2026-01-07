@@ -705,10 +705,6 @@ impl WastTest {
             // https://github.com/WebAssembly/component-model/issues/345 has
             // been addressed and the test updated accordingly:
             "component-model/test/wasm-tools/naming.wast",
-            // TODO: Remove this once
-            // https://github.com/bytecodealliance/wasm-tools/pull/2406 is
-            // merged and released, and Wasmtime has been updated to use it:
-            "component-model/test/async/same-component-stream-future.wast",
         ];
         if failing_component_model_tests
             .iter()

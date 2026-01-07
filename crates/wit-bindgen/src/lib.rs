@@ -1620,6 +1620,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::Map(..) => todo!(),
         }
     }
 
@@ -3409,6 +3410,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
             TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::Map(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because

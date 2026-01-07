@@ -50,7 +50,7 @@ fn import_section<'a>(
     imports: wasmparser::ImportSectionReader<'a>,
 ) -> anyhow::Result<()> {
     // Check that we can properly handle all imports.
-    for imp in imports {
+    for imp in imports.into_imports() {
         let imp = imp?;
 
         if imp.module.starts_with("__wizer_") || imp.name.starts_with("__wizer_") {

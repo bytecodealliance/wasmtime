@@ -158,6 +158,7 @@ impl Types {
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::Map(..) => todo!(),
         }
         self.type_info.insert(ty, info);
         info
