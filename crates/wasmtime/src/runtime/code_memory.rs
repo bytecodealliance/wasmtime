@@ -95,7 +95,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn publish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 
     /// Unpublish a region of memory.
     ///
@@ -106,7 +106,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 }
 
 impl CodeMemory {

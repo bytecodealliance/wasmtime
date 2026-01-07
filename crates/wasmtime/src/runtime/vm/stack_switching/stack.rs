@@ -1,7 +1,7 @@
 //! This module contains a modified version of the `wasmtime_fiber` crate,
 //! specialized for executing stack switching continuations.
 
-use anyhow::Result;
+use crate::Result;
 use core::ops::Range;
 
 use crate::runtime::vm::stack_switching::VMHostArray;

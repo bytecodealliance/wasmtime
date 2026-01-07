@@ -296,7 +296,7 @@ impl MmapVec {
                 MmapVec::from_slice_with_alignment(&self[..], layout.align())
             }
             MmapVec::ExternallyOwned { .. } => {
-                anyhow::bail!("Cannot clone an externally-owned code memory.");
+                crate::bail!("Cannot clone an externally-owned code memory.");
             }
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => {

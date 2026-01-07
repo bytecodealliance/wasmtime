@@ -235,7 +235,7 @@ impl VMStructRef {
             }
             Val::ContRef(_) => {
                 // TODO(#10248): Implement struct continuation reference field handling
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "setting continuation references in struct fields not yet supported"
                 ));
             }
@@ -394,7 +394,7 @@ pub(crate) fn initialize_field_impl(
         }
         Val::ContRef(_) => {
             // TODO(#10248): Implement struct continuation reference field init handling
-            return Err(anyhow::anyhow!(
+            return Err(crate::format_err!(
                 "initializing continuation references in struct fields not yet supported"
             ));
         }

@@ -108,7 +108,7 @@ impl MemoryImageSource {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn from_data(data: &[u8]) -> anyhow::Result<Option<MemoryImageSource>> {
+    pub fn from_data(data: &[u8]) -> crate::Result<Option<MemoryImageSource>> {
         // On Linux `memfd_create` is used to create an anonymous
         // in-memory file to represent the heap image. This anonymous
         // file is then used as the basis for further mmaps.

@@ -63,7 +63,7 @@ impl Global {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -286,7 +286,7 @@ impl Global {
                 }
                 Val::ContRef(Some(_)) => {
                     // TODO(#10248): Implement non-null global continuation reference handling
-                    return Err(anyhow::anyhow!(
+                    return Err(crate::format_err!(
                         "setting non-null continuation references in globals not yet supported"
                     ));
                 }

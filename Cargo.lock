@@ -4490,7 +4490,6 @@ name = "wasmtime"
 version = "42.0.0"
 dependencies = [
  "addr2line 0.25.1",
- "anyhow",
  "async-trait",
  "bitflags 2.9.4",
  "bumpalo",

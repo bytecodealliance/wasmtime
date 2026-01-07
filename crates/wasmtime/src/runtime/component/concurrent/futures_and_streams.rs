@@ -13,7 +13,10 @@ use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::{Context as _, Error, Result, anyhow, bail};
+use crate::{
+    Error, Result, bail,
+    error::{Context as _, format_err},
+};
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
 use core::fmt;
 use core::future;
@@ -160,7 +163,7 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
         .as_slice_mut()
         .get_mut(address..)
         .and_then(|b| b.get_mut(..T::SIZE32 * count))
-        .ok_or_else(|| anyhow::anyhow!("read pointer out of bounds of memory"))?;
+        .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
     if let Some(ty) = payload(ty, lower.types) {
         T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
@@ -194,7 +197,7 @@ fn lift<T: func::Lift + Send + 'static, B: ReadBuffer<T>>(
         lift.memory()
             .get(address..)
             .and_then(|b| b.get(..T::SIZE32 * count))
-            .ok_or_else(|| anyhow::anyhow!("write pointer out of bounds of memory"))?;
+            .ok_or_else(|| crate::format_err!("write pointer out of bounds of memory"))?;
 
         let list = &WasmList::new(address, count, lift, ty)?;
         T::linear_lift_into_from_memory(lift, list, &mut Extender(buffer))?
@@ -2451,7 +2454,7 @@ impl<T> StoreContextMut<'_, T> {
                                             || *guest_offset > 0
                                             || host_offset > 0
                                         {
-                                            return Poll::Ready(Err(anyhow!(
+                                            return Poll::Ready(Err(format_err!(
                                                 "StreamProducer::poll_produce returned Poll::Pending \
                                                  after producing at least one item"
                                             )));
@@ -2715,7 +2718,7 @@ impl<T> StoreContextMut<'_, T> {
                 let future = async move {
                     loop {
                         if tls::get(|store| {
-                            anyhow::Ok(matches!(
+                            crate::error::Ok(matches!(
                                 store.concurrent_state_mut().get_mut(id)?.read,
                                 ReadState::Dropped
                             ))
@@ -2763,7 +2766,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             None
         };
 
-        anyhow::Ok((
+        crate::error::Ok((
             mem::replace(&mut transmit.read, ReadState::Open),
             guest_offset,
         ))
@@ -2785,7 +2788,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             if let TransmitKind::Future = kind {
                 tls::get(|store| {
                     store.concurrent_state_mut().get_mut(id)?.done = true;
-                    anyhow::Ok(())
+                    crate::error::Ok(())
                 })?;
             }
 
@@ -2802,7 +2805,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                         count - guest_offset,
                         &mut pair.lock().unwrap().as_mut().unwrap().1,
                     )?;
-                    anyhow::Ok(())
+                    crate::error::Ok(())
                 }
             };
 
@@ -2856,7 +2859,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     caller,
                 };
 
-                anyhow::Ok(())
+                crate::error::Ok(())
             })?;
 
             Ok(())
@@ -2896,7 +2899,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     },
                 };
 
-                anyhow::Ok(())
+                crate::error::Ok(())
             })?;
             Ok(())
         }
@@ -3010,7 +3013,7 @@ impl Instance {
             TransmitIndex::Future(_) => store.host_drop_writer(
                 id,
                 Some(|| {
-                    Err(anyhow!(
+                    Err(format_err!(
                         "cannot drop future write end without first writing a value"
                     ))
                 }),
@@ -3064,7 +3067,7 @@ impl Instance {
                             .get(write_address..)
                             .and_then(|b| b.get(..usize::try_from(abi.size32).unwrap()))
                             .ok_or_else(|| {
-                                anyhow::anyhow!("write pointer out of bounds of memory")
+                                crate::format_err!("write pointer out of bounds of memory")
                             })?;
 
                         Val::load(lift, ty, bytes)
@@ -3111,7 +3114,7 @@ impl Instance {
                                 .get(write_address..)
                                 .and_then(|b| b.get(..length_in_bytes))
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!("write pointer out of bounds of memory")
+                                    crate::format_err!("write pointer out of bounds of memory")
                                 })?
                                 .as_ptr();
                             let dst = self
@@ -3119,7 +3122,7 @@ impl Instance {
                                 .get_mut(read_address..)
                                 .and_then(|b| b.get_mut(..length_in_bytes))
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!("read pointer out of bounds of memory")
+                                    crate::format_err!("read pointer out of bounds of memory")
                                 })?
                                 .as_mut_ptr();
                             // SAFETY: Both `src` and `dst` have been validated
@@ -3153,7 +3156,9 @@ impl Instance {
                         .memory()
                         .get(write_address..)
                         .and_then(|b| b.get(..size * count))
-                        .ok_or_else(|| anyhow::anyhow!("write pointer out of bounds of memory"))?;
+                        .ok_or_else(|| {
+                            crate::format_err!("write pointer out of bounds of memory")
+                        })?;
 
                     let values = (0..count)
                         .map(|index| Val::load(lift, ty, &bytes[(index * size)..][..size]))
@@ -3173,7 +3178,9 @@ impl Instance {
                         .as_slice_mut()
                         .get_mut(read_address..)
                         .and_then(|b| b.get_mut(..size * count))
-                        .ok_or_else(|| anyhow::anyhow!("read pointer out of bounds of memory"))?;
+                        .ok_or_else(|| {
+                            crate::format_err!("read pointer out of bounds of memory")
+                        })?;
                     let mut ptr = read_address;
                     for value in values {
                         value.store(lower, ty, ptr)?;
@@ -3214,7 +3221,7 @@ impl Instance {
                 .get(address..)
                 .and_then(|b| b.get(..(size * count)))
                 .map(drop)
-                .ok_or_else(|| anyhow::anyhow!("read pointer out of bounds of memory"))
+                .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))
         } else {
             Ok(())
         }
@@ -4023,7 +4030,7 @@ impl Instance {
             .get(debug_msg_address..)
             .and_then(|b| b.get(..debug_msg.bytes().len()))
             .map(|_| debug_msg_address)
-            .ok_or_else(|| anyhow::anyhow!("invalid debug message pointer: out of bounds"))?;
+            .ok_or_else(|| crate::format_err!("invalid debug message pointer: out of bounds"))?;
         debug_msg
             .as_str()
             .linear_lower_to_memory(lower_cx, InterfaceType::String, offset)?;
@@ -4592,13 +4599,13 @@ mod tests {
 
     #[test]
     fn future_producer() {
-        let mut fut = pin!(async { anyhow::Ok(()) });
+        let mut fut = pin!(async { crate::error::Ok(()) });
         assert!(matches!(
             poll_future_producer(fut.as_mut(), false),
             Poll::Ready(Ok(Some(()))),
         ));
 
-        let mut fut = pin!(async { anyhow::Ok(()) });
+        let mut fut = pin!(async { crate::error::Ok(()) });
         assert!(matches!(
             poll_future_producer(fut.as_mut(), true),
             Poll::Ready(Ok(Some(()))),

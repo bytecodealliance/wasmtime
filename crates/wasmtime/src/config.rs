@@ -362,7 +362,7 @@ impl Config {
     /// This method will error if the given target triple is not supported.
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         self.target =
-            Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
+            Some(target_lexicon::Triple::from_str(target).map_err(|e| crate::format_err!(e))?);
 
         Ok(self)
     }
@@ -543,9 +543,9 @@ impl Config {
     /// suitable in concurrent environments since one thread capturing a
     /// backtrace won't block other threads.
     ///
-    /// Collected backtraces are attached via [`anyhow::Error::context`] to
+    /// Collected backtraces are attached via [`wasmtime::Error::context`] to
     /// errors returned from host functions. The [`WasmBacktrace`] type can be
-    /// acquired via [`anyhow::Error::downcast_ref`] to inspect the backtrace.
+    /// acquired via [`wasmtime::Error::downcast_ref`] to inspect the backtrace.
     /// When this option is disabled then this context is never applied to
     /// errors coming out of wasm.
     ///
@@ -2127,7 +2127,7 @@ impl Config {
     }
 
     /// Configures whether or not a coredump should be generated and attached to
-    /// the anyhow::Error when a trap is raised.
+    /// the [`wasmtime::Error`] when a trap is raised.
     ///
     /// This option is disabled by default.
     #[cfg(feature = "coredump")]

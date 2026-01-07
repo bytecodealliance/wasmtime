@@ -20,21 +20,21 @@ use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_o
 /// # Errors in Wasmtime
 ///
 /// Error-handling in Wasmtime is primarily done through the
-/// [`anyhow`][mod@anyhow] crate where most results are a
-/// [`Result<T>`](anyhow::Result) which is an alias for [`Result<T,
-/// anyhow::Error>`](std::result::Result). Errors in Wasmtime are represented
-/// with [`anyhow::Error`] which acts as a container for any type of error in
+/// [`wasmtime::Error`][crate::Error] type where most results are a
+/// [`wasmtime::Result<T>`](crate::Result) which is an alias for [`Result<T,
+/// wasmtime::Error>`](std::result::Result). Errors in Wasmtime are represented
+/// with [`wasmtime::Error`] which acts as a container for any type of error in
 /// addition to optional context for this error. The "base" error or
-/// [`anyhow::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
+/// [`wasmtime::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
 /// trap, or otherwise it's whatever the host created the error with when
 /// returning an error for a host call.
 ///
 /// Any error which happens while WebAssembly is executing will also, by
 /// default, capture a backtrace of the wasm frames while executing. This
 /// backtrace is represented with a [`WasmBacktrace`] instance and is attached
-/// to the [`anyhow::Error`] return value as a
-/// [`context`](anyhow::Error::context). Inspecting a [`WasmBacktrace`] can be
-/// done with the [`downcast_ref`](anyhow::Error::downcast_ref) function. For
+/// to the [`wasmtime::Error`] return value as a
+/// [`context`](crate::Error::context). Inspecting a [`WasmBacktrace`] can be
+/// done with the [`downcast_ref`](crate::Error::downcast_ref) function. For
 /// information on this see the [`WasmBacktrace`] documentation.
 ///
 /// # Examples
@@ -83,7 +83,7 @@ pub(crate) fn from_runtime_box(
     let (mut error, pc) = match reason {
         #[cfg(feature = "gc")]
         crate::runtime::vm::TrapReason::Exception => (ThrownException.into(), None),
-        // For user-defined errors they're already an `anyhow::Error` so no
+        // For user-defined errors they're already an `crate::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
         // been captured so it's attempted to get inserted here.
         //
@@ -137,9 +137,9 @@ pub(crate) fn from_runtime_box(
 /// Representation of a backtrace of function frames in a WebAssembly module for
 /// where an error happened.
 ///
-/// This structure is attached to the [`anyhow::Error`] returned from many
+/// This structure is attached to the [`wasmtime::Error`] returned from many
 /// Wasmtime functions that execute WebAssembly such as [`Instance::new`] or
-/// [`Func::call`]. This can be acquired with the [`anyhow::Error::downcast`]
+/// [`Func::call`]. This can be acquired with the [`wasmtime::Error::downcast`]
 /// family of methods to programmatically inspect the backtrace. Otherwise since
 /// it's part of the error returned this will get printed along with the rest of
 /// the error when the error is logged.

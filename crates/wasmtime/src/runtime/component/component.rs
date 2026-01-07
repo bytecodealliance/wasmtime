@@ -141,7 +141,7 @@ impl Component {
     /// ```no_run
     /// # use wasmtime::*;
     /// # use wasmtime::component::Component;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let wasm_bytes: Vec<u8> = Vec::new();
     /// let component = Component::new(&engine, &wasm_bytes)?;
@@ -155,7 +155,7 @@ impl Component {
     /// ```
     /// # use wasmtime::*;
     /// # use wasmtime::component::Component;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let component = Component::new(&engine, "(component (core module))")?;
     /// # Ok(())

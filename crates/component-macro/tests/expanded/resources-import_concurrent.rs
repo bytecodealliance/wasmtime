@@ -137,8 +137,6 @@ pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldReso
 pub trait TheWorldImports: HostWorldResource + Send {}
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -157,11 +155,11 @@ const _: () = {
                 let (item, index) = _component
                     .get_export(None, "some-world-func2")
                     .ok_or_else(|| {
-                        anyhow::anyhow!("no export `some-world-func2` found")
+                        wasmtime::format_err!("no export `some-world-func2` found")
                     })?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
-                        anyhow::Context::context(
+                        wasmtime::error::Context::context(
                             func
                                 .typecheck::<
                                     (),
@@ -173,7 +171,7 @@ const _: () = {
                     }
                     _ => {
                         Err(
-                            anyhow::anyhow!(
+                            wasmtime::format_err!(
                                 "export `some-world-func2` is not a function"
                             ),
                         )?
@@ -384,7 +382,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod resources {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum Bar {}
             pub trait HostBarWithStore: wasmtime::component::HasData + Send {
                 fn drop<T>(
@@ -914,7 +912,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain1 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum A {}
             pub trait HostAWithStore: wasmtime::component::HasData {
                 fn drop<T>(
@@ -963,7 +961,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain2 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
@@ -988,7 +986,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain3 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
@@ -1013,7 +1011,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain4 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
                 fn foo<T>(
@@ -1050,7 +1048,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod transitive_interface_with_resource {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum Foo {}
             pub trait HostFooWithStore: wasmtime::component::HasData {
                 fn drop<T>(
@@ -1105,7 +1103,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod uses_resource_transitively {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type Foo = super::super::super::super::foo::foo::transitive_interface_with_resource::Foo;
                 #[derive(Clone)]
                 pub struct Guest {
@@ -1129,7 +1127,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/uses-resource-transitively")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
@@ -1138,7 +1136,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
                 not have export `{name}`"
                                     )

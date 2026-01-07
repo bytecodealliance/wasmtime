@@ -1,6 +1,6 @@
 use super::{TypedResource, TypedResourceIndex};
+use crate::{Result, bail};
 use alloc::vec::Vec;
-use anyhow::{Result, bail};
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 

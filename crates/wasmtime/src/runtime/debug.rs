@@ -1,5 +1,6 @@
 //! Debugging API.
 
+use crate::Result;
 use crate::{
     AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
@@ -11,7 +12,6 @@ use crate::{
 use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
-use anyhow::Result;
 use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
@@ -501,8 +501,8 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
 /// a debug handler attached.
 #[derive(Debug)]
 pub enum DebugEvent<'a> {
-    /// An `anyhow::Error` was raised by a hostcall.
-    HostcallError(&'a anyhow::Error),
+    /// A [`wasmtime::Error`] was raised by a hostcall.
+    HostcallError(&'a crate::Error),
     /// An exception is thrown and caught by Wasm. The current state
     /// is at the throw-point.
     CaughtExceptionThrown(OwnedRooted<ExnRef>),
@@ -790,7 +790,7 @@ impl<'a> Drop for BreakpointEdit<'a> {
 ///
 /// [1]: https://searchfox.org/firefox-main/rev/7496c8515212669451d7e775a00c2be07da38ca5/js/src/jit/AutoWritableJitCode.h#26-56
 #[cfg(feature = "std")]
-fn abort_on_republish_error(e: anyhow::Error) -> ! {
+fn abort_on_republish_error(e: crate::Error) -> ! {
     log::error!(
         "Failed to re-publish executable code: {e:?}. Wasmtime cannot return through JIT code on the stack and cannot even panic; aborting the process."
     );
@@ -804,6 +804,6 @@ fn abort_on_republish_error(e: anyhow::Error) -> ! {
 /// let's panic anyway; the panic propagation through the trampolines
 /// will at least deterministically crash.
 #[cfg(not(feature = "std"))]
-fn abort_on_republish_error(e: anyhow::Error) -> ! {
+fn abort_on_republish_error(e: crate::Error) -> ! {
     panic!("Failed to re-publish executable code: {e:?}");
 }

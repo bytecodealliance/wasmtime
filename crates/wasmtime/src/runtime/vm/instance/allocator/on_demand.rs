@@ -177,7 +177,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
-            anyhow::bail!("fiber stacks are not supported by the allocator")
+            crate::bail!("fiber stacks are not supported by the allocator")
         }
         let stack = match &self.stack_creator {
             Some(stack_creator) => {

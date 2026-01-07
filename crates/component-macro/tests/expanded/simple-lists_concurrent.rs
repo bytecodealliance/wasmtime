@@ -103,8 +103,6 @@ pub struct MyWorld {
     interface0: exports::foo::foo::simple_lists::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl MyWorldIndices {
         /// Creates a new copy of `MyWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple_lists {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
                 fn simple_list1<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
@@ -309,7 +307,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple_lists {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(Clone)]
                 pub struct Guest {
                     simple_list1: wasmtime::component::Func,
@@ -338,7 +336,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple-lists")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple-lists`"
                                 )
                             })?;
@@ -347,7 +345,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple-lists` does \
                 not have export `{name}`"
                                     )

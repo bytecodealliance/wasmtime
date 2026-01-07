@@ -61,8 +61,11 @@ use crate::vm::component::{
     CallContext, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
 };
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
-use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
-use anyhow::{Context as _, Result, anyhow, bail};
+use crate::{
+    AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType,
+    bail,
+    error::{Context as _, format_err},
+};
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
 use futures::future::{self, Either, FutureExt};
@@ -1031,8 +1034,8 @@ impl<T> StoreContextMut<'_, T> {
     ///
     /// ```
     /// # use {
-    /// #   anyhow::{Result},
     /// #   wasmtime::{
+    /// #     error::{Result},
     /// #     component::{ Component, Linker, Resource, ResourceTable},
     /// #     Config, Engine, Store
     /// #   },
@@ -1214,7 +1217,7 @@ impl<T> StoreContextMut<'_, T> {
                                     if trap_on_idle {
                                         // `trap_on_idle` is true, so we exit
                                         // immediately.
-                                        Poll::Ready(Err(anyhow!(crate::Trap::AsyncDeadlock)))
+                                        Poll::Ready(Err(format_err!(crate::Trap::AsyncDeadlock)))
                                     } else {
                                         // `trap_on_idle` is false, so we assume
                                         // that future will wake up and give us
@@ -1460,7 +1463,7 @@ impl StoreOpaque {
     ) -> Result<()> {
         let state = self.instance_state(caller_instance);
         let old = state.backpressure;
-        let new = modify(old).ok_or_else(|| anyhow!("backpressure counter overflow"))?;
+        let new = modify(old).ok_or_else(|| format_err!("backpressure counter overflow"))?;
         state.backpressure = new;
 
         if old > 0 && new == 0 {
@@ -2736,7 +2739,7 @@ impl Instance {
             .lift_result
             .take()
             .ok_or_else(|| {
-                anyhow!("`task.return` or `task.cancel` called more than once for current task")
+                format_err!("`task.return` or `task.cancel` called more than once for current task")
             })?;
         assert!(state.get_mut(guest_thread.task)?.result.is_none());
 
@@ -2793,7 +2796,7 @@ impl Instance {
             bail!("`task.cancel` called by task which has not been cancelled")
         }
         _ = task.lift_result.take().ok_or_else(|| {
-            anyhow!("`task.return` or `task.cancel` called more than once for current task")
+            format_err!("`task.return` or `task.cancel` called more than once for current task")
         })?;
 
         assert!(task.result.is_none());
@@ -3079,7 +3082,7 @@ impl Instance {
         let thread_id = store
             .concurrent_state_mut()
             .guest_thread
-            .ok_or_else(|| anyhow!("no current thread"))?
+            .ok_or_else(|| format_err!("no current thread"))?
             .thread;
         // The unwrap is safe because `instance_rep` must be `Some` by this point
         Ok(store
@@ -3108,7 +3111,7 @@ impl Instance {
         let callee = instance
             .index_runtime_func_table(registry, start_func_table_idx, start_func_idx as u64)?
             .ok_or_else(|| {
-                anyhow!("the start function index points to an uninitialized function")
+                format_err!("the start function index points to an uninitialized function")
             })?;
         if callee.type_index(store.0) != start_func_ty.type_index() {
             bail!(
@@ -5214,7 +5217,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
         rx.map(move |result| {
             result
                 .map(|v| (*v.downcast().unwrap(), exit_rx))
-                .map_err(anyhow::Error::from)
+                .map_err(crate::Error::from)
         }),
     ))
 }

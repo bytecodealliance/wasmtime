@@ -106,8 +106,6 @@ pub trait Host_ImportsWithStore: wasmtime::component::HasData + Send {
 pub trait Host_Imports: Send {}
 impl<_T: Host_Imports + ?Sized + Send> Host_Imports for &mut _T {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl Host_Indices {
         /// Creates a new copy of `Host_Indices` bindings which can then
         /// be used to instantiate into a particular store.

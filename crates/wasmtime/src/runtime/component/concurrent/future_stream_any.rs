@@ -1,6 +1,5 @@
 //! Implementation of [`FutureAny`] and [`StreamAny`].
 
-use crate::AsContextMut;
 use crate::component::concurrent::futures_and_streams::{self, TransmitOrigin};
 use crate::component::concurrent::{TableId, TransmitHandle};
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
@@ -10,7 +9,7 @@ use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader,
 };
 use crate::store::StoreOpaque;
-use anyhow::{Context, Result, bail};
+use crate::{AsContextMut, Result, bail, error::Context};
 use std::any::TypeId;
 use std::mem::MaybeUninit;
 use wasmtime_environ::component::{

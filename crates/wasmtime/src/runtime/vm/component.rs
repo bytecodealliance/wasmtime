@@ -6,6 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
+use crate::Result;
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::module::ModuleRegistry;
 use crate::runtime::component::ComponentInstanceId;
@@ -22,7 +23,6 @@ use crate::store::InstanceId;
 use crate::{Func, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::mem;
 use core::mem::offset_of;
 use core::pin::Pin;
@@ -998,12 +998,12 @@ impl ComponentInstance {
     pub(crate) fn check_may_leave(
         &self,
         instance: RuntimeComponentInstanceIndex,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         let flags = self.instance_flags(instance);
         if unsafe { flags.may_leave() } {
             Ok(())
         } else {
-            Err(anyhow::anyhow!(crate::Trap::CannotLeaveComponent))
+            Err(crate::format_err!(crate::Trap::CannotLeaveComponent))
         }
     }
 }

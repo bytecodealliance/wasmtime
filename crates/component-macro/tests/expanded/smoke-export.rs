@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::the_name::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -177,7 +175,7 @@ pub mod exports {
     #[allow(clippy::all)]
     pub mod the_name {
         #[allow(unused_imports)]
-        use wasmtime::component::__internal::{anyhow, Box};
+        use wasmtime::component::__internal::Box;
         #[derive(Clone)]
         pub struct Guest {
             y: wasmtime::component::Func,
@@ -200,14 +198,14 @@ pub mod exports {
                     .component()
                     .get_export_index(None, "the-name")
                     .ok_or_else(|| {
-                        anyhow::anyhow!("no exported instance named `the-name`")
+                        wasmtime::format_err!("no exported instance named `the-name`")
                     })?;
                 let mut lookup = move |name| {
                     _instance_pre
                         .component()
                         .get_export_index(Some(&instance), name)
                         .ok_or_else(|| {
-                            anyhow::anyhow!(
+                            wasmtime::format_err!(
                                 "instance export `the-name` does \
             not have export `{name}`"
                             )

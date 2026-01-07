@@ -137,7 +137,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
     }
 
     fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             module.memories.len() == 1,
             "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
         );

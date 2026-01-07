@@ -161,7 +161,7 @@ impl NoFunc {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
 /// let mut store = Store::new(&engine, ());
@@ -192,7 +192,7 @@ impl NoFunc {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let mut store = Store::<()>::default();
 ///
 /// // Create a custom `Func` which can execute arbitrary code inside of the
@@ -227,7 +227,7 @@ impl NoFunc {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let mut store = Store::<()>::default();
 ///
 /// // Here we need to define the type signature of our `Double` function and
@@ -351,7 +351,7 @@ impl Func {
     /// # Errors
     ///
     /// The host-provided function here returns a
-    /// [`Result<()>`](anyhow::Result). If the function returns `Ok(())` then
+    /// [`Result<()>`](crate::Result). If the function returns `Ok(())` then
     /// that indicates that the host function completed successfully and wrote
     /// the result into the `&mut [Val]` argument.
     ///
@@ -461,7 +461,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// // Simulate some application-specific state as well as asynchronous
     /// // functions to query that state.
     /// struct MyDatabase {
@@ -642,7 +642,7 @@ impl Func {
     /// # Errors
     ///
     /// The closure provided here to `wrap` can optionally return a
-    /// [`Result<T>`](anyhow::Result). Returning `Ok(t)` represents the host
+    /// [`Result<T>`](crate::Result). Returning `Ok(t)` represents the host
     /// function successfully completing with the `t` result. Returning
     /// `Err(e)`, however, is equivalent to raising a custom wasm trap.
     /// Execution of WebAssembly does not resume and the stack is unwound to the
@@ -660,7 +660,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let mut store = Store::<()>::default();
     /// let add = Func::wrap(&mut store, |a: i32, b: i32| a + b);
     /// let module = Module::new(
@@ -686,12 +686,12 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let mut store = Store::<()>::default();
     /// let add = Func::wrap(&mut store, |a: i32, b: i32| {
     ///     match a.checked_add(b) {
     ///         Some(i) => Ok(i),
-    ///         None => anyhow::bail!("overflow"),
+    ///         None => bail!("overflow"),
     ///     }
     /// });
     /// let module = Module::new(
@@ -717,7 +717,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let mut store = Store::<()>::default();
     /// let debug = Func::wrap(&mut store, |a: i32, b: u32, c: f32, d: i64, e: u64, f: f64| {
     ///
@@ -757,12 +757,12 @@ impl Func {
     /// use std::str;
     ///
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let mut store = Store::default();
     /// let log_str = Func::wrap(&mut store, |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
     ///     let mem = match caller.get_export("memory") {
     ///         Some(Extern::Memory(mem)) => mem,
-    ///         _ => anyhow::bail!("failed to find host memory"),
+    ///         _ => bail!("failed to find host memory"),
     ///     };
     ///     let data = mem.data(&caller)
     ///         .get(ptr as u32 as usize..)
@@ -770,9 +770,9 @@ impl Func {
     ///     let string = match data {
     ///         Some(data) => match str::from_utf8(data) {
     ///             Ok(s) => s,
-    ///             Err(_) => anyhow::bail!("invalid utf-8"),
+    ///             Err(_) => bail!("invalid utf-8"),
     ///         },
-    ///         None => anyhow::bail!("pointer/length out of bounds"),
+    ///         None => bail!("pointer/length out of bounds"),
     ///     };
     ///     assert_eq!(string, "Hello, world!");
     ///     println!("{}", string);
@@ -924,7 +924,7 @@ impl Func {
     /// # Errors
     ///
     /// Any error which occurs throughout the execution of the function will be
-    /// returned as `Err(e)`. The [`Error`](anyhow::Error) type can be inspected
+    /// returned as `Err(e)`. The [`Error`](crate::Error) type can be inspected
     /// for the precise error cause such as:
     ///
     /// * [`Trap`] - indicates that a wasm trap happened and execution was
@@ -1407,7 +1407,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
@@ -1429,7 +1429,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn foo(add: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(add: &Func, mut store: Store<()>) -> Result<()> {
     /// let typed = add.typed::<(i32, i64), f32>(&store)?;
     /// assert_eq!(typed.call(&mut store, (1, 2))?, 3.0);
     /// # Ok(())
@@ -1440,7 +1440,7 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> Result<()> {
     /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>(&store)?;
     /// let (result, overflow) = typed.call(&mut store, (u32::max_value(), 2))?;
     /// assert_eq!(result, 1);
@@ -2119,7 +2119,7 @@ impl<T> Caller<'_, T> {
     /// use std::str;
     ///
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let mut store = Store::default();
     ///
     /// let module = Module::new(
@@ -2137,13 +2137,13 @@ impl<T> Caller<'_, T> {
     /// )?;
     ///
     /// let Some(module_export) = module.get_export_index("memory") else {
-    ///    anyhow::bail!("failed to find `memory` export in module");
+    ///    bail!("failed to find `memory` export in module");
     /// };
     ///
     /// let log_str = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
     ///     let mem = match caller.get_module_export(&module_export) {
     ///         Some(Extern::Memory(mem)) => mem,
-    ///         _ => anyhow::bail!("failed to find host memory"),
+    ///         _ => bail!("failed to find host memory"),
     ///     };
     ///     let data = mem.data(&caller)
     ///         .get(ptr as u32 as usize..)
@@ -2151,9 +2151,9 @@ impl<T> Caller<'_, T> {
     ///     let string = match data {
     ///         Some(data) => match str::from_utf8(data) {
     ///             Ok(s) => s,
-    ///             Err(_) => anyhow::bail!("invalid utf-8"),
+    ///             Err(_) => bail!("invalid utf-8"),
     ///         },
-    ///         None => anyhow::bail!("pointer/length out of bounds"),
+    ///         None => bail!("pointer/length out of bounds"),
     ///     };
     ///     assert_eq!(string, "Hello, world!");
     ///     println!("{}", string);

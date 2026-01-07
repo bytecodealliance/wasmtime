@@ -38,7 +38,6 @@ wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
 wasm-compose = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
-anyhow = { workspace = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
 log = { workspace = true }

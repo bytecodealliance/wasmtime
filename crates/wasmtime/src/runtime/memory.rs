@@ -106,8 +106,7 @@ impl core::error::Error for MemoryAccessError {}
 /// **unsafe** usages of `Memory`. Do not do these things!
 ///
 /// ```rust
-/// # use anyhow::Result;
-/// use wasmtime::{Memory, Store};
+/// use wasmtime::{Memory, Result, Store};
 ///
 /// // NOTE: All code in this function is not safe to execute and may cause
 /// // segfaults/undefined behavior at runtime. Do not copy/paste these examples
@@ -246,7 +245,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -304,7 +303,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1))")?;
@@ -587,7 +586,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1 2))")?;
@@ -795,7 +794,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
 /// config.shared_memory(true);

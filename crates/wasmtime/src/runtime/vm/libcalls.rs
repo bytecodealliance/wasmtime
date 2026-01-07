@@ -199,7 +199,7 @@ macro_rules! block_on {
             // Note that if `async_support` is disabled then it should not be
             // possible to introduce await points so the provided future should
             // always be ready.
-            anyhow::Ok(vm::assert_ready(closure(store)))
+            crate::error::Ok(vm::assert_ready(closure(store)))
         }
     }};
 }
