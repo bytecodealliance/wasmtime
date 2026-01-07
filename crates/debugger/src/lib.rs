@@ -218,7 +218,7 @@ impl<T: Send + 'static> Debugger<T> {
                 }
                 None => {
                     // Premature exit due to closed channel. Just drop `inner`.
-                    anyhow::bail!("Debugger channel dropped");
+                    wasmtime::bail!("Debugger channel dropped");
                 }
             }
 
@@ -259,7 +259,7 @@ impl<T: Send + 'static> Debugger<T> {
                 self.in_tx
                     .send(Command::Continue)
                     .await
-                    .map_err(|_| anyhow::anyhow!("Failed to send over debug channel"))?;
+                    .map_err(|_| wasmtime::format_err!("Failed to send over debug channel"))?;
                 log::trace!("sent Continue");
 
                 // If that `send` was canceled, the command was not
@@ -277,11 +277,10 @@ impl<T: Send + 'static> Debugger<T> {
                 // the query was canceled, then transition back to
                 // `Paused`.
                 log::trace!("in Queried; receiving");
-                let response = self
-                    .out_rx
-                    .recv()
-                    .await
-                    .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+                let response =
+                    self.out_rx.recv().await.ok_or_else(|| {
+                        wasmtime::format_err!("Premature close of debugger channel")
+                    })?;
                 log::trace!("in Queried; received, dropping");
                 assert!(matches!(response, Response::QueryResponse(_)));
                 self.state = DebuggerState::Paused;
@@ -291,7 +290,7 @@ impl<T: Send + 'static> Debugger<T> {
                 self.in_tx
                     .send(Command::Continue)
                     .await
-                    .map_err(|_| anyhow::anyhow!("Failed to send over debug channel"))?;
+                    .map_err(|_| wasmtime::format_err!("Failed to send over debug channel"))?;
                 self.state = DebuggerState::Running;
             }
             DebuggerState::Complete => {
@@ -309,7 +308,7 @@ impl<T: Send + 'static> Debugger<T> {
             .out_rx
             .recv()
             .await
-            .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+            .ok_or_else(|| wasmtime::format_err!("Premature close of debugger channel"))?;
 
         match response {
             Response::Finished => {
@@ -368,11 +367,10 @@ impl<T: Send + 'static> Debugger<T> {
         match self.state {
             DebuggerState::Queried => {
                 // Earlier query canceled; drop its response first.
-                let response = self
-                    .out_rx
-                    .recv()
-                    .await
-                    .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+                let response =
+                    self.out_rx.recv().await.ok_or_else(|| {
+                        wasmtime::format_err!("Premature close of debugger channel")
+                    })?;
                 assert!(matches!(response, Response::QueryResponse(_)));
                 self.state = DebuggerState::Paused;
             }
@@ -392,16 +390,16 @@ impl<T: Send + 'static> Debugger<T> {
         self.in_tx
             .send(Command::Query(Box::new(|store| Box::new(f(store)))))
             .await
-            .map_err(|_| anyhow::anyhow!("Premature close of debugger channel"))?;
+            .map_err(|_| wasmtime::format_err!("Premature close of debugger channel"))?;
         self.state = DebuggerState::Queried;
 
         let response = self
             .out_rx
             .recv()
             .await
-            .ok_or_else(|| anyhow::anyhow!("Premature close of debugger channel"))?;
+            .ok_or_else(|| wasmtime::format_err!("Premature close of debugger channel"))?;
         let Response::QueryResponse(resp) = response else {
-            anyhow::bail!("Incorrect response from debugger task");
+            wasmtime::bail!("Incorrect response from debugger task");
         };
         self.state = DebuggerState::Paused;
 
@@ -463,7 +461,7 @@ mod test {
 
     #[tokio::test]
     #[cfg_attr(miri, ignore)]
-    async fn basic_debugger() -> anyhow::Result<()> {
+    async fn basic_debugger() -> wasmtime::Result<()> {
         let _ = env_logger::try_init();
 
         let mut config = Config::new();
