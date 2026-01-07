@@ -1,5 +1,5 @@
 use crate::{InstanceState, SnapshotVal, Wizer};
-use anyhow::Context;
+use wasmtime::error::Context;
 use wasmtime::{Extern, Instance, Module, Result, Store, Val};
 
 impl Wizer {
@@ -10,7 +10,7 @@ impl Wizer {
         store: &mut Store<T>,
         wasm: &[u8],
         instantiate: impl AsyncFnOnce(&mut Store<T>, &Module) -> Result<wasmtime::Instance>,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> wasmtime::Result<Vec<u8>> {
         let (cx, instrumented_wasm) = self.instrument(wasm)?;
 
         let engine = store.engine();
@@ -26,22 +26,22 @@ impl Wizer {
 
     /// Check that the module exports an initialization function, and that the
     /// function has the correct type.
-    fn validate_init_func(&self, module: &wasmtime::Module) -> anyhow::Result<()> {
+    fn validate_init_func(&self, module: &wasmtime::Module) -> wasmtime::Result<()> {
         log::debug!("Validating the exported initialization function");
         match module.get_export(self.get_init_func()) {
             Some(wasmtime::ExternType::Func(func_ty)) => {
                 if func_ty.params().len() != 0 || func_ty.results().len() != 0 {
-                    anyhow::bail!(
+                    wasmtime::bail!(
                         "the Wasm module's `{}` function export does not have type `[] -> []`",
                         self.get_init_func()
                     );
                 }
             }
-            Some(_) => anyhow::bail!(
+            Some(_) => wasmtime::bail!(
                 "the Wasm module's `{}` export is not a function",
                 self.get_init_func()
             ),
-            None => anyhow::bail!(
+            None => wasmtime::bail!(
                 "the Wasm module does not have a `{}` export",
                 self.get_init_func()
             ),
@@ -54,7 +54,7 @@ impl Wizer {
         &self,
         store: &mut Store<T>,
         instance: &wasmtime::Instance,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         log::debug!("Calling the initialization function");
 
         if let Some(export) = instance.get_export(&mut *store, "_initialize") {
