@@ -594,7 +594,13 @@ impl ComponentTypesBuilder {
         size: u32,
     ) -> TypeFixedSizeListIndex {
         let element_abi = self.component_types.canonical_abi(&element);
-        let abi = CanonicalAbiInfo::record((0..size).map(|_| element_abi));
+        let mut abi = element_abi.clone();
+        // this assumes that size32 is already rounded up to alignment
+        abi.size32 = element_abi.size32 * size;
+        abi.size64 = element_abi.size64 * size;
+        abi.flat_count = element_abi
+            .flat_count
+            .map(|c| c.saturating_mul(size.min(255) as u8));
         self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
     }
 
@@ -1115,7 +1121,21 @@ impl TypeInformation {
     }
 
     fn fixed_size_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedSizeList) {
-        self.build_record((0..ty.size).map(|_| types.type_information(&ty.element)));
+        let element_info = types.type_information(&ty.element);
+        self.depth = 1 + element_info.depth;
+        self.has_borrow = element_info.has_borrow;
+        match element_info.flat.as_flat_types() {
+            Some(types) => {
+                'outer: for _ in 0..ty.size {
+                    for (t32, t64) in types.memory32.iter().zip(types.memory64) {
+                        if self.flat.push(*t32, *t64) {
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            None => self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap(),
+        }
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
