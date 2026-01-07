@@ -22,6 +22,16 @@
   (core instance $i (instantiate $m (with "" (instance (export "stream.read" (func $stream-read))))))
 )
 
+;; stream.read w/o memory
+(component
+  (core module $m
+    (import "" "stream.read" (func $stream-read (param i32 i32 i32) (result i32)))
+  )
+  (type $stream-type (stream))
+  (core func $stream-read (canon stream.read $stream-type async))
+  (core instance $i (instantiate $m (with "" (instance (export "stream.read" (func $stream-read))))))
+)
+
 ;; stream.read; with realloc
 (component
   (core module $libc
@@ -46,6 +56,16 @@
   )
   (type $stream-type (stream u8))
   (core func $stream-write (canon stream.write $stream-type async (memory $libc "memory")))
+  (core instance $i (instantiate $m (with "" (instance (export "stream.write" (func $stream-write))))))
+)
+
+;; stream.write w/o memory
+(component
+  (core module $m
+    (import "" "stream.write" (func $stream-write (param i32 i32 i32) (result i32)))
+  )
+  (type $stream-type (stream))
+  (core func $stream-write (canon stream.write $stream-type async))
   (core instance $i (instantiate $m (with "" (instance (export "stream.write" (func $stream-write))))))
 )
 
