@@ -2,12 +2,13 @@
 //!
 //! [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 
-use anyhow::{Result, anyhow};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
-use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store};
+use wasmtime::{
+    Caller, ExternType, InstancePre, Linker, Module, Result, SharedMemory, Store, format_err,
+};
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
@@ -141,7 +142,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
     store: &wasmtime::Store<T>,
     module: &Module,
     get_cx: impl Fn(&mut T) -> &WasiThreadsCtx<T> + Send + Sync + Copy + 'static,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     linker.func_wrap(
         "wasi",
         "thread-spawn",
@@ -170,7 +171,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
                 let mem = SharedMemory::new(module.engine(), m.clone())?;
                 linker.define(store, import.module(), import.name(), mem.clone())?;
             } else {
-                return Err(anyhow!(
+                return Err(format_err!(
                     "memory was not shared; a `wasi-threads` must import \
                      a shared memory as \"memory\""
                 ));
