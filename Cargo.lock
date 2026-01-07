@@ -4609,7 +4609,6 @@ dependencies = [
 name = "wasmtime-c-api-impl"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "cap-std",
