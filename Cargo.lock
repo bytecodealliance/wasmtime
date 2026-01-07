@@ -5318,13 +5318,13 @@ dependencies = [
 name = "wiggle"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "bitflags 2.9.4",
  "proptest",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
  "wasmtime",
+ "wasmtime-environ",
  "wiggle-macro",
  "wiggle-test",
  "witx",
@@ -5334,11 +5334,11 @@ dependencies = [
 name = "wiggle-generate"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+ "wasmtime-environ",
  "witx",
 ]
 

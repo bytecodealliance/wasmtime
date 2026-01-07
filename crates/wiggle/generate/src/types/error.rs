@@ -15,7 +15,7 @@ pub(super) fn define_error(
     quote! {
         #[derive(Debug)]
         pub struct #rich_error {
-            inner: anyhow::Error,
+            inner: wiggle::error::Error,
         }
 
         impl std::fmt::Display for #rich_error {
@@ -30,10 +30,10 @@ pub(super) fn define_error(
         }
 
         impl #rich_error {
-            pub fn trap(inner: anyhow::Error) -> #rich_error {
+            pub fn trap(inner: wiggle::error::Error) -> #rich_error {
                 Self { inner }
             }
-            pub fn downcast(self) -> Result<#abi_error, anyhow::Error> {
+            pub fn downcast(self) -> Result<#abi_error, wiggle::error::Error> {
                 self.inner.downcast()
             }
             pub fn downcast_ref(&self) -> Option<&#abi_error> {
@@ -46,7 +46,7 @@ pub(super) fn define_error(
 
         impl From<#abi_error> for #rich_error {
             fn from(abi: #abi_error) -> #rich_error {
-                #rich_error { inner: anyhow::Error::from(abi) }
+                #rich_error { inner: wiggle::error::Error::from(abi) }
             }
         }
     }
