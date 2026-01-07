@@ -1,5 +1,5 @@
 use super::{TypedResource, TypedResourceIndex};
-use crate::error::{Result, bail};
+use crate::{Result, bail};
 use alloc::vec::Vec;
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};

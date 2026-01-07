@@ -1,4 +1,3 @@
-use crate::error::{Result, anyhow};
 use crate::prelude::*;
 use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
@@ -421,7 +420,7 @@ impl<'a> StoreFiber<'a> {
     pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
         if let Some(fiber) = self.fiber() {
             if !fiber.done() {
-                let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
+                let result = resume_fiber(store, self, Err(format_err!("future dropped")));
                 debug_assert!(result.is_ok());
             }
         }

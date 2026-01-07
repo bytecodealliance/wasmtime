@@ -1,8 +1,8 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, Val};
-use crate::error::{Result, anyhow, bail};
 use crate::runtime::vm::VMStore;
+use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
@@ -13,7 +13,7 @@ pub struct ConcurrentState;
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
     // bug in Wasmtime rather than in the guest.
-    Err(anyhow!(
+    Err(format_err!(
         "{what} should have failed validation \
          when `component-model-async` feature disabled"
     ))

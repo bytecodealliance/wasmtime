@@ -9,11 +9,14 @@ use crate::component::{
     AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower, StreamAny,
     Val, WasmList,
 };
-use crate::error::{Context as _, Error, Result, anyhow, bail};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{
+    Error, Result, bail,
+    error::{Context as _, format_err},
+};
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
 use core::fmt;
 use core::future;
@@ -2451,7 +2454,7 @@ impl<T> StoreContextMut<'_, T> {
                                             || *guest_offset > 0
                                             || host_offset > 0
                                         {
-                                            return Poll::Ready(Err(anyhow!(
+                                            return Poll::Ready(Err(format_err!(
                                                 "StreamProducer::poll_produce returned Poll::Pending \
                                                  after producing at least one item"
                                             )));
@@ -3010,7 +3013,7 @@ impl Instance {
             TransmitIndex::Future(_) => store.host_drop_writer(
                 id,
                 Some(|| {
-                    Err(anyhow!(
+                    Err(format_err!(
                         "cannot drop future write end without first writing a value"
                     ))
                 }),
