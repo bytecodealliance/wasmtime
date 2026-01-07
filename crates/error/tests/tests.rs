@@ -13,7 +13,7 @@ use core::{
 };
 #[cfg(feature = "std")]
 use std::backtrace::BacktraceStatus;
-use wasmtime_internal_error::{Context, Error, OutOfMemory, Result, anyhow, bail, ensure};
+use wasmtime_internal_error::{Context, Error, OutOfMemory, Result, bail, ensure, format_err};
 
 #[derive(Debug)]
 struct TestError(u32);
@@ -244,41 +244,41 @@ fn backtrace() {
 }
 
 #[test]
-fn anyhow_macro_string_literal() {
-    let error = anyhow!("literal");
+fn format_err_macro_string_literal() {
+    let error = format_err!("literal");
     assert_eq!(error.to_string(), "literal");
 }
 
 #[test]
-fn anyhow_macro_format_implicit_args() {
+fn format_err_macro_format_implicit_args() {
     let x = 42;
     let y = 36;
-    let error = anyhow!("implicit args {x} {y}");
+    let error = format_err!("implicit args {x} {y}");
     assert_eq!(error.to_string(), "implicit args 42 36");
 }
 
 #[test]
-fn anyhow_macro_format_explicit_args() {
+fn format_err_macro_format_explicit_args() {
     let a = 84;
     let b = 72;
-    let error = anyhow!("explicit args {x} {y}", x = a / 2, y = b / 2);
+    let error = format_err!("explicit args {x} {y}", x = a / 2, y = b / 2);
     assert_eq!(error.to_string(), "explicit args 42 36");
 }
 
 #[test]
-fn anyhow_macro_core_error() {
+fn format_err_macro_core_error() {
     let error = TestError(42);
-    let error = anyhow!(error);
+    let error = format_err!(error);
     assert!(error.is::<TestError>());
     assert_eq!(error.to_string(), "TestError(42)");
 }
 
 #[test]
-fn anyhow_macro_core_error_chain() {
+fn format_err_macro_core_error_chain() {
     let error = ChainError::new("ouch", None);
     let error = ChainError::new("yikes", Some(Box::new(error)));
     let error = ChainError::new("whoops", Some(Box::new(error)));
-    let error = anyhow!(error);
+    let error = format_err!(error);
 
     let mut chain = error.chain();
 
@@ -295,9 +295,9 @@ fn anyhow_macro_core_error_chain() {
 }
 
 #[test]
-fn anyhow_macro_msg() {
+fn format_err_macro_msg() {
     let error = 42;
-    let error = anyhow!(error);
+    let error = format_err!(error);
     assert_eq!(error.to_string(), "42");
 }
 

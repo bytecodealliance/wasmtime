@@ -11,7 +11,8 @@ use core::fmt::{self, write};
 
 /// Construct an [`Error`](crate::Error) via string formatting or another error.
 ///
-/// Like `anyhow::anyhow!` but for [`wasmtime::Error`][crate::Error].
+/// Like `anyhow::format_err!` or `anyhow::anyhow!` but for
+/// [`wasmtime::Error`][crate::Error].
 ///
 /// # String Formatting
 ///
@@ -20,16 +21,16 @@ use core::fmt::{self, write};
 ///
 /// ```
 /// # use wasmtime_internal_error as wasmtime;
-/// use wasmtime::{anyhow, Error};
+/// use wasmtime::{format_err, Error};
 ///
 /// let x = 42;
-/// let error: Error = anyhow!("x is {x}");
+/// let error: Error = format_err!("x is {x}");
 /// assert_eq!(error.to_string(), "x is 42");
 ///
-/// let error: Error = anyhow!("x / 2 is {}", x / 2);
+/// let error: Error = format_err!("x / 2 is {}", x / 2);
 /// assert_eq!(error.to_string(), "x / 2 is 21");
 ///
-/// let error: Error = anyhow!("x + 1 is {y}", y = x + 1);
+/// let error: Error = format_err!("x + 1 is {y}", y = x + 1);
 /// assert_eq!(error.to_string(), "x + 1 is 43");
 /// ```
 ///
@@ -45,7 +46,7 @@ use core::fmt::{self, write};
 /// #![cfg(feature = "std")]
 /// # use wasmtime_internal_error as wasmtime;
 /// use std::fmt;
-/// use wasmtime::{anyhow, Error};
+/// use wasmtime::{format_err, Error};
 ///
 /// #[derive(Debug)]
 /// struct SomeOtherError(u32);
@@ -58,13 +59,13 @@ use core::fmt::{self, write};
 ///
 /// impl std::error::Error for SomeOtherError {}
 ///
-/// let error: Error = anyhow!(SomeOtherError(36));
+/// let error: Error = format_err!(SomeOtherError(36));
 /// assert!(error.is::<SomeOtherError>());
 /// assert_eq!(error.to_string(), "some other error (code 36)");
 /// # }
 /// ```
 #[macro_export]
-macro_rules! anyhow {
+macro_rules! format_err {
     // Format-style invocation without explicit format arguments.
     ( $message:literal $(,)? ) => {
         $crate::Error::from_format_args($crate::macros::format_args!($message))
@@ -84,22 +85,24 @@ macro_rules! anyhow {
     }};
 }
 
-/// Identical to the [`anyhow!`][crate::anyhow] macro.
+/// Identical to the [`format_err!`][crate::format_err] macro.
 ///
-/// Provided for compatibility.
+/// This is provided for API compatibility with the `anyhow` crate, but you
+/// should prefer using `format_err!` instead.
 #[macro_export]
-macro_rules! format_err {
+#[deprecated = "Use `format_err!(...)` instead"]
+macro_rules! anyhow {
     ( $( $args:tt )* ) => {
-        anyhow!( $( $args )* )
+        $crate::format_err!( $( $args )* )
     };
 }
 
 /// Early exit from the current function with an error.
 ///
-/// This helper is equivalent to `return Err(anyhow!(...))`.
+/// This helper is equivalent to `return Err(format_err!(...))`.
 ///
-/// See the docs for the [`anyhow!`][crate::anyhow] macro for details on the
-/// kinds of errors that can be constructed.
+/// See the docs for the [`format_err!`][crate::format_err] macro for details on
+/// the kinds of errors that can be constructed.
 ///
 /// Like `anyhow::bail!` but for [`wasmtime::Error`][crate::Error].
 ///
@@ -128,7 +131,7 @@ macro_rules! format_err {
 #[macro_export]
 macro_rules! bail {
     ( $($args:tt)* ) => {{
-        return $crate::macros::Err($crate::anyhow!( $( $args )* ));
+        return $crate::macros::Err($crate::format_err!( $( $args )* ));
     }};
 }
 
@@ -139,7 +142,7 @@ macro_rules! bail {
 ///
 /// ```ignore
 /// if !condition {
-///     return Err(anyhow!(...));
+///     return Err(format_err!(...));
 /// }
 /// ```
 ///
@@ -291,7 +294,7 @@ pub mod formatting {
     impl Error {
         /// Construct an `Error` from format arguments.
         ///
-        /// Only for use by the `anyhow!` macro.
+        /// Only for use by the `format_err!` macro.
         #[doc(hidden)]
         pub fn from_format_args(args: fmt::Arguments<'_>) -> Self {
             if let Some(s) = args.as_str() {
