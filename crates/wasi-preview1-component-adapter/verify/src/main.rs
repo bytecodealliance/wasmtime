@@ -21,7 +21,7 @@ fn main() -> Result<()> {
             Payload::End(_) => {}
             Payload::TypeSection(_) => {}
             Payload::ImportSection(s) => {
-                for i in s {
+                for i in s.into_imports() {
                     let i = i?;
                     match i.ty {
                         TypeRef::Func(_) => {

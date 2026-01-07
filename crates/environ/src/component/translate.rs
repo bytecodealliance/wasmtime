@@ -867,9 +867,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
                             bail!("unsupported intrinsic")
                         }
-                        wasmparser::CanonicalFunction::BackpressureSet => {
-                            bail!("unsupported intrinsic")
-                        }
                         wasmparser::CanonicalFunction::BackpressureInc => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;

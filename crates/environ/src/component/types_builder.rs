@@ -459,6 +459,9 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::FixedSizeList(..) => {
                 bail!("support not implemented for fixed-size-lists");
             }
+            ComponentDefinedType::Map(..) => {
+                bail!("support not implemented for map type");
+            }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
