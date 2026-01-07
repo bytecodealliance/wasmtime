@@ -997,6 +997,10 @@
 (rule (lower (has_type (vr128_ty ty) (bnot x)))
       (vec_not ty x))
 
+;; Float version using vector NOR.
+(rule 5 (lower (has_type (ty_scalar_float _) (bnot x)))
+      (vec_not $F64X2 x))
+
 ;; With z15 (bnot (bxor ...)) can be a single instruction, similar to the
 ;; (bxor _ (bnot _)) lowering.
 (rule 3 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot (bxor x y))))
@@ -1032,6 +1036,10 @@
 ;; And two vector registers.
 (rule 0 (lower (has_type (vr128_ty ty) (band x y)))
       (vec_and ty x y))
+
+;; And two float registers, using vector overlay.
+(rule 11 (lower (has_type (ty_scalar_float _) (band x y)))
+      (vec_and $F64X2 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
@@ -1075,6 +1083,10 @@
 (rule 0 (lower (has_type (vr128_ty ty) (bor x y)))
       (vec_or ty x y))
 
+;; Or two floating registers, using vector overlay
+(rule 11 (lower (has_type (ty_scalar_float _) (bor x y)))
+      (vec_or $F64X2 x y))
+
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
 ;; forms early on.
@@ -1113,6 +1125,10 @@
 ;; Xor two vector registers.
 (rule 0 (lower (has_type (vr128_ty ty) (bxor x y)))
       (vec_xor ty x y))
+
+;; Xor two floating registers, using vector overlay
+(rule 9 (lower (has_type (ty_scalar_float _) (bxor x y)))
+      (vec_xor $F64X2 x y))
 
 ;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
