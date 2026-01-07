@@ -17,9 +17,8 @@ use {
         task::{self, Context, Poll},
         time::Duration,
     },
-    wasmtime::Result,
     wasmtime::{
-        Engine, Store, StoreContextMut,
+        Engine, Result, Store, StoreContextMut,
         component::{
             Destination, FutureReader, Lift, Linker, ResourceTable, Source, StreamConsumer,
             StreamProducer, StreamReader, StreamResult, VecBuffer,

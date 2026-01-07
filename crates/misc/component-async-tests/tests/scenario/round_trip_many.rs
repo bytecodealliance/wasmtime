@@ -13,7 +13,7 @@ use futures::{
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{Linker, ResourceTable, Val};
-use wasmtime::error::{Engine, Result, Store, format_err};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
