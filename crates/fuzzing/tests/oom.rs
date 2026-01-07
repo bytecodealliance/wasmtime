@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 use wasmtime::Config;
-use wasmtime_error::{Error, OutOfMemory, Result, anyhow};
+use wasmtime_error::{Error, OutOfMemory, Result, format_err};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -70,7 +70,7 @@ static X: AtomicU32 = AtomicU32::new(42);
 fn error_fmt() -> Result<()> {
     OomTest::new().test(|| {
         let x = X.load(SeqCst);
-        let error = anyhow!("ouch: {x}");
+        let error = format_err!("ouch: {x}");
         ok_if_not_oom(error)
     })
 }
