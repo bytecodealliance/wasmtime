@@ -15,7 +15,6 @@ cargo-fuzz = true
 mutatis = { workspace = true }
 rand = { workspace = true }
 postcard = { workspace = true }
-anyhow = { workspace = true }
 env_logger = { workspace = true }
 cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
 cranelift-codegen = { workspace = true, features = ["incremental-cache", "x86", "arm64", "s390x", "riscv64"] }
@@ -36,11 +35,11 @@ wasmtime-test-util = { workspace = true }
 log = { workspace = true }
 
 [build-dependencies]
-anyhow = { workspace = true }
 proc-macro2 = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 rand = { version = "0.8.0" }
 quote = { workspace = true }
+wasmtime = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
 
 [features]
