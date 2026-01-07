@@ -1,3 +1,16 @@
+## 40.0.1
+
+Released 2026-01-07.
+
+### Changed
+
+* This release is a test of Wasmtime's CI-based crate publishing infrastructure.
+  Wasmtime is switching to crates.io-based trusted publishing for this release
+  and is testing that everything works.
+  [#12257](https://github.com/bytecodealliance/wasmtime/pull/12257)
+
+--------------------------------------------------------------------------------
+
 ## 40.0.0
 
 Released 2025-12-20.
