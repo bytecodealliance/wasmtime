@@ -5363,6 +5363,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
+ "wasmtime",
  "wiggle",
 ]
 

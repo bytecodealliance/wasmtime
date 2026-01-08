@@ -25,3 +25,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
 env_logger = { workspace = true }
+# Explicitly enable default features so that tests pass even testing only this
+# crate in isolation and we can't accidentally rely on cargo feature resolution
+# to enable the runtime and compiler.
+wasmtime = { workspace = true, features = ["default"] }
