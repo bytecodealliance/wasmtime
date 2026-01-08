@@ -5098,7 +5098,6 @@ dependencies = [
 name = "wasmtime-wasi-config"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "test-programs-artifacts",
  "tokio",
  "wasmtime",
