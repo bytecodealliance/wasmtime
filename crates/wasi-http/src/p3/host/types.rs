@@ -6,7 +6,6 @@ use crate::p3::bindings::http::types::{
 };
 use crate::p3::body::{Body, HostBodyStreamProducer};
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
-use anyhow::Context as _;
 use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -16,6 +15,7 @@ use tokio::sync::oneshot;
 use wasmtime::component::{
     Access, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
+use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
 
 fn get_fields<'a>(
