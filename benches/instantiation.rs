@@ -1,4 +1,3 @@
-use anyhow::Result;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::cell::LazyCell;
 use std::path::Path;
