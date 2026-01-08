@@ -31,7 +31,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
-    "cranelift-egraph",
     "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
@@ -52,8 +51,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
-    // winch
-    "winch",
     // wasmtime
     "wasmtime-internal-error",
     "wasmtime-internal-versioned-export-macros",
