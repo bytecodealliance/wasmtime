@@ -5141,7 +5141,6 @@ dependencies = [
 name = "wasmtime-wasi-io"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "futures",
@@ -5152,7 +5151,6 @@ dependencies = [
 name = "wasmtime-wasi-keyvalue"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "test-programs-artifacts",
  "tokio",
  "wasmtime",
