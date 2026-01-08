@@ -5357,7 +5357,6 @@ dependencies = [
 name = "wiggle-test"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "env_logger 0.11.5",
  "proptest",
  "thiserror 2.0.17",
