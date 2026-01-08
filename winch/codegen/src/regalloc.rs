@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     codegen::CodeGenError,
+    format_err,
     isa::reg::{Reg, RegClass},
     regset::{RegBitSet, RegSet},
 };
-
-use anyhow::{Result, anyhow};
 
 /// The register allocator.
 ///
@@ -41,7 +41,7 @@ impl RegAlloc {
                 spill(self)?;
                 self.regset
                     .reg_for_class(class)
-                    .ok_or_else(|| anyhow!(CodeGenError::expected_register_to_be_available()))
+                    .ok_or_else(|| format_err!(CodeGenError::expected_register_to_be_available()))
             }
         }
     }
@@ -62,7 +62,7 @@ impl RegAlloc {
                 spill(self)?;
                 self.regset
                     .reg(named)
-                    .ok_or_else(|| anyhow!(CodeGenError::expected_register_to_be_available()))
+                    .ok_or_else(|| format_err!(CodeGenError::expected_register_to_be_available()))
             }
         }
     }

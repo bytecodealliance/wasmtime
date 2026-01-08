@@ -1,15 +1,14 @@
-use crate::{
-    abi::{ABI, wasm_sig},
-    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
-};
-
 use crate::frame::{DefinedLocals, Frame};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::isa::{Builder, TargetIsa};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use anyhow::Result;
+use crate::{
+    Result,
+    abi::{ABI, wasm_sig},
+    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
+};
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{Final, MachBufferFinalized, isa::x64::settings as x64_settings};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};

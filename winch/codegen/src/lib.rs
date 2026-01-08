@@ -22,3 +22,5 @@ mod regalloc;
 mod regset;
 mod stack;
 mod visitor;
+
+pub use wasmtime_environ::error::{Context, Error, Result, bail, ensure, format_err};
