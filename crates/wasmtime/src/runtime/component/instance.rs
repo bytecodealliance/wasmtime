@@ -197,7 +197,7 @@ impl Instance {
     {
         let f = self
             .get_func(store.as_context_mut(), name)
-            .ok_or_else(|| anyhow!("failed to find function export"))?;
+            .ok_or_else(|| format_err!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function to given type"))?)
     }

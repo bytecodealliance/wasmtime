@@ -61,7 +61,9 @@ impl<'a> CodeBuilder<'a> {
         main_wasm: &'b [u8],
     ) -> Result<crate::hash_set::HashSet<&'b str>, Error> {
         let intrinsics_import = self.unsafe_intrinsics_import.as_deref().ok_or_else(|| {
-            anyhow!("must configure the unsafe-intrinsics import when using compile-time builtins")
+            format_err!(
+                "must configure the unsafe-intrinsics import when using compile-time builtins"
+            )
         })?;
 
         let mut instance_imports = crate::hash_set::HashSet::new();

@@ -1549,7 +1549,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                 let worst_case = bytes
                     .len()
                     .checked_mul(2)
-                    .ok_or_else(|| anyhow!("byte length overflow"))?;
+                    .ok_or_else(|| format_err!("byte length overflow"))?;
                 if worst_case > MAX_STRING_BYTE_LENGTH {
                     bail!("byte length too large");
                 }
@@ -1853,7 +1853,7 @@ where
     let size = list
         .len()
         .checked_mul(elem_size)
-        .ok_or_else(|| anyhow!("size overflow copying a list"))?;
+        .ok_or_else(|| format_err!("size overflow copying a list"))?;
     let ptr = cx.realloc(0, 0, T::ALIGN32, size)?;
     T::linear_store_list_to_memory(cx, ty, ptr, list)?;
     Ok((ptr, list.len()))

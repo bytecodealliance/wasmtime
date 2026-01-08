@@ -957,7 +957,7 @@ fn load_variant(
         }
     };
     let case_ty = types.nth(discriminant as usize).ok_or_else(|| {
-        anyhow!(
+        format_err!(
             "discriminant {} out of range [0..{})",
             discriminant,
             types.len()
@@ -989,7 +989,7 @@ fn lift_variant(
     let discriminant = next(src).get_u32();
     let ty = types
         .nth(discriminant as usize)
-        .ok_or_else(|| anyhow!("discriminant {discriminant} out of range [0..{len})"))?;
+        .ok_or_else(|| format_err!("discriminant {discriminant} out of range [0..{len})"))?;
     let (value, value_flat) = match ty {
         Some(ty) => (
             Some(Box::new(Val::lift(cx, ty, src)?)),
