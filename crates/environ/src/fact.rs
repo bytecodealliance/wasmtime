@@ -88,8 +88,6 @@ pub struct Module<'a> {
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
 
-    imported_check_blocking: Option<FuncIndex>,
-
     imported_trap: Option<FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
@@ -102,6 +100,8 @@ pub struct Module<'a> {
     helper_worklist: Vec<(FunctionId, Helper)>,
 
     exports: Vec<(u32, String)>,
+
+    task_may_block: Option<GlobalIndex>,
 }
 
 struct AdapterData {
@@ -262,9 +262,9 @@ impl<'a> Module<'a> {
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
-            imported_check_blocking: None,
             imported_trap: None,
             exports: Vec::new(),
+            task_may_block: None,
         }
     }
 
@@ -458,6 +458,25 @@ impl<'a> Module<'a> {
         self.imported.insert(def.clone(), idx.index());
         self.imports.push(Import::CoreDef(def));
         idx
+    }
+
+    fn import_task_may_block(&mut self) -> GlobalIndex {
+        if let Some(task_may_block) = self.task_may_block {
+            task_may_block
+        } else {
+            let task_may_block = self.import_global(
+                "instance",
+                "task_may_block",
+                GlobalType {
+                    val_type: ValType::I32,
+                    mutable: true,
+                    shared: false,
+                },
+                CoreDef::TaskMayBlock,
+            );
+            self.task_may_block = Some(task_may_block);
+            task_may_block
+        }
     }
 
     fn import_transcoder(&mut self, transcoder: transcode::Transcoder) -> FuncIndex {
@@ -717,17 +736,6 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_check_blocking(&mut self) -> FuncIndex {
-        self.import_simple(
-            "async",
-            "check-blocking",
-            &[],
-            &[],
-            Import::CheckBlocking,
-            |me| &mut me.imported_check_blocking,
-        )
-    }
-
     fn import_trap(&mut self) -> FuncIndex {
         self.import_simple(
             "runtime",
@@ -882,9 +890,6 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
-    /// An intrinsic used by FACT-generated modules to check whether an
-    /// async-typed function may be called via a sync lower.
-    CheckBlocking,
     /// An intrinsic for trapping the instance with a specific trap code.
     Trap,
 }

@@ -675,6 +675,20 @@ impl Instance {
                     index,
                 )
             }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::TaskMayBlock => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = super::component::VMComponentContext::from_opaque(
+                        import.vmctx.unwrap().as_non_null(),
+                    );
+                    super::component::ComponentInstance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_task_may_block(
+                    crate::component::store::StoreComponentInstanceId::new(store, id),
+                )
+            }
         }
     }
 

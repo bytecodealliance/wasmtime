@@ -65,9 +65,10 @@
 ;;     gv7 = vmctx
 ;;     gv8 = load.i64 notrap aligned readonly can_move gv7+120
 ;;     gv9 = load.i64 notrap aligned readonly can_move gv7+96
-;;     gv10 = vmctx
-;;     gv11 = load.i64 notrap aligned readonly gv10+8
-;;     gv12 = load.i64 notrap aligned gv11+16
+;;     gv10 = load.i64 notrap aligned readonly can_move gv7+144
+;;     gv11 = vmctx
+;;     gv12 = load.i64 notrap aligned readonly gv11+8
+;;     gv13 = load.i64 notrap aligned gv12+16
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64, i32) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
@@ -90,10 +91,10 @@
 ;;                                     brif v18, block4, block5
 ;;
 ;;                                 block4:
-;;                                     v93 = load.i64 notrap aligned readonly can_move v5+72
-;;                                     v94 = load.i64 notrap aligned readonly can_move v5+88
+;;                                     v92 = load.i64 notrap aligned readonly can_move v5+72
+;;                                     v93 = load.i64 notrap aligned readonly can_move v5+88
 ;;                                     v19 = iconst.i32 24
-;;                                     call_indirect sig1, v93(v94, v5, v19)  ; v19 = 24
+;;                                     call_indirect sig1, v92(v93, v5, v19)  ; v19 = 24
 ;;                                     trap user11
 ;;
 ;;                                 block5:
@@ -101,9 +102,9 @@
 ;;                                     v23 = load.i32 notrap aligned table v22
 ;;                                     v24 = iconst.i32 2
 ;;                                     v25 = band v23, v24  ; v24 = 2
-;;                                     v85 = iconst.i32 0
-;;                                     v86 = icmp eq v25, v85  ; v85 = 0
-;;                                     v28 = uextend.i32 v86
+;;                                     v81 = iconst.i32 0
+;;                                     v82 = icmp eq v25, v81  ; v81 = 0
+;;                                     v28 = uextend.i32 v82
 ;;                                     brif v28, block6, block7
 ;;
 ;;                                 block6:
@@ -117,12 +118,17 @@
 ;;                                     v34 = iconst.i32 -3
 ;;                                     v35 = band.i32 v23, v34  ; v34 = -3
 ;;                                     store notrap aligned table v35, v22
-;;                                     v66 = iconst.i32 -4
-;;                                     v72 = band.i32 v23, v66  ; v66 = -4
-;;                                     store notrap aligned table v72, v22
-;;                                     v87 = iconst.i32 1
-;;                                     v88 = bor v35, v87  ; v87 = 1
-;;                                     store notrap aligned table v88, v22
+;;                                     v37 = load.i64 notrap aligned readonly can_move v5+144
+;;                                     v38 = load.i32 notrap aligned table v37
+;;                                     v83 = iconst.i32 0
+;;                                     store notrap aligned table v83, v37  ; v83 = 0
+;;                                     v42 = load.i32 notrap aligned table v22
+;;                                     v43 = iconst.i32 -2
+;;                                     v44 = band v42, v43  ; v43 = -2
+;;                                     store notrap aligned table v44, v22
+;;                                     v84 = iconst.i32 1
+;;                                     v85 = bor v42, v84  ; v84 = 1
+;;                                     store notrap aligned table v85, v22
 ;;                                     jump block8
 ;;
 ;;                                 block8:
@@ -132,17 +138,18 @@
 ;;                                     jump block10
 ;;
 ;;                                 block10:
-;;                                     v51 = load.i32 notrap aligned table v12
-;;                                     v39 = iconst.i32 -2
-;;                                     v53 = band v51, v39  ; v39 = -2
-;;                                     store notrap aligned table v53, v12
-;;                                     v89 = iconst.i32 1
-;;                                     v90 = bor v51, v89  ; v89 = 1
-;;                                     store notrap aligned table v90, v12
-;;                                     v61 = load.i32 notrap aligned table v22
-;;                                     v91 = iconst.i32 2
-;;                                     v92 = bor v61, v91  ; v91 = 2
-;;                                     store notrap aligned table v92, v22
+;;                                     v55 = load.i32 notrap aligned table v12
+;;                                     v86 = iconst.i32 -2
+;;                                     v87 = band v55, v86  ; v86 = -2
+;;                                     store notrap aligned table v87, v12
+;;                                     v88 = iconst.i32 1
+;;                                     v89 = bor v55, v88  ; v88 = 1
+;;                                     store notrap aligned table v89, v12
+;;                                     v65 = load.i32 notrap aligned table v22
+;;                                     v90 = iconst.i32 2
+;;                                     v91 = bor v65, v90  ; v90 = 2
+;;                                     store notrap aligned table v91, v22
+;;                                     store.i32 notrap aligned table v38, v37
 ;;                                     jump block3
 ;;
 ;;                                 block3:
@@ -152,6 +159,6 @@
 ;; @00f0                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v76 = iconst.i32 1276
-;; @00f0                               return v76  ; v76 = 1276
+;;                                     v72 = iconst.i32 1276
+;; @00f0                               return v72  ; v72 = 1276
 ;; }

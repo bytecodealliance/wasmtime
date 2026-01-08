@@ -606,6 +606,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
 
                     // We could in theory inline these trampolines, so it could
                     // potentially make sense to record that we know this
