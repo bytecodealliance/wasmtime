@@ -16,7 +16,7 @@ async fn run(path: &str, server: &Server) -> Result<()> {
     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;
-    result.map_err(|()| anyhow::anyhow!("run returned an error"))
+    result.map_err(|()| wasmtime::format_err!("run returned an error"))
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

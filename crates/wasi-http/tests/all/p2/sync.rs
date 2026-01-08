@@ -15,7 +15,7 @@ fn run(path: &str, server: &Server) -> Result<()> {
     wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)?;
     let command = Command::instantiate(&mut store, &component, &linker)?;
     let result = command.wasi_cli_run().call_run(&mut store)?;
-    result.map_err(|()| anyhow::anyhow!("run returned an error"))
+    result.map_err(|()| wasmtime::format_err!("run returned an error"))
 }
 
 #[test_log::test]

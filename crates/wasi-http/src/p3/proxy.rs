@@ -1,8 +1,8 @@
 use crate::p3::WasiHttpView;
 use crate::p3::bindings::Proxy;
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
-use anyhow::Context as _;
 use wasmtime::component::{Accessor, TaskExit};
+use wasmtime::error::Context as _;
 
 impl Proxy {
     /// Call `wasi:http/handler#handle` on [Proxy] getting a [Response] back.

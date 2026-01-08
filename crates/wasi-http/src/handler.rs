@@ -3,7 +3,6 @@
 
 #[cfg(feature = "p3")]
 use crate::p3;
-use anyhow::{Result, anyhow};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::VecDeque;
 use std::collections::btree_map::{BTreeMap, Entry};
@@ -21,7 +20,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use wasmtime::AsContextMut;
 use wasmtime::component::Accessor;
-use wasmtime::{Store, StoreContextMut};
+use wasmtime::{Result, Store, StoreContextMut, format_err};
 
 /// Alternative p2 bindings generated with `exports: { default: async | store }`
 /// so we can use `TypedFunc::call_concurrent` with both p2 and p3 instances.
@@ -174,7 +173,7 @@ pub trait HandlerState: 'static + Sync + Send {
     fn max_instance_concurrent_reuse_count(&self) -> usize;
 
     /// Called when a worker exits with an error.
-    fn handle_worker_error(&self, error: anyhow::Error);
+    fn handle_worker_error(&self, error: wasmtime::Error);
 }
 
 struct ProxyHandlerInner<S: HandlerState> {
@@ -446,9 +445,9 @@ where
             accessor.with(|mut access| write_profile(access.as_context_mut()));
 
             if timed_out {
-                Err(anyhow!("guest timed out"))
+                Err(format_err!("guest timed out"))
             } else {
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             }
         }));
 
@@ -499,7 +498,7 @@ where
                     if sleep.as_mut().poll(cx).is_ready() {
                         // Deadline has been reached; kill the instance with an
                         // error.
-                        return Poll::Ready(Err(anyhow!("guest timed out")));
+                        return Poll::Ready(Err(format_err!("guest timed out")));
                     }
                 }
 
