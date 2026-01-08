@@ -21,7 +21,7 @@ wiggle-macro = { workspace = true }
 tracing = { workspace = true }
 bitflags = { workspace = true }
 wasmtime = { workspace = true, optional = true }
-anyhow = { workspace = true }
+wasmtime-environ = { workspace = true }
 
 [dev-dependencies]
 wiggle-test = { path = "test-helpers" }

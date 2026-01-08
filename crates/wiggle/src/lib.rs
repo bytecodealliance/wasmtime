@@ -1,14 +1,14 @@
-use anyhow::{Result, bail};
 use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::fmt;
 use std::mem;
 use std::ops::Range;
 use std::str;
+use wasmtime_environ::error::{Result, bail};
 
 pub use wiggle_macro::from_witx;
 
-pub use anyhow;
+pub use wasmtime_environ::error;
 pub use wiggle_macro::wasmtime_integration;
 
 pub use bitflags;
@@ -16,13 +16,13 @@ pub use bitflags;
 #[cfg(feature = "wiggle_metadata")]
 pub use witx;
 
-mod error;
+mod guest_error;
 mod guest_type;
 mod region;
 
 pub use tracing;
 
-pub use error::GuestError;
+pub use guest_error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
 
