@@ -1,10 +1,6 @@
 use crate::Abi;
 use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
-use crate::error::Context;
-use crate::error::anyhow;
-use crate::error::ensure;
-use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, FuncKey, ModuleEnvironment, ModuleInternedTypeIndex,
@@ -1205,7 +1201,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     component
                         .get(unchecked_range.start..unchecked_range.end)
                         .ok_or_else(|| {
-                            anyhow!(
+                            format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
                                 unchecked_range.start,
                                 unchecked_range.end,
@@ -1682,7 +1678,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 kind: &str,
                 import: &str,
                 name: &str,
-            ) -> core::result::Result<(), anyhow::Error> {
+            ) -> Result<()> {
                 let expected_len = expected.len();
                 let actual_len = actual.len();
                 ensure!(
