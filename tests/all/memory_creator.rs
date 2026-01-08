@@ -133,7 +133,7 @@ mod not_for_windows {
     }
 
     #[test]
-    fn host_memory() -> anyhow::Result<()> {
+    fn host_memory() -> wasmtime::Result<()> {
         let (mut store, mem_creator) = config();
         let module = Module::new(
             store.engine(),
@@ -151,7 +151,7 @@ mod not_for_windows {
     }
 
     #[test]
-    fn host_memory_grow() -> anyhow::Result<()> {
+    fn host_memory_grow() -> wasmtime::Result<()> {
         let (mut store, mem_creator) = config();
         let module = Module::new(
             store.engine(),

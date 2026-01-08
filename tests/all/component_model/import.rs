@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use super::REALLOC_AND_FREE;
-use anyhow::Result;
 use std::ops::Deref;
+use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, WasmBacktrace};
 
@@ -837,7 +837,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         store
             .run_concurrent(async move |accessor| {
-                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
     } else {
@@ -962,7 +962,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
         store
             .run_concurrent(async |store| {
                 run.call_concurrent(store, &[], &mut []).await?;
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             })
             .await??;
     } else {

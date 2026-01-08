@@ -1,6 +1,6 @@
 //! Tuning Wasmtime for fast instantiation.
 
-use anyhow::anyhow;
+use wasmtime::format_err;
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, Linker, Module, PoolingAllocationConfig, Result,
     Store,
@@ -85,7 +85,7 @@ fn main() -> Result<()> {
 
     // Wait for the threads to finish.
     for h in handles.into_iter() {
-        h.join().map_err(|_| anyhow!("thread panicked!"))??;
+        h.join().map_err(|_| format_err!("thread panicked!"))??;
     }
 
     Ok(())

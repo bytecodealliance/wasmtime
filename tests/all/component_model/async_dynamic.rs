@@ -6,7 +6,7 @@ fn simple_type_conversions() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
 
-    let f = FutureReader::new(&mut store, async { anyhow::Ok(10_u32) });
+    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) });
     let f = f.try_into_future_any(&mut store).unwrap();
     assert!(f.clone().try_into_future_reader::<()>().is_err());
     assert!(f.clone().try_into_future_reader::<u64>().is_err());
@@ -143,7 +143,7 @@ fn simple_type_assertions() -> Result<()> {
         Ok(())
     };
 
-    let f = FutureReader::new(&mut store, async { anyhow::Ok(10_u32) });
+    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) });
     roundtrip(&mut store, f)?;
 
     let (f,) = mk_f_t.call(&mut store, ())?;

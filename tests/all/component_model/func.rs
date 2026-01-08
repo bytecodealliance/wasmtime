@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use super::{REALLOC_AND_FREE, TypedFuncExt};
-use anyhow::Result;
 use std::sync::Arc;
+use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
 
@@ -924,7 +924,7 @@ async fn async_reentrance() -> Result<()> {
     let message = "cannot enter component instance";
     match store
         .run_concurrent(async move |accessor| {
-            anyhow::Ok(func.call_concurrent(accessor, (42,)).await?.0)
+            wasmtime::error::Ok(func.call_concurrent(accessor, (42,)).await?.0)
         })
         .await
     {
@@ -1137,7 +1137,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     match store
         .run_concurrent(async move |accessor| {
-            anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
+            wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
         })
         .await
     {
@@ -1337,7 +1337,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             store
                 .run_concurrent(async |store| {
                     func.call_concurrent(store, &input, &mut results).await?;
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
         } else {
@@ -1381,7 +1381,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    anyhow::Ok(func.call_concurrent(accessor, input).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?.0)
                 })
                 .await??
                 .0
@@ -1771,7 +1771,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             store
                 .run_concurrent(async |store| {
                     func.call_concurrent(store, &[], &mut results).await?;
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
         } else {
@@ -1860,7 +1860,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
                 })
                 .await??
                 .0
@@ -2029,7 +2029,7 @@ fn some_traps() -> Result<()> {
     // FIXME(WebAssembly/component-model#32) confirm the semantics here are
     // what's desired.
     #[track_caller]
-    fn assert_oob(err: &anyhow::Error) {
+    fn assert_oob(err: &wasmtime::Error) {
         assert!(
             err.to_string()
                 .contains("realloc return: beyond end of memory"),

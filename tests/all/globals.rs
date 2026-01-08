@@ -1,7 +1,7 @@
 use wasmtime::*;
 
 #[test]
-fn smoke() -> anyhow::Result<()> {
+fn smoke() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let g = Global::new(
         &mut store,
@@ -42,7 +42,7 @@ fn smoke() -> anyhow::Result<()> {
 }
 
 #[test]
-fn mutability() -> anyhow::Result<()> {
+fn mutability() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let g = Global::new(
         &mut store,
@@ -60,7 +60,7 @@ fn mutability() -> anyhow::Result<()> {
 // implementation, but for now should hopefully be resilient enough to catch at
 // least some cases of heap corruption.
 #[test]
-fn use_after_drop() -> anyhow::Result<()> {
+fn use_after_drop() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
         store.engine(),
@@ -90,7 +90,7 @@ fn use_after_drop() -> anyhow::Result<()> {
 }
 
 #[test]
-fn v128() -> anyhow::Result<()> {
+fn v128() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let g = Global::new(
         &mut store,

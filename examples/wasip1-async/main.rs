@@ -7,7 +7,7 @@ You can execute this example with:
     cargo run --example wasip1-async
 */
 
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::WasiCtx;
 use wasmtime_wasi::p1::{self, WasiP1Ctx};

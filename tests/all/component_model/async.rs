@@ -1,7 +1,7 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
-use anyhow::Result;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use wasmtime::Result;
 use wasmtime::{AsContextMut, Config, component::*};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 use wasmtime_component_util::REALLOC_AND_FREE;
@@ -161,7 +161,7 @@ async fn resume_separate_thread() -> Result<()> {
         store.set_fuel(u64::MAX).unwrap();
         store.fuel_async_yield_interval(Some(1)).unwrap();
         linker.instantiate_async(&mut store, &component).await?;
-        Ok::<_, anyhow::Error>(())
+        Ok::<_, wasmtime::Error>(())
     })
     .await?;
     Ok(())
@@ -217,7 +217,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
             let instance = linker.instantiate_async(&mut store, &component).await?;
             let func = instance.get_typed_func::<(Vec<u8>,), ()>(&mut store, "run")?;
             func.call_async(&mut store, (vec![1, 2, 3],)).await?;
-            Ok::<_, anyhow::Error>(())
+            Ok::<_, wasmtime::Error>(())
         }
     };
 
@@ -242,7 +242,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
         while poll_once.call_async(&mut store, ()).await? != 1 {
             // loop around to call again
         }
-        Ok::<_, anyhow::Error>(())
+        Ok::<_, wasmtime::Error>(())
     })
     .await?;
     Ok(())
@@ -308,7 +308,7 @@ async fn drop_resource_async() -> Result<()> {
         let resource = Resource::new_own(100);
         f.call_async(&mut store, (resource,)).await?;
         f.post_return_async(&mut store).await?;
-        Ok::<_, anyhow::Error>(())
+        Ok::<_, wasmtime::Error>(())
     })
     .await?;
 

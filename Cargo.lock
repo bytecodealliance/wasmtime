@@ -4623,7 +4623,6 @@ dependencies = [
 name = "wasmtime-cli"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bstr",
  "bytes",

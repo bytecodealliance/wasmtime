@@ -3,7 +3,7 @@
 use wasmtime::*;
 
 #[test]
-fn same_import_names_still_distinct() -> anyhow::Result<()> {
+fn same_import_names_still_distinct() -> wasmtime::Result<()> {
     const WAT: &str = r#"
 (module
   (import "" "" (func $a (result i32)))
