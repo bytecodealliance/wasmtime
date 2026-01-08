@@ -430,8 +430,7 @@ impl Global {
                 .component_instance(crate::component::ComponentInstanceId::from_u32(
                     self.instance,
                 ))
-                .task_may_block()
-                .as_raw(),
+                .task_may_block(),
         }
     }
 }

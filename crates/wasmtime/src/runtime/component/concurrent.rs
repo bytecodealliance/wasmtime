@@ -58,7 +58,7 @@ use crate::component::{
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
-    CallContext, ComponentInstance, HandleTable, InstanceFlags, ResourceTables, TaskMayBlock,
+    CallContext, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
 };
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
@@ -1411,12 +1411,6 @@ impl StoreOpaque {
             .handle_table()
     }
 
-    fn task_may_block(&mut self, instance: ComponentInstanceId) -> TaskMayBlock {
-        StoreComponentInstanceId::new(self.id(), instance)
-            .get_mut(self)
-            .task_may_block()
-    }
-
     fn set_thread(&mut self, thread: Option<QualifiedThreadId>) -> Option<QualifiedThreadId> {
         // Each time we switch threads, we conservatively set `task_may_block`
         // to `false` for the component instance we're switching away from (if
@@ -1426,8 +1420,9 @@ impl StoreOpaque {
         let old_thread = state.guest_thread.take();
         if let Some(old_thread) = old_thread {
             let instance = state.get_mut(old_thread.task).unwrap().instance.instance;
-            let mut task_may_block = self.task_may_block(instance);
-            unsafe { task_may_block.set(false) }
+            StoreComponentInstanceId::new(self.id(), instance)
+                .get_mut(self)
+                .set_task_may_block(false)
         }
 
         self.concurrent_state_mut().guest_thread = thread;
@@ -1447,17 +1442,21 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
         let instance = state.get_mut(guest_thread.task).unwrap().instance.instance;
-        let mut task_may_block = self.task_may_block(instance);
         let may_block = self.concurrent_state_mut().may_block(guest_thread.task);
-        unsafe { task_may_block.set(may_block) }
+        StoreComponentInstanceId::new(self.id(), instance)
+            .get_mut(self)
+            .set_task_may_block(may_block)
     }
 
     pub(crate) fn check_blocking(&mut self) -> Result<()> {
         let state = self.concurrent_state_mut();
         let task = state.guest_thread.unwrap().task;
         let instance = state.get_mut(task).unwrap().instance.instance;
-        let task_may_block = self.task_may_block(instance);
-        if unsafe { task_may_block.get() } {
+        let task_may_block = StoreComponentInstanceId::new(self.id(), instance)
+            .get_mut(self)
+            .get_task_may_block();
+
+        if task_may_block {
             Ok(())
         } else {
             Err(Trap::CannotBlockSyncTask.into())
