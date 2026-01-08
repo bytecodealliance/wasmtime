@@ -27,7 +27,10 @@ wasmtime-environ = { workspace = true }
 wiggle-test = { path = "test-helpers" }
 proptest = "1.0.0"
 tokio = { version = "1", features = ["rt-multi-thread","time", "macros"] }
-wasmtime = { workspace = true }
+# Explicitly enable default features so that tests pass even testing only this
+# crate in isolation and we can't accidentally rely on cargo feature resolution
+# to enable the runtime and compiler.
+wasmtime = { workspace = true, features = ["default"] }
 
 [[test]]
 name = "atoms_async"
