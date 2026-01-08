@@ -5,7 +5,7 @@ use crate::sched::{
 };
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
-use crate::{ErrorExt, WasiCtx};
+use crate::{EnvError, ErrorExt, WasiCtx};
 use cap_std::time::Duration;
 use std::collections::HashSet;
 use wiggle::{GuestMemory, GuestPtr};
@@ -1004,7 +1004,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         &mut self,
         memory: &mut GuestMemory<'_>,
         status: types::Exitcode,
-    ) -> anyhow::Error {
+    ) -> EnvError {
         Snapshot1::proc_exit(self, memory, status).await
     }
 
@@ -1013,7 +1013,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _memory: &mut GuestMemory<'_>,
         _sig: types::Signal,
     ) -> Result<(), Error> {
-        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
+        Err(Error::trap(EnvError::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self, memory: &mut GuestMemory<'_>) -> Result<(), Error> {
@@ -1038,7 +1038,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _ri_data: types::IovecArray,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_recv unsupported")))
+        Err(Error::trap(EnvError::msg("sock_recv unsupported")))
     }
 
     async fn sock_send(
@@ -1048,7 +1048,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _si_data: types::CiovecArray,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_send unsupported")))
+        Err(Error::trap(EnvError::msg("sock_send unsupported")))
     }
 
     async fn sock_shutdown(
@@ -1057,7 +1057,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _fd: types::Fd,
         _how: types::Sdflags,
     ) -> Result<(), Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_shutdown unsupported")))
+        Err(Error::trap(EnvError::msg("sock_shutdown unsupported")))
     }
 }
 

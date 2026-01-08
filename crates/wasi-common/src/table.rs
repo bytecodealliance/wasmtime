@@ -1,4 +1,4 @@
-use crate::{Error, ErrorExt};
+use crate::{EnvError, Error, ErrorExt};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -37,7 +37,7 @@ impl Table {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
         // around.
         if inner.map.len() == u32::MAX as usize {
-            return Err(Error::trap(anyhow::Error::msg("table has no free keys")));
+            return Err(Error::trap(EnvError::msg("table has no free keys")));
         }
         loop {
             let key = inner.next_key;

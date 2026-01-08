@@ -4197,7 +4197,6 @@ dependencies = [
 name = "wasi-common"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitflags 2.9.4",
  "cap-fs-ext",
@@ -4220,6 +4219,7 @@ dependencies = [
  "tracing-subscriber",
  "wasi-common",
  "wasmtime",
+ "wasmtime-environ",
  "wiggle",
  "windows-sys 0.61.2",
 ]

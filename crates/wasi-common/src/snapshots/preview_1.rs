@@ -1,5 +1,5 @@
 use crate::{
-    I32Exit, SystemTimeSpec, WasiCtx,
+    EnvError, I32Exit, SystemTimeSpec, WasiCtx,
     dir::{DirEntry, OpenResult, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
         Advice, FdFlags, FdStat, FileAccessMode, FileEntry, FileType, Filestat, OFlags, RiFlags,
@@ -101,9 +101,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system()?.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| {
-                        Error::trap(anyhow::Error::msg("current time before unix epoch"))
-                    })?;
+                    .map_err(|_| Error::trap(EnvError::msg("current time before unix epoch")))?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -1135,12 +1133,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &mut self,
         _memory: &mut GuestMemory<'_>,
         status: types::Exitcode,
-    ) -> anyhow::Error {
+    ) -> EnvError {
         // Check that the status is within WASI's range.
         if status < 126 {
             I32Exit(status as i32).into()
         } else {
-            anyhow::Error::msg("exit with invalid exit status outside of [0..126)")
+            EnvError::msg("exit with invalid exit status outside of [0..126)")
         }
     }
 
@@ -1149,7 +1147,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _memory: &mut GuestMemory<'_>,
         _sig: types::Signal,
     ) -> Result<(), Error> {
-        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
+        Err(Error::trap(EnvError::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self, _memory: &mut GuestMemory<'_>) -> Result<(), Error> {
