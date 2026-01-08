@@ -16,11 +16,11 @@
 //! [`types`]: crate::wit::types
 
 use crate::{Backend, Registry};
-use anyhow::anyhow;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::{fmt, str::FromStr};
 use wasmtime::component::{HasData, Resource, ResourceTable};
+use wasmtime::format_err;
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
@@ -59,7 +59,7 @@ impl<'a> WasiNnView<'a> {
 #[derive(Debug)]
 pub struct Error {
     code: ErrorCode,
-    data: anyhow::Error,
+    data: wasmtime::Error,
 }
 
 /// Construct an [`Error`] resource and immediately return it.
@@ -152,7 +152,7 @@ pub use generated_::Ml as ML;
 pub fn add_to_linker<T: 'static>(
     l: &mut wasmtime::component::Linker<T>,
     f: fn(&mut T) -> WasiNnView<'_>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     generated::graph::add_to_linker::<_, HasWasiNnView>(l, f)?;
     generated::tensor::add_to_linker::<_, HasWasiNnView>(l, f)?;
     generated::inference::add_to_linker::<_, HasWasiNnView>(l, f)?;
@@ -189,7 +189,7 @@ impl generated::graph::Host for WasiNnView<'_> {
             bail!(
                 self,
                 ErrorCode::InvalidEncoding,
-                anyhow!("unable to find a backend for this encoding")
+                format_err!("unable to find a backend for this encoding")
             );
         }
     }
@@ -209,7 +209,7 @@ impl generated::graph::Host for WasiNnView<'_> {
             bail!(
                 self,
                 ErrorCode::NotFound,
-                anyhow!("failed to find graph with name: {name}")
+                format_err!("failed to find graph with name: {name}")
             );
         }
     }
@@ -334,7 +334,7 @@ impl generated::errors::HostError for WasiNnView<'_> {
             }
             ErrorCode::TooLarge => Ok(generated::errors::ErrorCode::TooLarge),
             ErrorCode::NotFound => Ok(generated::errors::ErrorCode::NotFound),
-            ErrorCode::Trap => Err(anyhow!(error.data.to_string())),
+            ErrorCode::Trap => Err(format_err!(error.data.to_string())),
         }
     }
 

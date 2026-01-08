@@ -3,8 +3,8 @@
 use super::{Graph, GraphRegistry};
 use crate::backend::BackendFromDir;
 use crate::wit::ExecutionTarget;
-use anyhow::{anyhow, bail};
 use std::{collections::HashMap, path::Path};
+use wasmtime::{bail, format_err};
 
 pub struct InMemoryRegistry(HashMap<String, Graph>);
 impl InMemoryRegistry {
@@ -18,7 +18,7 @@ impl InMemoryRegistry {
     /// from a directory. The name used in the registry is the directory's last
     /// suffix: if the backend can find the files it expects in `/my/model/foo`,
     /// the registry will contain a new graph named `foo`.
-    pub fn load(&mut self, backend: &mut dyn BackendFromDir, path: &Path) -> anyhow::Result<()> {
+    pub fn load(&mut self, backend: &mut dyn BackendFromDir, path: &Path) -> wasmtime::Result<()> {
         if !path.is_dir() {
             bail!(
                 "preload directory is not a valid directory: {}",
@@ -28,7 +28,7 @@ impl InMemoryRegistry {
         let name = path
             .file_name()
             .map(|s| s.to_string_lossy())
-            .ok_or(anyhow!("no file name in path"))?;
+            .ok_or(format_err!("no file name in path"))?;
 
         let graph = backend.load_from_dir(path, ExecutionTarget::Cpu)?;
         self.0.insert(name.into_owned(), graph);

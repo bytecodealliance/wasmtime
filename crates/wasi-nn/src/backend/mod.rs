@@ -115,7 +115,7 @@ impl Id {
 #[derive(Debug, Error)]
 pub enum BackendError {
     #[error("Failed while accessing backend")]
-    BackendAccess(#[from] anyhow::Error),
+    BackendAccess(#[from] wasmtime::Error),
     #[error("Failed while accessing guest module")]
     GuestAccess(#[from] GuestError),
     #[error("The backend expects {0} buffers, passed {1}")]
@@ -128,7 +128,7 @@ pub enum BackendError {
 
 /// Read a file into a byte vector.
 #[allow(dead_code, reason = "not used on all platforms")]
-fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
+fn read(path: &Path) -> wasmtime::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let mut buffer = vec![];
     file.read_to_end(&mut buffer)?;

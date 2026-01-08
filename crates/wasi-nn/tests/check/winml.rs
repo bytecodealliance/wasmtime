@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use wasmtime::{Result, format_err};
 use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
 
 /// Return `Ok` if we can use WinML.
@@ -10,6 +10,9 @@ pub fn is_available() -> Result<()> {
         )
     }) {
         Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("WinML learning device is not available: {:?}", e)),
+        Err(e) => Err(format_err!(
+            "WinML learning device is not available: {:?}",
+            e
+        )),
     }
 }

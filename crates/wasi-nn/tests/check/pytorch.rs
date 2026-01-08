@@ -1,6 +1,6 @@
 use super::{DOWNLOAD_LOCK, artifacts_dir, download};
-use anyhow::{Context, Result};
 use std::{env, fs};
+use wasmtime::{Result, error::Context as _};
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
