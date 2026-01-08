@@ -1268,6 +1268,7 @@ impl Config {
         self.wasm_features(WasmFeatures::CM_THREADING, enable);
         self
     }
+
     /// This corresponds to the 📝 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
