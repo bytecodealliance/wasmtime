@@ -5163,7 +5163,6 @@ dependencies = [
 name = "wasmtime-wasi-nn"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "cap-std",
  "libtest-mimic",
  "openvino",
