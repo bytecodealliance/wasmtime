@@ -1,8 +1,8 @@
 use alloc::boxed::Box;
-use anyhow::Result;
 use core::any::Any;
 use core::future::Future;
 use core::pin::Pin;
+use wasmtime::Result;
 use wasmtime::component::{Resource, ResourceTable};
 
 pub type DynFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;

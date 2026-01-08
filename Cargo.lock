@@ -5141,7 +5141,6 @@ dependencies = [
 name = "wasmtime-wasi-io"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "futures",
