@@ -19,14 +19,14 @@ impl preopens::Host for WasiFilesystemCtxView<'_> {
 }
 
 impl types::Host for WasiFilesystemCtxView<'_> {
-    fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
+    fn convert_error_code(&mut self, err: FsError) -> wasmtime::Result<ErrorCode> {
         err.downcast()
     }
 
     fn filesystem_error_code(
         &mut self,
-        err: Resource<anyhow::Error>,
-    ) -> anyhow::Result<Option<ErrorCode>> {
+        err: Resource<wasmtime::Error>,
+    ) -> wasmtime::Result<Option<ErrorCode>> {
         let err = self.table.get(&err)?;
 
         // Currently `err` always comes from the stream implementation which
@@ -303,7 +303,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         Ok(fd)
     }
 
-    fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<types::Descriptor>) -> wasmtime::Result<()> {
         // The Drop will close the file/dir, but if the close syscall
         // blocks the thread, I will face god and walk backwards into hell.
         // tokio::fs::File just uses std::fs::File's Drop impl to close, so
@@ -436,7 +436,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         &mut self,
         a: Resource<types::Descriptor>,
         b: Resource<types::Descriptor>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         let descriptor_a = self.table.get(&a)?;
         let descriptor_b = self.table.get(&b)?;
         descriptor_a.is_same_object(descriptor_b).await
@@ -470,7 +470,7 @@ impl HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
         readdir.next()
     }
 
-    fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> wasmtime::Result<()> {
         self.table.delete(stream)?;
         Ok(())
     }

@@ -1,7 +1,7 @@
-use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
+use wasmtime::Result;
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::add_to_linker_async;
@@ -86,7 +86,7 @@ async fn p2_api_time() -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+        .map_err(|()| wasmtime::format_err!("command returned with failing exit status"))
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -108,7 +108,7 @@ async fn p2_api_read_only() -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+        .map_err(|()| wasmtime::format_err!("command returned with failing exit status"))
 }
 
 #[expect(

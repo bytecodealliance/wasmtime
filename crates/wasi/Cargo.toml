@@ -18,7 +18,6 @@ workspace = true
 [dependencies]
 wasmtime = { workspace = true, features = ["runtime", "std"] }
 wasmtime-wasi-io = { workspace = true, features = ["std"] }
-anyhow = { workspace = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
 bytes = { workspace = true }

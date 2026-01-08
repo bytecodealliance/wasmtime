@@ -48,14 +48,14 @@ impl OutputStream for OutputFile {
     fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
         (&*self.file)
             .write_all(&bytes)
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))
     }
 
     fn flush(&mut self) -> StreamResult<()> {
         use std::io::Write;
         self.file
             .flush()
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
@@ -124,7 +124,7 @@ impl InputStream for InputFile {
         let bytes_read = self
             .file
             .read(&mut buf)
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))?;
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))?;
         if bytes_read == 0 {
             return Err(StreamError::Closed);
         }

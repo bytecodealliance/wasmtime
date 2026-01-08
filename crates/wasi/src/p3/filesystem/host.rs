@@ -7,7 +7,6 @@ use crate::p3::bindings::filesystem::types::{
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
-use anyhow::Context as _;
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -22,6 +21,7 @@ use wasmtime::component::{
     Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::error::Context as _;
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -495,7 +495,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             return Ok((
                 StreamReader::new(&mut store, iter::empty()),
                 FutureReader::new(&mut store, async {
-                    anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
                 }),
             ));
         }
@@ -636,7 +636,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 return Ok((
                     StreamReader::new(&mut store, iter::empty()),
                     FutureReader::new(&mut store, async {
-                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                        wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
                     }),
                 ));
             }
@@ -819,7 +819,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let table = store.get().table;
             let fd = get_descriptor(table, &fd)?.clone();
             let other = get_descriptor(table, &other)?.clone();
-            anyhow::Ok((fd, other))
+            wasmtime::error::Ok((fd, other))
         })?;
         fd.is_same_object(&other).await
     }

@@ -5,9 +5,9 @@ use crate::p3::bindings::sockets::types::{
 };
 use crate::p3::sockets::{SocketResult, WasiSockets};
 use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, UdpSocket, WasiSocketsCtxView};
-use anyhow::Context;
 use std::net::SocketAddr;
 use wasmtime::component::{Accessor, Resource, ResourceTable};
+use wasmtime::error::Context as _;
 
 fn get_socket<'a>(
     table: &'a ResourceTable,

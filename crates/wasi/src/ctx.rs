@@ -4,7 +4,6 @@ use crate::filesystem::{Dir, WasiFilesystemCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
-use anyhow::Result;
 use cap_rand::RngCore;
 use cap_std::ambient_authority;
 use std::future::Future;
@@ -13,6 +12,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::pin::Pin;
 use tokio::io::{stderr, stdin, stdout};
+use wasmtime::Result;
 
 /// Builder-style structure used to create a [`WasiCtx`].
 ///
