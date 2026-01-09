@@ -936,6 +936,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn image_range_is_whole_image() {
         let wat = r#"
                 (component
