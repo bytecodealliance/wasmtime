@@ -5063,7 +5063,6 @@ dependencies = [
 name = "wasmtime-wasi"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitflags 2.9.4",
  "bytes",

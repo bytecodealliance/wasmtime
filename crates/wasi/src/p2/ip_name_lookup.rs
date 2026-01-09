@@ -3,11 +3,11 @@ use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStrea
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::sockets::WasiSocketsCtxView;
-use anyhow::Result;
 use std::mem;
 use std::net::ToSocketAddrs;
 use std::pin::Pin;
 use std::vec;
+use wasmtime::Result;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{DynPollable, Pollable, subscribe};
 

@@ -30,7 +30,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         command
             .wasi_cli_run()
             .call_run(&mut store)?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
+            .map_err(|()| wasmtime::format_err!("run returned a failure"))?;
     }
     Ok(())
 }

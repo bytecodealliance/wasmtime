@@ -23,7 +23,7 @@ impl std::error::Error for I32Exit {}
 /// either:
 ///
 /// * A custom error type `T`
-/// * A trap, represented as `anyhow::Error`
+/// * A trap, represented as `wasmtime::Error`
 ///
 /// This error is created through either the `::trap` constructor representing a
 /// full-fledged trap or the `From<T>` constructor which is intended to be used
@@ -43,19 +43,19 @@ impl std::error::Error for I32Exit {}
 /// `bindgen!` macro.
 #[repr(transparent)]
 pub struct TrappableError<T> {
-    err: anyhow::Error,
+    err: wasmtime::Error,
     _marker: marker::PhantomData<T>,
 }
 
 impl<T> TrappableError<T> {
-    pub fn trap(err: impl Into<anyhow::Error>) -> TrappableError<T> {
+    pub fn trap(err: impl Into<wasmtime::Error>) -> TrappableError<T> {
         TrappableError {
             err: err.into(),
             _marker: marker::PhantomData,
         }
     }
 
-    pub fn downcast(self) -> anyhow::Result<T>
+    pub fn downcast(self) -> wasmtime::Result<T>
     where
         T: Error + Send + Sync + 'static,
     {
