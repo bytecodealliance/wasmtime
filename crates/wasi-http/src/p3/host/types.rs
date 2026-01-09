@@ -514,8 +514,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = connect_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("connect timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
@@ -540,8 +539,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = first_byte_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("first byte timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
@@ -566,8 +564,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = between_bytes_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("between bytes timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
