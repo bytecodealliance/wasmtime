@@ -5728,6 +5728,12 @@ criteria = "safe-to-deploy"
 delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasmtime-wasi-tls-openssl]]
+who = "Dave Bakker <github@davebakker.io>"
+criteria = "safe-to-deploy"
+version = "0.0.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
