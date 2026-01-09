@@ -1,3 +1,5 @@
+;;! component_model_map = true
+
 (component
   (type string)
   (type (func (param "a" string)))
@@ -19,6 +21,10 @@
 
   (type $errno (enum "a" "b" "e"))
   (type (list $errno))
+  (type (map u32 string))
+  (type (map string u32))
+  (type (map u32 u32))
+  (type (map string (map u32 string)))
   (type $oflags (flags "read" "write" "exclusive"))
   (type (tuple $oflags $errno $r))
 
