@@ -446,8 +446,14 @@ impl fmt::Debug for Error {
 
         if let Some(source) = inner.source() {
             f.write_str("\n\nCaused by:\n")?;
+            let multiple_causes = source.source().is_some();
             for (i, e) in Chain::new(source).enumerate() {
-                writeln!(f, "\t{i}: {e}")?;
+                if multiple_causes {
+                    write!(f, "{i: >5}: ")?;
+                } else {
+                    write!(f, "    ")?;
+                }
+                writeln!(f, "{e}")?;
             }
         }
 
@@ -717,8 +723,8 @@ impl Error {
     /// cannot frob the blobbins
     ///
     /// Caused by:
-    /// 	0: failed to bonkinate
-    /// 	1: root cause
+    ///     0: failed to bonkinate
+    ///     1: root cause
     ///         "#.trim(),
     ///     ),
     /// );
