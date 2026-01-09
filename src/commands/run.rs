@@ -616,8 +616,22 @@ impl RunCommand {
             .expect("found export index");
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
-        func.call_async(&mut *store, &params, &mut results).await?;
-        func.post_return_async(&mut *store).await?;
+
+        #[cfg(feature = "component-model-async")]
+        {
+            store
+                .run_concurrent(async |store| {
+                    let task = func.call_concurrent(store, &params, &mut results).await?;
+                    task.block(store).await;
+                    anyhow::Ok(())
+                })
+                .await??;
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            func.call_async(&mut *store, &params, &mut results).await?;
+            func.post_return_async(&mut *store).await?;
+        }
 
         println!("{}", DisplayFuncResults(&results));
 
