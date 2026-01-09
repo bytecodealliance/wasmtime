@@ -726,7 +726,7 @@ impl ResourceLimiter for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn memory_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
         Ok(())
     }
@@ -740,7 +740,7 @@ impl ResourceLimiter for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn table_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
         Ok(())
     }
@@ -835,7 +835,7 @@ impl ResourceLimiterAsync for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn memory_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
         Ok(())
     }
@@ -850,7 +850,7 @@ impl ResourceLimiterAsync for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn table_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
         Ok(())
     }

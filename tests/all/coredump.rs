@@ -1,4 +1,4 @@
-use anyhow::bail;
+use wasmtime::bail;
 use wasmtime::*;
 
 #[test]

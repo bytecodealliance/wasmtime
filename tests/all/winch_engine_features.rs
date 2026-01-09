@@ -12,7 +12,9 @@ fn ensure_compatibility_between_winch_and_table_lazy_init(config: &mut Config) -
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
-            anyhow::bail!("Expected incompatibility between the `table_lazy_init` option and Winch")
+            wasmtime::bail!(
+                "Expected incompatibility between the `table_lazy_init` option and Winch"
+            )
         }
         Err(e) => {
             assert_eq!(
@@ -32,7 +34,7 @@ fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Confi
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
-            anyhow::bail!(
+            wasmtime::bail!(
                 "Expected incompatibility between the `signals_based_traps` option and Winch"
             )
         }
@@ -54,7 +56,7 @@ fn ensure_compatibility_between_winch_and_debug_native(config: &mut Config) -> R
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
-            anyhow::bail!("Expected incompatibility between the `debug_native` option and Winch")
+            wasmtime::bail!("Expected incompatibility between the `debug_native` option and Winch")
         }
         Err(e) => {
             assert_eq!(

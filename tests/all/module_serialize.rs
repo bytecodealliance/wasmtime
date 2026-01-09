@@ -1,5 +1,5 @@
-use anyhow::bail;
 use std::fs::{self, OpenOptions};
+use wasmtime::bail;
 use wasmtime::*;
 
 fn serialize(engine: &Engine, wat: &str) -> Result<Vec<u8>> {

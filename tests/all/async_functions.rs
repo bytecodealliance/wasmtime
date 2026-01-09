@@ -1,4 +1,3 @@
-use anyhow::{anyhow, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -516,7 +515,7 @@ async fn resume_separate_thread() {
         let func = Func::wrap_async(&mut store, |_, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
-                Err::<(), _>(anyhow!("test"))
+                Err::<(), _>(format_err!("test"))
             })
         });
         let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
@@ -879,7 +878,7 @@ async fn non_stacky_async_activations() -> Result<()> {
                             .await?;
 
                         capture_stack(&stacks, &store2);
-                        anyhow::Ok(())
+                        wasmtime::error::Ok(())
                     }
                 }) as _)
                 .await

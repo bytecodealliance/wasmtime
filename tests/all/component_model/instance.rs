@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Module, Store};
 

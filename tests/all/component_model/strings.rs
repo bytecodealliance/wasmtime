@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use super::REALLOC_AND_FREE;
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 
@@ -524,7 +524,7 @@ fn test_raw_when_encoded(
     dst: &str,
     bytes: &[u8],
     len: u32,
-) -> Result<Option<anyhow::Error>> {
+) -> Result<Option<wasmtime::Error>> {
     let component = format!(
         r#"
 (component

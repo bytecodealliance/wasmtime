@@ -3,7 +3,6 @@
 //!
 //! [wasi-testsuite]: https://github.com/WebAssembly/wasi-testsuite
 
-use anyhow::{Result, anyhow};
 use libtest_mimic::{Arguments, Trial};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -12,6 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Output;
 use tempfile::TempDir;
+use wasmtime::{Result, format_err};
 use wit_component::ComponentEncoder;
 
 const KNOWN_FAILURES: &[&str] = &[
@@ -149,7 +149,7 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
     let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
     let test_name = path.file_stem().unwrap().to_str().unwrap();
     let target_dir = wasmtime.parent().unwrap().parent().unwrap();
-    let parent_dir = path.parent().ok_or(anyhow!("module has no parent?"))?;
+    let parent_dir = path.parent().ok_or(format_err!("module has no parent?"))?;
     let spec = if let Ok(contents) = fs::read_to_string(&path.with_extension("json")) {
         serde_json::from_str(&contents)?
     } else {
@@ -236,13 +236,13 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
                     String::from_utf8_lossy(&result.stderr).replace("\n", "\n    ")
                 )?;
             }
-            anyhow::bail!("{msg}\nFAILED! The result does not match the specification");
+            wasmtime::bail!("{msg}\nFAILED! The result does not match the specification");
         }
 
         // If this test passed but it's flagged as should be failed, then fail
         // this test for someone to update `KNOWN_FAILURES`.
         (true, true) => {
-            anyhow::bail!("test passed but it's listed in `KNOWN_FAILURES`")
+            wasmtime::bail!("test passed but it's listed in `KNOWN_FAILURES`")
         }
     }
 }

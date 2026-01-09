@@ -1,9 +1,8 @@
-use anyhow::{Context as _, Result};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use target_lexicon::Triple;
-use wasmtime::{CodeBuilder, Config, Engine};
+use wasmtime::{CodeBuilder, Config, Engine, Result, error::Context as _};
 
 pub fn compile_cranelift(
     wasm: &[u8],

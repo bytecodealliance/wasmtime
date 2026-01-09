@@ -1,6 +1,5 @@
 //! Implementation of the `wasmtime objdump` CLI command.
 
-use anyhow::{Context, Result, bail};
 use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
 use clap::Parser;
 use cranelift_codegen::isa::lookup_by_name;
@@ -14,7 +13,7 @@ use std::io::{IsTerminal, Read, Write};
 use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use wasmtime::Engine;
+use wasmtime::{Engine, Result, bail, error::Context as _};
 use wasmtime_environ::{
     FilePos, FrameInstPos, FrameStackShape, FrameStateSlot, FrameTable, FrameTableDescriptorIndex,
     StackMap, Trap, obj,
