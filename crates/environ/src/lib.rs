@@ -84,5 +84,20 @@ pub use cranelift_entity::*;
 // migration to the `wasmtime-internal-error` crate.
 pub use anyhow as error;
 
+// Temporarily polyfill `wasmtime_internal_error::ToWasmtimeResult` to ease
+// migration, before we swap out `anyhow` with the `wasmtime_internal_error`
+// crate.
+#[cfg(feature = "anyhow")]
+#[doc(hidden)]
+pub trait ToWasmtimeResult<T> {
+    fn to_wasmtime_result(self) -> self::error::Result<T>;
+}
+#[cfg(feature = "anyhow")]
+impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
+    fn to_wasmtime_result(self) -> self::error::Result<T> {
+        self
+    }
+}
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

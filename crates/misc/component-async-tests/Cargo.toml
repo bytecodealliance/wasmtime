@@ -24,6 +24,7 @@ tokio = { workspace = true, features = [
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = [
   "default",
+  "anyhow",
   "pulley",
   "cranelift",
   "component-model-async",
