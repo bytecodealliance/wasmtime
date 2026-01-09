@@ -587,9 +587,11 @@ fn verify(crates: &[Crate]) {
                 "
 failed to get owners for {name}
 
-If this crate does not exist on crates.io yet please ping wasmtime maintainers
-to add the crate on crates.io as a small shim. When doing so please remind them
-that the trusted publishing workflow must be configured as well.
+If this crate does not exist on crates.io yet please visit
+
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
 ",
                 name = name,
             );
@@ -599,9 +601,11 @@ that the trusted publishing workflow must be configured as well.
         if !owners.contains("\"id\":73222,") {
             panic!(
                 "
-crate {name} is not owned by wasmtime-publish, please run:
+crate {name} is not owned by wasmtime-publish, please visit:
 
-    cargo owner -a wasmtime-publish {name}
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
 ",
                 name = name,
             );
@@ -612,10 +616,11 @@ crate {name} is not owned by wasmtime-publish, please run:
         if false && owners.split("\"id\"").count() != 2 {
             panic!(
                 "
-crate {name} is not exclusively owned by wasmtime-publish
+crate {name} is not exclusively owned by wasmtime-publish, please visit:
 
-Please contact wasmtime maintainers to ensure that `wasmtime-publish` is the
-only listed owner of the crate.
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
 ",
                 name = name,
             );
