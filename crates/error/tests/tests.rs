@@ -640,11 +640,39 @@ fn fmt_debug() {
     let error = Error::msg("whoops").context("uh oh").context("yikes");
     let actual = format!("{error:?}");
 
-    let expected = "yikes\n\
-                        \n\
-                        Caused by:\n\
-                        \t0: uh oh\n\
-                        \t1: whoops\n";
+    let expected = "\
+yikes
+
+Caused by:
+    0: uh oh
+    1: whoops
+";
+
+    #[cfg(feature = "backtrace")]
+    {
+        assert!(actual.starts_with(expected));
+        if let BacktraceStatus::Captured = error.backtrace().status() {
+            assert!(actual.contains("Stack backtrace:"));
+        }
+    }
+
+    #[cfg(not(feature = "backtrace"))]
+    {
+        assert_eq!(actual, expected);
+    }
+}
+#[test]
+fn fmt_debug_with_single_cause() {
+    let error = Error::msg("whoops").context("uh oh");
+    let actual = format!("{error:?}");
+
+    // NB: the causes are only numbered when there are multiple of them.
+    let expected = "\
+uh oh
+
+Caused by:
+    whoops
+";
 
     #[cfg(feature = "backtrace")]
     {
