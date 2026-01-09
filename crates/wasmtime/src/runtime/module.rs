@@ -972,10 +972,7 @@ impl Module {
     /// Note that depending on the engine configuration, this image
     /// range may not actually be the code that is directly executed.
     pub fn image_range(&self) -> Range<*const u8> {
-        let range = self.engine_code().text_range();
-        let start = range.start.raw() as *const u8;
-        let end = range.end.raw() as *const u8;
-        start..end
+        self.engine_code().image().as_ptr_range()
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
@@ -1238,7 +1235,7 @@ impl crate::vm::ModuleMemoryImageSource for CodeMemory {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Engine, Module};
+    use crate::{CodeBuilder, Engine, Module};
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
@@ -1257,5 +1254,26 @@ mod tests {
 
         let init = &module.env_module().memory_initialization;
         assert!(matches!(init, MemoryInitialization::Static { .. }));
+    }
+
+    #[test]
+    fn image_range_is_whole_image() {
+        let wat = r#"
+                (module
+                    (memory 1)
+                    (data (i32.const 0) "1234")
+                    (func (export "f") (param i32) (result i32)
+                        local.get 0))
+            "#;
+        let engine = Engine::default();
+        let mut builder = CodeBuilder::new(&engine);
+        builder.wasm_binary_or_text(wat.as_bytes(), None).unwrap();
+        let bytes = builder.compile_module_serialized().unwrap();
+
+        let module = unsafe { Module::deserialize(&engine, &bytes).unwrap() };
+        let image_range = module.image_range();
+        let len = image_range.end.addr() - image_range.start.addr();
+        // Length may be strictly greater if it becomes page-aligned.
+        assert!(len >= bytes.len());
     }
 }
