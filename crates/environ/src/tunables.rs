@@ -1,4 +1,4 @@
-use crate::error::{Error, Result, anyhow, bail};
+use crate::prelude::*;
 use crate::{IndexType, Limits, Memory, TripleExt};
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
@@ -168,7 +168,7 @@ impl Tunables {
         }
         let mut ret = match target
             .pointer_width()
-            .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
+            .map_err(|_| format_err!("failed to retrieve target pointer width"))?
         {
             PointerWidth::U32 => Tunables::default_u32(),
             PointerWidth::U64 => Tunables::default_u64(),
