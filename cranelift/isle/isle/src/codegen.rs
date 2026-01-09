@@ -72,10 +72,25 @@ struct BodyContext<'a, W> {
     is_bound: StableSet<BindingId>,
     term_name: &'a str,
     emit_logging: bool,
+
+    // Extra fields for iterator-returning terms.
+    // These fields are used to generate optimized Rust code for iterator-returning terms.
+    /// The number of match splits that have been generated.
+    /// This is used to generate unique names for the match splits.
+    match_split: usize,
+
+    /// The action to take when the iterator overflows.
+    iter_overflow_action: &'static str,
 }
 
 impl<'a, W: Write> BodyContext<'a, W> {
-    fn new(out: &'a mut W, ruleset: &'a RuleSet, term_name: &'a str, emit_logging: bool) -> Self {
+    fn new(
+        out: &'a mut W,
+        ruleset: &'a RuleSet,
+        term_name: &'a str,
+        emit_logging: bool,
+        iter_overflow_action: &'static str,
+    ) -> Self {
         Self {
             out,
             ruleset,
@@ -84,6 +99,8 @@ impl<'a, W: Write> BodyContext<'a, W> {
             is_bound: Default::default(),
             term_name,
             emit_logging,
+            match_split: Default::default(),
+            iter_overflow_action,
         }
     }
 
@@ -426,7 +443,17 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
             let termdata = &self.termenv.terms[termid.index()];
             let term_name = &self.typeenv.syms[termdata.name.index()];
-            let mut ctx = BodyContext::new(code, ruleset, term_name, options.emit_logging);
+
+            // Split a match if the term returns an iterator.
+            let mut ctx = BodyContext::new(
+                code,
+                ruleset,
+                term_name,
+                options.emit_logging,
+                "return;", // At top level, we just return.
+            );
+
+            // Generate the function signature.
             writeln!(ctx.out)?;
             writeln!(
                 ctx.out,
@@ -470,6 +497,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                 ReturnKind::Option => write!(ctx.out, "Option<{ret}>")?,
                 ReturnKind::Plain => write!(ctx.out, "{ret}")?,
             };
+            // Generating the function signature is done.
 
             let last_expr = if let Some(EvalStep {
                 check: ControlFlow::Return { .. },
@@ -530,6 +558,21 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         Nested::Cases(block.steps.iter())
     }
 
+    fn block_weight(block: &Block) -> usize {
+        fn cf_weight(cf: &ControlFlow) -> usize {
+            match cf {
+                ControlFlow::Match { arms, .. } => {
+                    arms.iter().map(|a| Codegen::block_weight(&a.body)).sum()
+                }
+                ControlFlow::Equal { body, .. } => Codegen::block_weight(body),
+                ControlFlow::Loop { body, .. } => Codegen::block_weight(body),
+                ControlFlow::Return { .. } => 0,
+            }
+        }
+
+        block.steps.iter().map(|s| 1 + cf_weight(&s.check)).sum()
+    }
+
     fn emit_block<W: Write>(
         &self,
         ctx: &mut BodyContext<W>,
@@ -538,8 +581,19 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         last_expr: &str,
         scope: StableSet<BindingId>,
     ) -> std::fmt::Result {
-        let mut stack = Vec::new();
         ctx.begin_block()?;
+        self.emit_block_contents(ctx, block, ret_kind, last_expr, scope)
+    }
+
+    fn emit_block_contents<W: Write>(
+        &self,
+        ctx: &mut BodyContext<W>,
+        block: &Block,
+        ret_kind: ReturnKind,
+        last_expr: &str,
+        scope: StableSet<BindingId>,
+    ) -> std::fmt::Result {
+        let mut stack = Vec::new();
         stack.push((Self::validate_block(ret_kind, block), last_expr, scope));
 
         while let Some((mut nested, last_line, scope)) = stack.pop() {
@@ -706,8 +760,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                     writeln!(ctx.out, "));")?;
                                     writeln!(
                                         ctx.out,
-                                        "{}if returns.len() >= MAX_ISLE_RETURNS {{ return; }}",
-                                        ctx.indent
+                                        "{}if returns.len() >= MAX_ISLE_RETURNS {{ {} }}",
+                                        ctx.indent, ctx.iter_overflow_action
                                     )?;
                                 }
                             }
@@ -729,7 +783,39 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     self.emit_constraint(ctx, source, arm)?;
                     write!(ctx.out, " =>")?;
                     ctx.begin_block()?;
-                    stack.push((Self::validate_block(ret_kind, &arm.body), "", scope));
+
+                    // Compile-time optimization: huge function bodies (often from very large match arms
+                    // of constructor bodies)cause rustc to spend a lot of time in analysis passes.
+                    // Wrap such bodies in a local closure to move the bulk of the work into a separate body
+                    // without needing to know the types of captured locals.
+                    const MATCH_ARM_BODY_CLOSURE_THRESHOLD: usize = 256;
+                    if ret_kind == ReturnKind::Iterator
+                        && Codegen::block_weight(&arm.body) > MATCH_ARM_BODY_CLOSURE_THRESHOLD
+                    {
+                        let closure_id = ctx.match_split;
+                        ctx.match_split += 1;
+
+                        write!(ctx.out, "{}if (|| -> bool", &ctx.indent)?;
+                        ctx.begin_block()?;
+
+                        let old_overflow_action = ctx.iter_overflow_action;
+                        ctx.iter_overflow_action = "return true;";
+                        let closure_scope = ctx.enter_scope();
+                        self.emit_block_contents(ctx, &arm.body, ret_kind, "false", closure_scope)?;
+                        ctx.iter_overflow_action = old_overflow_action;
+
+                        // Close `if (|| -> bool { ... })()` and stop the outer function on
+                        // iterator-overflow.
+                        writeln!(
+                            ctx.out,
+                            "{})() {{ {} }} // __isle_arm_{}",
+                            &ctx.indent, ctx.iter_overflow_action, closure_id
+                        )?;
+
+                        ctx.end_block("", scope)?;
+                    } else {
+                        stack.push((Self::validate_block(ret_kind, &arm.body), "", scope));
+                    }
                 }
             }
         }
