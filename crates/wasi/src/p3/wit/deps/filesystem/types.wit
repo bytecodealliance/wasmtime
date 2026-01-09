@@ -26,7 +26,7 @@ package wasi:filesystem@0.3.0-rc-2025-09-16;
 @since(version = 0.3.0-rc-2025-09-16)
 interface types {
     @since(version = 0.3.0-rc-2025-09-16)
-    use wasi:clocks/wall-clock@0.3.0-rc-2025-09-16.{datetime};
+    use wasi:clocks/system-clock@0.3.0-rc-2025-09-16.{instant};
 
     /// File size or length of a region within a file.
     @since(version = 0.3.0-rc-2025-09-16)
@@ -116,17 +116,17 @@ interface types {
         ///
         /// If the `option` is none, the platform doesn't maintain an access
         /// timestamp for this file.
-        data-access-timestamp: option<datetime>,
+        data-access-timestamp: option<instant>,
         /// Last data modification timestamp.
         ///
         /// If the `option` is none, the platform doesn't maintain a
         /// modification timestamp for this file.
-        data-modification-timestamp: option<datetime>,
+        data-modification-timestamp: option<instant>,
         /// Last file status-change timestamp.
         ///
         /// If the `option` is none, the platform doesn't maintain a
         /// status-change timestamp for this file.
-        status-change-timestamp: option<datetime>,
+        status-change-timestamp: option<instant>,
     }
 
     /// Flags determining the method of how paths are resolved.
@@ -163,7 +163,7 @@ interface types {
         /// with the filesystem.
         now,
         /// Set the timestamp to the given value.
-        timestamp(datetime),
+        timestamp(instant),
     }
 
     /// A directory entry.

@@ -1,4 +1,4 @@
-package wasi:clocks@0.2.6;
+package wasi:clocks@0.2.9;
 /// WASI Monotonic Clock is a clock API intended to let users measure elapsed
 /// time.
 ///
@@ -10,7 +10,7 @@ package wasi:clocks@0.2.6;
 @since(version = 0.2.0)
 interface monotonic-clock {
     @since(version = 0.2.0)
-    use wasi:io/poll@0.2.6.{pollable};
+    use wasi:io/poll@0.2.9.{pollable};
 
     /// An instant in time, in nanoseconds. An instant is relative to an
     /// unspecified initial value, and can only be compared to instances from
@@ -26,6 +26,11 @@ interface monotonic-clock {
     ///
     /// The clock is monotonic, therefore calling this function repeatedly will
     /// produce a sequence of non-decreasing values.
+    ///
+    /// For completeness, this function traps if it's not possible to represent
+    /// the value of the clock in an `instant`. Consequently, implementations
+    /// should ensure that the starting time is low enough to avoid the
+    /// possibility of overflow in practice.
     @since(version = 0.2.0)
     now: func() -> instant;
 

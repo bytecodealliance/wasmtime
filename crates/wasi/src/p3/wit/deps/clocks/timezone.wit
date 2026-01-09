@@ -3,53 +3,44 @@ package wasi:clocks@0.3.0-rc-2025-09-16;
 @unstable(feature = clocks-timezone)
 interface timezone {
     @unstable(feature = clocks-timezone)
-    use wall-clock.{datetime};
+    use system-clock.{instant};
 
-    /// Return information needed to display the given `datetime`. This includes
-    /// the UTC offset, the time zone name, and a flag indicating whether
-    /// daylight saving time is active.
+    /// Return the IANA identifier of the currently configured timezone. This
+    /// should be an identifier from the IANA Time Zone Database.
     ///
-    /// If the timezone cannot be determined for the given `datetime`, return a
-    /// `timezone-display` for `UTC` with a `utc-offset` of 0 and no daylight
-    /// saving time.
-    @unstable(feature = clocks-timezone)
-    display: func(when: datetime) -> timezone-display;
-
-    /// The same as `display`, but only return the UTC offset.
-    @unstable(feature = clocks-timezone)
-    utc-offset: func(when: datetime) -> s32;
-
-    /// Information useful for displaying the timezone of a specific `datetime`.
+    /// For displaying to a user, the identifier should be converted into a
+    /// localized name by means of an internationalization API.
     ///
-    /// This information may vary within a single `timezone` to reflect daylight
-    /// saving time adjustments.
+    /// If the implementation does not expose an actual timezone, or is unable
+    /// to provide mappings from times to deltas between the configured timezone
+    /// and UTC, or determining the current timezone fails, or the timezone does
+    /// not have an IANA identifier, this returns nothing.
     @unstable(feature = clocks-timezone)
-    record timezone-display {
-        /// The number of seconds difference between UTC time and the local
-        /// time of the timezone.
-        ///
-        /// The returned value will always be less than 86400 which is the
-        /// number of seconds in a day (24*60*60).
-        ///
-        /// In implementations that do not expose an actual time zone, this
-        /// should return 0.
-        utc-offset: s32,
+    iana-id: func() -> option<string>;
 
-        /// The abbreviated name of the timezone to display to a user. The name
-        /// `UTC` indicates Coordinated Universal Time. Otherwise, this should
-        /// reference local standards for the name of the time zone.
-        ///
-        /// In implementations that do not expose an actual time zone, this
-        /// should be the string `UTC`.
-        ///
-        /// In time zones that do not have an applicable name, a formatted
-        /// representation of the UTC offset may be returned, such as `-04:00`.
-        name: string,
+    /// The number of nanoseconds difference between UTC time and the local
+    /// time of the currently configured timezone, at the exact time of
+    /// `instant`.
+    ///
+    /// The magnitude of the returned value will always be less than
+    /// 86,400,000,000,000 which is the number of nanoseconds in a day
+    /// (24*60*60*1e9).
+    ///
+    /// If the implementation does not expose an actual timezone, or is unable
+    /// to provide mappings from times to deltas between the configured timezone
+    /// and UTC, or determining the current timezone fails, this returns
+    /// nothing.
+    @unstable(feature = clocks-timezone)
+    utc-offset: func(when: instant) -> option<s64>;
 
-        /// Whether daylight saving time is active.
-        ///
-        /// In implementations that do not expose an actual time zone, this
-        /// should return false.
-        in-daylight-saving-time: bool,
-    }
+    /// Returns a string that is suitable to assist humans in debugging whether
+    /// any timezone is available, and if so, which. This may be the same string
+    /// as `iana-id`, or a formatted representation of the UTC offset such as
+    /// `-04:00`, or something else.
+    ///
+    /// WARNING: The returned string should not be consumed mechanically! It may
+    /// change across platforms, hosts, or other implementation details. Parsing
+    /// this string is a major platform-compatibility hazard.
+    @unstable(feature = clocks-timezone)
+    to-debug-string: func() -> string;
 }
