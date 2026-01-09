@@ -3,9 +3,9 @@ use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::{
-    ScopeVec, Tunables,
+    ScopeVec, ToWasmtimeResult as _, Tunables,
     component::*,
-    error::{Context, Result, bail},
+    error::{Context as _, Result, bail},
 };
 
 /// A small helper utility to explore generated adapter modules from Wasmtime's
@@ -79,6 +79,7 @@ impl Factc {
         for wasm in adapters.into_iter() {
             let output = if self.text {
                 wasmprinter::print_bytes(&wasm)
+                    .to_wasmtime_result()
                     .context("failed to convert binary wasm to text")?
                     .into_bytes()
             } else if self.output.is_none() && std::io::stdout().is_terminal() {

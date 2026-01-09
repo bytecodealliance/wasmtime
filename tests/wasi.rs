@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Output;
 use tempfile::TempDir;
-use wasmtime::{Result, format_err};
+use wasmtime::{Result, ToWasmtimeResult as _, format_err};
 use wit_component::ComponentEncoder;
 
 const KNOWN_FAILURES: &[&str] = &[
@@ -161,13 +161,16 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
     let path = if componentize {
         let module = fs::read(path).expect("read wasm module");
         let component = ComponentEncoder::default()
-            .module(module.as_slice())?
+            .module(module.as_slice())
+            .to_wasmtime_result()?
             .validate(true)
             .adapter(
                 "wasi_snapshot_preview1",
                 &fs::read(test_programs_artifacts::ADAPTER_COMMAND)?,
-            )?
-            .encode()?;
+            )
+            .to_wasmtime_result()?
+            .encode()
+            .to_wasmtime_result()?;
         let stem = path.file_stem().unwrap().to_str().unwrap();
         let component_path = td.path().join(format!("{stem}.component.wasm"));
         fs::write(&component_path, component)?;

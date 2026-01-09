@@ -411,6 +411,9 @@ use sync_nostd as sync;
 #[doc(inline)]
 pub use wasmtime_environ::error;
 
+#[cfg(feature = "anyhow")]
+pub use wasmtime_environ::ToWasmtimeResult;
+
 pub use self::error::{Error, Result, bail, ensure, format_err};
 
 /// A re-exported instance of Wasmtime's `wasmparser` dependency.
