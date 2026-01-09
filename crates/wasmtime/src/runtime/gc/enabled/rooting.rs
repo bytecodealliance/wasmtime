@@ -214,7 +214,7 @@ mod sealed {
         /// objects that have been unrooted.
         fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
             self.get_gc_ref(store).ok_or_else(|| {
-                anyhow!("attempted to use a garbage-collected object that has been unrooted")
+                format_err!("attempted to use a garbage-collected object that has been unrooted")
             })
         }
 
@@ -314,7 +314,7 @@ impl GcRootIndex {
     /// Panics if `self` is not associated with the given store.
     pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
         self.get_gc_ref(store).ok_or_else(|| {
-            anyhow!("attempted to use a garbage-collected object that has been unrooted")
+            format_err!("attempted to use a garbage-collected object that has been unrooted")
         })
     }
 

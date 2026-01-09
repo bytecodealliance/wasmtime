@@ -637,7 +637,7 @@ impl Engine {
 
     pub(crate) fn try_compiler(&self) -> Result<&dyn wasmtime_environ::Compiler> {
         self.compiler()
-            .ok_or_else(|| anyhow!("Engine was not configured with a compiler"))
+            .ok_or_else(|| format_err!("Engine was not configured with a compiler"))
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.

@@ -293,7 +293,7 @@ where
         // Exiting the component is disallowed, for example, when the `realloc`
         // function calls a canonical import.
         if unsafe { !flags.may_leave() } {
-            return Err(anyhow!(crate::Trap::CannotLeaveComponent));
+            return Err(format_err!(crate::Trap::CannotLeaveComponent));
         }
 
         if opts.async_ {

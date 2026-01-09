@@ -310,7 +310,7 @@ extern crate std;
 extern crate alloc;
 
 pub(crate) mod prelude {
-    pub use crate::error::{Context, Error, Result, anyhow, bail, ensure, format_err};
+    pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
     pub use wasmtime_environ::prelude::*;
 }
 

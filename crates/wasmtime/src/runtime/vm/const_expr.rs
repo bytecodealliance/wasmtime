@@ -431,7 +431,7 @@ impl ConstExprEvaluator {
 
     fn pop(&mut self) -> Result<Val> {
         self.stack.pop().ok_or_else(|| {
-            anyhow!(
+            format_err!(
                 "const expr evaluation error: attempted to pop from an empty \
                  evaluation stack"
             )

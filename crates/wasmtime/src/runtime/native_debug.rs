@@ -68,7 +68,7 @@ fn relocate_dwarf_sections(bytes: &mut [u8], code_region: (*const u8, usize)) ->
             .try_into()
             .ok()
             .and_then(|offset| object::from_bytes_mut::<U64Bytes<NE>>(&mut bytes[offset..]).ok())
-            .ok_or_else(|| anyhow!("invalid dwarf relocations"))?;
+            .ok_or_else(|| format_err!("invalid dwarf relocations"))?;
         loc.set(NE, value);
     }
     Ok(())

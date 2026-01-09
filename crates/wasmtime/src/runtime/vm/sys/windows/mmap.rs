@@ -87,7 +87,7 @@ impl Mmap {
                 .metadata()
                 .context("failed to get file metadata")?
                 .len();
-            let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
+            let len = usize::try_from(len).map_err(|_| format_err!("file too large to map"))?;
 
             // Create a file mapping that allows PAGE_EXECUTE_WRITECOPY.
             // This enables up-to these permissions but we won't leave all

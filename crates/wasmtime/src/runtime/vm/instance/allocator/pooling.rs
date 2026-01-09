@@ -391,7 +391,7 @@ impl PoolingInstanceAllocator {
             pagemap: match config.pagemap_scan {
                 Enabled::Auto => PageMap::new(),
                 Enabled::Yes => Some(PageMap::new().ok_or_else(|| {
-                    anyhow!(
+                    format_err!(
                         "required to enable PAGEMAP_SCAN but this system \
                          does not support it"
                     )

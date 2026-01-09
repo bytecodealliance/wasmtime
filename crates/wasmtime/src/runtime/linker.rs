@@ -290,7 +290,7 @@ impl<T> Linker<T> {
             if let Err(import_err) = self._get_by_import(&import) {
                 let default_extern =
                     import_err.ty().default_value(&mut store).with_context(|| {
-                        anyhow!(
+                        format_err!(
                             "no default value exists for `{}::{}` with type `{:?}`",
                             import.module(),
                             import.name(),
