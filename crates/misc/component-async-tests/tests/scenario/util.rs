@@ -11,7 +11,7 @@ use tokio::fs;
 use tokio::sync::Mutex;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, Result, Store, bail, format_err};
+use wasmtime::{Config, Engine, Result, Store, ToWasmtimeResult as _, bail, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 pub fn init_logger() {
@@ -63,6 +63,7 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Component> {

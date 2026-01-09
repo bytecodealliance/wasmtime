@@ -14,7 +14,7 @@ use tokio::{fs, try_join};
 use wasm_compose::composer::ComponentComposer;
 use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Result, Store, error::Context as _, format_err};
+use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::bindings::Proxy;
@@ -368,6 +368,7 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -422,7 +423,8 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
             .collect(),
         },
     )
-    .compose()?;
+    .compose()
+    .to_wasmtime_result()?;
     fs::write(&path, &bytes).await?;
 
     test_http_echo(&path.to_str().unwrap(), true, host_to_host).await
