@@ -417,6 +417,63 @@ public:
   }
 };
 
+/// \brief Class representing an entry in a map value.
+class MapEntry {
+  friend class Map;
+
+  wasmtime_component_valmap_entry_t entry;
+
+  // This value can't be constructed or destructed, it's only used in iteration
+  // of `Map`.
+  MapEntry() = delete;
+  ~MapEntry() = delete;
+
+  static const MapEntry *
+  from_capi(const wasmtime_component_valmap_entry_t *capi) {
+    return reinterpret_cast<const MapEntry *>(capi);
+  }
+
+public:
+  /// \brief Returns the key of this map entry.
+  const Val &key() const { return *detail::val_from_capi(&entry.key); }
+
+  /// \brief Returns the value of this map entry.
+  const Val &value() const { return *detail::val_from_capi(&entry.value); }
+};
+
+/// \brief Class representing a component model map, a collection of key/value
+/// pairs.
+class Map {
+  friend class Val;
+
+  VAL_REPR(Map, wasmtime_component_valmap_t);
+
+  static void transfer(Raw &&from, Raw &to) {
+    to = from;
+    from.size = 0;
+    from.data = nullptr;
+  }
+
+  void copy(const Raw &other) { wasmtime_component_valmap_copy(&raw, &other); }
+
+  void destroy() { wasmtime_component_valmap_delete(&raw); }
+
+public:
+  /// Creates a new map from the key/value pairs provided.
+  Map(std::vector<std::pair<Val, Val>> entries);
+
+  /// \brief Returns the number of entries in the map.
+  size_t size() const { return raw.size; }
+
+  /// \brief Returns an iterator to the beginning of the map entries.
+  const MapEntry *begin() const { return MapEntry::from_capi(raw.data); }
+
+  /// \brief Returns an iterator to the end of the map entries.
+  const MapEntry *end() const {
+    return MapEntry::from_capi(raw.data + raw.size);
+  }
+};
+
 class ResourceHost;
 
 /// Class representing a component model `resource` value which is either a
@@ -644,6 +701,12 @@ public:
     Flags::transfer(std::move(f.raw), raw.of.flags);
   }
 
+  /// Creates a new map value.
+  Val(Map m) {
+    raw.kind = WASMTIME_COMPONENT_MAP;
+    Map::transfer(std::move(m.raw), raw.of.map);
+  }
+
   /// Creates a new resource value.
   Val(ResourceAny r) {
     raw.kind = WASMTIME_COMPONENT_RESOURCE;
@@ -833,10 +896,19 @@ public:
   /// \brief Returns whether this value is a resource.
   bool is_resource() const { return raw.kind == WASMTIME_COMPONENT_RESOURCE; }
 
-  /// \brief Returns the flags value, only valid if `is_flags()`.
+  /// \brief Returns the resource value, only valid if `is_resource()`.
   const ResourceAny &get_resource() const {
     assert(is_resource());
     return *ResourceAny::from_capi(&raw.of.resource);
+  }
+
+  /// \brief Returns whether this value is a map.
+  bool is_map() const { return raw.kind == WASMTIME_COMPONENT_MAP; }
+
+  /// \brief Returns the map value, only valid if `is_map()`.
+  const Map &get_map() const {
+    assert(is_map());
+    return *Map::from_capi(&raw.of.map);
   }
 };
 
@@ -848,6 +920,16 @@ inline Record::Record(std::vector<std::pair<std::string_view, Val>> entries) {
   for (auto &&[name, val] : entries) {
     wasm_byte_vec_new(&dst->name, name.size(), name.data());
     new (&dst->val) Val(std::move(val));
+    dst++;
+  }
+}
+
+inline Map::Map(std::vector<std::pair<Val, Val>> entries) {
+  wasmtime_component_valmap_new_uninit(&raw, entries.size());
+  auto dst = raw.data;
+  for (auto &&[key, val] : entries) {
+    new (&dst->key) Val(std::move(key));
+    new (&dst->value) Val(std::move(val));
     dst++;
   }
 }
