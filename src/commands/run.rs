@@ -625,7 +625,7 @@ impl RunCommand {
                 .run_concurrent(async |store| {
                     let task = func.call_concurrent(store, &params, &mut results).await?;
                     task.block(store).await;
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
         }
