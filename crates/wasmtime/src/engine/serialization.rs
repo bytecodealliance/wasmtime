@@ -479,6 +479,15 @@ mod test {
         Ok(())
     }
 
+    fn assert_contains(error: &Error, msg: &str) {
+        let msg = msg.trim();
+        if error.chain().any(|e| e.to_string().contains(msg)) {
+            return;
+        }
+
+        panic!("failed to find:\n\n'''{msg}\n'''\n\nwithin error message:\n\n'''{error:?}'''")
+    }
+
     #[test]
     fn test_cranelift_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
@@ -490,13 +499,16 @@ mod test {
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{e:?}").starts_with(
-                "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
-            )),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported",
+                );
+            }
         }
 
         Ok(())
@@ -513,16 +525,16 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(
-                format!("{e:?}").starts_with(
-                    "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    don't know how to test for target-specific flag \"not_a_flag\" at runtime",
-                ),
-                "bad error {e:?}",
-            ),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "don't know how to test for target-specific flag \"not_a_flag\" at runtime",
+                );
+            }
         }
 
         Ok(())
