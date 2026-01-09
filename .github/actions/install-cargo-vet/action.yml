@@ -5,7 +5,7 @@ inputs:
   version:
     description: 'Version to install'
     required: false
-    default: '0.10.0'
+    default: '8b40d6351ed9758a73a4a0bf2c930c17a35c5e15'
 
 runs:
   using: composite
@@ -16,5 +16,11 @@ runs:
         key: cargo-vet-bin-${{ inputs.version }}
     - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
       shell: bash
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ inputs.version }} cargo-vet --locked
+    - run: |
+        cargo install \
+          --root ${{ runner.tool_cache }}/cargo-vet \
+          --rev ${{ inputs.version }} \
+          --git https://github.com/mozilla/cargo-vet \
+          --locked \
+          cargo-vet
       shell: bash
