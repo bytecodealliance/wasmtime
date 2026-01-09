@@ -59,9 +59,10 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    FuncEnv,
+    FuncEnv, Result,
     abi::{ABIOperand, ABISig, RetArea, vmctx},
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
+    ensure,
     masm::{
         CalleeKind, ContextArgs, IntScratch, MacroAssembler, MemMoveDirection, OperandSize,
         SPOffset, VMContextLoc,
@@ -69,7 +70,6 @@ use crate::{
     reg::{Reg, writable},
     stack::Val,
 };
-use anyhow::{Result, ensure};
 use wasmtime_environ::{DefinedFuncIndex, FuncIndex, PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
@@ -285,7 +285,7 @@ impl FnCall {
                     masm.load(addr, writable!(*reg), (*ty).try_into()?)?;
                 }
                 (VMContextLoc::OffsetFromPinned(_), ABIOperand::Stack { .. }) => {
-                    anyhow::bail!("unimplemented load from vmctx into stack");
+                    crate::bail!("unimplemented load from vmctx into stack");
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {

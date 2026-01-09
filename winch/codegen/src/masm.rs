@@ -1,10 +1,10 @@
+use crate::Result;
 use crate::abi::{self, LocalSlot, align_to};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
     CallingConvention,
     reg::{Reg, RegClass, WritableReg, writable},
 };
-use anyhow::Result;
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
@@ -1566,7 +1566,7 @@ pub(crate) trait MacroAssembler {
                             masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
                         )?;
                     }
-                    anyhow::Ok(())
+                    wasmtime_environ::error::Ok(())
                 })?;
             }
             MemMoveDirection::HighToLow => {
@@ -1588,7 +1588,7 @@ pub(crate) trait MacroAssembler {
                         src_offs -= word_bytes;
                         dst_offs -= word_bytes;
                     }
-                    anyhow::Ok(())
+                    wasmtime_environ::error::Ok(())
                 })?;
             }
         }
@@ -1615,7 +1615,7 @@ pub(crate) trait MacroAssembler {
                     masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
                     ptr_size,
                 )?;
-                anyhow::Ok(())
+                wasmtime_environ::error::Ok(())
             })?;
         }
         Ok(())
@@ -1926,7 +1926,7 @@ pub(crate) trait MacroAssembler {
                     let addr: Self::Address = masm.local_address(&slot)?;
                     masm.store(zero, addr, OperandSize::S64)?;
                 }
-                anyhow::Ok(())
+                wasmtime_environ::error::Ok(())
             })?;
         }
 

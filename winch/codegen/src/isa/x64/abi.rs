@@ -1,11 +1,11 @@
 use super::regs;
 use crate::{
-    RegIndexEnv,
+    RegIndexEnv, Result,
     abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, align_to},
+    bail,
     codegen::CodeGenError,
     isa::{CallingConvention, reg::Reg},
 };
-use anyhow::{Result, bail};
 use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
@@ -273,12 +273,10 @@ impl X64ABI {
 mod tests {
     use super::X64ABI;
     use crate::{
+        Result,
         abi::{ABI, ABIOperand},
         isa::{CallingConvention, reg::Reg, x64::regs},
     };
-
-    use anyhow::Result;
-
     use wasmtime_environ::{
         WasmFuncType,
         WasmValType::{self, *},

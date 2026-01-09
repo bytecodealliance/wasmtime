@@ -8,13 +8,13 @@
 //! a conditional jump inline when emitting the control flow instruction.
 use super::{CodeGenContext, CodeGenError, Emission, OperandSize, Reg, TypedReg};
 use crate::{
-    CallingConvention,
+    CallingConvention, Result,
     abi::{ABI, ABIOperand, ABIResults, ABISig, RetArea},
+    bail, ensure, format_err,
     masm::{IntCmpKind, MacroAssembler, MemMoveDirection, RegImm, SPOffset},
     reg::writable,
     stack::Val,
 };
-use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::MachLabel;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
@@ -466,7 +466,7 @@ impl ControlStackFrame {
                 masm.bind(head)?;
                 Ok(())
             }
-            _ => Err(anyhow!(CodeGenError::if_control_frame_expected())),
+            _ => Err(format_err!(CodeGenError::if_control_frame_expected())),
         }
     }
 
