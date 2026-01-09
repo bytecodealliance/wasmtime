@@ -160,6 +160,7 @@ members = [
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/wasi-tls-nativetls",
+  "crates/wasi-tls-openssl",
   "crates/debugger",
   "crates/wizer/fuzz",
   "crates/wizer/tests/regex-test",
@@ -247,6 +248,7 @@ wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "42.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "42.0.0" }
 wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "42.0.0" }
 wasmtime-wasi-tls-nativetls = { path = "crates/wasi-tls-nativetls", version = "42.0.0" }
+wasmtime-wasi-tls-openssl = { path = "crates/wasi-tls-openssl", version = "42.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=42.0.0" }
 
 # Internal Wasmtime-specific crates.
@@ -419,6 +421,9 @@ tokio-rustls = "0.25.0"
 rustls = "0.22.0"
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
+tokio-openssl = "0.6.5"
+openssl = "0.10.73"
+openssl-sys = "0.9.109"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"

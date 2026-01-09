@@ -932,10 +932,17 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
-  # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
-  # depends on OpenSSL, which is not easily available on all platforms.
-  test_wasi_tls_nativetls:
-    name: Test wasi-tls using native-tls provider
+  # Test `wasmtime-wasi-tls-nativetls` & `wasmtime-wasi-tls-openssl` in their
+  # own job. This is because they depends on OpenSSL, which is not easily
+  # available on all platforms.
+  #
+  # The Windows base image has OpenSSL installed by default, but not in a way
+  # that is automatically discoverable by `openssl-sys`. We need to configure
+  # the OPENSSL_DIR & OPENSSL_LIB_DIR paths manually.
+  # Additionally, the GH actions Windows image does not ship with a CA cert
+  # bundle, so we use the one from cUrl.
+  test_wasi_tls:
+    name: Test wasi-tls using native-tls & openssl providers
     needs: determine
     if: needs.determine.outputs.run-full
     runs-on: ${{ matrix.os }}
@@ -947,6 +954,19 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - name: Configure OpenSSL (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        mkdir "C:\Program Files\OpenSSL\certs"
+        $sslCertFile = "C:\Program Files\OpenSSL\certs\cacert.pem"
+        $opensslDir = "C:\Program Files\OpenSSL"
+        $opensslLibDir = "C:\Program Files\OpenSSL\lib\VC\x64\MD"
+        curl.exe -o $sslCertFile https://curl.se/ca/cacert.pem
+        "SSL_CERT_FILE=$sslCertFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_DIR=$opensslDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: cargo test -p wasmtime-wasi-tls-openssl
     - run: cargo test -p wasmtime-wasi-tls-nativetls
 
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
@@ -1259,7 +1279,7 @@ jobs:
       - doc
       - micro_checks
       - special_tests
-      - test_wasi_tls_nativetls
+      - test_wasi_tls
       - clippy
       - monolith_checks
       - platform_checks

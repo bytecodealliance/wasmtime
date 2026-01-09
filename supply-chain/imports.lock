@@ -209,6 +209,10 @@ audited_as = "40.0.1"
 version = "42.0.0"
 audited_as = "40.0.1"
 
+[[unpublished.wasmtime-wasi-tls-openssl]]
+version = "42.0.0"
+audited_as = "0.0.1"
+
 [[unpublished.wasmtime-wast]]
 version = "42.0.0"
 audited_as = "40.0.1"
