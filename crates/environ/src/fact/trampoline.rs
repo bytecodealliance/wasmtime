@@ -2882,14 +2882,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match (&src, &dst) {
             // Generate custom code for memory to memory copy
             (Source::Memory(src_mem), Destination::Memory(dst_mem)) => {
-                let src_opts = src.opts();
-                let dst_opts = dst.opts();
-
-                let src_mem_opts = match &src.opts().data_model {
+                let src_mem_opts = match &src_mem.opts.data_model {
                     DataModel::Gc {} => todo!("CM+GC"),
                     DataModel::LinearMemory(opts) => opts,
                 };
-                let dst_mem_opts = match &dst.opts().data_model {
+                let dst_mem_opts = match &dst_mem.opts.data_model {
                     DataModel::Gc {} => todo!("CM+GC"),
                     DataModel::LinearMemory(opts) => opts,
                 };
@@ -2901,8 +2898,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 // because data is stored in-line, we assume that source and destination memory have been validated upstream
 
                 self.instruction(LocalGet(src_mem.addr.idx));
+                if src_mem.offset != 0 {
+                    self.ptr_uconst(src_mem_opts, src_mem.offset);
+                    self.ptr_add(src_mem_opts);
+                }
                 let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
                 self.instruction(LocalGet(dst_mem.addr.idx));
+                if dst_mem.offset != 0 {
+                    self.ptr_uconst(dst_mem_opts, dst_mem.offset);
+                    self.ptr_add(dst_mem_opts);
+                }
                 let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
 
                 self.instruction(I32Const(src_ty.size as i32));
@@ -2912,12 +2917,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
                 // Translate the next element in the list
                 let element_src = Source::Memory(Memory {
-                    opts: src_opts,
+                    opts: src_mem.opts,
                     offset: 0,
                     addr: TempLocal::new(cur_src_ptr.idx, cur_src_ptr.ty),
                 });
                 let element_dst = Destination::Memory(Memory {
-                    opts: dst_opts,
+                    opts: dst_mem.opts,
                     offset: 0,
                     addr: TempLocal::new(cur_dst_ptr.idx, cur_dst_ptr.ty),
                 });
