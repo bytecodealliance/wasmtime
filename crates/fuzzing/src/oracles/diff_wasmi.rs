@@ -87,10 +87,7 @@ impl DiffEngine for WasmiEngine {
     }
 
     fn is_non_deterministic_error(&self, err: &Error) -> bool {
-        matches!(
-            self.trap_code(err),
-            Some(wasmi::TrapCode::StackOverflow)
-        )
+        matches!(self.trap_code(err), Some(wasmi::TrapCode::StackOverflow))
     }
 }
 
