@@ -52,7 +52,7 @@ pub enum ProxyPre<T: 'static> {
     P2(p2::bindings::ProxyPre<T>),
     /// A `wasi:http/handler@0.3.x` pre-instance.
     #[cfg(feature = "p3")]
-    P3(p3::bindings::ProxyPre<T>),
+    P3(p3::bindings::ServicePre<T>),
 }
 
 impl<T: 'static> ProxyPre<T> {
@@ -75,7 +75,7 @@ pub enum Proxy {
     P2(p2::bindings::Proxy),
     /// A `wasi:http/handler@0.3.x` instance.
     #[cfg(feature = "p3")]
-    P3(p3::bindings::Proxy),
+    P3(p3::bindings::Service),
 }
 
 /// Represents a task to run using a `wasi:http/incoming-handler@0.2.x` or

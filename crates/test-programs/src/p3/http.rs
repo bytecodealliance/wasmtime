@@ -2,7 +2,7 @@ use anyhow::{Context as _, Result, anyhow};
 use core::fmt;
 use futures::join;
 
-use crate::p3::wasi::http::{handler, types};
+use crate::p3::wasi::http::{client, types};
 use crate::p3::{wit_future, wit_stream};
 
 pub struct Response {
@@ -91,7 +91,7 @@ pub async fn request(
     let (transmit, handle) = join!(
         async { transmit.await.context("failed to transmit request") },
         async {
-            let response = handler::handle(request).await?;
+            let response = client::send(request).await?;
             let status = response.get_status_code();
             let headers = response.get_headers().copy_all();
             let (_, result_rx) = wit_future::new(|| Ok(()));
