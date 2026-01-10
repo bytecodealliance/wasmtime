@@ -2879,10 +2879,89 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // TODO: subtyping
         assert_eq!(src_ty.size, dst_ty.size);
 
-        let srcs = src.record_field_srcs(self.types, (0..src_ty.size).map(|_| src_ty.element));
-        let dsts = dst.record_field_dsts(self.types, (0..dst_ty.size).map(|_| dst_ty.element));
-        for (src, dst) in srcs.zip(dsts) {
-            self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
+        match (&src, &dst) {
+            // Generate custom code for memory to memory copy
+            (Source::Memory(src_mem), Destination::Memory(dst_mem)) => {
+                let src_opts = src.opts();
+                let dst_opts = dst.opts();
+
+                let src_mem_opts = match &src.opts().data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let dst_mem_opts = match &dst.opts().data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let src_element_bytes = self.types.size_align(src_mem_opts, &src_ty.element).0;
+                let dst_element_bytes = self.types.size_align(dst_mem_opts, &dst_ty.element).0;
+                assert_ne!(src_element_bytes, 0);
+                assert_ne!(dst_element_bytes, 0);
+
+                // because data is stored in-line, we assume that source and destination memory have been validated upstream
+
+                self.instruction(LocalGet(src_mem.addr.idx));
+                let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+                self.instruction(LocalGet(dst_mem.addr.idx));
+                let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
+
+                self.instruction(I32Const(src_ty.size as i32));
+                let remaining = self.local_set_new_tmp(ValType::I32);
+
+                self.instruction(Loop(BlockType::Empty));
+
+                // Translate the next element in the list
+                let element_src = Source::Memory(Memory {
+                    opts: src_opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_src_ptr.idx, cur_src_ptr.ty),
+                });
+                let element_dst = Destination::Memory(Memory {
+                    opts: dst_opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_dst_ptr.idx, cur_dst_ptr.ty),
+                });
+                self.translate(&src_ty.element, &element_src, &dst_ty.element, &element_dst);
+
+                // Update the two loop pointers
+                self.instruction(LocalGet(cur_src_ptr.idx));
+                self.ptr_uconst(src_mem_opts, src_element_bytes);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalSet(cur_src_ptr.idx));
+                self.instruction(LocalGet(cur_dst_ptr.idx));
+                self.ptr_uconst(dst_mem_opts, dst_element_bytes);
+                self.ptr_add(dst_mem_opts);
+                self.instruction(LocalSet(cur_dst_ptr.idx));
+
+                // Update the remaining count, falling through to break out if it's zero
+                // now.
+                self.instruction(LocalGet(remaining.idx));
+                self.ptr_iconst(src_mem_opts, -1);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalTee(remaining.idx));
+                self.ptr_br_if(src_mem_opts, 0);
+                self.instruction(End); // end of loop
+
+                self.free_temp_local(cur_dst_ptr);
+                self.free_temp_local(cur_src_ptr);
+                self.free_temp_local(remaining);
+                return;
+            }
+            // for the non-memory-to-memory case fall back to using generic tuple translation
+            (_, _) => {
+                // Assumes that the number of elements are small enough for this unrolling
+                assert!(
+                    src_ty.size as usize <= MAX_FLAT_PARAMS
+                        && dst_ty.size as usize <= MAX_FLAT_PARAMS
+                );
+                let srcs =
+                    src.record_field_srcs(self.types, (0..src_ty.size).map(|_| src_ty.element));
+                let dsts =
+                    dst.record_field_dsts(self.types, (0..dst_ty.size).map(|_| dst_ty.element));
+                for (src, dst) in srcs.zip(dsts) {
+                    self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
+                }
+            }
         }
     }
 
