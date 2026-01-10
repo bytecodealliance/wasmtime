@@ -2274,7 +2274,8 @@ impl Config {
             | WasmFeatures::CM_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
-            | WasmFeatures::CM_GC;
+            | WasmFeatures::CM_GC
+            | WasmFeatures::CM_FIXED_SIZE_LIST;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;

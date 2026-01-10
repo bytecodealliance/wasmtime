@@ -1128,7 +1128,7 @@ impl TypeInformation {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
-                        if self.flat.push(*t32, *t64) {
+                        if !self.flat.push(*t32, *t64) {
                             break 'outer;
                         }
                     }
