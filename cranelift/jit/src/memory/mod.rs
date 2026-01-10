@@ -16,14 +16,19 @@ pub enum BranchProtection {
     BTI,
 }
 
+pub enum JITMemoryKind {
+    /// Allocate memory that will be executable once finalized.
+    Executable,
+    /// Allocate writable memory.
+    Writable,
+    /// Allocate memory that will be read-only once finalized.
+    ReadOnly,
+}
+
 /// A provider of memory for the JIT.
 pub trait JITMemoryProvider {
-    /// Allocate memory that will be executable once finalized.
-    fn allocate_readexec(&mut self, size: usize, align: u64) -> io::Result<*mut u8>;
-    /// Allocate writable memory.
-    fn allocate_readwrite(&mut self, size: usize, align: u64) -> io::Result<*mut u8>;
-    /// Allocate memory that will be read-only once finalized.
-    fn allocate_readonly(&mut self, size: usize, align: u64) -> io::Result<*mut u8>;
+    /// Allocate memory
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8>;
 
     /// Free the memory region.
     unsafe fn free_memory(&mut self);
