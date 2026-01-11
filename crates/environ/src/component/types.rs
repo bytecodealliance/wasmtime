@@ -722,6 +722,23 @@ impl CanonicalAbiInfo {
         return ret;
     }
 
+    /// Returns the abi for a fixed size list
+    pub const fn fixed_size_list_static(
+        element: &CanonicalAbiInfo,
+        count: u32,
+    ) -> CanonicalAbiInfo {
+        CanonicalAbiInfo {
+            size32: element.size32 * count,
+            align32: element.align32,
+            size64: element.size64 * count,
+            align64: element.align64,
+            flat_count: match element.flat_count {
+                None => None,
+                Some(c) => Some(c.saturating_mul(if count > 255 { 255u8 } else { count as u8 })),
+            },
+        }
+    }
+
     /// Returns the delta from the current value of `offset` to align properly
     /// and read the next record field of type `abi` for 32-bit memories.
     pub fn next_field32(&self, offset: &mut u32) -> u32 {

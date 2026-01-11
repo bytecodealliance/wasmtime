@@ -10,10 +10,10 @@ use core::ops::Deref;
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
-    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
-    TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeModuleIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex, TypeStreamIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
+    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedSizeListIndex, TypeFlagsIndex,
+    TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeModuleIndex,
+    TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
 
 pub use crate::component::resources::ResourceType;
@@ -158,13 +158,29 @@ impl TypeChecker<'_> {
             (InterfaceType::Stream(_), _) => false,
             (InterfaceType::ErrorContext(_), InterfaceType::ErrorContext(_)) => true,
             (InterfaceType::ErrorContext(_), _) => false,
-            (InterfaceType::FixedSizeList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedSizeList(t1), InterfaceType::FixedSizeList(t2)) => {
+                self.fixed_size_lists_equal(t1, t2)
+            }
+            (InterfaceType::FixedSizeList(_), _) => false,
         }
     }
 
     fn lists_equal(&self, l1: TypeListIndex, l2: TypeListIndex) -> bool {
         let a = &self.a_types[l1];
         let b = &self.b_types[l2];
+        self.interface_types_equal(a.element, b.element)
+    }
+
+    fn fixed_size_lists_equal(
+        &self,
+        l1: wasmtime_environ::component::TypeFixedSizeListIndex,
+        l2: wasmtime_environ::component::TypeFixedSizeListIndex,
+    ) -> bool {
+        let a = &self.a_types[l1];
+        let b = &self.b_types[l2];
+        if a.size != b.size {
+            return false;
+        }
         self.interface_types_equal(a.element, b.element)
     }
 
@@ -322,6 +338,35 @@ impl List {
     /// Retrieve the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].element, &self.0.instance())
+    }
+}
+
+/// A `list` interface type
+#[derive(Clone, Debug)]
+pub struct FixedSizeList(Handle<TypeFixedSizeListIndex>);
+
+impl PartialEq for FixedSizeList {
+    fn eq(&self, other: &Self) -> bool {
+        self.0
+            .equivalent(&other.0, TypeChecker::fixed_size_lists_equal)
+    }
+}
+
+impl Eq for FixedSizeList {}
+
+impl FixedSizeList {
+    pub(crate) fn from(index: TypeFixedSizeListIndex, ty: &InstanceType<'_>) -> Self {
+        FixedSizeList(Handle::new(index, ty))
+    }
+
+    /// Retrieve the element type of this `list`.
+    pub fn ty(&self) -> Type {
+        Type::from(&self.0.types[self.0.index].element, &self.0.instance())
+    }
+
+    /// Retrieve the size of this `list`.
+    pub fn size(&self) -> u32 {
+        self.0.types[self.0.index].size
     }
 }
 
@@ -696,6 +741,7 @@ pub enum Type {
     Future(FutureType),
     Stream(StreamType),
     ErrorContext,
+    FixedSizeList(FixedSizeList),
 }
 
 impl Type {
@@ -856,7 +902,9 @@ impl Type {
             InterfaceType::Future(index) => Type::Future(instance.future_type(*index)),
             InterfaceType::Stream(index) => Type::Stream(instance.stream_type(*index)),
             InterfaceType::ErrorContext(_) => Type::ErrorContext,
-            InterfaceType::FixedSizeList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedSizeList(index) => {
+                Type::FixedSizeList(FixedSizeList::from(*index, instance))
+            }
         }
     }
 
@@ -888,6 +936,7 @@ impl Type {
             Type::Future(_) => "future",
             Type::Stream(_) => "stream",
             Type::ErrorContext => "error-context",
+            Type::FixedSizeList(_) => "list<_, N>",
         }
     }
 }

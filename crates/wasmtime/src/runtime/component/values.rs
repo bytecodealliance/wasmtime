@@ -90,6 +90,7 @@ pub enum Val {
     Future(FutureAny),
     Stream(StreamAny),
     ErrorContext(ErrorContextAny),
+    FixedSizeList(Vec<Val>),
 }
 
 impl Val {
@@ -215,7 +216,11 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
-            InterfaceType::FixedSizeList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedSizeList(i) => Val::FixedSizeList(
+                (0..cx.types[i].size)
+                    .map(|_| Self::lift(cx, cx.types[i].element, src))
+                    .collect::<Result<_>>()?,
+            ),
         })
     }
 
@@ -342,7 +347,20 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
-            InterfaceType::FixedSizeList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedSizeList(i) => {
+                let element = cx.types[i].element.clone();
+                let abi = cx.types.canonical_abi(&element);
+                Val::Tuple(
+                    (0..cx.types[i].size)
+                        .map(|n| {
+                            let offset = abi.size32 * n;
+                            let offset = usize::try_from(offset).unwrap();
+                            let size = usize::try_from(abi.size32).unwrap();
+                            Val::load(cx, element, &bytes[offset..][..size])
+                        })
+                        .collect::<Result<_>>()?,
+                )
+            }
         })
     }
 
@@ -493,7 +511,17 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedSizeList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedSizeList(ty), Val::FixedSizeList(values)) => {
+                let ty = &cx.types[ty];
+                if ty.size as usize != values.len() {
+                    bail!("expected vec of size {}, got {}", ty.size, values.len());
+                }
+                for value in values {
+                    value.lower(cx, ty.element, dst)?;
+                }
+                Ok(())
+            }
+            (InterfaceType::FixedSizeList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -647,7 +675,18 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedSizeList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedSizeList(ty), Val::FixedSizeList(values)) => {
+                let ty = &cx.types[ty];
+                if ty.size as usize != values.len() {
+                    bail!("expected {} types, got {}", ty.size, values.len());
+                }
+                let elemsize = cx.types.canonical_abi(&ty.element).size32 as usize;
+                for (n, value) in values.iter().enumerate() {
+                    value.store(cx, ty.element, elemsize * n)?;
+                }
+                Ok(())
+            }
+            (InterfaceType::FixedSizeList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -678,6 +717,7 @@ impl Val {
             Val::Future(_) => "future",
             Val::Stream(_) => "stream",
             Val::ErrorContext(_) => "error-context",
+            Val::FixedSizeList(_) => "list<_, N>",
         }
     }
 
@@ -762,6 +802,8 @@ impl PartialEq for Val {
             (Self::Stream(_), _) => false,
             (Self::ErrorContext(l), Self::ErrorContext(r)) => l == r,
             (Self::ErrorContext(_), _) => false,
+            (Self::FixedSizeList(l), Self::FixedSizeList(r)) => l == r,
+            (Self::FixedSizeList(_), _) => false,
         }
     }
 }
