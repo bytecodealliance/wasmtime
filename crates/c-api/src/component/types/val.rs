@@ -31,6 +31,7 @@ pub enum wasmtime_component_valtype_t {
     Future(Box<wasmtime_component_future_type_t>),
     Stream(Box<wasmtime_component_stream_type_t>),
     ErrorContext,
+    FixedSizeList(Box<wasmtime_component_list_type_t>),
 }
 
 impl From<Type> for wasmtime_component_valtype_t {
@@ -61,6 +62,7 @@ impl From<Type> for wasmtime_component_valtype_t {
             Type::Borrow(ty) => Self::Borrow(Box::new(ty.into())),
             Type::Future(ty) => Self::Future(Box::new(ty.into())),
             Type::Stream(ty) => Self::Stream(Box::new(ty.into())),
+            Type::FixedSizeList(ty) => Self::FixedSizeList(Box::new(ty.into())),
             Type::ErrorContext => Self::ErrorContext,
         }
     }
