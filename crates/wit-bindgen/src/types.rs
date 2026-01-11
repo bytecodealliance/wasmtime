@@ -167,7 +167,10 @@ impl Types {
             TypeDefKind::Handle(_) => info.has_handle = true,
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedLengthList(..) => todo!(),
+            TypeDefKind::FixedSizeList(ty, _) => {
+                info = self.type_info(resolve, ty);
+            }
+            TypeDefKind::Map(..) => todo!(),
         }
         self.type_info.insert(ty, info);
         info
