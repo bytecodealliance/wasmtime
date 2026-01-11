@@ -2958,7 +2958,8 @@ where
             return Err(e);
         }
         assert!(valid == N);
-        Ok(unsafe { core::mem::transmute::<_, Self>(result) })
+        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
+        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
     }
 
     fn linear_lift_from_memory(
@@ -2998,7 +2999,8 @@ where
             return Err(e);
         }
         assert!(valid == N);
-        Ok(unsafe { core::mem::transmute::<_, Self>(result) })
+        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
+        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
     }
 }
 
