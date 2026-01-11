@@ -291,6 +291,7 @@ fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         Val::Stream(..) => "stream",
         Val::ErrorContext(..) => "error-context",
         Val::Map(..) => "map",
+        Val::FixedLengthList(..) => "list<_, N>",
     };
     bail!("expected `{expected}` got `{actual}`")
 }

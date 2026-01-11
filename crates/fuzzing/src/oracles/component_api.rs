@@ -138,6 +138,11 @@ fn arbitrary_val(
                 })
                 .collect::<arbitrary::Result<_>>()?,
         ),
+        Type::FixedSizeList(list) => Val::FixedSizeList(
+            (0..list.size())
+                .map(|_| arbitrary_val(&list.ty(), input))
+                .collect::<arbitrary::Result<_>>()?,
+        ),
 
         Type::Map(map) => {
             let mut pairs = Vec::new();
