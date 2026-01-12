@@ -398,6 +398,16 @@ fn ensure_macro() {
     }
     assert!(ensure_bool_ref(&true).is_ok());
     assert_eq!(ensure_bool_ref(&false).unwrap_err().to_string(), "whoops");
+
+    fn ensure_no_message(a: u32) -> Result<()> {
+        ensure!(a == 42);
+        Ok(())
+    }
+    assert!(ensure_no_message(42).is_ok());
+    assert_eq!(
+        ensure_no_message(0).unwrap_err().to_string(),
+        "Condition failed: `a == 42`"
+    );
 }
 
 #[test]
