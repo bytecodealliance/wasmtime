@@ -10,13 +10,13 @@ use cranelift_codegen::{
     },
     isa,
 };
+use cranelift_fuzzgen::*;
 use libfuzzer_sys::{
     arbitrary::{self, Arbitrary, Unstructured},
     fuzz_target,
 };
 use std::fmt;
-
-use cranelift_fuzzgen::*;
+use wasmtime::ToWasmtimeResult;
 
 /// TODO: This *almost* could be replaced with `LibCall::all()`, but
 /// `LibCall::signature` panics for some libcalls, so we need to avoid that.
@@ -59,7 +59,9 @@ impl FunctionWithIsa {
         let flags = generator
             .generate_flags(architecture)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        generator.set_isa_flags(&mut builder, IsaFlagGen::All)?;
+        generator
+            .set_isa_flags(&mut builder, IsaFlagGen::All)
+            .to_wasmtime_result()?;
         let isa = builder
             .finish(flags)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
@@ -74,7 +76,7 @@ impl FunctionWithIsa {
         let usercalls = (0..func_count)
             .map(|i| {
                 let name = UserExternalName::new(2, i as u32);
-                let sig = generator.generate_signature(&*isa)?;
+                let sig = generator.generate_signature(&*isa).to_wasmtime_result()?;
                 Ok((name, sig))
             })
             .collect::<wasmtime::Result<Vec<(UserExternalName, Signature)>>>()

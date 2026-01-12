@@ -15,6 +15,7 @@ use std::fmt;
 use std::sync::LazyLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use wasmtime::ToWasmtimeResult;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
@@ -193,7 +194,9 @@ impl TestCase {
         let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let flags = generator.generate_flags(builder.triple().architecture)?;
-        generator.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
+        generator
+            .set_isa_flags(&mut builder, IsaFlagGen::Host)
+            .to_wasmtime_result()?;
         let isa = builder.finish(flags)?;
 
         // When generating functions, we allow each function to call any function that has
@@ -219,12 +222,9 @@ impl TestCase {
                 })
                 .collect();
 
-            let func = generator.generate_func(
-                fname,
-                isa.clone(),
-                usercalls,
-                ALLOWED_LIBCALLS.to_vec(),
-            )?;
+            let func = generator
+                .generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())
+                .to_wasmtime_result()?;
             functions.push(func);
 
             ctrl_planes.push(ControlPlane::arbitrary(generator.u)?);
@@ -233,7 +233,9 @@ impl TestCase {
         functions.reverse();
 
         let main = &functions[0];
-        let inputs = generator.generate_test_inputs(&main.signature)?;
+        let inputs = generator
+            .generate_test_inputs(&main.signature)
+            .to_wasmtime_result()?;
 
         Ok(TestCase {
             isa,
