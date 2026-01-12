@@ -4,6 +4,7 @@ target x86_64
 target x86_64 has_avx
 target riscv64
 target riscv64 has_c has_zcb
+target aarch64
 
 function %bnot_f32(f32) -> f32 {
 block0(v0: f32):
