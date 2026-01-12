@@ -29,7 +29,7 @@ target-lexicon = { workspace = true }
 pulley-interpreter-fuzz = { workspace = true }
 smallvec = { workspace = true }
 wasmparser = { workspace = true }
-wasmtime = { workspace = true, features = ["anyhow", "winch"] }
+wasmtime = { workspace = true, features = ["winch"] }
 wasmtime-fuzzing = { workspace = true }
 wasmtime-test-util = { workspace = true }
 log = { workspace = true }
