@@ -1,6 +1,12 @@
+use std::ptr;
+
 use cranelift_codegen::binemit::Reloc;
-use cranelift_module::ModuleReloc;
-use cranelift_module::ModuleRelocTarget;
+use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult};
+
+use crate::JITMemoryProvider;
+use crate::memory::JITMemoryKind;
+
+const VENEER_SIZE: usize = 24; // ldr + br + pointer
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -12,21 +18,96 @@ unsafe fn modify_inst32(iptr: *mut u32, modifier: impl FnOnce(u32) -> u32) {
 
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
-    pub(crate) ptr: *mut u8,
-    pub(crate) size: usize,
-    pub(crate) relocs: Vec<ModuleReloc>,
+    ptr: *mut u8,
+    size: usize,
+    relocs: Vec<ModuleReloc>,
+    veneer_count: usize,
     #[cfg(feature = "wasmtime-unwinder")]
-    pub(crate) exception_data: Option<Vec<u8>>,
+    wasmtime_exception_data: Option<Vec<u8>>,
 }
 
 unsafe impl Send for CompiledBlob {}
 
 impl CompiledBlob {
+    pub(crate) fn new(
+        memory: &mut dyn JITMemoryProvider,
+        data: &[u8],
+        align: u64,
+        relocs: Vec<ModuleReloc>,
+        #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
+        kind: JITMemoryKind,
+    ) -> ModuleResult<Self> {
+        // Reserve veneers for all function calls just in case
+        let mut veneer_count = 0;
+        for reloc in &relocs {
+            match reloc.kind {
+                Reloc::Arm64Call => veneer_count += 1,
+                _ => {}
+            }
+        }
+
+        let ptr = memory
+            .allocate(data.len() + veneer_count * VENEER_SIZE, align, kind)
+            .map_err(|e| ModuleError::Allocation { err: e })?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+        }
+
+        Ok(CompiledBlob {
+            ptr,
+            size: data.len(),
+            relocs,
+            veneer_count,
+            #[cfg(feature = "wasmtime-unwinder")]
+            wasmtime_exception_data,
+        })
+    }
+
+    pub(crate) fn new_zeroed(
+        memory: &mut dyn JITMemoryProvider,
+        size: usize,
+        align: u64,
+        relocs: Vec<ModuleReloc>,
+        #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
+        kind: JITMemoryKind,
+    ) -> ModuleResult<Self> {
+        let ptr = memory
+            .allocate(size, align, kind)
+            .map_err(|e| ModuleError::Allocation { err: e })?;
+
+        unsafe { ptr::write_bytes(ptr, 0, size) };
+
+        Ok(CompiledBlob {
+            ptr,
+            size,
+            relocs,
+            veneer_count: 0,
+            #[cfg(feature = "wasmtime-unwinder")]
+            wasmtime_exception_data,
+        })
+    }
+
+    pub(crate) fn ptr(&self) -> *const u8 {
+        self.ptr
+    }
+
+    pub(crate) fn size(&self) -> usize {
+        self.size
+    }
+
+    #[cfg(feature = "wasmtime-unwinder")]
+    pub(crate) fn wasmtime_exception_data(&self) -> Option<&[u8]> {
+        self.wasmtime_exception_data.as_deref()
+    }
+
     pub(crate) fn perform_relocations(
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
+
+        let mut next_veneer_idx = 0;
 
         for (
             i,
@@ -75,21 +156,53 @@ impl CompiledBlob {
                 }
                 Reloc::Arm64Call => {
                     let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     // The instruction is 32 bits long.
                     let iptr = at as *mut u32;
+
                     // The offset encoded in the `bl` instruction is the
                     // number of bytes divided by 4.
-                    let diff = ((base as isize) - (at as isize)) >> 2;
+                    let diff = ((what as isize) - (at as isize)) >> 2;
                     // Sign propagating right shift disposes of the
                     // included bits, so the result is expected to be
-                    // either all sign bits or 0, depending on if the original
-                    // value was negative or positive.
-                    assert!((diff >> 26 == -1) || (diff >> 26 == 0));
-                    // The lower 26 bits of the `bl` instruction form the
-                    // immediate offset argument.
-                    let chop = 32 - 26;
-                    let imm26 = (diff as u32) << chop >> chop;
-                    unsafe { modify_inst32(iptr, |inst| inst | imm26) };
+                    // either all sign bits or 0 when in-range, depending
+                    // on if the original value was negative or positive.
+                    if (diff >> 25 == -1) || (diff >> 25 == 0) {
+                        // The lower 26 bits of the `bl` instruction form the
+                        // immediate offset argument.
+                        let chop = 32 - 26;
+                        let imm26 = (diff as u32) << chop >> chop;
+                        unsafe { modify_inst32(iptr, |inst| inst | imm26) };
+                    } else {
+                        // If the target is out of range for a direct call, insert a veneer at the
+                        // end of the function.
+                        let veneer_idx = next_veneer_idx;
+                        next_veneer_idx += 1;
+                        assert!(veneer_idx <= self.veneer_count);
+                        let veneer =
+                            unsafe { self.ptr.byte_add(self.size + veneer_idx * VENEER_SIZE) };
+
+                        // Write the veneer
+                        // x16 is reserved as scratch register to be used by veneers and PLT entries
+                        unsafe {
+                            write_unaligned(
+                                veneer.cast::<u32>(),
+                                0x58000050, // ldr x16, 0x8
+                            );
+                            write_unaligned(
+                                veneer.byte_add(4).cast::<u32>(),
+                                0xd61f0200, // br x16
+                            );
+                            write_unaligned(veneer.byte_add(8).cast::<u64>(), what.addr() as u64);
+                        };
+
+                        // Set the veneer as target of the call
+                        let diff = ((veneer as isize) - (at as isize)) >> 2;
+                        assert!((diff >> 25 == -1) || (diff >> 25 == 0));
+                        let chop = 32 - 26;
+                        let imm26 = (diff as u32) << chop >> chop;
+                        unsafe { modify_inst32(iptr, |inst| inst | imm26) };
+                    }
                 }
                 Reloc::Aarch64AdrGotPage21 => {
                     panic!("GOT relocation shouldn't be generated when !is_pic");
