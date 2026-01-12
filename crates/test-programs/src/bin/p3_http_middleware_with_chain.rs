@@ -6,19 +6,18 @@ mod bindings {
 package local:local;
 
 world middleware-with-chain {
-  include wasi:http/service@0.3.0-rc-2026-01-06;
+  include wasi:http/proxy@0.3.0-rc-2025-09-16;
 
   import chain-http;
 }
 
 interface chain-http {
-  use wasi:http/types@0.3.0-rc-2026-01-06.{request, response, error-code};
+  use wasi:http/types@0.3.0-rc-2025-09-16.{request, response, error-code};
 
   handle: async func(request: request) -> result<response, error-code>;
 }
         ",
         generate_all,
-        features: ["clocks-timezone"],
     });
 
     use super::Component;

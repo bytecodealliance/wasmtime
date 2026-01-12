@@ -1,5 +1,5 @@
 use futures::join;
-use test_programs::p3::wasi::http::client;
+use test_programs::p3::wasi::http::handler;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Method, Request, Scheme, Trailers};
 use test_programs::p3::{wit_future, wit_stream};
 use wit_bindgen::{FutureReader, FutureWriter, StreamWriter};
@@ -47,7 +47,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
             let (handle, transmit, ()) = join!(
-                async { client::send(request).await },
+                async { handler::handle(request).await },
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"long enough".to_vec()).await;
@@ -64,7 +64,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
             let (handle, transmit, ()) = join!(
-                async { client::send(request).await },
+                async { handler::handle(request).await },
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"msg".to_vec()).await;
@@ -93,7 +93,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
             let (handle, transmit, ()) = join!(
-                async { client::send(request).await },
+                async { handler::handle(request).await },
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"more than 11 bytes".to_vec()).await;

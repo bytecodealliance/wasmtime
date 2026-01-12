@@ -1,0 +1,22 @@
+/// A keyvalue interface that provides atomic operations.
+/// 
+/// Atomic operations are single, indivisible operations. When a fault causes an atomic operation to
+/// fail, it will appear to the invoker of the atomic operation that the action either completed
+/// successfully or did nothing at all.
+/// 
+/// Please note that this interface is bare functions that take a reference to a bucket. This is to
+/// get around the current lack of a way to "extend" a resource with additional methods inside of
+/// wit. Future version of the interface will instead extend these methods on the base `bucket`
+/// resource.
+interface atomics {
+  	use store.{bucket, error};
+
+  	/// Atomically increment the value associated with the key in the store by the given delta. It
+	/// returns the new value.
+	///
+	/// If the key does not exist in the store, it creates a new key-value pair with the value set
+	/// to the given delta. 
+	///
+	/// If any other error occurs, it returns an `Err(error)`.
+	increment: func(bucket: borrow<bucket>, key: string, delta: u64) -> result<u64, error>;
+}

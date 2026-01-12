@@ -1,11 +1,11 @@
 use crate::p3::WasiHttpView;
-use crate::p3::bindings::Service;
+use crate::p3::bindings::Proxy;
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use wasmtime::component::{Accessor, TaskExit};
 use wasmtime::error::Context as _;
 
-impl Service {
-    /// Call `wasi:http/handler#handle` on [Service] getting a [Response] back.
+impl Proxy {
+    /// Call `wasi:http/handler#handle` on [Proxy] getting a [Response] back.
     pub async fn handle(
         &self,
         store: &Accessor<impl WasiHttpView>,

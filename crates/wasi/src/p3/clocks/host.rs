@@ -1,31 +1,32 @@
 use crate::clocks::WasiClocksCtxView;
-use crate::p3::bindings::clocks::{monotonic_clock, system_clock, types};
+use crate::p3::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::p3::clocks::WasiClocks;
 use core::time::Duration;
 use tokio::time::sleep;
 use wasmtime::component::Accessor;
 
-impl types::Host for WasiClocksCtxView<'_> {}
-
-impl system_clock::Host for WasiClocksCtxView<'_> {
-    fn now(&mut self) -> wasmtime::Result<system_clock::Instant> {
+impl wall_clock::Host for WasiClocksCtxView<'_> {
+    fn now(&mut self) -> wasmtime::Result<wall_clock::Datetime> {
         let now = self.ctx.wall_clock.now();
-        Ok(system_clock::Instant {
-            seconds: now.as_secs() as i64,
+        Ok(wall_clock::Datetime {
+            seconds: now.as_secs(),
             nanoseconds: now.subsec_nanos(),
         })
     }
 
-    fn get_resolution(&mut self) -> wasmtime::Result<types::Duration> {
+    fn get_resolution(&mut self) -> wasmtime::Result<wall_clock::Datetime> {
         let res = self.ctx.wall_clock.resolution();
-        Ok(res.as_nanos() as u64)
+        Ok(wall_clock::Datetime {
+            seconds: res.as_secs(),
+            nanoseconds: res.subsec_nanos(),
+        })
     }
 }
 
 impl monotonic_clock::HostWithStore for WasiClocks {
     async fn wait_until<U>(
         store: &Accessor<U, Self>,
-        when: monotonic_clock::Mark,
+        when: monotonic_clock::Instant,
     ) -> wasmtime::Result<()> {
         let clock_now = store.with(|mut view| view.get().ctx.monotonic_clock.now());
         if when > clock_now {
@@ -36,7 +37,7 @@ impl monotonic_clock::HostWithStore for WasiClocks {
 
     async fn wait_for<U>(
         _store: &Accessor<U, Self>,
-        duration: types::Duration,
+        duration: monotonic_clock::Duration,
     ) -> wasmtime::Result<()> {
         if duration > 0 {
             sleep(Duration::from_nanos(duration)).await;
@@ -46,11 +47,11 @@ impl monotonic_clock::HostWithStore for WasiClocks {
 }
 
 impl monotonic_clock::Host for WasiClocksCtxView<'_> {
-    fn now(&mut self) -> wasmtime::Result<monotonic_clock::Mark> {
+    fn now(&mut self) -> wasmtime::Result<monotonic_clock::Instant> {
         Ok(self.ctx.monotonic_clock.now())
     }
 
-    fn get_resolution(&mut self) -> wasmtime::Result<types::Duration> {
+    fn get_resolution(&mut self) -> wasmtime::Result<monotonic_clock::Instant> {
         Ok(self.ctx.monotonic_clock.resolution())
     }
 }

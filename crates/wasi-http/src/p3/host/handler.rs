@@ -1,4 +1,4 @@
-use crate::p3::bindings::http::client::{Host, HostWithStore};
+use crate::p3::bindings::http::handler::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use crate::p3::body::{Body, BodyExt as _};
 use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView};
@@ -34,7 +34,7 @@ async fn io_task_result(
 }
 
 impl HostWithStore for WasiHttp {
-    async fn send<T>(
+    async fn handle<T>(
         store: &Accessor<T, Self>,
         req: Resource<Request>,
     ) -> HttpResult<Resource<Response>> {

@@ -10,107 +10,85 @@ set -ex
 cache_dir=$(mktemp -d)
 trap "rm -rf $cache_dir" EXIT
 
-# vendor_wkg fetches packages from the OCI registry using wkg.
-# Using --format wit preserves @unstable annotations.
-# Each package is placed in its own directory for wit-bindgen compatibility.
-#
-# Arguments:
-#   $1 - Base path for the crate (e.g., "wasi/src/p2")
-#   $2 - Space-separated list of packages in format "name@version"
-vendor_wkg() {
-  local name=$1
-  local packages=$2
-  local path="crates/$name/wit/deps"
+# Helper to download the `WebAssembly/$repo` dir at the `$tag` (or rev)
+# specified. The `wit/*.wit` files are placed in `$path`.
+get_github() {
+  local repo=$1
+  local tag=$2
+  local path=$3
 
   rm -rf "$path"
   mkdir -p "$path"
 
-  for package in $packages; do
-    IFS='@' read -r pkg_name version <<< "$package"
-    wkg get "wasi:${pkg_name}@${version}" --format wit --overwrite -o "$path/${pkg_name}.wit"
-  done
+  cached_extracted_dir="$cache_dir/$repo-$tag"
+
+  if [[ ! -d $cached_extracted_dir ]]; then
+    mkdir -p $cached_extracted_dir
+    curl --retry 5 --retry-all-errors -sLO https://github.com/WebAssembly/$repo/archive/$tag.tar.gz
+    tar xzf $tag.tar.gz --strip-components=1 -C $cached_extracted_dir
+    rm $tag.tar.gz
+    rm -rf $cached_extracted_dir/wit/deps*
+  fi
+
+  cp -r $cached_extracted_dir/wit/* $path
 }
 
-# vendor_github fetches packages from GitHub tarballs for packages not
-# available in the OCI registry.
-#
-# Arguments:
-#   $1 - Base path for the crate (e.g., "wasi-tls")
-#   $2 - Space-separated list of packages in format "name@tag[@subdir]"
-vendor_github() {
-  local name=$1
-  local packages=$2
-  local path="crates/$name/wit/deps"
+p2=0.2.6
+p3=0.3.0-rc-2025-09-16
 
-  rm -rf "$path"
-  mkdir -p "$path"
+rm -rf crates/wasi-io/wit/deps
+mkdir -p crates/wasi-io/wit/deps
+wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-io/wit/deps/io.wit"
 
-  for package in $packages; do
-    IFS='@' read -r repo tag subdir <<< "$package"
-    mkdir -p "$path/$repo"
-    local extracted_dir="$cache_dir/$repo-$tag"
+rm -rf crates/wasi/src/p2/wit/deps
+mkdir -p crates/wasi/src/p2/wit/deps
+wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi/src/p2/wit/deps/io.wit"
+wkg get --format wit --overwrite "wasi:clocks@$p2" -o "crates/wasi/src/p2/wit/deps/clocks.wit"
+wkg get --format wit --overwrite "wasi:cli@$p2" -o "crates/wasi/src/p2/wit/deps/cli.wit"
+wkg get --format wit --overwrite "wasi:filesystem@$p2" -o "crates/wasi/src/p2/wit/deps/filesystem.wit"
+wkg get --format wit --overwrite "wasi:random@$p2" -o "crates/wasi/src/p2/wit/deps/random.wit"
+wkg get --format wit --overwrite "wasi:sockets@$p2" -o "crates/wasi/src/p2/wit/deps/sockets.wit"
 
-    if [[ ! -d $extracted_dir ]]; then
-      mkdir -p "$extracted_dir"
-      curl --retry 5 --retry-all-errors -sLO "https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz"
-      tar xzf "$tag.tar.gz" --strip-components=1 -C "$extracted_dir"
-      rm "$tag.tar.gz"
-      rm -rf "$extracted_dir/${subdir:-wit}/deps"*
-    fi
+rm -rf crates/wasi-http/wit/deps
+mkdir -p crates/wasi-http/wit/deps
+wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-http/wit/deps/io.wit"
+wkg get --format wit --overwrite "wasi:clocks@$p2" -o "crates/wasi-http/wit/deps/clocks.wit"
+wkg get --format wit --overwrite "wasi:cli@$p2" -o "crates/wasi-http/wit/deps/cli.wit"
+wkg get --format wit --overwrite "wasi:filesystem@$p2" -o "crates/wasi-http/wit/deps/filesystem.wit"
+wkg get --format wit --overwrite "wasi:random@$p2" -o "crates/wasi-http/wit/deps/random.wit"
+wkg get --format wit --overwrite "wasi:sockets@$p2" -o "crates/wasi-http/wit/deps/sockets.wit"
+wkg get --format wit --overwrite "wasi:http@$p2" -o "crates/wasi-http/wit/deps/http.wit"
 
-    cp -r "$extracted_dir/${subdir:-wit}"/* "$path/$repo"
-  done
-}
 
-# WASI Preview 2 packages (0.2.6)
-vendor_wkg "wasi-io" "io@0.2.6"
+rm -rf crates/wasi-tls/wit/deps
+mkdir -p crates/wasi-tls/wit/deps
+wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-tls/wit/deps/io.wit"
+get_github wasi-tls v0.2.0-draft+505fc98 crates/wasi-tls/wit/deps/tls
 
-vendor_wkg "wasi/src/p2" "
-  cli@0.2.6
-  clocks@0.2.6
-  filesystem@0.2.6
-  io@0.2.6
-  random@0.2.6
-  sockets@0.2.6
-"
+rm -rf crates/wasi-config/wit/deps
+mkdir -p crates/wasi-config/wit/deps
+get_github wasi-config v0.2.0-rc.1 crates/wasi-config/wit/deps/config
 
-vendor_wkg "wasi-http" "
-  cli@0.2.6
-  clocks@0.2.6
-  filesystem@0.2.6
-  io@0.2.6
-  random@0.2.6
-  sockets@0.2.6
-  http@0.2.6
-"
+rm -rf crates/wasi-keyvalue/wit/deps
+mkdir -p crates/wasi-keyvalue/wit/deps
+get_github wasi-keyvalue 219ea36 crates/wasi-keyvalue/wit/deps/keyvalue
 
-# wasi-tls is not yet published to OCI registry, use GitHub
-vendor_github "wasi-tls" "
-  io@v0.2.6
-  tls@v0.2.0-draft+505fc98
-"
+rm -rf crates/wasi/src/p3/wit/deps
+mkdir -p crates/wasi/src/p3/wit/deps
+wkg get --format wit --overwrite "wasi:clocks@$p3" -o "crates/wasi/src/p3/wit/deps/clocks.wit"
+wkg get --format wit --overwrite "wasi:cli@$p3" -o "crates/wasi/src/p3/wit/deps/cli.wit"
+wkg get --format wit --overwrite "wasi:filesystem@$p3" -o "crates/wasi/src/p3/wit/deps/filesystem.wit"
+wkg get --format wit --overwrite "wasi:random@$p3" -o "crates/wasi/src/p3/wit/deps/random.wit"
+wkg get --format wit --overwrite "wasi:sockets@$p3" -o "crates/wasi/src/p3/wit/deps/sockets.wit"
 
-# wasi-config and wasi-keyvalue from OCI registry
-vendor_wkg "wasi-config" "config@0.2.0-rc.1"
-vendor_wkg "wasi-keyvalue" "keyvalue@0.2.0-draft"
-
-# WASI Preview 3 packages (0.3.0-rc-2026-01-06)
-vendor_wkg "wasi/src/p3" "
-  cli@0.3.0-rc-2026-01-06
-  clocks@0.3.0-rc-2026-01-06
-  filesystem@0.3.0-rc-2026-01-06
-  random@0.3.0-rc-2026-01-06
-  sockets@0.3.0-rc-2026-01-06
-"
-
-vendor_wkg "wasi-http/src/p3" "
-  cli@0.3.0-rc-2026-01-06
-  clocks@0.3.0-rc-2026-01-06
-  filesystem@0.3.0-rc-2026-01-06
-  http@0.3.0-rc-2026-01-06
-  random@0.3.0-rc-2026-01-06
-  sockets@0.3.0-rc-2026-01-06
-"
+rm -rf crates/wasi-http/src/p3/wit/deps
+mkdir -p crates/wasi-http/src/p3/wit/deps
+wkg get --format wit --overwrite "wasi:clocks@$p3" -o "crates/wasi-http/src/p3/wit/deps/clocks.wit"
+wkg get --format wit --overwrite "wasi:cli@$p3" -o "crates/wasi-http/src/p3/wit/deps/cli.wit"
+wkg get --format wit --overwrite "wasi:filesystem@$p3" -o "crates/wasi-http/src/p3/wit/deps/filesystem.wit"
+wkg get --format wit --overwrite "wasi:random@$p3" -o "crates/wasi-http/src/p3/wit/deps/random.wit"
+wkg get --format wit --overwrite "wasi:sockets@$p3" -o "crates/wasi-http/src/p3/wit/deps/sockets.wit"
+wkg get --format wit --overwrite "wasi:http@$p3" -o "crates/wasi-http/src/p3/wit/deps/http.wit"
 
 # wasi-nn is fetched separately since it's not in the standard WASI registry
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn

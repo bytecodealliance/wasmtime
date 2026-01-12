@@ -1,5 +1,5 @@
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
-use crate::p3::bindings::clocks::system_clock;
+use crate::p3::bindings::clocks::wall_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
@@ -96,19 +96,10 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
     }
 }
 
-fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
-    if t.seconds >= 0 {
-        std::time::SystemTime::UNIX_EPOCH
-            .checked_add(core::time::Duration::new(t.seconds as u64, t.nanoseconds))
-            .ok_or(ErrorCode::Overflow)
-    } else {
-        std::time::SystemTime::UNIX_EPOCH
-            .checked_sub(core::time::Duration::new(
-                (-t.seconds) as u64,
-                t.nanoseconds,
-            ))
-            .ok_or(ErrorCode::Overflow)
-    }
+fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    std::time::SystemTime::UNIX_EPOCH
+        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .ok_or(ErrorCode::Overflow)
 }
 
 fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {

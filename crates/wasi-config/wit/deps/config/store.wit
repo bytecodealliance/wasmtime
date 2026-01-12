@@ -1,0 +1,30 @@
+interface store {
+    /// An error type that encapsulates the different errors that can occur fetching configuration values.
+    variant error {
+        /// This indicates an error from an "upstream" config source. 
+        /// As this could be almost _anything_ (such as Vault, Kubernetes ConfigMaps, KeyValue buckets, etc), 
+        /// the error message is a string.
+        upstream(string),
+        /// This indicates an error from an I/O operation. 
+        /// As this could be almost _anything_ (such as a file read, network connection, etc), 
+        /// the error message is a string. 
+        /// Depending on how this ends up being consumed, 
+        /// we may consider moving this to use the `wasi:io/error` type instead. 
+        /// For simplicity right now in supporting multiple implementations, it is being left as a string.
+        io(string),
+    }
+
+    /// Gets a configuration value of type `string` associated with the `key`. 
+    /// 
+    /// The value is returned as an `option<string>`. If the key is not found,
+    /// `Ok(none)` is returned. If an error occurs, an `Err(error)` is returned.
+    get: func(
+        /// A string key to fetch
+        key: string
+    ) -> result<option<string>, error>;
+
+    /// Gets a list of configuration key-value pairs of type `string`.
+    /// 
+    /// If an error occurs, an `Err(error)` is returned.
+    get-all: func() -> result<list<tuple<string, string>>, error>;
+}

@@ -2,7 +2,7 @@ use {
     test_programs::p3::{
         proxy::exports::wasi::http::handler::Guest as Handler,
         wasi::http::{
-            client,
+            handler,
             types::{ErrorCode, Fields, Request, Response, Scheme},
         },
         wit_future,
@@ -42,7 +42,7 @@ impl Handler for Component {
                 outgoing_request
                     .set_authority(Some(url.authority()))
                     .unwrap();
-                client::send(outgoing_request).await?
+                handler::handle(outgoing_request).await?
             } else {
                 bad_request()
             },

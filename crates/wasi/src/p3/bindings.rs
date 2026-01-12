@@ -23,7 +23,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.3.0-rc-2026-01-06;
+//!             include wasi:cli/command@0.3.0-rc-2025-09-16;
 //!
 //!             import custom-host;
 //!         }
