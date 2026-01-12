@@ -1,5 +1,8 @@
 use crate::InstanceState;
 use crate::info::ModuleContext;
+#[cfg(not(feature = "rayon"))]
+use crate::rayoff::{IntoParallelIterator, ParallelExtend};
+#[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
 use std::ops::Range;

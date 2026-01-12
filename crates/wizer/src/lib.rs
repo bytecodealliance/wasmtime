@@ -19,6 +19,8 @@ pub use wasmtime::*;
 mod component;
 #[cfg(feature = "component-model")]
 pub use component::*;
+#[cfg(not(feature = "rayon"))]
+mod rayoff;
 
 pub use crate::info::ModuleContext;
 pub use crate::snapshot::SnapshotVal;
