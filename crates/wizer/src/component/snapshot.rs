@@ -1,3 +1,5 @@
+use wasmparser::ValType;
+
 use crate::component::info::Accessor;
 use crate::component::{ComponentContext, ComponentInstanceState, WIZER_INSTANCE};
 use crate::snapshot::Snapshot;
@@ -80,7 +82,7 @@ impl<S> InstanceState for ViaComponent<'_, '_, S>
 where
     S: ComponentInstanceState,
 {
-    async fn global_get(&mut self, name: &str) -> SnapshotVal {
+    async fn global_get(&mut self, name: &str, _: ValType) -> SnapshotVal {
         let Accessor::Global {
             accessor_export_name,
             ty,
