@@ -431,6 +431,7 @@ jobs:
               -p wasmtime-wizer --no-default-features --features wasmtime
               -p wasmtime-wizer --no-default-features --features wasmprinter
               -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --features rayon
               -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
