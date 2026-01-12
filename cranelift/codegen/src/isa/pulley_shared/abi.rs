@@ -560,12 +560,21 @@ where
         Writable::from_reg(regs::x_reg(15))
     }
 
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[
             Reg::from_real_reg(regs::px_reg(0)),
             Reg::from_real_reg(regs::px_reg(1)),
         ];
-        PAYLOAD_REGS
+        match call_conv {
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
+            isa::CallConv::Fast
+            | isa::CallConv::WindowsFastcall
+            | isa::CallConv::AppleAarch64
+            | isa::CallConv::Probestack
+            | isa::CallConv::Winch => &[],
+        }
     }
 }
 
