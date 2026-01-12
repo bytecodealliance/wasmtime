@@ -4756,6 +4756,7 @@ dependencies = [
 name = "wasmtime-fuzz"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "arbitrary",
  "cranelift-assembler-x64",
  "cranelift-codegen",
