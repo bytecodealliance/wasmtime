@@ -1030,6 +1030,22 @@ start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
+
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
+
 [[wildcard-audits.wasmtime-internal-explorer]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
