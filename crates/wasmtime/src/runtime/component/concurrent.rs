@@ -3477,11 +3477,22 @@ impl Instance {
             let guest_task = TableId::<GuestTask>::new(rep);
             let task = concurrent_state.get_mut(guest_task)?;
             if !task.already_lowered_parameters() {
+                // The task is in a `starting` state, meaning it hasn't run at
+                // all yet.  Here we update its fields to indicate that it is
+                // ready to delete immediately once `subtask.drop` is called.
                 task.lower_params = None;
                 task.lift_result = None;
+                task.exited = true;
+
+                let instance = task.instance;
+
+                assert_eq!(1, task.threads.len());
+                let thread = mem::take(&mut task.threads).into_iter().next().unwrap();
+                let concurrent_state = store.concurrent_state_mut();
+                concurrent_state.delete(thread)?;
+                assert!(concurrent_state.get_mut(guest_task)?.ready_to_delete());
 
                 // Not yet started; cancel and remove from pending
-                let instance = task.instance;
                 let pending = &mut store.instance_state(instance).pending;
                 let pending_count = pending.len();
                 pending.retain(|thread, _| thread.task != guest_task);
