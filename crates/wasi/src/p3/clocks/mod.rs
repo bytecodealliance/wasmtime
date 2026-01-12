@@ -1,7 +1,7 @@
 mod host;
 
 use crate::clocks::{WasiClocks, WasiClocksView};
-use crate::p3::bindings::clocks::{monotonic_clock, wall_clock};
+use crate::p3::bindings::clocks::{monotonic_clock, system_clock};
 use cap_std::time::SystemTime;
 use wasmtime::component::Linker;
 
@@ -59,11 +59,11 @@ where
     T: WasiClocksView + 'static,
 {
     monotonic_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
-    wall_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
+    system_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
     Ok(())
 }
 
-impl From<crate::clocks::Datetime> for wall_clock::Datetime {
+impl From<crate::clocks::Datetime> for system_clock::Instant {
     fn from(
         crate::clocks::Datetime {
             seconds,
@@ -71,27 +71,28 @@ impl From<crate::clocks::Datetime> for wall_clock::Datetime {
         }: crate::clocks::Datetime,
     ) -> Self {
         Self {
-            seconds,
+            seconds: seconds as i64,
             nanoseconds,
         }
     }
 }
 
-impl From<wall_clock::Datetime> for crate::clocks::Datetime {
+impl From<system_clock::Instant> for crate::clocks::Datetime {
     fn from(
-        wall_clock::Datetime {
+        system_clock::Instant {
             seconds,
             nanoseconds,
-        }: wall_clock::Datetime,
+        }: system_clock::Instant,
     ) -> Self {
+        // Only convert if seconds is non-negative
         Self {
-            seconds,
+            seconds: seconds.max(0) as u64,
             nanoseconds,
         }
     }
 }
 
-impl TryFrom<SystemTime> for wall_clock::Datetime {
+impl TryFrom<SystemTime> for system_clock::Instant {
     type Error = wasmtime::Error;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
