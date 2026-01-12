@@ -403,7 +403,7 @@ mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
     });
 }
 
@@ -500,10 +500,12 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         cancel::CancelHost::instantiate_async(&mut store, &component, &linker).await?;
     store
         .run_concurrent(async move |accessor| {
-            cancel_host
+            let ((), task) = cancel_host
                 .local_local_cancel()
                 .call_run(accessor, mode, delay_millis())
-                .await
+                .await?;
+            task.block(accessor).await;
+            Ok::<_, wasmtime::Error>(())
         })
         .await??;
 
