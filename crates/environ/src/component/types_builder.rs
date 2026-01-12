@@ -596,11 +596,12 @@ impl ComponentTypesBuilder {
         let element_abi = self.component_types.canonical_abi(&element);
         let mut abi = element_abi.clone();
         // this assumes that size32 is already rounded up to alignment
-        abi.size32 = element_abi.size32 * size;
-        abi.size64 = element_abi.size64 * size;
+        abi.size32 = element_abi.size32.saturating_mul(size);
+        abi.size64 = element_abi.size64.saturating_mul(size);
         abi.flat_count = element_abi
             .flat_count
-            .map(|c| c.saturating_mul(size.min(255) as u8));
+            .zip(u8::try_from(size).ok())
+            .and_then(|(flat_count, size)| flat_count.checked_mul(size));
         self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
     }
 
