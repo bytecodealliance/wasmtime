@@ -976,11 +976,11 @@ mod anyhow_errors {
         impl foo::foo::my_interface::Host for MyHost {
             // NB: these must return an `anyhow::Result` since we `bindgen!`ed
             // with `anyhow: true`.
-            fn ok(&mut self) -> anyhow::Result<u32> {
+            fn ok(&mut self) -> anyhow_for_testing::Result<u32> {
                 Ok(42)
             }
-            fn trap(&mut self) -> anyhow::Result<u32> {
-                ::anyhow::bail!("anyhow error")
+            fn trap(&mut self) -> anyhow_for_testing::Result<u32> {
+                anyhow_for_testing::bail!("anyhow error")
             }
         }
 
