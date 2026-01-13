@@ -19,7 +19,7 @@ use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
     FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedSizeListIndex,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
     TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
     TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
     TypeVariantIndex, VariantInfo,
@@ -1127,7 +1127,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => 1,
-            InterfaceType::FixedSizeList(i) => self.types[*i].size as usize,
+            InterfaceType::FixedLengthList(i) => self.types[*i].size as usize,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -1167,7 +1167,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     InterfaceType::ErrorContext(t) => {
                         self.translate_error_context(*t, src, dst_ty, dst)
                     }
-                    InterfaceType::FixedSizeList(t) => {
+                    InterfaceType::FixedLengthList(t) => {
                         self.translate_fixed_size_list(*t, src, dst_ty, dst);
                     }
                 }
@@ -2865,14 +2865,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     fn translate_fixed_size_list(
         &mut self,
-        src_ty: TypeFixedSizeListIndex,
+        src_ty: TypeFixedLengthListIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
         let src_ty = &self.types[src_ty];
         let dst_ty = match dst_ty {
-            InterfaceType::FixedSizeList(t) => &self.types[*t],
+            InterfaceType::FixedLengthList(t) => &self.types[*t],
             _ => panic!("expected a fixed size list"),
         };
 

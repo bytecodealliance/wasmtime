@@ -1301,7 +1301,7 @@ impl Config {
     /// Please note that Wasmtime's support for this feature is _very_
     /// incomplete.
     #[cfg(feature = "component-model")]
-    pub fn wasm_component_model_fixed_size_lists(&mut self, enable: bool) -> &mut Self {
+    pub fn wasm_component_model_fixed_length_lists(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_FIXED_SIZE_LIST, enable);
         self
     }

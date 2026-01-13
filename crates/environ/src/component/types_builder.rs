@@ -50,7 +50,7 @@ pub struct ComponentTypesBuilder {
     future_tables: HashMap<TypeFutureTable, TypeFutureTableIndex>,
     stream_tables: HashMap<TypeStreamTable, TypeStreamTableIndex>,
     error_context_tables: HashMap<TypeErrorContextTable, TypeComponentLocalErrorContextTableIndex>,
-    fixed_size_lists: HashMap<TypeFixedSizeList, TypeFixedSizeListIndex>,
+    fixed_length_lists: HashMap<TypeFixedLengthList, TypeFixedLengthListIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -119,7 +119,7 @@ impl ComponentTypesBuilder {
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
             abstract_resources: 0,
-            fixed_size_lists: HashMap::default(),
+            fixed_length_lists: HashMap::default(),
         }
     }
 
@@ -459,7 +459,7 @@ impl ComponentTypesBuilder {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
             ComponentDefinedType::FixedSizeList(ty, size) => {
-                InterfaceType::FixedSizeList(self.fixed_size_list_type(types, ty, *size)?)
+                InterfaceType::FixedLengthList(self.fixed_size_list_type(types, ty, *size)?)
             }
             ComponentDefinedType::Map(..) => {
                 bail!("support not implemented for map type");
@@ -582,7 +582,7 @@ impl ComponentTypesBuilder {
         types: TypesRef<'_>,
         ty: &ComponentValType,
         size: u32,
-    ) -> Result<TypeFixedSizeListIndex> {
+    ) -> Result<TypeFixedLengthListIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let element = self.valtype(types, ty)?;
         Ok(self.new_fixed_size_list_type(element, size))
@@ -592,7 +592,7 @@ impl ComponentTypesBuilder {
         &mut self,
         element: InterfaceType,
         size: u32,
-    ) -> TypeFixedSizeListIndex {
+    ) -> TypeFixedLengthListIndex {
         let element_abi = self.component_types.canonical_abi(&element);
         let mut abi = element_abi.clone();
         // this assumes that size32 is already rounded up to alignment
@@ -602,7 +602,7 @@ impl ComponentTypesBuilder {
             .flat_count
             .zip(u8::try_from(size).ok())
             .and_then(|(flat_count, size)| flat_count.checked_mul(size));
-        self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
+        self.add_fixed_size_list_type(TypeFixedLengthList { element, size, abi })
     }
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
@@ -722,8 +722,11 @@ impl ComponentTypesBuilder {
     }
 
     /// Interns a new tuple type within this type information.
-    pub fn add_fixed_size_list_type(&mut self, ty: TypeFixedSizeList) -> TypeFixedSizeListIndex {
-        intern_and_fill_flat_types!(self, fixed_size_lists, ty)
+    pub fn add_fixed_size_list_type(
+        &mut self,
+        ty: TypeFixedLengthList,
+    ) -> TypeFixedLengthListIndex {
+        intern_and_fill_flat_types!(self, fixed_length_lists, ty)
     }
 
     /// Interns a new variant type within this type information.
@@ -861,7 +864,7 @@ impl ComponentTypesBuilder {
             InterfaceType::Enum(i) => &self.type_info.enums[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
-            InterfaceType::FixedSizeList(i) => &self.type_info.fixed_size_lists[*i],
+            InterfaceType::FixedLengthList(i) => &self.type_info.fixed_length_lists[*i],
         }
     }
 }
@@ -971,7 +974,7 @@ struct TypeInformationCache {
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
-    fixed_size_lists: PrimaryMap<TypeFixedSizeListIndex, TypeInformation>,
+    fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeInformation>,
 }
 
 struct TypeInformation {
@@ -1121,7 +1124,7 @@ impl TypeInformation {
         self.build_record(ty.types.iter().map(|t| types.type_information(t)));
     }
 
-    fn fixed_size_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedSizeList) {
+    fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
         self.depth = 1 + element_info.depth;
         self.has_borrow = element_info.has_borrow;

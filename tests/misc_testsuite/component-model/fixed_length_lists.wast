@@ -1,5 +1,5 @@
 ;;! multi_memory = true
-;;! component_model_fixed_size_lists = true
+;;! component_model_fixed_length_lists = true
 
 ;; This contains two components which exercise fixed-size-list
 ;; types. The first acts as a roundtrip, the second calls the first

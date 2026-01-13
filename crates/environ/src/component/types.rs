@@ -90,7 +90,7 @@ indices! {
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
     /// Index pointing to a fixed size list type in the component model.
-    pub struct TypeFixedSizeListIndex(u32);
+    pub struct TypeFixedLengthListIndex(u32);
     /// Index pointing to a future type in the component model.
     pub struct TypeFutureIndex(u32);
 
@@ -298,7 +298,7 @@ pub struct ComponentTypes {
     pub(super) stream_tables: PrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
     pub(super) error_context_tables:
         PrimaryMap<TypeComponentLocalErrorContextTableIndex, TypeErrorContextTable>,
-    pub(super) fixed_size_lists: PrimaryMap<TypeFixedSizeListIndex, TypeFixedSizeList>,
+    pub(super) fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeFixedLengthList>,
 }
 
 impl TypeTrace for ComponentTypes {
@@ -372,7 +372,7 @@ impl ComponentTypes {
             InterfaceType::Enum(i) => &self[*i].abi,
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
-            InterfaceType::FixedSizeList(i) => &self[*i].abi,
+            InterfaceType::FixedLengthList(i) => &self[*i].abi,
         }
     }
 
@@ -422,7 +422,7 @@ impl_index! {
     impl Index<TypeFutureTableIndex> for ComponentTypes { TypeFutureTable => future_tables }
     impl Index<TypeStreamTableIndex> for ComponentTypes { TypeStreamTable => stream_tables }
     impl Index<TypeComponentLocalErrorContextTableIndex> for ComponentTypes { TypeErrorContextTable => error_context_tables }
-    impl Index<TypeFixedSizeListIndex> for ComponentTypes { TypeFixedSizeList => fixed_size_lists }
+    impl Index<TypeFixedLengthListIndex> for ComponentTypes { TypeFixedLengthList => fixed_length_lists }
 }
 
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
@@ -600,7 +600,7 @@ pub enum InterfaceType {
     Future(TypeFutureTableIndex),
     Stream(TypeStreamTableIndex),
     ErrorContext(TypeComponentLocalErrorContextTableIndex),
-    FixedSizeList(TypeFixedSizeListIndex),
+    FixedLengthList(TypeFixedLengthListIndex),
 }
 
 /// Bye information about a type in the canonical ABI, with metadata for both
@@ -1183,7 +1183,7 @@ pub struct TypeList {
 
 /// Shape of a "fixed size list" interface type.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeFixedSizeList {
+pub struct TypeFixedLengthList {
     /// The element type of the list.
     pub element: InterfaceType,
     /// The fixed length of the list.
