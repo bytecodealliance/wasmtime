@@ -132,6 +132,11 @@ wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
 futures = { workspace = true }
 
+# Should only be used for tests that are explicitly testing `anyhow::Error` and
+# `wasmtime::Error` integration and conversion. Otherwise, always prefer to use
+# `wasmtime::Error`.
+anyhow = { workspace = true }
+
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
 

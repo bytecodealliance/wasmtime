@@ -910,3 +910,96 @@ mod unstable_import {
         Ok(())
     }
 }
+
+mod anyhow_errors {
+    use super::*;
+    use crate::ErrorExt;
+    use wasmtime::component::HasSelf;
+    use wasmtime::error::Context as _;
+
+    wasmtime::component::bindgen!({
+        anyhow: true,
+        imports: { default: trappable },
+        inline: "
+            package foo:foo;
+
+            interface my-interface {
+                ok: func() -> u32;
+                trap: func() -> u32;
+            }
+
+            world my-world {
+                import my-interface;
+                export ok: func() -> u32;
+                export trap: func() -> u32;
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "foo:foo/my-interface" (instance $i
+                        (export "ok" (func (result u32)))
+                        (export "trap" (func (result u32)))
+                    ))
+
+                    (core module $m
+                        (import "" "ok" (func (result i32)))
+                        (import "" "trap" (func (result i32)))
+                        (export "ok" (func 0))
+                        (export "trap" (func 1))
+                    )
+
+                    (core func $ok (canon lower (func $i "ok")))
+                    (core func $trap (canon lower (func $i "trap")))
+
+                    (core instance $r (instantiate $m
+                        (with "" (instance (export "ok" (func $ok))
+                                           (export "trap" (func $trap))))
+                    ))
+
+                    (func (export "ok") (result u32) (canon lift (core func $r "ok")))
+                    (func (export "trap") (result u32) (canon lift (core func $r "trap")))
+                )
+            "#,
+        )?;
+
+        #[derive(Default)]
+        struct MyHost;
+
+        impl foo::foo::my_interface::Host for MyHost {
+            // NB: these must return an `anyhow::Result` since we `bindgen!`ed
+            // with `anyhow: true`.
+            fn ok(&mut self) -> anyhow::Result<u32> {
+                Ok(42)
+            }
+            fn trap(&mut self) -> anyhow::Result<u32> {
+                ::anyhow::bail!("anyhow error")
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        MyWorld::add_to_linker::<_, HasSelf<_>>(&mut linker, |h| h)
+            .context("failed to add to linker")?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let instance = MyWorld::instantiate(&mut store, &component, &linker)
+            .context("failed to instantiate")?;
+
+        let x = instance
+            .call_ok(&mut store)
+            .context("failed to call `ok` function")?;
+        assert_eq!(x, 42);
+
+        let result = instance.call_trap(&mut store);
+        let error = result.unwrap_err();
+        error.assert_contains("anyhow error");
+
+        Ok(())
+    }
+}
