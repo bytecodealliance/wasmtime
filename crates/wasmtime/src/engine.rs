@@ -123,7 +123,7 @@ impl Engine {
         let _ = &mut tunables;
 
         Ok(Engine {
-            inner: Arc::new(EngineInner {
+            inner: try_new::<Arc<_>>(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
@@ -150,7 +150,7 @@ impl Engine {
                 config,
                 tunables,
                 features,
-            }),
+            })?,
         })
     }
 
@@ -748,7 +748,9 @@ impl Engine {
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
-        self.inner.allocator.as_ref()
+        let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
+            self.inner.allocator.as_ref();
+        &*r
     }
 
     pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {
