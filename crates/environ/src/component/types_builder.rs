@@ -459,7 +459,7 @@ impl ComponentTypesBuilder {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
             ComponentDefinedType::FixedSizeList(ty, size) => {
-                InterfaceType::FixedLengthList(self.fixed_size_list_type(types, ty, *size)?)
+                InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
             }
             ComponentDefinedType::Map(..) => {
                 bail!("support not implemented for map type");
@@ -577,7 +577,7 @@ impl ComponentTypesBuilder {
         self.add_tuple_type(TypeTuple { types, abi })
     }
 
-    fn fixed_size_list_type(
+    fn fixed_length_list_type(
         &mut self,
         types: TypesRef<'_>,
         ty: &ComponentValType,
@@ -585,10 +585,10 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeFixedLengthListIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let element = self.valtype(types, ty)?;
-        Ok(self.new_fixed_size_list_type(element, size))
+        Ok(self.new_fixed_length_list_type(element, size))
     }
 
-    pub(crate) fn new_fixed_size_list_type(
+    pub(crate) fn new_fixed_length_list_type(
         &mut self,
         element: InterfaceType,
         size: u32,
@@ -602,7 +602,7 @@ impl ComponentTypesBuilder {
             .flat_count
             .zip(u8::try_from(size).ok())
             .and_then(|(flat_count, size)| flat_count.checked_mul(size));
-        self.add_fixed_size_list_type(TypeFixedLengthList { element, size, abi })
+        self.add_fixed_length_list_type(TypeFixedLengthList { element, size, abi })
     }
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
@@ -722,7 +722,7 @@ impl ComponentTypesBuilder {
     }
 
     /// Interns a new tuple type within this type information.
-    pub fn add_fixed_size_list_type(
+    pub fn add_fixed_length_list_type(
         &mut self,
         ty: TypeFixedLengthList,
     ) -> TypeFixedLengthListIndex {

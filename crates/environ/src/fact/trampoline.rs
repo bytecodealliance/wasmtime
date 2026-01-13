@@ -1168,7 +1168,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                         self.translate_error_context(*t, src, dst_ty, dst)
                     }
                     InterfaceType::FixedLengthList(t) => {
-                        self.translate_fixed_size_list(*t, src, dst_ty, dst);
+                        self.translate_fixed_length_list(*t, src, dst_ty, dst);
                     }
                 }
             }
@@ -2863,7 +2863,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
-    fn translate_fixed_size_list(
+    fn translate_fixed_length_list(
         &mut self,
         src_ty: TypeFixedLengthListIndex,
         src: &Source<'_>,

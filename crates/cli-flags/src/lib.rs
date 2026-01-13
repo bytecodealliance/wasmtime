@@ -409,7 +409,7 @@ wasmtime_option_group! {
         pub exceptions: Option<bool>,
         /// Whether or not any GC infrastructure in Wasmtime is enabled or not.
         pub gc_support: Option<bool>,
-        /// Component model support for fixed size lists: this corresponds
+        /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
     }
