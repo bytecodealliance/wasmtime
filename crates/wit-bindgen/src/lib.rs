@@ -2669,6 +2669,15 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
+    fn push_wasmtime_or_anyhow_result(&mut self) {
+        let wt = self.generator.wasmtime_path();
+        uwrite!(self.src, "{wt}::");
+        if self.generator.opts.anyhow {
+            self.push_str("anyhow::");
+        }
+        self.push_str("Result");
+    }
+
     fn generate_function_result(&mut self, func: &Function, flags: FunctionFlags) {
         if !flags.contains(FunctionFlags::TRAPPABLE) {
             self.print_result_ty(func.result, TypeMode::Owned);
@@ -2688,8 +2697,8 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             // All other functions get their return values wrapped in an wasmtime::Result.
             // Returning the anyhow::Error case can be used to trap.
-            let wt = self.generator.wasmtime_path();
-            uwrite!(self.src, "{wt}::Result<");
+            self.push_wasmtime_or_anyhow_result();
+            self.push_str("<");
             self.print_result_ty(func.result, TypeMode::Owned);
             self.push_str(">");
         }
@@ -2978,17 +2987,21 @@ impl<'a> InterfaceGenerator<'a> {
                             self.src,
                             "
 fn drop<T>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>)
-    -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;
+    -> impl ::core::future::Future<Output =
 "
                         );
+                        self.push_wasmtime_or_anyhow_result();
+                        self.push_str("<()>> + Send where Self: Sized;");
                     } else {
                         uwrite!(
                             self.src,
                             "
 fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Resource<{camel}>)
-    ->  {wt}::Result<()>;
+    ->
 "
                         );
+                        self.push_wasmtime_or_anyhow_result();
+                        self.push_str("<()>;");
                     }
 
                     extra_with_store_function = true;
@@ -3043,7 +3056,8 @@ fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Res
                     if flags.contains(FunctionFlags::ASYNC) {
                         uwrite!(self.src, "impl ::core::future::Future<Output =");
                     }
-                    uwrite!(self.src, "{wt}::Result<()>");
+                    self.push_wasmtime_or_anyhow_result();
+                    self.push_str("<()>");
                     if flags.contains(FunctionFlags::ASYNC) {
                         uwrite!(self.src, "> + Send");
                     }
@@ -3054,12 +3068,14 @@ fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Res
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
-                    uwriteln!(
+                    uwrite!(
                         self.src,
                         "
-fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>;
+fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         "
                     );
+                    self.push_wasmtime_or_anyhow_result();
+                    uwrite!(self.src, "<{camel}>;");
                 }
             }
         }
@@ -3113,10 +3129,14 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>
                         self.src.push_str("async ");
                         await_ = ".await";
                     }
+                    uwrite!(
+                        self.src,
+                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> ",
+                    );
+                    self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "
-fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
+                        "<()> {{
     {trait_name}::drop(*self, rep){await_}
 }}
                         ",
@@ -3127,10 +3147,14 @@ fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> 
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
+                    uwrite!(
+                        self.src,
+                        "fn convert_{snake}(&mut self, err: {root}{custom_name}) -> ",
+                    );
+                    self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "
-fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}> {{
+                        "<{camel}> {{
     {trait_name}::convert_{snake}(*self, err)
 }}
                         ",
