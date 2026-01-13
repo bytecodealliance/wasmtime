@@ -1,6 +1,6 @@
 use {
     test_programs::p3::{
-        proxy::exports::wasi::http::handler::Guest as Handler,
+        service::exports::wasi::http::handler::Guest as Handler,
         wasi::http::{
             client,
             types::{ErrorCode, Fields, Request, Response, Scheme},
@@ -12,7 +12,7 @@ use {
 
 struct Component;
 
-test_programs::p3::proxy::export!(Component);
+test_programs::p3::service::export!(Component);
 
 impl Handler for Component {
     // Forward the request body and trailers to a URL specified in a header.

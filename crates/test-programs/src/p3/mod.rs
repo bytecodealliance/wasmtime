@@ -9,6 +9,7 @@ wit_bindgen::generate!({
             include wasi:cli/imports@0.3.0-rc-2026-01-06;
             import wasi:http/types@0.3.0-rc-2026-01-06;
             import wasi:http/client@0.3.0-rc-2026-01-06;
+            import wasi:http/handler@0.3.0-rc-2026-01-06;
 
             export wasi:cli/run@0.3.0-rc-2026-01-06;
         }
@@ -20,21 +21,14 @@ wit_bindgen::generate!({
     generate_all,
 });
 
-pub mod proxy {
+pub mod service {
     wit_bindgen::generate!({
-        inline: "
-            package wasmtime:test;
-
-            world proxyp3 {
-                include wasi:http/service@0.3.0-rc-2026-01-06;
-            }
-        ",
         path: "../wasi-http/src/p3/wit",
-        world: "wasmtime:test/proxyp3",
-        default_bindings_module: "test_programs::p3::proxy",
+        world: "wasi:http/service",
+        default_bindings_module: "test_programs::p3::service",
         pub_export_macro: true,
         with: {
-            "wasi:http/handler@0.3.0-rc-2026-01-06": generate,
+            "wasi:http/handler@0.3.0-rc-2026-01-06": crate::p3::wasi::http::handler,
             "wasi:http/types@0.3.0-rc-2026-01-06": crate::p3::wasi::http::types,
             "wasi:http/client@0.3.0-rc-2026-01-06": crate::p3::wasi::http::client,
             "wasi:random/random@0.3.0-rc-2026-01-06": crate::p3::wasi::random::random,

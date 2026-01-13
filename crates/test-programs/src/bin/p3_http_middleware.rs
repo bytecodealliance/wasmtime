@@ -5,9 +5,8 @@ use {
     },
     std::{io::Write, mem},
     test_programs::p3::{
-        proxy::exports::wasi::http::handler::Guest as Handler,
         wasi::http::{
-            client,
+            handler,
             types::{ErrorCode, Headers, Request, Response},
         },
         wit_future, wit_stream,
@@ -15,11 +14,31 @@ use {
     wit_bindgen::StreamResult,
 };
 
+wit_bindgen::generate!({
+    path: "../wasi-http/src/p3/wit",
+    world: "wasi:http/middleware",
+    with: {
+        "wasi:http/handler@0.3.0-rc-2026-01-06": test_programs::p3::wasi::http::handler,
+        "wasi:http/types@0.3.0-rc-2026-01-06": test_programs::p3::wasi::http::types,
+        "wasi:http/client@0.3.0-rc-2026-01-06": test_programs::p3::wasi::http::client,
+        "wasi:random/random@0.3.0-rc-2026-01-06": test_programs::p3::wasi::random::random,
+        "wasi:random/insecure@0.3.0-rc-2026-01-06": test_programs::p3::wasi::random::insecure,
+        "wasi:random/insecure-seed@0.3.0-rc-2026-01-06": test_programs::p3::wasi::random::insecure_seed,
+        "wasi:cli/stdout@0.3.0-rc-2026-01-06": test_programs::p3::wasi::cli::stdout,
+        "wasi:cli/stderr@0.3.0-rc-2026-01-06": test_programs::p3::wasi::cli::stderr,
+        "wasi:cli/stdin@0.3.0-rc-2026-01-06": test_programs::p3::wasi::cli::stdin,
+        "wasi:cli/types@0.3.0-rc-2026-01-06": test_programs::p3::wasi::cli::types,
+        "wasi:clocks/monotonic-clock@0.3.0-rc-2026-01-06": test_programs::p3::wasi::clocks::monotonic_clock,
+        "wasi:clocks/system-clock@0.3.0-rc-2026-01-06": test_programs::p3::wasi::clocks::system_clock,
+        "wasi:clocks/types@0.3.0-rc-2026-01-06": test_programs::p3::wasi::clocks::types,
+    },
+});
+
 struct Component;
 
-test_programs::p3::proxy::export!(Component);
+export!(Component);
 
-impl Handler for Component {
+impl exports::wasi::http::handler::Guest for Component {
     /// Forward the specified request to the imported `wasi:http/handler`, transparently decoding the request body
     /// if it is `deflate`d and then encoding the response body if the client has provided an `accept-encoding:
     /// deflate` header.
@@ -101,7 +120,7 @@ impl Handler for Component {
             .unwrap();
         my_request.set_authority(authority.as_deref()).unwrap();
 
-        let response = client::send(my_request).await?;
+        let response = handler::handle(my_request).await?;
 
         // Now that we have the response, extract the parts, adding an extra header if we'll be encoding the body.
         let status_code = response.get_status_code();
