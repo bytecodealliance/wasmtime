@@ -320,10 +320,10 @@
 (rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
-(rule (simplify (band ty (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
 (rule
   (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))
