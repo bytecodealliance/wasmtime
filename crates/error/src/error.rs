@@ -592,9 +592,15 @@ impl Error {
         E: core::error::Error + Send + Sync + 'static,
     {
         if TypeId::of::<E>() == TypeId::of::<OutOfMemory>() {
-            return Error {
-                inner: OutOfMemory::new().into(),
-            };
+            // Although we know that `E == OutOfMemory` in this block, the
+            // compiler doesn't understand that, and we have to do this litle
+            // dance.
+            let error = mem::ManuallyDrop::new(error);
+            let ptr = <*const E>::from(&*error);
+            let ptr = ptr.cast::<Error>();
+            // Safety: `OutOfMemory` and `Error` have the same representation
+            // and the pointer is valid for reading from.
+            return unsafe { core::ptr::read(ptr) };
         }
 
         Self::from_error_ext(ForeignError(error))
@@ -856,7 +862,7 @@ impl Error {
     /// # use wasmtime_internal_error as wasmtime;
     /// use wasmtime::{Error, OutOfMemory};
     ///
-    /// let oom = Error::from(OutOfMemory::new());
+    /// let oom = Error::from(OutOfMemory::new(1234));
     /// assert!(oom.is::<OutOfMemory>());
     /// assert!(!oom.is::<std::num::TryFromIntError>());
     ///
@@ -1147,7 +1153,32 @@ impl Error {
     /// ```
     #[inline]
     pub fn into_boxed_dyn_error(self) -> Box<dyn core::error::Error + Send + Sync + 'static> {
-        self.inner.into_boxed_dyn_core_error()
+        /// A specialized OOM error that is zero-sized, so that it can always be
+        /// boxed without allocation, and we can keep this method infallible (to
+        /// match `anyhow`'s API).
+        #[derive(Debug)]
+        struct IntoBoxedDynCoreErrorFailure;
+
+        impl core::fmt::Display for IntoBoxedDynCoreErrorFailure {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(
+                    f,
+                    "failed to box error into `Box<dyn core::error::Error>` \
+                     (allocation of {} bytes failed)",
+                    mem::size_of::<Error>()
+                )
+            }
+        }
+
+        impl core::error::Error for IntoBoxedDynCoreErrorFailure {}
+
+        match self.inner.into_boxed_dyn_core_error() {
+            Ok(boxed) => boxed,
+            Err(_oom) => {
+                // NB: `Box::new` will never actually allocate for zero-sized types.
+                Box::new(IntoBoxedDynCoreErrorFailure) as _
+            }
+        }
     }
 }
 
@@ -1549,7 +1580,7 @@ pub(crate) struct OomOrDynError {
     // Safety: this must always be the casted-to-`u8` version of either (a)
     // `0x1`, or (b) a valid, owned `DynError` pointer. (Note that these cases
     // cannot overlap because `DynError`'s alignment is greater than `0x1`.)
-    inner: NonNull<u8>,
+    pub(crate) inner: NonNull<u8>,
 }
 
 // Safety: `OomOrDynError` is either an `OutOfMemory` or a `BoxedDynError` and
@@ -1582,7 +1613,7 @@ impl Drop for OomOrDynError {
 impl From<BoxedDynError> for OomOrDynError {
     fn from(boxed: BoxedDynError) -> Self {
         let inner = boxed.into_owned_ptr().into_non_null().cast::<u8>();
-        debug_assert_ne!(inner, Self::OOM.inner);
+        debug_assert_eq!(inner.addr().get() & Self::OOM_BIT, 0);
         OomOrDynError { inner }
     }
 }
@@ -1590,24 +1621,37 @@ impl From<BoxedDynError> for OomOrDynError {
 impl OomOrDynError {
     const _SIZE: () = assert!(mem::size_of::<OomOrDynError>() == mem::size_of::<usize>());
 
-    // Our pointer tagging relies on this property.
+    /// Our pointer tagging relies on this property, which implies that
+    /// `Self::OOM_BIT` is never set for any `*mut DynError` pointer.
     const _DYN_ERROR_HAS_GREATER_ALIGN_THAN_OOM: () = assert!(mem::align_of::<DynError>() > 1);
 
-    const OOM_REPR: NonNull<u8> = unsafe {
-        // Safety: `0x1` is not null.
-        NonNull::<u8>::new_unchecked(0x1 as *mut u8)
-    };
+    /// If this bit is set in the inner pointer's address, then it is a bitpacked
+    /// `OutOfMemory` rather than a pointer to a boxed dyn error.
+    const OOM_BIT: usize = 0x1;
 
-    pub(crate) const OOM: Self = OomOrDynError {
-        inner: Self::OOM_REPR,
-    };
+    pub(crate) const fn new_oom_ptr(size: usize) -> NonNull<u8> {
+        let size = if size > (isize::MAX as usize) {
+            isize::MAX as usize
+        } else {
+            size
+        };
+        let repr = (size << 1) | Self::OOM_BIT;
+        let inner = core::ptr::without_provenance_mut(repr);
+        // Safety: the pointer is not null.
+        unsafe { NonNull::new_unchecked(inner) }
+    }
 
     fn is_oom(&self) -> bool {
-        self.inner == Self::OOM_REPR
+        (self.inner.addr().get() & Self::OOM_BIT) == Self::OOM_BIT
     }
 
     fn is_boxed_dyn_error(&self) -> bool {
         !self.is_oom()
+    }
+
+    pub(crate) fn oom_size(inner: NonNull<u8>) -> usize {
+        debug_assert_eq!(inner.addr().get() & Self::OOM_BIT, Self::OOM_BIT);
+        inner.addr().get() >> 1
     }
 
     /// # Safety
@@ -1615,11 +1659,8 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom(&self) -> &OutOfMemory {
         debug_assert!(self.is_oom());
-        let dangling = NonNull::<OutOfMemory>::dangling();
-        debug_assert_eq!(mem::size_of::<OutOfMemory>(), 0);
-        // Safety: it is always valid to turn `T`'s dangling pointer into an
-        // `&T` reference for unit types.
-        unsafe { dangling.as_ref() }
+        // Safety: `self.is_oom()` and `OutOfMemory` is a newtype of `Self`.
+        unsafe { mem::transmute(self) }
     }
 
     /// # Safety
@@ -1627,11 +1668,8 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom_mut(&mut self) -> &mut OutOfMemory {
         debug_assert!(self.is_oom());
-        let mut dangling = NonNull::<OutOfMemory>::dangling();
-        debug_assert_eq!(mem::size_of::<OutOfMemory>(), 0);
-        // Safety: it is always valid to turn `T`'s dangling pointer into an
-        // `&mut T` reference for unit types.
-        unsafe { dangling.as_mut() }
+        // Safety: `self.is_oom()` and `OutOfMemory` is a newtype of `Self`.
+        unsafe { mem::transmute(self) }
     }
 
     /// # Safety
@@ -1684,15 +1722,12 @@ impl OomOrDynError {
 
     pub(crate) fn into_boxed_dyn_core_error(
         self,
-    ) -> Box<dyn core::error::Error + Send + Sync + 'static> {
-        let box_dyn_error_of_oom = || {
-            // NB: `Box::new` will never actually allocate for zero-sized types
-            // like `OutOfMemory`.
-            Box::new(OutOfMemory::new()) as _
-        };
-
+    ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory> {
         if self.is_oom() {
-            box_dyn_error_of_oom()
+            let boxed = try_new_uninit_box::<OutOfMemory>()?;
+            // Safety: `self.is_oom()` is true.
+            let boxed = Box::write(boxed, unsafe { *self.unchecked_oom() });
+            Ok(boxed as _)
         } else {
             debug_assert!(self.is_boxed_dyn_error());
             // Safety: this is a boxed dyn error.
@@ -1701,10 +1736,7 @@ impl OomOrDynError {
             let vtable = unsafe { ptr.as_ref().vtable };
             // Safety: the pointer is valid and the vtable is associated with
             // this pointer's concrete error type.
-            match unsafe { (vtable.into_boxed_dyn_core_error)(ptr) } {
-                Ok(e) => e,
-                Err(_oom) => box_dyn_error_of_oom(),
-            }
+            unsafe { (vtable.into_boxed_dyn_core_error)(ptr) }
         }
     }
 
@@ -1813,7 +1845,7 @@ mod tests {
 
     #[test]
     fn from_oom() {
-        let mut error = Error::from(OutOfMemory::new());
+        let mut error = Error::from(OutOfMemory::new(5));
         assert!(error.is::<OutOfMemory>());
         assert!(error.downcast_ref::<OutOfMemory>().is_some());
         assert!(error.downcast_mut::<OutOfMemory>().is_some());

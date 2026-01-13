@@ -334,7 +334,7 @@ pub mod formatting {
                     Ok(())
                 }
                 Err(_) => {
-                    self.oom = Some(OutOfMemory::new());
+                    self.oom = Some(OutOfMemory::new(self.message.len() + s.len()));
                     Err(fmt::Error)
                 }
             }
