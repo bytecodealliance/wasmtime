@@ -468,6 +468,16 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // By default this is `wasmtime`.
 ///     wasmtime_crate: path::to::wasmtime,
 ///
+///     // Whether to use `anyhow::Result` for trappable host-defined function
+///     // imports, rather than `wasmtime::Result`.
+///     //
+///     // By default, this is false and `wasmtime::Result` is used instead of
+///     // `anyhow::Result`.
+///     //
+///     // When enabled, the generated code requires the `"anyhow"` cargo feature
+///     // to also be enabled in the `wasmtime` crate.
+///     anyhow: false,
+///
 ///     // This is an in-source alternative to using `WASMTIME_DEBUG_BINDGEN`.
 ///     //
 ///     // Note that if this option is specified then the compiler will always

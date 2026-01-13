@@ -167,6 +167,15 @@ pub struct Opts {
     /// Path to the `wasmtime` crate if it's not the default path.
     pub wasmtime_crate: Option<String>,
 
+    /// Whether to use `anyhow::Result` for trappable host-defined function
+    /// imports.
+    ///
+    /// By default, `wasmtime::Result` is used instead of `anyhow::Result`.
+    ///
+    /// When enabled, the generated code requires the `"anyhow"` cargo feature
+    /// to also be enabled in the `wasmtime` crate.
+    pub anyhow: bool,
+
     /// If true, write the generated bindings to a file for better error
     /// messages from `rustc`.
     ///
@@ -2595,7 +2604,14 @@ impl<'a> InterfaceGenerator<'a> {
                 }},))"
             );
         } else if func.result.is_some() {
-            uwrite!(self.src, "Ok((r?,))\n");
+            if self.generator.opts.anyhow {
+                uwrite!(
+                    self.src,
+                    "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
+                );
+            } else {
+                uwrite!(self.src, "Ok((r?,))\n");
+            }
         } else {
             uwrite!(self.src, "r\n");
         }
