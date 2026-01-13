@@ -251,6 +251,7 @@ where
     }
 
     /// Start a concurrent call to this function.
+    ///
     /// Concurrency is achieved by relying on the [`Accessor`] argument, which
     /// can be obtained by calling [`StoreContextMut::run_concurrent`].
     ///
