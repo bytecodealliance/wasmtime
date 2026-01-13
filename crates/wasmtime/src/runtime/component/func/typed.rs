@@ -280,7 +280,9 @@ where
     /// this function.
     ///
     /// # Example
+    ///
     /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
+    ///
     /// ```
     /// # use {
     /// #   wasmtime::{
