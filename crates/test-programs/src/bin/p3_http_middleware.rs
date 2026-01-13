@@ -1,33 +1,23 @@
-mod bindings {
-    wit_bindgen::generate!({
-        path: "../wasi-http/src/p3/wit",
-        world: "wasi:http/middleware",
-        generate_all,
-        features: ["clocks-timezone"],
-    });
-
-    use super::Component;
-    export!(Component);
-}
-
 use {
-    bindings::{
-        exports::wasi::http::handler::Guest as Handler,
-        wasi::http::{
-            handler,
-            types::{ErrorCode, Headers, Request, Response},
-        },
-        wit_future, wit_stream,
-    },
     flate2::{
         Compression,
         write::{DeflateDecoder, DeflateEncoder},
     },
     std::{io::Write, mem},
+    test_programs::p3::{
+        proxy::exports::wasi::http::handler::Guest as Handler,
+        wasi::http::{
+            client,
+            types::{ErrorCode, Headers, Request, Response},
+        },
+        wit_future, wit_stream,
+    },
     wit_bindgen::StreamResult,
 };
 
 struct Component;
+
+test_programs::p3::proxy::export!(Component);
 
 impl Handler for Component {
     /// Forward the specified request to the imported `wasi:http/handler`, transparently decoding the request body
@@ -111,7 +101,7 @@ impl Handler for Component {
             .unwrap();
         my_request.set_authority(authority.as_deref()).unwrap();
 
-        let response = handler::handle(my_request).await?;
+        let response = client::send(my_request).await?;
 
         // Now that we have the response, extract the parts, adding an extra header if we'll be encoding the body.
         let status_code = response.get_status_code();

@@ -18,7 +18,6 @@ interface chain-http {
 }
         ",
         generate_all,
-        features: ["clocks-timezone"],
     });
 
     use super::Component;

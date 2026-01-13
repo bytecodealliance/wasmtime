@@ -18,7 +18,6 @@ wit_bindgen::generate!({
     default_bindings_module: "test_programs::p3",
     pub_export_macro: true,
     generate_all,
-    features: ["clocks-timezone"],
 });
 
 pub mod proxy {
@@ -34,7 +33,6 @@ pub mod proxy {
         world: "wasmtime:test/proxyp3",
         default_bindings_module: "test_programs::p3::proxy",
         pub_export_macro: true,
-        features: ["clocks-timezone"],
         with: {
             "wasi:http/handler@0.3.0-rc-2026-01-06": generate,
             "wasi:http/types@0.3.0-rc-2026-01-06": crate::p3::wasi::http::types,
@@ -48,7 +46,6 @@ pub mod proxy {
             "wasi:cli/types@0.3.0-rc-2026-01-06": crate::p3::wasi::cli::types,
             "wasi:clocks/monotonic-clock@0.3.0-rc-2026-01-06": crate::p3::wasi::clocks::monotonic_clock,
             "wasi:clocks/system-clock@0.3.0-rc-2026-01-06": crate::p3::wasi::clocks::system_clock,
-            "wasi:clocks/timezone@0.3.0-rc-2026-01-06": crate::p3::wasi::clocks::timezone,
             "wasi:clocks/types@0.3.0-rc-2026-01-06": crate::p3::wasi::clocks::types,
         },
     });
