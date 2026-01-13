@@ -93,6 +93,10 @@ const KNOWN_FAILURES: &[&str] = &[
     "multi-clock-wait",
     "monotonic-clock",
     "filesystem-advise",
+    // Wasmtime's snapshot of WASIp3 APIs is different than what these tests are
+    // expecting.
+    "wall-clock",
+    "http-response",
 ];
 
 fn main() -> Result<()> {

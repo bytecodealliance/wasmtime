@@ -1,9 +1,9 @@
-package wasi:http@0.3.0-rc-2025-09-16;
+package wasi:http@0.3.0-rc-2026-01-06;
 
 /// This interface defines all of the types and methods for implementing HTTP
 /// Requests and Responses, as well as their headers, trailers, and bodies.
 interface types {
-  use wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16.{duration};
+  use wasi:clocks/types@0.3.0-rc-2026-01-06.{duration};
 
   /// This type corresponds to HTTP standard Methods.
   variant method {
@@ -376,55 +376,82 @@ interface types {
   }
 }
 
-/// This interface defines a handler of HTTP Requests.  It may be imported by
-/// components which wish to send HTTP Requests and also exported by components
-/// which can respond to HTTP Requests.  In addition, it may be used to pass
-/// a request from one component to another without any use of a network.
+/// This interface defines a handler of HTTP Requests.
+///
+/// In a `wasi:http/service` this interface is exported to respond to an
+/// incoming HTTP Request with a Response.
+///
+/// In `wasi:http/middleware` this interface is both exported and imported as
+/// the "downstream" and "upstream" directions of the middleware chain.
 interface handler {
   use types.{request, response, error-code};
 
-  /// When exported, this function may be called with either an incoming
-  /// request read from the network or a request synthesized or forwarded by
-  /// another component.
-  ///
-  /// When imported, this function may be used to either send an outgoing
-  /// request over the network or pass it to another component.
+  /// This function may be called with either an incoming request read from the
+  /// network or a request synthesized or forwarded by another component.
   handle: async func(request: request) -> result<response, error-code>;
 }
 
-/// The `wasi:http/imports` world imports all the APIs for HTTP proxies.
-/// It is intended to be `include`d in other worlds.
-world imports {
-  import wasi:random/random@0.3.0-rc-2025-09-16;
-  import wasi:cli/types@0.3.0-rc-2025-09-16;
-  import wasi:cli/stdout@0.3.0-rc-2025-09-16;
-  import wasi:cli/stderr@0.3.0-rc-2025-09-16;
-  import wasi:cli/stdin@0.3.0-rc-2025-09-16;
-  import wasi:clocks/types@0.3.0-rc-2025-09-16;
-  import wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16;
-  import types;
-  import handler;
-  import wasi:clocks/wall-clock@0.3.0-rc-2025-09-16;
-  @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0-rc-2025-09-16;
+/// This interface defines an HTTP client for sending "outgoing" requests.
+///
+/// Most components are expected to import this interface to provide the
+/// capability to send HTTP requests to arbitrary destinations on a network.
+///
+/// The type signature of `client.send` is the same as `handler.handle`. This
+/// duplication is currently necessary because some Component Model tooling
+/// (including WIT itself) is unable to represent a component importing two
+/// instances of the same interface. A `client.send` import may be linked
+/// directly to a `handler.handle` export to bypass the network.
+interface client {
+  use types.{request, response, error-code};
+
+  /// This function may be used to either send an outgoing request over the
+  /// network or to forward it to another component.
+  send: async func(request: request) -> result<response, error-code>;
 }
-/// The `wasi:http/proxy` world captures a widely-implementable intersection of
-/// hosts that includes HTTP forward and reverse proxies. Components targeting
-/// this world may concurrently stream in and out any number of incoming and
-/// outgoing HTTP requests.
-world proxy {
-  import wasi:random/random@0.3.0-rc-2025-09-16;
-  import wasi:cli/types@0.3.0-rc-2025-09-16;
-  import wasi:cli/stdout@0.3.0-rc-2025-09-16;
-  import wasi:cli/stderr@0.3.0-rc-2025-09-16;
-  import wasi:cli/stdin@0.3.0-rc-2025-09-16;
-  import wasi:clocks/types@0.3.0-rc-2025-09-16;
-  import wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16;
+
+/// The `wasi:http/service` world captures a broad category of HTTP services
+/// including web applications, API servers, and proxies. It may be `include`d
+/// in more specific worlds such as `wasi:http/middleware`.
+world service {
+  import wasi:cli/types@0.3.0-rc-2026-01-06;
+  import wasi:cli/stdout@0.3.0-rc-2026-01-06;
+  import wasi:cli/stderr@0.3.0-rc-2026-01-06;
+  import wasi:cli/stdin@0.3.0-rc-2026-01-06;
+  import wasi:clocks/types@0.3.0-rc-2026-01-06;
+  import types;
+  import client;
+  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-01-06;
+  import wasi:clocks/system-clock@0.3.0-rc-2026-01-06;
+  @unstable(feature = clocks-timezone)
+  import wasi:clocks/timezone@0.3.0-rc-2026-01-06;
+  import wasi:random/random@0.3.0-rc-2026-01-06;
+  import wasi:random/insecure@0.3.0-rc-2026-01-06;
+  import wasi:random/insecure-seed@0.3.0-rc-2026-01-06;
+
+  export handler;
+}
+/// The `wasi:http/middleware` world captures HTTP services that forward HTTP
+/// Requests to another handler.
+///
+/// Components may implement this world to allow them to participate in handler
+/// "chains" where a `request` flows through handlers on its way to some terminal
+/// `service` and corresponding `response` flows in the opposite direction.
+world middleware {
+  import wasi:clocks/types@0.3.0-rc-2026-01-06;
   import types;
   import handler;
-  import wasi:clocks/wall-clock@0.3.0-rc-2025-09-16;
+  import wasi:cli/types@0.3.0-rc-2026-01-06;
+  import wasi:cli/stdout@0.3.0-rc-2026-01-06;
+  import wasi:cli/stderr@0.3.0-rc-2026-01-06;
+  import wasi:cli/stdin@0.3.0-rc-2026-01-06;
+  import client;
+  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-01-06;
+  import wasi:clocks/system-clock@0.3.0-rc-2026-01-06;
   @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0-rc-2025-09-16;
+  import wasi:clocks/timezone@0.3.0-rc-2026-01-06;
+  import wasi:random/random@0.3.0-rc-2026-01-06;
+  import wasi:random/insecure@0.3.0-rc-2026-01-06;
+  import wasi:random/insecure-seed@0.3.0-rc-2026-01-06;
 
   export handler;
 }

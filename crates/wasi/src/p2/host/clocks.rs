@@ -9,40 +9,44 @@ use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{Pollable, subscribe};
 
-impl From<crate::clocks::Datetime> for Datetime {
-    fn from(
+impl TryFrom<crate::clocks::Datetime> for Datetime {
+    type Error = crate::clocks::DatetimeError;
+
+    fn try_from(
         crate::clocks::Datetime {
             seconds,
             nanoseconds,
         }: crate::clocks::Datetime,
-    ) -> Self {
-        Self {
-            seconds,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            seconds: seconds.try_into()?,
             nanoseconds,
-        }
+        })
     }
 }
 
-impl From<Datetime> for crate::clocks::Datetime {
-    fn from(
+impl TryFrom<Datetime> for crate::clocks::Datetime {
+    type Error = crate::clocks::DatetimeError;
+
+    fn try_from(
         Datetime {
             seconds,
             nanoseconds,
         }: Datetime,
-    ) -> Self {
-        Self {
-            seconds,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            seconds: seconds.try_into()?,
             nanoseconds,
-        }
+        })
     }
 }
 
 impl TryFrom<SystemTime> for Datetime {
-    type Error = wasmtime::Error;
+    type Error = crate::clocks::DatetimeError;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
         let time = crate::clocks::Datetime::try_from(time)?;
-        Ok(time.into())
+        time.try_into()
     }
 }
 

@@ -1,10 +1,10 @@
-package wasi:random@0.3.0-rc-2025-09-16;
+package wasi:random@0.3.0-rc-2026-01-06;
 
 /// The insecure-seed interface for seeding hash-map DoS resistance.
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 interface insecure-seed {
   /// Return a 128-bit value that may contain a pseudo-random value.
   ///
@@ -23,7 +23,7 @@ interface insecure-seed {
   /// This will likely be changed to a value import, to prevent it from being
   /// called multiple times and potentially used for purposes other than DoS
   /// protection.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   get-insecure-seed: func() -> tuple<u64, u64>;
 }
 
@@ -31,7 +31,7 @@ interface insecure-seed {
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 interface insecure {
   /// Return `len` insecure pseudo-random bytes.
   ///
@@ -41,14 +41,14 @@ interface insecure {
   /// There are no requirements on the values of the returned bytes, however
   /// implementations are encouraged to return evenly distributed values with
   /// a long period.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   get-insecure-random-bytes: func(len: u64) -> list<u8>;
 
   /// Return an insecure pseudo-random `u64` value.
   ///
   /// This function returns the same type of pseudo-random data as
   /// `get-insecure-random-bytes`, represented as a `u64`.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   get-insecure-random-u64: func() -> u64;
 }
 
@@ -56,7 +56,7 @@ interface insecure {
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 interface random {
   /// Return `len` cryptographically-secure random or pseudo-random bytes.
   ///
@@ -70,23 +70,23 @@ interface random {
   /// This function must always return fresh data. Deterministic environments
   /// must omit this function, rather than implementing it with deterministic
   /// data.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   get-random-bytes: func(len: u64) -> list<u8>;
 
   /// Return a cryptographically-secure random or pseudo-random `u64` value.
   ///
   /// This function returns the same type of data as `get-random-bytes`,
   /// represented as a `u64`.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   get-random-u64: func() -> u64;
 }
 
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 world imports {
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   import random;
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   import insecure;
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   import insecure-seed;
 }
