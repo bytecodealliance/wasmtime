@@ -1138,7 +1138,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                not have export `{name}`"
+                    not have export `{name}`"
                                     )
                                 })
                         };

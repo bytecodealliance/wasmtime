@@ -99,5 +99,10 @@ impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
     }
 }
 
+// Only for use with `bindgen!`-generated code.
+#[doc(hidden)]
+#[cfg(feature = "anyhow")]
+pub use anyhow;
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
