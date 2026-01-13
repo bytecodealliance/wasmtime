@@ -2,7 +2,6 @@ mod host;
 
 use crate::clocks::{WasiClocks, WasiClocksView};
 use crate::p3::bindings::clocks::{monotonic_clock, system_clock, types};
-use cap_std::time::SystemTime;
 use wasmtime::component::Linker;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
@@ -72,7 +71,7 @@ impl From<crate::clocks::Datetime> for system_clock::Instant {
         }: crate::clocks::Datetime,
     ) -> Self {
         Self {
-            seconds: seconds as i64,
+            seconds,
             nanoseconds,
         }
     }
@@ -86,17 +85,8 @@ impl From<system_clock::Instant> for crate::clocks::Datetime {
         }: system_clock::Instant,
     ) -> Self {
         Self {
-            seconds: seconds as u64,
+            seconds,
             nanoseconds,
         }
-    }
-}
-
-impl TryFrom<SystemTime> for system_clock::Instant {
-    type Error = wasmtime::Error;
-
-    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        let time = crate::clocks::Datetime::try_from(time)?;
-        Ok(time.into())
     }
 }

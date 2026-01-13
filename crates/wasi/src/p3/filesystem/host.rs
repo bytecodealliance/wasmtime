@@ -97,14 +97,14 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
 }
 
 fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
-    if t.seconds >= 0 {
+    if let Ok(seconds) = t.seconds.try_into() {
         std::time::SystemTime::UNIX_EPOCH
-            .checked_add(core::time::Duration::new(t.seconds as u64, t.nanoseconds))
+            .checked_add(core::time::Duration::new(seconds, t.nanoseconds))
             .ok_or(ErrorCode::Overflow)
     } else {
         std::time::SystemTime::UNIX_EPOCH
             .checked_sub(core::time::Duration::new(
-                (-t.seconds) as u64,
+                t.seconds.unsigned_abs(),
                 t.nanoseconds,
             ))
             .ok_or(ErrorCode::Overflow)

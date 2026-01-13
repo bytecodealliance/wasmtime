@@ -11,14 +11,14 @@ impl system_clock::Host for WasiClocksCtxView<'_> {
     fn now(&mut self) -> wasmtime::Result<system_clock::Instant> {
         let now = self.ctx.wall_clock.now();
         Ok(system_clock::Instant {
-            seconds: now.as_secs() as i64,
+            seconds: now.as_secs().try_into()?,
             nanoseconds: now.subsec_nanos(),
         })
     }
 
     fn get_resolution(&mut self) -> wasmtime::Result<types::Duration> {
         let res = self.ctx.wall_clock.resolution();
-        Ok(res.as_nanos() as u64)
+        Ok(res.as_nanos().try_into()?)
     }
 }
 
