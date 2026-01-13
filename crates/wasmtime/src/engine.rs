@@ -43,7 +43,7 @@ mod serialization;
 /// default settings.
 #[derive(Clone)]
 pub struct Engine {
-    inner: Arc<EngineInner>,
+    inner: OomArc<EngineInner>,
 }
 
 struct EngineInner {
@@ -53,9 +53,9 @@ struct EngineInner {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Option<Box<dyn wasmtime_environ::Compiler>>,
     #[cfg(feature = "runtime")]
-    allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
+    allocator: OomBox<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
-    gc_runtime: Option<Arc<dyn GcRuntime>>,
+    gc_runtime: Option<OomArc<dyn GcRuntime>>,
     #[cfg(feature = "runtime")]
     profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
     #[cfg(feature = "runtime")]
@@ -123,7 +123,7 @@ impl Engine {
         let _ = &mut tunables;
 
         Ok(Engine {
-            inner: Arc::new(EngineInner {
+            inner: OomArc::new(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
@@ -150,7 +150,7 @@ impl Engine {
                 config,
                 tunables,
                 features,
-            }),
+            })?,
         })
     }
 
@@ -748,10 +748,12 @@ impl Engine {
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
-        self.inner.allocator.as_ref()
+        let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
+            self.inner.allocator.as_ref();
+        &*r
     }
 
-    pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {
+    pub(crate) fn gc_runtime(&self) -> Option<&OomArc<dyn GcRuntime>> {
         self.inner.gc_runtime.as_ref()
     }
 
@@ -975,6 +977,8 @@ impl EngineWeak {
     /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
     /// strong references (the [`Engine`] type itself) no longer exist.
     pub fn upgrade(&self) -> Option<Engine> {
-        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine {
+            inner: OomArc::from_std_arc(inner),
+        })
     }
 }
