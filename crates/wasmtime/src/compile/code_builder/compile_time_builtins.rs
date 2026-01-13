@@ -1,4 +1,5 @@
 use super::*;
+use crate::ToWasmtimeResult as _;
 
 impl<'a> CodeBuilder<'a> {
     pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'a, str>, Cow<'a, [u8]>> {
@@ -47,7 +48,7 @@ impl<'a> CodeBuilder<'a> {
         }
 
         let composer = wasm_compose::composer::ComponentComposer::new(&main_wasm_path, &config);
-        let composed = composer.compose()?;
+        let composed = composer.compose().to_wasmtime_result()?;
         Ok(composed.into())
     }
 

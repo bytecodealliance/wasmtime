@@ -55,6 +55,7 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
+anyhow = []
 component-model = [
   "dep:wasmtime-component-util",
   "dep:semver",

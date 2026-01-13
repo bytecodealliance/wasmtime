@@ -13,7 +13,7 @@ use std::{
     path::Path,
     str::FromStr,
 };
-use wasmtime::Result;
+use wasmtime::{Result, ToWasmtimeResult as _};
 use wasmtime_environ::demangle_function_name;
 
 pub fn generate(
@@ -109,7 +109,8 @@ fn annotate_wat(wasm: &[u8]) -> Result<AnnotatedWat> {
     let printer = wasmprinter::Config::new();
     let mut storage = String::new();
     let chunks = printer
-        .offsets_and_lines(wasm, &mut storage)?
+        .offsets_and_lines(wasm, &mut storage)
+        .to_wasmtime_result()?
         .map(|(offset, wat)| AnnotatedWatChunk {
             wasm_offset: offset.map(|o| WasmOffset(u32::try_from(o).unwrap())),
             wat: wat.to_string(),
