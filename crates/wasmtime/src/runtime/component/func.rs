@@ -394,7 +394,7 @@ impl Func {
     /// # let mut linker = Linker::new(&engine);
     /// # let component = Component::new(&engine, "")?;
     /// # let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// # let my_func = instance.get_func(&mut store, "my_func").unwrap();
+    /// let my_func = instance.get_func(&mut store, "my_func").unwrap();
     /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
     ///    my_func.call_concurrent(accessor, &[], &mut Vec::new()).await?;
     ///    Ok(())

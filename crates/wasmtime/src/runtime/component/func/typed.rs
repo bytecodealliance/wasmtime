@@ -301,7 +301,7 @@ where
     /// # let mut linker = Linker::new(&engine);
     /// # let component = Component::new(&engine, "")?;
     /// # let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// # let my_typed_func = instance.get_typed_func::<(), ()>(&mut store, "my_typed_func")?;
+    /// let my_typed_func = instance.get_typed_func::<(), ()>(&mut store, "my_typed_func")?;
     /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
     ///    my_typed_func.call_concurrent(accessor, ()).await?;
     ///    Ok(())
