@@ -1,11 +1,11 @@
 use test_programs::p3::wasi::http::types::{ErrorCode, Fields, Request, Response};
-use test_programs::p3::{proxy, wit_future, wit_stream};
+use test_programs::p3::{service, wit_future, wit_stream};
 
 struct T;
 
-proxy::export!(T);
+service::export!(T);
 
-impl proxy::exports::wasi::http::handler::Guest for T {
+impl service::exports::wasi::http::handler::Guest for T {
     async fn handle(_request: Request) -> Result<Response, ErrorCode> {
         let (mut body_tx, body_rx) = wit_stream::new();
         let (body_result_tx, body_result_rx) = wit_future::new(|| Ok(None));

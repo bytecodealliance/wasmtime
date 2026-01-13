@@ -1,9 +1,9 @@
-package wasi:sockets@0.3.0-rc-2025-09-16;
+package wasi:sockets@0.3.0-rc-2026-01-06;
 
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 interface types {
-  @since(version = 0.3.0-rc-2025-09-16)
-  use wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16.{duration};
+  @since(version = 0.3.0-rc-2026-01-06)
+  use wasi:clocks/types@0.3.0-rc-2026-01-06.{duration};
 
   /// Error codes.
   ///
@@ -16,7 +16,7 @@ interface types {
   /// - `out-of-memory`
   ///
   /// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   enum error-code {
     /// Unknown error
     unknown,
@@ -57,7 +57,7 @@ interface types {
     datagram-too-large,
   }
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   enum ip-address-family {
     /// Similar to `AF_INET` in POSIX.
     ipv4,
@@ -65,19 +65,19 @@ interface types {
     ipv6,
   }
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   type ipv4-address = tuple<u8, u8, u8, u8>;
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   type ipv6-address = tuple<u16, u16, u16, u16, u16, u16, u16, u16>;
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   variant ip-address {
     ipv4(ipv4-address),
     ipv6(ipv6-address),
   }
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   record ipv4-socket-address {
     /// sin_port
     port: u16,
@@ -85,7 +85,7 @@ interface types {
     address: ipv4-address,
   }
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   record ipv6-socket-address {
     /// sin6_port
     port: u16,
@@ -97,7 +97,7 @@ interface types {
     scope-id: u32,
   }
 
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   variant ip-socket-address {
     ipv4(ipv4-socket-address),
     ipv6(ipv6-socket-address),
@@ -122,7 +122,7 @@ interface types {
   /// In addition to the general error codes documented on the
   /// `types::error-code` type, TCP socket methods may always return
   /// `error(invalid-state)` when in the `closed` state.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   resource tcp-socket {
     /// Create a new TCP socket.
     ///
@@ -138,7 +138,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/socket.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasocketw>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=socket&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     create: static func(address-family: ip-address-family) -> result<tcp-socket, error-code>;
     /// Bind the socket to the provided IP address and port.
     ///
@@ -171,7 +171,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/bind.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=bind&sektion=2&format=html>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     bind: func(local-address: ip-socket-address) -> result<_, error-code>;
     /// Connect to a remote endpoint.
     ///
@@ -202,7 +202,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/connect.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
     /// - <https://man.freebsd.org/cgi/man.cgi?connect>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     connect: async func(remote-address: ip-socket-address) -> result<_, error-code>;
     /// Start listening and return a stream of new inbound connections.
     ///
@@ -268,7 +268,7 @@ interface types {
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=listen&sektion=2>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=accept&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     listen: func() -> result<stream<tcp-socket>, error-code>;
     /// Transmit data to peer.
     ///
@@ -290,7 +290,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/send.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-send>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     send: async func(data: stream<u8>) -> result<_, error-code>;
     /// Read data from peer.
     ///
@@ -323,7 +323,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/recv.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=recv&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     receive: func() -> tuple<stream<u8>, future<result<_, error-code>>>;
     /// Get the bound local address.
     ///
@@ -341,7 +341,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/getsockname.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockname>
     /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-local-address: func() -> result<ip-socket-address, error-code>;
     /// Get the remote address.
     ///
@@ -353,19 +353,19 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/getpeername.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-remote-address: func() -> result<ip-socket-address, error-code>;
     /// Whether the socket is in the `listening` state.
     ///
     /// Equivalent to the SO_ACCEPTCONN socket option.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-is-listening: func() -> bool;
     /// Whether this is a IPv4 or IPv6 socket.
     ///
     /// This is the value passed to the constructor.
     ///
     /// Equivalent to the SO_DOMAIN socket option.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-address-family: func() -> ip-address-family;
     /// Hints the desired listen queue size. Implementations are free to ignore this.
     ///
@@ -376,7 +376,7 @@ interface types {
     /// - `not-supported`:        (set) The platform does not support changing the backlog size after the initial listen.
     /// - `invalid-argument`:     (set) The provided value was 0.
     /// - `invalid-state`:        (set) The socket is in the `connecting` or `connected` state.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-listen-backlog-size: func(value: u64) -> result<_, error-code>;
     /// Enables or disables keepalive.
     ///
@@ -387,9 +387,9 @@ interface types {
     /// These properties can be configured while `keep-alive-enabled` is false, but only come into effect when `keep-alive-enabled` is true.
     ///
     /// Equivalent to the SO_KEEPALIVE socket option.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-keep-alive-enabled: func() -> result<bool, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-keep-alive-enabled: func(value: bool) -> result<_, error-code>;
     /// Amount of time the connection has to be idle before TCP starts sending keepalive packets.
     ///
@@ -401,9 +401,9 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The provided value was 0.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-keep-alive-idle-time: func() -> result<duration, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-keep-alive-idle-time: func(value: duration) -> result<_, error-code>;
     /// The time between keepalive packets.
     ///
@@ -415,9 +415,9 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The provided value was 0.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-keep-alive-interval: func() -> result<duration, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-keep-alive-interval: func(value: duration) -> result<_, error-code>;
     /// The maximum amount of keepalive packets TCP should send before aborting the connection.
     ///
@@ -429,9 +429,9 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The provided value was 0.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-keep-alive-count: func() -> result<u32, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-keep-alive-count: func(value: u32) -> result<_, error-code>;
     /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
     ///
@@ -439,9 +439,9 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-hop-limit: func() -> result<u8, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-hop-limit: func(value: u8) -> result<_, error-code>;
     /// The kernel buffer space reserved for sends/receives on this socket.
     ///
@@ -453,18 +453,18 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The provided value was 0.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-receive-buffer-size: func() -> result<u64, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-receive-buffer-size: func(value: u64) -> result<_, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-send-buffer-size: func() -> result<u64, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-send-buffer-size: func(value: u64) -> result<_, error-code>;
   }
 
   /// A UDP socket handle.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   resource udp-socket {
     /// Create a new UDP socket.
     ///
@@ -480,7 +480,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/socket.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasocketw>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=socket&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     create: static func(address-family: ip-address-family) -> result<udp-socket, error-code>;
     /// Bind the socket to the provided IP address and port.
     ///
@@ -500,7 +500,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/bind.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=bind&sektion=2&format=html>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     bind: func(local-address: ip-socket-address) -> result<_, error-code>;
     /// Associate this socket with a specific peer address.
     ///
@@ -538,7 +538,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/connect.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
     /// - <https://man.freebsd.org/cgi/man.cgi?connect>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     connect: func(remote-address: ip-socket-address) -> result<_, error-code>;
     /// Dissociate this socket from its peer address.
     ///
@@ -555,7 +555,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/connect.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
     /// - <https://man.freebsd.org/cgi/man.cgi?connect>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     disconnect: func() -> result<_, error-code>;
     /// Send a message on the socket to a particular peer.
     ///
@@ -588,7 +588,7 @@ interface types {
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-sendto>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasendmsg>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     send: async func(data: list<u8>, remote-address: option<ip-socket-address>) -> result<_, error-code>;
     /// Receive a message on the socket.
     ///
@@ -613,7 +613,7 @@ interface types {
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recvfrom>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nc-mswsock-lpfn_wsarecvmsg>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=recv&sektion=2>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     receive: async func() -> result<tuple<list<u8>, ip-socket-address>, error-code>;
     /// Get the current bound address.
     ///
@@ -631,7 +631,7 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/getsockname.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockname>
     /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-local-address: func() -> result<ip-socket-address, error-code>;
     /// Get the address the socket is currently "connected" to.
     ///
@@ -643,14 +643,14 @@ interface types {
     /// - <https://man7.org/linux/man-pages/man2/getpeername.2.html>
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-remote-address: func() -> result<ip-socket-address, error-code>;
     /// Whether this is a IPv4 or IPv6 socket.
     ///
     /// This is the value passed to the constructor.
     ///
     /// Equivalent to the SO_DOMAIN socket option.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-address-family: func() -> ip-address-family;
     /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
     ///
@@ -658,9 +658,9 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-unicast-hop-limit: func() -> result<u8, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-unicast-hop-limit: func(value: u8) -> result<_, error-code>;
     /// The kernel buffer space reserved for sends/receives on this socket.
     ///
@@ -672,24 +672,24 @@ interface types {
     ///
     /// # Typical errors
     /// - `invalid-argument`:     (set) The provided value was 0.
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-receive-buffer-size: func() -> result<u64, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-receive-buffer-size: func(value: u64) -> result<_, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     get-send-buffer-size: func() -> result<u64, error-code>;
-    @since(version = 0.3.0-rc-2025-09-16)
+    @since(version = 0.3.0-rc-2026-01-06)
     set-send-buffer-size: func(value: u64) -> result<_, error-code>;
   }
 }
 
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 interface ip-name-lookup {
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   use types.{ip-address};
 
   /// Lookup error codes.
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   enum error-code {
     /// Unknown error
     unknown,
@@ -737,18 +737,16 @@ interface ip-name-lookup {
   /// - <https://man7.org/linux/man-pages/man3/getaddrinfo.3.html>
   /// - <https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo>
   /// - <https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3>
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   resolve-addresses: async func(name: string) -> result<list<ip-address>, error-code>;
 }
 
-@since(version = 0.3.0-rc-2025-09-16)
+@since(version = 0.3.0-rc-2026-01-06)
 world imports {
-  @since(version = 0.3.0-rc-2025-09-16)
-  import wasi:clocks/types@0.3.0-rc-2025-09-16;
-  @since(version = 0.3.0-rc-2025-09-16)
-  import wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16;
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
+  import wasi:clocks/types@0.3.0-rc-2026-01-06;
+  @since(version = 0.3.0-rc-2026-01-06)
   import types;
-  @since(version = 0.3.0-rc-2025-09-16)
+  @since(version = 0.3.0-rc-2026-01-06)
   import ip-name-lookup;
 }

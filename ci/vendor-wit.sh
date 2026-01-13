@@ -34,7 +34,7 @@ get_github() {
 }
 
 p2=0.2.6
-p3=0.3.0-rc-2025-09-16
+p3=0.3.0-rc-2026-01-06
 
 rm -rf crates/wasi-io/wit/deps
 mkdir -p crates/wasi-io/wit/deps
