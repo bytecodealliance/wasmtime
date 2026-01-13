@@ -311,6 +311,8 @@ impl Func {
     }
 
     /// Start a concurrent call to this function.
+    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
+    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
     ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
@@ -368,6 +370,35 @@ impl Func {
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
+    ///
+    /// # Example
+    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
+    /// ```
+    /// # use {
+    /// #   wasmtime::{
+    /// #     error::{Result},
+    /// #     component::{Component, Linker, ResourceTable},
+    /// #     Config, Engine, Store
+    /// #   },
+    /// # };
+    /// #
+    /// # struct Ctx { table: ResourceTable }
+    /// #
+    /// # async fn foo() -> Result<()> {
+    /// # let mut config = Config::new();
+    /// # let engine = Engine::new(&config)?;
+    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
+    /// # let mut linker = Linker::new(&engine);
+    /// # let component = Component::new(&engine, "")?;
+    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
+    /// # let foo = instance.get_func(&mut store, "foo").unwrap();
+    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
+    ///    foo.call_concurrent(accessor, &[], &mut Vec::new()).await?;
+    ///    Ok(())
+    /// }).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,
