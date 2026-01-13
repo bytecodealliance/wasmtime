@@ -1,3 +1,4 @@
+;;! multi_memory = true
 ;;! component_model_fixed_size_lists = true
 
 ;; This contains two components which exercise fixed-size-list
