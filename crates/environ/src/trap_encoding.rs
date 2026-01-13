@@ -57,13 +57,6 @@ pub enum Trap {
     /// Execution has potentially run too long and may be interrupted.
     Interrupt,
 
-    /// When the `component-model` feature is enabled this trap represents a
-    /// function that was `canon lift`'d, then `canon lower`'d, then called.
-    /// This combination of creation of a function in the component model
-    /// generates a function that always traps and, when called, produces this
-    /// flavor of trap.
-    AlwaysTrapAdapter,
-
     /// When wasm code is configured to consume fuel and it runs out of fuel
     /// then this trap will be raised.
     OutOfFuel,
@@ -183,7 +176,6 @@ impl Trap {
             BadConversionToInteger
             UnreachableCodeReached
             Interrupt
-            AlwaysTrapAdapter
             OutOfFuel
             AtomicWaitNonSharedMemory
             NullReference
@@ -230,7 +222,6 @@ impl fmt::Display for Trap {
             BadConversionToInteger => "invalid conversion to integer",
             UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
-            AlwaysTrapAdapter => "degenerate component adapter called",
             OutOfFuel => "all fuel consumed by WebAssembly",
             AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
             NullReference => "null reference",

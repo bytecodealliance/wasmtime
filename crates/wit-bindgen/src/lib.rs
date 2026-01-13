@@ -2636,7 +2636,7 @@ impl<'a> InterfaceGenerator<'a> {
         if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
             uwrite!(
                 self.src,
-                "<T>(accessor: &{wt}::component::Accessor<T, Self>, "
+                "<T: Send>(accessor: &{wt}::component::Accessor<T, Self>, "
             );
         } else if flags.contains(FunctionFlags::STORE) {
             uwrite!(self.src, "<T>(host: {wt}::component::Access<T, Self>, ");

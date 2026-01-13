@@ -16,8 +16,8 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_LEAVE, FixedEncoding as FE, FlatType,
+    InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
     TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
     TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
@@ -112,6 +112,19 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             lower_sig,
             lift_sig,
         )
+    }
+
+    // If the lift and lower instances are equal, or if one is an ancestor of
+    // the other, we trap unconditionally.  This ensures that recursive
+    // reentrance via an adapter is impossible.
+    if adapter.lift.instance == adapter.lower.instance
+        || adapter.lower.ancestors.contains(&adapter.lift.instance)
+        || adapter.lift.ancestors.contains(&adapter.lower.instance)
+    {
+        let (mut compiler, _, _) = compiler(module, adapter);
+        compiler.trap(Trap::CannotEnterComponent);
+        compiler.finish();
+        return;
     }
 
     // This closure compiles a function to be exported to the host which host to
@@ -739,20 +752,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             FLAG_MAY_LEAVE,
             Trap::CannotLeaveComponent,
         );
-        if adapter.called_as_export {
-            self.trap_if_not_flag(
-                adapter.lift.flags,
-                FLAG_MAY_ENTER,
-                Trap::CannotEnterComponent,
-            );
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, false);
-        } else if self.module.debug {
-            self.assert_not_flag(
-                adapter.lift.flags,
-                FLAG_MAY_ENTER,
-                Trap::DebugAssertMayEnterUnset,
-            );
-        }
 
         let task_may_block = self.module.import_task_may_block();
         let old_task_may_block = if self.types[adapter.lift.ty].async_ {
@@ -830,9 +829,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.instruction(LocalGet(*result));
             }
             self.instruction(Call(func.as_u32()));
-        }
-        if adapter.called_as_export {
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, true);
         }
 
         for tmp in temps {
@@ -3394,15 +3390,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(flag_to_test));
         self.instruction(I32And);
         self.instruction(I32Eqz);
-        self.instruction(If(BlockType::Empty));
-        self.trap(trap);
-        self.instruction(End);
-    }
-
-    fn assert_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, trap: Trap) {
-        self.instruction(GlobalGet(flags_global.as_u32()));
-        self.instruction(I32Const(flag_to_test));
-        self.instruction(I32And);
         self.instruction(If(BlockType::Empty));
         self.trap(trap);
         self.instruction(End);

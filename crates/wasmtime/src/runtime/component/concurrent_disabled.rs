@@ -1,6 +1,7 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, Lift, Lower, Val};
+use crate::component::store::StoreComponentInstanceId;
+use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
@@ -154,5 +155,17 @@ unsafe impl Lower for StreamAny {
 impl StoreOpaque {
     pub(crate) fn check_blocking(&mut self) -> Result<()> {
         Ok(())
+    }
+
+    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
+        if self.trapped() {
+            return false;
+        }
+
+        let flags = StoreComponentInstanceId::new(self.id(), instance.instance)
+            .get(self)
+            .instance_flags(instance.index);
+
+        !unsafe { flags.needs_post_return() }
     }
 }
