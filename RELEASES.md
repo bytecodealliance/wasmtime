@@ -1,3 +1,15 @@
+## 36.0.4
+
+Released 2026-01-14.
+
+### Fixed
+
+* A possible stack overflow in the x64 backend with `cmp` emission has been
+  fixed.
+  [#12333](https://github.com/bytecodealliance/wasmtime/pull/12333)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.3
 
 Released 2025-11-11.
