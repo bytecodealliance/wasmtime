@@ -1639,8 +1639,7 @@ impl OomOrDynError {
         };
         let repr = (size << 1) | Self::OOM_BIT;
         let inner = core::ptr::without_provenance_mut(repr);
-        // Safety: the pointer is not null.
-        unsafe { NonNull::new_unchecked(inner) }
+        NonNull::new(inner).unwrap()
     }
 
     pub(crate) fn new_oom(bitpacked: NonNull<u8>) -> Self {
