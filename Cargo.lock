@@ -5196,7 +5196,6 @@ dependencies = [
 name = "wasmtime-wasi-tls-openssl"
 version = "42.0.0"
 dependencies = [
- "anyhow",
  "futures",
  "openssl",
  "test-programs-artifacts",
