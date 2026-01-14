@@ -1669,7 +1669,8 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom(&self) -> &OutOfMemory {
         debug_assert!(self.is_oom());
-        // Safety: `self.is_oom()` and `OutOfMemory` is a newtype of `Self`.
+        // Safety: `self.is_oom()` and `OutOfMemory` has the same representation
+        // as `Self`.
         unsafe { mem::transmute(self) }
     }
 
@@ -1678,7 +1679,8 @@ impl OomOrDynError {
     /// `self.is_oom()` must be true.
     unsafe fn unchecked_oom_mut(&mut self) -> &mut OutOfMemory {
         debug_assert!(self.is_oom());
-        // Safety: `self.is_oom()` and `OutOfMemory` is a newtype of `Self`.
+        // Safety: `self.is_oom()` and `OutOfMemory` has the same representation
+        // as `Self`.
         unsafe { mem::transmute(self) }
     }
 
