@@ -1233,7 +1233,7 @@ impl HeapType {
             (HeapType::Any, _) => false,
 
             (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
-            (HeapType::NoExn, _) => true,
+            (HeapType::NoExn, _) => false,
 
             (HeapType::ConcreteExn(_), HeapType::Exn) => true,
             (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
