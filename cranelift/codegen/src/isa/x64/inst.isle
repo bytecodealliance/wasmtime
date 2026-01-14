@@ -3403,14 +3403,14 @@
 ;; Note that this is used as the base entry case for instruction lowering such
 ;; as `select` and `brif`. The `Value` here is expected to, via CLIF validation,
 ;; have an integer type (and it can be I128)
-(decl is_nonzero_cmp (Value) CondResult)
+(decl is_nonzero (Value) CondResult)
 
 ;; Base case: fits in one GPR, use `x64_test`
-(rule (is_nonzero_cmp val @ (value_type (is_single_register_gpr_type ty)))
+(rule (is_nonzero val @ (value_type (is_single_register_gpr_type ty)))
   (let ((gpr Gpr val)) (CondResult.CC (x64_test ty gpr gpr) (CC.NZ))))
 
 ;; Base case: i128
-(rule 1 (is_nonzero_cmp val @ (value_type $I128))
+(rule 1 (is_nonzero val @ (value_type $I128))
       (let ((lo Gpr (value_regs_get_gpr val 0))
             (hi Gpr (value_regs_get_gpr val 1)))
           (CondResult.CC
@@ -3419,13 +3419,24 @@
 
 ;; Special case some instructions where lowerings directly produce condition
 ;; codes.
-(rule 2 (is_nonzero_cmp (fcmp cc a b)) (emit_fcmp cc a b))
-(rule 2 (is_nonzero_cmp (icmp cc a b)) (emit_cmp cc a b))
-(rule 2 (is_nonzero_cmp (vall_true vec)) (is_vall_true vec))
-(rule 2 (is_nonzero_cmp (vany_true vec)) (is_vany_true vec))
-(rule 2 (is_nonzero_cmp (uextend val)) (is_nonzero_cmp val))
-(rule 2 (is_nonzero_cmp (band a @ (value_type (ty_int (fits_in_64 ty))) b))
-  (is_nonzero_band ty a b))
+(rule 2 (is_nonzero (vall_true vec)) (is_vall_true vec))
+(rule 2 (is_nonzero (vany_true vec)) (is_vany_true vec))
+(rule 2 (is_nonzero (uextend (vall_true vec))) (is_vall_true vec))
+(rule 2 (is_nonzero (uextend (vany_true vec))) (is_vany_true vec))
+(rule 2 (is_nonzero (band a @ (value_type (ty_int (fits_in_64 ty))) b))
+      (is_nonzero_band ty a b))
+
+
+;; Like `is_nonzero` but with additional specializations for compare
+;; operators. We break this out from `is_nonzero` because we want to
+;; avoid unbounded recursion.
+(decl is_nonzero_cmp (Value) CondResult)
+
+(rule 1 (is_nonzero_cmp (fcmp cc a b)) (emit_fcmp cc a b))
+(rule 1 (is_nonzero_cmp (icmp cc a b)) (emit_cmp cc a b))
+(rule 1 (is_nonzero_cmp (uextend (fcmp cc a b))) (emit_fcmp cc a b))
+(rule 1 (is_nonzero_cmp (uextend (icmp cc a b))) (emit_cmp cc a b))
+(rule 0 (is_nonzero_cmp val) (is_nonzero val))
 
 (decl is_nonzero_band (Type Value Value) CondResult)
 (rule 0 (is_nonzero_band ty a b) (CondResult.CC (x64_test ty a b) (CC.NZ)))
@@ -3510,7 +3521,14 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1)))
-      (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)))
+        (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)))
+
+;; For direct equality comparisons to zero transform the other operand into a
+;; nonzero comparison and then invert the whole conditional to test for zero.
+(rule 5 (emit_cmp (IntCC.Equal) a (u64_from_iconst 0)) (cond_invert (is_nonzero a)))
+(rule 6 (emit_cmp (IntCC.Equal) (u64_from_iconst 0) a) (cond_invert (is_nonzero a)))
+(rule 5 (emit_cmp (IntCC.NotEqual) a (u64_from_iconst 0)) (is_nonzero a))
+(rule 6 (emit_cmp (IntCC.NotEqual) (u64_from_iconst 0) a) (is_nonzero a))
 
 (decl emit_cmp_i128 (CC Gpr Gpr Gpr Gpr) CondResult)
 ;; Eliminate cases which compare something "or equal" by swapping arguments.
@@ -3522,13 +3540,6 @@
         (emit_cmp_i128 (CC.B)   b_hi b_lo a_hi a_lo))
 (rule 2 (emit_cmp_i128 (CC.BE)  a_hi a_lo b_hi b_lo)
         (emit_cmp_i128 (CC.NB)  b_hi b_lo a_hi a_lo))
-
-;; For direct equality comparisons to zero transform the other operand into a
-;; nonzero comparison and then invert the whole conditional to test for zero.
-(rule 5 (emit_cmp (IntCC.Equal) a (u64_from_iconst 0)) (cond_invert (is_nonzero_cmp a)))
-(rule 6 (emit_cmp (IntCC.Equal) (u64_from_iconst 0) a) (cond_invert (is_nonzero_cmp a)))
-(rule 5 (emit_cmp (IntCC.NotEqual) a (u64_from_iconst 0)) (is_nonzero_cmp a))
-(rule 6 (emit_cmp (IntCC.NotEqual) (u64_from_iconst 0) a) (is_nonzero_cmp a))
 
 ;; 128-bit strict equality/inequality can't be easily tested using subtraction
 ;; but we can quickly determine whether any bits are different instead.
