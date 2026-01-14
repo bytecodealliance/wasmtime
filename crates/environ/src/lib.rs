@@ -80,24 +80,12 @@ pub mod fact;
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
 
-// Temporarily re-export `anyhow` as `wasmtime_environ::error` to ease the
-// migration to the `wasmtime-internal-error` crate.
-pub use anyhow as error;
+// Reexport the error crate as a submodule for convenience.
+#[doc(inline)]
+pub use wasmtime_error as error;
 
-// Temporarily polyfill `wasmtime_internal_error::ToWasmtimeResult` to ease
-// migration, before we swap out `anyhow` with the `wasmtime_internal_error`
-// crate.
 #[cfg(feature = "anyhow")]
-#[doc(hidden)]
-pub trait ToWasmtimeResult<T> {
-    fn to_wasmtime_result(self) -> self::error::Result<T>;
-}
-#[cfg(feature = "anyhow")]
-impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
-    fn to_wasmtime_result(self) -> self::error::Result<T> {
-        self
-    }
-}
+pub use wasmtime_error::ToWasmtimeResult;
 
 // Only for use with `bindgen!`-generated code.
 #[doc(hidden)]

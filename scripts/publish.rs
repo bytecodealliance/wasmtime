@@ -40,6 +40,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
+    "wasmtime-internal-error",
     "wasmtime-internal-component-util",
     "wasmtime-environ",
     "wasmtime-internal-jit-icache-coherence",
@@ -52,7 +53,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle-generate",
     "wiggle-macro",
     // wasmtime
-    "wasmtime-internal-error",
     "wasmtime-internal-versioned-export-macros",
     "wasmtime-internal-slab",
     "wasmtime-internal-wit-bindgen",
