@@ -125,14 +125,14 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource => true,
+                    | TypeDefKind::Resource
+                    | TypeDefKind::FixedSizeList(..) => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
-                    TypeDefKind::FixedSizeList(..) => todo!(),
                     TypeDefKind::Map(..) => todo!(),
                 }
             }
@@ -189,7 +189,9 @@ pub trait RustGenerator<'a> {
 
             TypeDefKind::Type(t) => self.ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedSizeList(t, size) => {
+                format!("[{}; {}]", self.ty(t, mode), size)
+            }
             TypeDefKind::Map(..) => todo!(),
         }
     }

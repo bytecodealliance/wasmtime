@@ -19,9 +19,10 @@ use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
     FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedSizeListIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -1126,6 +1127,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => 1,
+            InterfaceType::FixedSizeList(i) => self.types[*i].size as usize,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -1164,6 +1166,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     InterfaceType::Stream(t) => self.translate_stream(*t, src, dst_ty, dst),
                     InterfaceType::ErrorContext(t) => {
                         self.translate_error_context(*t, src, dst_ty, dst)
+                    }
+                    InterfaceType::FixedSizeList(t) => {
+                        self.translate_fixed_size_list(*t, src, dst_ty, dst);
                     }
                 }
             }
@@ -2855,6 +2860,113 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .zip(dst_ty.types.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(src_ty, &src, dst_ty, &dst);
+        }
+    }
+
+    fn translate_fixed_size_list(
+        &mut self,
+        src_ty: TypeFixedSizeListIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::FixedSizeList(t) => &self.types[*t],
+            _ => panic!("expected a fixed size list"),
+        };
+
+        // TODO: subtyping
+        assert_eq!(src_ty.size, dst_ty.size);
+
+        match (&src, &dst) {
+            // Generate custom code for memory to memory copy
+            (Source::Memory(src_mem), Destination::Memory(dst_mem)) => {
+                let src_mem_opts = match &src_mem.opts.data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let dst_mem_opts = match &dst_mem.opts.data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let src_element_bytes = self.types.size_align(src_mem_opts, &src_ty.element).0;
+                let dst_element_bytes = self.types.size_align(dst_mem_opts, &dst_ty.element).0;
+                assert_ne!(src_element_bytes, 0);
+                assert_ne!(dst_element_bytes, 0);
+
+                // because data is stored in-line, we assume that source and destination memory have been validated upstream
+
+                self.instruction(LocalGet(src_mem.addr.idx));
+                if src_mem.offset != 0 {
+                    self.ptr_uconst(src_mem_opts, src_mem.offset);
+                    self.ptr_add(src_mem_opts);
+                }
+                let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+                self.instruction(LocalGet(dst_mem.addr.idx));
+                if dst_mem.offset != 0 {
+                    self.ptr_uconst(dst_mem_opts, dst_mem.offset);
+                    self.ptr_add(dst_mem_opts);
+                }
+                let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
+
+                self.instruction(I32Const(src_ty.size as i32));
+                let remaining = self.local_set_new_tmp(ValType::I32);
+
+                self.instruction(Loop(BlockType::Empty));
+
+                // Translate the next element in the list
+                let element_src = Source::Memory(Memory {
+                    opts: src_mem.opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_src_ptr.idx, cur_src_ptr.ty),
+                });
+                let element_dst = Destination::Memory(Memory {
+                    opts: dst_mem.opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_dst_ptr.idx, cur_dst_ptr.ty),
+                });
+                self.translate(&src_ty.element, &element_src, &dst_ty.element, &element_dst);
+
+                // Update the two loop pointers
+                self.instruction(LocalGet(cur_src_ptr.idx));
+                self.ptr_uconst(src_mem_opts, src_element_bytes);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalSet(cur_src_ptr.idx));
+                self.instruction(LocalGet(cur_dst_ptr.idx));
+                self.ptr_uconst(dst_mem_opts, dst_element_bytes);
+                self.ptr_add(dst_mem_opts);
+                self.instruction(LocalSet(cur_dst_ptr.idx));
+
+                // Update the remaining count, falling through to break out if it's zero
+                // now.
+                self.instruction(LocalGet(remaining.idx));
+                self.ptr_iconst(src_mem_opts, -1);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalTee(remaining.idx));
+                self.ptr_br_if(src_mem_opts, 0);
+                self.instruction(End); // end of loop
+
+                self.free_temp_local(cur_dst_ptr);
+                self.free_temp_local(cur_src_ptr);
+                self.free_temp_local(remaining);
+                return;
+            }
+            // for the non-memory-to-memory case fall back to using generic tuple translation
+            (_, _) => {
+                // Assumes that the number of elements are small enough for this unrolling
+                assert!(
+                    src_ty.size as usize <= MAX_FLAT_PARAMS
+                        && dst_ty.size as usize <= MAX_FLAT_PARAMS
+                );
+                let srcs =
+                    src.record_field_srcs(self.types, (0..src_ty.size).map(|_| src_ty.element));
+                let dsts =
+                    dst.record_field_dsts(self.types, (0..dst_ty.size).map(|_| dst_ty.element));
+                for (src, dst) in srcs.zip(dsts) {
+                    self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
+                }
+            }
         }
     }
 

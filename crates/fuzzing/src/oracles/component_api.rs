@@ -117,6 +117,11 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
                 })
                 .collect::<arbitrary::Result<_>>()?,
         ),
+        Type::FixedSizeList(list) => Val::FixedSizeList(
+            (0..list.size())
+                .map(|_| arbitrary_val(&list.ty(), input))
+                .collect::<arbitrary::Result<_>>()?,
+        ),
 
         // Resources, futures, streams, and error contexts aren't fuzzed at this time.
         Type::Own(_) | Type::Borrow(_) | Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {

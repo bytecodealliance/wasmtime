@@ -50,6 +50,7 @@ pub struct ComponentTypesBuilder {
     future_tables: HashMap<TypeFutureTable, TypeFutureTableIndex>,
     stream_tables: HashMap<TypeStreamTable, TypeStreamTableIndex>,
     error_context_tables: HashMap<TypeErrorContextTable, TypeComponentLocalErrorContextTableIndex>,
+    fixed_size_lists: HashMap<TypeFixedSizeList, TypeFixedSizeListIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -118,6 +119,7 @@ impl ComponentTypesBuilder {
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
             abstract_resources: 0,
+            fixed_size_lists: HashMap::default(),
         }
     }
 
@@ -456,8 +458,8 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Stream(ty) => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::FixedSizeList(..) => {
-                bail!("support not implemented for fixed-size-lists");
+            ComponentDefinedType::FixedSizeList(ty, size) => {
+                InterfaceType::FixedSizeList(self.fixed_size_list_type(types, ty, *size)?)
             }
             ComponentDefinedType::Map(..) => {
                 bail!("support not implemented for map type");
@@ -575,6 +577,33 @@ impl ComponentTypesBuilder {
         self.add_tuple_type(TypeTuple { types, abi })
     }
 
+    fn fixed_size_list_type(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &ComponentValType,
+        size: u32,
+    ) -> Result<TypeFixedSizeListIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
+        let element = self.valtype(types, ty)?;
+        Ok(self.new_fixed_size_list_type(element, size))
+    }
+
+    pub(crate) fn new_fixed_size_list_type(
+        &mut self,
+        element: InterfaceType,
+        size: u32,
+    ) -> TypeFixedSizeListIndex {
+        let element_abi = self.component_types.canonical_abi(&element);
+        let mut abi = element_abi.clone();
+        // this assumes that size32 is already rounded up to alignment
+        abi.size32 = element_abi.size32 * size;
+        abi.size64 = element_abi.size64 * size;
+        abi.flat_count = element_abi
+            .flat_count
+            .map(|c| c.saturating_mul(size.min(255) as u8));
+        self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
+    }
+
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
@@ -689,6 +718,11 @@ impl ComponentTypesBuilder {
     /// Interns a new tuple type within this type information.
     pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
         intern_and_fill_flat_types!(self, tuples, ty)
+    }
+
+    /// Interns a new tuple type within this type information.
+    pub fn add_fixed_size_list_type(&mut self, ty: TypeFixedSizeList) -> TypeFixedSizeListIndex {
+        intern_and_fill_flat_types!(self, fixed_size_lists, ty)
     }
 
     /// Interns a new variant type within this type information.
@@ -826,6 +860,7 @@ impl ComponentTypesBuilder {
             InterfaceType::Enum(i) => &self.type_info.enums[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
+            InterfaceType::FixedSizeList(i) => &self.type_info.fixed_size_lists[*i],
         }
     }
 }
@@ -935,6 +970,7 @@ struct TypeInformationCache {
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
+    fixed_size_lists: PrimaryMap<TypeFixedSizeListIndex, TypeInformation>,
 }
 
 struct TypeInformation {
@@ -1082,6 +1118,24 @@ impl TypeInformation {
 
     fn tuples(&mut self, types: &ComponentTypesBuilder, ty: &TypeTuple) {
         self.build_record(ty.types.iter().map(|t| types.type_information(t)));
+    }
+
+    fn fixed_size_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedSizeList) {
+        let element_info = types.type_information(&ty.element);
+        self.depth = 1 + element_info.depth;
+        self.has_borrow = element_info.has_borrow;
+        match element_info.flat.as_flat_types() {
+            Some(types) => {
+                'outer: for _ in 0..ty.size {
+                    for (t32, t64) in types.memory32.iter().zip(types.memory64) {
+                        if !self.flat.push(*t32, *t64) {
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            None => self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap(),
+        }
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {

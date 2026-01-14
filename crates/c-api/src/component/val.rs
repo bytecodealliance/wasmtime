@@ -234,6 +234,7 @@ pub enum wasmtime_component_val_t {
     Result(wasmtime_component_valresult_t),
     Flags(wasmtime_component_valflags_t),
     Resource(Box<wasmtime_component_resource_any_t>),
+    FixedSizeList(wasmtime_component_vallist_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -276,6 +277,7 @@ impl From<&wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::Result(x) => Val::Result(x.into()),
             wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
             wasmtime_component_val_t::Resource(x) => Val::Resource(x.resource),
+            wasmtime_component_val_t::FixedSizeList(x) => Val::FixedSizeList(x.into()),
         }
     }
 }
@@ -317,6 +319,9 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Future(_) => todo!(),
             Val::Stream(_) => todo!(),
             Val::ErrorContext(_) => todo!(),
+            Val::FixedSizeList(ty) => wasmtime_component_val_t::FixedSizeList(
+                wasmtime_component_vallist_t::from(ty.as_ref()),
+            ),
         }
     }
 }

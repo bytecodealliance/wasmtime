@@ -1628,7 +1628,9 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedSizeList(elem, size) => {
+                self.type_fixed_size_list(id, name, elem, *size, &ty.docs)
+            }
             TypeDefKind::Map(..) => todo!(),
         }
     }
@@ -1808,6 +1810,29 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(",");
             }
             self.push_str(");\n");
+            self.assert_type(id, &name);
+        }
+    }
+
+    fn type_fixed_size_list(
+        &mut self,
+        id: TypeId,
+        _name: &str,
+        elem: &Type,
+        size: u32,
+        docs: &Docs,
+    ) {
+        let info = self.info(id);
+        for (name, mode) in self.modes_of(id) {
+            let lt = self.lifetime_for(&info, mode);
+            self.rustdoc(docs);
+            self.push_str(&format!("pub type {name}"));
+            self.print_generics(lt);
+            self.push_str(" = [");
+            self.print_ty(elem, mode);
+            self.push_str("; ");
+            self.push_str(&size.to_string());
+            self.push_str("];\n");
             self.assert_type(id, &name);
         }
     }
@@ -3449,7 +3474,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedSizeList(elem, _) => type_contains_lists(*elem, resolve),
             TypeDefKind::Map(..) => todo!(),
         },
 

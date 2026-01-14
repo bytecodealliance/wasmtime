@@ -2900,6 +2900,144 @@ macro_rules! impl_component_ty_for_tuples {
 
 for_each_function_signature!(impl_component_ty_for_tuples);
 
+unsafe impl<T, const N: usize> ComponentType for [T; N]
+where
+    T: ComponentType,
+{
+    type Lower = [T::Lower; N];
+
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_size_list_static(&T::ABI, N as u32);
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        match ty {
+            InterfaceType::FixedSizeList(t) => T::typecheck(&types.types[*t].element, types),
+            other => bail!("expected `list<_, N>` found `{}`", desc(other)),
+        }
+    }
+}
+
+unsafe impl<T, const N: usize> Lower for [T; N]
+where
+    T: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        let element = match ty {
+            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        for (i, val) in self.iter().enumerate() {
+            val.linear_lower_to_flat(cx, element, map_maybe_uninit!(dst[i]))?;
+        }
+        Ok(())
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
+        let element = match ty {
+            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        for (i, val) in self.iter().enumerate() {
+            val.linear_lower_to_memory(cx, element, offset + i * T::SIZE32)?;
+        }
+        Ok(())
+    }
+}
+
+unsafe impl<T, const N: usize> Lift for [T; N]
+where
+    T: Lift + Sized,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let element = match ty {
+            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        // this is reimplementation of array::try_from_fn
+        let mut valid = 0;
+        let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
+        let mut error: Option<crate::error::Error> = None;
+        for n in 0..N {
+            match T::linear_lift_from_flat(cx, element, &src[n]) {
+                Ok(v) => {
+                    result[valid].write(v);
+                    valid += 1;
+                }
+                Err(e) => {
+                    error = Some(e);
+                    // continue to consume all input
+                }
+            }
+        }
+        if let Some(e) = error {
+            for n in 0..valid {
+                unsafe {
+                    result[n].assume_init_drop();
+                }
+            }
+            return Err(e);
+        }
+        assert!(valid == N);
+        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
+        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
+        let element = match ty {
+            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        // this is reimplementation of array::try_from_fn
+        let mut valid = 0;
+        let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
+        let mut error: Option<crate::error::Error> = None;
+        let mut offset = 0;
+        for _ in 0..N {
+            match T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32]) {
+                Ok(v) => {
+                    result[valid].write(v);
+                    valid += 1;
+                }
+                Err(e) => {
+                    error = Some(e);
+                    // continue to consume all input
+                }
+            }
+            offset += T::SIZE32;
+        }
+        if let Some(e) = error {
+            for n in 0..valid {
+                unsafe {
+                    result[n].assume_init_drop();
+                }
+            }
+            return Err(e);
+        }
+        assert!(valid == N);
+        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
+        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+    }
+}
+
 pub fn desc(ty: &InterfaceType) -> &'static str {
     match ty {
         InterfaceType::U8 => "u8",
@@ -2929,6 +3067,7 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Future(_) => "future",
         InterfaceType::Stream(_) => "stream",
         InterfaceType::ErrorContext(_) => "error-context",
+        InterfaceType::FixedSizeList(_) => "list<_, N>",
     }
 }
 
