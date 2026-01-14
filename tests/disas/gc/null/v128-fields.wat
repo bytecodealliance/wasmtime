@@ -22,7 +22,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0022                               trapz v2, user16
+;; @0022                               trapz v2, user15
 ;; @0022                               v19 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0022                               v5 = load.i64 notrap aligned readonly can_move v19+24
 ;; @0022                               v4 = uextend.i64 v2
