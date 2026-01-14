@@ -5,9 +5,8 @@ use core::{fmt, mem, ptr::NonNull};
 ///
 /// This error is the sentinel for allocation failure due to memory exhaustion.
 ///
-/// Use `Error::out_of_memory()` to construct new `OutOfMemory`
-/// errors. Constructing an [`Error`][crate::Error] from an `OutOfMemory` does
-/// not allocate.
+/// Constructing an [`Error`][crate::Error] from an `OutOfMemory` does not
+/// allocate.
 ///
 /// Allocation failure inside any `Error` method that must allocate
 /// (e.g. [`Error::context`][crate::Error::context]) will propagate an
