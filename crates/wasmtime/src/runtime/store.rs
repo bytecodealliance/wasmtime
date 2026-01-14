@@ -545,10 +545,6 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     concurrent_state: concurrent::ConcurrentState,
 
-    /// Whether an instance belonging to this store has trapped.
-    #[cfg(feature = "component-model")]
-    trapped: bool,
-
     /// State related to the executor of wasm code.
     ///
     /// For example if Pulley is enabled and configured then this will store a
@@ -767,8 +763,6 @@ impl<T> Store<T> {
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
             pkey,
-            #[cfg(feature = "component-model")]
-            trapped: false,
             #[cfg(feature = "component-model")]
             component_host_table: Default::default(),
             #[cfg(feature = "component-model")]
@@ -2770,16 +2764,6 @@ at https://bytecodealliance.org/security.
 
     pub(crate) fn get_epoch_deadline(&mut self) -> u64 {
         *self.vm_store_context.epoch_deadline.get_mut()
-    }
-
-    #[cfg(feature = "component-model")]
-    pub(crate) fn trapped(&self) -> bool {
-        self.trapped
-    }
-
-    #[cfg(feature = "component-model")]
-    pub(crate) fn set_trapped(&mut self) {
-        self.trapped = true;
     }
 }
 

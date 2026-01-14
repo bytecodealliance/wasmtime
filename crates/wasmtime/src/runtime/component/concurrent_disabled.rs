@@ -1,6 +1,5 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::store::StoreComponentInstanceId;
 use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
 use crate::{Result, bail, error::format_err};
@@ -162,10 +161,10 @@ impl StoreOpaque {
             return false;
         }
 
-        let flags = StoreComponentInstanceId::new(self.id(), instance.instance)
-            .get(self)
+        let flags = self
+            .component_instance(instance.instance)
             .instance_flags(instance.index);
 
-        !unsafe { flags.needs_post_return() }
+        unsafe { !flags.needs_post_return() }
     }
 }

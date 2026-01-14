@@ -51,7 +51,6 @@
 //! in host functions.
 
 use crate::component::func::{self, Func};
-use crate::component::store::StoreComponentInstanceId;
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
@@ -1407,8 +1406,8 @@ impl StoreOpaque {
             return false;
         }
 
-        let flags = StoreComponentInstanceId::new(self.id(), instance.instance)
-            .get(self)
+        let flags = self
+            .component_instance(instance.instance)
             .instance_flags(instance.index);
 
         unsafe { !flags.needs_post_return() }
@@ -1466,8 +1465,7 @@ impl StoreOpaque {
     /// Helper function to retrieve the `ConcurrentInstanceState` for the
     /// specified instance.
     fn instance_state(&mut self, instance: RuntimeInstance) -> &mut ConcurrentInstanceState {
-        StoreComponentInstanceId::new(self.id(), instance.instance)
-            .get_mut(self)
+        self.component_instance_mut(instance.instance)
             .instance_state(instance.index)
             .concurrent_state()
     }
@@ -1475,8 +1473,7 @@ impl StoreOpaque {
     /// Helper function to retrieve the `HandleTable` for the specified
     /// instance.
     fn handle_table(&mut self, instance: RuntimeInstance) -> &mut HandleTable {
-        StoreComponentInstanceId::new(self.id(), instance.instance)
-            .get_mut(self)
+        self.component_instance_mut(instance.instance)
             .instance_state(instance.index)
             .handle_table()
     }
@@ -1490,8 +1487,7 @@ impl StoreOpaque {
         let old_thread = state.guest_thread.take();
         if let Some(old_thread) = old_thread {
             let instance = state.get_mut(old_thread.task).unwrap().instance.instance;
-            StoreComponentInstanceId::new(self.id(), instance)
-                .get_mut(self)
+            self.component_instance_mut(instance)
                 .set_task_may_block(false)
         }
 
@@ -1513,8 +1509,7 @@ impl StoreOpaque {
         let guest_thread = state.guest_thread.unwrap();
         let instance = state.get_mut(guest_thread.task).unwrap().instance.instance;
         let may_block = self.concurrent_state_mut().may_block(guest_thread.task);
-        StoreComponentInstanceId::new(self.id(), instance)
-            .get_mut(self)
+        self.component_instance_mut(instance)
             .set_task_may_block(may_block)
     }
 
@@ -1522,9 +1517,7 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
         let task = state.guest_thread.unwrap().task;
         let instance = state.get_mut(task).unwrap().instance.instance;
-        let task_may_block = StoreComponentInstanceId::new(self.id(), instance)
-            .get_mut(self)
-            .get_task_may_block();
+        let task_may_block = self.component_instance(instance).get_task_may_block();
 
         if task_may_block {
             Ok(())
