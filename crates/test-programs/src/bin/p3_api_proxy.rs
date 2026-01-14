@@ -5,9 +5,9 @@ use wit_bindgen::spawn;
 
 struct T;
 
-test_programs::p3::proxy::export!(T);
+test_programs::p3::service::export!(T);
 
-impl test_programs::p3::proxy::exports::wasi::http::handler::Guest for T {
+impl test_programs::p3::service::exports::wasi::http::handler::Guest for T {
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         assert!(request.get_scheme().is_some());
         assert!(request.get_authority().is_some());
@@ -54,7 +54,7 @@ impl test_programs::p3::proxy::exports::wasi::http::handler::Guest for T {
     }
 }
 
-// Technically this should not be here for a proxy, but given the current
+// Technically this should not be here for a service, but given the current
 // framework for tests it's required since this file is built as a `bin`
 fn main() {}
 
