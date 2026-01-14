@@ -1,3 +1,23 @@
+## 40.0.2
+
+Released 2026-01-14.
+
+### Fixed
+
+* A possible stack overflow in the x64 backend with `cmp` emission has been
+  fixed.
+  [#12333](https://github.com/bytecodealliance/wasmtime/pull/12333)
+
+* Some ISLE optimization rules which created erroneous IR for vector inputs have
+  been fixed.
+  [#12179](https://github.com/bytecodealliance/wasmtime/pull/12179)
+  [#12335](https://github.com/bytecodealliance/wasmtime/pull/12335)
+
+* The x64 lowering of `shld` has been fixed for some edge caxes.
+  [#12321](https://github.com/bytecodealliance/wasmtime/pull/12321)
+
+--------------------------------------------------------------------------------
+
 ## 40.0.1
 
 Released 2026-01-07.
