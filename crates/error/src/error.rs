@@ -1582,7 +1582,7 @@ pub(crate) struct OomOrDynError {
     // Safety: this must always be the casted-to-`u8` version of either (a)
     // `0x1`, or (b) a valid, owned `DynError` pointer. (Note that these cases
     // cannot overlap because `DynError`'s alignment is greater than `0x1`.)
-    pub(crate) inner: NonNull<u8>,
+    inner: NonNull<u8>,
 }
 
 // Safety: `OomOrDynError` is either an `OutOfMemory` or a `BoxedDynError` and
@@ -1615,7 +1615,7 @@ impl Drop for OomOrDynError {
 impl From<BoxedDynError> for OomOrDynError {
     fn from(boxed: BoxedDynError) -> Self {
         let inner = boxed.into_owned_ptr().into_non_null().cast::<u8>();
-        debug_assert_eq!(inner.addr().get() & Self::OOM_BIT, 0);
+        debug_assert!(!Self::is_oom_ptr(inner));
         OomOrDynError { inner }
     }
 }
@@ -1643,8 +1643,17 @@ impl OomOrDynError {
         unsafe { NonNull::new_unchecked(inner) }
     }
 
+    pub(crate) fn new_oom(bitpacked: NonNull<u8>) -> Self {
+        assert!(Self::is_oom_ptr(bitpacked));
+        OomOrDynError { inner: bitpacked }
+    }
+
+    fn is_oom_ptr(ptr: NonNull<u8>) -> bool {
+        (ptr.addr().get() & Self::OOM_BIT) == Self::OOM_BIT
+    }
+
     fn is_oom(&self) -> bool {
-        (self.inner.addr().get() & Self::OOM_BIT) == Self::OOM_BIT
+        Self::is_oom_ptr(self.inner)
     }
 
     fn is_boxed_dyn_error(&self) -> bool {
@@ -1652,7 +1661,7 @@ impl OomOrDynError {
     }
 
     pub(crate) fn oom_size(inner: NonNull<u8>) -> usize {
-        debug_assert_eq!(inner.addr().get() & Self::OOM_BIT, Self::OOM_BIT);
+        debug_assert!(Self::is_oom_ptr(inner));
         inner.addr().get() >> 1
     }
 

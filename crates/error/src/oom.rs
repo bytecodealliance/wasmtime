@@ -130,6 +130,6 @@ impl OutOfMemory {
 
 impl From<OutOfMemory> for OomOrDynError {
     fn from(oom: OutOfMemory) -> Self {
-        OomOrDynError { inner: oom.inner }
+        OomOrDynError::new_oom(oom.inner)
     }
 }
