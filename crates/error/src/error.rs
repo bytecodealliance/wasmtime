@@ -595,12 +595,14 @@ impl Error {
             // Although we know that `E == OutOfMemory` in this block, the
             // compiler doesn't understand that, and we have to do this litle
             // dance.
+            union ToOom<T> {
+                oom: OutOfMemory,
+                error: mem::ManuallyDrop<T>,
+            }
             let error = mem::ManuallyDrop::new(error);
-            let ptr = <*const E>::from(&*error);
-            let ptr = ptr.cast::<Error>();
-            // Safety: `OutOfMemory` and `Error` have the same representation
-            // and the pointer is valid for reading from.
-            return unsafe { core::ptr::read(ptr) };
+            // Safety: `E == OutOfMemory`.
+            let oom = unsafe { (ToOom { error }).oom };
+            return Error { inner: oom.into() };
         }
 
         Self::from_error_ext(ForeignError(error))
