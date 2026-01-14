@@ -235,7 +235,7 @@ pub mod foo {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn option_test<T>(
+                fn option_test<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<

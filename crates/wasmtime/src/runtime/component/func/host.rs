@@ -1,6 +1,8 @@
 //! Implementation of calling Rust-defined functions from components.
 
 #[cfg(feature = "component-model-async")]
+use crate::component::RuntimeInstance;
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{Accessor, Status};
@@ -339,9 +341,14 @@ where
         let ret = match self.run(store.as_context_mut(), params) {
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
-            HostResult::Future(future) => {
-                concurrent::poll_and_block(store.0, future, caller_instance)?
-            }
+            HostResult::Future(future) => concurrent::poll_and_block(
+                store.0,
+                future,
+                RuntimeInstance {
+                    instance: instance.id().instance(),
+                    index: caller_instance,
+                },
+            )?,
         };
 
         let mut lower = LowerContext::new(store, options, instance);

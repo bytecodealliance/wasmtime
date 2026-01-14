@@ -192,16 +192,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::String,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn b<T>(
+                fn b<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::String,
                 > + Send;
-                fn c<T>(
+                fn c<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::String,
                     b: wasmtime::component::__internal::String,

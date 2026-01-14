@@ -246,10 +246,10 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn create_directory_at<T>(
+                fn create_directory_at<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Errno>> + Send;
-                fn stat<T>(
+                fn stat<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<DescriptorStat, Errno>,

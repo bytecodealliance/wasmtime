@@ -35,22 +35,30 @@
   )
   (instance $child (instantiate $child))
 
-  (core func $child-run (canon lower (func $child "run")))
-
-  (core module $m
-    (import "" "child-run" (func $child-run))
-
-    (func (export "run")
-      (call $child-run))
-  )
-  (core instance $i (instantiate $m
-    (with "" (instance
-      (export "child-run" (func $child-run))
+  (component $other-child
+    (import "child" (instance $child
+      (export "run" (func async))
     ))
-  ))
+             
+    (core func $child-run (canon lower (func $child "run")))
+    (core module $m
+      (import "" "child-run" (func $child-run))
+  
+      (func (export "run")
+        (call $child-run))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "child-run" (func $child-run))
+      ))
+    ))
+  
+    (func (export "run") async
+      (canon lift (core func $i "run")))
+  )
+  (instance $other-child (instantiate $other-child (with "child" (instance $child))))
 
-  (func (export "run") async
-    (canon lift (core func $i "run")))
+  (func (export "run") (alias export $other-child "run"))
 )
 
 (assert_trap (invoke "run") "deadlock detected")

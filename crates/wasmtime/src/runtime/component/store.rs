@@ -6,15 +6,35 @@ use crate::store::{StoreData, StoreId, StoreOpaque};
 use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
     instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
+
+    /// Whether an instance belonging to this store has trapped.
+    trapped: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ComponentInstanceId(u32);
 wasmtime_environ::entity_impl!(ComponentInstanceId);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct RuntimeInstance {
+    pub instance: ComponentInstanceId,
+    pub index: RuntimeComponentInstanceIndex,
+}
+
+impl StoreOpaque {
+    pub(crate) fn trapped(&self) -> bool {
+        self.store_data().components.trapped
+    }
+
+    pub(crate) fn set_trapped(&mut self) {
+        self.store_data_mut().components.trapped = true;
+    }
+}
 
 impl StoreData {
     pub(crate) fn push_component_instance(
@@ -84,6 +104,14 @@ impl StoreData {
 impl StoreOpaque {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
         self.store_data().component_instance(id)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_instance_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> Pin<&mut ComponentInstance> {
+        self.store_data_mut().component_instance_mut(id)
     }
 }
 

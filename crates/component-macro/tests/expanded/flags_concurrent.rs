@@ -304,31 +304,31 @@ pub mod foo {
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn roundtrip_flag1<T>(
+                fn roundtrip_flag1<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag1,
                 ) -> impl ::core::future::Future<Output = Flag1> + Send;
-                fn roundtrip_flag2<T>(
+                fn roundtrip_flag2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag2,
                 ) -> impl ::core::future::Future<Output = Flag2> + Send;
-                fn roundtrip_flag4<T>(
+                fn roundtrip_flag4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag4,
                 ) -> impl ::core::future::Future<Output = Flag4> + Send;
-                fn roundtrip_flag8<T>(
+                fn roundtrip_flag8<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag8,
                 ) -> impl ::core::future::Future<Output = Flag8> + Send;
-                fn roundtrip_flag16<T>(
+                fn roundtrip_flag16<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag16,
                 ) -> impl ::core::future::Future<Output = Flag16> + Send;
-                fn roundtrip_flag32<T>(
+                fn roundtrip_flag32<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag32,
                 ) -> impl ::core::future::Future<Output = Flag32> + Send;
-                fn roundtrip_flag64<T>(
+                fn roundtrip_flag64<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag64,
                 ) -> impl ::core::future::Future<Output = Flag64> + Send;

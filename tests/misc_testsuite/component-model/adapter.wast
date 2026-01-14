@@ -112,7 +112,7 @@
       (with "" (instance (export "" (func $f2))))
     ))
   )
-  "degenerate component adapter called")
+  "cannot enter component instance")
 
 ;; fiddling with 0-sized lists
 (component $c

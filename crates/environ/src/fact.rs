@@ -114,9 +114,6 @@ struct AdapterData {
     /// The core wasm function that this adapter will be calling (the original
     /// function that was `canon lift`'d)
     callee: FuncIndex,
-    /// FIXME(#4185) should be plumbed and handled as part of the new reentrance
-    /// rules not yet implemented here.
-    called_as_export: bool,
 }
 
 /// Configuration options which apply at the "global adapter" level.
@@ -124,7 +121,12 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    /// The Wasmtime-assigned component instance index where the options were
+    /// originally specified.
     instance: RuntimeComponentInstanceIndex,
+    /// The ancestors (i.e. chain of instantiating instances) of the instance
+    /// specified in the `instance` field.
+    ancestors: Vec<RuntimeComponentInstanceIndex>,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
     /// The global that represents the instance flags for where this adapter
@@ -307,9 +309,6 @@ impl<'a> Module<'a> {
                 lift,
                 lower,
                 callee,
-                // FIXME(#4185) should be plumbed and handled as part of the new
-                // reentrance rules not yet implemented here.
-                called_as_export: true,
             },
         );
 
@@ -321,6 +320,7 @@ impl<'a> Module<'a> {
     fn import_options(&mut self, ty: TypeFuncIndex, options: &AdapterOptionsDfg) -> AdapterOptions {
         let AdapterOptionsDfg {
             instance,
+            ancestors,
             string_encoding,
             post_return: _, // handled above
             callback,
@@ -399,6 +399,7 @@ impl<'a> Module<'a> {
 
         AdapterOptions {
             instance: *instance,
+            ancestors: ancestors.clone(),
             ty,
             flags,
             post_return: None,

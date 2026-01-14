@@ -326,7 +326,6 @@ pub enum Trampoline {
         to: MemoryId,
         to64: bool,
     },
-    AlwaysTrap,
     ResourceNew {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
@@ -945,7 +944,6 @@ impl LinearizeDfg<'_> {
                 to: self.runtime_memory(*to),
                 to64: *to64,
             },
-            Trampoline::AlwaysTrap => info::Trampoline::AlwaysTrap,
             Trampoline::ResourceNew { instance, ty } => info::Trampoline::ResourceNew {
                 instance: *instance,
                 ty: *ty,

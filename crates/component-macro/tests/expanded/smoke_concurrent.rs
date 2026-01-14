@@ -179,7 +179,7 @@ pub mod imports {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::Box;
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn y<T>(
+        fn y<T: Send>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = ()> + Send;
     }

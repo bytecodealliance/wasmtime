@@ -99,7 +99,7 @@ pub struct FooIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
 pub trait FooImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
