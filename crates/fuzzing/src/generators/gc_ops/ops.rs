@@ -269,15 +269,15 @@ impl GcOps {
                 continue;
             }
 
-            op.fixup(&self.limits);
+            op.fixup(&self.limits, num_types);
 
-            match &mut op {
-                GcOp::StructNew(t) | GcOp::TakeStructCall(t) | GcOp::TakeTypedStructCall(t) => {
-                    if num_types > 0 {
-                        *t = *t % num_types;
-                    }
-                }
-                _ => {}
+            if num_types == 0
+                && matches!(
+                    op,
+                    GcOp::StructNew(..) | GcOp::TakeStructCall(..) | GcOp::TakeTypedStructCall(..)
+                )
+            {
+                continue;
             }
 
             op.operand_types().iter().for_each(|ty| {
@@ -368,7 +368,7 @@ macro_rules! define_gc_ops {
                 }
             }
 
-            pub(crate) fn fixup(&mut self, limits: &GcOpsLimits) {
+            pub(crate) fn fixup(&mut self, limits: &GcOpsLimits, num_types: u32) {
                 match self {
                     $(
                         Self::$op( $( $( $limit_var ),* )? ) => {
@@ -380,6 +380,16 @@ macro_rules! define_gc_ops {
                             )* )?
                         }
                     )*
+                }
+                match self {
+                    Self::StructNew(t)
+                    | Self::TakeStructCall(t)
+                    | Self::TakeTypedStructCall(t) => {
+                        if num_types > 0 {
+                            *t %= num_types;
+                        }
+                    }
+                    _ => {}
                 }
             }
 
