@@ -4793,6 +4793,7 @@ dependencies = [
  "wasmprinter",
  "wasmtime",
  "wasmtime-cli-flags",
+ "wasmtime-environ",
  "wasmtime-internal-error",
  "wasmtime-test-util",
  "wasmtime-wasi",
