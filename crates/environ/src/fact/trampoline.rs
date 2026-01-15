@@ -3042,7 +3042,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // Assert that the discriminant is valid.
         self.instruction(I32Const(i32::try_from(src_ty.names.len()).unwrap()));
-        self.instruction(I32GtU);
+        self.instruction(I32GeU);
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::InvalidDiscriminant);
         self.instruction(End);
