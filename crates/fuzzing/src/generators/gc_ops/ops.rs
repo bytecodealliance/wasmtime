@@ -280,12 +280,15 @@ impl GcOps {
                 continue;
             }
 
-            op.operand_types().iter().for_each(|ty| {
-                StackType::fixup_stack_type(*ty, &mut stack, &mut new_ops, num_types);
-            });
+            let mut operand_types = Vec::new();
+            op.operand_types(&mut operand_types);
+            for ty in operand_types {
+                StackType::fixup_stack_type(ty, &mut stack, &mut new_ops, num_types);
+            }
 
             // Finally, emit the op itself (updates stack abstractly)
-            StackType::emit(op, &mut stack, &mut new_ops, num_types);
+            let mut result_types = Vec::new();
+            StackType::emit(op, &mut stack, &mut new_ops, num_types, &mut result_types);
         }
 
         // Balance any leftovers with drops (works for any type)
@@ -312,8 +315,9 @@ macro_rules! define_gc_ops {
             : ($operand_req:expr, $params:expr) => ($result_type:expr, $results:expr) ,
         )*
     ) => {
-        #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+
         /// The operations that can be performed by the `gc` function.
+        #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
         pub enum GcOp {
             $(
                 #[allow(missing_docs, reason = "macro-generated code")]
@@ -337,14 +341,19 @@ macro_rules! define_gc_ops {
             }
 
             #[allow(unreachable_patterns, reason = "macro-generated code")]
-            pub(crate) fn operand_types(&self) -> Vec<StackType> {
+            pub(crate) fn operand_types(&self, out: &mut Vec<StackType>) {
                 match self {
                     // special-cases
-                    Self::TakeTypedStructCall(t) => vec![StackType::Struct(Some(*t))],
+                    Self::TakeTypedStructCall(t) => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
                     $(
-                        Self::$op(..) => match $operand_req {
-                            None => vec![],
-                            Some(req) => if $params == 0 { vec![] } else { vec![req; $params] },
+                        Self::$op(..) => {
+                            if let Some(req) = $operand_req {
+                               for _ in 0..$params {
+                                out.push(req);
+                               }
+                            }
                         }
                     ),*
                 }
@@ -355,14 +364,19 @@ macro_rules! define_gc_ops {
             }
 
             #[allow(unreachable_patterns, reason = "macro-generated code")]
-            pub(crate) fn result_types(&self) -> Vec<StackType> {
+            pub(crate) fn result_types(&self, out: &mut Vec<StackType>) {
                 match self {
                     // special-cases
-                    Self::StructNew(t)        => vec![StackType::Struct(Some(*t))],
+                    Self::StructNew(t)        => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
                     $(
-                        Self::$op(..) => match $result_type {
-                            None => vec![],
-                            Some(ty) => if $results == 0 { vec![] } else { vec![ty; $results] },
+                        Self::$op(..) => {
+                            if let Some(req) = $result_type {
+                               for _ in 0..$results {
+                                out.push(req);
+                               }
+                            }
                         }
                     ),*
                 }

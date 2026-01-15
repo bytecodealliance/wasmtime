@@ -109,13 +109,14 @@ impl StackType {
         out: &mut Vec<GcOp>,
         num_types: u32,
     ) {
+        let mut result_types = Vec::new();
         match req {
             Self::Anything => {
                 // Anything can accept any type - just pop if available
                 // If stack is empty, synthesize null (anyref compatible)
                 if stack.pop().is_none() {
                     // Create a null externref
-                    Self::emit(GcOp::Null(), stack, out, num_types);
+                    Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
                     stack.pop(); // consume just-synthesized externref
                 }
             }
@@ -124,7 +125,7 @@ impl StackType {
                     stack.pop();
                 }
                 _ => {
-                    Self::emit(GcOp::Null(), stack, out, num_types);
+                    Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
                     stack.pop(); // consume just-synthesized externref
                 }
             },
@@ -143,23 +144,30 @@ impl StackType {
                         Some(t) => Self::clamp(t, num_types),
                         None => Self::clamp(0, num_types),
                     };
-                    Self::emit(GcOp::StructNew(t), stack, out, num_types);
+                    Self::emit(GcOp::StructNew(t), stack, out, num_types, &mut result_types);
                     stack.pop(); // consume the synthesized struct
                 }
             }
         }
     }
 
-    pub(crate) fn emit(op: GcOp, stack: &mut Vec<Self>, out: &mut Vec<GcOp>, num_types: u32) {
+    pub(crate) fn emit(
+        op: GcOp,
+        stack: &mut Vec<Self>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+        result_types: &mut Vec<Self>,
+    ) {
         out.push(op);
-        op.result_types().iter().for_each(|ty| {
-            // Clamp struct type indices when pushing to stack
+
+        op.result_types(result_types);
+        for ty in result_types {
             let clamped_ty = match ty {
                 Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
                 other => *other,
             };
             stack.push(clamped_ty);
-        });
+        }
     }
 
     fn clamp(t: u32, n: u32) -> u32 {
