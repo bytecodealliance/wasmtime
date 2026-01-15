@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 use wasmtime::{Config, Error, Result, error::OutOfMemory, format_err};
-use wasmtime_environ::collections::{OomArc, OomBox};
+use wasmtime_environ::collections::*;
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
