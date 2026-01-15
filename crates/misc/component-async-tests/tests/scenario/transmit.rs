@@ -1,6 +1,5 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::task::{self, Context, Poll};
 use std::time::Duration;
 
@@ -349,7 +348,6 @@ pub async fn async_readiness() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -492,7 +490,6 @@ async fn test_cancel(mode: Mode) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -737,7 +734,6 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -940,7 +936,6 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 

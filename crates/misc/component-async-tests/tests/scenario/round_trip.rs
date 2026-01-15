@@ -1,7 +1,5 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU32, Ordering::Relaxed},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use std::time::Duration;
 
 use super::util::{config, make_component};
@@ -355,7 +353,6 @@ pub async fn test_round_trip(
                 wasi: WasiCtxBuilder::new().inherit_stdio().build(),
                 table: ResourceTable::default(),
                 continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
             },
         )
     };

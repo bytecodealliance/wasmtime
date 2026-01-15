@@ -1,5 +1,4 @@
 use std::env;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::util::{config, make_component};
@@ -89,7 +88,6 @@ pub async fn test_run_bool(components: &[&str], v: bool) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 

@@ -43,8 +43,11 @@ world round-trip-direct {
 }
 
 interface ready {
-  set-ready: func(ready: bool);
-  when-ready: async func();
+  resource thing {
+    constructor();
+    set-ready: func(ready: bool);
+    when-ready: async func();
+  }
 }
 
 interface continue {
