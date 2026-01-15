@@ -18,6 +18,7 @@ wasmtime = { workspace = true, features = ["component-model", "async", "runtime"
 bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = [ "std" ]
