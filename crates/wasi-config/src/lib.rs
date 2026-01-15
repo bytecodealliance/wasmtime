@@ -66,8 +66,8 @@
 
 #![deny(missing_docs)]
 
-use anyhow::Result;
 use std::collections::HashMap;
+use wasmtime::Result;
 use wasmtime::component::HasData;
 
 mod gen_ {

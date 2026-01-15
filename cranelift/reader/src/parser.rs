@@ -384,6 +384,7 @@ impl Context {
                 name: ExternalName::testcase(""),
                 signature: SigRef::reserved_value(),
                 colocated: false,
+                patchable: false,
             });
         }
         self.function.dfg.ext_funcs[fn_] = data;
@@ -1405,11 +1406,6 @@ impl<'a> Parser<'a> {
                 }
                 _ => return err!(self.loc, "unknown calling convention: {}", text),
             },
-
-            Some(Token::Cold) => {
-                self.consume();
-                sig.call_conv = CallConv::Cold;
-            }
             _ => {}
         }
 
@@ -1858,7 +1854,7 @@ impl<'a> Parser<'a> {
     //
     // Two variants:
     //
-    // function-decl ::= FuncRef(fnref) "=" ["colocated"]" name function-decl-sig
+    // function-decl ::= FuncRef(fnref) "=" ["colocated"] ["patchable"] name function-decl-sig
     // function-decl-sig ::= SigRef(sig) | signature
     //
     // The first variant allocates a new signature reference. The second references an existing
@@ -1870,16 +1866,18 @@ impl<'a> Parser<'a> {
 
         let loc = self.loc;
 
-        // function-decl ::= FuncRef(fnref) "=" * ["colocated"] name function-decl-sig
+        // function-decl ::= FuncRef(fnref) "=" * ["colocated"] ["patchable"] name function-decl-sig
         let colocated = self.optional(Token::Identifier("colocated"));
+        // function-decl ::= FuncRef(fnref) "=" ["colocated"] * ["patchable"] name function-decl-sig
+        let patchable = self.optional(Token::Identifier("patchable"));
 
-        // function-decl ::= FuncRef(fnref) "=" ["colocated"] * name function-decl-sig
+        // function-decl ::= FuncRef(fnref) "=" ["colocated"] ["patchable"] * name function-decl-sig
         let name = self.parse_external_name()?;
 
-        // function-decl ::= FuncRef(fnref) "=" ["colocated"] name * function-decl-sig
+        // function-decl ::= FuncRef(fnref) "=" ["colocated"] ["patchable"] name * function-decl-sig
         let data = match self.token() {
             Some(Token::LPar) => {
-                // function-decl ::= FuncRef(fnref) "=" ["colocated"] name * signature
+                // function-decl ::= FuncRef(fnref) "=" ["colocated"] ["patchable"] name * signature
                 let sig = self.parse_signature()?;
                 let sigref = ctx.function.import_signature(sig);
                 ctx.map
@@ -1889,6 +1887,7 @@ impl<'a> Parser<'a> {
                     name,
                     signature: sigref,
                     colocated,
+                    patchable,
                 }
             }
             Some(Token::SigRef(sig_src)) => {
@@ -1904,6 +1903,7 @@ impl<'a> Parser<'a> {
                     name,
                     signature: sig,
                     colocated,
+                    patchable,
                 }
             }
             _ => return err!(self.loc, "expected 'function' or sig«n» in function decl"),
@@ -3879,10 +3879,10 @@ mod tests {
         );
 
         // However, we can specify a different calling convention to be the default.
-        let mut parser = Parser::new(code).with_default_calling_convention(CallConv::Cold);
+        let mut parser = Parser::new(code).with_default_calling_convention(CallConv::PreserveAll);
         assert_eq!(
             parser.parse_function().unwrap().0.signature.call_conv,
-            CallConv::Cold
+            CallConv::PreserveAll
         );
     }
 

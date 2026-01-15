@@ -3,14 +3,22 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime::{
-    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, Func, Instance, Module,
-    Store, StoreContextMut,
+    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameParentResult,
+    Func, Instance, Module, Store, StoreContextMut, Val,
 };
+
+#[test]
+fn debugging_does_not_work_with_signal_based_traps() {
+    let mut config = Config::default();
+    config.guest_debug(true).signals_based_traps(true);
+    let err = Engine::new(&config).expect_err("invalid config should produce an error");
+    assert!(format!("{err:?}").contains("cannot use signals-based traps"));
+}
 
 fn get_module_and_store<C: Fn(&mut Config)>(
     c: C,
     wat: &str,
-) -> anyhow::Result<(Module, Store<()>)> {
+) -> wasmtime::Result<(Module, Store<()>)> {
     let mut config = Config::default();
     config.guest_debug(true);
     config.wasm_exceptions(true);
@@ -24,7 +32,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
     wat: &str,
     c: C,
     f: F,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let (module, mut store) = get_module_and_store(c, wat)?;
     let func = Func::wrap(&mut store, move |caller: Caller<'_, ()>| {
         f(caller);
@@ -41,7 +49,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_two_frames() -> anyhow::Result<()> {
+fn stack_values_two_frames() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     for inlining in [false, true] {
@@ -81,12 +89,12 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
                 assert_eq!(stack.stack(0).unwrap_i32(), 1);
                 assert_eq!(stack.stack(1).unwrap_i32(), 2);
 
-                stack.move_to_parent();
+                assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
                 assert!(!stack.done());
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 55);
 
-                stack.move_to_parent();
+                assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
                 assert!(stack.done());
             },
         )?;
@@ -96,7 +104,7 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_exceptions() -> anyhow::Result<()> {
+fn stack_values_exceptions() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -116,7 +124,7 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert_eq!(stack.stack(0).unwrap_i32(), 42);
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
@@ -124,7 +132,7 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
+fn stack_values_dead_gc_ref() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -143,7 +151,7 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert!(stack.stack(0).unwrap_anyref().is_some());
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
@@ -151,7 +159,7 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn gc_access_during_call() -> anyhow::Result<()> {
+fn gc_access_during_call() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -186,7 +194,7 @@ fn gc_access_during_call() -> anyhow::Result<()> {
                 .unwrap_struct(&stack)
                 .unwrap();
             assert_eq!(s.field(&mut stack, 0).unwrap().unwrap_i32(), 42);
-            stack.move_to_parent();
+            assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
             assert!(stack.done());
         },
     )
@@ -194,7 +202,98 @@ fn gc_access_during_call() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn debug_frames_on_store_with_no_wasm_activation() -> anyhow::Result<()> {
+fn stack_values_two_activations() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let module1 = Module::new(
+        &engine,
+        r#"
+    (module
+      (import "" "host1" (func (param i32 i32) (result i32)))
+      (func (export "main") (result i32)
+        i32.const 1
+        i32.const 2
+        call 0))
+    "#,
+    )?;
+    let module2 = Module::new(
+        &engine,
+        r#"
+    (module
+      (import "" "host2" (func))
+      (func (export "inner") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        call 0
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+
+    let module1_clone = module1.clone();
+    let module2_clone = module2.clone();
+    let host2 = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+        let mut stack = caller.debug_frames().unwrap();
+        assert!(!stack.done());
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 56);
+        assert!(Module::same(stack.module().unwrap(), &module2_clone));
+        assert_eq!(stack.num_locals(), 2);
+        assert_eq!(stack.num_stacks(), 2);
+        assert_eq!(stack.local(0).unwrap_i32(), 1);
+        assert_eq!(stack.local(1).unwrap_i32(), 2);
+        assert_eq!(stack.stack(0).unwrap_i32(), 1);
+        assert_eq!(stack.stack(1).unwrap_i32(), 2);
+        let inner_instance = stack.instance();
+
+        assert_eq!(stack.move_to_parent(), FrameParentResult::NewActivation);
+        assert!(!stack.done());
+
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 56);
+        assert!(Module::same(stack.module().unwrap(), &module1_clone));
+        assert_eq!(stack.num_locals(), 0);
+        assert_eq!(stack.num_stacks(), 2);
+        assert_eq!(stack.stack(0).unwrap_i32(), 1);
+        assert_eq!(stack.stack(1).unwrap_i32(), 2);
+        let outer_instance = stack.instance();
+
+        assert_ne!(inner_instance, outer_instance);
+
+        assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
+        assert!(stack.done());
+    });
+
+    let instance2 = Instance::new(&mut store, &module2, &[Extern::Func(host2)])?;
+    let inner = instance2.get_func(&mut store, "inner").unwrap();
+
+    let host1 = Func::wrap(
+        &mut store,
+        move |mut caller: Caller<'_, ()>, a: i32, b: i32| -> i32 {
+            let mut results = [Val::I32(0)];
+            inner
+                .call(&mut caller, &[Val::I32(a), Val::I32(b)], &mut results[..])
+                .unwrap();
+            results[0].unwrap_i32()
+        },
+    );
+
+    let instance1 = Instance::new(&mut store, &module1, &[Extern::Func(host1)])?;
+    let main = instance1.get_func(&mut store, "main").unwrap();
+
+    let mut results = [Val::I32(0)];
+    main.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn debug_frames_on_store_with_no_wasm_activation() -> wasmtime::Result<()> {
     let mut config = Config::default();
     config.guest_debug(true);
     let engine = Engine::new(&config)?;
@@ -256,7 +355,7 @@ macro_rules! debug_event_checker {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn uncaught_exception_events() -> anyhow::Result<()> {
+async fn uncaught_exception_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -285,9 +384,9 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
               assert!(!stack.done());
               assert_eq!(stack.num_locals(), 1);
               assert_eq!(stack.local(0).unwrap_i32(), 100);
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(!stack.done());
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(stack.done());
           }
         }
@@ -308,7 +407,7 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn caught_exception_events() -> anyhow::Result<()> {
+async fn caught_exception_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -341,9 +440,9 @@ async fn caught_exception_events() -> anyhow::Result<()> {
               assert!(!stack.done());
               assert_eq!(stack.num_locals(), 1);
               assert_eq!(stack.local(0).unwrap_i32(), 100);
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(!stack.done());
-              stack.move_to_parent();
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
               assert!(stack.done());
           }
         }
@@ -363,15 +462,13 @@ async fn caught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn hostcall_trap_events() -> anyhow::Result<()> {
+async fn hostcall_trap_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
         |config| {
             config.async_support(true);
             config.wasm_exceptions(true);
-            // Force hostcall-based traps.
-            config.signals_based_traps(false);
         },
         r#"
     (module
@@ -405,7 +502,7 @@ async fn hostcall_trap_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn hostcall_error_events() -> anyhow::Result<()> {
+async fn hostcall_error_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -435,8 +532,8 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
 
     let do_a_trap = Func::wrap(
         &mut store,
-        |_caller: Caller<'_, ()>| -> anyhow::Result<()> {
-            Err(anyhow::anyhow!("secret error message"))
+        |_caller: Caller<'_, ()>| -> wasmtime::Result<()> {
+            Err(wasmtime::format_err!("secret error message"))
         },
     );
     let instance = Instance::new_async(&mut store, &module, &[Extern::Func(do_a_trap)]).await?;
@@ -445,5 +542,259 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoint_events() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+        },
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let mut stack = store.debug_frames().expect("frame cursor must be available");
+              assert!(!stack.done());
+              assert_eq!(stack.num_locals(), 2);
+              assert_eq!(stack.local(0).unwrap_i32(), 1);
+              assert_eq!(stack.local(1).unwrap_i32(), 2);
+              let (func, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(func.as_u32(), 0);
+              assert_eq!(pc, 0x28);
+              assert_eq!(stack.move_to_parent(), FrameParentResult::SameActivation);
+              assert!(stack.done());
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x28)?;
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 1);
+    assert!(Module::same(&breakpoints[0].module, &module));
+    assert_eq!(breakpoints[0].pc, 0x28);
+
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .remove_breakpoint(&module, 0x28)?;
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1); // Should not have incremented from above.
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // Enable single-step mode (on top of the breakpoint already enabled).
+    assert!(!store.is_single_step());
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    assert!(store.is_single_step());
+
+    debug_event_checker!(
+        D2, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x24);
+          }
+        },
+        {
+          1 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x26);
+          }
+        },
+        {
+          2 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x28);
+          }
+        },
+        {
+          3 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_frames().unwrap();
+              assert!(!stack.done());
+              let (_, pc) = stack.wasm_function_index_and_pc().unwrap();
+              assert_eq!(pc, 0x29);
+          }
+        }
+    );
+
+    let (handler, counter) = D2::new_and_counter();
+    store.set_debug_handler(handler);
+
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+    // Re-enable individual breakpoint.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x28)
+        .unwrap();
+
+    // Now disable single-stepping. The single breakpoint set above
+    // should still remain.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .single_step(false)
+        .unwrap();
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.wasm_exceptions(true);
+            config.compiler_inlining(true);
+            unsafe {
+                config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
+            }
+        },
+        r#"
+    (module
+      (func $f (export "f") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add)
+      
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        call $f))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {}
+        },
+        { 1 ;
+          wasmtime::DebugEvent::Breakpoint => {}
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x2d)?; // `i32.add` in `$f`.
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func_main = instance.get_func(&mut store, "main").unwrap();
+    let func_f = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::I32(0)];
+    // Breakpoint in `$f` should have been hit in `main` even if it
+    // was inlined.
+    func_main
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // Breakpoint in `$f` should be hit when called directly, too.
+    func_f
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 2);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn epoch_events() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+            config.epoch_interruption(true);
+        },
+        r#"
+    (module
+      (func $f (export "f") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::EpochYield => {}
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_async_yield_and_update(1);
+    store.engine().increment_epoch();
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func_f = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::I32(0)];
+    func_f
+        .call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
     Ok(())
 }

@@ -31,10 +31,10 @@ use crate::{
         abi::ArgPair, ty_bits,
     },
 };
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::u32;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<Reg>>;
@@ -83,6 +83,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> BoxCallInfo {
         let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
         let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
@@ -92,7 +93,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
         )
     }
 
@@ -112,7 +113,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, false),
         )
     }
 
@@ -236,7 +237,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= std::u8::MAX as usize {
+        if shiftee_bits <= core::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
         } else {
@@ -247,7 +248,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= std::u8::MAX as usize {
+        if shiftee_bits <= core::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
         } else {

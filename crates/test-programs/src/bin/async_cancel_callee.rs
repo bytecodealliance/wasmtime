@@ -14,7 +14,7 @@ use test_programs::async_::{
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/sleep-with-options")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]sleep-millis"]
+    #[link_name = "[task-return]sleep-millis"]
     fn task_return_sleep_millis();
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -25,7 +25,7 @@ unsafe extern "C" fn task_return_sleep_millis() {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "local:local/sleep")]
 unsafe extern "C" {
-    #[link_name = "[async]sleep-millis"]
+    #[link_name = "sleep-millis"]
     fn sleep_millis(_: u64);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -36,7 +36,7 @@ unsafe fn sleep_millis(_: u64) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "local:local/sleep")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][async]sleep-millis"]
+    #[link_name = "[async-lower]sleep-millis"]
     fn sleep_millis_async(ms: u64) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -80,8 +80,11 @@ enum State {
 
 #[unsafe(export_name = "local:local/backpressure#set-backpressure")]
 unsafe extern "C" fn export_set_backpressure(enabled: bool) {
-    #[expect(deprecated, reason = "will replace with backpressure.inc/dec soon")]
-    wit_bindgen::backpressure_set(enabled);
+    if enabled {
+        wit_bindgen::backpressure_inc();
+    } else {
+        wit_bindgen::backpressure_dec();
+    }
 }
 
 #[unsafe(export_name = "local:local/backpressure#inc-backpressure")]
@@ -94,14 +97,14 @@ unsafe extern "C" fn export_dec_backpressure() {
     wit_bindgen::backpressure_dec();
 }
 
-#[unsafe(export_name = "local:local/sleep#[async]sleep-millis")]
+#[unsafe(export_name = "local:local/sleep#sleep-millis")]
 unsafe extern "C" fn export_sleep_sleep_millis(time_in_millis: u64) {
     unsafe {
         sleep_millis(time_in_millis);
     }
 }
 
-#[unsafe(export_name = "[async-lift]local:local/sleep-with-options#[async]sleep-millis")]
+#[unsafe(export_name = "[async-lift]local:local/sleep-with-options#sleep-millis")]
 unsafe extern "C" fn export_sleep_with_options_sleep_millis(
     time_in_millis: u64,
     on_cancel: u8,
@@ -124,7 +127,7 @@ unsafe extern "C" fn export_sleep_with_options_sleep_millis(
     }
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/sleep-with-options#[async]sleep-millis")]
+#[unsafe(export_name = "[callback][async-lift]local:local/sleep-with-options#sleep-millis")]
 unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
     event0: u32,
     event1: u32,

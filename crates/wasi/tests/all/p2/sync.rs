@@ -30,7 +30,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         command
             .wasi_cli_run()
             .call_run(&mut store)?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
+            .map_err(|()| wasmtime::format_err!("run returned a failure"))?;
     }
     Ok(())
 }
@@ -286,6 +286,10 @@ fn p2_tcp_bind() {
 #[test_log::test]
 fn p2_tcp_connect() {
     run(P2_TCP_CONNECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn p2_tcp_listen() {
+    run(P2_TCP_LISTEN_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn p2_udp_sockopts() {

@@ -7,10 +7,6 @@ use crate::{
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex, Tunables, TypeConvert,
     WasmHeapType, WasmResult, WasmValType,
 };
-use anyhow::Context;
-use anyhow::anyhow;
-use anyhow::ensure;
-use anyhow::{Result, bail};
 use core::str::FromStr;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;
@@ -199,9 +195,6 @@ enum LocalInitializer<'data> {
     ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
-    BackpressureSet {
-        func: ModuleInternedTypeIndex,
-    },
     BackpressureInc {
         func: ModuleInternedTypeIndex,
     },
@@ -609,6 +602,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
 
                     // We could in theory inline these trampolines, so it could
                     // potentially make sense to record that we know this
@@ -869,11 +863,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                         | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
                             bail!("unsupported intrinsic")
-                        }
-                        wasmparser::CanonicalFunction::BackpressureSet => {
-                            let core_type = self.core_func_signature(core_func_index)?;
-                            core_func_index += 1;
-                            LocalInitializer::BackpressureSet { func: core_type }
                         }
                         wasmparser::CanonicalFunction::BackpressureInc => {
                             let core_type = self.core_func_signature(core_func_index)?;
@@ -1212,7 +1201,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     component
                         .get(unchecked_range.start..unchecked_range.end)
                         .ok_or_else(|| {
-                            anyhow!(
+                            format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
                                 unchecked_range.start,
                                 unchecked_range.end,
@@ -1394,7 +1383,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = match export.kind {
-                wasmparser::ExternalKind::Func => {
+                wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
                     let index = FuncIndex::from_u32(export.index);
                     EntityIndex::Function(index)
                 }
@@ -1491,7 +1480,9 @@ impl<'a, 'data> Translator<'a, 'data> {
         name: &'data str,
     ) -> LocalInitializer<'data> {
         match kind {
-            wasmparser::ExternalKind::Func => LocalInitializer::AliasExportFunc(instance, name),
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
+                LocalInitializer::AliasExportFunc(instance, name)
+            }
             wasmparser::ExternalKind::Memory => LocalInitializer::AliasExportMemory(instance, name),
             wasmparser::ExternalKind::Table => LocalInitializer::AliasExportTable(instance, name),
             wasmparser::ExternalKind::Global => LocalInitializer::AliasExportGlobal(instance, name),
@@ -1687,7 +1678,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 kind: &str,
                 import: &str,
                 name: &str,
-            ) -> core::result::Result<(), anyhow::Error> {
+            ) -> Result<()> {
                 let expected_len = expected.len();
                 let actual_len = actual.len();
                 ensure!(

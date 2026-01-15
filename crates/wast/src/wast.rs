@@ -2,14 +2,13 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{Context as _, anyhow, bail};
 use json_from_wast::{Action, Command, Const, WasmFile, WasmFileType};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::Arc;
 use std::thread;
-use wasmtime::*;
+use wasmtime::{error::Context as _, *};
 use wast::lexer::Lexer;
 use wast::parser::{self, ParseBuffer};
 
@@ -172,24 +171,24 @@ impl WastContext {
             return Ok(Export::Core(
                 self.core_linker
                     .get(&mut self.core_store, module, name)
-                    .ok_or_else(|| anyhow!("no item named `{module}::{name}` found"))?,
+                    .ok_or_else(|| format_err!("no item named `{module}::{name}` found"))?,
             ));
         }
 
         let cur = self
             .current
             .as_mut()
-            .ok_or_else(|| anyhow!("no previous instance found"))?;
+            .ok_or_else(|| format_err!("no previous instance found"))?;
         Ok(match cur {
             InstanceKind::Core(i) => Export::Core(
                 i.get_export(&mut self.core_store, name)
-                    .ok_or_else(|| anyhow!("no item named `{name}` found"))?,
+                    .ok_or_else(|| format_err!("no item named `{name}` found"))?,
             ),
             #[cfg(feature = "component-model")]
             InstanceKind::Component(store, i) => {
                 let export = i
                     .get_func(&mut *store, name)
-                    .ok_or_else(|| anyhow!("no func named `{name}` found"))?;
+                    .ok_or_else(|| format_err!("no func named `{name}` found"))?;
                 Export::Component(store, export)
             }
         })
@@ -267,7 +266,7 @@ impl WastContext {
                     drop(replace);
                     let func = export
                         .into_func()
-                        .ok_or_else(|| anyhow!("no function named `{field}`"))?;
+                        .ok_or_else(|| format_err!("no function named `{field}`"))?;
                     let values = args
                         .iter()
                         .map(|v| match v {
@@ -390,7 +389,7 @@ impl WastContext {
             WasmFileType::Text => file
                 .binary_filename
                 .as_ref()
-                .ok_or_else(|| anyhow!("cannot compile module that isn't a valid binary"))?,
+                .ok_or_else(|| format_err!("cannot compile module that isn't a valid binary"))?,
             WasmFileType::Binary => &file.filename,
         };
 
@@ -445,7 +444,7 @@ impl WastContext {
                 let current = self
                     .current
                     .as_ref()
-                    .ok_or(anyhow!("no previous instance"))?;
+                    .ok_or(format_err!("no previous instance"))?;
                 match current {
                     InstanceKind::Core(current) => {
                         self.core_linker
@@ -466,7 +465,7 @@ impl WastContext {
         let global = match self.get_export(instance_name, field)? {
             Export::Core(e) => e
                 .into_global()
-                .ok_or_else(|| anyhow!("no global named `{field}`"))?,
+                .ok_or_else(|| format_err!("no global named `{field}`"))?,
             #[cfg(feature = "component-model")]
             Export::Component(..) => bail!("no global named `{field}`"),
         };
@@ -562,7 +561,8 @@ impl WastContext {
 
         let mut ast = json_from_wast::Opts::default()
             .dwarf(self.generate_dwarf)
-            .convert(filename, wast, ast)?;
+            .convert(filename, wast, ast)
+            .to_wasmtime_result()?;
         let modules_by_filename = Arc::get_mut(&mut self.modules_by_filename).unwrap();
         for (name, bytes) in ast.wasms.drain(..) {
             let prev = modules_by_filename.insert(name, bytes);
@@ -651,7 +651,7 @@ impl WastContext {
                     .as_deref()
                     .and_then(|n| self.modules.get(n))
                     .cloned()
-                    .ok_or_else(|| anyhow!("no module named {module:?}"))?;
+                    .ok_or_else(|| format_err!("no module named {module:?}"))?;
                 self.module(instance.as_deref(), &module)?;
             }
             Register { line: _, name, as_ } => {
@@ -788,7 +788,7 @@ impl WastContext {
             Wait { thread, .. } => {
                 threads
                     .remove(&thread[..])
-                    .ok_or_else(|| anyhow!("no thread named `{thread}`"))?
+                    .ok_or_else(|| format_err!("no thread named `{thread}`"))?
                     .join()
                     .unwrap()?;
             }

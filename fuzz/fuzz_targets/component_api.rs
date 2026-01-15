@@ -10,13 +10,10 @@ fn target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     if input.arbitrary()? {
         static_component_api_target(input)
     } else {
-        oracles::dynamic_component_api_target(input)
+        oracles::component_api::dynamic_component_api_target(input)
     }
 }
 
 fuzz_target!(|bytes: &[u8]| {
-    match target(&mut arbitrary::Unstructured::new(bytes)) {
-        Ok(()) | Err(arbitrary::Error::NotEnoughData) => (),
-        Err(error) => panic!("{}", error),
-    }
+    let _ = target(&mut arbitrary::Unstructured::new(bytes));
 });

@@ -8,8 +8,9 @@ use crate::ir::ExternalName;
 use crate::isa::s390x::S390xBackend;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::{
-    CallInstDest, Cond, Inst as MInst, LaneOrder, MemArg, RegPair, ReturnCallInfo, SymbolReloc,
-    UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair, gpr, stack_reg, writable_gpr, zero_reg,
+    CallInstDest, Cond, Inst as MInst, LaneOrder, MemArg, RegPair, ReturnCallInfo, SImm20,
+    SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair, gpr, stack_reg,
+    writable_gpr, zero_reg,
 };
 use crate::machinst::isle::*;
 use crate::machinst::{CallInfo, MachLabel, Reg, TryCallInfo, non_writable_value_regs};
@@ -23,10 +24,10 @@ use crate::{
         ArgPair, CallArgList, CallRetList, InstOutput, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::cell::Cell;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::cell::Cell;
-use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo<CallInstDest>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<CallInstDest>>;
@@ -163,6 +164,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> BoxCallInfo {
         let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
         let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
@@ -177,7 +179,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
         )
     }
 
@@ -630,7 +632,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn fcvt_to_sint_lb32(&mut self, size: u8) -> u64 {
         let lb = (-2.0_f32).powi((size - 1).into());
-        std::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits()) as u64
+        core::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits()) as u64
     }
 
     #[inline]
@@ -641,7 +643,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn fcvt_to_sint_lb64(&mut self, size: u8) -> u64 {
         let lb = (-2.0_f64).powi((size - 1).into());
-        std::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits())
+        core::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits())
     }
 
     #[inline]
@@ -680,12 +682,48 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn memarg_imm_from_offset(&mut self, imm: Offset32) -> Option<SImm20> {
+        SImm20::maybe_from_i64(i64::from(imm))
+    }
+
+    #[inline]
+    fn memarg_imm_from_offset_plus_bias(&mut self, imm: Offset32, bias: u8) -> Option<SImm20> {
+        let final_offset = i64::from(imm) + bias as i64;
+        SImm20::maybe_from_i64(final_offset)
+    }
+
+    #[inline]
     fn memarg_reg_plus_reg(&mut self, x: Reg, y: Reg, bias: u8, flags: MemFlags) -> MemArg {
         MemArg::BXD12 {
             base: x,
             index: y,
             disp: UImm12::maybe_from_u64(bias as u64).unwrap(),
             flags,
+        }
+    }
+
+    #[inline]
+    fn memarg_reg_plus_reg_plus_off(
+        &mut self,
+        x: Reg,
+        y: Reg,
+        offset: &SImm20,
+        flags: MemFlags,
+    ) -> MemArg {
+        if let Some(imm) = UImm12::maybe_from_simm20(*offset) {
+            MemArg::BXD12 {
+                base: x,
+                index: y,
+                disp: imm,
+                flags,
+            }
+        } else {
+            MemArg::BXD20 {
+                base: x,
+                index: y,
+                disp: *offset,
+                flags,
+            }
         }
     }
 

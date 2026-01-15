@@ -99,7 +99,7 @@ pub struct VerifierError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierError {}
+impl core::error::Error for VerifierError {}
 
 impl Display for VerifierError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -178,7 +178,7 @@ pub struct VerifierErrors(pub Vec<VerifierError>);
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierErrors {}
+impl core::error::Error for VerifierErrors {}
 
 impl VerifierErrors {
     /// Return a new `VerifierErrors` struct.
@@ -587,10 +587,14 @@ impl<'a> Verifier<'a> {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {
-                func_ref, ref args, ..
+                opcode,
+                func_ref,
+                ref args,
+                ..
             } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
+                self.verify_callee_patchability(inst, func_ref, opcode, errors)?;
             }
             CallIndirect {
                 sig_ref, ref args, ..
@@ -946,6 +950,44 @@ impl<'a> Verifier<'a> {
                 format!(
                     "calling convention `{callee_call_conv}` of callee does not support exceptions"
                 ),
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn verify_callee_patchability(
+        &self,
+        inst: Inst,
+        func_ref: FuncRef,
+        opcode: Opcode,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        let ir::ExtFuncData {
+            patchable,
+            colocated,
+            signature,
+            name: _,
+        } = self.func.dfg.ext_funcs[func_ref];
+        let signature = &self.func.dfg.signatures[signature];
+        if patchable && (opcode == Opcode::ReturnCall || opcode == Opcode::ReturnCallIndirect) {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable funcref cannot be used in a return_call".to_string(),
+            ))?;
+        }
+        if patchable && !colocated {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call to non-colocated function".to_string(),
+            ))?;
+        }
+        if patchable && !signature.returns.is_empty() {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call cannot occur to a function with return values".to_string(),
             ))?;
         }
         Ok(())

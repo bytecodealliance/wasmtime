@@ -1,4 +1,3 @@
-use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
@@ -6,6 +5,7 @@ use wasmtime::component::__internal::{
 };
 use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
 use wasmtime::{AsContextMut, Config, Engine};
+use wasmtime_environ::prelude::*;
 
 pub trait TypedFuncExt<P, R> {
     fn call_and_post_return(&self, store: impl AsContextMut<Data: Send>, params: P) -> Result<R>;

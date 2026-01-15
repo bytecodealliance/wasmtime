@@ -105,8 +105,6 @@ pub struct Foo {
     interface1: exports::my::dep0_2_0::a::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl FooIndices {
         /// Creates a new copy of `FooIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -201,7 +199,7 @@ pub mod my {
         #[allow(clippy::all)]
         pub mod a {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -243,7 +241,7 @@ pub mod my {
         #[allow(clippy::all)]
         pub mod a {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -288,7 +286,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod a {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
@@ -310,7 +309,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "my:dep/a@0.1.0")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
@@ -319,7 +318,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `my:dep/a@0.1.0` does \
                     not have export `{name}`"
                                     )
@@ -370,7 +369,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod a {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     x: wasmtime::component::Func,
                 }
@@ -392,7 +392,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "my:dep/a@0.2.0")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
@@ -401,7 +401,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `my:dep/a@0.2.0` does \
                     not have export `{name}`"
                                     )

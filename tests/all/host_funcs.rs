@@ -1,5 +1,5 @@
-use anyhow::bail;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasmtime::bail;
 use wasmtime::*;
 
 #[test]

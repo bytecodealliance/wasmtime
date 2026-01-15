@@ -38,7 +38,6 @@ wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
 wasm-compose = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
-anyhow = { workspace = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
 log = { workspace = true }
@@ -156,6 +155,9 @@ default = [
   'debug',
   'compile-time-builtins',
 ]
+
+# Enables conversion helpers between `anyhow::Error` and `wasmtime::Error`.
+anyhow = ["wasmtime-environ/anyhow"]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
@@ -398,7 +400,7 @@ custom-sync-primitives = []
 # Off-by-default support to profile the Pulley interpreter. This has a
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
-profile-pulley = ['pulley', 'profiling', 'pulley-interpreter/profile']
+profile-pulley = ['anyhow', 'pulley', 'profiling', 'pulley-interpreter/profile']
 
 # Enables support for the Component Model Async ABI, along with `future`,
 # `stream`, and `error-context` types.
@@ -424,4 +426,4 @@ debug = [
 ]
 
 # Enables support for defining compile-time builtins.
-compile-time-builtins = ['dep:wasm-compose', 'dep:tempfile']
+compile-time-builtins = ['anyhow', 'dep:wasm-compose', 'dep:tempfile']

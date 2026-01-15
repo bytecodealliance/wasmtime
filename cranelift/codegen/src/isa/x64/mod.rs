@@ -16,10 +16,10 @@ use crate::machinst::{
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use crate::{Final, MachBufferFinalized};
+use alloc::string::String;
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::Triple;
 
 mod abi;
@@ -28,6 +28,7 @@ mod lower;
 mod pcc;
 pub mod settings;
 
+#[cfg(feature = "unwind")]
 pub use inst::unwind::systemv::create_cie;
 
 /// An X64 backend.
@@ -217,6 +218,7 @@ pub fn emit_unwind_info(
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
     use crate::isa::unwind::{UnwindInfo, UnwindInfoKind};
     Ok(match kind {
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::SystemV => {
             let mapper = self::inst::unwind::systemv::RegisterMapper;
             Some(UnwindInfo::SystemV(
@@ -227,6 +229,7 @@ pub fn emit_unwind_info(
                 )?,
             ))
         }
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::Windows => Some(UnwindInfo::WindowsX64(
             crate::isa::unwind::winx64::create_unwind_info_from_insts::<
                 self::inst::unwind::winx64::RegisterMapper,

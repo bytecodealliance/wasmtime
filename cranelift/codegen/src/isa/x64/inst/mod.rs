@@ -11,11 +11,13 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::fmt::{self, Write};
 use core::slice;
 use cranelift_assembler_x64 as asm;
 use smallvec::{SmallVec, smallvec};
-use std::fmt::{self, Write};
-use std::string::{String, ToString};
 
 pub mod args;
 mod emit;
@@ -58,7 +60,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(48, std::mem::size_of::<Inst>());
+    assert_eq!(48, core::mem::size_of::<Inst>());
 }
 
 impl Inst {
@@ -1382,7 +1384,16 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop(std::cmp::min(preferred_size, 9) as u8)
+        Inst::nop(core::cmp::min(preferred_size, 9) as u8)
+    }
+
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![
+            // Standard 1-byte NOP.
+            vec![0x90],
+            // 5-byte NOP useful for patching out patchable calls.
+            vec![0x0f, 0x1f, 0x44, 0x00, 0x00],
+        ]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

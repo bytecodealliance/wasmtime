@@ -14,7 +14,6 @@
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
 use crate::CompiledFunction;
-use anyhow::Result;
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
 use cranelift_control::ControlPlane;
@@ -23,6 +22,7 @@ use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::ops::Range;
+use wasmtime_environ::error::Result;
 use wasmtime_environ::{Compiler, TripleExt};
 use wasmtime_environ::{FuncKey, obj};
 
@@ -218,9 +218,12 @@ impl<'a> ModuleTextBuilder<'a> {
     ///
     /// Note that this will also write out the unwind information sections if
     /// necessary.
-    pub fn finish(mut self) {
+    pub fn finish(mut self, postprocess_text: impl FnOnce(&mut [u8])) {
         // Finish up the text section now that we're done adding functions.
-        let text = self.text.finish(&mut self.ctrl_plane);
+        let mut text = self.text.finish(&mut self.ctrl_plane);
+
+        postprocess_text(&mut text[..]);
+
         self.obj
             .section_mut(self.text_section)
             .set_data(text, text_align(self.compiler));

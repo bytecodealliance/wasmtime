@@ -3,8 +3,8 @@
 //! Primarily used to run WebAssembly modules.
 //! See `wasmtime --help` for usage.
 
-use anyhow::Result;
 use clap::Parser;
+use wasmtime::Result;
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -167,6 +167,7 @@ impl CompletionCommand {
     }
 }
 
+#[allow(unreachable_code, reason = "empty enum with all features disabled")]
 fn main() -> Result<()> {
     return Wasmtime::parse().execute();
 }

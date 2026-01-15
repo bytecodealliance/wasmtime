@@ -1,10 +1,12 @@
 //! Common functionality shared between command implementations.
 
-use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
-use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
+use wasmtime::{
+    Engine, Module, Precompiled, Result, StoreLimits, StoreLimitsBuilder, bail,
+    error::Context as _, format_err,
+};
 use wasmtime_cli_flags::{CommonOptions, opt::WasmtimeOptionValue};
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -285,7 +287,7 @@ impl RunCommon {
                 None => match std::env::var_os(key) {
                     Some(val) => val
                         .into_string()
-                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
+                        .map_err(|_| format_err!("environment variable `{key}` not valid utf-8"))?,
                     None => {
                         // leave the env var un-set in the guest
                         continue;

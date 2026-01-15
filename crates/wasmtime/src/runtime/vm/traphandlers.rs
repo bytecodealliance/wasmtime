@@ -21,7 +21,7 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
-#[cfg(feature = "debug")]
+#[cfg(all(feature = "debug", feature = "gc"))]
 use crate::store::AsStoreOpaque;
 use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
@@ -32,7 +32,7 @@ use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
 #[cfg(feature = "debug")]
-pub(crate) use self::backtrace::CurrentActivationBacktrace;
+pub(crate) use self::backtrace::{FrameOrHostCode, StoreBacktrace};
 #[cfg(feature = "gc")]
 pub use wasmtime_unwinder::Frame;
 
@@ -181,6 +181,7 @@ macro_rules! host_result_no_catch {
         $(
             impl HostResult for $t {
                 type Abi = $t;
+                #[allow(unreachable_code, reason = "some types uninhabited on some platforms")]
                 fn maybe_catch_unwind(
                     store: &mut dyn VMStore,
                     f: impl FnOnce(&mut dyn VMStore) -> $t,
@@ -830,6 +831,7 @@ impl CallThreadState {
         #[cfg(feature = "debug")]
         {
             let result = match &unwind {
+                #[cfg(feature = "gc")]
                 UnwindState::UnwindToWasm(_) => {
                     assert!(store.as_store_opaque().has_pending_exception());
                     let exn = store
@@ -838,12 +840,11 @@ impl CallThreadState {
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
                 }
-
+                #[cfg(feature = "gc")]
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::Exception),
                     ..
                 } => {
-                    use crate::store::AsStoreOpaque;
                     let exn = store
                         .as_store_opaque()
                         .pending_exception_owned_rooted()

@@ -52,12 +52,19 @@ pub struct FrameTable<'a> {
     progpoint_pcs: &'a [U32Bytes<LittleEndian>],
     progpoint_descriptor_offsets: &'a [U32Bytes<LittleEndian>],
     progpoint_descriptor_data: &'a [U32Bytes<LittleEndian>],
+
+    breakpoint_pcs: &'a [U32Bytes<LittleEndian>],
+    breakpoint_patch_offsets: &'a [U32Bytes<LittleEndian>],
+    breakpoint_patch_data_ends: &'a [U32Bytes<LittleEndian>],
+    breakpoint_patch_data: &'a [u8],
+
+    original_text: &'a [u8],
 }
 
 impl<'a> FrameTable<'a> {
     /// Parse a frame table section from a byte-slice as produced by
     /// [`crate::compile::frame_table::FrameTableBuilder`].
-    pub fn parse(data: &'a [u8]) -> anyhow::Result<FrameTable<'a>> {
+    pub fn parse(data: &'a [u8], original_text: &'a [u8]) -> anyhow::Result<FrameTable<'a>> {
         let mut data = Bytes(data);
         let num_frame_descriptors = data
             .read::<U32Bytes<LittleEndian>>()
@@ -68,6 +75,11 @@ impl<'a> FrameTable<'a> {
             .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor count prefix"))?;
         let num_progpoint_descriptors =
             usize::try_from(num_progpoint_descriptors.get(LittleEndian))?;
+        let num_breakpoints = data
+            .read::<U32Bytes<LittleEndian>>()
+            .map_err(|_| anyhow::anyhow!("Unable to read breakpoint count prefix"))?;
+        let num_breakpoints = usize::try_from(num_breakpoints.get(LittleEndian))?;
+
         let frame_descriptor_pool_length = data
             .read::<U32Bytes<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read frame descriptor pool length"))?;
@@ -78,6 +90,11 @@ impl<'a> FrameTable<'a> {
             .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor pool length"))?;
         let progpoint_descriptor_pool_length =
             usize::try_from(progpoint_descriptor_pool_length.get(LittleEndian))?;
+        let breakpoint_patch_pool_length = data
+            .read::<U32Bytes<LittleEndian>>()
+            .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch pool length"))?;
+        let breakpoint_patch_pool_length =
+            usize::try_from(breakpoint_patch_pool_length.get(LittleEndian))?;
 
         let (frame_descriptor_ranges, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data.0, 2 * num_frame_descriptors)
@@ -92,16 +109,29 @@ impl<'a> FrameTable<'a> {
         let (progpoint_descriptor_offsets, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_progpoint_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor offset slice"))?;
+        let (breakpoint_pcs, data) =
+            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+                .map_err(|_| anyhow::anyhow!("Unable to read breakpoint PC slice"))?;
+        let (breakpoint_patch_offsets, data) =
+            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+                .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch offsets slice"))?;
+        let (breakpoint_patch_data_ends, data) =
+            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+                .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch data ends slice"))?;
 
         let (frame_descriptor_data, data) = data
             .split_at_checked(frame_descriptor_pool_length)
             .ok_or_else(|| anyhow::anyhow!("Unable to read frame descriptor pool"))?;
 
-        let (progpoint_descriptor_data, _) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(
+        let (progpoint_descriptor_data, data) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(
             data,
             progpoint_descriptor_pool_length,
         )
         .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor pool"))?;
+
+        let (breakpoint_patch_data, _) = data
+            .split_at_checked(breakpoint_patch_pool_length)
+            .ok_or_else(|| anyhow::anyhow!("Unable to read breakpoint patch pool"))?;
 
         Ok(FrameTable {
             frame_descriptor_ranges,
@@ -110,6 +140,11 @@ impl<'a> FrameTable<'a> {
             progpoint_pcs,
             progpoint_descriptor_offsets,
             progpoint_descriptor_data,
+            breakpoint_pcs,
+            breakpoint_patch_offsets,
+            breakpoint_patch_data_ends,
+            breakpoint_patch_data,
+            original_text,
         })
     }
 
@@ -206,6 +241,85 @@ impl<'a> FrameTable<'a> {
             Some((wasm_pc, frame_descriptor, stack_shape))
         })
     }
+
+    /// For a given breakpoint index, return the patch offset in text,
+    /// the patch data, and the original data.
+    fn breakpoint_patch(&self, i: usize) -> FrameTableBreakpointData<'_> {
+        let patch_pool_start = if i == 0 {
+            0
+        } else {
+            self.breakpoint_patch_data_ends[i - 1].get(LittleEndian)
+        };
+        let patch_pool_end = self.breakpoint_patch_data_ends[i].get(LittleEndian);
+        let patch_pool_start = usize::try_from(patch_pool_start).unwrap();
+        let patch_pool_end = usize::try_from(patch_pool_end).unwrap();
+        let len = patch_pool_end - patch_pool_start;
+        let offset = self.breakpoint_patch_offsets[i].get(LittleEndian);
+        let offset = usize::try_from(offset).unwrap();
+        let original_data = &self.original_text[offset..offset + len];
+        FrameTableBreakpointData {
+            offset,
+            enable: &self.breakpoint_patch_data[patch_pool_start..patch_pool_end],
+            disable: original_data,
+        }
+    }
+
+    /// Find a list of breakpoint patches for a given Wasm PC.
+    pub fn lookup_breakpoint_patches_by_pc(
+        &self,
+        pc: u32,
+    ) -> impl Iterator<Item = FrameTableBreakpointData<'_>> + '_ {
+        // Find *some* entry with a matching Wasm PC. Note that there
+        // may be multiple entries for one PC.
+        let range = match self
+            .breakpoint_pcs
+            .binary_search_by_key(&pc, |p| p.get(LittleEndian))
+        {
+            Ok(mut i) => {
+                // Scan backward to first index with this PC.
+                while i > 0 && self.breakpoint_pcs[i - 1].get(LittleEndian) == pc {
+                    i -= 1;
+                }
+
+                // Scan forward to find the end of the range.
+                let mut end = i;
+                while end < self.breakpoint_pcs.len()
+                    && self.breakpoint_pcs[end].get(LittleEndian) == pc
+                {
+                    end += 1;
+                }
+
+                i..end
+            }
+            Err(_) => 0..0,
+        };
+
+        range.map(|i| self.breakpoint_patch(i))
+    }
+
+    /// Return an iterator over all breakpoint patches.
+    ///
+    /// Returned tuples are (Wasm PC, breakpoint data).
+    pub fn breakpoint_patches(
+        &self,
+    ) -> impl Iterator<Item = (u32, FrameTableBreakpointData<'_>)> + '_ {
+        self.breakpoint_pcs.iter().enumerate().map(|(i, wasm_pc)| {
+            let wasm_pc = wasm_pc.get(LittleEndian);
+            let data = self.breakpoint_patch(i);
+            (wasm_pc, data)
+        })
+    }
+}
+
+/// Data describing how to patch code to enable or disable one
+/// breakpoint.
+pub struct FrameTableBreakpointData<'a> {
+    /// Offset in the code image's text section.
+    pub offset: usize,
+    /// Code bytes to patch in to enable the breakpoint.
+    pub enable: &'a [u8],
+    /// Code bytes to patch in to disable the breakpoint.
+    pub disable: &'a [u8],
 }
 
 /// An instruction position for a program point.

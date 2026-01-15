@@ -9,45 +9,49 @@ use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{Pollable, subscribe};
 
-impl From<crate::clocks::Datetime> for Datetime {
-    fn from(
+impl TryFrom<crate::clocks::Datetime> for Datetime {
+    type Error = crate::clocks::DatetimeError;
+
+    fn try_from(
         crate::clocks::Datetime {
             seconds,
             nanoseconds,
         }: crate::clocks::Datetime,
-    ) -> Self {
-        Self {
-            seconds,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            seconds: seconds.try_into()?,
             nanoseconds,
-        }
+        })
     }
 }
 
-impl From<Datetime> for crate::clocks::Datetime {
-    fn from(
+impl TryFrom<Datetime> for crate::clocks::Datetime {
+    type Error = crate::clocks::DatetimeError;
+
+    fn try_from(
         Datetime {
             seconds,
             nanoseconds,
         }: Datetime,
-    ) -> Self {
-        Self {
-            seconds,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            seconds: seconds.try_into()?,
             nanoseconds,
-        }
+        })
     }
 }
 
 impl TryFrom<SystemTime> for Datetime {
-    type Error = wasmtime::Error;
+    type Error = crate::clocks::DatetimeError;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
         let time = crate::clocks::Datetime::try_from(time)?;
-        Ok(time.into())
+        time.try_into()
     }
 }
 
 impl wall_clock::Host for WasiClocksCtxView<'_> {
-    fn now(&mut self) -> anyhow::Result<Datetime> {
+    fn now(&mut self) -> wasmtime::Result<Datetime> {
         let now = self.ctx.wall_clock.now();
         Ok(Datetime {
             seconds: now.as_secs(),
@@ -55,7 +59,7 @@ impl wall_clock::Host for WasiClocksCtxView<'_> {
         })
     }
 
-    fn resolution(&mut self) -> anyhow::Result<Datetime> {
+    fn resolution(&mut self) -> wasmtime::Result<Datetime> {
         let res = self.ctx.wall_clock.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
@@ -67,7 +71,7 @@ impl wall_clock::Host for WasiClocksCtxView<'_> {
 fn subscribe_to_duration(
     table: &mut wasmtime::component::ResourceTable,
     duration: tokio::time::Duration,
-) -> anyhow::Result<Resource<DynPollable>> {
+) -> wasmtime::Result<Resource<DynPollable>> {
     let sleep = if duration.is_zero() {
         table.push(Deadline::Past)?
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
@@ -84,15 +88,15 @@ fn subscribe_to_duration(
 }
 
 impl monotonic_clock::Host for WasiClocksCtxView<'_> {
-    fn now(&mut self) -> anyhow::Result<Instant> {
+    fn now(&mut self) -> wasmtime::Result<Instant> {
         Ok(self.ctx.monotonic_clock.now())
     }
 
-    fn resolution(&mut self) -> anyhow::Result<Instant> {
+    fn resolution(&mut self) -> wasmtime::Result<Instant> {
         Ok(self.ctx.monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<DynPollable>> {
+    fn subscribe_instant(&mut self, when: Instant) -> wasmtime::Result<Resource<DynPollable>> {
         let clock_now = self.ctx.monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
@@ -105,7 +109,7 @@ impl monotonic_clock::Host for WasiClocksCtxView<'_> {
     fn subscribe_duration(
         &mut self,
         duration: WasiDuration,
-    ) -> anyhow::Result<Resource<DynPollable>> {
+    ) -> wasmtime::Result<Resource<DynPollable>> {
         subscribe_to_duration(self.table, Duration::from_nanos(duration))
     }
 }

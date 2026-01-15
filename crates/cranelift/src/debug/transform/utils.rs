@@ -2,9 +2,9 @@ use crate::debug::Reader;
 
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
-use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{AttributeValue, DebuggingInformationEntry, UnitRef, write};
+use wasmtime_environ::error::Error;
 
 pub(crate) fn append_vmctx_info(
     comp_unit: &mut write::Unit,

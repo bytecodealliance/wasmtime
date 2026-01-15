@@ -1,5 +1,5 @@
 use crate::generators::Stacks;
-use anyhow::bail;
+use wasmtime::bail;
 use wasmtime::*;
 
 /// Run the given `Stacks` test case and assert that the host's view of the Wasm
@@ -138,30 +138,15 @@ fn assert_stack_matches(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arbitrary::{Arbitrary, Unstructured};
-    use rand::prelude::*;
+    use crate::test::gen_until_pass;
 
     const TARGET_STACK_DEPTH: usize = 10;
 
     #[test]
     fn smoke_test() {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 2048];
-
-        for _ in 0..1024 {
-            rng.fill_bytes(&mut buf);
-            let u = Unstructured::new(&buf);
-            if let Ok(stacks) = Stacks::arbitrary_take_rest(u) {
-                let max_stack_depth = check_stacks(stacks);
-                if max_stack_depth >= TARGET_STACK_DEPTH {
-                    return;
-                }
-            }
-        }
-
-        panic!(
-            "never generated a `Stacks` test case that reached {TARGET_STACK_DEPTH} \
-             deep stack frames",
-        );
+        gen_until_pass(|stacks: Stacks, _u| {
+            let max_stack_depth = check_stacks(stacks);
+            Ok(max_stack_depth >= TARGET_STACK_DEPTH)
+        });
     }
 }

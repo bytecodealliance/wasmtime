@@ -22,10 +22,10 @@ use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, VCodeConstant,
     VCodeConstantData,
 };
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_assembler_x64 as asm;
 use regalloc2::PReg;
-use std::boxed::Box;
 
 /// Type representing out-of-line data for calls. This type optional because the
 /// call instruction is also used by Winch to emit calls, but the
@@ -83,6 +83,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> BoxCallInfo {
         let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
         let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
@@ -92,7 +93,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
         )
     }
 
@@ -112,7 +113,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest.clone(), uses, defs, try_call_info),
+                .gen_call_info(sig, dest.clone(), uses, defs, try_call_info, false),
         )
     }
 

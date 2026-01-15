@@ -6,11 +6,11 @@ use crate::sockets::util::{is_valid_address_family, is_valid_remote_address};
 use crate::sockets::{
     MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily, UdpSocket, WasiSocketsCtxView,
 };
-use anyhow::anyhow;
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
+use wasmtime::format_err;
 use wasmtime_wasi_io::poll::DynPollable;
 
 impl udp::Host for WasiSocketsCtxView<'_> {}
@@ -52,7 +52,9 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
             .any(|c| c.is::<IncomingDatagramStream>() || c.is::<OutgoingDatagramStream>());
 
         if has_active_streams {
-            return Err(SocketError::trap(anyhow!("UDP streams not dropped yet")));
+            return Err(SocketError::trap(format_err!(
+                "UDP streams not dropped yet"
+            )));
         }
 
         let socket = self.table.get_mut(&this)?;
@@ -79,7 +81,7 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
                 return Err(ErrorCode::InvalidState.into());
             };
             check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
-            socket.connect(connect_addr)?;
+            socket.connect_p2(connect_addr)?;
         }
 
         let incoming_stream = IncomingDatagramStream {
@@ -113,7 +115,7 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     fn address_family(
         &mut self,
         this: Resource<udp::UdpSocket>,
-    ) -> Result<IpAddressFamily, anyhow::Error> {
+    ) -> Result<IpAddressFamily, wasmtime::Error> {
         let socket = self.table.get(&this)?;
         Ok(socket.address_family().into())
     }
@@ -159,11 +161,11 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn subscribe(&mut self, this: Resource<UdpSocket>) -> anyhow::Result<Resource<DynPollable>> {
+    fn subscribe(&mut self, this: Resource<UdpSocket>) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
-    fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), wasmtime::Error> {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = self.table.delete(this)?;
@@ -243,11 +245,11 @@ impl udp::HostIncomingDatagramStream for WasiSocketsCtxView<'_> {
     fn subscribe(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
-    ) -> anyhow::Result<Resource<DynPollable>> {
+    ) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
-    fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), wasmtime::Error> {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = self.table.delete(this)?;
@@ -337,12 +339,12 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
                 stream.send_state = SendState::Idle;
             }
             SendState::Permitted(_) => {
-                return Err(SocketError::trap(anyhow::anyhow!(
+                return Err(SocketError::trap(wasmtime::format_err!(
                     "unpermitted: argument exceeds permitted size"
                 )));
             }
             SendState::Idle | SendState::Waiting => {
-                return Err(SocketError::trap(anyhow::anyhow!(
+                return Err(SocketError::trap(wasmtime::format_err!(
                     "unpermitted: must call check-send first"
                 )));
             }
@@ -377,11 +379,11 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
     fn subscribe(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
-    ) -> anyhow::Result<Resource<DynPollable>> {
+    ) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
-    fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), wasmtime::Error> {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = self.table.delete(this)?;

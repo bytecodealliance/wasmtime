@@ -6,15 +6,35 @@ use crate::store::{StoreData, StoreId, StoreOpaque};
 use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
     instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
+
+    /// Whether an instance belonging to this store has trapped.
+    trapped: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ComponentInstanceId(u32);
 wasmtime_environ::entity_impl!(ComponentInstanceId);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct RuntimeInstance {
+    pub instance: ComponentInstanceId,
+    pub index: RuntimeComponentInstanceIndex,
+}
+
+impl StoreOpaque {
+    pub(crate) fn trapped(&self) -> bool {
+        self.store_data().components.trapped
+    }
+
+    pub(crate) fn set_trapped(&mut self) {
+        self.store_data_mut().components.trapped = true;
+    }
+}
 
 impl StoreData {
     pub(crate) fn push_component_instance(
@@ -49,7 +69,7 @@ impl ComponentStoreData {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn assert_guest_tables_empty(&mut self) {
+    pub(crate) fn assert_instance_states_empty(&mut self) {
         for (_, instance) in self.instances.iter_mut() {
             let Some(instance) = instance.as_mut() else {
                 continue;
@@ -58,10 +78,11 @@ impl ComponentStoreData {
             assert!(
                 instance
                     .get_mut()
-                    .guest_tables()
+                    .instance_states()
                     .0
-                    .iter()
-                    .all(|(_, table)| table.is_empty())
+                    .iter_mut()
+                    .all(|(_, state)| state.handle_table().is_empty()
+                        && state.concurrent_state().pending_is_empty())
             );
         }
     }
@@ -83,6 +104,14 @@ impl StoreData {
 impl StoreOpaque {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
         self.store_data().component_instance(id)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_instance_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> Pin<&mut ComponentInstance> {
+        self.store_data_mut().component_instance_mut(id)
     }
 }
 
@@ -143,6 +172,25 @@ impl StoreComponentInstanceId {
     /// Panics if `self` does not belong to `store`.
     pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut ComponentInstance> {
         self.from_data_get_mut(store.store_data_mut())
+    }
+
+    /// Return a mutable `ComponentInstance` and a `ModuleRegistry`
+    /// from the store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn get_mut_and_registry<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (
+        Pin<&'a mut ComponentInstance>,
+        &'a crate::module::ModuleRegistry,
+    ) {
+        let (store_data, registry) = store.store_data_mut_and_registry();
+        let instance = self.from_data_get_mut(store_data);
+        (instance, registry)
     }
 
     /// Same as `get_mut`, but borrows less of a store.

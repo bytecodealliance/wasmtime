@@ -115,7 +115,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 usize::try_from(tunables.memory_guard_size).unwrap(),
             )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
-            .map_err(|e| anyhow!(e))
+            .map_err(|e| format_err!(e))
     }
 }
 
@@ -137,7 +137,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
     }
 
     fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             module.memories.len() == 1,
             "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
         );

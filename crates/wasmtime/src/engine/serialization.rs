@@ -75,18 +75,18 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
 
     let data = obj
         .section_by_name(obj::ELF_WASM_ENGINE)
-        .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
+        .ok_or_else(|| format_err!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
         .data()
         .map_err(obj::ObjectCrateErrorWrapper)?;
     let (first, data) = data
         .split_first()
-        .ok_or_else(|| anyhow!("invalid engine section"))?;
+        .ok_or_else(|| format_err!("invalid engine section"))?;
     if *first != VERSION {
         bail!("mismatched version in engine section");
     }
     let (len, data) = data
         .split_first()
-        .ok_or_else(|| anyhow!("invalid engine section"))?;
+        .ok_or_else(|| format_err!("invalid engine section"))?;
     let len = usize::from(*len);
     let (version, data) = if data.len() < len + 1 {
         bail!("engine section too small")
@@ -179,14 +179,15 @@ pub struct Metadata<'a> {
 
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub fn new(engine: &Engine) -> Metadata<'static> {
-        Metadata {
-            target: engine.compiler().triple().to_string(),
-            shared_flags: engine.compiler().flags(),
-            isa_flags: engine.compiler().isa_flags(),
+    pub fn new(engine: &Engine) -> Result<Metadata<'static>> {
+        let compiler = engine.try_compiler()?;
+        Ok(Metadata {
+            target: compiler.triple().to_string(),
+            shared_flags: compiler.flags(),
+            isa_flags: compiler.isa_flags(),
             tunables: engine.tunables().clone(),
             features: engine.features().bits(),
-        }
+        })
     }
 
     fn check_compatible(mut self, engine: &Engine) -> Result<()> {
@@ -201,7 +202,7 @@ impl Metadata<'_> {
     fn check_triple(&self, engine: &Engine) -> Result<()> {
         let engine_target = engine.target();
         let module_target =
-            target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
+            target_lexicon::Triple::from_str(&self.target).map_err(|e| format_err!(e))?;
 
         if module_target.architecture != engine_target.architecture {
             bail!(
@@ -224,7 +225,7 @@ impl Metadata<'_> {
         for (name, val) in self.shared_flags.iter() {
             engine
                 .check_compatible_with_shared_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())
@@ -234,7 +235,7 @@ impl Metadata<'_> {
         for (name, val) in self.isa_flags.iter() {
             engine
                 .check_compatible_with_isa_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())
@@ -441,7 +442,7 @@ mod test {
     #[test]
     fn test_architecture_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.target = "unknown-generic-linux".to_string();
 
         match metadata.check_compatible(&engine) {
@@ -460,7 +461,7 @@ mod test {
     #[cfg(all(target_arch = "x86_64", not(miri)))]
     fn test_os_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata.target = format!(
             "{}-generic-unknown",
@@ -478,10 +479,19 @@ mod test {
         Ok(())
     }
 
+    fn assert_contains(error: &Error, msg: &str) {
+        let msg = msg.trim();
+        if error.chain().any(|e| e.to_string().contains(msg)) {
+            return;
+        }
+
+        panic!("failed to find:\n\n'''{msg}\n'''\n\nwithin error message:\n\n'''{error:?}'''")
+    }
+
     #[test]
     fn test_cranelift_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata
             .shared_flags
@@ -489,13 +499,16 @@ mod test {
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{e:?}").starts_with(
-                "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
-            )),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported",
+                );
+            }
         }
 
         Ok(())
@@ -504,7 +517,7 @@ Caused by:
     #[test]
     fn test_isa_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata
             .isa_flags
@@ -512,16 +525,16 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(
-                format!("{e:?}").starts_with(
-                    "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    don't know how to test for target-specific flag \"not_a_flag\" at runtime",
-                ),
-                "bad error {e:?}",
-            ),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "don't know how to test for target-specific flag \"not_a_flag\" at runtime",
+                );
+            }
         }
 
         Ok(())
@@ -532,7 +545,7 @@ Caused by:
     #[cfg(target_pointer_width = "64")] // different defaults on 32-bit platforms
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
 
         metadata.tunables.memory_guard_size = 0;
 
@@ -553,7 +566,7 @@ Caused by:
         config.epoch_interruption(true);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.tunables.epoch_interruption = false;
 
         match metadata.check_compatible(&engine) {
@@ -568,7 +581,7 @@ Caused by:
         config.epoch_interruption(false);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.tunables.epoch_interruption = true;
 
         match metadata.check_compatible(&engine) {
@@ -590,7 +603,7 @@ Caused by:
         config.wasm_threads(true);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.features &= !wasmparser::WasmFeatures::THREADS.bits();
 
         // If a feature is disabled in the module and enabled in the host,
@@ -601,7 +614,7 @@ Caused by:
         config.wasm_threads(false);
 
         let engine = Engine::new(&config)?;
-        let mut metadata = Metadata::new(&engine);
+        let mut metadata = Metadata::new(&engine)?;
         metadata.features |= wasmparser::WasmFeatures::THREADS.bits();
 
         match metadata.check_compatible(&engine) {

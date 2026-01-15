@@ -366,6 +366,8 @@ jobs:
               -p wasmtime --no-default-features --features stack-switching
               -p wasmtime --no-default-features --features cranelift,stack-switching
               -p wasmtime --no-default-features --features runtime,stack-switching
+              -p wasmtime --no-default-features --features debug
+              -p wasmtime --no-default-features --features debug,gc
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
@@ -429,6 +431,7 @@ jobs:
               -p wasmtime-wizer --no-default-features --features wasmtime
               -p wasmtime-wizer --no-default-features --features wasmprinter
               -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --features rayon
               -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
@@ -505,6 +508,10 @@ jobs:
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
+    - name: Install wkg
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+        cargo binstall --no-confirm wkg
     - name: Re-vendor WIT
       run: ./ci/vendor-wit.sh
     - run: git diff --exit-code
@@ -548,6 +555,7 @@ jobs:
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
             cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async,debug-builtins &&
             cargo check -p cranelift-control --no-default-features &&
+            cargo check -p cranelift-assembler-x64 --lib &&
             cargo check -p pulley-interpreter --features encode,decode,disas,interp &&
             cargo check -p wasmtime-wasi-io --no-default-features
         # Use `cross` for illumos to have a C compiler/linker available.
@@ -633,11 +641,11 @@ jobs:
     - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
+    - run: cargo fuzz check --dev
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
@@ -875,7 +883,7 @@ jobs:
     # Install VTune, see `cli_tests::profile_with_vtune`.
     - name: Install VTune
       if: matrix.filter == 'linux-x64' && contains(matrix.bucket, 'wasmtime-cli')
-      uses: abrown/install-vtune-action@v1
+      uses: abrown/install-vtune-action@v3
 
     # Build and test all features.
     #
@@ -929,10 +937,17 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
-  # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
-  # depends on OpenSSL, which is not easily available on all platforms.
-  test_wasi_tls_nativetls:
-    name: Test wasi-tls using native-tls provider
+  # Test `wasmtime-wasi-tls-nativetls` & `wasmtime-wasi-tls-openssl` in their
+  # own job. This is because they depends on OpenSSL, which is not easily
+  # available on all platforms.
+  #
+  # The Windows base image has OpenSSL installed by default, but not in a way
+  # that is automatically discoverable by `openssl-sys`. We need to configure
+  # the OPENSSL_DIR & OPENSSL_LIB_DIR paths manually.
+  # Additionally, the GH actions Windows image does not ship with a CA cert
+  # bundle, so we use the one from cUrl.
+  test_wasi_tls:
+    name: Test wasi-tls using native-tls & openssl providers
     needs: determine
     if: needs.determine.outputs.run-full
     runs-on: ${{ matrix.os }}
@@ -944,6 +959,19 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - name: Configure OpenSSL (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        mkdir "C:\Program Files\OpenSSL\certs"
+        $sslCertFile = "C:\Program Files\OpenSSL\certs\cacert.pem"
+        $opensslDir = "C:\Program Files\OpenSSL"
+        $opensslLibDir = "C:\Program Files\OpenSSL\lib\VC\x64\MD"
+        curl.exe -o $sslCertFile https://curl.se/ca/cacert.pem
+        "SSL_CERT_FILE=$sslCertFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_DIR=$opensslDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: cargo test -p wasmtime-wasi-tls-openssl
     - run: cargo test -p wasmtime-wasi-tls-nativetls
 
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
@@ -1142,6 +1170,8 @@ jobs:
           - crate: "wasmtime-cli"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
+          - crate: "wasmtime-internal-error"
+          - crate: "wasmtime-internal-error --all-features"
           - script: ./ci/miri-provenance-test.sh
           - script: ./ci/miri-wast.sh ./tests/spec_testsuite/table.wast
     needs: determine
@@ -1254,7 +1284,7 @@ jobs:
       - doc
       - micro_checks
       - special_tests
-      - test_wasi_tls_nativetls
+      - test_wasi_tls
       - clippy
       - monolith_checks
       - platform_checks

@@ -218,7 +218,7 @@ macro_rules! isle_lower_prelude_methods {
                 _ => return None,
             };
             let ty = self.lower_ctx.output_ty(inst, 0);
-            let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
+            let shift_amt = core::cmp::max(0, 64 - self.ty_bits(ty));
             Some((constant << shift_amt) >> shift_amt)
         }
 
@@ -329,14 +329,22 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+        fn func_ref_data(
+            &mut self,
+            func_ref: FuncRef,
+        ) -> (SigRef, ExternalName, RelocDistance, bool) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             let reloc_distance = if funcdata.colocated {
                 RelocDistance::Near
             } else {
                 RelocDistance::Far
             };
-            (funcdata.signature, funcdata.name.clone(), reloc_distance)
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                reloc_distance,
+                funcdata.patchable,
+            )
         }
 
         #[inline]
@@ -620,6 +628,10 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.gen_try_call_rets(sig)
         }
 
+        fn gen_patchable_call_rets(&mut self) -> CallRetList {
+            smallvec::smallvec![]
+        }
+
         fn try_call_none(&mut self) -> OptionTryCallInfo {
             None
         }
@@ -748,7 +760,7 @@ macro_rules! isle_lower_prelude_methods {
             &mut self,
             targets: &MachLabelSlice,
         ) -> Option<(MachLabel, BoxVecMachLabel)> {
-            use std::boxed::Box;
+            use alloc::boxed::Box;
             if targets.is_empty() {
                 return None;
             }

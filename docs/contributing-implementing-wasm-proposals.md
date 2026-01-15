@@ -21,7 +21,7 @@ multiple pull requests.
 * [ ] Add `-Wyour-proposal` to the `wasmtime-cli-flags` crate.
 * [ ] Update `tests/wast.rs` to spec tests should pass for this proposal.
 * [ ] Write custom tests in `tests/misc_testsuite/*.wast` for this proposal.
-* [ ] Enable the proposal in [the fuzz targets](./contributing-fuzzing.html).
+* [ ] Enable the proposal in [the fuzz targets](./contributing-fuzzing.md).
   * [ ] Write a custom fuzz target, oracle, and/or test
     case generator for fuzzing this proposal in particular.
 

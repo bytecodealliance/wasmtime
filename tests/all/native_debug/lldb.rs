@@ -1,10 +1,10 @@
-use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
 use test_programs_artifacts::*;
+use wasmtime::{Result, bail, format_err};
 
 macro_rules! assert_test_exists {
     ($name:ident) => {
@@ -449,7 +449,12 @@ check: exited with status = 0
 
 fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
     println!("testing {wasm:?}");
-    let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
+    let mut args = vec![
+        "-Ccache=n",
+        "-Oopt-level=0",
+        "-Ddebug-info",
+        "-Wshared-memory",
+    ];
     args.extend(extra_args);
     args.push(wasm);
     let output = lldb_with_script(

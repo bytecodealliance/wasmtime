@@ -47,12 +47,6 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_UNREACHABLE_CODE_REACHED,
   /// Execution has potentially run too long and may be interrupted.
   WASMTIME_TRAP_CODE_INTERRUPT,
-  /// When the `component-model` feature is enabled this trap represents a
-  /// function that was `canon lift`'d, then `canon lower`'d, then called.
-  /// This combination of creation of a function in the component model
-  /// generates a function that always traps and, when called, produces this
-  /// flavor of trap.
-  WASMTIME_TRAP_CODE_ALWAYS_TRAP_ADAPTER,
   /// Execution has run out of the configured fuel amount.
   WASMTIME_TRAP_CODE_OUT_OF_FUEL,
   /// Used to indicate that a trap was raised by atomic wait operations on non
@@ -74,9 +68,47 @@ enum wasmtime_trap_code_enum {
   /// Async-lifted export failed to produce a result by calling `task.return`
   /// before returning `STATUS_DONE` and/or after all host tasks completed.
   WASMTIME_TRAP_CODE_NO_ASYNC_RESULT,
+  /// We are suspending to a tag for which there is no active handler.
+  WASMTIME_TRAP_CODE_UNHANDLED_TAG,
+  /// Attempt to resume a continuation twice.
+  WASMTIME_TRAP_CODE_CONTINUATION_ALREADY_CONSUMED,
   /// A Pulley opcode was executed at runtime when the opcode was disabled at
   /// compile time.
   WASMTIME_TRAP_CODE_DISABLED_OPCODE,
+  /// Async event loop deadlocked; i.e. it cannot make further progress given
+  /// that all host tasks have completed and any/all host-owned stream/future
+  /// handles have been dropped.
+  WASMTIME_TRAP_CODE_ASYNC_DEADLOCK,
+  /// When the `component-model` feature is enabled this trap represents a
+  /// scenario where a component instance tried to call an import or intrinsic
+  /// when it wasn't allowed to, e.g. from a post-return function.
+  WASMTIME_TRAP_CODE_CANNOT_LEAVE_COMPONENT,
+  /// A synchronous task attempted to make a potentially blocking call prior
+  /// to returning.
+  WASMTIME_TRAP_CODE_CANNOT_BLOCK_SYNC_TASK,
+  /// A component tried to lift a `char` with an invalid bit pattern.
+  WASMTIME_TRAP_CODE_INVALID_CHAR,
+  /// Debug assertion generated for a fused adapter regarding the expected
+  /// completion of a string encoding operation.
+  WASMTIME_TRAP_CODE_DEBUG_ASSERT_STRING_ENCODING_FINISHED,
+  /// Debug assertion generated for a fused adapter regarding a string
+  /// encoding operation.
+  WASMTIME_TRAP_CODE_DEBUG_ASSERT_EQUAL_CODE_UNITS,
+  /// Debug assertion generated for a fused adapter regarding the alignment of
+  /// a pointer.
+  WASMTIME_TRAP_CODE_DEBUG_ASSERT_POINTER_ALIGNED,
+  /// Debug assertion generated for a fused adapter regarding the upper bits
+  /// of a 64-bit value.
+  WASMTIME_TRAP_CODE_DEBUG_ASSERT_UPPER_BITS_UNSET,
+  /// A component tried to lift or lower a string past the end of its memory.
+  WASMTIME_TRAP_CODE_STRING_OUT_OF_BOUNDS,
+  /// A component tried to lift or lower a list past the end of its memory.
+  WASMTIME_TRAP_CODE_LIST_OUT_OF_BOUNDS,
+  /// A component used an invalid discriminant when lowering a variant value.
+  WASMTIME_TRAP_CODE_INVALID_DISCRIMINANT,
+  /// A component passed an unaligned pointer when lifting or lowering a
+  /// value.
+  WASMTIME_TRAP_CODE_UNALIGNED_POINTER,
 };
 
 /**

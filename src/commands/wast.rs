@@ -1,9 +1,8 @@
 //! The module that implements the `wasmtime wast` command.
 
-use anyhow::{Context as _, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use wasmtime::Engine;
+use wasmtime::{Engine, Result, error::Context as _};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
@@ -48,6 +47,7 @@ impl WastCommand {
         let async_ = optional_flag_with_default(self.async_, true);
         let mut config = self.common.config(None)?;
         config.async_support(async_);
+        config.shared_memory(true);
         let engine = Engine::new(&config)?;
         let mut wast_context = WastContext::new(
             &engine,

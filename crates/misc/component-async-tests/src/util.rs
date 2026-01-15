@@ -1,4 +1,3 @@
-use anyhow::Result;
 use futures::{Sink, Stream, channel::oneshot};
 use std::{
     marker::PhantomData,
@@ -6,6 +5,7 @@ use std::{
     task::{Context, Poll},
     thread,
 };
+use wasmtime::Result;
 use wasmtime::{
     StoreContextMut,
     component::{

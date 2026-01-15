@@ -107,12 +107,12 @@ impl dsl::Inst {
         fmtln!(f, "#[must_use]");
         fmtln!(f, "#[inline]");
         f.add_block(
-            &format!("pub fn mnemonic(&self) -> std::borrow::Cow<'static, str>"),
+            &format!("pub fn mnemonic(&self) -> alloc::borrow::Cow<'static, str>"),
             |f| {
                 if self.custom.contains(Mnemonic) {
                     fmtln!(f, "crate::custom::mnemonic::{}(self)", self.name());
                 } else {
-                    fmtln!(f, "std::borrow::Cow::Borrowed(\"{}\")", self.mnemonic);
+                    fmtln!(f, "alloc::borrow::Cow::Borrowed(\"{}\")", self.mnemonic);
                 }
             },
         );
@@ -265,10 +265,10 @@ impl dsl::Inst {
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
         f.add_block(
-            &format!("{impl_block} std::fmt::Display for {struct_name}"),
+            &format!("{impl_block} core::fmt::Display for {struct_name}"),
             |f| {
                 f.add_block(
-                    "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
+                    "fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result",
                     |f| {
                         if self.custom.contains(Display) {
                             fmtln!(f, "crate::custom::display::{}(f, self)", self.name());

@@ -1,7 +1,7 @@
 //! S390x ISA definitions: immediate constants.
 
 use crate::machinst::PrettyPrint;
-use std::string::String;
+use alloc::string::String;
 
 /// An unsigned 12-bit immediate.
 #[derive(Clone, Copy, Debug)]
@@ -16,6 +16,15 @@ impl UImm12 {
             Some(UImm12 {
                 value: value as u16,
             })
+        } else {
+            None
+        }
+    }
+
+    pub fn maybe_from_simm20(value: SImm20) -> Option<UImm12> {
+        let SImm20 { value } = value;
+        if value >= 0 {
+            Self::maybe_from_u64(value as u64)
         } else {
             None
         }

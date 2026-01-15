@@ -128,6 +128,9 @@ impl<'a> ModuleContext<'a> {
             wasmparser::TypeRef::Tag(_) => {
                 unreachable!("exceptions are unsupported; checked in validation")
             }
+            wasmparser::TypeRef::FuncExact(_) => {
+                unreachable!("custom-descriptors are unsupported; checked in validation")
+            }
         }
     }
 

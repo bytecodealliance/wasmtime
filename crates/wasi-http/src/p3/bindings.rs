@@ -4,15 +4,15 @@
 mod generated {
     wasmtime::component::bindgen!({
         path: "src/p3/wit",
-        world: "wasi:http/proxy",
+        world: "wasi:http/service",
         imports: {
-            "wasi:http/handler.[async]handle": async | store | trappable | tracing,
+            "wasi:http/client.send": store | trappable | tracing,
             "wasi:http/types.[drop]request": store | trappable | tracing,
             "wasi:http/types.[drop]response": store | trappable | tracing,
-            "wasi:http/types.[static]request.consume-body": async | store | trappable | tracing,
-            "wasi:http/types.[static]request.new": async | store | trappable | tracing,
-            "wasi:http/types.[static]response.consume-body": async | store | trappable | tracing,
-            "wasi:http/types.[static]response.new": async | store | trappable | tracing,
+            "wasi:http/types.[static]request.consume-body": store | trappable | tracing,
+            "wasi:http/types.[static]request.new": store | trappable | tracing,
+            "wasi:http/types.[static]response.consume-body": store | trappable | tracing,
+            "wasi:http/types.[static]response.new": store | trappable | tracing,
             default: trappable | tracing,
         },
         exports: { default: async | store | task_exit },
@@ -37,8 +37,8 @@ mod generated {
 
 pub use self::generated::wasi::*;
 
-/// Raw bindings to the `wasi:http/proxy` exports.
+/// Raw bindings to the `wasi:http/service` exports.
 pub use self::generated::exports;
 
-/// Bindings to the `wasi:http/proxy` world.
-pub use self::generated::{Proxy, ProxyIndices, ProxyPre};
+/// Bindings to the `wasi:http/service` world.
+pub use self::generated::{Service, ServiceIndices, ServicePre};

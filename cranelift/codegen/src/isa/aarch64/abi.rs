@@ -12,11 +12,11 @@ use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
@@ -348,7 +348,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             } else {
                 // Every arg takes a minimum slot of 8 bytes. (16-byte stack
                 // alignment happens separately after all args.)
-                std::cmp::max(size, 8)
+                core::cmp::max(size, 8)
             };
 
             if !is_winch_return {
@@ -1067,6 +1067,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 callee_conv: call_conv,
                 callee_pop_size: 0,
                 try_call_info: None,
+                patchable: false,
             }),
         });
         insts
@@ -1101,7 +1102,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
             (isa::CallConv::Tail, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, false) => WINCH_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
             (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
             (_, false) => DEFAULT_AAPCS_CLOBBERS,
             (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
@@ -1183,7 +1191,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::xreg(0), regs::xreg(1)];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -1265,11 +1275,15 @@ impl AArch64MachineDeps {
 /// Is the given register saved in the prologue if clobbered, i.e., is it a
 /// callee-save?
 fn is_reg_saved_in_prologue(
-    _call_conv: isa::CallConv,
+    call_conv: isa::CallConv,
     enable_pinned_reg: bool,
     sig: &Signature,
     r: RealReg,
 ) -> bool {
+    if call_conv == isa::CallConv::PreserveAll {
+        return true;
+    }
+
     // FIXME: We need to inspect whether a function is returning Z or P regs too.
     let save_z_regs = sig
         .params
@@ -1518,6 +1532,7 @@ const fn all_clobbers() -> PRegSet {
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 const WINCH_CLOBBERS: PRegSet = winch_clobbers();
 const ALL_CLOBBERS: PRegSet = all_clobbers();
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
     fn preg(r: Reg) -> PReg {

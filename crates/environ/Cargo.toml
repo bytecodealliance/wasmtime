@@ -35,6 +35,7 @@ target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+wasmtime-error = { workspace = true }
 semver = { workspace = true, optional = true, features = ['serde'] }
 smallvec = { workspace = true, features = ['serde'] }
 
@@ -55,6 +56,7 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
+anyhow = ["wasmtime-error/anyhow"]
 component-model = [
   "dep:wasmtime-component-util",
   "dep:semver",

@@ -197,7 +197,7 @@ impl Instance {
     {
         let f = self
             .get_func(store.as_context_mut(), name)
-            .ok_or_else(|| anyhow!("failed to find function export"))?;
+            .ok_or_else(|| format_err!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function to given type"))?)
     }
@@ -614,6 +614,9 @@ pub(crate) fn lookup_vmdef(
             // within that store, so it's safe to create a `Func`.
             vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
         }
+        CoreDef::TaskMayBlock => vm::Export::Global(crate::Global::from_task_may_block(
+            StoreComponentInstanceId::new(store.id(), id),
+        )),
     }
 }
 
@@ -632,7 +635,7 @@ where
         .store_data_mut()
         .component_instance_mut(id)
         .instance(item.instance);
-    let instance = store.instance_mut(id);
+    let (instance, registry) = store.instance_and_module_registry_mut(id);
     let idx = match &item.item {
         ExportItem::Index(idx) => (*idx).into(),
 
@@ -649,7 +652,7 @@ where
     };
     // SAFETY: the `store_id` owns this instance and all exports contained
     // within.
-    unsafe { instance.get_export_by_index_mut(store_id, idx) }
+    unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
 }
 
 fn resource_tables<'a>(
@@ -659,7 +662,7 @@ fn resource_tables<'a>(
     ResourceTables {
         host_table: None,
         calls,
-        guest: Some(instance.guest_tables()),
+        guest: Some(instance.instance_states()),
     }
 }
 
@@ -742,9 +745,9 @@ impl<'a> Instantiator<'a> {
         component: &'a Component,
         store: &mut StoreOpaque,
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    ) -> Instantiator<'a> {
+    ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        store.modules_mut().register_component(component);
+        store.register_component(component)?;
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
@@ -757,12 +760,12 @@ impl<'a> Instantiator<'a> {
         );
         let id = store.store_data_mut().push_component_instance(instance);
 
-        Instantiator {
+        Ok(Instantiator {
             component,
             imports,
             core_imports: OwnedImports::empty(),
             id,
-        }
+        })
     }
 
     async fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
@@ -928,11 +931,11 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
-        let mem = match lookup_vmexport(store, self.id, &memory.export) {
-            crate::runtime::vm::Export::Memory { memory, .. } => memory,
+        let import = match lookup_vmexport(store, self.id, &memory.export) {
+            crate::runtime::vm::Export::Memory(memory) => memory.vmimport(store),
+            crate::runtime::vm::Export::SharedMemory(_, import) => import,
             _ => unreachable!(),
         };
-        let import = mem.vmimport(store);
         self.instance_mut(store)
             .set_runtime_memory(memory.index, import.from.as_non_null());
     }
@@ -1040,7 +1043,7 @@ impl<'a> Instantiator<'a> {
             return;
         }
 
-        let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+        let val = crate::Extern::from_wasmtime_export(export, store);
         let ty = DefinitionType::from(store, &val);
         crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)
@@ -1165,7 +1168,7 @@ impl<T: 'static> InstancePre<T> {
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports);
+        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
         instantiator.run(&mut store).await.map_err(|e| {
             store
                 .engine()

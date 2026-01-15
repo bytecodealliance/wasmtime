@@ -3,7 +3,6 @@ use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
 use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
-use anyhow::{Result, anyhow};
 use core::mem;
 use core::ops::Range;
 use core::pin::Pin;
@@ -358,7 +357,7 @@ impl StoreOpaque {
     }
 
     /// Returns whether `block_on` will succeed or panic.
-    #[cfg(feature = "call-hook")]
+    #[cfg(any(feature = "call-hook", feature = "debug"))]
     pub(crate) fn can_block(&mut self) -> bool {
         self.fiber_async_state_mut().current_future_cx.is_some()
     }
@@ -421,7 +420,7 @@ impl<'a> StoreFiber<'a> {
     pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
         if let Some(fiber) = self.fiber() {
             if !fiber.done() {
-                let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
+                let result = resume_fiber(store, self, Err(format_err!("future dropped")));
                 debug_assert!(result.is_ok());
             }
         }

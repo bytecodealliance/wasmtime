@@ -252,6 +252,9 @@ where
 
     /// Start a concurrent call to this function.
     ///
+    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
+    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
+    ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
@@ -275,6 +278,37 @@ where
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
+    ///
+    /// # Example
+    ///
+    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
+    ///
+    /// ```
+    /// # use {
+    /// #   wasmtime::{
+    /// #     error::{Result},
+    /// #     component::{Component, Linker, ResourceTable},
+    /// #     Config, Engine, Store
+    /// #   },
+    /// # };
+    /// #
+    /// # struct Ctx { table: ResourceTable }
+    /// #
+    /// # async fn foo() -> Result<()> {
+    /// # let mut config = Config::new();
+    /// # let engine = Engine::new(&config)?;
+    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
+    /// # let mut linker = Linker::new(&engine);
+    /// # let component = Component::new(&engine, "")?;
+    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
+    /// let my_typed_func = instance.get_typed_func::<(), ()>(&mut store, "my_typed_func")?;
+    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
+    ///    my_typed_func.call_concurrent(accessor, ()).await?;
+    ///    Ok(())
+    /// }).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,
@@ -543,7 +577,7 @@ where
             .memory()
             .get(ptr..)
             .and_then(|b| b.get(..Return::SIZE32))
-            .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
+            .ok_or_else(|| crate::format_err!("pointer out of bounds of memory"))?;
         Return::linear_lift_from_memory(cx, ty, bytes)
     }
 
@@ -1549,7 +1583,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                 let worst_case = bytes
                     .len()
                     .checked_mul(2)
-                    .ok_or_else(|| anyhow!("byte length overflow"))?;
+                    .ok_or_else(|| format_err!("byte length overflow"))?;
                 if worst_case > MAX_STRING_BYTE_LENGTH {
                     bail!("byte length too large");
                 }
@@ -1853,7 +1887,7 @@ where
     let size = list
         .len()
         .checked_mul(elem_size)
-        .ok_or_else(|| anyhow!("size overflow copying a list"))?;
+        .ok_or_else(|| format_err!("size overflow copying a list"))?;
     let ptr = cx.realloc(0, 0, T::ALIGN32, size)?;
     T::linear_store_list_to_memory(cx, ty, ptr, list)?;
     Ok((ptr, list.len()))
@@ -2895,6 +2929,7 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Future(_) => "future",
         InterfaceType::Stream(_) => "stream",
         InterfaceType::ErrorContext(_) => "error-context",
+        InterfaceType::FixedLengthList(_) => "list<_, N>",
     }
 }
 

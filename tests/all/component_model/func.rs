@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use super::{REALLOC_AND_FREE, TypedFuncExt};
-use anyhow::Result;
 use std::sync::Arc;
+use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
 
@@ -183,8 +183,7 @@ fn integers() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let new_instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
-    let instance = new_instance(&mut store)?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     // Passing in 100 is valid for all primitives
     instance
@@ -213,46 +212,62 @@ fn integers() -> Result<()> {
         .call_and_post_return(&mut store, (100,))?;
 
     // This specific wasm instance traps if any value other than 100 is passed
-    new_instance(&mut store)?
-        .get_typed_func::<(u8,), ()>(&mut store, "take-u8")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(i8,), ()>(&mut store, "take-s8")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(u16,), ()>(&mut store, "take-u16")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(i16,), ()>(&mut store, "take-s16")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(u32,), ()>(&mut store, "take-u32")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(i32,), ()>(&mut store, "take-s32")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(u64,), ()>(&mut store, "take-u64")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    new_instance(&mut store)?
-        .get_typed_func::<(i64,), ()>(&mut store, "take-s64")?
-        .call(&mut store, (101,))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(u8,), ()>(&mut *store, "take-u8")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(i8,), ()>(&mut *store, "take-s8")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(u16,), ()>(&mut *store, "take-u16")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(i16,), ()>(&mut *store, "take-s16")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(u32,), ()>(&mut *store, "take-u32")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(i32,), ()>(&mut *store, "take-s32")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(u64,), ()>(&mut *store, "take-u64")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(i64,), ()>(&mut *store, "take-s64")?
+            .call(store, (101,))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
 
     // Zero can be returned as any integer
     assert_eq!(
@@ -924,7 +939,7 @@ async fn async_reentrance() -> Result<()> {
     let message = "cannot enter component instance";
     match store
         .run_concurrent(async move |accessor| {
-            anyhow::Ok(func.call_concurrent(accessor, (42,)).await?.0)
+            wasmtime::error::Ok(func.call_concurrent(accessor, (42,)).await?.0)
         })
         .await
     {
@@ -968,11 +983,11 @@ async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
                 (table (export "__indirect_function_table") 1 funcref))
             (core module $m
                 (import "" "task.return" (func $task-return))
-                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
                 (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
                 (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
                 (func $thread-start (param i32) (; empty ;))
-                (elem (table $indirect-function-table) (i32.const 0) func $thread-start) 
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
                 (func (export "foo") (result i32)
                     (call $thread-resume-later
                         (call $thread-new-indirect (i32.const 0) (i32.const 0)))
@@ -983,13 +998,13 @@ async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
             (core instance $libc (instantiate $libc))
             (core type $start-func-ty (func (param i32)))
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
-            (core func $thread-new-indirect 
-                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+            (core func $thread-new-indirect
+                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
             (core func $thread-resume-later (canon thread.resume-later))
             (core func $task-return (canon task.return))
             (core instance $i (instantiate $m
-                (with "" (instance 
-                    (export "thread.new_indirect" (func $thread-new-indirect))
+                (with "" (instance
+                    (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.resume-later" (func $thread-resume-later))
                     (export "task.return" (func $task-return))
                 ))
@@ -1010,11 +1025,11 @@ async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
                 (table (export "__indirect_function_table") 1 funcref))
             (core module $m
                 (import "" "task.return" (func $task-return))
-                (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
                 (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
                 (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
                 (func $thread-start (param i32) (; empty ;))
-                (elem (table $indirect-function-table) (i32.const 0) func $thread-start) 
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
                 (func (export "foo")
                     (call $thread-resume-later
                         (call $thread-new-indirect (i32.const 0) (i32.const 0)))
@@ -1023,13 +1038,13 @@ async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
             (core instance $libc (instantiate $libc))
             (core type $start-func-ty (func (param i32)))
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
-            (core func $thread-new-indirect 
-                (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+            (core func $thread-new-indirect
+                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
             (core func $thread-resume-later (canon thread.resume-later))
             (core func $task-return (canon task.return))
             (core instance $i (instantiate $m
-                (with "" (instance 
-                    (export "thread.new_indirect" (func $thread-new-indirect))
+                (with "" (instance
+                    (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.resume-later" (func $thread-resume-later))
                     (export "task.return" (func $task-return))
                 ))
@@ -1137,7 +1152,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     match store
         .run_concurrent(async move |accessor| {
-            anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
+            wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
         })
         .await
     {
@@ -1337,7 +1352,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             store
                 .run_concurrent(async |store| {
                     func.call_concurrent(store, &input, &mut results).await?;
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
         } else {
@@ -1381,7 +1396,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    anyhow::Ok(func.call_concurrent(accessor, input).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?.0)
                 })
                 .await??
                 .0
@@ -1771,7 +1786,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             store
                 .run_concurrent(async |store| {
                     func.call_concurrent(store, &[], &mut results).await?;
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
         } else {
@@ -1860,7 +1875,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
                 })
                 .await??
                 .0
@@ -1991,35 +2006,39 @@ fn some_traps() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
 
     // This should fail when calling the allocator function for the argument
-    let err = instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-unreachable")?
-        .call(&mut store, (&[],))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-unreachable")?
+            .call(store, (&[],))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
     assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the argument
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-unreachable")?
-        .call(&mut store, ("",))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-unreachable")?
+            .call(store, ("",))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
     assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the space
     // to store the arguments (before arguments are even lowered)
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
-            &mut store,
-            "take-many-unreachable",
-        )?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
+                &mut *store,
+                "take-many-unreachable",
+            )?
+            .call(store, ("", "", "", "", "", "", "", "", "", ""))
+            .unwrap_err()
+            .downcast::<Trap>()
+    })?;
     assert_eq!(err, Trap::UnreachableCodeReached);
 
     // Assert that when the base pointer returned by malloc is out of bounds
@@ -2029,94 +2048,122 @@ fn some_traps() -> Result<()> {
     // FIXME(WebAssembly/component-model#32) confirm the semantics here are
     // what's desired.
     #[track_caller]
-    fn assert_oob(err: &anyhow::Error) {
+    fn assert_oob(err: &wasmtime::Error) {
         assert!(
             err.to_string()
                 .contains("realloc return: beyond end of memory"),
             "{err:?}",
         );
     }
-    let err = instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-base-oob")?
-        .call(&mut store, (&[],))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-base-oob")?
+            .call(store, (&[],))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-base-oob")?
-        .call(&mut store, (&[1],))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-base-oob")?
+            .call(store, (&[1],))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-base-oob")?
-        .call(&mut store, ("",))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-base-oob")?
+            .call(store, ("",))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-base-oob")?
-        .call(&mut store, ("x",))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-base-oob")?
+            .call(store, ("x",))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
-            &mut store,
-            "take-many-base-oob",
-        )?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
+                &mut *store,
+                "take-many-base-oob",
+            )?
+            .call(store, ("", "", "", "", "", "", "", "", "", ""))
+    })
+    .unwrap_err();
     assert_oob(&err);
 
     // Test here that when the returned pointer from malloc is one byte from the
     // end of memory that empty things are fine, but larger things are not.
 
-    instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-end-oob")?
-        .call_and_post_return(&mut store, (&[],))?;
-    instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-end-oob")?
-        .call_and_post_return(&mut store, (&[1, 2, 3, 4],))?;
-    let err = instance(&mut store)?
-        .get_typed_func::<(&[u8],), ()>(&mut store, "take-list-end-oob")?
-        .call(&mut store, (&[1, 2, 3, 4, 5],))
-        .unwrap_err();
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-end-oob")?
+            .call_and_post_return(store, (&[],))
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-end-oob")?
+            .call_and_post_return(store, (&[1, 2, 3, 4],))
+    })?;
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-end-oob")?
+            .call(store, (&[1, 2, 3, 4, 5],))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-end-oob")?
-        .call_and_post_return(&mut store, ("",))?;
-    instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-end-oob")?
-        .call_and_post_return(&mut store, ("abcd",))?;
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str,), ()>(&mut store, "take-string-end-oob")?
-        .call(&mut store, ("abcde",))
-        .unwrap_err();
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-end-oob")?
+            .call_and_post_return(store, ("",))
+    })?;
+    with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-end-oob")?
+            .call_and_post_return(store, ("abcd",))
+    })?;
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str,), ()>(&mut *store, "take-string-end-oob")?
+            .call(store, ("abcde",))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
-            &mut store,
-            "take-many-end-oob",
-        )?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
+                &mut *store,
+                "take-many-end-oob",
+            )?
+            .call(store, ("", "", "", "", "", "", "", "", "", ""))
+    })
+    .unwrap_err();
     assert_oob(&err);
 
     // For this function the first allocation, the space to store all the
     // arguments, is in-bounds but then all further allocations, such as for
     // each individual string, are all out of bounds.
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
-            &mut store,
-            "take-many-second-oob",
-        )?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
+                &mut *store,
+                "take-many-second-oob",
+            )?
+            .call(store, ("", "", "", "", "", "", "", "", "", ""))
+    })
+    .unwrap_err();
     assert_oob(&err);
-    let err = instance(&mut store)?
-        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
-            &mut store,
-            "take-many-second-oob",
-        )?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", "x"))
-        .unwrap_err();
+    let err = with_new_instance(&engine, &component, |store, instance| {
+        instance
+            .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), ()>(
+                &mut *store,
+                "take-many-second-oob",
+            )?
+            .call(store, ("", "", "", "", "", "", "", "", "", "x"))
+    })
+    .unwrap_err();
     assert_oob(&err);
     Ok(())
 }
@@ -3223,24 +3270,39 @@ fn errors_that_poison_instance() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
-    let f1 = instance.get_typed_func::<(), ()>(&mut store, "f1")?;
-    let f2 = instance.get_typed_func::<(), ()>(&mut store, "f2")?;
-    assert_unreachable(f1.call(&mut store, ()));
-    assert_poisoned(f1.call(&mut store, ()));
-    assert_poisoned(f2.call(&mut store, ()));
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let f3 = instance.get_typed_func::<(&str,), ()>(&mut store, "f3")?;
-    assert_unreachable(f3.call(&mut store, ("x",)));
-    assert_poisoned(f3.call(&mut store, ("x",)));
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let f1 = instance.get_typed_func::<(), ()>(&mut store, "f1")?;
+        let f2 = instance.get_typed_func::<(), ()>(&mut store, "f2")?;
+        assert_unreachable(f1.call(&mut store, ()));
+        assert_poisoned(f1.call(&mut store, ()));
+        assert_poisoned(f2.call(&mut store, ()));
+    }
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let f4 = instance.get_typed_func::<(), (WasmStr,)>(&mut store, "f4")?;
-    assert!(f4.call(&mut store, ()).is_err());
-    assert_poisoned(f4.call(&mut store, ()));
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let f3 = instance.get_typed_func::<(&str,), ()>(&mut store, "f3")?;
+        assert_unreachable(f3.call(&mut store, ("x",)));
+        assert_poisoned(f3.call(&mut store, ("x",)));
+
+        // Since we actually poison the store, even an unrelated instance will
+        // be considered poisoned:
+        let instance = linker.instantiate(&mut store, &component)?;
+        let f3 = instance.get_typed_func::<(&str,), ()>(&mut store, "f3")?;
+        assert_poisoned(f3.call(&mut store, ("x",)));
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let f4 = instance.get_typed_func::<(), (WasmStr,)>(&mut store, "f4")?;
+        assert!(f4.call(&mut store, ()).is_err());
+        assert_poisoned(f4.call(&mut store, ()));
+    }
 
     return Ok(());
 
@@ -3315,4 +3377,99 @@ fn run_export_with_internal_adapter() -> Result<()> {
     let run = instance.get_typed_func::<(), (u32,)>(&mut store, "run")?;
     assert_eq!(run.call(&mut store, ())?, (5,));
     Ok(())
+}
+
+enum RecurseKind {
+    AThenA,
+    AThenB,
+    AThenBThenA,
+}
+
+#[test]
+fn recurse() -> Result<()> {
+    test_recurse(RecurseKind::AThenB)
+}
+
+#[test]
+fn recurse_trap() -> Result<()> {
+    let error = test_recurse(RecurseKind::AThenA).unwrap_err();
+
+    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
+
+    Ok(())
+}
+
+#[test]
+fn recurse_more_trap() -> Result<()> {
+    let error = test_recurse(RecurseKind::AThenBThenA).unwrap_err();
+
+    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
+
+    Ok(())
+}
+
+fn test_recurse(kind: RecurseKind) -> Result<()> {
+    #[derive(Default)]
+    struct Ctx {
+        instances: Vec<Arc<Instance>>,
+    }
+
+    let component = r#"
+(component
+  (import "import" (func $import))
+  (core func $import (canon lower (func $import)))
+  (core module $m
+    (func $import (import "" "import"))
+    (func (export "export") call $import)
+  )
+  (core instance $m (instantiate $m (with "" (instance
+    (export "import" (func $import))
+  ))))
+  (func (export "export") (canon lift (core func $m "export")))
+)
+"#;
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, Ctx::default());
+    let mut linker = Linker::<Ctx>::new(&engine);
+    linker.root().func_wrap("import", |mut store, (): ()| {
+        if let Some(instance) = store.data_mut().instances.pop() {
+            let run = instance.get_typed_func::<(), ()>(&mut store, "export")?;
+            run.call(&mut store, ())?;
+            store.data_mut().instances.push(instance);
+        }
+        Ok(())
+    })?;
+    let instance = Arc::new(linker.instantiate(&mut store, &component)?);
+    let instance = match kind {
+        RecurseKind::AThenA => {
+            store.data_mut().instances.push(instance.clone());
+            instance
+        }
+        RecurseKind::AThenB => {
+            let other = Arc::new(linker.instantiate(&mut store, &component)?);
+            store.data_mut().instances.push(other);
+            instance
+        }
+        RecurseKind::AThenBThenA => {
+            store.data_mut().instances.push(instance.clone());
+            let other = Arc::new(linker.instantiate(&mut store, &component)?);
+            store.data_mut().instances.push(other);
+            instance
+        }
+    };
+
+    let run = instance.get_typed_func::<(), ()>(&mut store, "export")?;
+    run.call(&mut store, ())?;
+    Ok(())
+}
+
+fn with_new_instance<T>(
+    engine: &Engine,
+    component: &Component,
+    fun: impl Fn(&mut Store<()>, Instance) -> wasmtime::Result<T>,
+) -> wasmtime::Result<T> {
+    let mut store = Store::new(engine, ());
+    let instance = Linker::new(engine).instantiate(&mut store, component)?;
+    fun(&mut store, instance)
 }

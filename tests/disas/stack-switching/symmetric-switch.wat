@@ -33,14 +33,14 @@
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32) -> i64 tail
-;;     fn0 = colocated u1610612736:7 sig0
-;;     fn1 = colocated u1610612736:52 sig1
+;;     fn0 = colocated u805306368:7 sig0
+;;     fn1 = colocated u805306368:52 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @003a                               v2 = iconst.i32 1
 ;; @003a                               v4 = call fn0(v0, v2)  ; v2 = 1
-;; @003c                               trapz v4, user16
+;; @003c                               trapz v4, user15
 ;; @003c                               v5 = iconst.i32 1
 ;; @003c                               v6 = iconst.i32 0
 ;; @003c                               v8 = call fn1(v0, v4, v5, v6)  ; v5 = 1, v6 = 0
@@ -56,10 +56,10 @@
 ;;                                     v137 = uextend.i128 v136  ; v136 = 64
 ;; @003e                               v16 = ushr v13, v137
 ;; @003e                               v17 = ireduce.i64 v16
-;; @003e                               trapz v15, user16
+;; @003e                               trapz v15, user15
 ;; @003e                               v18 = load.i64 notrap aligned v15+72
 ;; @003e                               v19 = icmp eq v18, v17
-;; @003e                               trapz v19, user23
+;; @003e                               trapz v19, user22
 ;;                                     v135 = iconst.i64 1
 ;; @003e                               v20 = iadd v18, v135  ; v135 = 1
 ;; @003e                               store notrap aligned v20, v15+72
@@ -73,7 +73,7 @@
 ;;                                 block2(v26: i64, v27: i64):
 ;;                                     v133 = iconst.i64 1
 ;; @003e                               v28 = icmp eq v26, v133  ; v133 = 1
-;; @003e                               trapnz v28, user22
+;; @003e                               trapnz v28, user21
 ;; @003e                               jump block3
 ;;
 ;;                                 block3:
@@ -248,14 +248,14 @@
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32) -> i64 tail
-;;     fn0 = colocated u1610612736:7 sig0
-;;     fn1 = colocated u1610612736:52 sig1
+;;     fn0 = colocated u805306368:7 sig0
+;;     fn1 = colocated u805306368:52 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0047                               v2 = iconst.i32 0
 ;; @0047                               v4 = call fn0(v0, v2)  ; v2 = 0
-;; @0049                               trapz v4, user16
+;; @0049                               trapz v4, user15
 ;; @0049                               v5 = iconst.i32 0
 ;; @0049                               v6 = iconst.i32 0
 ;; @0049                               v8 = call fn1(v0, v4, v5, v6)  ; v5 = 0, v6 = 0
@@ -274,10 +274,10 @@
 ;;                                     v110 = uextend.i128 v109  ; v109 = 64
 ;; @004b                               v16 = ushr.i128 v13, v110
 ;; @004b                               v17 = ireduce.i64 v16
-;; @004b                               trapz v15, user16
+;; @004b                               trapz v15, user15
 ;; @004b                               v18 = load.i64 notrap aligned v15+72
 ;; @004b                               v19 = icmp eq v18, v17
-;; @004b                               trapz v19, user23
+;; @004b                               trapz v19, user22
 ;;                                     v108 = iconst.i64 1
 ;; @004b                               v20 = iadd v18, v108  ; v108 = 1
 ;; @004b                               store notrap aligned v20, v15+72

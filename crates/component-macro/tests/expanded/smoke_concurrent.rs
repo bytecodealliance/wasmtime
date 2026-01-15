@@ -99,8 +99,6 @@ pub struct TheWorldIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -179,9 +177,9 @@ const _: () = {
 #[allow(clippy::all)]
 pub mod imports {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::{anyhow, Box};
+    use wasmtime::component::__internal::Box;
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn y<T>(
+        fn y<T: Send>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = ()> + Send;
     }

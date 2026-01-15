@@ -32,6 +32,7 @@
 //! example code in the `pulley-interpreter` crate or `pulley/examples/*.rs` in
 //! the Wasmtime repository.
 
+use crate::ToWasmtimeResult as _;
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use crate::vm::Interpreter;
@@ -97,7 +98,7 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
     let filename = format!("./pulley-{pid}.data");
     let mut agent = PulleyAgent {
         state: Arc::new(State {
-            recorder: Mutex::new(Recorder::new(&filename)?),
+            recorder: Mutex::new(Recorder::new(&filename).to_wasmtime_result()?),
             sampling: Default::default(),
             sampling_done: Condvar::new(),
             sampling_freq: std::env::var("PULLEY_SAMPLING_FREQ")

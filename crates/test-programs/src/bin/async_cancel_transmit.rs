@@ -19,7 +19,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]start"]
+    #[link_name = "[task-return]start"]
     fn task_return_start(_: u32, _: *const u8, _: usize, _: u32, _: u8);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -30,7 +30,7 @@ unsafe extern "C" fn task_return_start(_: u32, _: *const u8, _: usize, _: u32, _
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[stream-new-0][async]start"]
+    #[link_name = "[stream-new-0]start"]
     fn stream_new() -> u64;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -41,7 +41,7 @@ unsafe extern "C" fn stream_new() -> u64 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-write-0][async]start"]
+    #[link_name = "[async-lower][stream-write-0]start"]
     fn stream_write(_: u32, _: *const u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -52,7 +52,7 @@ unsafe extern "C" fn stream_write(_: u32, _: *const u8, _: usize) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-read-0][async]start"]
+    #[link_name = "[async-lower][stream-read-0]start"]
     fn stream_read(_: u32, _: *mut u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -63,7 +63,7 @@ unsafe extern "C" fn stream_read(_: u32, _: *mut u8, _: usize) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[stream-cancel-write-0][async]start"]
+    #[link_name = "[stream-cancel-write-0]start"]
     fn stream_cancel_write(_: u32) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -74,7 +74,7 @@ unsafe extern "C" fn stream_cancel_write(_: u32) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[stream-cancel-read-0][async]start"]
+    #[link_name = "[stream-cancel-read-0]start"]
     fn stream_cancel_read(_: u32) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -85,7 +85,7 @@ unsafe extern "C" fn stream_cancel_read(_: u32) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[stream-drop-readable-0][async]start"]
+    #[link_name = "[stream-drop-readable-0]start"]
     fn stream_drop_readable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -96,7 +96,7 @@ unsafe extern "C" fn stream_drop_readable(_: u32) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[stream-drop-writable-0][async]start"]
+    #[link_name = "[stream-drop-writable-0]start"]
     fn stream_drop_writable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -107,7 +107,7 @@ unsafe extern "C" fn stream_drop_writable(_: u32) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[future-new-1][async]start"]
+    #[link_name = "[future-new-1]start"]
     fn future_new() -> u64;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -118,7 +118,7 @@ unsafe extern "C" fn future_new() -> u64 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][future-write-1][async]start"]
+    #[link_name = "[async-lower][future-write-1]start"]
     fn future_write(_: u32, _: *const u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -129,7 +129,7 @@ unsafe extern "C" fn future_write(_: u32, _: *const u8) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][future-read-1][async]start"]
+    #[link_name = "[async-lower][future-read-1]start"]
     fn future_read(_: u32, _: *mut u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -140,7 +140,7 @@ unsafe extern "C" fn future_read(_: u32, _: *mut u8) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[future-cancel-write-1][async]start"]
+    #[link_name = "[future-cancel-write-1]start"]
     fn future_cancel_write(_: u32) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -151,7 +151,7 @@ unsafe extern "C" fn future_cancel_write(_: u32) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[future-cancel-read-1][async]start"]
+    #[link_name = "[future-cancel-read-1]start"]
     fn future_cancel_read(_: u32) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -162,7 +162,7 @@ unsafe extern "C" fn future_cancel_read(_: u32) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[future-drop-readable-1][async]start"]
+    #[link_name = "[future-drop-readable-1]start"]
     fn future_drop_readable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -173,7 +173,7 @@ unsafe extern "C" fn future_drop_readable(_: u32) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[future-drop-writable-1][async]start"]
+    #[link_name = "[future-drop-writable-1]start"]
     fn future_drop_writable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -203,7 +203,7 @@ enum State {
     },
 }
 
-#[unsafe(export_name = "[async-lift]local:local/synchronous-transmit#[async]start")]
+#[unsafe(export_name = "[async-lift]local:local/synchronous-transmit#start")]
 unsafe extern "C" fn export_start(
     stream: u32,
     stream_expected: u32,
@@ -232,7 +232,7 @@ unsafe extern "C" fn export_start(
     }
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/synchronous-transmit#[async]start")]
+#[unsafe(export_name = "[callback][async-lift]local:local/synchronous-transmit#start")]
 unsafe extern "C" fn callback_start(event0: u32, _event1: u32, _event2: u32) -> u32 {
     unsafe {
         let state = &mut *(usize::try_from(context_get()).unwrap() as *mut State);

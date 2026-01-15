@@ -28,9 +28,9 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
+use crate::error::Result;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
-use anyhow::Result;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
@@ -267,6 +267,7 @@ pub enum CoreDef {
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
     UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
+    TaskMayBlock,
 
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
@@ -325,7 +326,6 @@ pub enum Trampoline {
         to: MemoryId,
         to64: bool,
     },
-    AlwaysTrap,
     ResourceNew {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
@@ -337,9 +337,6 @@ pub enum Trampoline {
     ResourceDrop {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
-    },
-    BackpressureSet {
-        instance: RuntimeComponentInstanceIndex,
     },
     BackpressureInc {
         instance: RuntimeComponentInstanceIndex,
@@ -478,6 +475,7 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
+    Trap,
     ContextGet {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
@@ -906,6 +904,7 @@ impl LinearizeDfg<'_> {
                 }
                 info::CoreDef::UnsafeIntrinsic(*i)
             }
+            CoreDef::TaskMayBlock => info::CoreDef::TaskMayBlock,
         }
     }
 
@@ -945,7 +944,6 @@ impl LinearizeDfg<'_> {
                 to: self.runtime_memory(*to),
                 to64: *to64,
             },
-            Trampoline::AlwaysTrap => info::Trampoline::AlwaysTrap,
             Trampoline::ResourceNew { instance, ty } => info::Trampoline::ResourceNew {
                 instance: *instance,
                 ty: *ty,
@@ -957,9 +955,6 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceRep { instance, ty } => info::Trampoline::ResourceRep {
                 instance: *instance,
                 ty: *ty,
-            },
-            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
-                instance: *instance,
             },
             Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
                 instance: *instance,
@@ -1160,6 +1155,7 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
+            Trampoline::Trap => info::Trampoline::Trap,
             Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
                 instance: *instance,
                 slot: *slot,

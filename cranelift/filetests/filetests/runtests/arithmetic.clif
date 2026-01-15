@@ -608,3 +608,27 @@ block0(v0: i32, v1: i32):
 
 ; run: %simplify_sub_sub_self(42, 5) == -5
 
+;; (x * y) (==/!=) z --> x (==/!=) (y / z) when z is odd and divides y
+function %eq_mul_odd(i32) -> i8 {
+block0(v0: i32):
+	v1 = iconst.i32 7
+	v2 = iconst.i32 42
+  v3 = imul v0, v1
+  v4 = icmp eq v3, v2
+  return v4
+}
+
+; run: %eq_mul_odd(6) == 1
+; run: %eq_mul_odd(7) == 0
+
+function %ne_mul_odd(i32) -> i8 {
+block0(v0: i32):
+	v1 = iconst.i32 7
+	v2 = iconst.i32 42
+  v3 = imul v0, v1
+  v4 = icmp ne v3, v2
+  return v4
+}
+
+; run: %ne_mul_odd(6) == 0
+; run: %ne_mul_odd(7) == 1

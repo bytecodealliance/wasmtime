@@ -10,6 +10,7 @@ use wasmtime::*;
 pub fn engine() -> Option<Engine> {
     let mut config = Config::new();
     config.wasm_threads(true);
+    config.shared_memory(true);
     match Engine::new(&config) {
         Ok(engine) => {
             assert!(cfg!(target_pointer_width = "64"));
@@ -20,6 +21,23 @@ pub fn engine() -> Option<Engine> {
             None
         }
     }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn shared_memory_failed_creation() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_threads(true);
+    config.shared_memory(false);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 1)).is_err());
+    let wat = r#"(module (memory 1 1 shared))"#;
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+    Ok(())
 }
 
 #[test]
@@ -293,5 +311,13 @@ fn test_memory_size_accessibility() -> Result<()> {
     done.store(true, Ordering::SeqCst);
     probe_thread.join().unwrap();
 
+    Ok(())
+}
+
+#[test]
+fn create_shared_memory_through_memory() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    assert!(Memory::new(&mut store, MemoryType::shared(1, 1)).is_err());
     Ok(())
 }

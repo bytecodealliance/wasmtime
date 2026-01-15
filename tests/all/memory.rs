@@ -566,7 +566,9 @@ fn memory64_maximum_minimum(config: &mut Config) -> Result<()> {
 
 #[test]
 fn shared_memory_basics() -> Result<()> {
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.shared_memory(true);
+    let engine = Engine::new(&config)?;
     assert!(SharedMemory::new(&engine, MemoryType::new(1, None)).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)).is_err());
@@ -639,7 +641,9 @@ fn shared_memory_wait_notify() -> Result<()> {
     const THREADS: usize = 8;
     const COUNT: usize = 100_000;
 
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.shared_memory(true);
+    let engine = Engine::new(&config)?;
     let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
     let data = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().cast_mut().cast()) };
     let locked = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().add(4).cast_mut().cast()) };

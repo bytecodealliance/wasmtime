@@ -5,14 +5,13 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock, Once};
 use std::time::Duration;
 
-use anyhow::{Result, anyhow, bail};
 use component_async_tests::{Ctx, sleep};
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use tokio::fs;
 use tokio::sync::Mutex;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Result, Store, ToWasmtimeResult as _, bail, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 pub fn init_logger() {
@@ -64,12 +63,13 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Component> {
     fn cwasm_name(components: &[&str]) -> Result<String> {
         if components.is_empty() {
-            Err(anyhow!("expected at least one path"))
+            Err(format_err!("expected at least one path"))
         } else {
             let names = components
                 .iter()
@@ -78,7 +78,7 @@ pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Comp
                     if let Some(name) = path.file_name() {
                         Ok(name)
                     } else {
-                        Err(anyhow!(
+                        Err(format_err!(
                             "expected path with at least two components; got: {}",
                             path.display()
                         ))
@@ -108,7 +108,7 @@ pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Comp
             }
         }
         engine.precompile_component(
-            &composed.ok_or_else(|| anyhow!("expected at least one component"))?,
+            &composed.ok_or_else(|| format_err!("expected at least one component"))?,
         )
     }
 
@@ -233,7 +233,7 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
             while let Some(()) = futures.try_next().await? {
                 // continue
             }
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await??;
 

@@ -21,7 +21,7 @@ fn main() -> Result<()> {
             Payload::End(_) => {}
             Payload::TypeSection(_) => {}
             Payload::ImportSection(s) => {
-                for i in s {
+                for i in s.into_imports() {
                     let i = i?;
                     match i.ty {
                         TypeRef::Func(_) => {
@@ -37,6 +37,7 @@ fn main() -> Result<()> {
                         TypeRef::Global(_) => bail!("should not import globals"),
                         TypeRef::Memory(_) => {}
                         TypeRef::Tag(_) => bail!("unsupported `tag` type"),
+                        TypeRef::FuncExact(_) => bail!("unsupported exact `func` type"),
                     }
                 }
             }

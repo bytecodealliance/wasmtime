@@ -404,21 +404,15 @@ impl Stacks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::prelude::*;
     use wasmparser::Validator;
 
     #[test]
     fn stacks_generates_valid_wasm_modules() {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 2048];
-        for _ in 0..1024 {
-            rng.fill_bytes(&mut buf);
-            let u = Unstructured::new(&buf);
-            if let Ok(stacks) = Stacks::arbitrary_take_rest(u) {
-                let wasm = stacks.wasm();
-                validate(&wasm);
-            }
-        }
+        crate::test::test_n_times(10, |stacks: Stacks, _u| {
+            let wasm = stacks.wasm();
+            validate(&wasm);
+            Ok(())
+        })
     }
 
     fn validate(wasm: &[u8]) {

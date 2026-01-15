@@ -7,10 +7,10 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult, settings};
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use smallvec::SmallVec;
-use std::fmt::Write;
-use std::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
 pub mod imms;
@@ -55,7 +55,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(32, std::mem::size_of::<Inst>());
+    assert_eq!(32, core::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -1159,6 +1159,10 @@ impl MachInst for Inst {
             assert!(preferred_size >= 2);
             Inst::Nop2
         }
+    }
+
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![vec![0x07, 0x07]]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -3226,7 +3230,7 @@ impl Inst {
                     dest,
                     callee_pop_size,
                     retval_loads,
-                    try_call
+                    try_call,
                 )
             }
             &Inst::ReturnCall { ref info } => {

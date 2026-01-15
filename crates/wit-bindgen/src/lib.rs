@@ -167,6 +167,15 @@ pub struct Opts {
     /// Path to the `wasmtime` crate if it's not the default path.
     pub wasmtime_crate: Option<String>,
 
+    /// Whether to use `anyhow::Result` for trappable host-defined function
+    /// imports.
+    ///
+    /// By default, `wasmtime::Result` is used instead of `anyhow::Result`.
+    ///
+    /// When enabled, the generated code requires the `"anyhow"` cargo feature
+    /// to also be enabled in the `wasmtime` crate.
+    pub anyhow: bool,
+
     /// If true, write the generated bindings to a file for better error
     /// messages from `rustc`.
     ///
@@ -450,7 +459,7 @@ impl Wasmtime {
                             #[allow(clippy::all)]
                             pub mod {snake} {{
                                 #[allow(unused_imports)]
-                                use {wt}::component::__internal::{{anyhow, Box}};
+                                use {wt}::component::__internal::{{Box}};
 
                                 {module}
                             }}
@@ -503,19 +512,19 @@ impl Wasmtime {
                 let typecheck = format!(
                     "match item {{
                             {wt}::component::types::ComponentItem::ComponentFunc(func) => {{
-                                anyhow::Context::context(
+                                {wt}::error::Context::context(
                                     func.typecheck::<{sig}>(&_instance_type),
                                     \"type-checking export func `{0}`\"
                                 )?;
                                 index
                             }}
-                            _ => Err(anyhow::anyhow!(\"export `{0}` is not a function\"))?,
+                            _ => Err({wt}::format_err!(\"export `{0}` is not a function\"))?,
                         }}",
                     func.name
                 );
                 get_index = format!(
                     "{{ let (item, index) = _component.get_export(None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no export `{0}` found\"))?;
+                        .ok_or_else(|| {wt}::format_err!(\"no export `{0}` found\"))?;
                         {typecheck}
                      }}",
                     func.name
@@ -536,6 +545,7 @@ impl Wasmtime {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
                 };
+                uwriteln!(generator.src, "#[derive(Clone)]");
                 uwriteln!(generator.src, "pub struct {struct_name} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
@@ -572,10 +582,10 @@ pub fn new<_T>(
     _instance_pre: &{wt}::component::InstancePre<_T>,
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
-        .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
+        .ok_or_else(|| {wt}::format_err!(\"no exported instance named `{instance_name}`\"))?;
     let mut lookup = move |name| {{
         _instance_pre.component().get_export_index(Some(&instance), name).ok_or_else(|| {{
-            anyhow::anyhow!(
+            {wt}::format_err!(
                 \"instance export `{instance_name}` does \\
                   not have export `{{name}}`\"
             )
@@ -672,7 +682,7 @@ pub fn new<_T>(
                         #[allow(clippy::all)]
                         pub mod {snake} {{
                             #[allow(unused_imports)]
-                            use {wt}::component::__internal::{{anyhow, Box}};
+                            use {wt}::component::__internal::Box;
 
                             {module}
                         }}
@@ -871,13 +881,6 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         let world_trait = self.world_imports_trait(resolve, world);
 
         uwriteln!(self.src, "const _: () = {{");
-        uwriteln!(
-            self.src,
-            "
-                #[allow(unused_imports)]
-                use {wt}::component::__internal::anyhow;
-            "
-        );
 
         uwriteln!(
             self.src,
@@ -1626,6 +1629,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::Map(..) => todo!(),
         }
     }
 
@@ -2508,7 +2512,11 @@ impl<'a> InterfaceGenerator<'a> {
             } else {
                 uwriteln!(
                     self.src,
-                    "let host = {wt}::component::Access::new(caller, host_getter);"
+                    "let access_cx = {wt}::AsContextMut::as_context_mut(&mut caller);"
+                );
+                uwriteln!(
+                    self.src,
+                    "let host = {wt}::component::Access::new(access_cx, host_getter);"
                 );
             }
         } else {
@@ -2581,9 +2589,9 @@ impl<'a> InterfaceGenerator<'a> {
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if flags.contains(FunctionFlags::STORE) {
                 if flags.contains(FunctionFlags::ASYNC) {
-                    format!("host.with(|mut host| {convert}(&mut host.get(), e))?")
+                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))?")
                 } else {
-                    format!("{convert}(&mut host.get(), e)?")
+                    format!("{convert}(&mut host_getter(caller.data_mut()), e)?")
                 }
             } else {
                 format!("{convert}(host, e)?")
@@ -2596,7 +2604,14 @@ impl<'a> InterfaceGenerator<'a> {
                 }},))"
             );
         } else if func.result.is_some() {
-            uwrite!(self.src, "Ok((r?,))\n");
+            if self.generator.opts.anyhow {
+                uwrite!(
+                    self.src,
+                    "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
+                );
+            } else {
+                uwrite!(self.src, "Ok((r?,))\n");
+            }
         } else {
             uwrite!(self.src, "r\n");
         }
@@ -2621,7 +2636,7 @@ impl<'a> InterfaceGenerator<'a> {
         if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
             uwrite!(
                 self.src,
-                "<T>(accessor: &{wt}::component::Accessor<T, Self>, "
+                "<T: Send>(accessor: &{wt}::component::Accessor<T, Self>, "
             );
         } else if flags.contains(FunctionFlags::STORE) {
             uwrite!(self.src, "<T>(host: {wt}::component::Access<T, Self>, ");
@@ -2654,6 +2669,15 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
+    fn push_wasmtime_or_anyhow_result(&mut self) {
+        let wt = self.generator.wasmtime_path();
+        uwrite!(self.src, "{wt}::");
+        if self.generator.opts.anyhow {
+            self.push_str("anyhow::");
+        }
+        self.push_str("Result");
+    }
+
     fn generate_function_result(&mut self, func: &Function, flags: FunctionFlags) {
         if !flags.contains(FunctionFlags::TRAPPABLE) {
             self.print_result_ty(func.result, TypeMode::Owned);
@@ -2673,8 +2697,8 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             // All other functions get their return values wrapped in an wasmtime::Result.
             // Returning the anyhow::Error case can be used to trap.
-            let wt = self.generator.wasmtime_path();
-            uwrite!(self.src, "{wt}::Result<");
+            self.push_wasmtime_or_anyhow_result();
+            self.push_str("<");
             self.print_result_ty(func.result, TypeMode::Owned);
             self.push_str(">");
         }
@@ -2963,17 +2987,21 @@ impl<'a> InterfaceGenerator<'a> {
                             self.src,
                             "
 fn drop<T>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>)
-    -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;
+    -> impl ::core::future::Future<Output =
 "
                         );
+                        self.push_wasmtime_or_anyhow_result();
+                        self.push_str("<()>> + Send where Self: Sized;");
                     } else {
                         uwrite!(
                             self.src,
                             "
 fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Resource<{camel}>)
-    ->  {wt}::Result<()>;
+    ->
 "
                         );
+                        self.push_wasmtime_or_anyhow_result();
+                        self.push_str("<()>;");
                     }
 
                     extra_with_store_function = true;
@@ -3028,7 +3056,8 @@ fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Res
                     if flags.contains(FunctionFlags::ASYNC) {
                         uwrite!(self.src, "impl ::core::future::Future<Output =");
                     }
-                    uwrite!(self.src, "{wt}::Result<()>");
+                    self.push_wasmtime_or_anyhow_result();
+                    self.push_str("<()>");
                     if flags.contains(FunctionFlags::ASYNC) {
                         uwrite!(self.src, "> + Send");
                     }
@@ -3039,12 +3068,14 @@ fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Res
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
-                    uwriteln!(
+                    uwrite!(
                         self.src,
                         "
-fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>;
+fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         "
                     );
+                    self.push_wasmtime_or_anyhow_result();
+                    uwrite!(self.src, "<{camel}>;");
                 }
             }
         }
@@ -3098,10 +3129,14 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>
                         self.src.push_str("async ");
                         await_ = ".await";
                     }
+                    uwrite!(
+                        self.src,
+                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> ",
+                    );
+                    self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "
-fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
+                        "<()> {{
     {trait_name}::drop(*self, rep){await_}
 }}
                         ",
@@ -3112,10 +3147,14 @@ fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> 
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
+                    uwrite!(
+                        self.src,
+                        "fn convert_{snake}(&mut self, err: {root}{custom_name}) -> ",
+                    );
+                    self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "
-fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}> {{
+                        "<{camel}> {{
     {trait_name}::convert_{snake}(*self, err)
 }}
                         ",
@@ -3411,6 +3450,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
             TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::Map(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because

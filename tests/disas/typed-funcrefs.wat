@@ -134,7 +134,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
-;;     fn0 = colocated u1610612736:9 sig0
+;;     fn0 = colocated u805306368:9 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -153,7 +153,7 @@
 ;; @0048                               jump block3(v23)
 ;;
 ;;                                 block3(v19: i64):
-;; @004a                               v24 = load.i64 user16 aligned readonly v19+8
+;; @004a                               v24 = load.i64 user15 aligned readonly v19+8
 ;; @004a                               v25 = load.i64 notrap aligned readonly v19+24
 ;; @004a                               v26 = call_indirect sig1, v24(v25, v0, v2, v3, v4, v5)
 ;;                                     v76 = iconst.i64 16
@@ -170,7 +170,7 @@
 ;; @005b                               jump block5(v48)
 ;;
 ;;                                 block5(v44: i64):
-;; @005d                               v49 = load.i64 user16 aligned readonly v44+8
+;; @005d                               v49 = load.i64 user15 aligned readonly v44+8
 ;; @005d                               v50 = load.i64 notrap aligned readonly v44+24
 ;; @005d                               v51 = call_indirect sig1, v49(v50, v0, v2, v3, v4, v5)
 ;; @0066                               jump block1
@@ -188,7 +188,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u1610612736:9 sig1
+;;     fn0 = colocated u805306368:9 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -244,11 +244,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @009e                               v9 = load.i64 notrap aligned table v0+64
-;; @00a0                               v10 = load.i64 user16 aligned readonly v9+8
+;; @00a0                               v10 = load.i64 user15 aligned readonly v9+8
 ;; @00a0                               v11 = load.i64 notrap aligned readonly v9+24
 ;; @00a0                               v12 = call_indirect sig0, v10(v11, v0, v2, v3, v4, v5)
 ;; @00af                               v15 = load.i64 notrap aligned table v0+80
-;; @00b1                               v16 = load.i64 user16 aligned readonly v15+8
+;; @00b1                               v16 = load.i64 user15 aligned readonly v15+8
 ;; @00b1                               v17 = load.i64 notrap aligned readonly v15+24
 ;; @00b1                               v18 = call_indirect sig0, v16(v17, v0, v2, v3, v4, v5)
 ;; @00ba                               jump block1

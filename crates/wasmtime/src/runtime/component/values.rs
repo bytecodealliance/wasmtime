@@ -1,6 +1,6 @@
 use crate::ValRaw;
 use crate::component::ResourceAny;
-use crate::component::concurrent::{self, ErrorContext, FutureReader, StreamReader};
+use crate::component::concurrent::{self, ErrorContext, FutureAny, StreamAny};
 use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
 use crate::prelude::*;
 use core::mem::MaybeUninit;
@@ -207,14 +207,15 @@ impl Val {
                 Val::Flags(flags)
             }
             InterfaceType::Future(_) => {
-                FutureReader::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+                Val::Future(FutureAny::linear_lift_from_flat(cx, ty, next(src))?)
             }
             InterfaceType::Stream(_) => {
-                StreamReader::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+                Val::Stream(StreamAny::linear_lift_from_flat(cx, ty, next(src))?)
             }
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
+            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
         })
     }
 
@@ -336,15 +337,12 @@ impl Val {
                 }
                 Val::Flags(flags)
             }
-            InterfaceType::Future(_) => {
-                FutureReader::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
-            }
-            InterfaceType::Stream(_) => {
-                StreamReader::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
-            }
+            InterfaceType::Future(_) => FutureAny::linear_lift_from_memory(cx, ty, bytes)?.into(),
+            InterfaceType::Stream(_) => StreamAny::linear_lift_from_memory(cx, ty, bytes)?.into(),
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
+            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
         })
     }
 
@@ -479,20 +477,12 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
-                concurrent::lower_future_to_index(*rep, cx, ty)?.linear_lower_to_flat(
-                    cx,
-                    InterfaceType::U32,
-                    next_mut(dst),
-                )
+            (InterfaceType::Future(_), Val::Future(f)) => {
+                f.linear_lower_to_flat(cx, ty, next_mut(dst))
             }
             (InterfaceType::Future(_), _) => unexpected(ty, self),
-            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
-                concurrent::lower_stream_to_index(*rep, cx, ty)?.linear_lower_to_flat(
-                    cx,
-                    InterfaceType::U32,
-                    next_mut(dst),
-                )
+            (InterfaceType::Stream(_), Val::Stream(s)) => {
+                s.linear_lower_to_flat(cx, ty, next_mut(dst))
             }
             (InterfaceType::Stream(_), _) => unexpected(ty, self),
             (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
@@ -503,6 +493,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
         }
     }
 
@@ -644,21 +635,9 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
-                concurrent::lower_future_to_index::<T>(*rep, cx, ty)?.linear_lower_to_memory(
-                    cx,
-                    InterfaceType::U32,
-                    offset,
-                )
-            }
+            (InterfaceType::Future(_), Val::Future(f)) => f.linear_lower_to_memory(cx, ty, offset),
             (InterfaceType::Future(_), _) => unexpected(ty, self),
-            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
-                concurrent::lower_stream_to_index::<T>(*rep, cx, ty)?.linear_lower_to_memory(
-                    cx,
-                    InterfaceType::U32,
-                    offset,
-                )
-            }
+            (InterfaceType::Stream(_), Val::Stream(s)) => s.linear_lower_to_memory(cx, ty, offset),
             (InterfaceType::Stream(_), _) => unexpected(ty, self),
             (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
                 concurrent::lower_error_context_to_index(*rep, cx, ty)?.linear_lower_to_memory(
@@ -668,6 +647,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
         }
     }
 
@@ -981,7 +961,7 @@ fn load_variant(
         }
     };
     let case_ty = types.nth(discriminant as usize).ok_or_else(|| {
-        anyhow!(
+        format_err!(
             "discriminant {} out of range [0..{})",
             discriminant,
             types.len()
@@ -1013,7 +993,7 @@ fn lift_variant(
     let discriminant = next(src).get_u32();
     let ty = types
         .nth(discriminant as usize)
-        .ok_or_else(|| anyhow!("discriminant {discriminant} out of range [0..{len})"))?;
+        .ok_or_else(|| format_err!("discriminant {discriminant} out of range [0..{len})"))?;
     let (value, value_flat) = match ty {
         Some(ty) => (
             Some(Box::new(Val::lift(cx, ty, src)?)),
@@ -1039,7 +1019,7 @@ fn lower_list<T>(
     let size = items
         .len()
         .checked_mul(elt_size)
-        .ok_or_else(|| anyhow::anyhow!("size overflow copying a list"))?;
+        .ok_or_else(|| crate::format_err!("size overflow copying a list"))?;
     let ptr = cx.realloc(0, 0, elt_align, size)?;
     let mut element_ptr = ptr;
     for item in items {
@@ -1070,7 +1050,7 @@ fn flags_to_storage(ty: &TypeFlags, flags: &[String]) -> Result<Vec<u32>> {
         let bit = ty
             .names
             .get_index_of(flag)
-            .ok_or_else(|| anyhow::anyhow!("unknown flag: `{flag}`"))?;
+            .ok_or_else(|| crate::format_err!("unknown flag: `{flag}`"))?;
         storage[bit / 32] |= 1 << (bit % 32);
     }
     Ok(storage)
@@ -1079,7 +1059,7 @@ fn flags_to_storage(ty: &TypeFlags, flags: &[String]) -> Result<Vec<u32>> {
 fn get_enum_discriminant(ty: &TypeEnum, n: &str) -> Result<u32> {
     ty.names
         .get_index_of(n)
-        .ok_or_else(|| anyhow::anyhow!("enum variant name `{n}` is not valid"))
+        .ok_or_else(|| crate::format_err!("enum variant name `{n}` is not valid"))
         .map(|i| i.try_into().unwrap())
 }
 
@@ -1090,7 +1070,7 @@ fn get_variant_discriminant<'a>(
     let (i, _, ty) = ty
         .cases
         .get_full(name)
-        .ok_or_else(|| anyhow::anyhow!("unknown variant case: `{name}`"))?;
+        .ok_or_else(|| crate::format_err!("unknown variant case: `{name}`"))?;
     Ok((i.try_into().unwrap(), ty))
 }
 
@@ -1111,30 +1091,6 @@ fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
     )
 }
 
-/// Represents a component model `future`.
-///
-/// Note that this type is not usable at this time as its implementation has not
-/// been filled out. There are no operations on this and there's additionally no
-/// ability to "drop" or deallocate this index. This means that from the
-/// perspective of wasm it'll appear that this handle has "leaked" without ever
-/// being dropped or read from.
-//
-// FIXME(#11161) this needs to be filled out implementation-wise
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FutureAny(pub(crate) u32);
-
-/// Represents a component model `stream`.
-///
-/// Note that this type is not usable at this time as its implementation has not
-/// been filled out. There are no operations on this and there's additionally no
-/// ability to "drop" or deallocate this index. This means that from the
-/// perspective of wasm it'll appear that this handle has "leaked" without ever
-/// being dropped or read from.
-//
-// FIXME(#11161) this needs to be filled out implementation-wise
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StreamAny(pub(crate) u32);
-
 /// Represents a component model `error-context`.
 ///
 /// Note that this type is not usable at this time as its implementation has not
@@ -1144,3 +1100,87 @@ pub struct StreamAny(pub(crate) u32);
 // FIXME(#11161) this needs to be filled out implementation-wise
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorContextAny(pub(crate) u32);
+
+impl From<bool> for Val {
+    fn from(b: bool) -> Self {
+        Val::Bool(b)
+    }
+}
+
+impl From<u8> for Val {
+    fn from(u: u8) -> Self {
+        Val::U8(u)
+    }
+}
+
+impl From<i8> for Val {
+    fn from(i: i8) -> Self {
+        Val::S8(i)
+    }
+}
+
+impl From<u16> for Val {
+    fn from(u: u16) -> Self {
+        Val::U16(u)
+    }
+}
+
+impl From<i16> for Val {
+    fn from(i: i16) -> Self {
+        Val::S16(i)
+    }
+}
+
+impl From<u32> for Val {
+    fn from(u: u32) -> Self {
+        Val::U32(u)
+    }
+}
+
+impl From<i32> for Val {
+    fn from(i: i32) -> Self {
+        Val::S32(i)
+    }
+}
+
+impl From<u64> for Val {
+    fn from(u: u64) -> Self {
+        Val::U64(u)
+    }
+}
+
+impl From<i64> for Val {
+    fn from(i: i64) -> Self {
+        Val::S64(i)
+    }
+}
+
+impl From<char> for Val {
+    fn from(i: char) -> Self {
+        Val::Char(i)
+    }
+}
+
+impl From<String> for Val {
+    fn from(i: String) -> Self {
+        Val::String(i)
+    }
+}
+
+impl From<ResourceAny> for Val {
+    fn from(i: ResourceAny) -> Self {
+        Val::Resource(i)
+    }
+}
+
+impl From<FutureAny> for Val {
+    fn from(i: FutureAny) -> Self {
+        Val::Future(i)
+    }
+}
+
+impl From<StreamAny> for Val {
+    fn from(i: StreamAny) -> Self {
+        Val::Stream(i)
+    }
+}

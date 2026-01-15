@@ -25,32 +25,40 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run")))
   )
   (instance $child (instantiate $child))
 
-  (type $future (future))
-  (core func $new (canon future.new $future))
-  (core func $child-run (canon lower (func $child "run")))
-
-  (core module $m
-    (import "" "new" (func $new (result i64)))
-    (import "" "child-run" (func $child-run (param i32)))
-
-    (func (export "run")
-      (call $child-run (i32.wrap_i64 (call $new)))
-    )
-  )
-  (core instance $i (instantiate $m
-    (with "" (instance
-      (export "new" (func $new))
-      (export "child-run" (func $child-run))
+  (component $other-child
+    (type $future (future))
+    (import "child" (instance $child
+      (export "run" (func async (param "x" $future)))
     ))
-  ))
+             
+    (core func $new (canon future.new $future))
+    (core func $child-run (canon lower (func $child "run")))
+    (core module $m
+      (import "" "new" (func $new (result i64)))
+      (import "" "child-run" (func $child-run (param i32)))
+  
+      (func (export "run")
+        (call $child-run (i32.wrap_i64 (call $new)))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "new" (func $new))
+        (export "child-run" (func $child-run))
+      ))
+    ))
+  
+    (func (export "run") async
+      (canon lift (core func $i "run")))
+  )
+  (instance $other-child (instantiate $other-child (with "child" (instance $child))))
 
-  (func (export "run")
-    (canon lift (core func $i "run")))
+  (func (export "run") (alias export $other-child "run"))
 )
 
 ;; We expect deadlock since the write end is leaked:
@@ -83,27 +91,35 @@
   )
   (instance $child (instantiate $child))
 
-  (type $future (future))
-  (core func $new (canon future.new $future))
-  (core func $child-run (canon lower (func $child "run")))
-
-  (core module $m
-    (import "" "new" (func $new (result i64)))
-    (import "" "child-run" (func $child-run (param i32)))
-
-    (func (export "run")
-      (call $child-run (i32.wrap_i64 (call $new)))
-    )
-  )
-  (core instance $i (instantiate $m
-    (with "" (instance
-      (export "new" (func $new))
-      (export "child-run" (func $child-run))
+  (component $other-child
+    (type $future (future))
+    (import "child" (instance $child
+      (export "run" (func (param "x" $future)))
     ))
-  ))
+    (core func $new (canon future.new $future))
+    (core func $child-run (canon lower (func $child "run")))
+  
+    (core module $m
+      (import "" "new" (func $new (result i64)))
+      (import "" "child-run" (func $child-run (param i32)))
+  
+      (func (export "run")
+        (call $child-run (i32.wrap_i64 (call $new)))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "new" (func $new))
+        (export "child-run" (func $child-run))
+      ))
+    ))
+  
+    (func (export "run")
+      (canon lift (core func $i "run")))
+  )
+  (instance $other-child (instantiate $other-child (with "child" (instance $child))))
 
-  (func (export "run")
-    (canon lift (core func $i "run")))
+  (func (export "run") (alias export $other-child "run"))
 )
 
 (assert_return (invoke "run"))
@@ -134,32 +150,40 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run") async (callback (func $i "cb"))))
   )
   (instance $child (instantiate $child))
 
-  (type $future (future))
-  (core func $new (canon future.new $future))
-  (core func $child-run (canon lower (func $child "run")))
-
-  (core module $m
-    (import "" "new" (func $new (result i64)))
-    (import "" "child-run" (func $child-run (param i32)))
-
-    (func (export "run")
-      (call $child-run (i32.wrap_i64 (call $new)))
-    )
-  )
-  (core instance $i (instantiate $m
-    (with "" (instance
-      (export "new" (func $new))
-      (export "child-run" (func $child-run))
+  (component $other-child
+    (type $future (future))
+    (import "child" (instance $child
+      (export "run" (func async (param "x" $future)))
     ))
-  ))
+    (core func $new (canon future.new $future))
+    (core func $child-run (canon lower (func $child "run")))
+  
+    (core module $m
+      (import "" "new" (func $new (result i64)))
+      (import "" "child-run" (func $child-run (param i32)))
+  
+      (func (export "run")
+        (call $child-run (i32.wrap_i64 (call $new)))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "new" (func $new))
+        (export "child-run" (func $child-run))
+      ))
+    ))
+  
+    (func (export "run") async
+      (canon lift (core func $i "run")))
+  )
+  (instance $other-child (instantiate $other-child (with "child" (instance $child))))
 
-  (func (export "run")
-    (canon lift (core func $i "run")))
+  (func (export "run") (alias export $other-child "run"))
 )
 
 ;; We expect deadlock since the write end is leaked:
@@ -200,27 +224,35 @@
   )
   (instance $child (instantiate $child))
 
-  (type $future (future))
-  (core func $new (canon future.new $future))
-  (core func $child-run (canon lower (func $child "run")))
-
-  (core module $m
-    (import "" "new" (func $new (result i64)))
-    (import "" "child-run" (func $child-run (param i32)))
-
-    (func (export "run")
-      (call $child-run (i32.wrap_i64 (call $new)))
-    )
-  )
-  (core instance $i (instantiate $m
-    (with "" (instance
-      (export "new" (func $new))
-      (export "child-run" (func $child-run))
+  (component $other-child
+    (type $future (future))
+    (import "child" (instance $child
+      (export "run" (func (param "x" $future)))
     ))
-  ))
+    (core func $new (canon future.new $future))
+    (core func $child-run (canon lower (func $child "run")))
+  
+    (core module $m
+      (import "" "new" (func $new (result i64)))
+      (import "" "child-run" (func $child-run (param i32)))
+  
+      (func (export "run")
+        (call $child-run (i32.wrap_i64 (call $new)))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "new" (func $new))
+        (export "child-run" (func $child-run))
+      ))
+    ))
+  
+    (func (export "run") async
+      (canon lift (core func $i "run")))
+  )
+  (instance $other-child (instantiate $other-child (with "child" (instance $child))))
 
-  (func (export "run")
-    (canon lift (core func $i "run")))
+  (func (export "run") (alias export $other-child "run"))
 )
 
 (assert_return (invoke "run"))

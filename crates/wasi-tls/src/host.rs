@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::Resource;
 use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::Pollable;

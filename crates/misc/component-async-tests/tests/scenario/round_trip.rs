@@ -5,7 +5,6 @@ use std::sync::{
 use std::time::Duration;
 
 use super::util::{config, make_component};
-use anyhow::{Result, anyhow};
 use component_async_tests::Ctx;
 use component_async_tests::util::sleep;
 use futures::{
@@ -13,9 +12,11 @@ use futures::{
     channel::oneshot,
     stream::{FuturesUnordered, TryStreamExt},
 };
-use wasmtime::component::{Accessor, AccessorTask, HasSelf, Instance, Linker, ResourceTable, Val};
-use wasmtime::{Engine, Store};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime::component::{
+    Accessor, AccessorTask, HasData, HasSelf, Instance, Linker, ResourceTable, Val,
+};
+use wasmtime::{Engine, Result, Store, Trap, format_err};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 #[tokio::test]
 pub async fn async_round_trip_stackful() -> Result<()> {
@@ -204,6 +205,143 @@ pub async fn async_round_trip_stackless_sync_import() -> Result<()> {
     .await
 }
 
+#[tokio::test]
+pub async fn async_round_trip_stackless_recurse() -> Result<()> {
+    test_round_trip_recurse(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        false,
+    )
+    .await
+}
+
+#[tokio::test]
+pub async fn async_round_trip_stackless_recurse_trap() -> Result<()> {
+    let error = test_round_trip_recurse(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
+        true,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
+
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn async_round_trip_synchronous_recurse() -> Result<()> {
+    test_round_trip_recurse(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
+        false,
+    )
+    .await
+}
+
+#[tokio::test]
+pub async fn async_round_trip_synchronous_recurse_trap() -> Result<()> {
+    let error = test_round_trip_recurse(
+        test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
+        true,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
+
+    Ok(())
+}
+
+async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result<()> {
+    pub struct MyCtx {
+        wasi: WasiCtx,
+        table: ResourceTable,
+        instance: Option<Arc<Instance>>,
+    }
+
+    impl WasiView for MyCtx {
+        fn ctx(&mut self) -> WasiCtxView<'_> {
+            WasiCtxView {
+                ctx: &mut self.wasi,
+                table: &mut self.table,
+            }
+        }
+    }
+
+    impl HasData for MyCtx {
+        type Data<'a> = &'a mut Self;
+    }
+
+    impl component_async_tests::round_trip::bindings::local::local::baz::HostWithStore for MyCtx {
+        async fn foo<T: Send>(accessor: &Accessor<T, Self>, s: String) -> wasmtime::Result<String> {
+            if let Some(instance) = accessor.with(|mut access| access.get().instance.take()) {
+                run(accessor, &instance).await?;
+                accessor.with(|mut access| access.get().instance = Some(instance));
+            }
+            Ok(format!("{s} - entered host - exited host"))
+        }
+    }
+
+    impl component_async_tests::round_trip::bindings::local::local::baz::Host for MyCtx {}
+
+    async fn run<T: Send>(accessor: &Accessor<T, MyCtx>, instance: &Instance) -> Result<()> {
+        let round_trip = accessor.with(|mut access| {
+            component_async_tests::round_trip::bindings::RoundTrip::new(&mut access, &instance)
+        })?;
+
+        let input = "hello, world!";
+        let expected = "hello, world! - entered guest - entered host - exited host - exited guest";
+
+        let actual = round_trip
+            .local_local_baz()
+            .call_foo(accessor, input.into())
+            .await?;
+
+        assert_eq!(expected, actual);
+
+        Ok(())
+    }
+
+    let engine = Engine::new(&config())?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    component_async_tests::round_trip::bindings::local::local::baz::add_to_linker::<_, MyCtx>(
+        &mut linker,
+        |ctx| ctx,
+    )?;
+
+    let component = make_component(&engine, &[component]).await?;
+
+    let mut store = Store::new(
+        &engine,
+        MyCtx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            instance: None,
+        },
+    );
+
+    let instance = Arc::new(linker.instantiate_async(&mut store, &component).await?);
+    store.data_mut().instance = Some(instance.clone());
+
+    let instance = if same_instance {
+        instance
+    } else {
+        Arc::new(linker.instantiate_async(&mut store, &component).await?)
+    };
+
+    store
+        .run_concurrent(async move |accessor| {
+            run(&accessor.with_getter(|ctx| ctx), &instance).await
+        })
+        .await??;
+
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
 pub async fn test_round_trip(
     components: &[&str],
     inputs_and_outputs: &[(&str, &str)],
@@ -287,7 +425,7 @@ pub async fn test_round_trip(
                 tx: oneshot::Sender<()>,
             }
 
-            impl AccessorTask<Ctx, HasSelf<Ctx>, Result<()>> for Task {
+            impl AccessorTask<Ctx, HasSelf<Ctx>> for Task {
                 async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
                     let round_trip = accessor.with(|mut store| {
                         component_async_tests::round_trip::bindings::RoundTrip::new(
@@ -362,7 +500,7 @@ pub async fn test_round_trip(
         linker
             .root()
             .instance("local:local/baz")?
-            .func_new_concurrent("[async]foo", |_, _, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
@@ -378,13 +516,13 @@ pub async fn test_round_trip(
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let baz_instance = instance
             .get_export_index(&mut store, None, "local:local/baz")
-            .ok_or_else(|| anyhow!("can't find `local:local/baz` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `local:local/baz` in instance"))?;
         let foo_function = instance
-            .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
-            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
+            .get_export_index(&mut store, Some(&baz_instance), "foo")
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
             store
@@ -402,7 +540,7 @@ pub async fn test_round_trip(
                                     &mut results,
                                 )
                                 .await?;
-                            anyhow::Ok((results, output))
+                            wasmtime::error::Ok((results, output))
                         });
                     }
 
@@ -412,7 +550,7 @@ pub async fn test_round_trip(
                         };
                         assert_eq!(expected, actual);
                     }
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 })
                 .await??;
 

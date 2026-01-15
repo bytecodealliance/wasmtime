@@ -101,7 +101,7 @@ impl ResourceAny {
         let store = store.as_context_mut();
         let mut tables = HostResourceTables::new_host(store.0);
         let ResourceAny { idx, ty, owned } = self;
-        let ty = T::typecheck(ty).ok_or_else(|| anyhow::anyhow!("resource type mismatch"))?;
+        let ty = T::typecheck(ty).ok_or_else(|| crate::format_err!("resource type mismatch"))?;
         if owned {
             let rep = tables.host_resource_lift_own(idx)?;
             Ok(HostResource::new_own(rep, ty))
@@ -192,11 +192,9 @@ impl ResourceAny {
         // Note that this should be safe because the raw pointer access in
         // `flags` is valid due to `store` being the owner of the flags and
         // flags are never destroyed within the store.
-        if let Some(flags) = slot.flags {
-            unsafe {
-                if !flags.may_enter() {
-                    bail!(Trap::CannotEnterComponent);
-                }
+        if let Some(instance) = slot.instance {
+            if !store.0.may_enter(instance) {
+                bail!(Trap::CannotEnterComponent);
             }
         }
 

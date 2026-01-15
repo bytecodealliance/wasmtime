@@ -9,12 +9,12 @@ use crate::{
     machinst::*,
     settings,
 };
+use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Pulley ABI from the callee side (within a function body).
@@ -130,7 +130,7 @@ where
                     // Compute size and 16-byte stack alignment happens
                     // separately after all args.
                     let size = reg_ty.bits() / 8;
-                    let size = std::cmp::max(size, 8);
+                    let size = core::cmp::max(size, 8);
 
                     // Align.
                     debug_assert!(size.is_power_of_two());
@@ -480,18 +480,20 @@ where
     }
 
     fn get_regs_clobbered_by_call(
-        _call_conv_of_callee: isa::CallConv,
+        call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
         if is_exception {
             ALL_CLOBBERS
+        } else if call_conv_of_callee == isa::CallConv::PreserveAll {
+            NO_CLOBBERS
         } else {
             DEFAULT_CLOBBERS
         }
     }
 
     fn compute_frame_layout(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
@@ -502,11 +504,12 @@ where
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
-        let mut regs: Vec<Writable<RealReg>> = regs
-            .iter()
-            .cloned()
-            .filter(|r| DEFAULT_CALLEE_SAVES.contains(r.to_reg().into()))
-            .collect();
+        let is_callee_save = |reg: &Writable<RealReg>| match call_conv {
+            isa::CallConv::PreserveAll => true,
+            _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
+        };
+        let mut regs: Vec<Writable<RealReg>> =
+            regs.iter().cloned().filter(is_callee_save).collect();
 
         regs.sort_unstable();
 
@@ -557,12 +560,21 @@ where
         Writable::from_reg(regs::x_reg(15))
     }
 
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[
             Reg::from_real_reg(regs::px_reg(0)),
             Reg::from_real_reg(regs::px_reg(1)),
         ];
-        PAYLOAD_REGS
+        match call_conv {
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
+            isa::CallConv::Fast
+            | isa::CallConv::WindowsFastcall
+            | isa::CallConv::AppleAarch64
+            | isa::CallConv::Probestack
+            | isa::CallConv::Winch => &[],
+        }
     }
 }
 
@@ -720,7 +732,7 @@ impl FrameLayout {
                     I64
                 }
                 RegClass::Float => F64,
-                RegClass::Vector => unreachable!("no vector registers are callee-save"),
+                RegClass::Vector => I8X16,
             };
             let offset = i32::try_from(offset).unwrap();
             Some((offset, ty, Reg::from(reg.to_reg())))
@@ -759,7 +771,11 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Float => {
                 clobbered_size += 8;
             }
-            RegClass::Vector => unimplemented!("Vector Size Clobbered"),
+            RegClass::Vector => {
+                // No alignment concerns: the Pulley virtual CPU
+                // supports unaligned vector load/stores.
+                clobbered_size += 16;
+            }
         }
     }
     align_to(clobbered_size, 16)
@@ -947,6 +963,8 @@ const ALL_CLOBBERS: PRegSet = PRegSet::empty()
     .with(pv_reg(29))
     .with(pv_reg(30))
     .with(pv_reg(31));
+
+const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 fn create_reg_environment() -> MachineEnv {
     // Prefer caller-saved registers over callee-saved registers, because that

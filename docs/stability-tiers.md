@@ -37,7 +37,6 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`component-model`]                        |
 | WebAssembly Proposal | [`relaxed-simd`]                           |
 | WebAssembly Proposal | [`multi-memory`]                           |
-| WebAssembly Proposal | [`threads`]                                |
 | WebAssembly Proposal | [`tail-call`]                              |
 | WebAssembly Proposal | [`extended-const`]                         |
 | WebAssembly Proposal | [`memory64`]                               |
@@ -81,18 +80,19 @@ For explanations of what each tier means see below.
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
-| WebAssembly Proposal | [`function-references`]    | production quality          |
-| WebAssembly Proposal | [`gc`]                     | production quality          |
-| WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
 | WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
+| WebAssembly Proposal | [`function-references`]    | production quality          |
+| WebAssembly Proposal | [`gc`]                     | production quality          |
+| WebAssembly Proposal | [`threads`]                | fuzzing, API quality        |
+| WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 | Embedding API        | C++                        | Full-time maintainer        |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
-[`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[`threads`]: https://github.com/WebAssembly/threads
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md

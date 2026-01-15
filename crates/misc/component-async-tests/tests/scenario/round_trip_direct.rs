@@ -2,12 +2,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::util::{config, make_component};
-use anyhow::{Result, anyhow};
 use component_async_tests::Ctx;
 use component_async_tests::util::sleep;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable, Val};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
@@ -81,7 +80,7 @@ async fn test_round_trip_direct(
                         assert_eq!(expected_output, value);
                     }
 
-                    anyhow::Ok(())
+                    wasmtime::error::Ok(())
                 }
             })
             .await??;
@@ -94,7 +93,7 @@ async fn test_round_trip_direct(
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         linker
             .root()
-            .func_new_concurrent("[async]foo", |_, _, params, results| {
+            .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
@@ -109,11 +108,11 @@ async fn test_round_trip_direct(
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let foo_function = instance
-            .get_export_index(&mut store, None, "[async]foo")
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .get_export_index(&mut store, None, "foo")
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
 
         // Start three concurrent calls and then join them all:
         store
@@ -125,7 +124,7 @@ async fn test_round_trip_direct(
                         foo_function
                             .call_concurrent(store, &[Val::String(input.to_owned())], &mut results)
                             .await?;
-                        anyhow::Ok(results)
+                        wasmtime::error::Ok(results)
                     });
                 }
 

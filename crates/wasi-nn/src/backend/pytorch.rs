@@ -117,7 +117,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
             Id::Index(i) => {
                 // Check if id_type is already set and if it matches the current id type
                 if let Some(Id::Name(_)) = self.id_type {
-                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                    return Err(BackendError::BackendAccess(wasmtime::format_err!(
                         "Cannot mix u32 and str indexes"
                     )));
                 }
@@ -135,7 +135,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
             Id::Name(_) => {
                 // Check if id_type is already set and if it matches the current id type
                 if let Some(Id::Index(_)) = self.id_type {
-                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                    return Err(BackendError::BackendAccess(wasmtime::format_err!(
                         "Cannot mix u32 and str indexes"
                     )));
                 }
@@ -144,7 +144,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
                     self.id_type = Some(Id::Name(String::new())); // Provide a str value for Name
                 }
                 if self.inputs.get(0).is_some() {
-                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                    return Err(BackendError::BackendAccess(wasmtime::format_err!(
                         "The pytorch backend does not support multiple named inputs"
                     )));
                 } else {
@@ -214,7 +214,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
             // WITX-style compute with previously set inputs
             None => {
                 if self.inputs.is_empty() {
-                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                    return Err(BackendError::BackendAccess(wasmtime::format_err!(
                         "No inputs provided for inference"
                     )));
                 }
@@ -310,6 +310,6 @@ impl TryFrom<Kind> for TensorType {
 
 impl From<TchError> for BackendError {
     fn from(e: TchError) -> Self {
-        BackendError::BackendAccess(anyhow::Error::new(e))
+        BackendError::BackendAccess(wasmtime::Error::new(e))
     }
 }

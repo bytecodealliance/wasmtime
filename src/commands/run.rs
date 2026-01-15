@@ -6,14 +6,16 @@
 )]
 
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{Context as _, Error, Result, anyhow, bail};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
-use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
+use wasmtime::{
+    Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
+    error::Context as _, format_err,
+};
 use wasmtime_wasi::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-config")]
@@ -284,7 +286,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         let instance = match result.unwrap_or_else(|elapsed| {
-            Err(anyhow::Error::from(wasmtime::Trap::Interrupt))
+            Err(wasmtime::Error::from(wasmtime::Trap::Interrupt))
                 .with_context(|| format!("timed out after {elapsed}"))
         }) {
             Ok(instance) => instance,
@@ -333,7 +335,7 @@ impl RunCommand {
             };
             result.push(
                 arg.to_str()
-                    .ok_or_else(|| anyhow!("failed to convert {arg:?} to utf-8"))?
+                    .ok_or_else(|| format_err!("failed to convert {arg:?} to utf-8"))?
                     .to_string(),
             );
         }
@@ -355,7 +357,7 @@ impl RunCommand {
                 profiled_modules,
                 path,
                 *interval,
-            ));
+            )?);
             #[cfg(not(feature = "profiling"))]
             {
                 let _ = (profiled_modules, path, interval, main_target);
@@ -383,22 +385,24 @@ impl RunCommand {
         profiled_modules: Vec<(String, Module)>,
         path: &str,
         interval: std::time::Duration,
-    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
         use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
             RunTarget::Core(_m) => Some(Arc::new(GuestProfiler::new(
+                store.engine(),
                 module_name,
                 interval,
                 profiled_modules,
-            ))),
+            )?)),
             RunTarget::Component(component) => Some(Arc::new(GuestProfiler::new_component(
+                store.engine(),
                 module_name,
                 interval,
                 component.clone(),
                 profiled_modules,
-            ))),
+            )?)),
         };
 
         fn sample(
@@ -450,11 +454,11 @@ impl RunCommand {
         });
 
         let path = path.to_string();
-        return Box::new(move |store| {
+        Ok(Box::new(move |store| {
             let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
                 .expect("profiling doesn't support threads yet");
             if let Err(e) = std::fs::File::create(&path)
-                .map_err(anyhow::Error::new)
+                .map_err(wasmtime::Error::new)
                 .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
             {
                 eprintln!("failed writing profile at {path}: {e:#}");
@@ -463,7 +467,7 @@ impl RunCommand {
                 eprintln!("Profile written to: {path}");
                 eprintln!("View this profile at https://profiler.firefox.com/.");
             }
-        });
+        }))
     }
 
     async fn load_main_module(
@@ -528,7 +532,7 @@ impl RunCommand {
                     Some(
                         instance
                             .get_func(&mut *store, name)
-                            .ok_or_else(|| anyhow!("no func export named `{name}` found"))?,
+                            .ok_or_else(|| format_err!("no func export named `{name}` found"))?,
                     )
                 } else {
                     instance
@@ -614,8 +618,22 @@ impl RunCommand {
             .expect("found export index");
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
-        func.call_async(&mut *store, &params, &mut results).await?;
-        func.post_return_async(&mut *store).await?;
+
+        #[cfg(feature = "component-model-async")]
+        {
+            store
+                .run_concurrent(async |store| {
+                    let task = func.call_concurrent(store, &params, &mut results).await?;
+                    task.block(store).await;
+                    wasmtime::error::Ok(())
+                })
+                .await??;
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            func.call_async(&mut *store, &params, &mut results).await?;
+            func.post_return_async(&mut *store).await?;
+        }
 
         println!("{}", DisplayFuncResults(&results));
 
@@ -643,7 +661,11 @@ impl RunCommand {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
                     store
-                        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+                        .run_concurrent(async |store| {
+                            let (result, task) = command.wasi_cli_run().call_run(store).await?;
+                            task.block(store).await;
+                            Ok(result)
+                        })
                         .await?,
                 );
             }
@@ -710,8 +732,7 @@ impl RunCommand {
                     return None;
                 };
                 let func_name = names.last().expect("at least one name");
-                let base_func_name = func_name.strip_prefix("[async]").unwrap_or(func_name);
-                (base_func_name == name).then_some((names, func))
+                (func_name == name).then_some((names, func))
             })
             .collect()
     }
@@ -739,7 +760,7 @@ impl RunCommand {
             };
             let val = val
                 .to_str()
-                .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
+                .ok_or_else(|| format_err!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
                 // Supports both decimal and hexadecimal notation (with 0x prefix)
                 ValType::I32 => Val::I32(if val.starts_with("0x") || val.starts_with("0X") {
@@ -1087,7 +1108,7 @@ impl RunCommand {
                 None => match std::env::var_os(key) {
                     Some(val) => val
                         .into_string()
-                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
+                        .map_err(|_| format_err!("environment variable `{key}` not valid utf-8"))?,
                     None => {
                         // leave the env var un-set in the guest
                         continue;
@@ -1292,7 +1313,7 @@ fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<u
 #[cfg(feature = "coredump")]
 fn write_core_dump(
     store: &mut Store<Host>,
-    err: &anyhow::Error,
+    err: &wasmtime::Error,
     name: &str,
     path: &str,
 ) -> Result<()> {

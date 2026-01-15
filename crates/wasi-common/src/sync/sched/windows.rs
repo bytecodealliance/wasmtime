@@ -9,7 +9,7 @@
 // taken the time to improve it. See bug #2880.
 
 use crate::sched::subscription::{RwEventFlags, Subscription};
-use crate::{Error, ErrorExt, file::WasiFile, sched::Poll};
+use crate::{EnvError, Error, ErrorExt, file::WasiFile, sched::Poll};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
@@ -70,7 +70,7 @@ pub async fn poll_oneoff_<'a>(
     if !stdin_read_subs.is_empty() {
         let state = STDIN_POLL
             .lock()
-            .map_err(|_| Error::trap(anyhow::Error::msg("failed to take lock of STDIN_POLL")))?
+            .map_err(|_| Error::trap(EnvError::msg("failed to take lock of STDIN_POLL")))?
             .poll(waitmode)?;
         for readsub in stdin_read_subs.into_iter() {
             match state {
@@ -82,7 +82,7 @@ pub async fn poll_oneoff_<'a>(
                 PollState::Error(ref e) => {
                     // Unfortunately, we need to deliver the Error to each of the
                     // subscriptions, but there is no Clone on std::io::Error. So, we convert it to the
-                    // kind, and then back to std::io::Error, and finally to anyhow::Error.
+                    // kind, and then back to std::io::Error, and finally to EnvError.
                     // When its time to turn this into an errno elsewhere, the error kind will
                     // be inspected.
                     let ekind = e.kind();
@@ -164,7 +164,7 @@ impl StdinPoll {
             // Clean up possibly unread result from previous poll.
             Ok(_) | Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
-                return Err(Error::trap(anyhow::Error::msg(
+                return Err(Error::trap(EnvError::msg(
                     "StdinPoll notify_rx channel closed",
                 )));
             }
@@ -173,25 +173,25 @@ impl StdinPoll {
         // Notify the worker thread to poll stdin
         self.request_tx
             .send(())
-            .map_err(|_| Error::trap(anyhow::Error::msg("request_tx channel closed")))?;
+            .map_err(|_| Error::trap(EnvError::msg("request_tx channel closed")))?;
 
         // Wait for the worker thread to send a readiness notification
         match wait_mode {
             WaitMode::Timeout(timeout) => match self.notify_rx.recv_timeout(timeout) {
                 Ok(r) => Ok(r),
                 Err(RecvTimeoutError::Timeout) => Ok(PollState::TimedOut),
-                Err(RecvTimeoutError::Disconnected) => Err(Error::trap(anyhow::Error::msg(
+                Err(RecvTimeoutError::Disconnected) => Err(Error::trap(EnvError::msg(
                     "StdinPoll notify_rx channel closed",
                 ))),
             },
             WaitMode::Infinite => self
                 .notify_rx
                 .recv()
-                .map_err(|_| Error::trap(anyhow::Error::msg("StdinPoll notify_rx channel closed"))),
+                .map_err(|_| Error::trap(EnvError::msg("StdinPoll notify_rx channel closed"))),
             WaitMode::Immediate => match self.notify_rx.try_recv() {
                 Ok(r) => Ok(r),
                 Err(TryRecvError::Empty) => Ok(PollState::NotReady),
-                Err(TryRecvError::Disconnected) => Err(Error::trap(anyhow::Error::msg(
+                Err(TryRecvError::Disconnected) => Err(Error::trap(EnvError::msg(
                     "StdinPoll notify_rx channel closed",
                 ))),
             },

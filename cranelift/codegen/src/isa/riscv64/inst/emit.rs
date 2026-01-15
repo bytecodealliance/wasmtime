@@ -1196,6 +1196,7 @@ impl Inst {
             &Inst::Call { ref info } => {
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
+                let start = sink.cur_offset();
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
@@ -1221,12 +1222,16 @@ impl Inst {
                     }
                 }
 
-                // Load any stack-carried return values.
-                info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
-                    state.frame_layout().stackslots_size,
-                    |inst| inst.emit(sink, emit_info, state),
-                    |needed_space| Some(Inst::EmitIsland { needed_space }),
-                );
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    // Load any stack-carried return values.
+                    info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
+                        state.frame_layout().stackslots_size,
+                        |inst| inst.emit(sink, emit_info, state),
+                        |needed_space| Some(Inst::EmitIsland { needed_space }),
+                    );
+                }
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

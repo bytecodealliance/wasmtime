@@ -3,9 +3,11 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::OpaqueRootScope;
+use crate::code::ModuleWithCode;
+use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
-use crate::runtime::vm::export::Export;
+use crate::runtime::vm::export::{Export, ExportMemory};
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
@@ -18,6 +20,7 @@ use crate::runtime::vm::{
     VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::vm::VMWasmCallFunction;
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -346,7 +349,6 @@ impl Instance {
         self.runtime_info.env_module()
     }
 
-    #[cfg(any(feature = "gc", feature = "debug"))]
     pub(crate) fn runtime_module(&self) -> Option<&crate::Module> {
         match &self.runtime_info {
             ModuleRuntimeInfo::Module(m) => Some(m),
@@ -550,10 +552,11 @@ impl Instance {
     /// functions that this instance can reference.
     pub unsafe fn get_exported_func(
         self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         store: StoreId,
         index: FuncIndex,
     ) -> crate::Func {
-        let func_ref = self.get_func_ref(index).unwrap();
+        let func_ref = self.get_func_ref(registry, index).unwrap();
 
         // SAFETY: the validity of `func_ref` is guaranteed by the validity of
         // `self`, and the contract that `store` must own `func_ref` is a
@@ -586,19 +589,48 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out-of-bounds for this instance.
-    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> crate::Memory {
-        let (id, def_index) = if let Some(def_index) = self.env_module().defined_memory_index(index)
-        {
-            (self.id, def_index)
+    #[cfg_attr(
+        not(feature = "threads"),
+        expect(unused_variables, reason = "definitions cfg'd to dummy",)
+    )]
+    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> ExportMemory {
+        let module = self.env_module();
+        if module.memories[index].shared {
+            let (memory, import) =
+                if let Some(def_index) = self.env_module().defined_memory_index(index) {
+                    (
+                        self.get_defined_memory(def_index),
+                        self.get_defined_memory_vmimport(def_index),
+                    )
+                } else {
+                    let import = self.imported_memory(index);
+                    // SAFETY: validity of this `Instance` guarantees validity of
+                    // the `vmctx` pointer being read here to find the transitive
+                    // `InstanceId` that the import is associated with.
+                    let instance = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()) };
+                    (instance.get_defined_memory(import.index), *import)
+                };
+
+            let vm = memory.as_shared_memory().unwrap().clone();
+            ExportMemory::Shared(vm, import)
         } else {
-            let import = self.imported_memory(index);
-            // SAFETY: validity of this `Instance` guarantees validity of the
-            // `vmctx` pointer being read here to find the transitive
-            // `InstanceId` that the import is associated with.
-            let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
-            (id, import.index)
-        };
-        crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
+            let (id, def_index) =
+                if let Some(def_index) = self.env_module().defined_memory_index(index) {
+                    (self.id, def_index)
+                } else {
+                    let import = self.imported_memory(index);
+                    // SAFETY: validity of this `Instance` guarantees validity of the
+                    // `vmctx` pointer being read here to find the transitive
+                    // `InstanceId` that the import is associated with.
+                    let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
+                    (id, import.index)
+                };
+
+            // SAFETY: `from_raw` requires that the memory is not shared, which
+            // was tested above in this if/else.
+            let store_id = StoreInstanceId::new(store, id);
+            ExportMemory::Unshared(unsafe { crate::Memory::from_raw(store_id, def_index) })
+        }
     }
 
     /// Lookup a global by index.
@@ -641,6 +673,20 @@ impl Instance {
                 crate::Global::from_component_flags(
                     crate::component::store::StoreComponentInstanceId::new(store, id),
                     index,
+                )
+            }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::TaskMayBlock => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = super::component::VMComponentContext::from_opaque(
+                        import.vmctx.unwrap().as_non_null(),
+                    );
+                    super::component::ComponentInstance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_task_may_block(
+                    crate::component::store::StoreComponentInstanceId::new(store, id),
                 )
             }
         }
@@ -751,18 +797,38 @@ impl Instance {
     /// This functions requires that `into` is a valid pointer.
     unsafe fn construct_func_ref(
         self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         index: FuncIndex,
         type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
     ) {
+        let module_with_code = ModuleWithCode::in_store(
+            registry,
+            self.runtime_module()
+                .expect("funcref impossible in fake module"),
+        )
+        .expect("module not in store");
+
         let func_ref = if let Some(def_index) = self.env_module().defined_func_index(index) {
             VMFuncRef {
-                array_call: self
-                    .runtime_info
-                    .array_to_wasm_trampoline(def_index)
-                    .expect("should have array-to-Wasm trampoline for escaping function")
+                array_call: NonNull::from(
+                    module_with_code
+                        .array_to_wasm_trampoline(def_index)
+                        .expect("should have array-to-Wasm trampoline for escaping function"),
+                )
+                .cast()
+                .into(),
+                wasm_call: Some(
+                    NonNull::new(
+                        module_with_code
+                            .finished_function(def_index)
+                            .as_ptr()
+                            .cast::<VMWasmCallFunction>()
+                            .cast_mut(),
+                    )
+                    .unwrap()
                     .into(),
-                wasm_call: Some(self.runtime_info.function(def_index).into()),
+                ),
                 vmctx: VMOpaqueContext::from_vmcontext(self.vmctx()).into(),
                 type_index,
             }
@@ -791,6 +857,7 @@ impl Instance {
     /// be passed into JIT code.
     pub(crate) fn get_func_ref(
         self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         index: FuncIndex,
     ) -> Option<NonNull<VMFuncRef>> {
         if index == FuncIndex::reserved_value() {
@@ -833,7 +900,7 @@ impl Instance {
         // SAFETY: the `func_ref` ptr should be valid as it's within our
         // `VMContext` area.
         unsafe {
-            self.construct_func_ref(index, sig, func_ref.as_ptr());
+            self.construct_func_ref(registry, index, sig, func_ref.as_ptr());
         }
 
         Some(func_ref)
@@ -949,13 +1016,11 @@ impl Instance {
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 for (i, func_idx) in positions.zip(elements) {
+                    let (instance, registry) =
+                        store.instance_and_module_registry_mut(elements_instance_id);
                     // SAFETY: the `store_id` passed to `get_exported_func` is
                     // indeed the store that owns the function.
-                    let func = unsafe {
-                        store
-                            .instance_mut(elements_instance_id)
-                            .get_exported_func(store_id, *func_idx)
-                    };
+                    let func = unsafe { instance.get_exported_func(registry, store_id, *func_idx) };
                     table.set_(store, i, func.into()).unwrap();
                 }
             }
@@ -996,6 +1061,14 @@ impl Instance {
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&self, index: DefinedMemoryIndex) -> &Memory {
         &self.memories[index].1
+    }
+
+    pub fn get_defined_memory_vmimport(&self, index: DefinedMemoryIndex) -> VMMemoryImport {
+        crate::runtime::vm::VMMemoryImport {
+            from: self.memory_ptr(index).into(),
+            vmctx: self.vmctx().into(),
+            index,
+        }
     }
 
     /// Do a `memory.copy`
@@ -1159,11 +1232,12 @@ impl Instance {
     /// works correctly.
     pub(crate) fn get_table_with_lazy_init(
         self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         table_index: TableIndex,
         range: impl Iterator<Item = u64>,
     ) -> &mut Table {
         let (idx, instance) = self.defined_table_index_and_instance(table_index);
-        instance.get_defined_table_with_lazy_init(idx, range)
+        instance.get_defined_table_with_lazy_init(registry, idx, range)
     }
 
     /// Gets the raw runtime table data structure owned by this instance
@@ -1172,6 +1246,7 @@ impl Instance {
     /// The `range` specified is eagerly initialized for funcref tables.
     pub fn get_defined_table_with_lazy_init(
         mut self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         idx: DefinedTableIndex,
         range: impl IntoIterator<Item = u64>,
     ) -> &mut Table {
@@ -1204,8 +1279,8 @@ impl Instance {
                 };
                 // Panicking here helps catch bugs rather than silently truncating by accident.
                 let func_index = precomputed.get(usize::try_from(i).unwrap()).cloned();
-                let func_ref =
-                    func_index.and_then(|func_index| self.as_mut().get_func_ref(func_index));
+                let func_ref = func_index
+                    .and_then(|func_index| self.as_mut().get_func_ref(registry, func_index));
                 self.as_mut().tables_mut()[idx]
                     .1
                     .set_func(i, func_ref)
@@ -1462,7 +1537,7 @@ impl Instance {
     pub fn all_memories(
         &self,
         store: StoreId,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + '_ {
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + '_ {
         self.env_module()
             .memories
             .iter()
@@ -1473,7 +1548,7 @@ impl Instance {
     pub fn defined_memories<'a>(
         &'a self,
         store: StoreId,
-    ) -> impl ExactSizeIterator<Item = crate::Memory> + 'a {
+    ) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
         let num_imported = self.env_module().num_imported_memories;
         self.all_memories(store)
             .skip(num_imported)
@@ -1492,6 +1567,7 @@ impl Instance {
     /// instance.
     pub unsafe fn get_export_by_index_mut(
         self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
         store: StoreId,
         export: EntityIndex,
     ) -> Export {
@@ -1499,13 +1575,13 @@ impl Instance {
             // SAFETY: the contract of `store` owning the this instance is a
             // safety requirement of this function itself.
             EntityIndex::Function(i) => {
-                Export::Function(unsafe { self.get_exported_func(store, i) })
+                Export::Function(unsafe { self.get_exported_func(registry, store, i) })
             }
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
-            EntityIndex::Memory(i) => Export::Memory {
-                memory: self.get_exported_memory(store, i),
-                shared: self.env_module().memories[i].shared,
+            EntityIndex::Memory(i) => match self.get_exported_memory(store, i) {
+                ExportMemory::Unshared(m) => Export::Memory(m),
+                ExportMemory::Shared(m, i) => Export::SharedMemory(m, i),
             },
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
         }

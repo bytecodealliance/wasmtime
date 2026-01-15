@@ -1,12 +1,12 @@
 use crate::clocks::Datetime;
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
-use anyhow::Context as _;
 use cap_fs_ext::{FileTypeExt as _, MetadataExt as _};
 use fs_set_times::SystemTimeSpec;
 use std::collections::hash_map;
 use std::sync::Arc;
 use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
+use wasmtime::error::Context as _;
 
 /// A helper struct which implements [`HasData`] for the `wasi:filesystem` APIs.
 ///
@@ -1045,6 +1045,14 @@ impl Dir {
             .await?;
 
         match opened {
+            // Paper over a divergence between Windows and POSIX, where
+            // POSIX returns EISDIR if you open a directory with the
+            // WRITE flag: https://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html#:~:text=EISDIR
+            #[cfg(windows)]
+            OpenResult::Dir(_) if flags.contains(DescriptorFlags::WRITE) => {
+                Err(ErrorCode::IsDirectory)
+            }
+
             OpenResult::Dir(dir) => Ok(Descriptor::Dir(Dir::new(
                 dir,
                 self.perms,

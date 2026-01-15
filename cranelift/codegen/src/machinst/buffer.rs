@@ -180,15 +180,15 @@ use crate::machinst::{
 use crate::trace;
 use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
+use alloc::collections::BinaryHeap;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::cmp::Ordering;
+use core::mem;
 use core::ops::Range;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use smallvec::SmallVec;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-use std::mem;
-use std::string::String;
-use std::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -250,6 +250,8 @@ pub struct MachBuffer<I: VCodeInst> {
     traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
     call_sites: SmallVec<[MachCallSite; 16]>,
+    /// Any patchable call site locations.
+    patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
     exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -340,6 +342,7 @@ impl MachBufferFinalized<Stencil> {
             relocs: self.relocs,
             traps: self.traps,
             call_sites: self.call_sites,
+            patchable_call_sites: self.patchable_call_sites,
             exception_handlers: self.exception_handlers,
             srclocs: self
                 .srclocs
@@ -352,6 +355,7 @@ impl MachBufferFinalized<Stencil> {
             unwind_info: self.unwind_info,
             alignment: self.alignment,
             frame_layout: self.frame_layout,
+            nop_units: self.nop_units,
         }
     }
 }
@@ -374,6 +378,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
     pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
+    /// Any patchable call site locations refering to this code.
+    pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -395,6 +401,15 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The required alignment of this buffer.
     pub alignment: u32,
+    /// The means by which to NOP out patchable call sites.
+    ///
+    /// This allows a consumer of a `MachBufferFinalized` to disable
+    /// patchable call sites (which are enabled by default) without
+    /// specific knowledge of the target ISA.
+    ///
+    /// Each entry is one form of nop, and these are required to be
+    /// sorted in ascending-size order.
+    pub nop_units: Vec<Vec<u8>>,
 }
 
 const UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
@@ -464,6 +479,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             relocs: SmallVec::new(),
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
+            patchable_call_sites: SmallVec::new(),
             exception_handlers: SmallVec::new(),
             srclocs: SmallVec::new(),
             debug_tags: vec![],
@@ -1564,6 +1580,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             relocs: finalized_relocs,
             traps: self.traps,
             call_sites: self.call_sites,
+            patchable_call_sites: self.patchable_call_sites,
             exception_handlers: finalized_exception_handlers,
             srclocs,
             debug_tags: self.debug_tags,
@@ -1572,6 +1589,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             unwind_info: self.unwind_info,
             alignment,
             frame_layout: self.frame_layout,
+            nop_units: I::gen_nop_units(),
         }
     }
 
@@ -1664,6 +1682,17 @@ impl<I: VCodeInst> MachBuffer<I> {
             ret_addr: self.data.len() as CodeOffset,
             frame_offset,
             exception_handler_range,
+        });
+    }
+
+    /// Add a patchable call record at the current offset The actual
+    /// call is expected to have been emitted; the VCodeInst trait
+    /// specifies how to NOP it out, and we carry that information to
+    /// the finalized Machbuffer.
+    pub fn add_patchable_call_site(&mut self, len: u32) {
+        self.patchable_call_sites.push(MachPatchableCallSite {
+            ret_addr: self.cur_offset(),
+            len,
         });
     }
 
@@ -1791,7 +1820,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Return the code in this mach buffer as a hex string for testing purposes.
     pub fn stringify_code_bytes(&self) -> String {
         // This is pretty lame, but whatever ..
-        use std::fmt::Write;
+        use core::fmt::Write;
         let mut s = String::with_capacity(self.data.len() * 2);
         for b in &self.data {
             write!(&mut s, "{b:02X}").unwrap();
@@ -1813,6 +1842,12 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         // to add the appropriate relocations in this case.
 
         &self.data[..]
+    }
+
+    /// Get a mutable slice of the code bytes, allowing patching
+    /// post-passes.
+    pub fn data_mut(&mut self) -> &mut [u8] {
+        &mut self.data[..]
     }
 
     /// Get the list of external relocations for this code.
@@ -1862,6 +1897,19 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Get the frame layout, if known.
     pub fn frame_layout(&self) -> Option<&MachBufferFrameLayout> {
         self.frame_layout.as_ref()
+    }
+
+    /// Get the list of patchable call sites for this code.
+    ///
+    /// Each location in the buffer contains the bytes for a call
+    /// instruction to the specified target. If the call is to be
+    /// patched out, the bytes in the region should be replaced with
+    /// those given in the `MachBufferFinalized::nop` array, repeated
+    /// as many times as necessary. (The length of the patchable
+    /// region is guaranteed to be an integer multiple of that NOP
+    /// unit size.)
+    pub fn patchable_call_sites(&self) -> impl Iterator<Item = &MachPatchableCallSite> + '_ {
+        self.patchable_call_sites.iter()
     }
 }
 
@@ -2132,6 +2180,22 @@ pub struct FinalizedMachCallSite<'a> {
     /// Exception handlers at this callsite, with target offsets
     /// *relative to the start of the buffer*.
     pub exception_handlers: &'a [FinalizedMachExceptionHandler],
+}
+
+/// A patchable call site record resulting from a compilation.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachPatchableCallSite {
+    /// The offset of the call's return address (i.e., the address
+    /// after the end of the patchable region), *relative to the start
+    /// of the buffer*.
+    pub ret_addr: CodeOffset,
+
+    /// The length of the region to be patched by NOP bytes.
+    pub len: u32,
 }
 
 /// A source-location mapping resulting from a compilation.

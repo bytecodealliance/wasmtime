@@ -2,8 +2,7 @@
 
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{Context, Error, Result};
-use wasmtime::Trap;
+use wasmtime::{Error, Result, Trap, error::Context as _};
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine {
@@ -41,7 +40,7 @@ impl WasmiEngine {
         }
     }
 
-    fn trap_code(&self, err: &Error) -> Option<wasmi::core::TrapCode> {
+    fn trap_code(&self, err: &Error) -> Option<wasmi::TrapCode> {
         let err = err.downcast_ref::<wasmi::Error>()?;
         if let Some(code) = err.as_trap_code() {
             return Some(code);
@@ -50,12 +49,12 @@ impl WasmiEngine {
         match err.kind() {
             wasmi::errors::ErrorKind::Instantiation(
                 wasmi::errors::InstantiationError::ElementSegmentDoesNotFit { .. },
-            ) => Some(wasmi::core::TrapCode::TableOutOfBounds),
+            ) => Some(wasmi::TrapCode::TableOutOfBounds),
             wasmi::errors::ErrorKind::Memory(wasmi::errors::MemoryError::OutOfBoundsAccess) => {
-                Some(wasmi::core::TrapCode::MemoryOutOfBounds)
+                Some(wasmi::TrapCode::MemoryOutOfBounds)
             }
             wasmi::errors::ErrorKind::Table(wasmi::errors::TableError::CopyOutOfBounds) => {
-                Some(wasmi::core::TrapCode::TableOutOfBounds)
+                Some(wasmi::TrapCode::TableOutOfBounds)
             }
             _ => {
                 log::trace!("unknown wasmi error: {:?}", err.kind());
@@ -88,16 +87,13 @@ impl DiffEngine for WasmiEngine {
     }
 
     fn is_non_deterministic_error(&self, err: &Error) -> bool {
-        matches!(
-            self.trap_code(err),
-            Some(wasmi::core::TrapCode::StackOverflow)
-        )
+        matches!(self.trap_code(err), Some(wasmi::TrapCode::StackOverflow))
     }
 }
 
 /// Converts `wasmi` trap code to `wasmtime` trap code.
-fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> Trap {
-    use wasmi::core::TrapCode;
+fn wasmi_to_wasmtime_trap_code(trap: wasmi::TrapCode) -> Trap {
+    use wasmi::TrapCode;
     match trap {
         TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
         TrapCode::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
@@ -175,9 +171,9 @@ impl From<&DiffValue> for wasmi::Val {
         match *v {
             DiffValue::I32(n) => WasmiValue::I32(n),
             DiffValue::I64(n) => WasmiValue::I64(n),
-            DiffValue::F32(n) => WasmiValue::F32(wasmi::core::F32::from_bits(n)),
-            DiffValue::F64(n) => WasmiValue::F64(wasmi::core::F64::from_bits(n)),
-            DiffValue::V128(n) => WasmiValue::V128(wasmi::core::V128::from(n)),
+            DiffValue::F32(n) => WasmiValue::F32(wasmi::F32::from_bits(n)),
+            DiffValue::F64(n) => WasmiValue::F64(wasmi::F64::from_bits(n)),
+            DiffValue::V128(n) => WasmiValue::V128(wasmi::V128::from(n)),
             DiffValue::FuncRef { null } => {
                 assert!(null);
                 WasmiValue::default(wasmi::ValType::FuncRef)

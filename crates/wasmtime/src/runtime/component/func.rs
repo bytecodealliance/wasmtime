@@ -1,3 +1,4 @@
+use crate::component::RuntimeInstance;
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
@@ -8,7 +9,6 @@ use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTa
 use crate::runtime::vm::{Export, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
-use anyhow::Context as _;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -103,7 +103,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, store: &mut Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, store: &mut Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(), ()>(&store)?;
     /// typed.call(store, ())?;
     /// # Ok(())
@@ -116,7 +116,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, mut store: Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(&str,), (String,)>(&store)?;
     /// let ret = typed.call(&mut store, ("Hello, ",))?.0;
     /// println!("returned string was: {}", ret);
@@ -129,7 +129,7 @@ impl Func {
     /// ```
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
-    /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// # fn foo(func: &Func, mut store: Store<()>) -> wasmtime::Result<()> {
     /// let typed = func.typed::<(u32, Option<&str>, &[u8]), (bool,)>(&store)?;
     /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?.0;
     /// println!("return value was: {ok}");
@@ -313,6 +313,9 @@ impl Func {
 
     /// Start a concurrent call to this function.
     ///
+    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
+    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
+    ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
@@ -369,6 +372,37 @@ impl Func {
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
+    ///
+    /// # Example
+    ///
+    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
+    ///
+    /// ```
+    /// # use {
+    /// #   wasmtime::{
+    /// #     error::{Result},
+    /// #     component::{Component, Linker, ResourceTable},
+    /// #     Config, Engine, Store
+    /// #   },
+    /// # };
+    /// #
+    /// # struct Ctx { table: ResourceTable }
+    /// #
+    /// # async fn foo() -> Result<()> {
+    /// # let mut config = Config::new();
+    /// # let engine = Engine::new(&config)?;
+    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
+    /// # let mut linker = Linker::new(&engine);
+    /// # let component = Component::new(&engine, "")?;
+    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
+    /// let my_func = instance.get_func(&mut store, "my_func").unwrap();
+    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
+    ///    my_func.call_concurrent(accessor, &[], &mut Vec::new()).await?;
+    ///    Ok(())
+    /// }).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,
@@ -581,6 +615,15 @@ impl Func {
         LowerReturn: Copy,
     {
         let export = self.lifted_core_func(store.0);
+        let (_options, _flags, _ty, raw_options) = self.abi_info(store.0);
+        let instance = RuntimeInstance {
+            instance: self.instance.id().instance(),
+            index: raw_options.instance,
+        };
+
+        if !store.0.may_enter(instance) {
+            bail!(crate::Trap::CannotEnterComponent);
+        }
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
@@ -755,9 +798,6 @@ impl Func {
             );
             let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
 
-            // This is a sanity-check assert which shouldn't ever trip.
-            assert!(!flags.may_enter());
-
             // Unset the "needs post return" flag now that post-return is being
             // processed. This will cause future invocations of this method to
             // panic, even if the function call below traps.
@@ -769,10 +809,6 @@ impl Func {
 
             // If the function actually had a `post-return` configured in its
             // canonical options that's executed here.
-            //
-            // Note that if this traps (returns an error) this function
-            // intentionally leaves the instance in a "poisoned" state where it
-            // can no longer be entered because `may_enter` is `false`.
             if let Some(func) = post_return {
                 crate::Func::call_unchecked_raw(
                     &mut store,
@@ -783,9 +819,8 @@ impl Func {
             }
 
             // And finally if everything completed successfully then the "may
-            // enter" and "may leave" flags are set to `true` again here which
-            // enables further use of the component.
-            flags.set_may_enter(true);
+            // leave" flags is set to `true` again here which enables further
+            // use of the component.
             flags.set_may_leave(true);
 
             let (calls, host_table, _, instance) = store
@@ -794,7 +829,7 @@ impl Func {
             ResourceTables {
                 host_table: Some(host_table),
                 calls,
-                guest: Some(instance.guest_tables()),
+                guest: Some(instance.instance_states()),
             }
             .exit_call()?;
         }
@@ -881,7 +916,7 @@ impl Func {
             .memory()
             .get(ptr..)
             .and_then(|b| b.get(..usize::try_from(results_ty.abi.size32).unwrap()))
-            .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
+            .ok_or_else(|| crate::format_err!("pointer out of bounds of memory"))?;
 
         let mut offset = 0;
         Ok(results_ty.types.iter().map(move |ty| {
@@ -910,25 +945,11 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
-        may_enter: bool,
+        call_post_return_automatically: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
         let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
         let async_ = options.async_;
-
-        // Test the "may enter" flag which is a "lock" on this instance.
-        // This is immediately set to `false` afterwards and note that
-        // there's no on-cleanup setting this flag back to true. That's an
-        // intentional design aspect where if anything goes wrong internally
-        // from this point on the instance is considered "poisoned" and can
-        // never be entered again. The only time this flag is set to `true`
-        // again is after post-return logic has completed successfully.
-        unsafe {
-            if !flags.may_enter() {
-                bail!(crate::Trap::CannotEnterComponent);
-            }
-            flags.set_may_enter(false);
-        }
 
         // Perform the actual lowering, where while this is running the
         // component is forbidden from calling imports.
@@ -942,14 +963,10 @@ impl Func {
         unsafe { flags.set_may_leave(true) };
         result?;
 
-        // If this is an async function and `may_enter == true` then we're
-        // allowed to reenter the component at this point, and otherwise flag a
-        // post-return call being required as we're about to enter wasm and
-        // afterwards need a post-return.
+        // If needed, flag a post-return call being required as we're about to
+        // enter wasm and afterwards need a post-return.
         unsafe {
-            if may_enter && async_ {
-                flags.set_may_enter(true);
-            } else {
+            if !(call_post_return_automatically && async_) {
                 flags.set_needs_post_return(true);
             }
         }

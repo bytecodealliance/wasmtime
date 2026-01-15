@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     abi::{ABI, ABIOperand, ABISig, LocalSlot, align_to},
     codegen::{CodeGenPhase, Emission, Prologue},
     masm::MacroAssembler,
 };
-use anyhow::Result;
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::ops::Range;

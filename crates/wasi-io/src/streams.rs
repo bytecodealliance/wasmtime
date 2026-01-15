@@ -1,7 +1,7 @@
 use crate::poll::Pollable;
 use alloc::boxed::Box;
-use anyhow::Result;
 use bytes::Bytes;
+use wasmtime::Result;
 
 /// `Pollable::ready()` for `InputStream` and `OutputStream` may return
 /// prematurely due to `io::ErrorKind::WouldBlock`.
@@ -76,22 +76,22 @@ pub trait InputStream: Pollable {
 /// Representation of the `error` resource type in the `wasi:io/error`
 /// interface.
 ///
-/// This is currently `anyhow::Error` to retain full type information for
+/// This is currently `wasmtime::Error` to retain full type information for
 /// errors.
-pub type Error = anyhow::Error;
+pub type Error = wasmtime::Error;
 
 pub type StreamResult<T> = Result<T, StreamError>;
 
 #[derive(Debug)]
 pub enum StreamError {
     Closed,
-    LastOperationFailed(anyhow::Error),
-    Trap(anyhow::Error),
+    LastOperationFailed(wasmtime::Error),
+    Trap(wasmtime::Error),
 }
 
 impl StreamError {
     pub fn trap(msg: &str) -> StreamError {
-        StreamError::Trap(anyhow::anyhow!("{msg}"))
+        StreamError::Trap(wasmtime::format_err!("{msg}"))
     }
 }
 

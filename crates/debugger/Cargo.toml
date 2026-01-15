@@ -1,0 +1,26 @@
+[package]
+name = "wasmtime-internal-debugger"
+authors.workspace = true
+version.workspace = true
+description = "INTERNAL: Wasmtime's guest-debugger functionality"
+license = "Apache-2.0 WITH LLVM-exception"
+keywords = ["debugger"]
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+wasmtime = { workspace = true, features = ["debug", "std", "async"] }
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+log = { workspace = true }
+
+[dev-dependencies]
+# Depend on `wasmtime` again to get `cranelift` and `wat` so we can
+# write unit tests that build modules from textual WAT.
+wasmtime = { workspace = true, features = ["cranelift", "wat"] }
+env_logger = { workspace = true }
+
+[features]
+default = []

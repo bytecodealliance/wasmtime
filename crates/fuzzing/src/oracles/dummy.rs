@@ -1,7 +1,6 @@
 //! Dummy implementations of things that a Wasm module can import.
 
-use anyhow::Context;
-use wasmtime::*;
+use wasmtime::{error::Context as _, *};
 
 /// Create a set of dummy functions/globals/etc for the given imports.
 pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
@@ -59,7 +58,11 @@ mod tests {
     fn dummy_memory_import() {
         let mut store = store();
         let memory_type = MemoryType::new(1, None);
-        let memory = memory_type.default_value(&mut store).unwrap();
+        let memory = memory_type
+            .default_value(&mut store)
+            .unwrap()
+            .into_memory()
+            .unwrap();
         assert_eq!(memory.size(&store), 1);
     }
 

@@ -1,0 +1,9 @@
+test compile
+target aarch64
+
+function %band_not_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    return v3
+}

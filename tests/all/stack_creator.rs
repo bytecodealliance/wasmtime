@@ -1,11 +1,11 @@
 #![cfg(all(not(target_os = "windows"), not(miri)))]
-use anyhow::{Context, bail};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     ops::Range,
     ptr::NonNull,
     sync::Arc,
 };
+use wasmtime::error::Context as _;
 use wasmtime::*;
 
 fn align_up(v: usize, align: usize) -> usize {

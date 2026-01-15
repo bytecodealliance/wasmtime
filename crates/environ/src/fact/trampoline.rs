@@ -16,22 +16,22 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_LEAVE, FixedEncoding as FE, FlatType,
+    InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
-use crate::fact::traps::Trap;
 use crate::fact::{
     AdapterData, Body, Function, FunctionId, Helper, HelperLocation, HelperType,
     LinearMemoryOptions, Module, Options,
 };
 use crate::prelude::*;
-use crate::{FuncIndex, GlobalIndex};
+use crate::{FuncIndex, GlobalIndex, Trap};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
@@ -60,11 +60,6 @@ struct Compiler<'a, 'b> {
 
     /// Locals partitioned by type which are not currently in use.
     free_locals: HashMap<ValType, Vec<u32>>,
-
-    /// Metadata about all `unreachable` trap instructions in this function and
-    /// what the trap represents. The offset within `self.code` is recorded as
-    /// well.
-    traps: Vec<(usize, Trap)>,
 
     /// A heuristic which is intended to limit the size of a generated function
     /// to a certain maximum to avoid generating arbitrarily large functions.
@@ -117,6 +112,19 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             lower_sig,
             lift_sig,
         )
+    }
+
+    // If the lift and lower instances are equal, or if one is an ancestor of
+    // the other, we trap unconditionally.  This ensures that recursive
+    // reentrance via an adapter is impossible.
+    if adapter.lift.instance == adapter.lower.instance
+        || adapter.lower.ancestors.contains(&adapter.lift.instance)
+        || adapter.lift.ancestors.contains(&adapter.lower.instance)
+    {
+        let (mut compiler, _, _) = compiler(module, adapter);
+        compiler.trap(Trap::CannotEnterComponent);
+        compiler.finish();
+        return;
     }
 
     // This closure compiles a function to be exported to the host which host to
@@ -331,7 +339,6 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
         code: Vec::new(),
         nlocals,
         free_locals: HashMap::new(),
-        traps: Vec::new(),
         result,
         fuel: INITIAL_FUEL,
         // This is a helper function and only the top-level function is
@@ -445,7 +452,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             code: Vec::new(),
             nlocals,
             free_locals: HashMap::new(),
-            traps: Vec::new(),
             fuel: INITIAL_FUEL,
             emit_resource_call,
         }
@@ -544,6 +550,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(
             i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
         ));
+        self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
+            1
+        } else {
+            0
+        }));
         self.instruction(I32Const(i32::from(
             adapter.lift.options.string_encoding as u8,
         )));
@@ -736,17 +747,28 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // This inserts the initial check required by `canon_lower` that the
         // caller instance can be left and additionally checks the
         // flags on the callee if necessary whether it can be entered.
-        self.trap_if_not_flag(adapter.lower.flags, FLAG_MAY_LEAVE, Trap::CannotLeave);
-        if adapter.called_as_export {
-            self.trap_if_not_flag(adapter.lift.flags, FLAG_MAY_ENTER, Trap::CannotEnter);
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, false);
-        } else if self.module.debug {
-            self.assert_not_flag(
-                adapter.lift.flags,
-                FLAG_MAY_ENTER,
-                "may_enter should be unset",
-            );
-        }
+        self.trap_if_not_flag(
+            adapter.lower.flags,
+            FLAG_MAY_LEAVE,
+            Trap::CannotLeaveComponent,
+        );
+
+        let task_may_block = self.module.import_task_may_block();
+        let old_task_may_block = if self.types[adapter.lift.ty].async_ {
+            self.instruction(GlobalGet(task_may_block.as_u32()));
+            self.instruction(I32Eqz);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::CannotBlockSyncTask);
+            self.instruction(End);
+            None
+        } else {
+            let task_may_block = self.module.import_task_may_block();
+            self.instruction(GlobalGet(task_may_block.as_u32()));
+            let old_task_may_block = self.local_set_new_tmp(ValType::I32);
+            self.instruction(I32Const(0));
+            self.instruction(GlobalSet(task_may_block.as_u32()));
+            Some(old_task_may_block)
+        };
 
         if self.emit_resource_call {
             let enter = self.module.import_resource_enter_call();
@@ -808,9 +830,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
             self.instruction(Call(func.as_u32()));
         }
-        if adapter.called_as_export {
-            self.set_flag(adapter.lift.flags, FLAG_MAY_ENTER, true);
-        }
 
         for tmp in temps {
             self.free_temp_local(tmp);
@@ -819,6 +838,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
         if self.emit_resource_call {
             let exit = self.module.import_resource_exit_call();
             self.instruction(Call(exit.as_u32()));
+        }
+
+        if let Some(old_task_may_block) = old_task_may_block {
+            let task_may_block = self.module.import_task_may_block();
+            self.instruction(LocalGet(old_task_may_block.idx));
+            self.instruction(GlobalSet(task_may_block.as_u32()));
+            self.free_temp_local(old_task_may_block);
         }
 
         self.finish()
@@ -1097,6 +1123,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => 1,
+            InterfaceType::FixedLengthList(i) => self.types[*i].size as usize,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -1135,6 +1162,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     InterfaceType::Stream(t) => self.translate_stream(*t, src, dst_ty, dst),
                     InterfaceType::ErrorContext(t) => {
                         self.translate_error_context(*t, src, dst_ty, dst)
+                    }
+                    InterfaceType::FixedLengthList(t) => {
+                        self.translate_fixed_length_list(*t, src, dst_ty, dst);
                     }
                 }
             }
@@ -1929,7 +1959,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.ptr_sub(src_mem_opts);
             self.ptr_ne(src_mem_opts);
             self.instruction(If(BlockType::Empty));
-            self.trap(Trap::AssertFailed("should have finished encoding"));
+            self.trap(Trap::DebugAssertStringEncodingFinished);
             self.instruction(End);
         } else {
             self.instruction(Drop);
@@ -1957,7 +1987,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(LocalGet(dst_byte_len.idx));
             self.ptr_ne(dst_mem_opts);
             self.instruction(If(BlockType::Empty));
-            self.trap(Trap::AssertFailed("should have finished encoding"));
+            self.trap(Trap::DebugAssertStringEncodingFinished);
             self.instruction(End);
         }
 
@@ -2128,7 +2158,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.convert_src_len_to_dst(src.len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
             self.ptr_ne(dst_mem_opts);
             self.instruction(If(BlockType::Empty));
-            self.trap(Trap::AssertFailed("expected equal code units"));
+            self.trap(Trap::DebugAssertEqualCodeUnits);
             self.instruction(End);
         }
 
@@ -2325,7 +2355,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.ptr_uconst(mem_opts, max);
         self.ptr_ge_u(mem_opts);
         self.instruction(If(BlockType::Empty));
-        self.trap(Trap::StringLengthTooBig);
+        self.trap(Trap::StringOutOfBounds);
         self.instruction(End);
     }
 
@@ -2364,7 +2394,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match &s.opts.data_model {
             DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => {
-                self.validate_memory_inbounds(opts, s.ptr.idx, byte_len, Trap::StringLengthOverflow)
+                self.validate_memory_inbounds(opts, s.ptr.idx, byte_len, Trap::StringOutOfBounds)
             }
         }
     }
@@ -2499,13 +2529,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             src_mem_opts,
             src_mem.addr.idx,
             src_byte_len.idx,
-            Trap::ListByteLengthOverflow,
+            Trap::ListOutOfBounds,
         );
         self.validate_memory_inbounds(
             dst_mem_opts,
             dst_mem.addr.idx,
             dst_byte_len.idx,
-            Trap::ListByteLengthOverflow,
+            Trap::ListOutOfBounds,
         );
 
         self.free_temp_local(src_byte_len);
@@ -2626,7 +2656,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.instruction(I64ShrU);
                 self.instruction(I32WrapI64);
                 self.instruction(If(BlockType::Empty));
-                self.trap(Trap::ListByteLengthOverflow);
+                self.trap(Trap::ListOutOfBounds);
                 self.instruction(End);
             }
             self.instruction(LocalGet(len_local));
@@ -2678,7 +2708,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I64Eqz);
         self.instruction(BrIf(1));
         self.instruction(End);
-        self.trap(Trap::ListByteLengthOverflow);
+        self.trap(Trap::ListOutOfBounds);
         self.instruction(End);
 
         // If a fresh local was used to store the result of the multiplication
@@ -2829,6 +2859,113 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
+    fn translate_fixed_length_list(
+        &mut self,
+        src_ty: TypeFixedLengthListIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::FixedLengthList(t) => &self.types[*t],
+            _ => panic!("expected a fixed size list"),
+        };
+
+        // TODO: subtyping
+        assert_eq!(src_ty.size, dst_ty.size);
+
+        match (&src, &dst) {
+            // Generate custom code for memory to memory copy
+            (Source::Memory(src_mem), Destination::Memory(dst_mem)) => {
+                let src_mem_opts = match &src_mem.opts.data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let dst_mem_opts = match &dst_mem.opts.data_model {
+                    DataModel::Gc {} => todo!("CM+GC"),
+                    DataModel::LinearMemory(opts) => opts,
+                };
+                let src_element_bytes = self.types.size_align(src_mem_opts, &src_ty.element).0;
+                let dst_element_bytes = self.types.size_align(dst_mem_opts, &dst_ty.element).0;
+                assert_ne!(src_element_bytes, 0);
+                assert_ne!(dst_element_bytes, 0);
+
+                // because data is stored in-line, we assume that source and destination memory have been validated upstream
+
+                self.instruction(LocalGet(src_mem.addr.idx));
+                if src_mem.offset != 0 {
+                    self.ptr_uconst(src_mem_opts, src_mem.offset);
+                    self.ptr_add(src_mem_opts);
+                }
+                let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+                self.instruction(LocalGet(dst_mem.addr.idx));
+                if dst_mem.offset != 0 {
+                    self.ptr_uconst(dst_mem_opts, dst_mem.offset);
+                    self.ptr_add(dst_mem_opts);
+                }
+                let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
+
+                self.instruction(I32Const(src_ty.size as i32));
+                let remaining = self.local_set_new_tmp(ValType::I32);
+
+                self.instruction(Loop(BlockType::Empty));
+
+                // Translate the next element in the list
+                let element_src = Source::Memory(Memory {
+                    opts: src_mem.opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_src_ptr.idx, cur_src_ptr.ty),
+                });
+                let element_dst = Destination::Memory(Memory {
+                    opts: dst_mem.opts,
+                    offset: 0,
+                    addr: TempLocal::new(cur_dst_ptr.idx, cur_dst_ptr.ty),
+                });
+                self.translate(&src_ty.element, &element_src, &dst_ty.element, &element_dst);
+
+                // Update the two loop pointers
+                self.instruction(LocalGet(cur_src_ptr.idx));
+                self.ptr_uconst(src_mem_opts, src_element_bytes);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalSet(cur_src_ptr.idx));
+                self.instruction(LocalGet(cur_dst_ptr.idx));
+                self.ptr_uconst(dst_mem_opts, dst_element_bytes);
+                self.ptr_add(dst_mem_opts);
+                self.instruction(LocalSet(cur_dst_ptr.idx));
+
+                // Update the remaining count, falling through to break out if it's zero
+                // now.
+                self.instruction(LocalGet(remaining.idx));
+                self.ptr_iconst(src_mem_opts, -1);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalTee(remaining.idx));
+                self.ptr_br_if(src_mem_opts, 0);
+                self.instruction(End); // end of loop
+
+                self.free_temp_local(cur_dst_ptr);
+                self.free_temp_local(cur_src_ptr);
+                self.free_temp_local(remaining);
+                return;
+            }
+            // for the non-memory-to-memory case fall back to using generic tuple translation
+            (_, _) => {
+                // Assumes that the number of elements are small enough for this unrolling
+                assert!(
+                    src_ty.size as usize <= MAX_FLAT_PARAMS
+                        && dst_ty.size as usize <= MAX_FLAT_PARAMS
+                );
+                let srcs =
+                    src.record_field_srcs(self.types, (0..src_ty.size).map(|_| src_ty.element));
+                let dsts =
+                    dst.record_field_dsts(self.types, (0..dst_ty.size).map(|_| dst_ty.element));
+                for (src, dst) in srcs.zip(dsts) {
+                    self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
+                }
+            }
+        }
+    }
+
     fn translate_variant(
         &mut self,
         src_ty: TypeVariantIndex,
@@ -2905,7 +3042,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // Assert that the discriminant is valid.
         self.instruction(I32Const(i32::try_from(src_ty.names.len()).unwrap()));
-        self.instruction(I32GtU);
+        self.instruction(I32GeU);
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::InvalidDiscriminant);
         self.instruction(End);
@@ -3258,15 +3395,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(End);
     }
 
-    fn assert_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, msg: &'static str) {
-        self.instruction(GlobalGet(flags_global.as_u32()));
-        self.instruction(I32Const(flag_to_test));
-        self.instruction(I32And);
-        self.instruction(If(BlockType::Empty));
-        self.trap(Trap::AssertFailed(msg));
-        self.instruction(End);
-    }
-
     fn set_flag(&mut self, flags_global: GlobalIndex, flag_to_set: i32, value: bool) {
         self.instruction(GlobalGet(flags_global.as_u32()));
         if value {
@@ -3310,7 +3438,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.ptr_uconst(mem_opts, align - 1);
         self.ptr_and(mem_opts);
         self.ptr_if(mem_opts, BlockType::Empty);
-        self.trap(Trap::AssertFailed("pointer not aligned"));
+        self.trap(Trap::DebugAssertPointerAligned);
         self.instruction(End);
     }
 
@@ -3406,22 +3534,23 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn trap(&mut self, trap: Trap) {
-        self.traps.push((self.code.len(), trap));
+        let trap_func = self.module.import_trap();
+        self.instruction(I32Const(trap as i32));
+        self.instruction(Call(trap_func.as_u32()));
         self.instruction(Unreachable);
     }
 
-    /// Flushes out the current `code` instructions (and `traps` if there are
-    /// any) into the destination function.
+    /// Flushes out the current `code` instructions into the destination
+    /// function.
     ///
     /// This is a noop if no instructions have been encoded yet.
     fn flush_code(&mut self) {
         if self.code.is_empty() {
             return;
         }
-        self.module.funcs[self.result].body.push(Body::Raw(
-            mem::take(&mut self.code),
-            mem::take(&mut self.traps),
-        ));
+        self.module.funcs[self.result]
+            .body
+            .push(Body::Raw(mem::take(&mut self.code)));
     }
 
     fn finish(mut self) {
@@ -3493,7 +3622,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I64ShrU);
         self.instruction(I32WrapI64);
         self.instruction(If(BlockType::Empty));
-        self.trap(Trap::AssertFailed("upper bits are unexpectedly set"));
+        self.trap(Trap::DebugAssertUpperBitsUnset);
         self.instruction(End);
     }
 

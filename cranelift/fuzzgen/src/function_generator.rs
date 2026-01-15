@@ -119,7 +119,6 @@ fn insert_call(
 ) -> Result<()> {
     assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
     let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
-
     insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
 }
 
@@ -200,10 +199,6 @@ fn insert_cmp(
             // https://github.com/bytecodealliance/wasmtime/issues/4850
             (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
             (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
 
             // These are not implemented on x86_64, for vectors.
             (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
@@ -1617,6 +1612,7 @@ where
                 // time cranelift-jit puts all functions in their own mmap so
                 // they also cannot be colocated.
                 colocated: false,
+                patchable: false,
             });
 
             self.resources

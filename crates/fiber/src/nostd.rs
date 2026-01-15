@@ -31,10 +31,11 @@ use alloc::boxed::Box;
 use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use core::ops::Range;
+use wasmtime_environ::prelude::*;
 
 // The no_std implementation is infallible in practice, but we use
-// `anyhow::Error` here absent any better alternative.
-pub type Error = anyhow::Error;
+// `wasmtime_environ::error::Error` here absent any better alternative.
+pub use wasmtime_environ::error::Error;
 
 pub struct FiberStack {
     base: BasePtr,
@@ -133,7 +134,7 @@ impl Fiber {
         // On unsupported platforms `wasmtime_fiber_init` is a panicking shim so
         // return an error saying the host architecture isn't supported instead.
         if !SUPPORTED_ARCH {
-            anyhow::bail!("fibers unsupported on this host architecture");
+            bail!("fibers unsupported on this host architecture");
         }
         unsafe {
             let data = Box::into_raw(Box::new(func)).cast();

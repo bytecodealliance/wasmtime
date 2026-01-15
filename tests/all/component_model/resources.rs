@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Store, Trap};
 
@@ -1323,7 +1323,7 @@ async fn drop_on_owned_resource() -> Result<()> {
             (component
                 (import "t" (type $t (sub resource)))
                 (import "[constructor]t" (func $ctor (result (own $t))))
-                (import "[method]t.foo" (func $foo (param "self" (borrow $t))))
+                (import "[method]t.foo" (func $foo async (param "self" (borrow $t))))
 
                 (core func $ctor (canon lower (func $ctor)))
                 (core func $drop (canon resource.drop $t))
@@ -1352,7 +1352,7 @@ async fn drop_on_owned_resource() -> Result<()> {
                         (export "drop" (func $drop))
                     ))
                 ))
-                (func (export "f") (canon lift (core func $i "f")))
+                (func (export "f") async (canon lift (core func $i "f")))
             )
         "#,
     )?;
@@ -1364,11 +1364,9 @@ async fn drop_on_owned_resource() -> Result<()> {
     linker
         .root()
         .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
-    linker
-        .root()
-        .func_wrap_concurrent("[constructor]t", |_cx, ()| {
-            Box::pin(async { Ok((Resource::<MyType>::new_own(300),)) })
-        })?;
+    linker.root().func_wrap("[constructor]t", |_, ()| {
+        Ok((Resource::<MyType>::new_own(300),))
+    })?;
     linker
         .root()
         .func_wrap_concurrent("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {

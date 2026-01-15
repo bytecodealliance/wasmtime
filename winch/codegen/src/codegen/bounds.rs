@@ -3,13 +3,13 @@
 //! recommended when working on this area of Winch.
 use super::env::HeapData;
 use crate::{
+    Result,
     abi::vmctx,
     codegen::{CodeGenContext, Emission},
     isa::reg::{Reg, writable},
     masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
-use anyhow::Result;
 
 /// A newtype to represent an immediate offset argument for a heap access.
 #[derive(Debug, Copy, Clone)]

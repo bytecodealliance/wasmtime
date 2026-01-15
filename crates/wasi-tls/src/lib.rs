@@ -100,7 +100,7 @@ pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     opts: &mut LinkOptions,
     f: fn(&mut T) -> WasiTls<'_>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     bindings::types::add_to_linker::<_, HasWasiTls>(l, &opts, f)?;
     Ok(())
 }

@@ -7,15 +7,18 @@
 //! lifting and lowering code and verify the values remain intact during both processes.
 
 use arbitrary::{Arbitrary, Unstructured};
+use indexmap::IndexSet;
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Write};
+use std::hash::{Hash, Hasher};
 use std::iter;
 use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize, REALLOC_AND_FREE};
 
 const MAX_FLAT_PARAMS: usize = 16;
+const MAX_FLAT_ASYNC_PARAMS: usize = 4;
 const MAX_FLAT_RESULTS: usize = 1;
 
 /// The name of the imported host function which the generated component will call
@@ -27,7 +30,19 @@ pub const EXPORT_FUNCTION: &str = "echo-export";
 /// Wasmtime allows up to 100 type depth so limit this to just under that.
 pub const MAX_TYPE_DEPTH: u32 = 99;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+macro_rules! uwriteln {
+    ($($arg:tt)*) => {
+        writeln!($($arg)*).unwrap()
+    };
+}
+
+macro_rules! uwrite {
+    ($($arg:tt)*) => {
+        write!($($arg)*).unwrap()
+    };
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum CoreType {
     I32,
     I64,
@@ -204,6 +219,393 @@ impl Type {
     ) -> arbitrary::Result<VecInRange<Type, L, H>> {
         VecInRange::new(u, fuel, |u, fuel| Type::generate(u, depth, fuel))
     }
+
+    /// Generates text format wasm into `s` to store a value of this type, in
+    /// its flat representation stored in the `locals` provided, to the local
+    /// named `ptr` at the `offset` provided.
+    ///
+    /// This will register helper functions necessary in `helpers`. The
+    /// `locals` iterator will be advanced for all locals consumed by this
+    /// store operation.
+    fn store_flat<'a>(
+        &'a self,
+        s: &mut String,
+        ptr: &str,
+        offset: u32,
+        locals: &mut dyn Iterator<Item = FlatSource>,
+        helpers: &mut IndexSet<Helper<'a>>,
+    ) {
+        enum Kind {
+            Primitive(&'static str),
+            PointerPair,
+            Helper,
+        }
+        let kind = match self {
+            Type::Bool | Type::S8 | Type::U8 => Kind::Primitive("i32.store8"),
+            Type::S16 | Type::U16 => Kind::Primitive("i32.store16"),
+            Type::S32 | Type::U32 | Type::Char => Kind::Primitive("i32.store"),
+            Type::S64 | Type::U64 => Kind::Primitive("i64.store"),
+            Type::Float32 => Kind::Primitive("f32.store"),
+            Type::Float64 => Kind::Primitive("f64.store"),
+            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.store8"),
+            Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.store16"),
+            Type::Enum(_) => Kind::Primitive("i32.store"),
+            Type::Flags(n) if *n <= 8 => Kind::Primitive("i32.store8"),
+            Type::Flags(n) if *n <= 16 => Kind::Primitive("i32.store16"),
+            Type::Flags(n) if *n <= 32 => Kind::Primitive("i32.store"),
+            Type::Flags(_) => unreachable!(),
+            Type::Record(_)
+            | Type::Tuple(_)
+            | Type::Variant(_)
+            | Type::Option(_)
+            | Type::Result { .. } => Kind::Helper,
+        };
+
+        match kind {
+            Kind::Primitive(op) => uwriteln!(
+                s,
+                "({op} offset={offset} (local.get {ptr}) {})",
+                locals.next().unwrap()
+            ),
+            Kind::PointerPair => {
+                let abi_ptr = locals.next().unwrap();
+                let abi_len = locals.next().unwrap();
+                uwriteln!(s, "(i32.store offset={offset} (local.get {ptr}) {abi_ptr})",);
+                let offset = offset + 4;
+                uwriteln!(s, "(i32.store offset={offset} (local.get {ptr}) {abi_len})",);
+            }
+            Kind::Helper => {
+                let (index, _) = helpers.insert_full(Helper(self));
+                uwriteln!(s, "(i32.add (local.get {ptr}) (i32.const {offset}))");
+                for _ in 0..self.lowered().len() {
+                    let i = locals.next().unwrap();
+                    uwriteln!(s, "{i}");
+                }
+                uwriteln!(s, "call $store_helper_{index}");
+            }
+        }
+    }
+
+    /// Generates a text-format wasm function which takes a pointer and this
+    /// type's flat representation as arguments and then stores this value in
+    /// the first argument.
+    ///
+    /// This is used to store records/variants to cut down on the size of final
+    /// functions and make codegen here a bit easier.
+    fn store_flat_helper<'a>(
+        &'a self,
+        s: &mut String,
+        i: usize,
+        helpers: &mut IndexSet<Helper<'a>>,
+    ) {
+        uwrite!(s, "(func $store_helper_{i} (param i32)");
+        let lowered = self.lowered();
+        for ty in &lowered {
+            uwrite!(s, " (param {ty})");
+        }
+        s.push_str("\n");
+        let locals = (0..lowered.len() as u32).map(|i| i + 1).collect::<Vec<_>>();
+        let record = |s: &mut String, helpers: &mut IndexSet<Helper<'a>>, types: &'a [Type]| {
+            let mut locals = locals.iter().cloned().map(FlatSource::Local);
+            for (offset, ty) in record_field_offsets(types) {
+                ty.store_flat(s, "0", offset, &mut locals, helpers);
+            }
+            assert!(locals.next().is_none());
+        };
+        let variant = |s: &mut String,
+                       helpers: &mut IndexSet<Helper<'a>>,
+                       types: &[Option<&'a Type>]| {
+            let (size, offset) = variant_memory_info(types.iter().cloned());
+            // One extra block for out-of-bounds discriminants.
+            for _ in 0..types.len() + 1 {
+                s.push_str("block\n");
+            }
+
+            // Store the discriminant in memory, then branch on it to figure
+            // out which case we're in.
+            let store = match size {
+                DiscriminantSize::Size1 => "i32.store8",
+                DiscriminantSize::Size2 => "i32.store16",
+                DiscriminantSize::Size4 => "i32.store",
+            };
+            uwriteln!(s, "({store} (local.get 0) (local.get 1))");
+            s.push_str("local.get 1\n");
+            s.push_str("br_table");
+            for i in 0..types.len() + 1 {
+                uwrite!(s, " {i}");
+            }
+            s.push_str("\nend\n");
+
+            // Store each payload individually while converting locals from
+            // their source types to the precise type necessary for this
+            // variant.
+            for ty in types {
+                if let Some(ty) = ty {
+                    let ty_lowered = ty.lowered();
+                    let mut locals = locals[1..].iter().zip(&lowered[1..]).zip(&ty_lowered).map(
+                        |((i, from), to)| FlatSource::LocalConvert {
+                            local: *i,
+                            from: *from,
+                            to: *to,
+                        },
+                    );
+                    ty.store_flat(s, "0", offset, &mut locals, helpers);
+                }
+                s.push_str("return\n");
+                s.push_str("end\n");
+            }
+
+            // Catch-all result which is for out-of-bounds discriminants.
+            s.push_str("unreachable\n");
+        };
+        match self {
+            Type::Bool
+            | Type::S8
+            | Type::U8
+            | Type::S16
+            | Type::U16
+            | Type::S32
+            | Type::U32
+            | Type::Char
+            | Type::S64
+            | Type::U64
+            | Type::Float32
+            | Type::Float64
+            | Type::String
+            | Type::List(_)
+            | Type::Flags(_)
+            | Type::Enum(_) => unreachable!(),
+
+            Type::Record(r) => record(s, helpers, r),
+            Type::Tuple(t) => record(s, helpers, t),
+            Type::Variant(v) => variant(
+                s,
+                helpers,
+                &v.iter().map(|t| t.as_ref()).collect::<Vec<_>>(),
+            ),
+            Type::Option(o) => variant(s, helpers, &[None, Some(&**o)]),
+            Type::Result { ok, err } => variant(s, helpers, &[ok.as_deref(), err.as_deref()]),
+        };
+        s.push_str(")\n");
+    }
+
+    /// Same as `store_flat`, except loads the flat values from `ptr+offset`.
+    ///
+    /// Results are placed directly on the wasm stack.
+    fn load_flat<'a>(
+        &'a self,
+        s: &mut String,
+        ptr: &str,
+        offset: u32,
+        helpers: &mut IndexSet<Helper<'a>>,
+    ) {
+        enum Kind {
+            Primitive(&'static str),
+            PointerPair,
+            Helper,
+        }
+        let kind = match self {
+            Type::Bool | Type::U8 => Kind::Primitive("i32.load8_u"),
+            Type::S8 => Kind::Primitive("i32.load8_s"),
+            Type::U16 => Kind::Primitive("i32.load16_u"),
+            Type::S16 => Kind::Primitive("i32.load16_s"),
+            Type::U32 | Type::S32 | Type::Char => Kind::Primitive("i32.load"),
+            Type::U64 | Type::S64 => Kind::Primitive("i64.load"),
+            Type::Float32 => Kind::Primitive("f32.load"),
+            Type::Float64 => Kind::Primitive("f64.load"),
+            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.load8_u"),
+            Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.load16_u"),
+            Type::Enum(_) => Kind::Primitive("i32.load"),
+            Type::Flags(n) if *n <= 8 => Kind::Primitive("i32.load8_u"),
+            Type::Flags(n) if *n <= 16 => Kind::Primitive("i32.load16_u"),
+            Type::Flags(n) if *n <= 32 => Kind::Primitive("i32.load"),
+            Type::Flags(_) => unreachable!(),
+
+            Type::Record(_)
+            | Type::Tuple(_)
+            | Type::Variant(_)
+            | Type::Option(_)
+            | Type::Result { .. } => Kind::Helper,
+        };
+        match kind {
+            Kind::Primitive(op) => uwriteln!(s, "({op} offset={offset} (local.get {ptr}))"),
+            Kind::PointerPair => {
+                uwriteln!(s, "(i32.load offset={offset} (local.get {ptr}))",);
+                let offset = offset + 4;
+                uwriteln!(s, "(i32.load offset={offset} (local.get {ptr}))",);
+            }
+            Kind::Helper => {
+                let (index, _) = helpers.insert_full(Helper(self));
+                uwriteln!(s, "(i32.add (local.get {ptr}) (i32.const {offset}))");
+                uwriteln!(s, "call $load_helper_{index}");
+            }
+        }
+    }
+
+    /// Same as `store_flat_helper` but for loading the flat representation.
+    fn load_flat_helper<'a>(
+        &'a self,
+        s: &mut String,
+        i: usize,
+        helpers: &mut IndexSet<Helper<'a>>,
+    ) {
+        uwrite!(s, "(func $load_helper_{i} (param i32)");
+        let lowered = self.lowered();
+        for ty in &lowered {
+            uwrite!(s, " (result {ty})");
+        }
+        s.push_str("\n");
+        let record = |s: &mut String, helpers: &mut IndexSet<Helper<'a>>, types: &'a [Type]| {
+            for (offset, ty) in record_field_offsets(types) {
+                ty.load_flat(s, "0", offset, helpers);
+            }
+        };
+        let variant = |s: &mut String,
+                       helpers: &mut IndexSet<Helper<'a>>,
+                       types: &[Option<&'a Type>]| {
+            let (size, offset) = variant_memory_info(types.iter().cloned());
+
+            // Destination locals where the flat representation will be stored.
+            // These are automatically zero which handles unused fields too.
+            for (i, ty) in lowered.iter().enumerate() {
+                uwriteln!(s, " (local $r{i} {ty})");
+            }
+
+            // Return block each case jumps to after setting all locals.
+            s.push_str("block $r\n");
+
+            // One extra block for "out of bounds discriminant".
+            for _ in 0..types.len() + 1 {
+                s.push_str("block\n");
+            }
+
+            // Load the discriminant and branch on it, storing it in
+            // `$r0` as well which is the first flat local representation.
+            let load = match size {
+                DiscriminantSize::Size1 => "i32.load8_u",
+                DiscriminantSize::Size2 => "i32.load16",
+                DiscriminantSize::Size4 => "i32.load",
+            };
+            uwriteln!(s, "({load} (local.get 0))");
+            s.push_str("local.tee $r0\n");
+            s.push_str("br_table");
+            for i in 0..types.len() + 1 {
+                uwrite!(s, " {i}");
+            }
+            s.push_str("\nend\n");
+
+            // For each payload, which is in its own block, load payloads from
+            // memory as necessary and convert them into the final locals.
+            for ty in types {
+                if let Some(ty) = ty {
+                    let ty_lowered = ty.lowered();
+                    ty.load_flat(s, "0", offset, helpers);
+                    for (i, (from, to)) in ty_lowered.iter().zip(&lowered[1..]).enumerate().rev() {
+                        let i = i + 1;
+                        match (from, to) {
+                            (CoreType::F32, CoreType::I32) => {
+                                s.push_str("i32.reinterpret_f32\n");
+                            }
+                            (CoreType::I32, CoreType::I64) => {
+                                s.push_str("i64.extend_i32_u\n");
+                            }
+                            (CoreType::F32, CoreType::I64) => {
+                                s.push_str("i32.reinterpret_f32\n");
+                                s.push_str("i64.extend_i32_u\n");
+                            }
+                            (CoreType::F64, CoreType::I64) => {
+                                s.push_str("i64.reinterpret_f64\n");
+                            }
+                            (a, b) if a == b => {}
+                            _ => unimplemented!("convert {from:?} to {to:?}"),
+                        }
+                        uwriteln!(s, "local.set $r{i}");
+                    }
+                }
+                s.push_str("br $r\n");
+                s.push_str("end\n");
+            }
+
+            // The catch-all block for out-of-bounds discriminants.
+            s.push_str("unreachable\n");
+            s.push_str("end\n");
+            for i in 0..lowered.len() {
+                uwriteln!(s, " local.get $r{i}");
+            }
+        };
+
+        match self {
+            Type::Bool
+            | Type::S8
+            | Type::U8
+            | Type::S16
+            | Type::U16
+            | Type::S32
+            | Type::U32
+            | Type::Char
+            | Type::S64
+            | Type::U64
+            | Type::Float32
+            | Type::Float64
+            | Type::String
+            | Type::List(_)
+            | Type::Flags(_)
+            | Type::Enum(_) => unreachable!(),
+
+            Type::Record(r) => record(s, helpers, r),
+            Type::Tuple(t) => record(s, helpers, t),
+            Type::Variant(v) => variant(
+                s,
+                helpers,
+                &v.iter().map(|t| t.as_ref()).collect::<Vec<_>>(),
+            ),
+            Type::Option(o) => variant(s, helpers, &[None, Some(&**o)]),
+            Type::Result { ok, err } => variant(s, helpers, &[ok.as_deref(), err.as_deref()]),
+        };
+        s.push_str(")\n");
+    }
+}
+
+#[derive(Clone)]
+enum FlatSource {
+    Local(u32),
+    LocalConvert {
+        local: u32,
+        from: CoreType,
+        to: CoreType,
+    },
+}
+
+impl fmt::Display for FlatSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FlatSource::Local(i) => write!(f, "(local.get {i})"),
+            FlatSource::LocalConvert { local, from, to } => {
+                match (from, to) {
+                    (a, b) if a == b => write!(f, "(local.get {local})"),
+                    (CoreType::I32, CoreType::F32) => {
+                        write!(f, "(f32.reinterpret_i32 (local.get {local}))")
+                    }
+                    (CoreType::I64, CoreType::I32) => {
+                        write!(f, "(i32.wrap_i64 (local.get {local}))")
+                    }
+                    (CoreType::I64, CoreType::F64) => {
+                        write!(f, "(f64.reinterpret_i64 (local.get {local}))")
+                    }
+                    (CoreType::I64, CoreType::F32) => {
+                        write!(
+                            f,
+                            "(f32.reinterpret_i32 (i32.wrap_i64 (local.get {local})))"
+                        )
+                    }
+                    _ => unimplemented!("convert {from:?} to {to:?}"),
+                }
+                // ..
+            }
+        }
+    }
 }
 
 fn lower_record<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreType>) {
@@ -350,7 +752,19 @@ fn align_to(a: usize, align: u32) -> usize {
     (a + (align - 1)) & !(align - 1)
 }
 
-fn record_size_and_alignment<'a>(types: impl Iterator<Item = &'a Type>) -> SizeAndAlignment {
+fn record_field_offsets<'a>(
+    types: impl IntoIterator<Item = &'a Type>,
+) -> impl Iterator<Item = (u32, &'a Type)> {
+    let mut offset = 0;
+    types.into_iter().map(move |ty| {
+        let SizeAndAlignment { size, alignment } = ty.size_and_alignment();
+        let ret = align_to(offset, alignment);
+        offset = ret + size;
+        (ret as u32, ty)
+    })
+}
+
+fn record_size_and_alignment<'a>(types: impl IntoIterator<Item = &'a Type>) -> SizeAndAlignment {
     let mut offset = 0;
     let mut align = 1;
     for ty in types {
@@ -388,79 +802,335 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[&Type], result: Option<&Type>) -> String {
+fn variant_memory_info<'a>(
+    types: impl ExactSizeIterator<Item = Option<&'a Type>>,
+) -> (DiscriminantSize, u32) {
+    let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
+    let mut alignment = u32::from(discriminant_size);
+    for ty in types {
+        if let Some(ty) = ty {
+            let size_and_alignment = ty.size_and_alignment();
+            alignment = alignment.max(size_and_alignment.alignment);
+        }
+    }
+
+    (
+        discriminant_size,
+        align_to(usize::from(discriminant_size), alignment) as u32,
+    )
+}
+
+/// Generates the internals of a core wasm module which imports a single
+/// component function `IMPORT_FUNCTION` and exports a single component
+/// function `EXPORT_FUNCTION`.
+///
+/// The component function takes `params` as arguments and optionally returns
+/// `result`. The `lift_abi` and `lower_abi` fields indicate the ABI in-use for
+/// this operation.
+fn make_import_and_export(
+    params: &[&Type],
+    result: Option<&Type>,
+    lift_abi: LiftAbi,
+    lower_abi: LowerAbi,
+) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
         .collect::<Box<[_]>>();
     let result_lowered = result.map(|t| t.lowered()).unwrap_or(Vec::new());
 
-    let mut core_params = String::new();
-    let mut gets = String::new();
+    let mut wat = String::new();
 
-    if params_lowered.len() <= MAX_FLAT_PARAMS {
-        for (index, param) in params_lowered.iter().enumerate() {
-            write!(&mut core_params, " {param}").unwrap();
-            write!(&mut gets, "local.get {index} ").unwrap();
-        }
-    } else {
-        write!(&mut core_params, " i32").unwrap();
-        write!(&mut gets, "local.get 0 ").unwrap();
+    enum Location {
+        Flat,
+        Indirect(u32),
     }
 
-    let maybe_core_params = if params_lowered.is_empty() {
-        String::new()
-    } else {
-        format!("(param{core_params})")
+    // Generate the core wasm type corresponding to the imported function being
+    // lowered with `lower_abi`.
+    wat.push_str(&format!("(type $import (func"));
+    let max_import_params = match lower_abi {
+        LowerAbi::Sync => MAX_FLAT_PARAMS,
+        LowerAbi::Async => MAX_FLAT_ASYNC_PARAMS,
     };
+    let (import_params_loc, nparams) = push_params(&mut wat, &params_lowered, max_import_params);
+    let import_results_loc = match lower_abi {
+        LowerAbi::Sync => {
+            push_result_or_retptr(&mut wat, &result_lowered, nparams, MAX_FLAT_RESULTS)
+        }
+        LowerAbi::Async => {
+            let loc = if result.is_none() {
+                Location::Flat
+            } else {
+                wat.push_str(" (param i32)"); // result pointer
+                Location::Indirect(nparams)
+            };
+            wat.push_str(" (result i32)"); // status code
+            loc
+        }
+    };
+    wat.push_str("))\n");
 
-    if result_lowered.len() <= MAX_FLAT_RESULTS {
-        let mut core_results = String::new();
-        for result in result_lowered.iter() {
-            write!(&mut core_results, " {result}").unwrap();
+    // Generate the import function.
+    wat.push_str(&format!(
+        r#"(import "host" "{IMPORT_FUNCTION}" (func $host (type $import)))"#
+    ));
+
+    // Do the same as above for the exported function's type which is lifted
+    // with `lift_abi`.
+    //
+    // Note that `export_results_loc` being `None` means that `task.return` is
+    // used to communicate results.
+    wat.push_str(&format!("(type $export (func"));
+    let (export_params_loc, _nparams) = push_params(&mut wat, &params_lowered, MAX_FLAT_PARAMS);
+    let export_results_loc = match lift_abi {
+        LiftAbi::Sync => Some(push_group(&mut wat, "result", &result_lowered, MAX_FLAT_RESULTS).0),
+        LiftAbi::AsyncCallback => {
+            wat.push_str(" (result i32)"); // status code
+            None
+        }
+        LiftAbi::AsyncStackful => None,
+    };
+    wat.push_str("))\n");
+
+    // If the export is async, generate `task.return` as an import as well
+    // which is necesary to communicate the results.
+    if export_results_loc.is_none() {
+        wat.push_str(&format!("(type $task.return (func"));
+        push_params(&mut wat, &result_lowered, MAX_FLAT_PARAMS);
+        wat.push_str("))\n");
+        wat.push_str(&format!(
+            r#"(import "" "task.return" (func $task.return (type $task.return)))"#
+        ));
+    }
+
+    wat.push_str(&format!(
+        r#"
+(func (export "{EXPORT_FUNCTION}") (type $export)
+    (local $retptr i32)
+    (local $argptr i32)
+        "#
+    ));
+    let mut store_helpers = IndexSet::new();
+    let mut load_helpers = IndexSet::new();
+
+    match (export_params_loc, import_params_loc) {
+        // flat => flat is just moving locals around
+        (Location::Flat, Location::Flat) => {
+            for (index, _) in params_lowered.iter().enumerate() {
+                uwrite!(wat, "local.get {index}\n");
+            }
         }
 
-        let maybe_core_results = if result_lowered.is_empty() {
-            String::new()
+        // indirect => indirect is just moving locals around
+        (Location::Indirect(i), Location::Indirect(j)) => {
+            assert_eq!(j, 0);
+            uwrite!(wat, "local.get {i}\n");
+        }
+
+        // flat => indirect means that all parameters are stored in memory as
+        // if it was a record of all the parameters.
+        (Location::Flat, Location::Indirect(_)) => {
+            let SizeAndAlignment { size, alignment } =
+                record_size_and_alignment(params.iter().cloned());
+            wat.push_str(&format!(
+                r#"
+                    (local.set $argptr
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const {alignment})
+                            (i32.const {size})))
+                    local.get $argptr
+                "#
+            ));
+            let mut locals = (0..params_lowered.len() as u32).map(FlatSource::Local);
+            for (offset, ty) in record_field_offsets(params.iter().cloned()) {
+                ty.store_flat(&mut wat, "$argptr", offset, &mut locals, &mut store_helpers);
+            }
+            assert!(locals.next().is_none());
+        }
+
+        (Location::Indirect(_), Location::Flat) => unreachable!(),
+    }
+
+    // Pass a return-pointer if necessary.
+    match import_results_loc {
+        Location::Flat => {}
+        Location::Indirect(_) => {
+            let SizeAndAlignment { size, alignment } = result.unwrap().size_and_alignment();
+
+            wat.push_str(&format!(
+                r#"
+                    (local.set $retptr
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const {alignment})
+                            (i32.const {size})))
+                    local.get $retptr
+                "#
+            ));
+        }
+    }
+
+    wat.push_str("call $host\n");
+
+    // Assert the lowered call is ready if an async code was returned.
+    //
+    // TODO: handle when the import isn't ready yet
+    if let LowerAbi::Async = lower_abi {
+        wat.push_str("i32.const 2\n");
+        wat.push_str("i32.ne\n");
+        wat.push_str("if unreachable end\n");
+    }
+
+    // TODO: conditionally inject a yield here
+
+    match (import_results_loc, export_results_loc) {
+        // flat => flat results involves nothing, the results are already on
+        // the stack.
+        (Location::Flat, Some(Location::Flat)) => {}
+
+        // indirect => indirect results requires returning the `$retptr` the
+        // host call filled in.
+        (Location::Indirect(_), Some(Location::Indirect(_))) => {
+            wat.push_str("local.get $retptr\n");
+        }
+
+        // indirect => flat requires loading the result from the return pointer
+        (Location::Indirect(_), Some(Location::Flat)) => {
+            result
+                .unwrap()
+                .load_flat(&mut wat, "$retptr", 0, &mut load_helpers);
+        }
+
+        // flat => task.return is easy, the results are already there so just
+        // call the function.
+        (Location::Flat, None) => {
+            wat.push_str("call $task.return\n");
+        }
+
+        // indirect => task.return needs to forward `$retptr` if the results
+        // are indirect, or otherwise it must be loaded from memory to a flat
+        // representation.
+        (Location::Indirect(_), None) => {
+            if result_lowered.len() <= MAX_FLAT_PARAMS {
+                result
+                    .unwrap()
+                    .load_flat(&mut wat, "$retptr", 0, &mut load_helpers);
+            } else {
+                wat.push_str("local.get $retptr\n");
+            }
+            wat.push_str("call $task.return\n");
+        }
+
+        (Location::Flat, Some(Location::Indirect(_))) => unreachable!(),
+    }
+
+    if let LiftAbi::AsyncCallback = lift_abi {
+        wat.push_str("i32.const 0\n"); // completed status code
+    }
+
+    wat.push_str(")\n");
+
+    // Generate a `callback` function for the callback ABI.
+    //
+    // TODO: fill this in
+    if let LiftAbi::AsyncCallback = lift_abi {
+        wat.push_str(
+            r#"
+(func (export "callback") (param i32 i32 i32) (result i32) unreachable)
+            "#,
+        );
+    }
+
+    // Fill out all store/load helpers that were needed during generation
+    // above. This is a fix-point-loop since each helper may end up requiring
+    // more helpers.
+    let mut i = 0;
+    while i < store_helpers.len() {
+        let ty = store_helpers[i].0;
+        ty.store_flat_helper(&mut wat, i, &mut store_helpers);
+        i += 1;
+    }
+    i = 0;
+    while i < load_helpers.len() {
+        let ty = load_helpers[i].0;
+        ty.load_flat_helper(&mut wat, i, &mut load_helpers);
+        i += 1;
+    }
+
+    return wat;
+
+    fn push_params(wat: &mut String, params: &[CoreType], max_flat: usize) -> (Location, u32) {
+        push_group(wat, "param", params, max_flat)
+    }
+
+    fn push_group(
+        wat: &mut String,
+        name: &str,
+        params: &[CoreType],
+        max_flat: usize,
+    ) -> (Location, u32) {
+        let mut nparams = 0;
+        let loc = if params.is_empty() {
+            // nothing to emit...
+            Location::Flat
+        } else if params.len() <= max_flat {
+            wat.push_str(&format!(" ({name}"));
+            for ty in params {
+                wat.push_str(&format!(" {ty}"));
+                nparams += 1;
+            }
+            wat.push_str(")");
+            Location::Flat
         } else {
-            format!("(result{core_results})")
+            wat.push_str(&format!(" ({name} i32)"));
+            nparams += 1;
+            Location::Indirect(0)
         };
+        (loc, nparams)
+    }
 
-        format!(
-            r#"
-            (func $f (import "host" "{IMPORT_FUNCTION}") {maybe_core_params} {maybe_core_results})
-
-            (func (export "{EXPORT_FUNCTION}") {maybe_core_params} {maybe_core_results}
-                {gets}
-
-                call $f
-            )"#
-        )
-    } else {
-        let SizeAndAlignment { size, alignment } = result.unwrap().size_and_alignment();
-
-        format!(
-            r#"
-            (func $f (import "host" "{IMPORT_FUNCTION}") (param{core_params} i32))
-
-            (func (export "{EXPORT_FUNCTION}") {maybe_core_params} (result i32)
-                (local $base i32)
-                (local.set $base
-                    (call $realloc
-                        (i32.const 0)
-                        (i32.const 0)
-                        (i32.const {alignment})
-                        (i32.const {size})))
-                {gets}
-                local.get $base
-
-                call $f
-
-                local.get $base
-            )"#
-        )
+    fn push_result_or_retptr(
+        wat: &mut String,
+        results: &[CoreType],
+        nparams: u32,
+        max_flat: usize,
+    ) -> Location {
+        if results.is_empty() {
+            // nothing to emit...
+            Location::Flat
+        } else if results.len() <= max_flat {
+            wat.push_str(" (result");
+            for ty in results {
+                wat.push_str(&format!(" {ty}"));
+            }
+            wat.push_str(")");
+            Location::Flat
+        } else {
+            wat.push_str(" (param i32)");
+            Location::Indirect(nparams)
+        }
     }
 }
+
+struct Helper<'a>(&'a Type);
+
+impl Hash for Helper<'_> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        std::ptr::hash(self.0, h);
+    }
+}
+
+impl PartialEq for Helper<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for Helper<'_> {}
 
 fn make_rust_name(name_counter: &mut u32) -> Ident {
     let name = format_ident!("Foo{name_counter}");
@@ -564,10 +1234,10 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
                 .collect::<TokenStream>();
 
             let name = make_rust_name(name_counter);
-            let repr = match count.ilog2() {
-                0..=7 => quote!(u8),
-                8..=15 => quote!(u16),
-                _ => quote!(u32),
+            let repr = match DiscriminantSize::from_count(*count as usize).unwrap() {
+                DiscriminantSize::Size1 => quote!(u8),
+                DiscriminantSize::Size2 => quote!(u16),
+                DiscriminantSize::Size4 => quote!(u32),
             };
 
             declarations.extend(quote! {
@@ -669,7 +1339,7 @@ impl<'a> TypesBuilder<'a> {
             | Type::Flags(_) => {
                 let idx = self.next;
                 self.next += 1;
-                write!(dst, "$t{idx}").unwrap();
+                uwrite!(dst, "$t{idx}");
                 self.worklist.push((idx, ty));
             }
         }
@@ -700,7 +1370,7 @@ impl<'a> TypesBuilder<'a> {
             Type::Record(types) => {
                 decl.push_str("(record");
                 for (index, ty) in types.iter().enumerate() {
-                    write!(decl, r#" (field "f{index}" "#).unwrap();
+                    uwrite!(decl, r#" (field "f{index}" "#);
                     self.write_ref(ty, &mut decl);
                     decl.push_str(")");
                 }
@@ -717,7 +1387,7 @@ impl<'a> TypesBuilder<'a> {
             Type::Variant(types) => {
                 decl.push_str("(variant");
                 for (index, ty) in types.iter().enumerate() {
-                    write!(decl, r#" (case "C{index}""#).unwrap();
+                    uwrite!(decl, r#" (case "C{index}""#);
                     if let Some(ty) = ty {
                         decl.push_str(" ");
                         self.write_ref(ty, &mut decl);
@@ -729,7 +1399,7 @@ impl<'a> TypesBuilder<'a> {
             Type::Enum(count) => {
                 decl.push_str("(enum");
                 for index in 0..*count {
-                    write!(decl, r#" "E{index}""#).unwrap();
+                    uwrite!(decl, r#" "E{index}""#);
                 }
                 decl.push_str(")");
             }
@@ -754,13 +1424,13 @@ impl<'a> TypesBuilder<'a> {
             Type::Flags(count) => {
                 decl.push_str("(flags");
                 for index in 0..*count {
-                    write!(decl, r#" "F{index}""#).unwrap();
+                    uwrite!(decl, r#" "F{index}""#);
                 }
                 decl.push_str(")");
             }
         }
         decl.push_str(")\n");
-        writeln!(decl, "(import \"t{idx}\" (type $t{idx} (eq $t{idx}')))").unwrap();
+        uwriteln!(decl, "(import \"t{idx}\" (type $t{idx} (eq $t{idx}')))");
         decl
     }
 }
@@ -776,12 +1446,13 @@ pub struct Declarations {
     pub params: Cow<'static, str>,
     /// Result declaration used for the imported and exported functions
     pub results: Cow<'static, str>,
-    /// A WAT fragment representing the core function import and export to use for testing
-    pub import_and_export: Cow<'static, str>,
-    /// String encoding to use for host -> component
-    pub encoding1: StringEncoding,
-    /// String encoding to use for component -> host
-    pub encoding2: StringEncoding,
+    /// Implementation of the "caller" component, which invokes the `callee`
+    /// composed component.
+    pub caller_module: Cow<'static, str>,
+    /// Implementation of the "callee" component, which invokes the host.
+    pub callee_module: Cow<'static, str>,
+    /// Options used for caller/calle ABI/etc.
+    pub options: TestCaseOptions,
 }
 
 impl Declarations {
@@ -792,47 +1463,115 @@ impl Declarations {
             type_instantiation_args,
             params,
             results,
-            import_and_export,
-            encoding1,
-            encoding2,
+            caller_module,
+            callee_module,
+            options,
         } = self;
-        let mk_component = |name: &str, encoding: StringEncoding| {
+        let mk_component = |name: &str,
+                            module: &str,
+                            import_async: bool,
+                            export_async: bool,
+                            encoding: StringEncoding,
+                            lift_abi: LiftAbi,
+                            lower_abi: LowerAbi| {
+            let import_async = if import_async { "async" } else { "" };
+            let export_async = if export_async { "async" } else { "" };
+            let lower_async_option = match lower_abi {
+                LowerAbi::Sync => "",
+                LowerAbi::Async => "async",
+            };
+            let lift_async_option = match lift_abi {
+                LiftAbi::Sync => "",
+                LiftAbi::AsyncStackful => "async",
+                LiftAbi::AsyncCallback => "async (callback (func $i \"callback\"))",
+            };
+
+            let mut intrinsic_defs = String::new();
+            let mut intrinsic_imports = String::new();
+
+            match lift_abi {
+                LiftAbi::Sync => {}
+                LiftAbi::AsyncCallback | LiftAbi::AsyncStackful => {
+                    intrinsic_defs.push_str(&format!(
+                        r#"
+(core func $task.return (canon task.return {results}
+    (memory $libc "memory") string-encoding={encoding}))
+                        "#,
+                    ));
+                    intrinsic_imports.push_str(
+                        r#"
+(with "" (instance (export "task.return" (func $task.return))))
+                        "#,
+                    );
+                }
+            }
+
             format!(
                 r#"
-                (component ${name}
-                    {types}
-                    (type $sig (func {params} {results}))
-                    (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
+(component ${name}
+    {types}
+    (type $import_sig (func {import_async} {params} {results}))
+    (type $export_sig (func {export_async} {params} {results}))
+    (import "{IMPORT_FUNCTION}" (func $f (type $import_sig)))
 
-                    (core instance $libc (instantiate $libc))
+    (core instance $libc (instantiate $libc))
 
-                    (core func $f_lower (canon lower
-                        (func $f)
-                        (memory $libc "memory")
-                        (realloc (func $libc "realloc"))
-                        string-encoding={encoding}
-                    ))
+    (core func $f_lower (canon lower
+        (func $f)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc"))
+        string-encoding={encoding}
+        {lower_async_option}
+    ))
 
-                    (core instance $i (instantiate $m
-                        (with "libc" (instance $libc))
-                        (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
-                    ))
+    {intrinsic_defs}
 
-                    (func (export "{EXPORT_FUNCTION}") (type $sig)
-                        (canon lift
-                            (core func $i "{EXPORT_FUNCTION}")
-                            (memory $libc "memory")
-                            (realloc (func $libc "realloc"))
-                            string-encoding={encoding}
-                        )
-                    )
-                )
+    (core module $m
+        (memory (import "libc" "memory") 1)
+        (func $realloc (import "libc" "realloc") (param i32 i32 i32 i32) (result i32))
+
+        {module}
+    )
+
+    (core instance $i (instantiate $m
+        (with "libc" (instance $libc))
+        (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
+        {intrinsic_imports}
+    ))
+
+    (func (export "{EXPORT_FUNCTION}") (type $export_sig)
+        (canon lift
+            (core func $i "{EXPORT_FUNCTION}")
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+            string-encoding={encoding}
+            {lift_async_option}
+        )
+    )
+)
             "#
             )
         };
 
-        let c1 = mk_component("c1", *encoding2);
-        let c2 = mk_component("c2", *encoding1);
+        let c1 = mk_component(
+            "callee",
+            &callee_module,
+            options.host_async,
+            options.guest_callee_async,
+            options.callee_encoding,
+            options.callee_lift_abi,
+            options.callee_lower_abi,
+        );
+        let c2 = mk_component(
+            "caller",
+            &caller_module,
+            options.guest_callee_async,
+            options.guest_caller_async,
+            options.caller_encoding,
+            options.caller_lift_abi,
+            options.caller_lower_abi,
+        );
+        let host_async = if options.host_async { "async" } else { "" };
 
         format!(
             r#"
@@ -842,25 +1581,19 @@ impl Declarations {
                     {REALLOC_AND_FREE}
                 )
 
-                (core module $m
-                    (memory (import "libc" "memory") 1)
-                    (func $realloc (import "libc" "realloc") (param i32 i32 i32 i32) (result i32))
-
-                    {import_and_export}
-                )
 
                 {types}
 
-                (type $sig (func {params} {results}))
-                (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
+                (type $host_sig (func {host_async} {params} {results}))
+                (import "{IMPORT_FUNCTION}" (func $f (type $host_sig)))
 
                 {c1}
                 {c2}
-                (instance $c1 (instantiate $c1
+                (instance $c1 (instantiate $callee
                     {type_instantiation_args}
                     (with "{IMPORT_FUNCTION}" (func $f))
                 ))
-                (instance $c2 (instantiate $c2
+                (instance $c2 (instantiate $caller
                     {type_instantiation_args}
                     (with "{IMPORT_FUNCTION}" (func $c1 "{EXPORT_FUNCTION}"))
                 ))
@@ -878,13 +1611,86 @@ pub struct TestCase<'a> {
     pub params: Vec<&'a Type>,
     /// The result types of the function
     pub result: Option<&'a Type>,
-    /// String encoding to use from host-to-component.
-    pub encoding1: StringEncoding,
-    /// String encoding to use from component-to-host.
-    pub encoding2: StringEncoding,
+    /// ABI options to use for this test case.
+    pub options: TestCaseOptions,
 }
 
-impl TestCase<'_> {
+/// Collection of options which configure how the caller/callee/etc ABIs are
+/// all configured.
+#[derive(Debug, Arbitrary, Copy, Clone)]
+pub struct TestCaseOptions {
+    /// Whether or not the guest caller component (the entrypoint) is using an
+    /// `async` function type.
+    pub guest_caller_async: bool,
+    /// Whether or not the guest callee component (what the entrypoint calls)
+    /// is using an `async` function type.
+    pub guest_callee_async: bool,
+    /// Whether or not the host is using an async function type (what the
+    /// guest callee calls).
+    pub host_async: bool,
+    /// The string encoding of the caller component.
+    pub caller_encoding: StringEncoding,
+    /// The string encoding of the callee component.
+    pub callee_encoding: StringEncoding,
+    /// The ABI that the caller component is using to lift its export (the main
+    /// entrypoint).
+    pub caller_lift_abi: LiftAbi,
+    /// The ABI that the callee component is using to lift its export (called
+    /// by the caller).
+    pub callee_lift_abi: LiftAbi,
+    /// The ABI that the caller component is using to lower its import (the
+    /// callee's export).
+    pub caller_lower_abi: LowerAbi,
+    /// The ABI that the callee component is using to lower its import (the
+    /// host function).
+    pub callee_lower_abi: LowerAbi,
+}
+
+#[derive(Debug, Arbitrary, Copy, Clone)]
+pub enum LiftAbi {
+    Sync,
+    AsyncStackful,
+    AsyncCallback,
+}
+
+#[derive(Debug, Arbitrary, Copy, Clone)]
+pub enum LowerAbi {
+    Sync,
+    Async,
+}
+
+impl<'a> TestCase<'a> {
+    pub fn generate(types: &'a [Type], u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        let max_params = if types.len() > 0 { 5 } else { 0 };
+        let params = (0..u.int_in_range(0..=max_params)?)
+            .map(|_| u.choose(&types))
+            .collect::<arbitrary::Result<Vec<_>>>()?;
+        let result = if types.len() > 0 && u.arbitrary()? {
+            Some(u.choose(&types)?)
+        } else {
+            None
+        };
+
+        let mut options = u.arbitrary::<TestCaseOptions>()?;
+
+        // Sync tasks cannot call async functions via a sync lower, nor can they
+        // block in other ways (e.g. by calling `waitable-set.wait`, returning
+        // `CALLBACK_CODE_WAIT`, etc.) prior to returning.  Therefore,
+        // async-ness cascades to the callers:
+        if options.host_async {
+            options.guest_callee_async = true;
+        }
+        if options.guest_callee_async {
+            options.guest_caller_async = true;
+        }
+
+        Ok(Self {
+            params,
+            result,
+            options,
+        })
+    }
+
     /// Generate a `Declarations` for this `TestCase` which may be used to build a component to execute the case.
     pub fn declarations(&self) -> Declarations {
         let mut builder = TypesBuilder::default();
@@ -903,13 +1709,24 @@ impl TestCase<'_> {
             results.push_str(")");
         }
 
-        let import_and_export = make_import_and_export(&self.params, self.result);
+        let caller_module = make_import_and_export(
+            &self.params,
+            self.result,
+            self.options.caller_lift_abi,
+            self.options.caller_lower_abi,
+        );
+        let callee_module = make_import_and_export(
+            &self.params,
+            self.result,
+            self.options.callee_lift_abi,
+            self.options.callee_lower_abi,
+        );
 
         let mut type_decls = Vec::new();
         let mut type_instantiation_args = String::new();
         while let Some((idx, ty)) = builder.worklist.pop() {
             type_decls.push(builder.write_decl(idx, ty));
-            writeln!(type_instantiation_args, "(with \"t{idx}\" (type $t{idx}))").unwrap();
+            uwriteln!(type_instantiation_args, "(with \"t{idx}\" (type $t{idx}))");
         }
 
         // Note that types are printed here in reverse order since they were
@@ -926,9 +1743,9 @@ impl TestCase<'_> {
             type_instantiation_args: type_instantiation_args.into(),
             params: params.into(),
             results: results.into(),
-            import_and_export: import_and_export.into(),
-            encoding1: self.encoding1,
-            encoding2: self.encoding2,
+            caller_module: caller_module.into(),
+            callee_module: callee_module.into(),
+            options: self.options,
         }
     }
 }
@@ -950,6 +1767,54 @@ impl fmt::Display for StringEncoding {
     }
 }
 
+impl ToTokens for TestCaseOptions {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let TestCaseOptions {
+            guest_caller_async,
+            guest_callee_async,
+            host_async,
+            caller_encoding,
+            callee_encoding,
+            caller_lift_abi,
+            callee_lift_abi,
+            caller_lower_abi,
+            callee_lower_abi,
+        } = self;
+        tokens.extend(quote!(wasmtime_test_util::component_fuzz::TestCaseOptions {
+            guest_caller_async: #guest_caller_async,
+            guest_callee_async: #guest_callee_async,
+            host_async: #host_async,
+            caller_encoding: #caller_encoding,
+            callee_encoding: #callee_encoding,
+            caller_lift_abi: #caller_lift_abi,
+            callee_lift_abi: #callee_lift_abi,
+            caller_lower_abi: #caller_lower_abi,
+            callee_lower_abi: #callee_lower_abi,
+        }));
+    }
+}
+
+impl ToTokens for LowerAbi {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let me = match self {
+            LowerAbi::Sync => quote!(Sync),
+            LowerAbi::Async => quote!(Async),
+        };
+        tokens.extend(quote!(wasmtime_test_util::component_fuzz::LowerAbi::#me));
+    }
+}
+
+impl ToTokens for LiftAbi {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let me = match self {
+            LiftAbi::Sync => quote!(Sync),
+            LiftAbi::AsyncCallback => quote!(AsyncCallback),
+            LiftAbi::AsyncStackful => quote!(AsyncStackful),
+        };
+        tokens.extend(quote!(wasmtime_test_util::component_fuzz::LiftAbi::#me));
+    }
+}
+
 impl ToTokens for StringEncoding {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let me = match self {
@@ -958,5 +1823,47 @@ impl ToTokens for StringEncoding {
             StringEncoding::Latin1OrUtf16 => quote!(Latin1OrUtf16),
         };
         tokens.extend(quote!(wasmtime_test_util::component_fuzz::StringEncoding::#me));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arbtest() {
+        arbtest::arbtest(|u| {
+            let mut fuel = 100;
+            let types = (0..5)
+                .map(|_| Type::generate(u, 3, &mut fuel))
+                .collect::<arbitrary::Result<Vec<_>>>()?;
+            let case = TestCase::generate(&types, u)?;
+            let decls = case.declarations();
+            let component = decls.make_component();
+            let wasm = wat::parse_str(&component).unwrap_or_else(|e| {
+                panic!("failed to parse generated component as wat: {e}\n\n{component}");
+            });
+            wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
+                .validate_all(&wasm)
+                .unwrap_or_else(|e| {
+                    let mut wat = String::new();
+                    let mut dst = wasmprinter::PrintFmtWrite(&mut wat);
+                    let to_print = if wasmprinter::Config::new()
+                        .print_offsets(true)
+                        .print_operand_stack(true)
+                        .print(&wasm, &mut dst)
+                        .is_ok()
+                    {
+                        &wat[..]
+                    } else {
+                        &component[..]
+                    };
+                    panic!("generated component is not valid wasm: {e}\n\n{to_print}");
+                });
+            Ok(())
+        })
+        .budget_ms(1_000)
+        // .seed(0x3c9050d4000000e9)
+        ;
     }
 }

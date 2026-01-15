@@ -21,6 +21,13 @@ pub struct CodegenOptions {
     /// Prefixes to remove when printing file names in generaed files. This
     /// helps keep codegen deterministic.
     pub prefixes: Vec<Prefix>,
+
+    /// Emit `log::debug!` and `log::trace!` invocations in the generated code to help
+    /// debug rule matching and execution.
+    ///
+    /// In Cranelift this is typically controlled by a cargo feature on the
+    /// crate that includes the generated code (e.g. `cranelift-codegen`).
+    pub emit_logging: bool,
 }
 
 /// A path prefix which should be replaced when printing file names.
@@ -63,16 +70,20 @@ struct BodyContext<'a, W> {
     indent: String,
     is_ref: StableSet<BindingId>,
     is_bound: StableSet<BindingId>,
+    term_name: &'a str,
+    emit_logging: bool,
 }
 
 impl<'a, W: Write> BodyContext<'a, W> {
-    fn new(out: &'a mut W, ruleset: &'a RuleSet) -> Self {
+    fn new(out: &'a mut W, ruleset: &'a RuleSet, term_name: &'a str, emit_logging: bool) -> Self {
         Self {
             out,
             ruleset,
             indent: Default::default(),
             is_ref: Default::default(),
             is_bound: Default::default(),
+            term_name,
+            emit_logging,
         }
     }
 
@@ -130,7 +141,8 @@ impl<'a> Codegen<'a> {
         self.generate_header(&mut code, options);
         self.generate_ctx_trait(&mut code);
         self.generate_internal_types(&mut code);
-        self.generate_internal_term_constructors(&mut code).unwrap();
+        self.generate_internal_term_constructors(&mut code, options)
+            .unwrap();
 
         code
     }
@@ -166,7 +178,7 @@ impl<'a> Codegen<'a> {
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
-        writeln!(code, "use std::marker::PhantomData;").unwrap();
+        writeln!(code, "use core::marker::PhantomData;").unwrap();
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
@@ -271,38 +283,38 @@ pub trait Length {{
     fn len(&self) -> usize;
 }}
 
-impl<T> Length for std::vec::Vec<T> {{
+impl<T> Length for alloc::vec::Vec<T> {{
     fn len(&self) -> usize {{
-        std::vec::Vec::len(self)
+        alloc::vec::Vec::len(self)
     }}
 }}
 
 pub struct ContextIterWrapper<I, C> {{
     iter: I,
-    _ctx: std::marker::PhantomData<C>,
+    _ctx: core::marker::PhantomData<C>,
 }}
 impl<I: Default, C> Default for ContextIterWrapper<I, C> {{
     fn default() -> Self {{
         ContextIterWrapper {{
             iter: I::default(),
-            _ctx: std::marker::PhantomData
+            _ctx: core::marker::PhantomData
         }}
     }}
 }}
-impl<I, C> std::ops::Deref for ContextIterWrapper<I, C> {{
+impl<I, C> core::ops::Deref for ContextIterWrapper<I, C> {{
     type Target = I;
     fn deref(&self) -> &I {{
         &self.iter
     }}
 }}
-impl<I, C> std::ops::DerefMut for ContextIterWrapper<I, C> {{
+impl<I, C> core::ops::DerefMut for ContextIterWrapper<I, C> {{
     fn deref_mut(&mut self) -> &mut I {{
         &mut self.iter
     }}
 }}
 impl<I: Iterator, C: Context> From<I> for ContextIterWrapper<I, C> {{
     fn from(iter: I) -> Self {{
-        Self {{ iter, _ctx: std::marker::PhantomData }}
+        Self {{ iter, _ctx: core::marker::PhantomData }}
     }}
 }}
 impl<I: Iterator, C: Context> ContextIter for ContextIterWrapper<I, C> {{
@@ -322,7 +334,7 @@ impl<I: IntoIterator, C: Context> IntoContextIter for ContextIterWrapper<I, C> {
     fn into_context_iter(self) -> Self::IntoIter {{
         ContextIterWrapper {{
             iter: self.iter.into_iter(),
-            _ctx: std::marker::PhantomData
+            _ctx: core::marker::PhantomData
         }}
     }}
 }}
@@ -404,13 +416,17 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         }
     }
 
-    fn generate_internal_term_constructors(&self, code: &mut String) -> std::fmt::Result {
+    fn generate_internal_term_constructors(
+        &self,
+        code: &mut String,
+        options: &CodegenOptions,
+    ) -> std::fmt::Result {
         for &(termid, ref ruleset) in self.terms.iter() {
             let root = crate::serialize::serialize(ruleset);
-            let mut ctx = BodyContext::new(code, ruleset);
 
             let termdata = &self.termenv.terms[termid.index()];
             let term_name = &self.typeenv.syms[termdata.name.index()];
+            let mut ctx = BodyContext::new(code, ruleset, term_name, options.emit_logging);
             writeln!(ctx.out)?;
             writeln!(
                 ctx.out,
@@ -664,6 +680,15 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                 &ctx.indent,
                                 pos.pretty_print_line(&self.files)
                             )?;
+                            if ctx.emit_logging {
+                                // Produce a valid Rust string literal with escapes.
+                                let pp = pos.pretty_print_line(&self.files);
+                                writeln!(
+                                    ctx.out,
+                                    "{}log::debug!(\"ISLE {{}} {{}}\", {:?}, {:?});",
+                                    &ctx.indent, ctx.term_name, pp
+                                )?;
+                            }
                             write!(ctx.out, "{}", &ctx.indent)?;
                             match ret_kind {
                                 ReturnKind::Plain | ReturnKind::Option => {

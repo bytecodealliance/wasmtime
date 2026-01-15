@@ -51,13 +51,10 @@ impl ConstEvalContext {
 
     fn ref_func(&mut self, store: &mut StoreOpaque, index: FuncIndex) -> Result<Val> {
         let id = store.id();
+        let (instance, registry) = store.instance_and_module_registry_mut(self.instance);
         // SAFETY: `id` is the correct store-owner of the function being looked
         // up
-        let func = unsafe {
-            store
-                .instance_mut(self.instance)
-                .get_exported_func(id, index)
-        };
+        let func = unsafe { instance.get_exported_func(registry, id, index) };
         Ok(func.into())
     }
 
@@ -434,7 +431,7 @@ impl ConstExprEvaluator {
 
     fn pop(&mut self) -> Result<Val> {
         self.stack.pop().ok_or_else(|| {
-            anyhow!(
+            format_err!(
                 "const expr evaluation error: attempted to pop from an empty \
                  evaluation stack"
             )

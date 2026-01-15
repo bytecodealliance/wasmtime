@@ -1,10 +1,11 @@
 test interpret
 test run
 set enable_llvm_abi_extensions=true
-target aarch64
 set enable_multi_ret_implicit_sret
 target x86_64
+target aarch64
 target riscv64
+target s390x
 target pulley32
 target pulley32be
 target pulley64

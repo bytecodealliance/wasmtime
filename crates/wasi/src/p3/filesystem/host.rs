@@ -1,5 +1,5 @@
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
-use crate::p3::bindings::clocks::wall_clock;
+use crate::p3::bindings::clocks::system_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
@@ -7,7 +7,6 @@ use crate::p3::bindings::filesystem::types::{
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
-use anyhow::Context as _;
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -19,9 +18,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::error::Context as _;
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -96,10 +96,19 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
     }
 }
 
-fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
-    std::time::SystemTime::UNIX_EPOCH
-        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
-        .ok_or(ErrorCode::Overflow)
+fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
+    if let Ok(seconds) = t.seconds.try_into() {
+        std::time::SystemTime::UNIX_EPOCH
+            .checked_add(core::time::Duration::new(seconds, t.nanoseconds))
+            .ok_or(ErrorCode::Overflow)
+    } else {
+        std::time::SystemTime::UNIX_EPOCH
+            .checked_sub(core::time::Duration::new(
+                t.seconds.unsigned_abs(),
+                t.nanoseconds,
+            ))
+            .ok_or(ErrorCode::Overflow)
+    }
 }
 
 fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
@@ -485,37 +494,35 @@ impl types::Host for WasiFilesystemCtxView<'_> {
 }
 
 impl types::HostDescriptorWithStore for WasiFilesystem {
-    async fn read_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn read_via_stream<U>(
+        mut store: Access<U, Self>,
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut store| {
-            let file = get_file(store.get().table, &fd)?;
-            if !file.perms.contains(FilePerms::READ) {
-                return Ok((
-                    StreamReader::new(&mut store, iter::empty()),
-                    FutureReader::new(&mut store, async {
-                        anyhow::Ok(Err(ErrorCode::NotPermitted))
-                    }),
-                ));
-            }
+        let file = get_file(store.get().table, &fd)?;
+        if !file.perms.contains(FilePerms::READ) {
+            return Ok((
+                StreamReader::new(&mut store, iter::empty()),
+                FutureReader::new(&mut store, async {
+                    wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
+                }),
+            ));
+        }
 
-            let file = file.clone();
-            let (result_tx, result_rx) = oneshot::channel();
-            Ok((
-                StreamReader::new(
-                    &mut store,
-                    ReadStreamProducer {
-                        file,
-                        offset,
-                        result: Some(result_tx),
-                        task: None,
-                    },
-                ),
-                FutureReader::new(&mut store, result_rx),
-            ))
-        })
+        let file = file.clone();
+        let (result_tx, result_rx) = oneshot::channel();
+        Ok((
+            StreamReader::new(
+                &mut store,
+                ReadStreamProducer {
+                    file,
+                    offset,
+                    result: Some(result_tx),
+                    task: None,
+                },
+            ),
+            FutureReader::new(&mut store, result_rx),
+        ))
     }
 
     async fn write_via_stream<U>(
@@ -638,7 +645,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 return Ok((
                     StreamReader::new(&mut store, iter::empty()),
                     FutureReader::new(&mut store, async {
-                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                        wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
                     }),
                 ));
             }
@@ -821,7 +828,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let table = store.get().table;
             let fd = get_descriptor(table, &fd)?.clone();
             let other = get_descriptor(table, &other)?.clone();
-            anyhow::Ok((fd, other))
+            wasmtime::error::Ok((fd, other))
         })?;
         fd.is_same_object(&other).await
     }

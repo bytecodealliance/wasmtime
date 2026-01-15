@@ -99,15 +99,13 @@ pub struct Host_Indices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Host_ {}
 pub trait Host_ImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
 pub trait Host_Imports: Send {}
 impl<_T: Host_Imports + ?Sized + Send> Host_Imports for &mut _T {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl Host_Indices {
         /// Creates a new copy of `Host_Indices` bindings which can then
         /// be used to instantiate into a particular store.

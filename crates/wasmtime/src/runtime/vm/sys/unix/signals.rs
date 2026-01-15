@@ -49,7 +49,7 @@ impl TrapHandler {
             // crash while handling the signal, and fall through to the
             // Breakpad handler by testing handlingSegFault.
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
-            handler.sa_sigaction = trap_handler as usize;
+            handler.sa_sigaction = (trap_handler as *const ()).addr();
             unsafe {
                 libc::sigemptyset(&mut handler.sa_mask);
                 if libc::sigaction(signal, &handler, slot) != 0 {
@@ -111,7 +111,7 @@ impl Drop for TrapHandler {
                 // signal handler state and don't know how to remove ourselves
                 // from the signal handling state. Inform the user of this and
                 // abort the process.
-                if prev.sa_sigaction != trap_handler as usize {
+                if prev.sa_sigaction != (trap_handler as *const ()).addr() {
                     eprintln!(
                         "
 Wasmtime's signal handler was not the last signal handler to be installed
@@ -383,6 +383,13 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
             cx.uc_mcontext.mc_rsp = handler.sp as _;
             cx.uc_mcontext.mc_rax = 0;
             cx.uc_mcontext.mc_rdx = 0;
+        } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
+            let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
+            cx.sc_rip = handler.pc as _;
+            cx.sc_rbp = handler.fp as _;
+            cx.sc_rsp = handler.sp as _;
+            cx.sc_rax = 0;
+            cx.sc_rdx = 0;
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.__gregs[libc::REG_PC] = handler.pc as _;

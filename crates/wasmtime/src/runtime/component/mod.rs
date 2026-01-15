@@ -120,8 +120,8 @@ pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
-    ErrorContext, FutureConsumer, FutureProducer, FutureReader, GuardedFutureReader,
-    GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamConsumer, StreamProducer,
+    ErrorContext, FutureAny, FutureConsumer, FutureProducer, FutureReader, GuardedFutureReader,
+    GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny, StreamConsumer, StreamProducer,
     StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 #[cfg(feature = "component-model-async")]
@@ -139,7 +139,7 @@ pub use self::values::Val;
 
 pub(crate) use self::instance::RuntimeImport;
 pub(crate) use self::resources::HostResourceData;
-pub(crate) use self::store::ComponentInstanceId;
+pub(crate) use self::store::{ComponentInstanceId, RuntimeInstance};
 
 // Re-export wasm_wave crate so the compatible version of this dep doesn't have to be
 // tracked separately from wasmtime.
@@ -161,7 +161,6 @@ pub mod __internal {
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
-    pub use anyhow;
     pub use core::cell::RefCell;
     pub use core::future::Future;
     pub use core::mem::transmute;
@@ -316,7 +315,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // means that this is the default already applied meaning that
 ///         // specifying it here would be redundant.
 ///         //
-///         // "wasi:clocks/monotonic-clock.[async]wait-until": async | store,
+///         // "wasi:clocks/monotonic-clock.wait-until": async | store,
 ///
 ///         // The `tracing` flag indicates that `tracing!` will be used to log
 ///         // entries and exits into this host API. This can assist with
@@ -350,7 +349,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // The `ignore_wit` flag discards the WIT-level defaults of a
 ///         // function. For example this `async` WIT function will be ignored
 ///         // and a synchronous function will be generated on the host.
-///         "my:local/api.[async]wait": ignore_wit,
+///         "my:local/api.wait": ignore_wit,
 ///
 ///         // The `exact` flag ensures that the filter, here "f", only matches
 ///         // functions exactly. For example "f" here would only refer to
@@ -378,7 +377,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // this function should return a tuple of the result produced by the
 ///         // callee and a `TaskExit` future which will resolve when the task
 ///         // (and any transitively created subtasks) have exited.
-///         "my:local/api.[async]does-stuff-after-returning": task_exit,
+///         "my:local/api.does-stuff-after-returning": task_exit,
 ///     },
 ///
 ///     // This can be used to translate WIT return values of the form
@@ -468,6 +467,16 @@ pub(crate) use self::store::ComponentStoreData;
 ///     //
 ///     // By default this is `wasmtime`.
 ///     wasmtime_crate: path::to::wasmtime,
+///
+///     // Whether to use `anyhow::Result` for trappable host-defined function
+///     // imports, rather than `wasmtime::Result`.
+///     //
+///     // By default, this is false and `wasmtime::Result` is used instead of
+///     // `anyhow::Result`.
+///     //
+///     // When enabled, the generated code requires the `"anyhow"` cargo feature
+///     // to also be enabled in the `wasmtime` crate.
+///     anyhow: false,
 ///
 ///     // This is an in-source alternative to using `WASMTIME_DEBUG_BINDGEN`.
 ///     //

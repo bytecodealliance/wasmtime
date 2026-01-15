@@ -88,7 +88,7 @@ impl Mmap {
             .metadata()
             .context("failed to get file metadata")?
             .len();
-        let len = usize::try_from(len).map_err(|_| anyhow::anyhow!("file too large to map"))?;
+        let len = usize::try_from(len).map_err(|_| crate::format_err!("file too large to map"))?;
         let ptr = unsafe {
             rustix::mm::mmap(
                 ptr::null_mut(),
@@ -196,6 +196,17 @@ impl Mmap {
 
         unsafe {
             mprotect(base, len, MprotectFlags::READ)?;
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
+        let len = range.end - range.start;
+
+        unsafe {
+            mprotect(base, len, MprotectFlags::READ | MprotectFlags::WRITE)?;
         }
 
         Ok(())

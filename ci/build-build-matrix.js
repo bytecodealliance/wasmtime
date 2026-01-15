@@ -68,6 +68,10 @@ const array = [
     "build": "aarch64-android",
     "os": ubuntu,
     "target": "aarch64-linux-android",
+    // See https://developer.android.com/guide/practices/page-sizes
+    // for some more commentary, but apparently Google recommends passing this
+    // linker flag.
+    "env": { "RUSTFLAGS": "-Clink-arg=-z -Clink-arg=max-page-size=16384" },
   },
   {
     "build": "x86_64-android",

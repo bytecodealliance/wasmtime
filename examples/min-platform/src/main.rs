@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 
 #[cfg(not(target_os = "linux"))]
 fn main() -> Result<()> {
@@ -8,22 +8,21 @@ fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use anyhow::{Context, anyhow, bail};
     use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW, Symbol};
     use object::{Object, ObjectSymbol};
-    use wasmtime::{Config, Engine};
+    use wasmtime::{Config, Engine, bail, error::Context as _, format_err};
 
     let mut args = std::env::args();
     let _current_exe = args.next();
     let triple = args
         .next()
-        .ok_or_else(|| anyhow!("missing argument 1: triple"))?;
+        .ok_or_else(|| format_err!("missing argument 1: triple"))?;
     let embedding_so_path = args
         .next()
-        .ok_or_else(|| anyhow!("missing argument 2: path to libembedding.so"))?;
+        .ok_or_else(|| format_err!("missing argument 2: path to libembedding.so"))?;
     let platform_so_path = args
         .next()
-        .ok_or_else(|| anyhow!("missing argument 3: path to libwasmtime-platform.so"))?;
+        .ok_or_else(|| format_err!("missing argument 3: path to libwasmtime-platform.so"))?;
 
     // Path to the artifact which is the build of the embedding.
     //
@@ -192,7 +191,7 @@ fn main() -> Result<()> {
         {
             let wasi_component_path = args
                 .next()
-                .ok_or_else(|| anyhow!("missing argument 4: path to wasi component"))?;
+                .ok_or_else(|| format_err!("missing argument 4: path to wasi component"))?;
             let wasi_component = std::fs::read(&wasi_component_path)?;
             let wasi_component = engine.precompile_component(&wasi_component)?;
 

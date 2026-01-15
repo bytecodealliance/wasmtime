@@ -76,8 +76,6 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-#[cfg(feature = "debug")]
-use crate::DebugHandler;
 #[cfg(all(feature = "gc", feature = "debug"))]
 use crate::OwnedRooted;
 use crate::RootSet;
@@ -97,16 +95,20 @@ use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore, VMStoreContext,
+    self, ExportMemory, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    SendSyncPtr, SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
+#[cfg(feature = "debug")]
+use crate::{BreakpointState, DebugHandler};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
-use crate::{Global, Instance, Memory, Table, Uninhabited};
+use crate::{Global, Instance, Table};
 use alloc::sync::Arc;
+use core::convert::Infallible;
 use core::fmt;
 use core::marker;
 use core::mem::{self, ManuallyDrop, MaybeUninit};
@@ -343,7 +345,7 @@ impl StoreResourceLimiter<'_> {
         }
     }
 
-    pub(crate) fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+    pub(crate) fn memory_grow_failed(&mut self, error: crate::Error) -> Result<()> {
         match self {
             Self::Sync(s) => s.memory_grow_failed(error),
             #[cfg(feature = "async")]
@@ -364,7 +366,7 @@ impl StoreResourceLimiter<'_> {
         }
     }
 
-    pub(crate) fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+    pub(crate) fn table_grow_failed(&mut self, error: crate::Error) -> Result<()> {
         match self {
             Self::Sync(s) => s.table_grow_failed(error),
             #[cfg(feature = "async")]
@@ -383,7 +385,7 @@ enum CallHookInner<T: 'static> {
         reason = "forcing, regardless of cfg, the type param to be used"
     )]
     ForceTypeParameterToBeUsed {
-        uninhabited: Uninhabited,
+        uninhabited: Infallible,
         _marker: marker::PhantomData<T>,
     },
 }
@@ -548,6 +550,20 @@ pub struct StoreOpaque {
     /// For example if Pulley is enabled and configured then this will store a
     /// Pulley interpreter.
     executor: Executor,
+
+    /// The debug breakpoint state for this store.
+    ///
+    /// When guest debugging is enabled, a given store may have a set
+    /// of breakpoints defined, denoted by module and Wasm PC within
+    /// that module. Or alternately, it may be in "single-step" mode,
+    /// where every possible breakpoint is logically enabled.
+    ///
+    /// When execution of any instance in this store hits any defined
+    /// breakpoint, a `Breakpoint` debug event is emitted and the
+    /// handler defined above, if any, has a chance to perform some
+    /// logic before returning to allow execution to resume.
+    #[cfg(feature = "debug")]
+    breakpoints: BreakpointState,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -756,6 +772,8 @@ impl<T> Store<T> {
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
             concurrent_state: Default::default(),
+            #[cfg(feature = "debug")]
+            breakpoints: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1238,16 +1256,29 @@ impl<T> Store<T> {
     /// VM-level values (locals and operand stack), when debugging is
     /// enabled.
     ///
-    /// This object views the frames from the most recent Wasm entry
-    /// onward (up to the exit that allows this host code to run). Any
-    /// Wasm stack frames upward from the most recent entry to Wasm
-    /// are not visible to this cursor.
-    ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
     pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.as_context_mut().debug_frames()
+    }
+
+    /// Start an edit session to update breakpoints.
+    #[cfg(feature = "debug")]
+    pub fn edit_breakpoints(&mut self) -> Option<crate::BreakpointEdit<'_>> {
+        self.as_context_mut().edit_breakpoints()
+    }
+
+    /// Return all breakpoints.
+    #[cfg(feature = "debug")]
+    pub fn breakpoints(&self) -> Option<impl Iterator<Item = crate::Breakpoint> + '_> {
+        self.as_context().breakpoints()
+    }
+
+    /// Indicate whether single-step mode is enabled.
+    #[cfg(feature = "debug")]
+    pub fn is_single_step(&self) -> bool {
+        self.as_context().is_single_step()
     }
 
     /// Set the debug callback on this store.
@@ -1615,14 +1646,37 @@ impl StoreOpaque {
         &mut self.store_data
     }
 
+    pub fn store_data_mut_and_registry(&mut self) -> (&mut StoreData, &ModuleRegistry) {
+        (&mut self.store_data, &self.modules)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn breakpoints_and_registry_mut(
+        &mut self,
+    ) -> (&mut BreakpointState, &mut ModuleRegistry) {
+        (&mut self.breakpoints, &mut self.modules)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn breakpoints_and_registry(&self) -> (&BreakpointState, &ModuleRegistry) {
+        (&self.breakpoints, &self.modules)
+    }
+
     #[inline]
     pub(crate) fn modules(&self) -> &ModuleRegistry {
         &self.modules
     }
 
-    #[inline]
-    pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
-        &mut self.modules
+    pub(crate) fn register_module(&mut self, module: &Module) -> Result<RegisteredModuleId> {
+        self.modules.register_module(module, &self.engine)
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn register_component(
+        &mut self,
+        component: &crate::component::Component,
+    ) -> Result<()> {
+        self.modules.register_component(component, &self.engine)
     }
 
     pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
@@ -1648,7 +1702,7 @@ impl StoreOpaque {
             StoreInstanceKind::Real { module_id } => {
                 let module = self
                     .modules()
-                    .lookup_module_by_id(module_id)
+                    .module_by_id(module_id)
                     .expect("should always have a registered module for real instances");
                 Some(module)
             }
@@ -1673,6 +1727,16 @@ impl StoreOpaque {
     #[inline]
     pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
         self.instances[id].handle.get_mut()
+    }
+
+    /// Accessor from `InstanceId` to both `Pin<&mut vm::Instance>`
+    /// and `&ModuleRegistry`.
+    #[inline]
+    pub fn instance_and_module_registry_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> (Pin<&mut vm::Instance>, &ModuleRegistry) {
+        (self.instances[id].handle.get_mut(), &self.modules)
     }
 
     /// Access multiple instances specified via `ids`.
@@ -1709,6 +1773,23 @@ impl StoreOpaque {
         (self.gc_store.as_mut(), self.instances[id].handle.get_mut())
     }
 
+    /// Tuple of `Self::optional_gc_store_mut`, `Self::modules`, and
+    /// `Self::instance_mut`.
+    pub fn optional_gc_store_and_registry_and_instance_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> (
+        Option<&mut GcStore>,
+        &ModuleRegistry,
+        Pin<&mut vm::Instance>,
+    ) {
+        (
+            self.gc_store.as_mut(),
+            &self.modules,
+            self.instances[id].handle.get_mut(),
+        )
+    }
+
     /// Get all instances (ignoring dummy instances) within this store.
     pub fn all_instances<'a>(&'a mut self) -> impl ExactSizeIterator<Item = Instance> + 'a {
         let instances = self
@@ -1728,7 +1809,7 @@ impl StoreOpaque {
     }
 
     /// Get all memories (host- or Wasm-defined) within this store.
-    pub fn all_memories<'a>(&'a self) -> impl Iterator<Item = Memory> + 'a {
+    pub fn all_memories<'a>(&'a self) -> impl Iterator<Item = ExportMemory> + 'a {
         // NB: Host-created memories have dummy instances. Therefore, we can get
         // all memories in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.
@@ -2035,12 +2116,12 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let module_info = self
+        let (module_with_code, _offset) = self
             .modules()
-            .lookup_module_by_pc(pc)
+            .module_and_code_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+        if let Some(stack_map) = module_with_code.lookup_stack_map(pc) {
             log::trace!(
                 "We have a stack map that maps {} bytes in this Wasm frame",
                 stack_map.frame_size()
@@ -2055,8 +2136,10 @@ impl StoreOpaque {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(frame_table) = module_info.frame_table() {
-            let relpc = module_info.text_offset(pc);
+        if let Some(frame_table) = module_with_code.module().frame_table() {
+            let relpc = module_with_code
+                .text_offset(pc)
+                .expect("PC should be within module");
             for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
@@ -2205,7 +2288,7 @@ impl StoreOpaque {
     }
 
     pub fn get_fuel(&self) -> Result<u64> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
@@ -2223,7 +2306,7 @@ impl StoreOpaque {
     }
 
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
@@ -2238,15 +2321,15 @@ impl StoreOpaque {
     }
 
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
-        anyhow::ensure!(
+        crate::ensure!(
             self.engine().config().async_support,
             "async support is not configured in this store"
         );
-        anyhow::ensure!(
+        crate::ensure!(
             interval != Some(0),
             "fuel_async_yield_interval must not be 0"
         );
@@ -2754,8 +2837,11 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> anyhow::Result<()> {
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent<'_>) -> crate::Result<()> {
         if let Some(handler) = self.debug_handler.take() {
+            if !self.can_block() {
+                bail!("could not invoke debug handler without async context");
+            }
             log::trace!("about to raise debug event {event:?}");
             StoreContextMut(self).with_blocking(|store, cx| {
                 cx.block_on(Pin::from(handler.handle(store, event)).as_mut())

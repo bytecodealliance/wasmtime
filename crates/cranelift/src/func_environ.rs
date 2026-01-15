@@ -3,8 +3,8 @@ pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
-    TargetEnvironment,
+    FuncTranslationStacks, GlobalConstValue, GlobalVariable, Heap, HeapData, StructFieldsVec,
+    TableData, TableSize, TargetEnvironment,
 };
 use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
@@ -14,7 +14,7 @@ use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::ir::{Block, types::*};
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
@@ -45,6 +45,7 @@ pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
     builtins: [Option<ir::FuncRef>; BuiltinFunctionIndex::len() as usize],
+    breakpoint_trampoline: Option<ir::FuncRef>,
 }
 
 impl BuiltinFunctions {
@@ -52,6 +53,7 @@ impl BuiltinFunctions {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::len() as usize],
+            breakpoint_trampoline: None,
         }
     }
 
@@ -70,9 +72,31 @@ impl BuiltinFunctions {
             name,
             signature,
             colocated: true,
+            patchable: false,
         });
         *cache = Some(f);
         f
+    }
+
+    pub(crate) fn patchable_breakpoint(&mut self, func: &mut Function) -> ir::FuncRef {
+        *self.breakpoint_trampoline.get_or_insert_with(|| {
+            let mut signature = ir::Signature::new(CallConv::PreserveAll);
+            signature
+                .params
+                .push(ir::AbiParam::new(self.types.pointer_type));
+            let signature = func.import_signature(signature);
+            let key = FuncKey::PatchableToBuiltinTrampoline(BuiltinFunctionIndex::breakpoint());
+            let (namespace, index) = key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
+            func.import_function(ir::ExtFuncData {
+                name,
+                signature,
+                colocated: true,
+                patchable: true,
+            })
+        })
     }
 }
 
@@ -85,6 +109,7 @@ macro_rules! declare_function_signatures {
     )*) => {
         $(impl BuiltinFunctions {
             $( #[$attr] )*
+            #[allow(dead_code, reason = "debug breakpoint libcall not used in host ABI, only patchable ABI")]
             pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
                 self.load_builtin(func, BuiltinFunctionIndex::$name())
             }
@@ -1401,6 +1426,15 @@ impl FuncEnvironment<'_> {
             return GlobalVariable::Custom;
         }
 
+        if !self.module.globals[index].mutability {
+            if let Some(index) = self.module.defined_global_index(index) {
+                let init = &self.module.global_initializers[index];
+                if let Some(value) = GlobalConstValue::const_eval(init) {
+                    return GlobalVariable::Constant { value };
+                }
+            }
+        }
+
         let (gv, offset) = self.get_global_location(func, index);
         GlobalVariable::Memory {
             gv,
@@ -1452,6 +1486,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -1492,6 +1527,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -3101,6 +3137,21 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { value } => match value {
+                GlobalConstValue::I32(x) => Ok(builder.ins().iconst(ir::types::I32, i64::from(x))),
+                GlobalConstValue::I64(x) => Ok(builder.ins().iconst(ir::types::I64, x)),
+                GlobalConstValue::F32(x) => {
+                    Ok(builder.ins().f32const(ir::immediates::Ieee32::with_bits(x)))
+                }
+                GlobalConstValue::F64(x) => {
+                    Ok(builder.ins().f64const(ir::immediates::Ieee64::with_bits(x)))
+                }
+                GlobalConstValue::V128(x) => {
+                    let data = x.to_le_bytes().to_vec().into();
+                    let handle = builder.func.dfg.constants.insert(data);
+                    Ok(builder.ins().vconst(ir::types::I8X16, handle))
+                }
+            },
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
@@ -3151,6 +3202,9 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { .. } => {
+                unreachable!("validation checks that Wasm cannot `global.set` constant globals")
+            }
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
@@ -3741,7 +3795,9 @@ impl FuncEnvironment<'_> {
             self.fuel_before_op(op, builder, self.is_reachable());
         }
         if self.is_reachable() && self.state_slot.is_some() {
-            let inst = builder.ins().sequence_point();
+            let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let inst = builder.ins().call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }

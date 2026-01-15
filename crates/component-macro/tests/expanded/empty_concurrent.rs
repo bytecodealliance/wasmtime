@@ -99,8 +99,6 @@ pub struct EmptyIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Empty {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl EmptyIndices {
         /// Creates a new copy of `EmptyIndices` bindings which can then
         /// be used to instantiate into a particular store.

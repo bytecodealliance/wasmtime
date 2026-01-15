@@ -142,6 +142,9 @@ audit-as-crates-io = true
 [policy.wasmtime-internal-cranelift]
 audit-as-crates-io = true
 
+[policy.wasmtime-internal-error]
+audit-as-crates-io = true
+
 [policy.wasmtime-internal-explorer]
 audit-as-crates-io = true
 
@@ -202,7 +205,13 @@ audit-as-crates-io = true
 [policy.wasmtime-wasi-tls-nativetls]
 audit-as-crates-io = true
 
+[policy.wasmtime-wasi-tls-openssl]
+audit-as-crates-io = true
+
 [policy.wasmtime-wast]
+audit-as-crates-io = true
+
+[policy.wasmtime-wizer]
 audit-as-crates-io = true
 
 [policy.wiggle]
@@ -235,20 +244,12 @@ criteria = "safe-to-deploy"
 version = "1.6.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.bitflags]]
-version = "1.3.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.capstone]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.capstone-sys]]
 version = "0.16.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.console]]
-version = "0.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.constant_time_eq]]
@@ -299,10 +300,6 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.encode_unicode]]
-version = "0.3.6"
-criteria = "safe-to-deploy"
-
 [[exemptions.fallible-iterator]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
@@ -339,14 +336,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.im-rc]]
 version = "15.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.indicatif]]
-version = "0.13.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.io-uring]]
-version = "0.7.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
@@ -404,10 +393,6 @@ criteria = "safe-to-deploy"
 version = "0.4.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.number_prefix]]
-version = "0.3.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.object]]
 version = "0.36.0"
 criteria = "safe-to-deploy"
@@ -460,10 +445,6 @@ criteria = "safe-to-deploy"
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.rand]]
-version = "0.8.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
@@ -471,10 +452,6 @@ criteria = "safe-to-deploy"
 [[exemptions.rand_xoshiro]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.rand_xoshiro]]
-version = "0.6.0"
-criteria = "safe-to-run"
 
 [[exemptions.rawpointer]]
 version = "0.2.1"
@@ -528,20 +505,8 @@ criteria = "safe-to-deploy"
 version = "1.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.simd-adler32]]
-version = "0.3.7"
-criteria = "safe-to-deploy"
-
 [[exemptions.sized-chunks]]
 version = "0.6.5"
-criteria = "safe-to-deploy"
-
-[[exemptions.sized-chunks]]
-version = "0.6.5"
-criteria = "safe-to-run"
-
-[[exemptions.smallvec]]
-version = "1.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
@@ -550,14 +515,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.souper-ir]]
 version = "2.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.stable_deref_trait]]
-version = "1.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.strsim]]
-version = "0.10.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]

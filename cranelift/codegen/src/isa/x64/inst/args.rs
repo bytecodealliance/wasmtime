@@ -7,8 +7,8 @@ use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::machinst::*;
-use std::fmt;
-use std::string::String;
+use alloc::string::String;
+use core::fmt;
 
 /// An extension trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
@@ -87,7 +87,7 @@ macro_rules! newtype_of_reg {
         // NB: We cannot implement `DerefMut` because that would let people do
         // nasty stuff like `*my_gpr.deref_mut() = some_xmm_reg`, breaking the
         // invariants that `Gpr` provides.
-        impl std::ops::Deref for $newtype_reg {
+        impl core::ops::Deref for $newtype_reg {
             type Target = Reg;
 
             fn deref(&self) -> &Reg {

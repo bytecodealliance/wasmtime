@@ -31,7 +31,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/many")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]foo"]
+    #[link_name = "[task-return]foo"]
     fn task_return_foo(ptr: *mut u8);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -42,7 +42,7 @@ unsafe extern "C" fn task_return_foo(_ptr: *mut u8) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "local:local/many")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][async]foo"]
+    #[link_name = "[async-lower]foo"]
     fn import_foo(params: *mut u8, results: *mut u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -50,7 +50,7 @@ unsafe extern "C" fn import_foo(_params: *mut u8, _results: *mut u8) -> u32 {
     unreachable!()
 }
 
-#[unsafe(export_name = "[async-lift-stackful]local:local/many#[async]foo")]
+#[unsafe(export_name = "[async-lift-stackful]local:local/many#foo")]
 unsafe extern "C" fn export_foo(args: *mut u8) {
     // Note that we're careful not to take the address of any stack-allocated
     // value here.  We need to avoid relying on the LLVM-generated shadow stack

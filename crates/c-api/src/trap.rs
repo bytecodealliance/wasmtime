@@ -1,7 +1,46 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
-use anyhow::{Error, anyhow};
 use std::cell::OnceCell;
-use wasmtime::{Trap, WasmBacktrace};
+use wasmtime::{Error, Trap, WasmBacktrace, format_err};
+
+// Help ensure the Rust enum matches the C one.  If any of these assertions
+// fail, please update both this code and `trap.h` to sync them with
+// `trap_encoding.rs`.
+const _: () = {
+    assert!(Trap::StackOverflow as u8 == 0);
+    assert!(Trap::MemoryOutOfBounds as u8 == 1);
+    assert!(Trap::HeapMisaligned as u8 == 2);
+    assert!(Trap::TableOutOfBounds as u8 == 3);
+    assert!(Trap::IndirectCallToNull as u8 == 4);
+    assert!(Trap::BadSignature as u8 == 5);
+    assert!(Trap::IntegerOverflow as u8 == 6);
+    assert!(Trap::IntegerDivisionByZero as u8 == 7);
+    assert!(Trap::BadConversionToInteger as u8 == 8);
+    assert!(Trap::UnreachableCodeReached as u8 == 9);
+    assert!(Trap::Interrupt as u8 == 10);
+    assert!(Trap::OutOfFuel as u8 == 11);
+    assert!(Trap::AtomicWaitNonSharedMemory as u8 == 12);
+    assert!(Trap::NullReference as u8 == 13);
+    assert!(Trap::ArrayOutOfBounds as u8 == 14);
+    assert!(Trap::AllocationTooLarge as u8 == 15);
+    assert!(Trap::CastFailure as u8 == 16);
+    assert!(Trap::CannotEnterComponent as u8 == 17);
+    assert!(Trap::NoAsyncResult as u8 == 18);
+    assert!(Trap::UnhandledTag as u8 == 19);
+    assert!(Trap::ContinuationAlreadyConsumed as u8 == 20);
+    assert!(Trap::DisabledOpcode as u8 == 21);
+    assert!(Trap::AsyncDeadlock as u8 == 22);
+    assert!(Trap::CannotLeaveComponent as u8 == 23);
+    assert!(Trap::CannotBlockSyncTask as u8 == 24);
+    assert!(Trap::InvalidChar as u8 == 25);
+    assert!(Trap::DebugAssertStringEncodingFinished as u8 == 26);
+    assert!(Trap::DebugAssertEqualCodeUnits as u8 == 27);
+    assert!(Trap::DebugAssertPointerAligned as u8 == 28);
+    assert!(Trap::DebugAssertUpperBitsUnset as u8 == 29);
+    assert!(Trap::StringOutOfBounds as u8 == 30);
+    assert!(Trap::ListOutOfBounds as u8 == 31);
+    assert!(Trap::InvalidDiscriminant as u8 == 32);
+    assert!(Trap::UnalignedPointer as u8 == 33);
+};
 
 #[repr(C)]
 pub struct wasm_trap_t {
@@ -15,7 +54,7 @@ pub struct wasm_trap_t {
 impl Clone for wasm_trap_t {
     fn clone(&self) -> wasm_trap_t {
         wasm_trap_t {
-            error: anyhow!("{:?}", self.error),
+            error: format_err!("{:?}", self.error),
         }
     }
 }

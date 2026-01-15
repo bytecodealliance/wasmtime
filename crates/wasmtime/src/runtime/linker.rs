@@ -4,7 +4,7 @@ use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, Module, StoreContextMut, Val, ValRaw,
+    Instance, Module, Result, StoreContextMut, Val, ValRaw,
 };
 use crate::{IntoFunc, prelude::*};
 use alloc::sync::Arc;
@@ -173,7 +173,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let mut linker = Linker::<()>::new(&engine);
     /// linker.func_wrap("", "", || {})?;
@@ -204,7 +204,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module)")?;
     /// # let mut store = Store::new(&engine, ());
@@ -230,7 +230,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
     /// # let mut store = Store::new(&engine, ());
@@ -240,7 +240,7 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()>
+    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> Result<()>
     where
         T: 'static,
     {
@@ -267,7 +267,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
     /// # let mut store = Store::new(&engine, ());
@@ -281,7 +281,7 @@ impl<T> Linker<T> {
         &mut self,
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> anyhow::Result<()>
+    ) -> Result<()>
     where
         T: 'static,
     {
@@ -290,7 +290,7 @@ impl<T> Linker<T> {
             if let Err(import_err) = self._get_by_import(&import) {
                 let default_extern =
                     import_err.ty().default_value(&mut store).with_context(|| {
-                        anyhow!(
+                        format_err!(
                             "no default value exists for `{}::{}` with type `{:?}`",
                             import.module(),
                             import.name(),
@@ -324,7 +324,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -512,7 +512,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let mut linker = Linker::new(&engine);
     /// linker.func_wrap("host", "double", |x: i32| x * 2)?;
@@ -617,7 +617,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -708,7 +708,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -738,7 +738,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -1102,7 +1102,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -1163,7 +1163,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -1488,8 +1488,9 @@ impl ModuleKind {
 
 /// Error for an unresolvable import.
 ///
-/// Returned - wrapped in an [`anyhow::Error`] - by [`Linker::instantiate`] and
-/// related methods for modules with unresolvable imports.
+/// Returned - wrapped in an [`Error`][crate::Error] - by
+/// [`Linker::instantiate`] and related methods for modules with unresolvable
+/// imports.
 #[derive(Clone, Debug)]
 pub struct UnknownImportError {
     module: String,

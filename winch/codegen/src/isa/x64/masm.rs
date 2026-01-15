@@ -5,8 +5,6 @@ use super::{
     asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind, VroundMode},
     regs::{self, rbp, rsp, scratch_fpr_bitset, scratch_gpr_bitset},
 };
-use anyhow::{Result, anyhow, bail};
-
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm as I, IntCmpKind,
     IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
@@ -17,8 +15,11 @@ use crate::masm::{
     VectorEqualityKind, Zero,
 };
 use crate::{
+    Result,
     abi::{self, LocalSlot, align_to, calculate_frame_adjustment},
+    bail,
     codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
+    format_err,
     stack::{TypedReg, Val},
 };
 use crate::{
@@ -144,7 +145,7 @@ impl Masm for MacroAssembler {
 
             masm.asm.cmp_rr(scratch.inner(), regs::rsp(), masm.ptr_size);
             masm.asm.trapif(IntCmpKind::GtU, TrapCode::STACK_OVERFLOW);
-            anyhow::Ok(())
+            wasmtime_environ::error::Ok(())
         })?;
 
         // Emit unwind info.
@@ -406,7 +407,7 @@ impl Masm for MacroAssembler {
                     masm.load_impl(src, byte_tmp.writable(), size, UNTRUSTED_FLAGS)?;
                     masm.asm
                         .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp.inner(), lane, size);
-                    anyhow::Ok(())
+                    wasmtime_environ::error::Ok(())
                 })?;
             }
             LoadKind::VectorZero(size) => {
@@ -414,7 +415,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.load_impl(src, scratch.writable(), size, UNTRUSTED_FLAGS)?;
                     masm.asm.avx_gpr_to_xmm(scratch.inner(), dst, size);
-                    anyhow::Ok(())
+                    wasmtime_environ::error::Ok(())
                 })?;
             }
         }
@@ -456,7 +457,7 @@ impl Masm for MacroAssembler {
         match (src.class(), dst.to_reg().class()) {
             (RegClass::Int, RegClass::Int) => Ok(self.asm.cmov(src, dst, cc, size)),
             (RegClass::Float, RegClass::Float) => Ok(self.asm.xmm_cmov(src, dst, cc, size)),
-            _ => Err(anyhow!(CodeGenError::invalid_operand_combination())),
+            _ => Err(format_err!(CodeGenError::invalid_operand_combination())),
         }
     }
 
@@ -470,7 +471,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.add_rr(scratch.inner(), dst, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -506,7 +507,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.sub_rr(scratch.inner(), reg, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -529,7 +530,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.mul_rr(scratch.inner(), dst, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -695,7 +696,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.and_rr(scratch.inner(), dst, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -718,7 +719,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.or_rr(scratch.inner(), dst, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -741,7 +742,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.xor_rr(scratch.inner(), dst, size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -872,7 +873,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.cmp_rr(src1, scratch.inner(), size);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
             }
@@ -1080,7 +1081,7 @@ impl Masm for MacroAssembler {
                 masm.asm.and_rr(scratch.inner(), dst, size);
                 masm.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
                 masm.asm.and_rr(scratch.inner(), tmp, size);
-                anyhow::Ok(())
+                wasmtime_environ::error::Ok(())
             })?;
             self.asm.add_rr(dst.to_reg(), tmp, size);
 
@@ -2356,7 +2357,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<FloatScratch, _>(|masm, tmp| {
                     masm.v128_xor(tmp.inner(), tmp.inner(), tmp.writable())?;
                     masm.v128_sub(tmp.inner(), op.to_reg(), op, kind.into())?;
-                    anyhow::Ok(())
+                    wasmtime_environ::error::Ok(())
                 })?;
             }
             V128NegKind::F32x4 | V128NegKind::F64x2 => {
@@ -3059,6 +3060,7 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
 
         let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        let reg2 = writable!(context.any_fpr(self)?);
 
         // This works by using a lookup table to determine the count of bits
         // set in the upper 4 bits and lower 4 bits separately and then adding
@@ -3103,7 +3105,6 @@ impl Masm for MacroAssembler {
             let address = masm.asm.add_constant(&[
                 0x0, 0x1, 0x1, 0x2, 0x1, 0x2, 0x2, 0x3, 0x1, 0x2, 0x2, 0x3, 0x2, 0x3, 0x3, 0x4,
             ]);
-            let reg2 = writable!(context.any_fpr(masm)?);
             masm.asm
                 .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlags::trusted());
             // Use the upper 4 bits as an index into the lookup table.
@@ -3117,7 +3118,7 @@ impl Masm for MacroAssembler {
             // total number of bits set.
             masm.asm
                 .xmm_vpadd_rrr(reg.to_reg(), scratch.inner(), reg, OperandSize::S8);
-            anyhow::Ok(())
+            wasmtime_environ::error::Ok(())
         })?;
 
         context.stack.push(TypedReg::v128(reg.to_reg()).into());
@@ -3211,17 +3212,17 @@ impl MacroAssembler {
     }
 
     fn ensure_has_avx(&self) -> Result<()> {
-        anyhow::ensure!(self.flags.has_avx(), CodeGenError::UnimplementedForNoAvx);
+        crate::ensure!(self.flags.has_avx(), CodeGenError::UnimplementedForNoAvx);
         Ok(())
     }
 
     fn ensure_has_avx2(&self) -> Result<()> {
-        anyhow::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
+        crate::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
         Ok(())
     }
 
     fn ensure_has_avx512vl(&self) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.flags.has_avx512vl(),
             CodeGenError::UnimplementedForNoAvx512VL
         );
@@ -3229,7 +3230,7 @@ impl MacroAssembler {
     }
 
     fn ensure_has_avx512dq(&self) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             self.flags.has_avx512dq(),
             CodeGenError::UnimplementedForNoAvx512DQ
         );
@@ -3365,7 +3366,7 @@ impl MacroAssembler {
 
     fn ensure_two_argument_form(dst: &Reg, lhs: &Reg) -> Result<()> {
         if dst != lhs {
-            Err(anyhow!(CodeGenError::invalid_two_arg_form()))
+            Err(format_err!(CodeGenError::invalid_two_arg_form()))
         } else {
             Ok(())
         }

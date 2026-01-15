@@ -51,6 +51,13 @@
                       (iconst_u _ 0)))
       (subsume inner))
 
+;; Likewise for icmp-of-fcmp.
+;; ne(fcmp(ty, cc, x, y), 0) == fcmp(ty, cc, x, y)
+(rule (simplify (ne ty
+                      (uextend_maybe _ inner @ (fcmp ty _ _ _))
+                      (iconst_u _ 0)))
+      (subsume inner))
+
 ;; eq(icmp(ty, cc, x, y), 0) == icmp(ty, cc_complement, x, y)
 ;; e.g. eq(ugt(x, y), 0) == ule(x, y)
 (rule (simplify (eq ty
@@ -302,8 +309,111 @@
 (rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
 (rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
 
-
 ;; a < b ^^ a > b => (a ≠ b)
-(rule (simplify (bxor ty (slt cty x y) (sgt cty x y))) (ne cty x y))
-(rule (simplify (bxor ty (ult cty x y) (ugt cty x y))) (ne cty x y))
+(rule (simplify (bxor ty (sgt ty x y) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (sgt ty x y) (slt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (slt ty x y) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (slt ty x y) (slt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (ugt ty x y) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bxor ty (ugt ty x y) (ult ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (ult ty x y) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
+;; a < b && a > b = false
+(rule (simplify (band (fits_in_64 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
+(rule
+  (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
+  (if-let true (i64_gt_eq y 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (sgt ty (iconst_s _ x) y) (ult ty (iconst_s _ x) y)))
+  (if-let true (i64_lt x 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (slt ty x (iconst_s _ y)) (ugt ty x (iconst_s _ y))))
+  (if-let true (i64_lt y 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (slt ty (iconst_s _ x) y) (ugt ty (iconst_s _ x) y)))
+  (if-let true (i64_gt_eq x 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (ugt ty x (iconst_s _ y)) (slt ty x (iconst_s _ y))))
+  (if-let true (i64_lt y 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (ugt ty (iconst_s _ x) y) (slt ty (iconst_s _ x) y)))
+  (if-let true (i64_gt_eq x 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (ult ty x (iconst_s _ y)) (sgt ty x (iconst_s _ y))))
+  (if-let true (i64_gt_eq y 0))
+  (iconst_u ty 0))
+(rule
+  (simplify (band ty (ult ty (iconst_s _ x) y) (sgt ty (iconst_s _ x) y)))
+  (if-let true (i64_lt x 0))
+  (iconst_u ty 0))
+
+;; (x < y) & (x ≠ -1) = (x < y)
+(rule
+  (simplify (band ty (ne ty x (iconst_s _ -1)) (ugt ty y x)))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ne ty x (iconst_s _ -1)) (ult ty x z)))
+   (ult ty x z))
+(rule
+  (simplify (band ty (ne ty (iconst_s _ -1) x) (ugt ty y x)))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ne ty (iconst_s _ -1) x) (ult ty x z)))
+   (ult ty x z))
+(rule
+  (simplify (band ty (ugt ty x y) (ne ty y (iconst_s _ -1))))
+   (ult ty y x))
+(rule
+  (simplify (band ty (ugt ty x y) (ne ty (iconst_s _ -1) y)))
+   (ult ty y x))
+(rule
+  (simplify (band ty (ult ty x y) (ne ty x (iconst_s _ -1))))
+   (ult ty x y))
+(rule
+  (simplify (band ty (ult ty x y) (ne ty (iconst_s _ -1) x)))
+   (ult ty x y))
+
+;; icmp on select with two constant inputs compared with one of the two
+;; constants can directly use the inner select condition.
+;; See: https://github.com/bytecodealliance/wasmtime/issues/11578
+(rule (simplify (eq _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k1)))
+  (if-let false (u64_eq k1 k2))
+  (ne select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (eq _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k2)))
+  (if-let false (u64_eq k1 k2))
+  (eq select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (ne _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k1)))
+  (if-let false (u64_eq k1 k2))
+  (eq select_ty inner_cond (iconst_u select_ty 0)))
+
+(rule (simplify (ne _
+  (select select_ty inner_cond
+    (iconst_u _ k1)
+    (iconst_u _ k2))
+  (iconst_u _ k2)))
+  (if-let false (u64_eq k1 k2))
+  (ne select_ty inner_cond (iconst_u select_ty 0)))

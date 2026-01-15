@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::conventions::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod conventions {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -226,29 +224,29 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn kebab_case<T>(
+                fn kebab_case<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn foo<T>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: LudicrousSpeed,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn function_with_dashes<T>(
+                fn function_with_dashes<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn function_with_no_weird_characters<T>(
+                fn function_with_no_weird_characters<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn apple<T>(
+                fn apple<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn apple_pear<T>(
+                fn apple_pear<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn apple_pear_grape<T>(
+                fn apple_pear_grape<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a0<T>(
+                fn a0<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// Comment out identifiers that collide when mapped to snake_case, for now; see
@@ -256,17 +254,17 @@ pub mod foo {
                 /// APPLE: func()
                 /// APPLE-pear-GRAPE: func()
                 /// apple-PEAR-grape: func()
-                fn is_xml<T>(
+                fn is_xml<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn explicit<T>(
+                fn explicit<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn explicit_kebab<T>(
+                fn explicit_kebab<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// Identifiers with the same name as keywords are quoted.
-                fn bool<T>(
+                fn bool<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -420,7 +418,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod conventions {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -459,6 +457,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     kebab_case: wasmtime::component::Func,
                     foo: wasmtime::component::Func,
@@ -502,7 +501,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/conventions")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/conventions`"
                                 )
                             })?;
@@ -511,7 +510,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/conventions` does \
                 not have export `{name}`"
                                     )

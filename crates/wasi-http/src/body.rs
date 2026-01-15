@@ -1,24 +1,24 @@
 //! Implementation of the `wasi:http/types` interface's various body types.
 
 use crate::{bindings::http::types, types::FieldMap};
-use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
-use http_body_util::combinators::BoxBody;
+use http_body_util::combinators::UnsyncBoxBody;
 use std::future::Future;
 use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
+use wasmtime::format_err;
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
 use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
 
 /// Common type for incoming bodies.
-pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
+pub type HyperIncomingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
 
 /// Common type for outgoing bodies.
-pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
+pub type HyperOutgoingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
 
 /// The concrete type behind a `was:http/types.incoming-body` resource.
 #[derive(Debug)]
@@ -164,7 +164,7 @@ enum StreamEnd {
 pub struct HostIncomingBodyStream {
     state: IncomingBodyStreamState,
     buffer: Bytes,
-    error: Option<anyhow::Error>,
+    error: Option<wasmtime::Error>,
 }
 
 impl HostIncomingBodyStream {
@@ -481,7 +481,7 @@ impl HostOutgoingBody {
             body_receiver,
             finish_receiver: Some(finish_receiver),
         }
-        .boxed();
+        .boxed_unsync();
 
         let output_stream = BodyWriteStream::new(context, chunk_size, body_sender, written.clone());
 
@@ -613,7 +613,7 @@ impl OutputStream for BodyWriteStream {
                 if let Some(written) = self.written.as_ref() {
                     if !written.update(len) {
                         let total = written.written();
-                        return Err(StreamError::LastOperationFailed(anyhow!(
+                        return Err(StreamError::LastOperationFailed(format_err!(
                             self.context.as_body_size_error(total)
                         )));
                     }
@@ -626,7 +626,7 @@ impl OutputStream for BodyWriteStream {
             // called. The call to `check_write` always guarantees that there's
             // at least one capacity if a write is allowed.
             Err(mpsc::error::TrySendError::Full(_)) => {
-                Err(StreamError::Trap(anyhow!("write exceeded budget")))
+                Err(StreamError::Trap(format_err!("write exceeded budget")))
             }
 
             // Hyper is gone so this stream is now closed.

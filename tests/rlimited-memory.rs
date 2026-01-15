@@ -22,7 +22,7 @@ impl ResourceLimiter for MemoryGrowFailureDetector {
         self.desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn memory_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.error = Some(err.to_string());
         Ok(())
     }

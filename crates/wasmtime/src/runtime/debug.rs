@@ -1,11 +1,15 @@
 //! Debugging API.
 
+use crate::Result;
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, OwnedRooted,
-    StoreContext, StoreContextMut, Val,
+    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
+    OwnedRooted, StoreContext, StoreContextMut, Val,
+    code::StoreCodePC,
+    module::ModuleRegistry,
     store::{AutoAssertNoGc, StoreOpaque},
-    vm::{CurrentActivationBacktrace, VMContext},
+    vm::{CompiledModuleId, FrameOrHostCode, StoreBacktrace, VMContext},
 };
+use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
@@ -13,7 +17,7 @@ use core::{ffi::c_void, ptr::NonNull};
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
+    FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -39,11 +43,7 @@ impl<'a, T> StoreContextMut<'a, T> {
             return None;
         }
 
-        // SAFETY: This takes a mutable borrow of `self` (the
-        // `StoreOpaque`), which owns all active stacks in the
-        // store. We do not provide any API that could mutate the
-        // frames that we are walking on the `DebugFrameCursor`.
-        let iter = unsafe { CurrentActivationBacktrace::new(self) };
+        let iter = StoreBacktrace::new(self);
         let mut view = DebugFrameCursor {
             iter,
             is_trapping_frame: false,
@@ -53,19 +53,47 @@ impl<'a, T> StoreContextMut<'a, T> {
         view.move_to_parent(); // Load the first frame.
         Some(view)
     }
+
+    /// Start an edit session to update breakpoints.
+    pub fn edit_breakpoints(self) -> Option<BreakpointEdit<'a>> {
+        if !self.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let (breakpoints, registry) = self.0.breakpoints_and_registry_mut();
+        Some(breakpoints.edit(registry))
+    }
+}
+
+impl<'a, T> StoreContext<'a, T> {
+    /// Return all breakpoints.
+    pub fn breakpoints(self) -> Option<impl Iterator<Item = Breakpoint> + 'a> {
+        if !self.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let (breakpoints, registry) = self.0.breakpoints_and_registry();
+        Some(breakpoints.breakpoints(registry))
+    }
+
+    /// Indicate whether single-step mode is enabled.
+    pub fn is_single_step(&self) -> bool {
+        let (breakpoints, _) = self.0.breakpoints_and_registry();
+        breakpoints.is_single_step()
+    }
 }
 
 /// A view of an active stack frame, with the ability to move up the
 /// stack.
 ///
-/// See the documentation on `Store::stack_value` for more information
+/// See the documentation on `Store::debug_frames` for more information
 /// about which frames this view will show.
 pub struct DebugFrameCursor<'a, T: 'static> {
     /// Iterator over frames.
     ///
     /// This iterator owns the store while the view exists (accessible
     /// as `iter.store`).
-    iter: CurrentActivationBacktrace<'a, T>,
+    iter: StoreBacktrace<'a, T>,
 
     /// Is the next frame to be visited by the iterator a trapping
     /// frame?
@@ -88,9 +116,25 @@ pub struct DebugFrameCursor<'a, T: 'static> {
     current: Option<FrameData>,
 }
 
+/// The result type from `DebugFrameCursor::move_to_parent()`:
+/// indicates whether the cursor skipped over host code to move to the
+/// next Wasm frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameParentResult {
+    /// The new frame is in the same Wasm activation.
+    SameActivation,
+    /// The new frame is in the next higher Wasm activation on the
+    /// stack.
+    NewActivation,
+}
+
 impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Move up to the next frame in the activation.
-    pub fn move_to_parent(&mut self) {
+    ///
+    /// Returns `FrameParentMove` as an indication whether the
+    /// moved-to frame is in the same activation or skipped over host
+    /// code.
+    pub fn move_to_parent(&mut self) -> FrameParentResult {
         // If there are no virtual frames to yield, take and decode
         // the next physical frame.
         //
@@ -101,22 +145,30 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         // functions or other things that we completely ignore). If
         // this ever changes, we can remove the assert and convert
         // this to a loop that polls until it finds virtual frames.
+        let mut result = FrameParentResult::SameActivation;
         self.current = None;
-        if self.frames.is_empty() {
+        while self.frames.is_empty() {
             let Some(next_frame) = self.iter.next() else {
-                return;
+                return result;
             };
-            self.frames = VirtualFrame::decode(
-                self.iter.store.0.as_store_opaque(),
-                next_frame,
-                self.is_trapping_frame,
-            );
+            self.frames = match next_frame {
+                FrameOrHostCode::Frame(frame) => VirtualFrame::decode(
+                    self.iter.store_mut().0.as_store_opaque(),
+                    frame,
+                    self.is_trapping_frame,
+                ),
+                FrameOrHostCode::HostCode => {
+                    result = FrameParentResult::NewActivation;
+                    continue;
+                }
+            };
             debug_assert!(!self.frames.is_empty());
             self.is_trapping_frame = false;
         }
 
         // Take a frame and focus it as the current one.
         self.current = self.frames.pop().map(|vf| FrameData::compute(vf));
+        result
     }
 
     /// Has the iterator reached the end of the activation?
@@ -146,7 +198,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Get the instance associated with the current frame.
     pub fn instance(&mut self) -> Instance {
         let instance = self.raw_instance();
-        Instance::from_wasmtime(instance.id(), self.iter.store.0.as_store_opaque())
+        Instance::from_wasmtime(instance.id(), self.iter.store_mut().0.as_store_opaque())
     }
 
     /// Get the module associated with the current frame, if any
@@ -197,7 +249,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         let slot_addr = data.slot_addr;
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it.
-        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store_mut().0, slot_addr, offset, ty) }
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -214,7 +266,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
         // into it.
-        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store_mut().0, slot_addr, offset, ty) }
     }
 }
 
@@ -244,12 +296,11 @@ impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
     fn decode(store: &mut StoreOpaque, frame: Frame, is_trapping_frame: bool) -> Vec<VirtualFrame> {
-        let module = store
+        let (module_with_code, pc) = store
             .modules()
-            .lookup_module_by_pc(frame.pc())
+            .module_and_code_by_pc(frame.pc())
             .expect("Wasm frame PC does not correspond to a module");
-        let base = module.code_object().code_memory().text().as_ptr() as usize;
-        let pc = frame.pc().wrapping_sub(base);
+        let module = module_with_code.module();
         let table = module.frame_table().unwrap();
         let pc = u32::try_from(pc).expect("PC offset too large");
         let pos = if is_trapping_frame {
@@ -437,12 +488,12 @@ pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) 
 impl<'a, T: 'static> AsContext for DebugFrameCursor<'a, T> {
     type Data = T;
     fn as_context(&self) -> StoreContext<'_, Self::Data> {
-        StoreContext(self.iter.store.0)
+        StoreContext(self.iter.store().0)
     }
 }
 impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
-        StoreContextMut(self.iter.store.0)
+        StoreContextMut(self.iter.store_mut().0)
     }
 }
 
@@ -450,8 +501,8 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
 /// a debug handler attached.
 #[derive(Debug)]
 pub enum DebugEvent<'a> {
-    /// An `anyhow::Error` was raised by a hostcall.
-    HostcallError(&'a anyhow::Error),
+    /// A [`wasmtime::Error`] was raised by a hostcall.
+    HostcallError(&'a crate::Error),
     /// An exception is thrown and caught by Wasm. The current state
     /// is at the throw-point.
     CaughtExceptionThrown(OwnedRooted<ExnRef>),
@@ -459,6 +510,10 @@ pub enum DebugEvent<'a> {
     UncaughtExceptionThrown(OwnedRooted<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
+    /// A breakpoint was reached.
+    Breakpoint,
+    /// An epoch yield occurred.
+    EpochYield,
 }
 
 /// A handler for debug events.
@@ -516,4 +571,239 @@ pub trait DebugHandler: Clone + Send + Sync + 'static {
         store: StoreContextMut<'_, Self::Data>,
         event: DebugEvent<'_>,
     ) -> impl Future<Output = ()> + Send;
+}
+
+/// Breakpoint state for modules within a store.
+#[derive(Default)]
+pub(crate) struct BreakpointState {
+    /// Single-step mode.
+    single_step: bool,
+    /// Breakpoints added individually.
+    breakpoints: BTreeSet<BreakpointKey>,
+}
+
+/// A breakpoint.
+pub struct Breakpoint {
+    /// Reference to the module in which we are setting the breakpoint.
+    pub module: Module,
+    /// Wasm PC offset within the module.
+    pub pc: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct BreakpointKey(CompiledModuleId, u32);
+
+impl BreakpointKey {
+    fn from_raw(module: &Module, pc: u32) -> BreakpointKey {
+        BreakpointKey(module.id(), pc)
+    }
+
+    fn get(&self, registry: &ModuleRegistry) -> Breakpoint {
+        let module = registry
+            .module_by_compiled_id(self.0)
+            .expect("Module should not have been removed from Store")
+            .clone();
+        Breakpoint { module, pc: self.1 }
+    }
+}
+
+/// A breakpoint-editing session.
+///
+/// This enables updating breakpoint state (setting or unsetting
+/// individual breakpoints or the store-global single-step flag) in a
+/// batch. It is more efficient to batch these updates because
+/// "re-publishing" the newly patched code, with update breakpoint
+/// settings, typically requires a syscall to re-enable execute
+/// permissions.
+pub struct BreakpointEdit<'a> {
+    state: &'a mut BreakpointState,
+    registry: &'a mut ModuleRegistry,
+    /// Modules that have been edited.
+    ///
+    /// Invariant: each of these modules' CodeMemory objects is
+    /// *unpublished* when in the dirty set.
+    dirty_modules: BTreeSet<StoreCodePC>,
+}
+
+impl BreakpointState {
+    pub(crate) fn edit<'a>(&'a mut self, registry: &'a mut ModuleRegistry) -> BreakpointEdit<'a> {
+        BreakpointEdit {
+            state: self,
+            registry,
+            dirty_modules: BTreeSet::new(),
+        }
+    }
+
+    pub(crate) fn breakpoints<'a>(
+        &'a self,
+        registry: &'a ModuleRegistry,
+    ) -> impl Iterator<Item = Breakpoint> + 'a {
+        self.breakpoints.iter().map(|key| key.get(registry))
+    }
+
+    pub(crate) fn is_single_step(&self) -> bool {
+        self.single_step
+    }
+}
+
+impl<'a> BreakpointEdit<'a> {
+    fn get_code_memory<'b>(
+        registry: &'b mut ModuleRegistry,
+        dirty_modules: &mut BTreeSet<StoreCodePC>,
+        module: &Module,
+    ) -> Result<&'b mut CodeMemory> {
+        let store_code_pc = registry.store_code_base_or_register(module)?;
+        let code_memory = registry
+            .store_code_mut(store_code_pc)
+            .expect("Just checked presence above")
+            .code_memory_mut()
+            .expect("Must have unique ownership of StoreCode in guest-debug mode");
+        if dirty_modules.insert(store_code_pc) {
+            code_memory.unpublish()?;
+        }
+        Ok(code_memory)
+    }
+
+    fn patch<'b>(
+        patches: impl Iterator<Item = FrameTableBreakpointData<'b>> + 'b,
+        mem: &mut CodeMemory,
+        enable: bool,
+    ) {
+        let mem = mem.text_mut();
+        for patch in patches {
+            let data = if enable { patch.enable } else { patch.disable };
+            let mem = &mut mem[patch.offset..patch.offset + data.len()];
+            log::trace!(
+                "patch: offset 0x{:x} with enable={enable}: data {data:?} replacing {mem:?}",
+                patch.offset
+            );
+            mem.copy_from_slice(data);
+        }
+    }
+
+    /// Add a breakpoint in the given module at the given PC in that
+    /// module.
+    ///
+    /// No effect if the breakpoint is already set.
+    pub fn add_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+        let key = BreakpointKey::from_raw(module, pc);
+        self.state.breakpoints.insert(key);
+        log::trace!("patching in breakpoint {key:?}");
+        let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+        let frame_table = module
+            .frame_table()
+            .expect("Frame table must be present when guest-debug is enabled");
+        let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
+        Self::patch(patches, mem, true);
+        Ok(())
+    }
+
+    /// Remove a breakpoint in the given module at the given PC in
+    /// that module.
+    ///
+    /// No effect if the breakpoint was not set.
+    pub fn remove_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+        let key = BreakpointKey::from_raw(module, pc);
+        self.state.breakpoints.remove(&key);
+        if !self.state.single_step {
+            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+            let frame_table = module
+                .frame_table()
+                .expect("Frame table must be present when guest-debug is enabled");
+            let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
+            Self::patch(patches, mem, false);
+        }
+        Ok(())
+    }
+
+    /// Turn on or off single-step mode.
+    ///
+    /// In single-step mode, a breakpoint event is emitted at every
+    /// Wasm PC.
+    pub fn single_step(&mut self, enabled: bool) -> Result<()> {
+        log::trace!(
+            "single_step({enabled}) with breakpoint set {:?}",
+            self.state.breakpoints
+        );
+        let modules = self.registry.all_modules().cloned().collect::<Vec<_>>();
+        for module in modules {
+            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, &module)?;
+            let table = module
+                .frame_table()
+                .expect("Frame table must be present when guest-debug is enabled");
+            for (wasm_pc, patch) in table.breakpoint_patches() {
+                let key = BreakpointKey::from_raw(&module, wasm_pc);
+                let this_enabled = enabled || self.state.breakpoints.contains(&key);
+                log::trace!(
+                    "single_step: enabled {enabled} key {key:?} -> this_enabled {this_enabled}"
+                );
+                Self::patch(core::iter::once(patch), mem, this_enabled);
+            }
+        }
+
+        self.state.single_step = enabled;
+
+        Ok(())
+    }
+}
+
+impl<'a> Drop for BreakpointEdit<'a> {
+    fn drop(&mut self) {
+        for &store_code_base in &self.dirty_modules {
+            let store_code = self.registry.store_code_mut(store_code_base).unwrap();
+            if let Err(e) = store_code
+                .code_memory_mut()
+                .expect("Must have unique ownership of StoreCode in guest-debug mode")
+                .publish()
+            {
+                abort_on_republish_error(e);
+            }
+        }
+    }
+}
+
+/// Abort when we cannot re-publish executable code.
+///
+/// Note that this puts us in quite a conundrum. Typically we will
+/// have been editing breakpoints from within a hostcall context
+/// (e.g. inside a debugger hook while execution is paused) with JIT
+/// code on the stack. Wasmtime's usual path to return errors is back
+/// through that JIT code: we do not panic-unwind across the JIT code,
+/// we return into the exit trampoline and that then re-enters the
+/// raise libcall to use a Cranelift exception-throw to cross most of
+/// the JIT frames to the entry trampoline. When even trampolines are
+/// no longer executable, we have no way out. Even an ordinary
+/// `panic!` cannot work, because we catch panics and carry them
+/// across JIT code using that trampoline-based error path. Our only
+/// way out is to directly abort the whole process.
+///
+/// This is not without precedent: other engines have similar failure
+/// paths. For example, SpiderMonkey directly aborts the process when
+/// failing to re-apply executable permissions (see [1]).
+///
+/// Note that we don't really expect to ever hit this case in
+/// practice: it's unlikely that `mprotect` applying `PROT_EXEC` would
+/// fail due to, e.g., resource exhaustion in the kernel, because we
+/// will have the same net number of virtual memory areas before and
+/// after the permissions change. Nevertheless, we have to account for
+/// the possibility of error.
+///
+/// [1]: https://searchfox.org/firefox-main/rev/7496c8515212669451d7e775a00c2be07da38ca5/js/src/jit/AutoWritableJitCode.h#26-56
+#[cfg(feature = "std")]
+fn abort_on_republish_error(e: crate::Error) -> ! {
+    log::error!(
+        "Failed to re-publish executable code: {e:?}. Wasmtime cannot return through JIT code on the stack and cannot even panic; aborting the process."
+    );
+    std::process::abort();
+}
+
+/// In the `no_std` case, we don't have a concept of a "process
+/// abort", so rely on `panic!`. Typically an embedded scenario that
+/// uses `no_std` will build with `panic=abort` so the effect is the
+/// same. If it doesn't, there is truly nothing we can do here so
+/// let's panic anyway; the panic propagation through the trampolines
+/// will at least deterministically crash.
+#[cfg(not(feature = "std"))]
+fn abort_on_republish_error(e: crate::Error) -> ! {
+    panic!("Failed to re-publish executable code: {e:?}");
 }

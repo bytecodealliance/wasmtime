@@ -17,7 +17,6 @@ workspace = true
 
 [dependencies]
 # These dependencies are necessary for the WITX-generation macros to work:
-anyhow = { workspace = true, features = ['std'] }
 wiggle = { workspace = true, features = ["wasmtime"] }
 
 # This dependency is necessary for the WIT-generation macros to work:
@@ -31,7 +30,7 @@ wasmtime = { workspace = true, features = [
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
-ort = { version = "2.0.0-rc.2", default-features = false, features = [
+ort = { version = "2.0.0-rc.10", default-features = false, features = [
     "copy-dylibs",
 ], optional = true }
 tch = { version = "0.17.0", default-features = false, optional = true}

@@ -1,4 +1,4 @@
-## 40.0.0
+## 42.0.0
 
 Unreleased.
 
@@ -12,6 +12,8 @@ Release notes for previous releases of Wasmtime can be found on the respective
 release branches of the Wasmtime repository.
 
 <!-- ARCHIVE_START -->
+* [41.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-41.0.0/RELEASES.md)
+* [40.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-40.0.0/RELEASES.md)
 * [39.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-39.0.0/RELEASES.md)
 * [38.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-38.0.0/RELEASES.md)
 * [37.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-37.0.0/RELEASES.md)

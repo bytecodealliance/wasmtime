@@ -115,6 +115,7 @@ pub mod raw {
                 // with conversion of the return value in the face of traps.
                 #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 #[allow(unused_variables, reason = "macro-generated")]
+                #[allow(unreachable_code, reason = "some types uninhabited on some platforms")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -198,7 +199,7 @@ macro_rules! block_on {
             // Note that if `async_support` is disabled then it should not be
             // possible to introduce await points so the provided future should
             // always be ready.
-            anyhow::Ok(vm::assert_ready(closure(store)))
+            crate::error::Ok(vm::assert_ready(closure(store)))
         }
     }};
 }
@@ -562,9 +563,9 @@ fn memory_init(
 
 // Implementation of `ref.func`.
 fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
-    store
-        .instance_mut(instance)
-        .get_func_ref(FuncIndex::from_u32(func_index))
+    let (instance, registry) = store.instance_and_module_registry_mut(instance);
+    instance
+        .get_func_ref(registry, FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
         .cast()
 }
@@ -583,9 +584,8 @@ fn table_get_lazy_init_func_ref(
     index: u64,
 ) -> *mut u8 {
     let table_index = TableIndex::from_u32(table_index);
-    let table = store
-        .instance_mut(instance)
-        .get_table_with_lazy_init(table_index, core::iter::once(index));
+    let (instance, registry) = store.instance_and_module_registry_mut(instance);
+    let table = instance.get_table_with_lazy_init(registry, table_index, core::iter::once(index));
     let elem = table
         .get_func(index)
         .expect("table access already bounds-checked");
@@ -962,14 +962,14 @@ fn array_new_elem(
         match elements {
             TableSegmentElements::Functions(fs) => {
                 let store_id = store.id();
-                let mut instance = store.instance_mut(instance_id);
+                let (mut instance, registry) = store.instance_and_module_registry_mut(instance_id);
                 vals.extend(
                     fs.get(src..)
                         .and_then(|s| s.get(..len))
                         .ok_or_else(|| Trap::TableOutOfBounds)?
                         .iter()
                         .map(|f| {
-                            let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                            let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
                             let func = unsafe {
                                 raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p))
                             };
@@ -1052,7 +1052,7 @@ fn array_init_elem(
         // Get the passive element segment.
         let mut storage = None;
         let store_id = store.id();
-        let mut instance = store.instance_mut(instance);
+        let (mut instance, registry) = store.instance_and_module_registry_mut(instance);
         let elements = instance.passive_element_segment(&mut storage, elem_index);
 
         // Convert array offsets into `usize`s.
@@ -1067,7 +1067,7 @@ fn array_init_elem(
                 .ok_or_else(|| Trap::TableOutOfBounds)?
                 .iter()
                 .map(|f| {
-                    let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                    let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
                     let func = unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p)) };
                     Val::FuncRef(func)
                 })
@@ -1255,6 +1255,11 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 #[cfg(target_has_atomic = "64")]
 fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch> {
     use crate::UpdateDeadline;
+
+    #[cfg(feature = "debug")]
+    {
+        store.block_on_debug_handler(crate::DebugEvent::EpochYield)?;
+    }
 
     let update_deadline = store.new_epoch_updated_deadline()?;
     block_on!(store, async move |store| {
@@ -1704,4 +1709,15 @@ fn throw_ref(
         .expect("gc ref should be an exception object");
     store.set_pending_exception(exnref);
     Err(TrapReason::Exception)
+}
+
+fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
+    #[cfg(feature = "debug")]
+    {
+        log::trace!("hit breakpoint");
+        store.block_on_debug_handler(crate::DebugEvent::Breakpoint)?;
+    }
+    // Avoid unused-argument warning in no-debugger builds.
+    let _ = store;
+    Ok(())
 }

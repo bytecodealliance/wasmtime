@@ -1,11 +1,10 @@
-use anyhow::anyhow;
 use clap::Parser;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use wasmtime::component::{Component, Linker, bindgen};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Store, format_err};
 
 // Generates bindings for the plugin world defined in the wit/calculator.wit file.
 bindgen!("plugin");
@@ -26,15 +25,15 @@ struct BinaryOperation {
 fn lookup_plugin<'a>(
     state: &'a mut CalculatorState,
     op: &str,
-) -> anyhow::Result<&'a mut PluginDesc> {
+) -> wasmtime::Result<&'a mut PluginDesc> {
     state
         .plugin_descs
         .get_mut(op)
-        .ok_or(anyhow!("unknown operation {}", op))
+        .ok_or(format_err!("unknown operation {}", op))
 }
 
 impl BinaryOperation {
-    fn run(self, state: &mut CalculatorState) -> anyhow::Result<()> {
+    fn run(self, state: &mut CalculatorState) -> wasmtime::Result<()> {
         let desc = lookup_plugin(state, self.op.as_ref())?;
         let result = desc.plugin.call_evaluate(&mut desc.store, self.x, self.y)?;
         println!("{}({}, {}) = {}", self.op, self.x, self.y, result);
@@ -99,7 +98,7 @@ fn load_plugins(state: &mut CalculatorState, plugins_dir: &Path) -> wasmtime::Re
     let linker: Linker<()> = Linker::new(&engine);
 
     if !plugins_dir.is_dir() {
-        anyhow::bail!("plugins directory does not exist");
+        wasmtime::bail!("plugins directory does not exist");
     }
 
     for entry in fs::read_dir(plugins_dir)? {
@@ -122,7 +121,7 @@ struct Args {
     plugins: PathBuf,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> wasmtime::Result<()> {
     // Get plugins directory
     let args = Args::parse();
 

@@ -719,7 +719,7 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
 (extern constructor gen_call_info gen_call_info)
 
 (decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)

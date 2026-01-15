@@ -291,7 +291,7 @@ pub enum GlobalInitializer {
     /// from its `export` and stored into the `VMComponentContext` at the
     /// `index` specified. During this extraction, we will also capture the
     /// table's containing instance pointer to access the table at runtime. This
-    /// extraction is useful for `thread.spawn_indirect`.
+    /// extraction is useful for `thread.spawn-indirect`.
     ExtractTable(ExtractTable),
 
     /// Declares a new defined resource within this component.
@@ -389,6 +389,10 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
+    /// Reference to a wasm global which represents a runtime-managed boolean
+    /// indicating whether the currently-running task may perform a blocking
+    /// operation.
+    TaskMayBlock,
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -730,10 +734,6 @@ pub enum Trampoline {
         to64: bool,
     },
 
-    /// A small adapter which simply traps, used for degenerate lift/lower
-    /// combinations.
-    AlwaysTrap,
-
     /// A `resource.new` intrinsic which will inject a new resource into the
     /// table specified.
     ResourceNew {
@@ -757,13 +757,6 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         /// The type of the resource.
         ty: TypeResourceTableIndex,
-    },
-
-    /// A `backpressure.set` intrinsic, which tells the host to enable or
-    /// disable backpressure for the caller's instance.
-    BackpressureSet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
     },
 
     /// A `backpressure.inc` intrinsic.
@@ -1112,6 +1105,10 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
+    /// An intrinsic used by FACT-generated modules to trap with a specified
+    /// code.
+    Trap,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
@@ -1137,7 +1134,7 @@ pub enum Trampoline {
     /// Intrinsic used to implement the `thread.index` component model builtin.
     ThreadIndex,
 
-    /// Intrinsic used to implement the `thread.new_indirect` component model builtin.
+    /// Intrinsic used to implement the `thread.new-indirect` component model builtin.
     ThreadNewIndirect {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
@@ -1198,11 +1195,9 @@ impl Trampoline {
                 let to = if *to64 { "64" } else { "32" };
                 format!("component-transcode-{op}-m{from}-m{to}")
             }
-            AlwaysTrap => format!("component-always-trap"),
             ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
             ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
             ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
-            BackpressureSet { .. } => format!("backpressure-set"),
             BackpressureInc { .. } => format!("backpressure-inc"),
             BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),
@@ -1242,6 +1237,7 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
+            Trap => format!("trap"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),

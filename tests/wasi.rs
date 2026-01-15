@@ -3,7 +3,6 @@
 //!
 //! [wasi-testsuite]: https://github.com/WebAssembly/wasi-testsuite
 
-use anyhow::{Result, anyhow};
 use libtest_mimic::{Arguments, Trial};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -12,11 +11,11 @@ use std::fs;
 use std::path::Path;
 use std::process::Output;
 use tempfile::TempDir;
+use wasmtime::{Result, ToWasmtimeResult as _, format_err};
 use wit_component::ComponentEncoder;
 
 const KNOWN_FAILURES: &[&str] = &[
     "filesystem-hard-links",
-    "http-response",
     "filesystem-read-directory",
     // FIXME(#11524)
     "remove_directory_trailing_slashes",
@@ -64,8 +63,6 @@ const KNOWN_FAILURES: &[&str] = &[
     #[cfg(windows)]
     "path_open_missing",
     #[cfg(windows)]
-    "path_open_preopen",
-    #[cfg(windows)]
     "path_open_read_write",
     #[cfg(windows)]
     "path_rename",
@@ -91,6 +88,15 @@ const KNOWN_FAILURES: &[&str] = &[
     "symlink_loop",
     #[cfg(windows)]
     "unlink_file_trailing_slashes",
+    // Once cm-async changes have percolated this can be removed.
+    "filesystem-flags-and-type",
+    "multi-clock-wait",
+    "monotonic-clock",
+    "filesystem-advise",
+    // Wasmtime's snapshot of WASIp3 APIs is different than what these tests are
+    // expecting.
+    "wall-clock",
+    "http-response",
 ];
 
 fn main() -> Result<()> {
@@ -147,7 +153,7 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
     let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
     let test_name = path.file_stem().unwrap().to_str().unwrap();
     let target_dir = wasmtime.parent().unwrap().parent().unwrap();
-    let parent_dir = path.parent().ok_or(anyhow!("module has no parent?"))?;
+    let parent_dir = path.parent().ok_or(format_err!("module has no parent?"))?;
     let spec = if let Ok(contents) = fs::read_to_string(&path.with_extension("json")) {
         serde_json::from_str(&contents)?
     } else {
@@ -159,13 +165,16 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
     let path = if componentize {
         let module = fs::read(path).expect("read wasm module");
         let component = ComponentEncoder::default()
-            .module(module.as_slice())?
+            .module(module.as_slice())
+            .to_wasmtime_result()?
             .validate(true)
             .adapter(
                 "wasi_snapshot_preview1",
                 &fs::read(test_programs_artifacts::ADAPTER_COMMAND)?,
-            )?
-            .encode()?;
+            )
+            .to_wasmtime_result()?
+            .encode()
+            .to_wasmtime_result()?;
         let stem = path.file_stem().unwrap().to_str().unwrap();
         let component_path = td.path().join(format!("{stem}.component.wasm"));
         fs::write(&component_path, component)?;
@@ -234,13 +243,13 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
                     String::from_utf8_lossy(&result.stderr).replace("\n", "\n    ")
                 )?;
             }
-            anyhow::bail!("{msg}\nFAILED! The result does not match the specification");
+            wasmtime::bail!("{msg}\nFAILED! The result does not match the specification");
         }
 
         // If this test passed but it's flagged as should be failed, then fail
         // this test for someone to update `KNOWN_FAILURES`.
         (true, true) => {
-            anyhow::bail!("test passed but it's listed in `KNOWN_FAILURES`")
+            wasmtime::bail!("test passed but it's listed in `KNOWN_FAILURES`")
         }
     }
 }

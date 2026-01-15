@@ -40,7 +40,6 @@ capstone = { workspace = true, optional = true }
 target-lexicon = { workspace = true, features = ["std"] }
 env_logger = { workspace = true }
 rayon = { version = "1", optional = true }
-indicatif = "0.13.0"
 thiserror = { workspace = true }
 walkdir = { workspace = true }
 anyhow = { workspace = true }

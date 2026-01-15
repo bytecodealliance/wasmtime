@@ -103,8 +103,6 @@ pub struct TheLists {
     interface0: exports::foo::foo::lists::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheListsIndices {
         /// Creates a new copy of `TheListsIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod lists {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -372,116 +370,116 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn list_u8_param<T>(
+                fn list_u8_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u8>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_u16_param<T>(
+                fn list_u16_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u16>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_u32_param<T>(
+                fn list_u32_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_u64_param<T>(
+                fn list_u64_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u64>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_s8_param<T>(
+                fn list_s8_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i8>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_s16_param<T>(
+                fn list_s16_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i16>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_s32_param<T>(
+                fn list_s32_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_s64_param<T>(
+                fn list_s64_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i64>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_f32_param<T>(
+                fn list_f32_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<f32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_f64_param<T>(
+                fn list_f64_param<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<f64>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_u8_ret<T>(
+                fn list_u8_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u8>,
                 > + Send;
-                fn list_u16_ret<T>(
+                fn list_u16_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u16>,
                 > + Send;
-                fn list_u32_ret<T>(
+                fn list_u32_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u32>,
                 > + Send;
-                fn list_u64_ret<T>(
+                fn list_u64_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u64>,
                 > + Send;
-                fn list_s8_ret<T>(
+                fn list_s8_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i8>,
                 > + Send;
-                fn list_s16_ret<T>(
+                fn list_s16_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i16>,
                 > + Send;
-                fn list_s32_ret<T>(
+                fn list_s32_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i32>,
                 > + Send;
-                fn list_s64_ret<T>(
+                fn list_s64_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i64>,
                 > + Send;
-                fn list_f32_ret<T>(
+                fn list_f32_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<f32>,
                 > + Send;
-                fn list_f64_ret<T>(
+                fn list_f64_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<f64>,
                 > + Send;
-                fn tuple_list<T>(
+                fn tuple_list<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<(u8, i8)>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<(i64, u32)>,
                 > + Send;
-                fn string_list_arg<T>(
+                fn string_list_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn string_list_ret<T>(
+                fn string_list_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
                 > + Send;
-                fn tuple_string_list<T>(
+                fn tuple_string_list<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
                         (u8, wasmtime::component::__internal::String),
@@ -491,7 +489,7 @@ pub mod foo {
                         (wasmtime::component::__internal::String, u8),
                     >,
                 > + Send;
-                fn string_list<T>(
+                fn string_list<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
@@ -501,25 +499,25 @@ pub mod foo {
                         wasmtime::component::__internal::String,
                     >,
                 > + Send;
-                fn record_list<T>(
+                fn record_list<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<SomeRecord>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<OtherRecord>,
                 > + Send;
-                fn record_list_reverse<T>(
+                fn record_list_reverse<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<OtherRecord>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<SomeRecord>,
                 > + Send;
-                fn variant_list<T>(
+                fn variant_list<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<SomeVariant>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<OtherVariant>,
                 > + Send;
-                fn load_store_everything<T>(
+                fn load_store_everything<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: LoadStoreAllSizes,
                 ) -> impl ::core::future::Future<Output = LoadStoreAllSizes> + Send;
@@ -926,7 +924,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod lists {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -1127,6 +1125,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     list_u8_param: wasmtime::component::Func,
                     list_u16_param: wasmtime::component::Func,
@@ -1204,7 +1203,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/lists")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/lists`"
                                 )
                             })?;
@@ -1213,7 +1212,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/lists` does \
                 not have export `{name}`"
                                     )

@@ -1,14 +1,13 @@
 //! Decoding support for pulley bytecode.
 
-use core::ptr::NonNull;
-
-use alloc::vec::Vec;
-use cranelift_bitset::ScalarBitSet;
-use cranelift_bitset::scalar::ScalarBitSetStorage;
-
 use crate::imms::*;
 use crate::opcode::*;
 use crate::regs::*;
+use alloc::vec::Vec;
+use core::convert::Infallible;
+use core::ptr::NonNull;
+use cranelift_bitset::ScalarBitSet;
+use cranelift_bitset::scalar::ScalarBitSetStorage;
 
 /// Either an `Ok(T)` or an `Err(DecodingError)`.
 pub type Result<T, E = DecodingError> = core::result::Result<T, E>;
@@ -188,10 +187,6 @@ impl BytecodeStream for SafeBytecodeStream<'_> {
     }
 }
 
-/// An uninhabited type that cannot be constructed at runtime.
-#[derive(Debug)]
-pub enum Uninhabited {}
-
 /// An unsafe bytecode stream.
 ///
 /// This is a wrapper over a raw pointer to bytecode somewhere in memory.
@@ -239,7 +234,7 @@ impl BytecodeStream for UnsafeBytecodeStream {
         Ok(bytes)
     }
 
-    type Error = Uninhabited;
+    type Error = Infallible;
 
     fn unexpected_eof(&self) -> Self::Error {
         unsafe { crate::unreachable_unchecked() }

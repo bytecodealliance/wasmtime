@@ -80,6 +80,11 @@ pub extern "C" fn wasmtime_config_wasm_threads_set(c: &mut wasm_config_t, enable
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_shared_memory_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.shared_memory(enable);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_wasm_tail_call_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_tail_call(enable);
 }
@@ -434,7 +439,7 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
                 }))
             }
             Some(err) => {
-                let err: anyhow::Error = (*err).into();
+                let err: wasmtime::Error = (*err).into();
                 Err(format!("{err}"))
             }
         }

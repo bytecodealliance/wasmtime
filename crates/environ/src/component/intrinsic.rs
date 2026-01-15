@@ -1,8 +1,7 @@
 //! Wasmtime compile-time intrinsic definitions.
 
+use crate::prelude::*;
 use core::str::FromStr;
-
-use anyhow::{Result, bail};
 use serde_derive::{Deserialize, Serialize};
 
 /// Invoke a macro for each of our unsafe intrinsics.
@@ -120,7 +119,7 @@ macro_rules! define_unsafe_intrinsics {
         }
 
         impl FromStr for UnsafeIntrinsic {
-            type Err = anyhow::Error;
+            type Err = Error;
 
             fn from_str(s: &str) -> Result<Self> {
                 match s {

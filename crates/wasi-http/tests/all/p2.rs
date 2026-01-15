@@ -1,6 +1,5 @@
 use crate::body;
 use crate::http_server::Server;
-use anyhow::{Context, Result, anyhow};
 use futures::{FutureExt, channel::oneshot, future, stream};
 use http_body::Frame;
 use http_body_util::{BodyExt, Collected, Empty, StreamBody, combinators::BoxBody};
@@ -9,8 +8,10 @@ use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
 use tokio::task;
 use wasmtime::{
-    Config, Engine, Store,
+    Config, Engine, Result, Store,
     component::{Component, Linker, ResourceTable},
+    error::Context as _,
+    format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::{
@@ -123,7 +124,7 @@ async fn run_wasi_http(
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
     early_drop: bool,
-) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
+) -> wasmtime::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let table = ResourceTable::new();
@@ -178,7 +179,7 @@ async fn run_wasi_http(
             .call_handle(&mut store, req, out)
             .await?;
 
-        Ok::<_, anyhow::Error>(())
+        Ok::<_, wasmtime::Error>(())
     });
 
     if let Some(r) = receiver {
@@ -207,7 +208,7 @@ async fn run_wasi_http(
 }
 
 #[test_log::test(tokio::test)]
-async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
+async fn wasi_http_proxy_tests() -> wasmtime::Result<()> {
     let req = hyper::Request::builder()
         .header("custom-forbidden-header", "yes")
         .uri("http://example.com:8080/test-path")
@@ -263,7 +264,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
 
         move |request: http::request::Parts| {
             if let (Method::GET, Some(body)) = (request.method, bodies.get(request.uri.path())) {
-                Ok::<_, anyhow::Error>(hyper::Response::new(body::full(Bytes::copy_from_slice(
+                Ok::<_, wasmtime::Error>(hyper::Response::new(body::full(Bytes::copy_from_slice(
                     body.as_bytes(),
                 ))))
             } else {
@@ -285,7 +286,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                     Ok(IncomingResponse {
                         resp: resp.map(|body| {
                             body.map_err(wasmtime_wasi_http::hyper_response_error)
-                                .boxed()
+                                .boxed_unsync()
                         }),
                         worker: None,
                         between_bytes_timeout,
@@ -318,7 +319,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
 
                 // Help rustc with type inference:
                 if false {
-                    return Ok::<_, anyhow::Error>(());
+                    return Ok::<_, wasmtime::Error>(());
                 }
             }
         }
@@ -360,17 +361,17 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
     for line in body.lines() {
         let (url, hash) = line
             .split_once(": ")
-            .ok_or_else(|| anyhow!("expected string of form `<url>: <sha-256>`; got {line}"))?;
+            .ok_or_else(|| format_err!("expected string of form `<url>: <sha-256>`; got {line}"))?;
 
         let path = url
             .strip_prefix(&prefix)
-            .ok_or_else(|| anyhow!("expected string with prefix {prefix}; got {url}"))?;
+            .ok_or_else(|| format_err!("expected string with prefix {prefix}; got {url}"))?;
 
         let mut hasher = Sha256::new();
         hasher.update(
             bodies
                 .get(path)
-                .ok_or_else(|| anyhow!("unexpected path: {path}"))?,
+                .ok_or_else(|| format_err!("unexpected path: {path}"))?,
         );
 
         use base64::Engine;
@@ -446,7 +447,7 @@ async fn wasi_http_double_echo() -> Result<()> {
                                 if let (&Method::POST, "/echo") =
                                     (request.method(), request.uri().path())
                                 {
-                                    Ok::<_, anyhow::Error>(hyper::Response::new(
+                                    Ok::<_, wasmtime::Error>(hyper::Response::new(
                                         request.into_body().boxed(),
                                     ))
                                 } else {
@@ -467,7 +468,7 @@ async fn wasi_http_double_echo() -> Result<()> {
 
             // Help rustc with type inference:
             if false {
-                return Ok::<_, anyhow::Error>(());
+                return Ok::<_, wasmtime::Error>(());
             }
         }
     }

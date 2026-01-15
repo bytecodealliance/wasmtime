@@ -4,7 +4,6 @@ use crate::{
     wasm_val_t, wasm_val_vec_t, wasmtime_error_t, wasmtime_extern_t, wasmtime_val_t,
     wasmtime_val_union,
 };
-use anyhow::{Error, Result};
 use std::any::Any;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
@@ -12,8 +11,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
 use wasmtime::{
-    AsContext, AsContextMut, Extern, Func, RootScope, StoreContext, StoreContextMut, Trap, Val,
-    ValRaw,
+    AsContext, AsContextMut, Error, Extern, Func, Result, RootScope, StoreContext, StoreContextMut,
+    Trap, Val, ValRaw,
 };
 
 #[derive(Clone)]

@@ -21,9 +21,9 @@ use crate::{
     isa::riscv64::inst::*,
     machinst::{ArgPair, CallArgList, CallRetList, InstOutput},
 };
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::vec::Vec;
 use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
@@ -70,6 +70,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> BoxCallInfo {
         let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
         let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
@@ -79,7 +80,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
         )
     }
 
@@ -99,7 +100,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, false),
         )
     }
 

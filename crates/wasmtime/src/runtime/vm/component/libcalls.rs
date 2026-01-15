@@ -5,6 +5,8 @@ use crate::component::Instance;
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
+use crate::runtime::component::RuntimeInstance;
+#[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
@@ -192,7 +194,7 @@ unsafe fn utf8_to_utf8(
     let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     log::trace!("utf8-to-utf8 {len}");
-    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| format_err!("invalid utf8 encoding"))?;
     dst.copy_from_slice(src.as_bytes());
     Ok(())
 }
@@ -222,7 +224,7 @@ unsafe fn utf16_to_utf16(
 fn run_utf16_to_utf16(src: &[u16], mut dst: &mut [u16]) -> Result<bool> {
     let mut all_latin1 = true;
     for ch in core::char::decode_utf16(src.iter().map(|i| u16::from_le(*i))) {
-        let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
+        let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
         all_latin1 = all_latin1 && u8::try_from(u32::from(ch)).is_ok();
         let result = ch.encode_utf16(dst);
         let size = result.len();
@@ -305,7 +307,7 @@ unsafe fn utf8_to_utf16(
 }
 
 fn run_utf8_to_utf16(src: &[u8], dst: &mut [u16]) -> Result<usize> {
-    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| format_err!("invalid utf8 encoding"))?;
     let mut amt = 0;
     for (i, dst) in src.encode_utf16().zip(dst) {
         *dst = i.to_le();
@@ -358,7 +360,7 @@ unsafe fn utf16_to_utf8(
     let mut dst_written = 0;
 
     for ch in core::char::decode_utf16(src_iter) {
-        let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
+        let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
 
         // If the destination doesn't have enough space for this character
         // then the loop is ended and this function will be called later with a
@@ -665,32 +667,24 @@ fn resource_exit_call(store: &mut dyn VMStore, instance: Instance) -> Result<()>
     instance.resource_exit_call(store)
 }
 
-fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
-    Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
-}
-
-#[cfg(feature = "component-model-async")]
-fn backpressure_set(
-    store: &mut dyn VMStore,
-    _instance: Instance,
-    caller_instance: u32,
-    enabled: u32,
-) -> Result<()> {
-    store.concurrent_state_mut().backpressure_modify(
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        |_| Some(if enabled != 0 { 1 } else { 0 }),
-    )
+fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u32) -> Result<()> {
+    Err(wasmtime_environ::Trap::from_u8(u8::try_from(code).unwrap())
+        .unwrap()
+        .into())
 }
 
 #[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
-    _instance: Instance,
+    instance: Instance,
     caller_instance: u32,
     increment: u8,
 ) -> Result<()> {
-    store.concurrent_state_mut().backpressure_modify(
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    store.backpressure_modify(
+        RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        },
         |old| {
             if increment != 0 {
                 old.checked_add(1)
@@ -864,6 +858,7 @@ unsafe fn prepare_call(
     caller_instance: u32,
     callee_instance: u32,
     task_return_type: u32,
+    callee_async: u32,
     string_encoding: u32,
     result_count_or_max_if_async: u32,
     storage: *mut u8,
@@ -878,6 +873,7 @@ unsafe fn prepare_call(
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             RuntimeComponentInstanceIndex::from_u32(callee_instance),
             TypeTupleIndex::from_u32(task_return_type),
+            callee_async != 0,
             u8::try_from(string_encoding).unwrap(),
             result_count_or_max_if_async,
             storage.cast::<crate::ValRaw>(),

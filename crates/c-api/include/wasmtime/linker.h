@@ -242,7 +242,7 @@ wasmtime_linker_instantiate(const wasmtime_linker_t *linker,
  * on success.
  *
  * This function automatically handles [Commands and
- * Reactors](https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi)
+ * Reactors](https://github.com/WebAssembly/WASI/blob/main/legacy/application-abi.md#current-unstable-abi)
  * instantiation and initialization.
  *
  * For more information see the [Rust

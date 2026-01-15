@@ -1,6 +1,5 @@
 //! Module for configuring the cache system.
 
-use anyhow::{Context, Result, anyhow, bail};
 use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
@@ -11,6 +10,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use wasmtime_environ::prelude::*;
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility
@@ -132,7 +132,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Resu
 
     let parent_dir = config_file
         .parent()
-        .ok_or_else(|| anyhow!("Invalid cache config path: {}", config_file.display()))?;
+        .ok_or_else(|| format_err!("Invalid cache config path: {}", config_file.display()))?;
 
     fs::create_dir_all(parent_dir).with_context(|| {
         format!(

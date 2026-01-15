@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::anon::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod anon {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -307,7 +305,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod anon {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -363,6 +361,7 @@ pub mod exports {
                         1 == < Error as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     option_test: wasmtime::component::Func,
                 }
@@ -384,14 +383,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/anon")
                             .ok_or_else(|| {
-                                anyhow::anyhow!("no exported instance named `foo:foo/anon`")
+                                wasmtime::format_err!(
+                                    "no exported instance named `foo:foo/anon`"
+                                )
                             })?;
                         let mut lookup = move |name| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/anon` does \
                       not have export `{name}`"
                                     )

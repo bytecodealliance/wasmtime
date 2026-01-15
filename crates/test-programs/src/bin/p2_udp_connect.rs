@@ -76,6 +76,18 @@ fn test_udp_connect_wrong_family(net: &Network, family: IpAddressFamily) {
     ));
 }
 
+/// Socket must be explicitly bound before connecting.
+fn test_udp_connect_without_bind(family: IpAddressFamily) {
+    let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
+
+    let sock = UdpSocket::new(family).unwrap();
+
+    assert!(matches!(
+        sock.stream(Some(remote_addr)),
+        Err(ErrorCode::InvalidState)
+    ));
+}
+
 fn test_udp_connect_dual_stack(net: &Network) {
     // Set-up:
     let v4_server = UdpSocket::new(IpAddressFamily::Ipv4).unwrap();
@@ -119,6 +131,9 @@ fn main() {
 
     test_udp_connect_wrong_family(&net, IpAddressFamily::Ipv4);
     test_udp_connect_wrong_family(&net, IpAddressFamily::Ipv6);
+
+    test_udp_connect_without_bind(IpAddressFamily::Ipv4);
+    test_udp_connect_without_bind(IpAddressFamily::Ipv6);
 
     test_udp_connect_dual_stack(&net);
 }

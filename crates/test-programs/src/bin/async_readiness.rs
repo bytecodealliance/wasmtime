@@ -17,7 +17,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]start"]
+    #[link_name = "[task-return]start"]
     fn task_return_start(_: u32, _: *const u8, _: usize);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -28,7 +28,7 @@ unsafe extern "C" fn task_return_start(_: u32, _: *const u8, _: usize) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[stream-new-0][async]start"]
+    #[link_name = "[stream-new-0]start"]
     fn stream_new() -> u64;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -39,7 +39,7 @@ unsafe extern "C" fn stream_new() -> u64 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-write-0][async]start"]
+    #[link_name = "[async-lower][stream-write-0]start"]
     fn stream_write(_: u32, _: *const u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -50,7 +50,7 @@ unsafe extern "C" fn stream_write(_: u32, _: *const u8, _: usize) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-read-0][async]start"]
+    #[link_name = "[async-lower][stream-read-0]start"]
     fn stream_read(_: u32, _: *mut u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,7 +61,7 @@ unsafe extern "C" fn stream_read(_: u32, _: *mut u8, _: usize) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[stream-drop-readable-0][async]start"]
+    #[link_name = "[stream-drop-readable-0]start"]
     fn stream_drop_readable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -72,7 +72,7 @@ unsafe extern "C" fn stream_drop_readable(_: u32) {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/readiness")]
 unsafe extern "C" {
-    #[link_name = "[stream-drop-writable-0][async]start"]
+    #[link_name = "[stream-drop-writable-0]start"]
     fn stream_drop_writable(_: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -95,7 +95,7 @@ enum State {
     },
 }
 
-#[unsafe(export_name = "[async-lift]local:local/readiness#[async]start")]
+#[unsafe(export_name = "[async-lift]local:local/readiness#start")]
 unsafe extern "C" fn export_start(rx: u32, expected: u32, expected_len: u32) -> u32 {
     let expected_len = usize::try_from(expected_len).unwrap();
 
@@ -116,7 +116,7 @@ unsafe extern "C" fn export_start(rx: u32, expected: u32, expected_len: u32) -> 
     }
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/readiness#[async]start")]
+#[unsafe(export_name = "[callback][async-lift]local:local/readiness#start")]
 unsafe extern "C" fn callback_start(event0: u32, event1: u32, event2: u32) -> u32 {
     unsafe {
         let state = &mut *(usize::try_from(context_get()).unwrap() as *mut State);

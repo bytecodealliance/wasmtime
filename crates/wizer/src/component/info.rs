@@ -112,7 +112,7 @@ impl<'a> ComponentContext<'a> {
 
     pub(crate) fn inc_core(&mut self, kind: wasmparser::ExternalKind) {
         match kind {
-            wasmparser::ExternalKind::Func => {
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
                 self.inc_core_funcs();
             }
             wasmparser::ExternalKind::Memory => {

@@ -316,6 +316,7 @@ TEST(types, func_result) {
   auto f1 = *instance.get_func(store, f1_index);
   auto f2 = *instance.get_func(store, f2_index);
 
+  EXPECT_FALSE(f1.type(store).async());
   EXPECT_EQ(f1.type(store).param_count(), 0);
   EXPECT_FALSE(f1.type(store).result().has_value());
 

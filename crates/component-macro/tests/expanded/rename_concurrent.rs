@@ -99,8 +99,6 @@ pub struct NeptuneIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Neptune {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl NeptuneIndices {
         /// Creates a new copy of `NeptuneIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -182,7 +180,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod green {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Thing = i32;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);
@@ -211,14 +209,14 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod red {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Thing = super::super::super::foo::foo::green::Thing;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn foo<T>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Thing> + Send;
             }

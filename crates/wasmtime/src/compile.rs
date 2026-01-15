@@ -32,11 +32,10 @@ use call_graph::CallGraph;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    Abi, BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
-    CompiledFunctionsTableBuilder, CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos,
-    FinishedObject, FuncKey, FunctionBodyData, InliningCompiler, IntraModuleInlining,
-    ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
-    StaticModuleIndex, Tunables,
+    Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
+    CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
+    FunctionBodyData, InliningCompiler, IntraModuleInlining, ModuleEnvironment, ModuleTranslation,
+    ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex, Tunables,
 };
 
 mod call_graph;
@@ -70,6 +69,7 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
     T,
     Option<(CompiledModuleInfo, CompiledFunctionsTable, ModuleTypes)>,
 )> {
+    let compiler = engine.try_compiler()?;
     let tunables = engine.tunables();
 
     // First a `ModuleEnvironment` is created which records type information
@@ -101,7 +101,7 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
 
     // Emplace all compiled functions into the object file with any other
     // sections associated with code as well.
-    let mut object = engine.compiler().object(ObjectKind::Module)?;
+    let mut object = compiler.object(ObjectKind::Module)?;
     // Insert `Engine` and type-level information into the compiled
     // artifact so if this module is deserialized later it contains all
     // information necessary.
@@ -111,7 +111,7 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
     // They're only used during deserialization and not during runtime for
     // the module itself. Currently there's no need for that, however, so
     // it's left as an exercise for later.
-    engine.append_compiler_info(&mut object);
+    engine.append_compiler_info(&mut object)?;
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = indices.link_and_append_code(
@@ -150,8 +150,8 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
     };
 
+    let compiler = engine.try_compiler()?;
     let tunables = engine.tunables();
-    let compiler = engine.compiler();
 
     let scope = ScopeVec::new();
     let mut validator = wasmparser::Validator::new_with_features(engine.features());
@@ -185,7 +185,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     }
 
     let mut object = compiler.object(ObjectKind::Component)?;
-    engine.append_compiler_info(&mut object);
+    engine.append_compiler_info(&mut object)?;
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = indices.link_and_append_code(
@@ -305,6 +305,7 @@ impl<'a> CompileInputs<'a> {
                         match abi {
                             Abi::Wasm => "wasm-call",
                             Abi::Array => "array-call",
+                            Abi::Patchable => "patchable-call",
                         },
                         intrinsic.name(),
                     );
@@ -333,6 +334,7 @@ impl<'a> CompileInputs<'a> {
                         match abi {
                             Abi::Wasm => "wasm-call",
                             Abi::Array => "array-call",
+                            Abi::Patchable => "patchable-call",
                         },
                         trampoline.symbol_name(),
                     );
@@ -520,7 +522,7 @@ impl<'a> CompileInputs<'a> {
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
     fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs<'a>> {
-        let compiler = engine.compiler();
+        let compiler = engine.try_compiler()?;
 
         if self.inputs.len() > 0 && cfg!(miri) {
             bail!(
@@ -625,7 +627,8 @@ the use case.
                 // in their own call frames.
                 FuncKey::ArrayToWasmTrampoline(..)
                 | FuncKey::WasmToArrayTrampoline(..)
-                | FuncKey::WasmToBuiltinTrampoline(..) => false,
+                | FuncKey::WasmToBuiltinTrampoline(..)
+                | FuncKey::PatchableToBuiltinTrampoline(..) => false,
                 #[cfg(feature = "component-model")]
                 FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
 
@@ -912,14 +915,21 @@ the use case.
 }
 
 fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {
-    let compiler = engine.compiler();
+    let compiler = engine.try_compiler()?;
     let mut builtins = HashSet::new();
     let mut new_inputs: Vec<CompileInput<'_>> = Vec::new();
 
-    let compile_builtin = |builtin: BuiltinFunctionIndex| {
+    let compile_builtin = |key: FuncKey| {
         Box::new(move |compiler: &dyn Compiler| {
-            let key = FuncKey::WasmToBuiltinTrampoline(builtin);
-            let symbol = format!("wasmtime_builtin_{}", builtin.name());
+            let symbol = match key {
+                FuncKey::WasmToBuiltinTrampoline(builtin) => {
+                    format!("wasmtime_builtin_{}", builtin.name())
+                }
+                FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                    format!("wasmtime_patchable_builtin_{}", builtin.name())
+                }
+                _ => unreachable!(),
+            };
             let mut function = compiler
                 .compile_wasm_to_builtin(key, &symbol)
                 .with_context(|| format!("failed to compile `{symbol}`"))?;
@@ -939,10 +949,14 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
 
     for output in raw_outputs.iter() {
         for reloc in compiler.compiled_function_relocation_targets(&*output.function.code) {
-            if let FuncKey::WasmToBuiltinTrampoline(builtin) = reloc {
-                if builtins.insert(builtin) {
-                    new_inputs.push(compile_builtin(builtin));
+            match reloc {
+                FuncKey::WasmToBuiltinTrampoline(builtin)
+                | FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                    if builtins.insert(builtin) {
+                        new_inputs.push(compile_builtin(reloc));
+                    }
                 }
+                _ => {}
             }
         }
     }
@@ -1040,7 +1054,7 @@ impl FunctionIndices {
         // The result is a vector parallel to `compiled_funcs` where
         // `symbol_ids_and_locs[i]` is the symbol ID and function location of
         // `compiled_funcs[i]`.
-        let compiler = engine.compiler();
+        let compiler = engine.try_compiler()?;
         let tunables = engine.tunables();
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,

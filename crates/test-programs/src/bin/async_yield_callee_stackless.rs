@@ -15,7 +15,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/run")]
 unsafe extern "C" {
-    #[link_name = "[task-return][async]run"]
+    #[link_name = "[task-return]run"]
     fn task_return_run();
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,12 +23,12 @@ unsafe extern "C" fn task_return_run() {
     unreachable!()
 }
 
-#[unsafe(export_name = "[async-lift]local:local/run#[async]run")]
+#[unsafe(export_name = "[async-lift]local:local/run#run")]
 unsafe extern "C" fn export_run() -> u32 {
     callback_run(EVENT_NONE, 0, 0)
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/run#[async]run")]
+#[unsafe(export_name = "[callback][async-lift]local:local/run#run")]
 unsafe extern "C" fn callback_run(event0: u32, _event1: u32, _event2: u32) -> u32 {
     assert!(event0 == EVENT_NONE || event0 == EVENT_CANCELLED);
 

@@ -1,6 +1,4 @@
 use crate::http_server::Server;
-use anyhow::Result;
-use anyhow::{Context as _, anyhow};
 use bytes::Bytes;
 use flate2::Compression;
 use flate2::write::{DeflateDecoder, DeflateEncoder};
@@ -15,11 +13,11 @@ use test_programs_artifacts::*;
 use tokio::{fs, try_join};
 use wasm_compose::composer::ComponentComposer;
 use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
-use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::p3::bindings::Proxy;
+use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p3::{
     self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
@@ -116,7 +114,7 @@ impl WasiHttpView for Ctx {
     }
 }
 
-async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
+async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.async_support(true);
@@ -144,14 +142,15 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
-        .map_err(|()| anyhow!("`wasi:cli/run#run` failed"))
+        .0
+        .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
 async fn run_http<E: Into<ErrorCode> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
     request_body_tx: oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>,
-) -> anyhow::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
+) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.async_support(true);
@@ -167,7 +166,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
-    let proxy = Proxy::instantiate_async(&mut store, &component, &linker).await?;
+    let service = Service::instantiate_async(&mut store, &component, &linker).await?;
     let (req, io) = Request::from_http(req);
     let (tx, rx) = tokio::sync::oneshot::channel();
     let ((handle_result, ()), res) = try_join!(
@@ -176,7 +175,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
                 .run_concurrent(async |store| {
                     try_join!(
                         async {
-                            let (res, task) = match proxy.handle(store, req).await? {
+                            let (res, task) = match service.handle(store, req).await? {
                                 Ok(pair) => pair,
                                 Err(err) => return Ok(Err(Some(err))),
                             };
@@ -194,7 +193,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
             let res = rx.await?;
             let (parts, body) = res.into_parts();
             let body = body.collect().await.context("failed to collect body")?;
-            anyhow::Ok(http::Response::from_parts(parts, body))
+            wasmtime::error::Ok(http::Response::from_parts(parts, body))
         }
     )?;
 
@@ -202,55 +201,55 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_get() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_get() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_timeout() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_timeout() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_post() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_post() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_POST_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_large_post() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_large_post() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_LARGE_POST_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_put() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_put() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_PUT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_invalid_version() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_invalid_version() -> wasmtime::Result<()> {
     let server = Server::http2(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_VERSION_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_invalid_header() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_invalid_header() -> wasmtime::Result<()> {
     let server = Server::http2(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_HEADER_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_unknown_method() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_unknown_method() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_UNKNOWN_METHOD_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_unsupported_scheme() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_unsupported_scheme() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(
         P3_HTTP_OUTBOUND_REQUEST_UNSUPPORTED_SCHEME_COMPONENT,
@@ -260,31 +259,31 @@ async fn p3_http_outbound_request_unsupported_scheme() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_invalid_port() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_invalid_port() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_PORT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_invalid_dnsname() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_invalid_dnsname() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_DNSNAME_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_response_build() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_content_length() -> wasmtime::Result<()> {
     let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_outbound_request_missing_path_and_query() -> anyhow::Result<()> {
+async fn p3_http_outbound_request_missing_path_and_query() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(
         P3_HTTP_OUTBOUND_REQUEST_MISSING_PATH_AND_QUERY_COMPONENT,
@@ -294,7 +293,7 @@ async fn p3_http_outbound_request_missing_path_and_query() -> anyhow::Result<()>
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
+async fn wasi_http_proxy_tests() -> wasmtime::Result<()> {
     let req = http::Request::builder()
         .uri("http://example.com:8080/test-path")
         .method(http::Method::GET);
@@ -330,8 +329,15 @@ async fn p3_http_middleware() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_http_middleware_host_to_host() -> Result<()> {
-    test_http_middleware(true).await
+async fn p3_http_middleware_host_to_host() {
+    let error = format!("{:?}", test_http_middleware(true).await.unwrap_err());
+
+    let expected = "cannot read from and write to intra-component future with non-numeric payload";
+
+    assert!(
+        error.contains(expected),
+        "expected `{expected}`; got `{error}`"
+    );
 }
 
 async fn test_http_middleware(host_to_host: bool) -> Result<()> {
@@ -353,6 +359,8 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
     let b_file = dir.path().join("b.wasm");
     fs::write(&b_file, b).await?;
 
+    // The middleware imports `wasi:http/handler` which matches the echo's
+    // `wasi:http/handler` export, so wasm-compose can link them automatically.
     ComponentComposer::new(
         &a_file,
         &wasm_compose::config::Config {
@@ -362,6 +370,7 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -405,7 +414,7 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
                         "local:local/chain-http".to_owned(),
                         InstantiationArg {
                             instance: "local:local/chain-http".into(),
-                            export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".into()),
+                            export: Some("wasi:http/handler@0.3.0-rc-2026-01-06".into()),
                         },
                     )]
                     .into_iter()
@@ -416,7 +425,8 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
             .collect(),
         },
     )
-    .compose()?;
+    .compose()
+    .to_wasmtime_result()?;
     fs::write(&path, &bytes).await?;
 
     test_http_echo(&path.to_str().unwrap(), true, host_to_host).await

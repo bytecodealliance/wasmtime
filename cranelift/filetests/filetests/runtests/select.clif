@@ -441,3 +441,24 @@ block0(v0: i64, v1: i64):
 ; run: %simplify_select_ult_ne_i64(7, 9) == 0
 ; run: %simplify_select_ult_ne_i64(3, 1) == 1
 ; run: %simplify_select_ult_ne_i64(-1, 42) == 1
+
+function %test_sgt_select_slt_min(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v1, v0  ; (slt y, x)
+    v3 = select v2, v1, v0 ; select( (y <_s x), y, x) -> smin(y, x)
+    v4 = icmp sgt v3, v0   ; sgt( min(y, x), x )
+    return v4
+}
+
+; run: %test_sgt_select_slt_min(42, 444) == 0
+
+function %test_ugt_select_ult_min(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v1, v0  ; (slt y, x)
+    v3 = select v2, v1, v0 ; select( (y <_s x), y, x) -> umin(y, x)
+    v4 = icmp ugt v3, v0   ; sgt( min(y, x), x )
+    return v4
+}
+
+; run: %test_ugt_select_ult_min(234234, 5544) == 0
+

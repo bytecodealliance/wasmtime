@@ -22,6 +22,7 @@ pub struct CodeMemory {
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
+    registered: bool,
     enable_branch_protection: bool,
     needs_executable: bool,
     #[cfg(feature = "debug-builtins")]
@@ -46,6 +47,10 @@ impl Drop for CodeMemory {
     fn drop(&mut self) {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
+        //
+        // We do this rather than invoking `unpublish()` because we
+        // want to skip the mprotect() if we natively own the mmap and
+        // are going to munmap soon anyway.
         if let Some(mem) = self.custom_code_memory.as_ref() {
             if self.published && self.needs_executable {
                 let text = self.text();
@@ -90,7 +95,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn publish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 
     /// Unpublish a region of memory.
     ///
@@ -101,7 +106,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 }
 
 impl CodeMemory {
@@ -207,8 +212,9 @@ impl CodeMemory {
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
             published: false,
+            registered: false,
             enable_branch_protection: enable_branch_protection
-                .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
+                .ok_or_else(|| format_err!("missing `{}` section", obj::ELF_WASM_BTI))?,
             needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,
@@ -303,15 +309,20 @@ impl CodeMemory {
 
     /// Publishes the internal ELF image to be ready for execution.
     ///
-    /// This method can only be called once and will panic if called twice. This
-    /// will parse the ELF image from the original `MmapVec` and do everything
-    /// necessary to get it ready for execution, including:
+    /// This method can only be when the image is not published (its
+    /// default state) and will panic if called when already
+    /// published. This will parse the ELF image from the original
+    /// `MmapVec` and do everything necessary to get it ready for
+    /// execution, including:
     ///
     /// * Change page protections from read/write to read/execute.
     /// * Register unwinding information with the OS
     /// * Register this image with the debugger if native DWARF is present
     ///
     /// After this function executes all JIT code should be ready to execute.
+    ///
+    /// The action may be reversed by calling [`unpublish`], as long
+    /// as that method's safety requirements are upheld.
     pub fn publish(&mut self) -> Result<()> {
         assert!(!self.published);
         self.published = true;
@@ -358,14 +369,17 @@ impl CodeMemory {
                 }
             }
 
-            // With all our memory set up use the platform-specific
-            // `UnwindRegistration` implementation to inform the general
-            // runtime that there's unwinding information available for all
-            // our just-published JIT functions.
-            self.register_unwind_info()?;
+            if !self.registered {
+                // With all our memory set up use the platform-specific
+                // `UnwindRegistration` implementation to inform the general
+                // runtime that there's unwinding information available for all
+                // our just-published JIT functions.
+                self.register_unwind_info()?;
 
-            #[cfg(feature = "debug-builtins")]
-            self.register_debug_image()?;
+                #[cfg(feature = "debug-builtins")]
+                self.register_debug_image()?;
+                self.registered = true;
+            }
         }
 
         Ok(())
@@ -392,6 +406,78 @@ impl CodeMemory {
         } else {
             Ok(false)
         }
+    }
+
+    /// "Unpublish" code memory (transition it from executable to read/writable).
+    ///
+    /// This may be used to edit the code image, as long as the
+    /// overall size of the memory remains the same. Note the hazards
+    /// inherent in editing code that may have been executed: any
+    /// stack frames with PC still active in this code must be
+    /// suspended (e.g., called into a hostcall that is then invoking
+    /// this method, or async-yielded) and any active PC values must
+    /// point to valid instructions. Thus this is mostly useful for
+    /// patching in-place at particular sites, such as by the use of
+    /// Cranelift's `patchable_call` instruction.
+    ///
+    /// If this fails, then the memory remains executable.
+    pub fn unpublish(&mut self) -> Result<()> {
+        assert!(self.published);
+        self.published = false;
+
+        if self.text().is_empty() {
+            return Ok(());
+        }
+
+        if self.custom_unpublish()? {
+            return Ok(());
+        }
+
+        if !self.mmap.supports_virtual_memory() {
+            bail!("this target requires virtual memory to be enabled");
+        }
+
+        // SAFETY: we are guaranteed by our own safety conditions that
+        // we have exclusive access to this code and can change its
+        // permissions (removing the execute bit) without causing
+        // problems.
+        #[cfg(has_virtual_memory)]
+        unsafe {
+            self.mmap.make_readwrite(0..self.mmap.len())?;
+        }
+
+        // Note that we do *not* unregister: we expect unpublish
+        // to be used for temporary edits, so we want the
+        // registration to "stick" after the initial publish and
+        // not toggle in subsequent unpublish/publish cycles.
+
+        Ok(())
+    }
+
+    fn custom_unpublish(&mut self) -> Result<bool> {
+        if let Some(mem) = self.custom_code_memory.as_ref() {
+            let text = self.text();
+            mem.unpublish_executable(text.as_ptr(), text.len())?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Return a mutable borrow to the code, suitable for editing.
+    ///
+    /// Must not be published.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the code has been published (and not
+    /// subsequently unpublished).
+    pub fn text_mut(&mut self) -> &mut [u8] {
+        assert!(!self.published);
+        // SAFETY: we assert !published, which means we either have
+        // not yet applied readonly + execute permissinos, or we have
+        // undone that and flipped back to read-write via unpublish.
+        unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] }
     }
 
     unsafe fn register_unwind_info(&mut self) -> Result<()> {
@@ -440,6 +526,23 @@ impl CodeMemory {
     /// the trap code associated with that instruction, if there is one.
     pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
         lookup_trap_code(self.trap_data(), text_offset)
+    }
+
+    /// Get the raw address range of this CodeMemory.
+    pub(crate) fn raw_addr_range(&self) -> Range<usize> {
+        let start = self.text().as_ptr().addr();
+        let end = start + self.text().len();
+        start..end
+    }
+
+    /// Create a "deep clone": a separate CodeMemory for the same code
+    /// that can be patched or mutated independently. Also returns a
+    /// "metadata and location" handle that can be registered with the
+    /// global module registry and used for trap metadata lookups.
+    #[cfg(feature = "debug")]
+    pub(crate) fn deep_clone(self: &Arc<Self>, engine: &Engine) -> Result<CodeMemory> {
+        let mmap = self.mmap.deep_clone()?;
+        Self::new(engine, mmap)
     }
 }
 

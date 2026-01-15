@@ -1,5 +1,5 @@
 use super::{super::REALLOC_AND_FREE, engine};
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::{
     Store,
     component::{Component, Linker},

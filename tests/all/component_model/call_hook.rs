@@ -2,12 +2,11 @@
 
 use super::REALLOC_AND_FREE;
 use crate::call_hook::{Context, State, sync_call_hook};
-use anyhow::{Result, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
 use wasmtime::component::*;
-use wasmtime::{CallHook, CallHookHandler, Config, Engine, Store, StoreContextMut};
+use wasmtime::{CallHook, CallHookHandler, Config, Engine, Result, Store, StoreContextMut, bail};
 
 // Crate a synchronous Func, call it directly:
 #[test]
@@ -320,7 +319,7 @@ fn trapping() -> Result<()> {
 
     let component = Component::new(&engine, wat)?;
 
-    let run = |action: i32, again: bool| -> (State, Option<anyhow::Error>) {
+    let run = |action: i32, again: bool| -> (State, Option<wasmtime::Error>) {
         let mut store = Store::new(&engine, State::default());
         store.call_hook(sync_call_hook);
         let inst = linker

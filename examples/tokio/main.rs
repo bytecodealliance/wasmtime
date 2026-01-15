@@ -1,6 +1,6 @@
-use anyhow::Error;
 use std::sync::Arc;
 use tokio::time::Duration;
+use wasmtime::Error;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
 

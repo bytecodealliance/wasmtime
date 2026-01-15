@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::util::{config, make_component};
-use anyhow::Result;
 use futures::stream::{FuturesUnordered, TryStreamExt};
+use wasmtime::Result;
 use wasmtime::component::{Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::WasiCtxBuilder;
@@ -120,7 +120,7 @@ pub async fn test_run_bool(components: &[&str], v: bool) -> Result<()> {
                 // continue
             }
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await?
 }

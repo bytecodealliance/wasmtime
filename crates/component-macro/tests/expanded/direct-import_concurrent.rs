@@ -99,15 +99,13 @@ pub struct FooIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
 pub trait FooImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
 pub trait FooImports: Send {}
 impl<_T: FooImports + ?Sized + Send> FooImports for &mut _T {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl FooIndices {
         /// Creates a new copy of `FooIndices` bindings which can then
         /// be used to instantiate into a particular store.

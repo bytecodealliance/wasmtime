@@ -25,34 +25,46 @@ name = "uap"
 harness = false
 
 [dependencies]
-anyhow = { workspace = true }
 log = { workspace = true }
-rayon = { workspace = true }
+rayon = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, features = ['wasmparser'] }
 wasmparser = { workspace = true, features = ['validate', 'features'] }
 wasmprinter = { workspace = true, optional = true }
-wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null', 'async'] }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 env_logger = { workspace = true }
 wasmprinter = { workspace = true }
 wat = { workspace = true }
-wasmtime = { workspace = true, features = ['default'] }
+wasmtime = { workspace = true, features = ['default', 'anyhow'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
 tokio = { workspace = true, features = ['macros'] }
 
 [features]
+default = ["rayon"]
+# Enables parallel snapshotting.
+# Needs to be disabled if compiling wizer to single-threaded targets like wasm32-unknown-unknown
+rayon = ["dep:rayon"]
 # Enable this dependency to get messages with WAT disassemblies when certain
 # internal panics occur.
-wasmprinter = ['dep:wasmprinter']
+wasmprinter = ['dep:wasmprinter', 'wasmtime/anyhow']
 
 # Enables default runtime implementations based on the `wasmtime` crate.
-wasmtime = ['dep:wasmtime']
+wasmtime = [
+  'wasmtime/std',
+  'wasmtime/runtime',
+  'wasmtime/cranelift',
+  'wasmtime/cache',
+  'wasmtime/threads',
+  'wasmtime/gc',
+  'wasmtime/gc-null',
+  'wasmtime/async',
+]
 
 # Enable support for wizening components.
-component-model = ['wasmtime?/component-model']
+component-model = ['wasmtime/component-model']
 
 [[test]]
 name = "all"

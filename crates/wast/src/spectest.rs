@@ -80,7 +80,7 @@ pub fn link_spectest<T>(
 
     if config.use_shared_memory {
         let ty = MemoryType::shared(1, 1);
-        let memory = Memory::new(&mut *store, ty)?;
+        let memory = SharedMemory::new(store.engine(), ty)?;
         linker.define(&mut *store, "spectest", "shared_memory", memory)?;
     }
 

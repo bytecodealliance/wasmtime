@@ -121,14 +121,18 @@ const FULL_MATRIX = [
   },
   {
     "name": "Test Linux s390x",
-    "os": ubuntu,
+    "os": 'ubuntu-24.04-s390x',
     "target": "s390x-unknown-linux-gnu",
     "filter": "linux-s390x",
     "isa": "s390x",
-    "gcc_package": "gcc-s390x-linux-gnu",
-    "gcc": "s390x-linux-gnu-gcc",
-    "qemu": "qemu-s390x -L /usr/s390x-linux-gnu",
-    "qemu_target": "s390x-linux-user",
+    // These are no longer necessary now that this runner is using an
+    // IBM-provided native runner. If that needs to change, however,
+    // uncommenting these and switching back to `ubuntu` for the os will switch
+    // us back to QEMU emulation.
+    // "gcc_package": "gcc-s390x-linux-gnu",
+    // "gcc": "s390x-linux-gnu-gcc",
+    // "qemu": "qemu-s390x -L /usr/s390x-linux-gnu",
+    // "qemu_target": "s390x-linux-user",
   },
   {
     "name": "Test Linux riscv64",

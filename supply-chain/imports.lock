@@ -2,464 +2,248 @@
 # cargo-vet imports lock
 
 [[unpublished.cranelift]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-assembler-x64]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-assembler-x64-meta]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-bforest]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-bforest]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-bitset]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-bitset]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-codegen]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-codegen]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-codegen-meta]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-codegen-shared]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-control]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-control]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-entity]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-entity]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-frontend]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-frontend]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-interpreter]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-isle]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-isle]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-jit]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-jit]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-module]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-module]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-native]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-native]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-object]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-object]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-reader]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-reader]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-serde]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-serde]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.cranelift-srcgen]]
-version = "0.126.0"
-audited_as = "0.124.2"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.127.0"
-audited_as = "0.125.3"
+version = "0.129.0"
+audited_as = "0.127.1"
 
 [[unpublished.pulley-interpreter]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.pulley-interpreter]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.pulley-macros]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.pulley-macros]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasi-common]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasi-common]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-cli]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-cli]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-cli-flags]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-environ]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-environ]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-c-api-macros]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-cache]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-component-macro]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-component-util]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-cranelift]]
-version = "39.0.0"
-audited_as = "37.0.2"
+version = "42.0.0"
+audited_as = "40.0.1"
 
-[[unpublished.wasmtime-internal-cranelift]]
-version = "40.0.0"
-audited_as = "38.0.3"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "39.0.0"
-audited_as = "37.0.2"
+[[unpublished.wasmtime-internal-error]]
+version = "42.0.0"
+audited_as = "0.0.0"
 
 [[unpublished.wasmtime-internal-explorer]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-fiber]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-jit-debug]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-math]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-math]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-slab]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-unwinder]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-winch]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-wit-bindgen]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-internal-wmemcheck]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-config]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-http]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-io]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-keyvalue]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-threads]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-tls]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "39.0.0"
-audited_as = "37.0.2"
+version = "42.0.0"
+audited_as = "40.0.1"
 
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "40.0.0"
-audited_as = "38.0.3"
-
-[[unpublished.wasmtime-wast]]
-version = "39.0.0"
-audited_as = "37.0.2"
+[[unpublished.wasmtime-wasi-tls-openssl]]
+version = "42.0.0"
+audited_as = "0.0.1"
 
 [[unpublished.wasmtime-wast]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
+
+[[unpublished.wasmtime-wizer]]
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wiggle]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wiggle]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wiggle-generate]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wiggle-generate]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wiggle-macro]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.wiggle-macro]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
 audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
-version = "39.0.0"
-audited_as = "37.0.2"
-
-[[unpublished.winch-codegen]]
-version = "40.0.0"
-audited_as = "38.0.3"
+version = "42.0.0"
+audited_as = "40.0.1"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -490,15 +274,15 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anstyle-query]]
-version = "1.1.4"
-when = "2025-08-05"
+version = "1.1.5"
+when = "2025-11-13"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anstyle-wincon]]
-version = "3.0.10"
-when = "2025-08-05"
+version = "3.0.11"
+when = "2025-11-13"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -678,124 +462,104 @@ user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
 
 [[publisher.cranelift]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-assembler-x64]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-assembler-x64-meta]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bforest]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bitset]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-control]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-entity]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-frontend]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-interpreter]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-isle]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-jit]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-module]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-native]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-object]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-reader]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-serde]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-srcgen]]
-version = "0.125.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.127.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.derive_arbitrary]]
 version = "1.4.0"
@@ -945,8 +709,8 @@ user-login = "cuviper"
 user-name = "Josh Stone"
 
 [[publisher.io-extras]]
-version = "0.18.2"
-when = "2024-03-29"
+version = "0.18.4"
+when = "2024-12-04"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -959,8 +723,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.is-terminal]]
-version = "0.4.16"
-when = "2025-03-07"
+version = "0.4.17"
+when = "2025-10-23"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1068,16 +832,14 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.pulley-interpreter]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.pulley-macros]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.quote]]
 version = "1.0.41"
@@ -1087,8 +849,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.13.2"
-when = "2025-09-18"
+version = "0.13.4"
+when = "2026-01-06"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"
@@ -1290,8 +1052,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.tokio]]
-version = "1.47.1"
-when = "2025-08-01"
+version = "1.48.0"
+when = "2025-10-14"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
@@ -1402,10 +1164,9 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasi-common]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasip1]]
 version = "1.0.0"
@@ -1493,184 +1254,166 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-cli]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-cli-flags]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-environ]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-c-api-macros]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-cache]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-macro]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-util]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-cranelift]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
+[[publisher.wasmtime-internal-error]]
+version = "0.0.0"
+when = "2025-12-16"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
 
 [[publisher.wasmtime-internal-explorer]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-fiber]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-debug]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-icache-coherence]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-math]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-slab]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-unwinder]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-versioned-export-macros]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-winch]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-wit-bindgen]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-wmemcheck]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-config]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-http]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-io]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-keyvalue]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-threads]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-tls]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-tls-nativetls]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wast]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
+[[publisher.wasmtime-wizer]]
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wast]]
 version = "236.0.0"
@@ -1684,30 +1427,20 @@ when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.web-sys]]
-version = "0.3.57"
-when = "2022-04-07"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
 [[publisher.wiggle]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-generate]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-macro]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-test]]
 version = "0.1.0"
@@ -1724,10 +1457,9 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "38.0.3"
-when = "2025-10-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "40.0.1"
+when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.windows]]
 version = "0.52.0"
@@ -1765,15 +1497,15 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.windows-sys]]
-version = "0.59.0"
-when = "2024-07-30"
+version = "0.60.2"
+when = "2025-06-12"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.windows-sys]]
-version = "0.60.2"
-when = "2025-06-12"
+version = "0.61.2"
+when = "2025-10-06"
 user-id = 64539
 user-login = "kennykerr"
 user-name = "Kenny Kerr"
@@ -1912,8 +1644,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.winx]]
-version = "0.36.3"
-when = "2023-12-01"
+version = "0.36.4"
+when = "2024-12-04"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1924,11 +1656,15 @@ when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen]]
+version = "0.51.0"
+when = "2026-01-12"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+
 [[publisher.wit-bindgen-core]]
-version = "0.43.0"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.51.0"
+when = "2026-01-12"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
 version = "0.33.0"
@@ -1937,16 +1673,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.43.0"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.51.0"
+when = "2026-01-12"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.43.0"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.51.0"
+when = "2026-01-12"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
 version = "0.236.0"
@@ -2015,6 +1749,28 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "No unsafe usage or ambient capabilities, sane build script"
 
+[[audits.google.audits.addr2line]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-run"
+version = "0.19.0"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/refs/heads/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.bitflags]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "safe-to-deploy"
+version = "1.3.2"
+notes = """
+Security review of earlier versions of the crate can be found at
+(Google-internal, sorry): go/image-crate-chromium-security-review
+
+The crate exposes a function marked as `unsafe`, but doesn't use any
+`unsafe` blocks (except for tests of the single `unsafe` function).  I
+think this justifies marking this crate as `ub-risk-1`.
+
+Additional review comments can be found at https://crrev.com/c/4723145/31
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
 [[audits.google.audits.cast]]
 who = "George Burgess IV <gbiv@google.com>"
 criteria = "safe-to-run"
@@ -2029,12 +1785,6 @@ notes = """
 `does-not-implement-crypto` is certified because this crate explicitly says
 that the RNG here is not cryptographically secure.
 """
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/refs/heads/main/cargo-vet/audits.toml?format=TEXT"
-
-[[audits.google.audits.fixedbitset]]
-who = "ChromeOS"
-criteria = "safe-to-run"
-version = "0.4.2"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/refs/heads/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.itertools]]
@@ -2076,6 +1826,15 @@ delta = "0.2.9 -> 0.2.13"
 notes = "Audited at https://fxrev.dev/946396"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
 
+[[audits.google.audits.rand]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "safe-to-deploy"
+version = "0.8.5"
+notes = """
+For more detailed unsafe review notes please see https://crrev.com/c/6362797
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
 [[audits.google.audits.rand_chacha]]
 who = "Android Legacy"
 criteria = "safe-to-run"
@@ -2095,12 +1854,48 @@ version = "0.10.5"
 notes = "Reviewed on https://fxrev.dev/712371."
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
 
+[[audits.google.audits.simd-adler32]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "safe-to-deploy"
+version = "0.3.7"
+notes = """
+Security review of earlier versions of the crate can be found at
+(Google-internal, sorry): go/image-crate-chromium-security-review
+
+Audit comments for 1.3.2 can be found at https://crrev.com/c/4723145.
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.smallvec]]
+who = "Manish Goregaokar <manishearth@google.com>"
+criteria = "safe-to-deploy"
+version = "1.13.2"
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
 [[audits.google.audits.socket2]]
 who = "David Koloski <dkoloski@google.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.4 -> 0.5.5"
 notes = "Reviewed at https://fxrev.dev/946307"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.stable_deref_trait]]
+who = "Manish Goregaokar <manishearth@google.com>"
+criteria = "safe-to-deploy"
+version = "1.2.0"
+notes = "Purely a trait, crates using this should be carefully vetted since self-referential stuff can be super tricky around various unsafe rust edges."
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.strsim]]
+who = "danakj@chromium.org"
+criteria = "safe-to-deploy"
+version = "0.10.0"
+notes = """
+Reviewed in https://crrev.com/c/5171063
+
+Previously reviewed during security review and the audit is grandparented in.
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
 
 [[audits.google.audits.tinytemplate]]
 who = "Ying Hsu <yinghsu@chromium.org>"
@@ -3348,7 +3143,7 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Makoto Kato <m_kato@ga2.so-net.ne.jp>"
 criteria = "safe-to-deploy"
 version = "0.1.2"
-notes = "This crate is zero-copy version of \"From\". This has no unsafe code and uses no ambient capabilities."
+notes = 'This crate is zero-copy version of "From". This has no unsafe code and uses no ambient capabilities.'
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.zerofrom]]

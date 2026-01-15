@@ -12,12 +12,12 @@
 ;;       4      |        00
 ;;       5      |        08
 
-;; After all threads have spawned and written their indices to the byte position given by their assigned number, 
+;; After all threads have spawned and written their indices to the byte position given by their assigned number,
 ;; the buffer state will be:
 ;; 4 3 5 2 1
 
 ;; The main thread will then yield to these threads in the order that they are stored in the buffer,
-;; and they will write their assigned number into the buffer, after the indices. 
+;; and they will write their assigned number into the buffer, after the indices.
 ;; After all threads have been yielded to, the buffer contents will be:
 ;; 4 3 5 2 1 0 4 8 12 16
 
@@ -27,10 +27,10 @@
     ;; Defines the table for the thread start function
     (core module $libc
         (table (export "__indirect_function_table") 1 funcref))
-    ;; Defines the thread start function and a function that calls thread.new_indirect
+    ;; Defines the thread start function and a function that calls thread.new-indirect
     (core module $m
         ;; Import the threading builtins and the table from libc
-        (import "" "thread.new_indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+        (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
         (import "" "thread.suspend" (func $thread-suspend (result i32)))
         (import "" "thread.yield-to" (func $thread-yield-to (param i32) (result i32)))
         (import "" "thread.switch-to" (func $thread-switch-to (param i32) (result i32)))
@@ -53,17 +53,17 @@
             (i32.store (local.get 0) (call $thread-index))
             (drop (call $thread-suspend))
             (i32.store (global.get $g) (local.get 0))
-            (global.set $g 
+            (global.set $g
                 (i32.add (global.get $g) (i32.const 4))))
         (export "thread-start" (func $thread-start))
 
         ;; Initialize the function table with our thread-start function; this will be
-        ;; used by thread.new_indirect
+        ;; used by thread.new-indirect
         (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
 
         (func $new-thread (param i32)
-            (drop 
-                (call $thread-yield-to 
+            (drop
+                (call $thread-yield-to
                     (call $thread-new-indirect (i32.const 0) (local.get 0)))))
 
         ;; The main entry point
@@ -88,18 +88,18 @@
             (if (i32.ne (i32.load (i32.const 28)) (i32.const 8)) (then unreachable))
             (if (i32.ne (i32.load (i32.const 32)) (i32.const 12)) (then unreachable))
             (if (i32.ne (i32.load (i32.const 36)) (i32.const 16)) (then unreachable))
-            
+
             ;; Sentinel value
-            (i32.const 42))) 
-    
+            (i32.const 42)))
+
     ;; Instantiate the libc module to get the table
     (core instance $libc (instantiate $libc))
-    ;; Get access to `thread.new_indirect` that uses the table from libc
+    ;; Get access to `thread.new-indirect` that uses the table from libc
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
-    (core func $thread-new-indirect 
-        (canon thread.new_indirect $start-func-ty (table $indirect-function-table)))
+    (core func $thread-new-indirect
+        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
     (core func $thread-yield-to (canon thread.yield-to))
@@ -109,9 +109,9 @@
 
     ;; Instantiate the main module
     (core instance $i (
-        instantiate $m 
+        instantiate $m
             (with "" (instance
-                (export "thread.new_indirect" (func $thread-new-indirect))
+                (export "thread.new-indirect" (func $thread-new-indirect))
                 (export "thread.index" (func $thread-index))
                 (export "thread.yield-to" (func $thread-yield-to))
                 (export "thread.yield" (func $thread-yield))
@@ -121,6 +121,6 @@
             (with "libc" (instance $libc))))
 
     ;; Export the main entry point
-    (func (export "run") (result u32) (canon lift (core func $i "run"))))
+    (func (export "run") async (result u32) (canon lift (core func $i "run"))))
 
 (assert_return (invoke "run") (u32.const 42))

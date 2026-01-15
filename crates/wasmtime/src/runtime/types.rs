@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::runtime::Memory as RuntimeMemory;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
 use crate::runtime::externals::Tag as RuntimeTag;
@@ -1234,7 +1233,7 @@ impl HeapType {
             (HeapType::Any, _) => false,
 
             (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
-            (HeapType::NoExn, _) => true,
+            (HeapType::NoExn, _) => false,
 
             (HeapType::ConcreteExn(_), HeapType::Exn) => true,
             (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
@@ -1526,7 +1525,7 @@ impl ExternType {
             ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
             ExternType::Global(global_ty) => global_ty.default_value(store).map(Extern::Global),
             ExternType::Table(table_ty) => table_ty.default_value(store).map(Extern::Table),
-            ExternType::Memory(mem_ty) => mem_ty.default_value(store).map(Extern::Memory),
+            ExternType::Memory(mem_ty) => mem_ty.default_value(store),
             ExternType::Tag(tag_ty) => tag_ty.default_value(store).map(Extern::Tag),
         }
     }
@@ -2706,7 +2705,7 @@ impl FuncType {
             .results()
             .map(|ty| ty.default_value())
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| anyhow!("function results do not have a default value"))?;
+            .ok_or_else(|| format_err!("function results do not have a default value"))?;
         Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
@@ -3001,7 +3000,7 @@ impl GlobalType {
         let val = self
             .content()
             .default_value()
-            .ok_or_else(|| anyhow!("global type has no default value"))?;
+            .ok_or_else(|| format_err!("global type has no default value"))?;
         RuntimeGlobal::new(store, self.clone(), val)
     }
 
@@ -3494,12 +3493,26 @@ impl MemoryType {
     pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
     }
-    /// Construct a new memory import initialized to this memory type’s default state
+    /// Construct a new memory import initialized to this memory type’s default
+    /// state.
     ///
-    /// Returns a host `Memory` in the given store with the configured initial
-    /// page size and zeroed contents.
-    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeMemory> {
-        RuntimeMemory::new(store, self.clone())
+    /// Returns a host `Memory` or `SharedMemory` depending on if this is a
+    /// shared memory type or not. The memory's type will have the same type as
+    /// `self` and the initial contents of the memory, if any, will be all zero.
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<Extern> {
+        Ok(if self.is_shared() {
+            #[cfg(feature = "threads")]
+            {
+                let store = store.as_context();
+                Extern::SharedMemory(crate::SharedMemory::new(store.engine(), self.clone())?)
+            }
+            #[cfg(not(feature = "threads"))]
+            {
+                bail!("creation of shared memories disabled at compile time")
+            }
+        } else {
+            Extern::Memory(crate::Memory::new(store, self.clone())?)
+        })
     }
 }
 

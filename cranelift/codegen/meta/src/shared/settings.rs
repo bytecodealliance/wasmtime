@@ -169,11 +169,11 @@ pub(crate) fn define() -> SettingGroup {
         vec![
             "isa_default",
             "fast",
-            "cold",
             "system_v",
             "windows_fastcall",
             "apple_aarch64",
             "probestack",
+            "preserve_all",
         ],
     );
 

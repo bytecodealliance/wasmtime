@@ -89,3 +89,84 @@ block0(v0: i32, v1: i32):
 ; run: %test_bxor_ult_ugt(1, 1) == 0
 ; run: %test_bxor_ult_ugt(1, 3) == 1
 
+;; Rule 1: (x <_s y) & (x >_s y) => false
+function %test_slt_sgt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1  ; (x <_s y)
+    v3 = icmp sgt v0, v1  ; (x >_s y)
+    v4 = band v2, v3       ; (x <_s y) & (x >_s y)
+    return v4
+}
+
+; run: %test_slt_sgt(42, 24) == 0
+
+;; Rule 2: (x <_u y) & (x >_u y) => false
+function %test_ult_ugt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1  ; (x <_u y)
+    v3 = icmp ugt v0, v1  ; (x >_u y)
+    v4 = band v2, v3       ; (x <_u y) & (x >_u y)
+    return v4
+}
+
+; run: %test_ult_ugt(42, 24) == 0
+
+;; Rule 3: (x <_s y_const) & (x >_u y_const) => false, if y_const < 0
+function %test_slt_ugt_neg_const_y(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = iconst.i32 -10      ; y_const = -10. Triggers (i64_lt y 0)
+    v2 = icmp slt v0, v1  ; (x <_s -10)
+    v3 = icmp ugt v0, v1  ; (x >_u -10)
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %test_slt_ugt_neg_const_y(42) == 0
+
+;; Rule 4: (x_const <_s y) & (x_const >_u y) => false, if x_const >= 0
+function %test_slt_ugt_pos_const_x(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = iconst.i32 10
+    v2 = icmp slt v1, v0
+    v3 = icmp ugt v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %test_slt_ugt_pos_const_x(42) == 0
+
+;; Rule 5: (x <_u y_const) & (x >_s y_const) => false, if y_const >= 0
+function %test_ult_sgt_pos_const_y(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = iconst.i32 10
+    v2 = icmp ult v0, v1
+    v3 = icmp sgt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %test_ult_sgt_pos_const_y(42) == 0
+
+;; Rule 6: (x_const <_u y) & (x_const >_s y) => false, if x_const < 0
+function %test_ult_sgt_neg_const_x(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = iconst.i32 -10
+    v2 = icmp ult v1, v0
+    v3 = icmp sgt v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %test_ult_sgt_neg_const_x(42) == 0
+
+;; (x <u y) & (x != -1) => (x <_u y)
+function %test_ult_ne_minus_one(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = iconst.i32 -1
+    v4 = icmp ne v0, v3
+    v5 = band v2, v4
+    return v5
+}
+; run: %test_ult_ne_minus_one(3, 5) == 1
+; run: %test_ult_ne_minus_one(-1, 1) == 0

@@ -19,7 +19,7 @@ use {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "local:local/run")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][async]run"]
+    #[link_name = "[async-lower]run"]
     fn run() -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]

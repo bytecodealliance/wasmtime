@@ -16,7 +16,7 @@ function u1:0() tail {
     ss3 = explicit_slot 103, align = 1024
     ss4 = explicit_slot 110, align = 512
     ss5 = explicit_slot 126, align = 512
-    sig0 = (f32, f64, f64, f32, i8 uext, i128, i8 uext, i32, i16 sext, i64, i64 sext, i128, i8 sext, i8, i64, i64 sext) -> i16 sext, i64 sext, f64, i32 sext, f64, i8 sext, i64 sext, f32 cold
+    sig0 = (f32, f64, f64, f32, i8 uext, i128, i8 uext, i32, i16 sext, i64, i64 sext, i128, i8 sext, i8, i64, i64 sext) -> i16 sext, i64 sext, f64, i32 sext, f64, i8 sext, i64 sext, f32 system_v
     sig1 = () system_v
     sig2 = (i128, i16 sext, i128 sext, i32 sext, i16, i64 uext, f32, i8 sext, f32, i8, i64, i64, i64, i64 uext, f64) -> f64, i8 uext, f32, i128, i64 uext, i8, i16 sext, i64 sext tail
     sig3 = () -> i8 sext, f32, i128, i32, f32, i128 uext, i8, i8 uext, f64, i8 sext, f32 system_v

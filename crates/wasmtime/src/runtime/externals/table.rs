@@ -71,7 +71,7 @@ impl Table {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -154,10 +154,11 @@ impl Table {
         lazy_init_range: impl IntoIterator<Item = u64>,
     ) -> (&'a mut vm::Table, Option<&'a mut GcStore>) {
         self.instance.assert_belongs_to(store.id());
-        let (store, instance) = store.optional_gc_store_and_instance_mut(self.instance.instance());
+        let (store, registry, instance) =
+            store.optional_gc_store_and_registry_and_instance_mut(self.instance.instance());
 
         (
-            instance.get_defined_table_with_lazy_init(self.index, lazy_init_range),
+            instance.get_defined_table_with_lazy_init(registry, self.index, lazy_init_range),
             store,
         )
     }

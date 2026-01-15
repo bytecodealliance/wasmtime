@@ -99,8 +99,6 @@ pub struct ImportsIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Imports {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl ImportsIndices {
         /// Creates a new copy of `ImportsIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -186,7 +184,7 @@ pub mod a {
         #[allow(clippy::all)]
         pub mod interface_with_live_type {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -208,7 +206,7 @@ pub mod a {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f<T>(
+                fn f<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = LiveType> + Send;
             }
@@ -240,7 +238,7 @@ pub mod a {
         #[allow(clippy::all)]
         pub mod interface_with_dead_type {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type LiveType = super::super::super::a::b::interface_with_live_type::LiveType;
             const _: () = {
                 assert!(4 == < LiveType as wasmtime::component::ComponentType >::SIZE32);

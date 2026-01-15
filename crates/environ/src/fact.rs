@@ -26,7 +26,6 @@ use crate::component::{
 use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
 use crate::{ModuleInternedTypeIndex, prelude::*};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use wasm_encoder::*;
 
@@ -34,7 +33,6 @@ mod core_types;
 mod signature;
 mod trampoline;
 mod transcode;
-mod traps;
 
 /// Fixed parameter types for the `prepare_call` built-in function.
 ///
@@ -47,6 +45,7 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
     ValType::I32,     // caller_instance
     ValType::I32,     // callee_instance
     ValType::I32,     // task_return_type
+    ValType::I32,     // callee_async
     ValType::I32,     // string_encoding
     ValType::I32,     // result_count_or_max_if_async
 ];
@@ -89,6 +88,8 @@ pub struct Module<'a> {
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
 
+    imported_trap: Option<FuncIndex>,
+
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
     imported_memories: PrimaryMap<MemoryIndex, CoreDef>,
@@ -99,6 +100,8 @@ pub struct Module<'a> {
     helper_worklist: Vec<(FunctionId, Helper)>,
 
     exports: Vec<(u32, String)>,
+
+    task_may_block: Option<GlobalIndex>,
 }
 
 struct AdapterData {
@@ -111,9 +114,6 @@ struct AdapterData {
     /// The core wasm function that this adapter will be calling (the original
     /// function that was `canon lift`'d)
     callee: FuncIndex,
-    /// FIXME(#4185) should be plumbed and handled as part of the new reentrance
-    /// rules not yet implemented here.
-    called_as_export: bool,
 }
 
 /// Configuration options which apply at the "global adapter" level.
@@ -121,7 +121,12 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    /// The Wasmtime-assigned component instance index where the options were
+    /// originally specified.
     instance: RuntimeComponentInstanceIndex,
+    /// The ancestors (i.e. chain of instantiating instances) of the instance
+    /// specified in the `instance` field.
+    ancestors: Vec<RuntimeComponentInstanceIndex>,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
     /// The global that represents the instance flags for where this adapter
@@ -259,7 +264,9 @@ impl<'a> Module<'a> {
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
+            imported_trap: None,
             exports: Vec::new(),
+            task_may_block: None,
         }
     }
 
@@ -302,9 +309,6 @@ impl<'a> Module<'a> {
                 lift,
                 lower,
                 callee,
-                // FIXME(#4185) should be plumbed and handled as part of the new
-                // reentrance rules not yet implemented here.
-                called_as_export: true,
             },
         );
 
@@ -316,6 +320,7 @@ impl<'a> Module<'a> {
     fn import_options(&mut self, ty: TypeFuncIndex, options: &AdapterOptionsDfg) -> AdapterOptions {
         let AdapterOptionsDfg {
             instance,
+            ancestors,
             string_encoding,
             post_return: _, // handled above
             callback,
@@ -394,6 +399,7 @@ impl<'a> Module<'a> {
 
         AdapterOptions {
             instance: *instance,
+            ancestors: ancestors.clone(),
             ty,
             flags,
             post_return: None,
@@ -453,6 +459,25 @@ impl<'a> Module<'a> {
         self.imported.insert(def.clone(), idx.index());
         self.imports.push(Import::CoreDef(def));
         idx
+    }
+
+    fn import_task_may_block(&mut self) -> GlobalIndex {
+        if let Some(task_may_block) = self.task_may_block {
+            task_may_block
+        } else {
+            let task_may_block = self.import_global(
+                "instance",
+                "task_may_block",
+                GlobalType {
+                    val_type: ValType::I32,
+                    mutable: true,
+                    shared: false,
+                },
+                CoreDef::TaskMayBlock,
+            );
+            self.task_may_block = Some(task_may_block);
+            task_may_block
+        }
     }
 
     fn import_transcoder(&mut self, transcoder: transcode::Transcoder) -> FuncIndex {
@@ -712,6 +737,17 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_trap(&mut self) -> FuncIndex {
+        self.import_simple(
+            "runtime",
+            "trap",
+            &[ValType::I32],
+            &[],
+            Import::Trap,
+            |me| &mut me.imported_trap,
+        )
+    }
+
     fn translate_helper(&mut self, helper: Helper) -> FunctionId {
         *self.helper_funcs.entry(helper).or_insert_with(|| {
             // Generate a fresh `Function` with a unique id for what we're about to
@@ -750,9 +786,7 @@ impl<'a> Module<'a> {
         // With all functions numbered the fragments of the body of each
         // function can be assigned into one final adapter function.
         let mut code = CodeSection::new();
-        let mut traps = traps::TrapSection::default();
-        for (id, func) in self.funcs.iter() {
-            let mut func_traps = Vec::new();
+        for (_, func) in self.funcs.iter() {
             let mut body = Vec::new();
 
             // Encode all locals used for this function
@@ -768,12 +802,8 @@ impl<'a> Module<'a> {
             // here to the final function index.
             for chunk in func.body.iter() {
                 match chunk {
-                    Body::Raw(code, traps) => {
-                        let start = body.len();
+                    Body::Raw(code) => {
                         body.extend_from_slice(code);
-                        for (offset, trap) in traps {
-                            func_traps.push((start + offset, *trap));
-                        }
                     }
                     Body::Call(id) => {
                         Instruction::Call(id_to_index[*id].as_u32()).encode(&mut body);
@@ -784,10 +814,7 @@ impl<'a> Module<'a> {
                 }
             }
             code.raw(&body);
-            traps.append(id_to_index[id].as_u32(), func_traps);
         }
-
-        let traps = traps.finish();
 
         let mut result = wasm_encoder::Module::new();
         result.section(&self.core_types.section);
@@ -795,12 +822,6 @@ impl<'a> Module<'a> {
         result.section(&funcs);
         result.section(&exports);
         result.section(&code);
-        if self.debug {
-            result.section(&CustomSection {
-                name: "wasmtime-trampoline-traps".into(),
-                data: Cow::Borrowed(&traps),
-            });
-        }
         result.finish()
     }
 
@@ -870,6 +891,8 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
+    /// An intrinsic for trapping the instance with a specific trap code.
+    Trap,
 }
 
 impl Options {
@@ -936,8 +959,6 @@ struct Function {
 ///
 /// 1. First a `Raw` variant is used to contain general instructions for the
 ///    wasm function. This is populated by `Compiler::instruction` primarily.
-///    This also comes with a list of traps. and the byte offset within the
-///    first vector of where the trap information applies to.
 ///
 /// 2. A `Call` instruction variant for a `FunctionId` where the final
 ///    `FuncIndex` isn't known until emission time.
@@ -953,7 +974,7 @@ struct Function {
 /// easier to represent. A 5-byte leb may be more efficient at compile-time if
 /// necessary, however.
 enum Body {
-    Raw(Vec<u8>, Vec<(usize, traps::Trap)>),
+    Raw(Vec<u8>),
     Call(FunctionId),
     RefFunc(FunctionId),
 }

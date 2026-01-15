@@ -13,7 +13,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
@@ -21,24 +20,30 @@ arbitrary = { workspace = true, optional = true }
 quote = { workspace = true, optional = true }
 proc-macro2 = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-wasmtime-environ = { workspace = true, optional = true }
+wasmtime-environ = { workspace = true }
 target-lexicon = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true, features = ['std'] }
 # NB: this crate is compiled both in as a dependency of a proc-macro and as a
 # dependency of tests themselves. That means dependencies of this crate are
 # compiled twice. Try to ensure "big" dependencies are optional and feature
 # gated.
 
+[dev-dependencies]
+rand = { workspace = true }
+wat = { workspace = true }
+wasmparser = { workspace = true, features = ['validate', 'component-model', 'features'] }
+wasmprinter = { workspace = true, features = ['component-model'] }
+arbtest = { workspace = true }
+
 [features]
 wast = [
   'dep:serde',
-  'dep:anyhow',
   'dep:toml',
   'dep:serde_derive',
 ]
 wasmtime-wast = [
-  'dep:wasmtime-environ',
   'wast',
   'dep:wasmtime',
   'wasmtime/cranelift',
@@ -50,8 +55,6 @@ wasmtime-wast = [
   'dep:target-lexicon',
 ]
 component = [
-  'dep:anyhow',
-  'dep:anyhow',
   'arbitrary/derive',
   'wast',
   'dep:env_logger',
@@ -61,6 +64,8 @@ component = [
 ]
 component-fuzz = [
   'dep:arbitrary',
+  'arbitrary/derive',
+  'dep:indexmap',
   'dep:quote',
   'dep:proc-macro2',
   'dep:wasmtime-component-util',

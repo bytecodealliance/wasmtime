@@ -29,6 +29,11 @@ wasmtime_component_func_type_clone(const wasmtime_component_func_type_t *ty);
 WASM_API_EXTERN
 void wasmtime_component_func_type_delete(wasmtime_component_func_type_t *ty);
 
+/// \brief Returns whether this is an async function.
+WASM_API_EXTERN
+bool wasmtime_component_func_type_async(
+    const wasmtime_component_func_type_t *ty);
+
 /// \brief Returns the number of parameters of a component function type.
 WASM_API_EXTERN
 size_t wasmtime_component_func_type_param_count(

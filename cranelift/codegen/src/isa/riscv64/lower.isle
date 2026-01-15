@@ -2410,7 +2410,7 @@
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
 (rule
-  (lower (func_addr (func_ref_data _ name dist)))
+  (lower (func_addr (func_ref_data _ name dist _)))
   (load_ext_name name 0 dist))
 
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
@@ -2700,17 +2700,17 @@
 ;;;; Rules for calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
             (_ Unit (emit_side_effect (call_impl info))))
         output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (call (func_ref_data sig_ref name dist) args))
+(rule (lower (call (func_ref_data sig_ref name dist false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
@@ -2734,16 +2734,16 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower_branch (try_call (func_ref_data sig_ref name dist) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist false) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
@@ -2766,14 +2766,14 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (return_call (func_ref_data sig_ref name dist) args))
+(rule (lower (return_call (func_ref_data sig_ref name dist false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (target Reg (load_ext_name name 0 dist))

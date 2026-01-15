@@ -13,21 +13,21 @@ pub enum IsATTY {
 }
 
 impl stdin::Host for WasiCliCtxView<'_> {
-    fn get_stdin(&mut self) -> Result<Resource<streams::DynInputStream>, anyhow::Error> {
+    fn get_stdin(&mut self) -> Result<Resource<streams::DynInputStream>, wasmtime::Error> {
         let stream = self.ctx.stdin.p2_stream();
         Ok(self.table.push(stream)?)
     }
 }
 
 impl stdout::Host for WasiCliCtxView<'_> {
-    fn get_stdout(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
+    fn get_stdout(&mut self) -> Result<Resource<streams::DynOutputStream>, wasmtime::Error> {
         let stream = self.ctx.stdout.p2_stream();
         Ok(self.table.push(stream)?)
     }
 }
 
 impl stderr::Host for WasiCliCtxView<'_> {
-    fn get_stderr(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
+    fn get_stderr(&mut self) -> Result<Resource<streams::DynOutputStream>, wasmtime::Error> {
         let stream = self.ctx.stderr.p2_stream();
         Ok(self.table.push(stream)?)
     }
@@ -38,20 +38,20 @@ pub struct TerminalOutput;
 
 impl terminal_input::Host for WasiCliCtxView<'_> {}
 impl terminal_input::HostTerminalInput for WasiCliCtxView<'_> {
-    fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
+    fn drop(&mut self, r: Resource<TerminalInput>) -> wasmtime::Result<()> {
         self.table.delete(r)?;
         Ok(())
     }
 }
 impl terminal_output::Host for WasiCliCtxView<'_> {}
 impl terminal_output::HostTerminalOutput for WasiCliCtxView<'_> {
-    fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
+    fn drop(&mut self, r: Resource<TerminalOutput>) -> wasmtime::Result<()> {
         self.table.delete(r)?;
         Ok(())
     }
 }
 impl terminal_stdin::Host for WasiCliCtxView<'_> {
-    fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
+    fn get_terminal_stdin(&mut self) -> wasmtime::Result<Option<Resource<TerminalInput>>> {
         if self.ctx.stdin.is_terminal() {
             let fd = self.table.push(TerminalInput)?;
             Ok(Some(fd))
@@ -61,7 +61,7 @@ impl terminal_stdin::Host for WasiCliCtxView<'_> {
     }
 }
 impl terminal_stdout::Host for WasiCliCtxView<'_> {
-    fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+    fn get_terminal_stdout(&mut self) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx.stdout.is_terminal() {
             let fd = self.table.push(TerminalOutput)?;
             Ok(Some(fd))
@@ -71,7 +71,7 @@ impl terminal_stdout::Host for WasiCliCtxView<'_> {
     }
 }
 impl terminal_stderr::Host for WasiCliCtxView<'_> {
-    fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+    fn get_terminal_stderr(&mut self) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx.stderr.is_terminal() {
             let fd = self.table.push(TerminalOutput)?;
             Ok(Some(fd))

@@ -68,7 +68,7 @@
 ;;                                 block4(v11: i64, v12: i64, v52: i32):
 ;;                                     v73 = iconst.i64 1
 ;;                                     v74 = icmp eq v11, v73  ; v73 = 1
-;; @0044                               trapnz v74, user22
+;; @0044                               trapnz v74, user21
 ;; @0044                               jump block5
 ;;
 ;;                                 block5:
@@ -152,14 +152,14 @@
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32) -> i64 tail
-;;     fn0 = colocated u1610612736:7 sig0
-;;     fn1 = colocated u1610612736:52 sig1
+;;     fn0 = colocated u805306368:7 sig0
+;;     fn1 = colocated u805306368:52 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0056                               v2 = iconst.i32 0
 ;; @0056                               v4 = call fn0(v0, v2)  ; v2 = 0
-;; @0058                               trapz v4, user16
+;; @0058                               trapz v4, user15
 ;; @0058                               v8 = call fn1(v0, v4, v2, v2)  ; v2 = 0, v2 = 0
 ;; @0058                               v9 = load.i64 notrap aligned v8+72
 ;; @0058                               v11 = uextend.i128 v9
@@ -188,13 +188,13 @@
 ;;
 ;;                                 block5:
 ;; @0062                               v18 = ireduce.i64 v16
-;; @0062                               trapz v18, user16
+;; @0062                               trapz v18, user15
 ;; @0062                               v21 = load.i64 notrap aligned v18+72
 ;;                                     v128 = iconst.i64 64
 ;;                                     v129 = ushr.i128 v16, v128  ; v128 = 64
 ;; @0062                               v20 = ireduce.i64 v129
 ;; @0062                               v22 = icmp eq v21, v20
-;; @0062                               trapz v22, user23
+;; @0062                               trapz v22, user22
 ;;                                     v130 = iconst.i64 1
 ;;                                     v131 = iadd v21, v130  ; v130 = 1
 ;; @0062                               store notrap aligned v131, v18+72

@@ -17,7 +17,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
-;;     fn0 = colocated u1610612736:27 sig0
+;;     fn0 = colocated u805306368:27 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
@@ -26,11 +26,11 @@
 ;;                                     v36 = ishl v6, v35  ; v35 = 3
 ;;                                     v33 = iconst.i64 32
 ;; @0022                               v8 = ushr v36, v33  ; v33 = 32
-;; @0022                               trapnz v8, user18
+;; @0022                               trapnz v8, user17
 ;; @0022                               v5 = iconst.i32 32
 ;;                                     v42 = iconst.i32 3
 ;;                                     v43 = ishl v3, v42  ; v42 = 3
-;; @0022                               v10 = uadd_overflow_trap v5, v43, user18  ; v5 = 32
+;; @0022                               v10 = uadd_overflow_trap v5, v43, user17  ; v5 = 32
 ;; @0022                               v12 = iconst.i32 -1476395008
 ;; @0022                               v13 = iconst.i32 0
 ;;                                     v40 = iconst.i32 8
@@ -54,9 +54,9 @@
 ;;
 ;;                                 block3:
 ;; @0022                               store.i64 notrap aligned little v2, v27
-;;                                     v64 = iconst.i64 8
-;;                                     v65 = iadd.i64 v27, v64  ; v64 = 8
-;; @0022                               jump block2(v65)
+;;                                     v57 = iconst.i64 8
+;;                                     v58 = iadd.i64 v27, v57  ; v57 = 8
+;; @0022                               jump block2(v58)
 ;;
 ;;                                 block4:
 ;; @0025                               jump block1
