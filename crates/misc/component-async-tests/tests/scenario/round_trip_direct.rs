@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::util::{config, make_component};
@@ -40,7 +39,6 @@ async fn test_round_trip_direct(
                 wasi: WasiCtxBuilder::new().inherit_stdio().build(),
                 table: ResourceTable::default(),
                 continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
             },
         )
     };
