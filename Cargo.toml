@@ -69,7 +69,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
-tracing = { workspace = true }
+tracing = { workspace = true, features = ['std'] }
 log = { workspace = true }
 tempfile = { workspace = true, optional = true }
 object = { workspace = true, optional = true }
@@ -378,7 +378,7 @@ clap_complete = "4.5.58"
 hashbrown = { version = "0.15", default-features = false }
 capstone = "0.13.0"
 smallvec = { version = "1.15.1", features = ["union"] }
-tracing = "0.1.41"
+tracing = { version = "0.1.41", default-features = false }
 bitflags = "2.9.4"
 thiserror = "2.0.17"
 async-trait = "0.1.89"
