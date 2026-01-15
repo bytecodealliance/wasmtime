@@ -25,4 +25,5 @@ default = [ "std" ]
 std = [
     "bytes/std",
     "wasmtime/std",
+    "tracing/std",
 ]
