@@ -551,7 +551,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             PrimaryMap::<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>::new();
         for init in &translation.component.initializers {
             match init {
-                GlobalInitializer::InstantiateModule(instantiation) => match instantiation {
+                GlobalInitializer::InstantiateModule(instantiation, _) => match instantiation {
                     InstantiateModule::Static(module, args) => {
                         instantiations[*module].join(AbstractInstantiations::One(&*args));
                         instance_to_module.push(Some(*module).into());

@@ -610,6 +610,15 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
+        #[cfg(feature = "component-model-async")]
+        let exit = if store.engine().config().enable_component_model_concurrency() {
+            let async_type = self.abi_async(store.0);
+            store.0.enter_sync_call(None, async_type, instance)?;
+            true
+        } else {
+            false
+        };
+
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
             params: Params,
@@ -688,6 +697,12 @@ impl Func {
                 _ => unreachable!(),
             },
         );
+
+        #[cfg(feature = "component-model-async")]
+        if exit {
+            store.0.exit_sync_call(false)?;
+        }
+
         return Ok(val);
     }
 

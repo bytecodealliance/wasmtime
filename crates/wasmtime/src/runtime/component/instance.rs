@@ -3,7 +3,7 @@ use crate::component::matching::InstanceType;
 use crate::component::store::{ComponentInstanceId, StoreComponentInstanceId};
 use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
-    TypedFunc, types::ComponentItem,
+    RuntimeInstance, TypedFunc, types::ComponentItem,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -837,7 +837,8 @@ impl<'a> Instantiator<'a> {
 
         for initializer in env_component.initializers.iter() {
             match initializer {
-                GlobalInitializer::InstantiateModule(m) => {
+                GlobalInitializer::InstantiateModule(m, component_instance) => {
+                    let instance = self.id;
                     let module;
                     let imports = match m {
                         // Since upvars are statically know we know that the
@@ -867,6 +868,24 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
+                    #[cfg(feature = "component-model-async")]
+                    let exit = if let (&Some(component_instance), true) = (
+                        component_instance,
+                        store.engine().config().enable_component_model_concurrency(),
+                    ) {
+                        store.0.enter_sync_call(
+                            None,
+                            false,
+                            RuntimeInstance {
+                                instance,
+                                index: component_instance,
+                            },
+                        )?;
+                        true
+                    } else {
+                        false
+                    };
+
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
                     // already been performed. This means that the unsafety due
@@ -880,6 +899,12 @@ impl<'a> Instantiator<'a> {
                         crate::Instance::new_started(store, module, imports.as_ref(), asyncness)
                             .await?
                     };
+
+                    #[cfg(feature = "component-model-async")]
+                    if exit {
+                        store.0.exit_sync_call(false)?;
+                    }
+
                     self.instance_mut(store.0).push_instance_id(i.id());
                 }
 
@@ -1202,6 +1227,7 @@ impl<T: 'static> InstancePre<T> {
                 .decrement_component_instance_count();
             e
         })?;
+
         let instance = Instance::from_wasmtime(store.0, instantiator.id);
         store.0.push_component_instance(instance);
         Ok(instance)

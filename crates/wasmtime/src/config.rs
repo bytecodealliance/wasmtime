@@ -125,7 +125,7 @@ pub struct Config {
     #[cfg(feature = "gc")]
     collector: Collector,
     profiling_strategy: ProfilingStrategy,
-    tunables: ConfigTunables,
+    pub(crate) tunables: ConfigTunables,
 
     #[cfg(feature = "cache")]
     pub(crate) cache: Option<Cache>,
@@ -290,6 +290,20 @@ impl Config {
             "cannot configure compiler settings for `Config`s \
              created by `Config::without_compiler`",
         )
+    }
+
+    pub(crate) fn enable_component_model_concurrency(&self) -> bool {
+        self.enabled_features.contains(WasmFeatures::CM_ASYNC)
+            || self
+                .enabled_features
+                .contains(WasmFeatures::CM_ASYNC_BUILTINS)
+            || self
+                .enabled_features
+                .contains(WasmFeatures::CM_ASYNC_STACKFUL)
+            || self.enabled_features.contains(WasmFeatures::CM_THREADING)
+            || self
+                .enabled_features
+                .contains(WasmFeatures::CM_ERROR_CONTEXT)
     }
 
     /// Configure whether Wasm compilation is enabled.
@@ -2429,6 +2443,8 @@ impl Config {
                 "cannot use signals-based traps with guest debugging enabled"
             );
         }
+
+        tunables.component_model_concurrency = self.enable_component_model_concurrency();
 
         Ok((tunables, features))
     }

@@ -285,6 +285,7 @@ impl Metadata<'_> {
             inlining_intra_module,
             inlining_small_callee_size,
             inlining_sum_size_threshold,
+            component_model_concurrency,
 
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
@@ -364,6 +365,11 @@ impl Metadata<'_> {
             inlining_sum_size_threshold,
             other.inlining_sum_size_threshold,
             "function inlining sum-size threshold",
+        )?;
+        Self::check_bool(
+            component_model_concurrency,
+            other.component_model_concurrency,
+            "component model concurrency",
         )?;
         Self::check_intra_module_inlining(inlining_intra_module, other.inlining_intra_module)?;
 

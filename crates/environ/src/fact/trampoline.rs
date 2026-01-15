@@ -180,6 +180,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
         }
         (true, true) => {
+            assert!(module.enable_async);
+
             // In the async->async case, we must compile a couple of helper functions:
             //
             // - `async-start`: copies the parameters from the caller to the callee
@@ -207,6 +209,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (false, true) => {
+            assert!(module.enable_async);
+
             // Like the async->async case above, for the sync->async case we
             // also need `async-start` and `async-return` helper functions to
             // allow the callee to asynchronously "pull" the parameters and
@@ -231,6 +235,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (true, false) => {
+            assert!(module.enable_async);
+
             // As with the async->async and sync->async cases above, for the
             // async->sync case we use `async-start` and `async-return` helper
             // functions.  Here, those functions allow the host to enforce
@@ -753,21 +759,46 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Trap::CannotLeaveComponent,
         );
 
-        let task_may_block = self.module.import_task_may_block();
-        let old_task_may_block = if self.types[adapter.lift.ty].async_ {
-            self.instruction(GlobalGet(task_may_block.as_u32()));
-            self.instruction(I32Eqz);
-            self.instruction(If(BlockType::Empty));
-            self.trap(Trap::CannotBlockSyncTask);
-            self.instruction(End);
-            None
-        } else {
+        let old_task_may_block = if self.module.enable_async {
+            // Save, clear, and later restore the `may_block` field.
             let task_may_block = self.module.import_task_may_block();
-            self.instruction(GlobalGet(task_may_block.as_u32()));
-            let old_task_may_block = self.local_set_new_tmp(ValType::I32);
-            self.instruction(I32Const(0));
-            self.instruction(GlobalSet(task_may_block.as_u32()));
-            Some(old_task_may_block)
+            let old_task_may_block = if self.types[adapter.lift.ty].async_ {
+                self.instruction(GlobalGet(task_may_block.as_u32()));
+                self.instruction(I32Eqz);
+                self.instruction(If(BlockType::Empty));
+                self.trap(Trap::CannotBlockSyncTask);
+                self.instruction(End);
+                None
+            } else {
+                let task_may_block = self.module.import_task_may_block();
+                self.instruction(GlobalGet(task_may_block.as_u32()));
+                let old_task_may_block = self.local_set_new_tmp(ValType::I32);
+                self.instruction(I32Const(0));
+                self.instruction(GlobalSet(task_may_block.as_u32()));
+                Some(old_task_may_block)
+            };
+
+            // Push a task onto the current task stack.
+            //
+            // FIXME: Apply the optimizations described in #12311.
+
+            self.instruction(I32Const(
+                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+            ));
+            self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
+                1
+            } else {
+                0
+            }));
+            self.instruction(I32Const(
+                i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+            ));
+            let enter_sync_call = self.module.import_enter_sync_call();
+            self.instruction(Call(enter_sync_call.as_u32()));
+
+            old_task_may_block
+        } else {
+            None
         };
 
         if self.emit_resource_call {
@@ -840,11 +871,20 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(exit.as_u32()));
         }
 
-        if let Some(old_task_may_block) = old_task_may_block {
-            let task_may_block = self.module.import_task_may_block();
-            self.instruction(LocalGet(old_task_may_block.idx));
-            self.instruction(GlobalSet(task_may_block.as_u32()));
-            self.free_temp_local(old_task_may_block);
+        if self.module.enable_async {
+            // Pop the task we pushed earlier off of the current task stack.
+            //
+            // FIXME: Apply the optimizations described in #12311.
+            let exit_sync_call = self.module.import_exit_sync_call();
+            self.instruction(Call(exit_sync_call.as_u32()));
+
+            // Restore old `may_block_field`
+            if let Some(old_task_may_block) = old_task_may_block {
+                let task_may_block = self.module.import_task_may_block();
+                self.instruction(LocalGet(old_task_may_block.idx));
+                self.instruction(GlobalSet(task_may_block.as_u32()));
+                self.free_temp_local(old_task_may_block);
+            }
         }
 
         self.finish()

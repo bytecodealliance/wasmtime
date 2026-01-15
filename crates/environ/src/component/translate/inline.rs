@@ -1216,7 +1216,7 @@ impl<'a> Inliner<'a> {
 
                 self.result
                     .side_effects
-                    .push(dfg::SideEffect::Instance(instance));
+                    .push(dfg::SideEffect::Instance(instance, frame.instance));
 
                 frame
                     .module_instances

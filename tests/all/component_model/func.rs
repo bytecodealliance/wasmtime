@@ -3455,7 +3455,122 @@ fn test_recurse(kind: RecurseKind) -> Result<()> {
         }
     };
 
-    let run = instance.get_typed_func::<(), ()>(&mut store, "export")?;
+    let export = instance.get_typed_func::<(), ()>(&mut store, "export")?;
+    export.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_during_init() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func $start
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+    (start $start)
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    linker.instantiate(&mut store, &component)?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func (export "run")
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (canon lift (core func $m "run")))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call_and_sync_guest_call() -> Result<()> {
+    let component = r#"
+(component
+  (component $c
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (func (export "run") (result i32)
+         (call $thread-index)
+      )
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+    ))))
+    (func (export "run") (result u32) (canon lift (core func $m "run")))
+  )
+  (instance $c (instantiate $c))
+
+  (component $d
+    (import "c" (instance $c
+      (export "run" (func (result u32)))
+    ))
+    (core func $run (canon lower (func $c "run")))
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (import "" "run" (func $run (result i32)))
+      (func (export "run")
+         (local $mine i32)
+         (local $theirs i32)
+         (local.set $mine (call $thread-index))
+         (if (i32.eqz (local.get $mine)) (then unreachable))
+         (local.set $theirs (call $run))
+         (if (i32.eqz (local.get $theirs)) (then unreachable))
+      )
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+      (export "run" (func $run))
+    ))))
+    (func (export "run") (canon lift (core func $m "run")))
+  )
+  (instance $d (instantiate $d (with "c" (instance $c))))
+  (func (export "run") (alias export $d "run"))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call(&mut store, ())?;
     Ok(())
 }

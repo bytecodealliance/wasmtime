@@ -140,6 +140,10 @@ define_tunables! {
         /// The general size threshold for the sum of the caller's and callee's
         /// sizes, past which we will generally not inline calls anymore.
         pub inlining_sum_size_threshold: u32,
+
+        /// Whether any component model feature related to concurrency is
+        /// enabled.
+        pub component_model_concurrency: bool,
     }
 
     pub struct ConfigTunables {
@@ -215,6 +219,7 @@ impl Tunables {
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
+            component_model_concurrency: true,
         }
     }
 
