@@ -83,6 +83,7 @@ fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
         let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
         let result = validator.validate_all(&wasm);
         log::debug!("{wat}");
+        println!("{wat}");
         assert!(
             result.is_ok(),
             "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",

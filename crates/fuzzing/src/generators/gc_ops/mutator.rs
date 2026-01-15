@@ -1,15 +1,6 @@
 //! Mutators for the `gc` operations.
 
-use crate::generators::gc_ops::{
-    limits::{
-        GcOpsLimits, MAX_OPS, MAX_REC_GROUPS_RANGE, MAX_TYPES_RANGE, NUM_GLOBALS_RANGE,
-        NUM_PARAMS_RANGE, TABLE_SIZE_RANGE,
-    },
-    ops::{GcOp, GcOps},
-    types::{RecGroupId, TypeId, Types},
-};
-
-use mutatis::mutators as m;
+use crate::generators::gc_ops::ops::{GcOp, GcOps};
 use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
 
 /// A mutator for the gc ops
@@ -63,64 +54,12 @@ impl<'a> arbitrary::Arbitrary<'a> for GcOps {
 }
 
 impl Generate<GcOps> for GcOpsMutator {
-    fn generate(&mut self, ctx: &mut Context) -> MutResult<GcOps> {
-        let num_params = m::range(NUM_PARAMS_RANGE).generate(ctx)?;
-        let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
-        let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
+    fn generate(&mut self, _ctx: &mut Context) -> MutResult<GcOps> {
+        let mut ops = GcOps::default();
+        let mut session = mutatis::Session::new();
 
-        let max_rec_groups = m::range(MAX_REC_GROUPS_RANGE).generate(ctx)?;
-        let max_types = m::range(MAX_TYPES_RANGE).generate(ctx)?;
-
-        let mut ops = GcOps {
-            limits: GcOpsLimits {
-                num_params,
-                num_globals,
-                table_size,
-                max_rec_groups,
-                max_types,
-            },
-            ops: {
-                let mut v = vec![GcOp::Null(), GcOp::Drop(), GcOp::Gc()];
-                if num_params > 0 {
-                    v.push(GcOp::LocalSet(0));
-                    v.push(GcOp::LocalGet(0));
-                }
-                if num_globals > 0 {
-                    v.push(GcOp::GlobalSet(0));
-                    v.push(GcOp::GlobalGet(0));
-                }
-                if max_types > 0 {
-                    v.push(GcOp::StructNew(0));
-                }
-                v
-            },
-            types: Types::new(),
-        };
-
-        for i in 0..ops.limits.max_rec_groups {
-            ops.types.insert_rec_group(RecGroupId(i));
-        }
-
-        if ops.limits.max_rec_groups > 0 {
-            for i in 0..ops.limits.max_types {
-                let tid = TypeId(i);
-                let gid = RecGroupId(m::range(0..=ops.limits.max_rec_groups - 1).generate(ctx)?);
-
-                ops.types.insert_empty_struct(tid, gid);
-            }
-        }
-
-        let mut stack: usize = 0;
-
-        while ops.ops.len() < MAX_OPS {
-            let (op, new_stack_len) = GcOp::generate(ctx, &ops, stack)?;
-            ops.ops.push(op);
-            stack = new_stack_len;
-        }
-
-        // Drop any leftover refs on the stack.
-        for _ in 0..stack {
-            ops.ops.push(GcOp::Drop());
+        for _ in 0..64 {
+            session.mutate(&mut ops)?;
         }
 
         Ok(ops)

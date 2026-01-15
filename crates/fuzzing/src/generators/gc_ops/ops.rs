@@ -407,6 +407,7 @@ macro_rules! define_gc_ops {
                 }
             }
 
+            // TODO: This is stack-depth-biased generation. It needs to be updated.
             pub(crate) fn generate(
                 ctx: &mut mutatis::Context,
                 ops: &GcOps,
