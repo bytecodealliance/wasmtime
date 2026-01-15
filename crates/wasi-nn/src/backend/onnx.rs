@@ -68,18 +68,20 @@ fn configure_execution_providers(
             #[cfg(feature = "onnx-cuda")]
             {
                 // Use CUDA execution provider for GPU acceleration
-                tracing::debug!("Configuring ONNX Nvidia CUDA execution provider for GPU target");
+                tracing::debug!("Using Nvidia GPU CUDA execution provider");
                 Ok(vec![CUDAExecutionProvider::default().build()])
             }
             #[cfg(not(feature = "onnx-cuda"))]
             {
-                Err(BackendError::BackendAccess(wasmtime::format_err!(
-                    "GPU execution target is requested, but 'onnx-cuda' feature is not enabled"
-                )))
+                tracing::warn!("GPU CUDA execution provider is not enabled, falling back to CPU");
+                Ok(vec![CPUExecutionProvider::default().build()])
             }
         }
         ExecutionTarget::Tpu => {
-            unimplemented!("TPU execution target is not supported for ONNX backend yet");
+            tracing::warn!(
+                "TPU execution target is not supported for ONNX backend yet, falling back to CPU"
+            );
+            Ok(vec![CPUExecutionProvider::default().build()])
         }
     }
 }

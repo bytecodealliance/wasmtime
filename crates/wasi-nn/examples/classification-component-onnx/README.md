@@ -12,7 +12,11 @@ GPU execution target only supports Nvidia CUDA (onnx-cuda) as execution provider
 
 In this directory, run the following command to build the WebAssembly component:
 ```console
+# build component for target wasm32-wasip1
 cargo component build
+
+# build component for target wasm32-wasip2
+cargo component build --target wasm32-wasip2
 ```
 
 ## Running the Example
@@ -44,7 +48,7 @@ Arguments:
 ./target/debug/wasmtime run \
     -Snn \
     --dir ./crates/wasi-nn/examples/classification-component-onnx/fixture/::fixture \
-    ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip1/debug/classification-component-onnx.wasm
+    ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip2/debug/classification-component-onnx.wasm
 ```
 
 #### GPU (CUDA) Execution:
@@ -55,7 +59,7 @@ export LD_LIBRARY_PATH={wasmtime_workspace}/target/debug
 ./target/debug/wasmtime run \
     -Snn \
     --dir ./crates/wasi-nn/examples/classification-component-onnx/fixture/::fixture \
-    ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip1/debug/classification-component-onnx.wasm \
+    ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip2/debug/classification-component-onnx.wasm \
     gpu
 
 ```
@@ -79,7 +83,31 @@ Index: n02102318 cocker spaniel, English cocker spaniel, cocker - Probability: 0
 When using GPU target, the first line will indicate the selected execution target.
 You can monitor GPU usage using cmd `watch -n 1 nvidia-smi`.
 
+To see trace logs from `wasmtime_wasi_nn` or `ort`, run Wasmtime with `WASMTIME_LOG` enabled, e.g.,
+
+```sh
+WASMTIME_LOG=wasmtime_wasi_nn=warn ./target/debug/wasmtime run ...
+WASMTIME_LOG=ort=warn ./target/debug/wasmtime run ...
+```
+
 ## Prerequisites for GPU(CUDA) Support
 - NVIDIA GPU with CUDA support
 - CUDA Toolkit 12.x with cuDNN 9.x
 - Build wasmtime with `wasmtime-wasi-nn/onnx-cuda` feature
+
+## ONNX Runtime's Fallback Behavior
+
+If the GPU execution provider is requested (by passing `gpu`) but the device does not have a GPU or the necessary CUDA drivers are missing, ONNX Runtime will **silently fall back** to the CPU execution provider. The application will continue to run, but inference will happen on the CPU.
+
+To verify if fallback is happening, you can enable ONNX Runtime logging:
+
+1. Build Wasmtime with the additional `wasmtime-wasi-nn/ort-tracing` feature:
+   ```sh
+   cargo build --features component-model,wasi-nn,wasmtime-wasi-nn/onnx-cuda,wasmtime-wasi-nn/ort-tracing
+   ```
+
+2. Run Wasmtime with `WASMTIME_LOG` enabled to see `ort` warnings:
+   ```sh
+   WASMTIME_LOG=ort=warn ./target/debug/wasmtime run ...
+   ```
+   You should see a warning like: `No execution providers from session options registered successfully; may fall back to CPU.`
