@@ -21,8 +21,8 @@ use crate::component::{
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
     TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
     TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex,
-    TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
