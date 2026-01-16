@@ -2,6 +2,7 @@
 #include <wasmtime/component.hh>
 
 using namespace wasmtime::component;
+using wasmtime::Config;
 using wasmtime::Engine;
 using wasmtime::ExternType;
 using wasmtime::Result;
@@ -188,8 +189,14 @@ TEST(types, valtype_list) {
 }
 
 TEST(types, valtype_map) {
-  auto ty =
-      result("(component (import \"f\" (func (result (map u32 string)))))");
+  Config config;
+  config.wasm_component_model_map(true);
+  Engine engine(std::move(config));
+  auto component =
+      Component::compile(engine,
+                         "(component (import \"f\" (func (result (map u32 string)))))")
+          .unwrap();
+  auto ty = *component.type().import_get(engine, "f")->component_func().result();
   EXPECT_TRUE(ty.is_map());
   auto map_ty = ty.map();
   EXPECT_TRUE(map_ty.key().is_u32());
