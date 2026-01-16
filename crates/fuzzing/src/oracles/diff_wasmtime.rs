@@ -5,9 +5,10 @@ use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{StoreLimits, compile_module, engine::DiffEngine};
 use crate::single_module_fuzzer::KnownValid;
-use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
-use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
+use wasmtime::{
+    Error, Extern, FuncType, Instance, Module, Result, Store, Trap, Val, error::Context as _,
+};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {

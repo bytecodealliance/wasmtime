@@ -6,8 +6,11 @@ use super::{
     regs::{self, scratch_fpr_bitset, scratch_gpr_bitset},
 };
 use crate::{
+    Result,
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
+    bail,
     codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
+    format_err,
     isa::{
         CallingConvention,
         aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
@@ -24,7 +27,6 @@ use crate::{
     },
     stack::TypedReg,
 };
-use anyhow::{Result, anyhow, bail};
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
@@ -357,10 +359,10 @@ impl Masm for MacroAssembler {
                 Ok(())
             }
             StoreKind::Atomic(_size) => {
-                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+                Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
             }
             StoreKind::VectorLane(_selector) => {
-                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+                Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
             }
         })
     }
@@ -503,7 +505,7 @@ impl Masm for MacroAssembler {
                 self.asm
                     .fpu_csel(src, dst.to_reg(), dst, Cond::from(cc), size)
             }
-            _ => return Err(anyhow!(CodeGenError::invalid_operand_combination())),
+            _ => return Err(format_err!(CodeGenError::invalid_operand_combination())),
         }
 
         Ok(())
@@ -762,8 +764,10 @@ impl Masm for MacroAssembler {
         size: OperandSize,
     ) -> Result<()> {
         match ImmShift::maybe_from_u64(imm.unwrap_as_u64()) {
-            Some(imml) => self.asm.shift_ir(imml, lhs, dst, kind, size),
-            None => {
+            Some(imml) if imml.value() < size.num_bits() => {
+                self.asm.shift_ir(imml, lhs, dst, kind, size)
+            }
+            _ => {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.mov_ir(scratch.writable(), imm, imm.size());
                     masm.asm.shift_rrr(scratch.inner(), lhs, dst, kind, size);
@@ -806,7 +810,7 @@ impl Masm for MacroAssembler {
             match size {
                 OperandSize::S32 => Ok(TypedReg::new(WasmValType::I32, dividend)),
                 OperandSize::S64 => Ok(TypedReg::new(WasmValType::I64, dividend)),
-                _ => Err(anyhow!(CodeGenError::unexpected_operand_size())),
+                _ => Err(format_err!(CodeGenError::unexpected_operand_size())),
             }
         })
     }
@@ -834,7 +838,7 @@ impl Masm for MacroAssembler {
             match size {
                 OperandSize::S32 => Ok(TypedReg::new(WasmValType::I32, dividend)),
                 OperandSize::S64 => Ok(TypedReg::new(WasmValType::I64, dividend)),
-                _ => Err(anyhow!(CodeGenError::unexpected_operand_size())),
+                _ => Err(format_err!(CodeGenError::unexpected_operand_size())),
             }
         })
     }
@@ -1163,7 +1167,7 @@ impl Masm for MacroAssembler {
         rhs_hi: Reg,
     ) -> Result<()> {
         let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn sub128(
@@ -1176,7 +1180,7 @@ impl Masm for MacroAssembler {
         rhs_hi: Reg,
     ) -> Result<()> {
         let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn mul_wide(
@@ -1185,7 +1189,7 @@ impl Masm for MacroAssembler {
         kind: MulWideKind,
     ) -> Result<()> {
         let _ = (context, kind);
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn splat(&mut self, _context: &mut CodeGenContext<Emission>, _size: SplatKind) -> Result<()> {
@@ -1209,7 +1213,7 @@ impl Masm for MacroAssembler {
         _flags: MemFlags,
         _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn extract_lane(
@@ -1240,7 +1244,7 @@ impl Masm for MacroAssembler {
         _flags: MemFlags,
         _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_eq(
@@ -1304,27 +1308,27 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn fence(&mut self) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_bitselect(
@@ -1334,11 +1338,11 @@ impl Masm for MacroAssembler {
         _mask: Reg,
         _dst: WritableReg,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_convert(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ConvertKind) -> Result<()> {
@@ -1374,7 +1378,7 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _kind: V128AddKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_sub(
@@ -1384,7 +1388,7 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _kind: V128SubKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_mul(
@@ -1392,7 +1396,7 @@ impl Masm for MacroAssembler {
         _context: &mut CodeGenContext<Emission>,
         _kind: V128MulKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_abs(&mut self, _src: Reg, _dst: WritableReg, _kind: V128AbsKind) -> Result<()> {
@@ -1400,7 +1404,7 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_neg(&mut self, _op: WritableReg, _kind: V128NegKind) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_shift(
@@ -1409,7 +1413,7 @@ impl Masm for MacroAssembler {
         _lane_width: OperandSize,
         _shift_kind: ShiftKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_q15mulr_sat_s(
@@ -1445,7 +1449,7 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _kind: V128MinKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_max(
@@ -1455,7 +1459,7 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _kind: V128MaxKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_extmul(
@@ -1463,7 +1467,7 @@ impl Masm for MacroAssembler {
         _context: &mut CodeGenContext<Emission>,
         _kind: V128ExtMulKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_extadd_pairwise(
@@ -1472,7 +1476,7 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _kind: V128ExtAddKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {

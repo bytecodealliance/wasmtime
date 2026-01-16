@@ -389,6 +389,10 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
+    /// Reference to a wasm global which represents a runtime-managed boolean
+    /// indicating whether the currently-running task may perform a blocking
+    /// operation.
+    TaskMayBlock,
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -729,10 +733,6 @@ pub enum Trampoline {
         /// Whether or not the destination linear memory is 64-bit or not.
         to64: bool,
     },
-
-    /// A small adapter which simply traps, used for degenerate lift/lower
-    /// combinations.
-    AlwaysTrap,
 
     /// A `resource.new` intrinsic which will inject a new resource into the
     /// table specified.
@@ -1105,10 +1105,6 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
-    /// An intrinsic used by FACT-generated modules to check whether an
-    /// async-typed function may be called via a sync lower.
-    CheckBlocking,
-
     /// An intrinsic used by FACT-generated modules to trap with a specified
     /// code.
     Trap,
@@ -1199,7 +1195,6 @@ impl Trampoline {
                 let to = if *to64 { "64" } else { "32" };
                 format!("component-transcode-{op}-m{from}-m{to}")
             }
-            AlwaysTrap => format!("component-always-trap"),
             ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
             ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
             ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
@@ -1242,7 +1237,6 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
-            CheckBlocking => format!("check-blocking"),
             Trap => format!("trap"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),

@@ -4,9 +4,8 @@
 extern crate alloc;
 
 use alloc::string::ToString;
-use anyhow::{Result, ensure};
 use core::ptr;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
+use wasmtime::{Config, Engine, Instance, Linker, Module, Result, Store, ensure};
 
 mod allocator;
 mod panic;

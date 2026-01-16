@@ -1,6 +1,6 @@
-use anyhow::{Context, Result, bail};
 use std::env;
 use std::process::Command;
+use wasmtime::{Result, bail, error::Context as _};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DwarfDumpSection {

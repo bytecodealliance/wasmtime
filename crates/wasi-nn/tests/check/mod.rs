@@ -31,7 +31,7 @@ pub fn artifacts_dir() -> PathBuf {
 }
 
 /// Retrieve the bytes at the `from` URL and place them in the `to` file.
-fn download(from: &str, to: &Path) -> anyhow::Result<()> {
+fn download(from: &str, to: &Path) -> wasmtime::Result<()> {
     let mut curl = Command::new("curl");
     curl.arg("--location").arg(from).arg("--output").arg(to);
     println!("> downloading: {:?}", &curl);

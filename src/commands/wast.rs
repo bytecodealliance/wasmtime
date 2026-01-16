@@ -1,9 +1,8 @@
 //! The module that implements the `wasmtime wast` command.
 
-use anyhow::{Context as _, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use wasmtime::Engine;
+use wasmtime::{Engine, Result, error::Context as _};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::{SpectestConfig, WastContext};
 

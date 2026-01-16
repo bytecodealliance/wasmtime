@@ -55,7 +55,7 @@ fn bad_tables() {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn cross_store() -> anyhow::Result<()> {
+fn cross_store() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -153,7 +153,7 @@ fn cross_store() -> anyhow::Result<()> {
 }
 
 #[test]
-fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
+fn get_set_externref_globals_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -207,7 +207,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
+fn get_set_funcref_globals_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -242,7 +242,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn create_get_set_funcref_tables_via_api() -> anyhow::Result<()> {
+fn create_get_set_funcref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -260,7 +260,7 @@ fn create_get_set_funcref_tables_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn fill_funcref_tables_via_api() -> anyhow::Result<()> {
+fn fill_funcref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -287,7 +287,7 @@ fn fill_funcref_tables_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn grow_funcref_tables_via_api() -> anyhow::Result<()> {
+fn grow_funcref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -304,7 +304,7 @@ fn grow_funcref_tables_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
+fn create_get_set_externref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -333,7 +333,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn fill_externref_tables_via_api() -> anyhow::Result<()> {
+fn fill_externref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;
@@ -371,7 +371,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
 }
 
 #[test]
-fn grow_externref_tables_via_api() -> anyhow::Result<()> {
+fn grow_externref_tables_via_api() -> wasmtime::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
     let engine = Engine::new(&cfg)?;

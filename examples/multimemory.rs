@@ -23,14 +23,14 @@ fn main() -> Result<()> {
 
     let memory0 = instance
         .get_memory(&mut store, "memory0")
-        .ok_or(anyhow::format_err!("failed to find `memory0` export"))?;
+        .ok_or(wasmtime::format_err!("failed to find `memory0` export"))?;
     let size0 = instance.get_typed_func::<(), i32>(&mut store, "size0")?;
     let load0 = instance.get_typed_func::<i32, i32>(&mut store, "load0")?;
     let store0 = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store0")?;
 
     let memory1 = instance
         .get_memory(&mut store, "memory1")
-        .ok_or(anyhow::format_err!("failed to find `memory1` export"))?;
+        .ok_or(wasmtime::format_err!("failed to find `memory1` export"))?;
     let size1 = instance.get_typed_func::<(), i32>(&mut store, "size1")?;
     let load1 = instance.get_typed_func::<i32, i32>(&mut store, "load1")?;
     let store1 = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store1")?;

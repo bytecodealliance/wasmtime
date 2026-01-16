@@ -65,7 +65,7 @@
 //! A standalone example of doing all this looks like:
 //!
 //! ```no_run
-//! use anyhow::bail;
+//! use wasmtime::bail;
 //! use hyper::server::conn::http1;
 //! use std::sync::Arc;
 //! use tokio::net::TcpListener;
@@ -292,7 +292,7 @@ use wasmtime::component::{HasData, Linker};
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
@@ -307,7 +307,7 @@ where
 /// example to avoid re-adding the same interfaces twice.
 pub fn add_only_http_to_linker_async<T>(
     l: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     T: WasiHttpView + 'static,
 {
@@ -368,7 +368,7 @@ impl<T: 'static> HasData for WasiHttp<T> {
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
+pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
@@ -381,7 +381,7 @@ where
 ///
 /// This is useful when using [`wasmtime_wasi::p2::add_to_linker_sync`] for
 /// example to avoid re-adding the same interfaces twice.
-pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
+pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + 'static,
 {

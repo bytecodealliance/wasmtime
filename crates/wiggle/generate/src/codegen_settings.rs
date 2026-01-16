@@ -1,9 +1,9 @@
 use crate::config::{AsyncConf, ErrorConf, ErrorConfField, TracingConf};
-use anyhow::{Error, anyhow};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use std::collections::HashMap;
 use std::rc::Rc;
+use wasmtime_environ::error::{Error, format_err};
 use witx::{Document, Id, InterfaceFunc, Module, NamedType, TypeRef};
 
 pub use crate::config::Asyncness;
@@ -58,13 +58,13 @@ impl ErrorTransform {
                 ErrorConfField::Trappable(field) => if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
                     Ok(ErrorType::Generated(TrappableErrorType { abi_type, rich_type: field.rich_error.clone() }))
                 } else {
-                    Err(anyhow!("No witx typename \"{}\" found", ident.to_string()))
+                    Err(format_err!("No witx typename \"{}\" found", ident.to_string()))
                 },
                 ErrorConfField::User(field) => if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
                     if let Some(ident) = field.rich_error.get_ident() {
                         if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc)
                          {
-                            return Err(anyhow!(
+                            return Err(format_err!(
                                     "duplicate rich type identifier of {ident:?} not allowed. prior definition at {prior_def:?}",
                                 ));
                         }
@@ -74,13 +74,13 @@ impl ErrorTransform {
                             method_fragment: ident.to_string()
                         }))
                     } else {
-                        return Err(anyhow!(
+                        return Err(format_err!(
                             "rich error type must be identifier for now - TODO add ability to provide a corresponding identifier: {:?}",
                             field.err_loc
                         ))
                     }
                 }
-                else { Err(anyhow!("No witx typename \"{}\" found", ident.to_string())) }
+                else { Err(format_err!("No witx typename \"{}\" found", ident.to_string())) }
             }
         ).collect::<Result<Vec<_>, Error>>()?;
         Ok(Self { m })

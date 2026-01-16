@@ -197,7 +197,7 @@ impl Instance {
     {
         let f = self
             .get_func(store.as_context_mut(), name)
-            .ok_or_else(|| anyhow!("failed to find function export"))?;
+            .ok_or_else(|| format_err!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function to given type"))?)
     }
@@ -614,6 +614,9 @@ pub(crate) fn lookup_vmdef(
             // within that store, so it's safe to create a `Func`.
             vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
         }
+        CoreDef::TaskMayBlock => vm::Export::Global(crate::Global::from_task_may_block(
+            StoreComponentInstanceId::new(store.id(), id),
+        )),
     }
 }
 

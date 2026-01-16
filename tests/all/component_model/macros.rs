@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use super::{TypedFuncExt, make_echo_component};
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::{Engine, Store};
 use wasmtime_test_macros::{add_variants, flags_test};

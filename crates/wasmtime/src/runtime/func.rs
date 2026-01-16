@@ -501,7 +501,7 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg(feature = "async")]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -1510,6 +1510,10 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         return Err(trap);
     }
     let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
+    #[cfg(feature = "component-model")]
+    if result.is_err() {
+        store.0.set_trapped();
+    }
     core::mem::drop(previous_runtime_state);
     store.0.call_hook(CallHook::ReturningFromWasm)?;
     result

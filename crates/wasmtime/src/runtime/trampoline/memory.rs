@@ -115,7 +115,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 usize::try_from(tunables.memory_guard_size).unwrap(),
             )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
-            .map_err(|e| anyhow!(e))
+            .map_err(|e| format_err!(e))
     }
 }
 

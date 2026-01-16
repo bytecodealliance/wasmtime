@@ -1,8 +1,8 @@
 use super::{super::REALLOC_AND_FREE, engine};
-use anyhow::{Error, anyhow};
 use wasmtime::{
-    Store,
+    Error, Store,
     component::{Component, Linker},
+    format_err,
 };
 
 mod empty_error {
@@ -71,7 +71,7 @@ mod empty_error {
                 } else if a == 1.0 {
                     Ok(Err(()))
                 } else {
-                    Err(anyhow!("empty_error: trap"))
+                    Err(format_err!("empty_error: trap"))
                 }
             }
         }
@@ -186,7 +186,7 @@ mod string_error {
                 } else if a == 1.0 {
                     Ok(Err("string_error: error".to_owned()))
                 } else {
-                    Err(anyhow!("string_error: trap"))
+                    Err(format_err!("string_error: trap"))
                 }
             }
         }
@@ -350,7 +350,7 @@ mod enum_error {
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
+            fn convert_e1(&mut self, err: TrappableE1) -> wasmtime::Result<imports::E1> {
                 match err {
                     TrappableE1::Normal(e) => Ok(e),
                     TrappableE1::MyTrap(e) => Err(e.into()),
@@ -433,7 +433,7 @@ mod record_error {
 
     pub enum TrappableE2 {
         Normal(imports::E2),
-        Trap(anyhow::Error),
+        Trap(wasmtime::Error),
     }
 
     impl From<imports::E2> for TrappableE2 {
@@ -513,7 +513,7 @@ mod record_error {
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn convert_e2(&mut self, err: TrappableE2) -> anyhow::Result<imports::E2> {
+            fn convert_e2(&mut self, err: TrappableE2) -> wasmtime::Result<imports::E2> {
                 match err {
                     TrappableE2::Normal(e) => Ok(e),
                     TrappableE2::Trap(e) => Err(e),
@@ -528,7 +528,7 @@ mod record_error {
                         col: 1312,
                     })?
                 } else {
-                    Err(TrappableE2::Trap(anyhow!("record_error: trap")))
+                    Err(TrappableE2::Trap(format_err!("record_error: trap")))
                 }
             }
         }
@@ -606,7 +606,7 @@ mod variant_error {
 
     pub enum TrappableE3 {
         Normal(imports::E3),
-        Trap(anyhow::Error),
+        Trap(wasmtime::Error),
     }
 
     impl From<imports::E3> for TrappableE3 {
@@ -709,7 +709,7 @@ mod variant_error {
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn convert_e3(&mut self, err: TrappableE3) -> anyhow::Result<imports::E3> {
+            fn convert_e3(&mut self, err: TrappableE3) -> wasmtime::Result<imports::E3> {
                 match err {
                     TrappableE3::Normal(e) => Ok(e),
                     TrappableE3::Trap(e) => Err(e),
@@ -724,7 +724,7 @@ mod variant_error {
                         col: 1312,
                     }))?
                 } else {
-                    Err(TrappableE3::Trap(anyhow!("variant_error: trap")))
+                    Err(TrappableE3::Trap(format_err!("variant_error: trap")))
                 }
             }
         }
@@ -803,7 +803,7 @@ mod multiple_interfaces_error {
 
     pub enum TrappableE1 {
         Normal(types::E1),
-        Trap(anyhow::Error),
+        Trap(wasmtime::Error),
     }
 
     impl From<types::E1> for TrappableE1 {
@@ -896,7 +896,7 @@ mod multiple_interfaces_error {
         // their throw site.
         impl From<MyTrap> for TrappableE1 {
             fn from(t: MyTrap) -> TrappableE1 {
-                TrappableE1::Trap(anyhow!(t))
+                TrappableE1::Trap(format_err!(t))
             }
         }
 
@@ -904,7 +904,7 @@ mod multiple_interfaces_error {
         struct MyImports {}
 
         impl types::Host for MyImports {
-            fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
+            fn convert_e1(&mut self, err: TrappableE1) -> wasmtime::Result<imports::E1> {
                 match err {
                     TrappableE1::Normal(e) => Ok(e),
                     TrappableE1::Trap(e) => Err(e),
@@ -1051,7 +1051,7 @@ mod with_remapping {
                 } else if a == 1.0 {
                     Ok(Err(()))
                 } else {
-                    Err(anyhow!("empty_error: trap"))
+                    Err(format_err!("empty_error: trap"))
                 }
             }
         }

@@ -1,0 +1,10 @@
+test compile
+set enable_nan_canonicalization=true
+target s390x
+
+function %fadd_f128(i64, f128, f128) {
+block0(v0: i64, v1: f128, v2: f128):
+    v3 = fadd v1, v2
+    store v3, v0
+    return
+}

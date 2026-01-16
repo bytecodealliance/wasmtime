@@ -14,7 +14,6 @@ workspace = true
 [dependencies]
 wasmtime = { workspace = true, features = ["debug", "std", "async"] }
 tokio = { workspace = true, features = ["rt", "sync", "macros"] }
-anyhow = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]

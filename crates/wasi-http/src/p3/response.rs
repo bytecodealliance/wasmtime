@@ -2,13 +2,13 @@ use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
-use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
 use wasmtime::AsContextMut;
+use wasmtime::error::Context as _;
 
 /// The concrete type behind a `wasi:http/types.response` resource.
 pub struct Response {

@@ -1,5 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_name_t};
-use anyhow::{Error, Result, anyhow};
+use wasmtime::{Error, Result, format_err};
 
 #[repr(C)]
 pub struct wasmtime_error_t {
@@ -26,7 +26,7 @@ pub extern "C" fn wasmtime_error_new(
 ) -> Option<Box<wasmtime_error_t>> {
     let msg_bytes = unsafe { std::ffi::CStr::from_ptr(msg).to_bytes() };
     let msg_string = String::from_utf8_lossy(msg_bytes).into_owned();
-    Some(Box::new(wasmtime_error_t::from(anyhow!(msg_string))))
+    Some(Box::new(wasmtime_error_t::from(format_err!(msg_string))))
 }
 
 pub(crate) fn handle_result<T>(
@@ -44,7 +44,7 @@ pub(crate) fn handle_result<T>(
 
 pub(crate) fn bad_utf8() -> Option<Box<wasmtime_error_t>> {
     Some(Box::new(wasmtime_error_t {
-        error: anyhow!("input was not valid utf-8"),
+        error: format_err!("input was not valid utf-8"),
     }))
 }
 

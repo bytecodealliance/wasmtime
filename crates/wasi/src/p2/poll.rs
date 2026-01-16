@@ -1,7 +1,7 @@
 use crate::runtime::in_tokio;
 use wasmtime_wasi_io::{bindings::wasi::io::poll as async_poll, poll::DynPollable};
 
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::{Resource, ResourceTable};
 
 impl crate::p2::bindings::sync::io::poll::Host for ResourceTable {

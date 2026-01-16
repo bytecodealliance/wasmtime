@@ -31,7 +31,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
-    "cranelift-egraph",
     "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
@@ -41,6 +40,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
+    "wasmtime-internal-error",
     "wasmtime-internal-component-util",
     "wasmtime-environ",
     "wasmtime-internal-jit-icache-coherence",
@@ -52,10 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
-    // winch
-    "winch",
     // wasmtime
-    "wasmtime-internal-error",
     "wasmtime-internal-versioned-export-macros",
     "wasmtime-internal-slab",
     "wasmtime-internal-wit-bindgen",
@@ -81,6 +78,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-threads",
     "wasmtime-wasi-tls",
     "wasmtime-wasi-tls-nativetls",
+    "wasmtime-wasi-tls-openssl",
     "wasmtime-wast",
     "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
@@ -103,6 +101,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi",
     "wasmtime-wasi-tls",
     "wasmtime-wasi-tls-nativetls",
+    "wasmtime-wasi-tls-openssl",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
@@ -472,34 +471,6 @@ fn publish(krate: &Crate) -> bool {
         return false;
     }
 
-    // After we've published then make sure that the `wasmtime-publish` group is
-    // added to this crate for future publications. If it's already present
-    // though we can skip the `cargo owner` modification.
-    let Some(output) = curl(&format!(
-        "https://crates.io/api/v1/crates/{}/owners",
-        krate.name
-    )) else {
-        return false;
-    };
-    if output.contains("wasmtime-publish") {
-        println!(
-            "wasmtime-publish already listed as an owner of {}",
-            krate.name
-        );
-        return true;
-    }
-
-    // Note that the status is ignored here. This fails most of the time because
-    // the owner is already set and present, so we only want to add this to
-    // crates which haven't previously been published.
-    run_cmd(
-        Command::new("cargo")
-            .arg("owner")
-            .arg("-a")
-            .arg("github:bytecodealliance:wasmtime-publish")
-            .arg(&krate.name),
-    );
-
     true
 }
 
@@ -614,26 +585,47 @@ fn verify(crates: &[Crate]) {
     fn verify_crates_io(krate: &Crate) {
         let name = &krate.name;
         let Some(owners) = curl(&format!("https://crates.io/api/v1/crates/{name}/owners")) else {
-            panic!("failed to get owners for {name}", name = name);
-        };
+            panic!(
+                "
+failed to get owners for {name}
 
-        let assert_owner = |owner: &str| {
-            let owner_json = format!("\"{owner}\"");
-            if !owners.contains(&owner_json) {
-                panic!(
-                    "
-crate {name} is not owned by {owner}, please run:
+If this crate does not exist on crates.io yet please visit
 
-    cargo owner -a {owner} {name}
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
 ",
-                    name = name
-                );
-            }
+                name = name,
+            );
         };
 
-        // the wasmtime-publish github user
-        assert_owner("wasmtime-publish");
-        // the BA team which can publish crates
-        assert_owner("github:bytecodealliance:wasmtime-publish");
+        // This is the id of the `wasmtime-publish` user on crates.io
+        if !owners.contains("\"id\":73222,") {
+            panic!(
+                "
+crate {name} is not owned by wasmtime-publish, please visit:
+
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
+",
+                name = name,
+            );
+        }
+
+        // TODO: waiting for trusted publishing to be proven to work before
+        // activating this.
+        if false && owners.split("\"id\"").count() != 2 {
+            panic!(
+                "
+crate {name} is not exclusively owned by wasmtime-publish, please visit:
+
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
+",
+                name = name,
+            );
+        }
     }
 }

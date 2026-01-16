@@ -16,10 +16,10 @@
 mod check;
 mod exec;
 
-use anyhow::Result;
 use libtest_mimic::{Arguments, Trial};
 use std::{borrow::Cow, env};
 use test_programs_artifacts::*;
+use wasmtime::Result;
 use wasmtime_wasi_nn::{Backend, backend};
 
 fn main() -> Result<()> {
@@ -137,7 +137,7 @@ fn nn_witx_image_classification_onnx() -> Result<()> {
 }
 #[cfg(not(feature = "onnx"))]
 fn nn_witx_image_classification_onnx() -> Result<()> {
-    anyhow::bail!("this test requires the `onnx` feature")
+    wasmtime::bail!("this test requires the `onnx` feature")
 }
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
@@ -149,7 +149,7 @@ fn nn_witx_image_classification_winml_named() -> Result<()> {
 }
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
 fn nn_witx_image_classification_winml_named() -> Result<()> {
-    anyhow::bail!("this test requires the `winml` feature and only runs on windows")
+    wasmtime::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
 #[cfg(feature = "pytorch")]
@@ -160,7 +160,7 @@ fn nn_witx_image_classification_pytorch() -> Result<()> {
 }
 #[cfg(not(feature = "pytorch"))]
 fn nn_witx_image_classification_pytorch() -> Result<()> {
-    anyhow::bail!("this test requires the `pytorch` feature")
+    wasmtime::bail!("this test requires the `pytorch` feature")
 }
 
 fn nn_wit_image_classification_openvino() -> Result<()> {
@@ -193,7 +193,7 @@ fn nn_wit_image_classification_onnx() -> Result<()> {
 }
 #[cfg(not(feature = "onnx"))]
 fn nn_wit_image_classification_onnx() -> Result<()> {
-    anyhow::bail!("this test requires the `onnx` feature")
+    wasmtime::bail!("this test requires the `onnx` feature")
 }
 
 #[cfg(feature = "pytorch")]
@@ -208,7 +208,7 @@ fn nn_wit_image_classification_pytorch() -> Result<()> {
 }
 #[cfg(not(feature = "pytorch"))]
 fn nn_wit_image_classification_pytorch() -> Result<()> {
-    anyhow::bail!("this test requires the `pytorch` feature")
+    wasmtime::bail!("this test requires the `pytorch` feature")
 }
 
 #[cfg(all(feature = "winml", target_os = "windows"))]
@@ -220,7 +220,7 @@ fn nn_wit_image_classification_winml_named() -> Result<()> {
 }
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
 fn nn_wit_image_classification_winml_named() -> Result<()> {
-    anyhow::bail!("this test requires the `winml` feature and only runs on windows")
+    wasmtime::bail!("this test requires the `winml` feature and only runs on windows")
 }
 
 /// Helper for keeping track of what tests should do when pre-test checks fail.

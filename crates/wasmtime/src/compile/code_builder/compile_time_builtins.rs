@@ -1,4 +1,5 @@
 use super::*;
+use crate::ToWasmtimeResult as _;
 
 impl<'a> CodeBuilder<'a> {
     pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'a, str>, Cow<'a, [u8]>> {
@@ -47,7 +48,7 @@ impl<'a> CodeBuilder<'a> {
         }
 
         let composer = wasm_compose::composer::ComponentComposer::new(&main_wasm_path, &config);
-        let composed = composer.compose()?;
+        let composed = composer.compose().to_wasmtime_result()?;
         Ok(composed.into())
     }
 
@@ -61,7 +62,9 @@ impl<'a> CodeBuilder<'a> {
         main_wasm: &'b [u8],
     ) -> Result<crate::hash_set::HashSet<&'b str>, Error> {
         let intrinsics_import = self.unsafe_intrinsics_import.as_deref().ok_or_else(|| {
-            anyhow!("must configure the unsafe-intrinsics import when using compile-time builtins")
+            format_err!(
+                "must configure the unsafe-intrinsics import when using compile-time builtins"
+            )
         })?;
 
         let mut instance_imports = crate::hash_set::HashSet::new();

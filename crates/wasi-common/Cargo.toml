@@ -16,7 +16,6 @@ include = ["src/**/*", "tests/**/*", "witx", "README.md", "LICENSE", "build.rs"]
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, features = ['std'] }
 thiserror = { workspace = true }
 wiggle = { workspace = true }
 tracing = { workspace = true }
@@ -25,6 +24,7 @@ cap-rand = { workspace = true }
 bitflags = { workspace = true }
 log = { workspace = true }
 async-trait = { workspace = true }
+wasmtime-environ = { workspace = true }
 
 # Optional, enabled by wasmtime feature:
 wasmtime = { workspace = true, optional = true, features = ['runtime'] }

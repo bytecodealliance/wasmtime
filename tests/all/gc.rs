@@ -649,7 +649,7 @@ fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn no_leak_with_global_get_elem_segment() -> anyhow::Result<()> {
+fn no_leak_with_global_get_elem_segment() -> wasmtime::Result<()> {
     let dropped = Arc::new(AtomicBool::new(false));
 
     let engine = Engine::default();
@@ -695,7 +695,7 @@ fn no_leak_with_global_get_elem_segment() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn table_init_with_externref_global_get() -> anyhow::Result<()> {
+fn table_init_with_externref_global_get() -> wasmtime::Result<()> {
     let dropped = Arc::new(AtomicBool::new(false));
 
     let mut config = Config::new();
@@ -1487,7 +1487,7 @@ fn drc_gc_inbetween_host_calls() -> Result<()> {
         assert!(!inner_dropped.load(SeqCst));
         store.gc(None);
         assert!(inner_dropped.load(SeqCst));
-        anyhow::Ok(())
+        wasmtime::error::Ok(())
     };
 
     invoke_func()?;

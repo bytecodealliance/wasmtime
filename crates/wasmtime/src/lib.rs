@@ -310,7 +310,7 @@ extern crate std;
 extern crate alloc;
 
 pub(crate) mod prelude {
-    pub use crate::error::{Context, Error, Result, anyhow, bail, ensure, format_err};
+    pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
     pub use wasmtime_environ::prelude::*;
 }
 
@@ -410,6 +410,14 @@ use sync_nostd as sync;
 
 #[doc(inline)]
 pub use wasmtime_environ::error;
+
+#[cfg(feature = "anyhow")]
+pub use wasmtime_environ::ToWasmtimeResult;
+
+// Only for use in `bindgen!`-generated code.
+#[doc(hidden)]
+#[cfg(feature = "anyhow")]
+pub use wasmtime_environ::anyhow;
 
 pub use self::error::{Error, Result, bail, ensure, format_err};
 

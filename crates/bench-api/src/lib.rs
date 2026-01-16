@@ -136,12 +136,11 @@
 mod unsafe_send_sync;
 
 use crate::unsafe_send_sync::UnsafeSendSync;
-use anyhow::{Context, Result};
 use clap::Parser;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
-use wasmtime::{Engine, Instance, Linker, Module, Store};
+use wasmtime::{Engine, Instance, Linker, Module, Result, Store, error::Context as _};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::cli::{InputFile, OutputFile};
 use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, p1::WasiP1Ctx};

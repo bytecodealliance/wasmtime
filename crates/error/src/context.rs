@@ -73,7 +73,7 @@ mod sealed {
 /// failed to convert `999` into a `u8` (max = `255`)
 ///
 /// Caused by:
-/// 	0: out of range integral type conversion attempted
+///     out of range integral type conversion attempted
 ///     "#.trim(),
 /// );
 /// ```

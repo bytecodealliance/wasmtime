@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::{Instance, Linker, Module};
 use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
@@ -50,7 +50,7 @@ async fn run_with_preloads(args: &[wasmtime::Val], wat: &str) -> Result<wasmtime
     let inst = linker.instantiate_async(&mut store, &testmod).await?;
     let run = inst
         .get_func(&mut store, "run")
-        .ok_or_else(|| anyhow::anyhow!("no `run` function on test module"))?;
+        .ok_or_else(|| wasmtime::format_err!("no `run` function on test module"))?;
     let mut returned = vec![wasmtime::Val::I32(0)];
     run.call_async(&mut store, args, &mut returned).await?;
     Ok(returned[0])

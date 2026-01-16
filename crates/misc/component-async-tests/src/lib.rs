@@ -1,8 +1,5 @@
 #![expect(clippy::allow_attributes_without_reason)]
 
-use std::sync::{Arc, Mutex};
-use std::task::Waker;
-
 use wasmtime::component::{HasData, ResourceTable};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
@@ -21,7 +18,6 @@ pub mod yield_host;
 pub struct Ctx {
     pub wasi: WasiCtx,
     pub table: ResourceTable,
-    pub wakers: Arc<Mutex<Option<Vec<Waker>>>>,
     pub continue_: bool,
 }
 

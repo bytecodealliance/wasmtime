@@ -1,8 +1,7 @@
 use crate::WastContext;
-use anyhow::{Context, Result, anyhow, bail};
 use json_from_wast::{CoreConst, FloatConst, V128};
 use std::fmt::{Display, LowerHex};
-use wasmtime::{Store, Val};
+use wasmtime::{Result, Store, Val, bail, error::Context as _, format_err};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 pub fn val(ctx: &mut WastContext, v: &CoreConst) -> Result<Val> {
@@ -139,7 +138,7 @@ pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> R
             let x = x
                 .data(store)?
                 .ok_or_else(|| {
-                    anyhow!("expected an externref of a u32, found externref without host data")
+                    format_err!("expected an externref of a u32, found externref without host data")
                 })?
                 .downcast_ref::<u32>()
                 .expect("only u32 externrefs created in wast test suites");
@@ -188,7 +187,7 @@ pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> R
             let x = x
                 .data(&mut *store)?
                 .ok_or_else(|| {
-                    anyhow!(
+                    format_err!(
                         "expected anyref of externref of u32, found anyref that is \
                          not a converted externref"
                     )

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use criterion::*;
 use wasmtime::*;
 

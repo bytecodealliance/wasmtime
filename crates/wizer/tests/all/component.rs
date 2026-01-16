@@ -1,6 +1,5 @@
-use anyhow::{Context, Result, bail};
 use wasmtime::component::{Component, Instance, Linker, Val};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Result, Store, ToWasmtimeResult as _, bail, error::Context as _};
 use wasmtime_wizer::Wizer;
 
 fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
@@ -9,7 +8,7 @@ fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
     let wasm = wat::parse_bytes(wasm)?;
     log::debug!(
         "testing wizening failure for wasm:\n{}",
-        wasmprinter::print_bytes(&wasm)?
+        wasmprinter::print_bytes(&wasm).to_wasmtime_result()?
     );
     match Wizer::new().instrument_component(&wasm) {
         Ok(_) => bail!("expected wizening to fail"),
@@ -171,16 +170,16 @@ async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &module).await?;
 
     let run = instance.get_func(&mut store, "run").ok_or_else(|| {
-        anyhow::anyhow!("the test Wasm component does not export a `run` function")
+        wasmtime::format_err!("the test Wasm component does not export a `run` function")
     })?;
 
     let mut actual = [Val::U8(0)];
     run.call_async(&mut store, &[], &mut actual).await?;
     let actual = match actual[0] {
         Val::U32(x) => x,
-        _ => anyhow::bail!("expected an u32 result"),
+        _ => wasmtime::bail!("expected an u32 result"),
     };
-    anyhow::ensure!(
+    wasmtime::ensure!(
         expected == actual,
         "expected `{expected}`, found `{actual}`",
     );

@@ -18,7 +18,7 @@ fn debugging_does_not_work_with_signal_based_traps() {
 fn get_module_and_store<C: Fn(&mut Config)>(
     c: C,
     wat: &str,
-) -> anyhow::Result<(Module, Store<()>)> {
+) -> wasmtime::Result<(Module, Store<()>)> {
     let mut config = Config::default();
     config.guest_debug(true);
     config.wasm_exceptions(true);
@@ -32,7 +32,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
     wat: &str,
     c: C,
     f: F,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let (module, mut store) = get_module_and_store(c, wat)?;
     let func = Func::wrap(&mut store, move |caller: Caller<'_, ()>| {
         f(caller);
@@ -49,7 +49,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_two_frames() -> anyhow::Result<()> {
+fn stack_values_two_frames() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     for inlining in [false, true] {
@@ -104,7 +104,7 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_exceptions() -> anyhow::Result<()> {
+fn stack_values_exceptions() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -132,7 +132,7 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
+fn stack_values_dead_gc_ref() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -159,7 +159,7 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn gc_access_during_call() -> anyhow::Result<()> {
+fn gc_access_during_call() -> wasmtime::Result<()> {
     test_stack_values(
         r#"
     (module
@@ -202,7 +202,7 @@ fn gc_access_during_call() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn stack_values_two_activations() -> anyhow::Result<()> {
+fn stack_values_two_activations() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let mut config = Config::default();
@@ -293,7 +293,7 @@ fn stack_values_two_activations() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn debug_frames_on_store_with_no_wasm_activation() -> anyhow::Result<()> {
+fn debug_frames_on_store_with_no_wasm_activation() -> wasmtime::Result<()> {
     let mut config = Config::default();
     config.guest_debug(true);
     let engine = Engine::new(&config)?;
@@ -355,7 +355,7 @@ macro_rules! debug_event_checker {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn uncaught_exception_events() -> anyhow::Result<()> {
+async fn uncaught_exception_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -407,7 +407,7 @@ async fn uncaught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn caught_exception_events() -> anyhow::Result<()> {
+async fn caught_exception_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -462,7 +462,7 @@ async fn caught_exception_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn hostcall_trap_events() -> anyhow::Result<()> {
+async fn hostcall_trap_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -502,7 +502,7 @@ async fn hostcall_trap_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn hostcall_error_events() -> anyhow::Result<()> {
+async fn hostcall_error_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -532,8 +532,8 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
 
     let do_a_trap = Func::wrap(
         &mut store,
-        |_caller: Caller<'_, ()>| -> anyhow::Result<()> {
-            Err(anyhow::anyhow!("secret error message"))
+        |_caller: Caller<'_, ()>| -> wasmtime::Result<()> {
+            Err(wasmtime::format_err!("secret error message"))
         },
     );
     let instance = Instance::new_async(&mut store, &module, &[Extern::Func(do_a_trap)]).await?;
@@ -547,7 +547,7 @@ async fn hostcall_error_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn breakpoint_events() -> anyhow::Result<()> {
+async fn breakpoint_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -689,7 +689,7 @@ async fn breakpoint_events() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn breakpoints_in_inlined_code() -> anyhow::Result<()> {
+async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(
@@ -756,7 +756,7 @@ async fn breakpoints_in_inlined_code() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn epoch_events() -> anyhow::Result<()> {
+async fn epoch_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let (module, mut store) = get_module_and_store(

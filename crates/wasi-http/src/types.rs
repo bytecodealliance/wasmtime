@@ -5,13 +5,13 @@ use crate::{
     bindings::http::types::{self, ErrorCode, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
-use anyhow::bail;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
 use hyper::header::HeaderName;
 use std::any::Any;
 use std::time::Duration;
+use wasmtime::bail;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
@@ -548,7 +548,7 @@ impl HostIncomingRequest {
         mut parts: http::request::Parts,
         scheme: Scheme,
         body: Option<HostIncomingBody>,
-    ) -> anyhow::Result<Self> {
+    ) -> wasmtime::Result<Self> {
         let authority = match parts.uri.authority() {
             Some(authority) => authority.to_string(),
             None => match parts.headers.get(http::header::HOST) {
@@ -673,7 +673,7 @@ pub type FieldMap = hyper::HeaderMap;
 
 /// A handle to a future incoming response.
 pub type FutureIncomingResponseHandle =
-    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponse, types::ErrorCode>>>;
+    AbortOnDropJoinHandle<wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>>;
 
 /// A response that is in the process of being received.
 #[derive(Debug)]
@@ -694,7 +694,7 @@ pub enum HostFutureIncomingResponse {
     /// The response is ready.
     ///
     /// An outer error will trap while the inner error gets returned to the guest.
-    Ready(anyhow::Result<Result<IncomingResponse, types::ErrorCode>>),
+    Ready(wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>),
     /// The response has been consumed.
     Consumed,
 }
@@ -706,7 +706,7 @@ impl HostFutureIncomingResponse {
     }
 
     /// Create a new `HostFutureIncomingResponse` that is ready.
-    pub fn ready(result: anyhow::Result<Result<IncomingResponse, types::ErrorCode>>) -> Self {
+    pub fn ready(result: wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>) -> Self {
         Self::Ready(result)
     }
 
@@ -716,7 +716,7 @@ impl HostFutureIncomingResponse {
     }
 
     /// Unwrap the response, panicking if it is not ready.
-    pub fn unwrap_ready(self) -> anyhow::Result<Result<IncomingResponse, types::ErrorCode>> {
+    pub fn unwrap_ready(self) -> wasmtime::Result<Result<IncomingResponse, types::ErrorCode>> {
         match self {
             Self::Ready(res) => res,
             Self::Pending(_) | Self::Consumed => {

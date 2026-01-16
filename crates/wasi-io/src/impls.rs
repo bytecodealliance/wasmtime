@@ -4,18 +4,18 @@ use crate::streams::{DynInputStream, DynOutputStream, StreamError, StreamResult}
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use anyhow::{Result, anyhow};
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::{Result, format_err};
 
 impl poll::Host for ResourceTable {
     async fn poll(&mut self, pollables: Vec<Resource<DynPollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
 
         if pollables.is_empty() {
-            return Err(anyhow!("empty poll list"));
+            return Err(format_err!("empty poll list"));
         }
 
         let mut table_futures: BTreeMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = BTreeMap::new();

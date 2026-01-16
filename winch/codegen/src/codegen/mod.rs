@@ -1,6 +1,9 @@
 use crate::{
+    Result,
     abi::{ABIOperand, ABISig, RetArea, vmctx},
+    bail,
     codegen::BlockSig,
+    ensure, format_err,
     isa::reg::{Reg, RegClass, writable},
     masm::{
         AtomicWaitKind, Extend, Imm, IntCmpKind, IntScratch, LaneSelector, LoadKind,
@@ -9,7 +12,6 @@ use crate::{
     },
     stack::{TypedReg, Val},
 };
-use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
@@ -149,7 +151,7 @@ where
             .sig
             .params()
             .first()
-            .ok_or_else(|| anyhow!(CodeGenError::vmcontext_arg_expected()))?
+            .ok_or_else(|| format_err!(CodeGenError::vmcontext_arg_expected()))?
             .unwrap_reg();
 
         self.masm.start_source_loc(Default::default())?;
@@ -254,7 +256,7 @@ where
     pub fn pop_control_frame(&mut self) -> Result<ControlStackFrame> {
         self.control_frames
             .pop()
-            .ok_or_else(|| anyhow!(CodeGenError::control_frame_expected()))
+            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
     }
 
     /// Derives a [RelSourceLoc] from a [SourceLoc].
@@ -497,7 +499,7 @@ where
         self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE)?;
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
-        anyhow::Ok(())
+        wasmtime_environ::error::Ok(())
     }
 
     /// Emit the usual function end instruction sequence.
@@ -1625,5 +1627,5 @@ where
 pub fn control_index(depth: u32, control_length: usize) -> Result<usize> {
     (control_length - 1)
         .checked_sub(depth as usize)
-        .ok_or_else(|| anyhow!(CodeGenError::control_frame_expected()))
+        .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
 }

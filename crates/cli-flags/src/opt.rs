@@ -6,12 +6,12 @@
 //! option parsing is contained exclusively within this module.
 
 use crate::{KeyValuePair, WasiNnGraph};
-use anyhow::{Result, bail};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
 use std::time::Duration;
 use std::{fmt, marker};
+use wasmtime::{Result, bail};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
 const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];

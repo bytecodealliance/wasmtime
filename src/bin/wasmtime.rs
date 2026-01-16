@@ -3,8 +3,8 @@
 //! Primarily used to run WebAssembly modules.
 //! See `wasmtime --help` for usage.
 
-use anyhow::Result;
 use clap::Parser;
+use wasmtime::Result;
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]

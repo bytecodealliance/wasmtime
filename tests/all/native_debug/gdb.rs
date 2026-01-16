@@ -1,9 +1,9 @@
-use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
+use wasmtime::{Result, bail, format_err};
 
 fn gdb_with_script(args: &[&str], script: &str) -> Result<String> {
     let lldb_path = env::var("GDB").unwrap_or("gdb".to_string());

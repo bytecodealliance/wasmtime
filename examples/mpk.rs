@@ -31,11 +31,11 @@
 //! $ sysctl vm.max_map_count=$LARGER_LIMIT
 //! ```
 
-use anyhow::anyhow;
 use bytesize::ByteSize;
 use clap::Parser;
 use log::{info, warn};
 use std::str::FromStr;
+use wasmtime::format_err;
 use wasmtime::*;
 
 fn main() -> Result<()> {
@@ -84,7 +84,7 @@ struct Args {
 /// Parse a human-readable byte size--e.g., "512 MiB"--into the correct number
 /// of bytes.
 fn parse_byte_size(value: &str) -> Result<u64> {
-    let size = ByteSize::from_str(value).map_err(|e| anyhow!(e))?;
+    let size = ByteSize::from_str(value).map_err(|e| format_err!(e))?;
     Ok(size.as_u64())
 }
 
@@ -239,15 +239,15 @@ fn num_bytes_mapped() -> Result<usize> {
         let range = line
             .split_whitespace()
             .next()
-            .ok_or(anyhow!("parse failure: expected whitespace"))?;
+            .ok_or(format_err!("parse failure: expected whitespace"))?;
         let mut addresses = range.split("-");
-        let start = addresses
-            .next()
-            .ok_or(anyhow!("parse failure: expected dash-separated address"))?;
+        let start = addresses.next().ok_or(format_err!(
+            "parse failure: expected dash-separated address"
+        ))?;
         let start = usize::from_str_radix(start, 16)?;
-        let end = addresses
-            .next()
-            .ok_or(anyhow!("parse failure: expected dash-separated address"))?;
+        let end = addresses.next().ok_or(format_err!(
+            "parse failure: expected dash-separated address"
+        ))?;
         let end = usize::from_str_radix(end, 16)?;
 
         total += end - start;
@@ -257,5 +257,5 @@ fn num_bytes_mapped() -> Result<usize> {
 
 #[cfg(not(target_os = "linux"))]
 fn num_bytes_mapped() -> Result<usize> {
-    anyhow::bail!("this example can only read virtual memory maps on Linux")
+    wasmtime::bail!("this example can only read virtual memory maps on Linux")
 }

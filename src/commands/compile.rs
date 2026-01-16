@@ -1,10 +1,9 @@
 //! The module that implements the `wasmtime compile` command.
 
-use anyhow::{Context, Result, bail};
 use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
-use wasmtime::{CodeBuilder, CodeHint, Engine};
+use wasmtime::{CodeBuilder, CodeHint, Engine, Result, bail, error::Context as _};
 use wasmtime_cli_flags::CommonOptions;
 
 const AFTER_HELP: &str =

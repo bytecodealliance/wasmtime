@@ -1,9 +1,9 @@
 #![cfg(not(miri))]
 
 use crate::async_functions::{CountPending, PollOnce};
-use anyhow::anyhow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use wasmtime::format_err;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -433,7 +433,7 @@ async fn epoch_callback_trap(config: &mut Config) -> Result<()> {
                 (func $subfunc))
             ",
             1,
-            InterruptMode::Callback(|_| Err(anyhow!("Failing in callback"))),
+            InterruptMode::Callback(|_| Err(format_err!("Failing in callback"))),
             |_| {},
         )
         .await?

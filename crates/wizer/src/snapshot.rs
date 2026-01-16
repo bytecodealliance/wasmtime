@@ -1,5 +1,8 @@
 use crate::InstanceState;
 use crate::info::ModuleContext;
+#[cfg(not(feature = "rayon"))]
+use crate::rayoff::{IntoParallelIterator, ParallelExtend};
+#[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
 use std::ops::Range;
@@ -75,9 +78,11 @@ async fn snapshot_globals(
     log::debug!("Snapshotting global values");
 
     let mut ret = Vec::new();
-    for (i, name) in module.defined_global_exports.as_ref().unwrap().iter() {
-        let val = ctx.global_get(&name).await;
-        ret.push((*i, val));
+    for (i, ty, name) in module.defined_globals() {
+        if let Some(name) = name {
+            let val = ctx.global_get(name, ty.content_type).await;
+            ret.push((i, val));
+        }
     }
     ret
 }

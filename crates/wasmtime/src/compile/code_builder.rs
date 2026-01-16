@@ -204,7 +204,7 @@ impl<'a> CodeBuilder<'a> {
         let wasm = self
             .wasm
             .as_deref()
-            .ok_or_else(|| anyhow!("no wasm bytes have been configured"))?;
+            .ok_or_else(|| format_err!("no wasm bytes have been configured"))?;
 
         #[cfg(not(feature = "compile-time-builtins"))]
         {

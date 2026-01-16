@@ -21,6 +21,15 @@ impl UImm12 {
         }
     }
 
+    pub fn maybe_from_simm20(value: SImm20) -> Option<UImm12> {
+        let SImm20 { value } = value;
+        if value >= 0 {
+            Self::maybe_from_u64(value as u64)
+        } else {
+            None
+        }
+    }
+
     /// Create a zero immediate of this format.
     pub fn zero() -> UImm12 {
         UImm12 { value: 0 }

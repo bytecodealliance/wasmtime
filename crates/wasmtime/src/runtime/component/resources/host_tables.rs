@@ -21,9 +21,8 @@
 //! the own is removed or otherwise taken out.
 
 use crate::prelude::*;
-use crate::runtime::vm::component::{
-    InstanceFlags, ResourceTables, TypedResource, TypedResourceIndex,
-};
+use crate::runtime::component::RuntimeInstance;
+use crate::runtime::vm::component::{ResourceTables, TypedResource, TypedResourceIndex};
 use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
 use crate::store::StoreOpaque;
 use core::ptr::NonNull;
@@ -69,7 +68,7 @@ pub struct HostResourceData {
 #[derive(Copy, Clone)]
 pub struct TableSlot {
     generation: u32,
-    pub(super) flags: Option<InstanceFlags>,
+    pub(super) instance: Option<RuntimeInstance>,
     pub(super) dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
 
@@ -144,16 +143,16 @@ impl<'a> HostResourceTables<'a> {
     /// will point to the `rep` specified. The returned index is suitable for
     /// conversion into either [`Resource`] or [`ResourceAny`].
     ///
-    /// The `dtor` and instance `flags` are specified as well to know what
+    /// The `dtor` and instance `instance` are specified as well to know what
     /// destructor to run when this resource is destroyed.
     pub fn host_resource_lower_own(
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_own(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, dtor, flags))
+        Ok(self.new_host_index(idx, dtor, instance))
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
@@ -208,12 +207,12 @@ impl<'a> HostResourceTables<'a> {
         &mut self,
         idx: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> HostResourceIndex {
         let list = &mut self.host_resource_data.table_slot_metadata;
         let info = TableSlot {
             generation: self.host_resource_data.cur_generation,
-            flags,
+            instance,
             dtor: dtor.map(SendSyncPtr::new),
         };
         match list.get_mut(idx as usize) {
@@ -225,7 +224,7 @@ impl<'a> HostResourceTables<'a> {
                     assert_eq!(idx, 1);
                     list.push(TableSlot {
                         generation: 0,
-                        flags: None,
+                        instance: None,
                         dtor: None,
                     });
                 }

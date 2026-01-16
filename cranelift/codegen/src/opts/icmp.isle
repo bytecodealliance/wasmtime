@@ -51,6 +51,13 @@
                       (iconst_u _ 0)))
       (subsume inner))
 
+;; Likewise for icmp-of-fcmp.
+;; ne(fcmp(ty, cc, x, y), 0) == fcmp(ty, cc, x, y)
+(rule (simplify (ne ty
+                      (uextend_maybe _ inner @ (fcmp ty _ _ _))
+                      (iconst_u _ 0)))
+      (subsume inner))
+
 ;; eq(icmp(ty, cc, x, y), 0) == icmp(ty, cc_complement, x, y)
 ;; e.g. eq(ugt(x, y), 0) == ule(x, y)
 (rule (simplify (eq ty
@@ -313,10 +320,10 @@
 (rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
-(rule (simplify (band ty (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
-(rule (simplify (band ty (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
+(rule (simplify (band (fits_in_64 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
 (rule
   (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))

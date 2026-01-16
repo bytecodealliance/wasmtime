@@ -5,7 +5,9 @@ use crate::component::Instance;
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::{ResourcePair, RuntimeInstance};
+use crate::runtime::component::RuntimeInstance;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -192,7 +194,7 @@ unsafe fn utf8_to_utf8(
     let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     log::trace!("utf8-to-utf8 {len}");
-    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| format_err!("invalid utf8 encoding"))?;
     dst.copy_from_slice(src.as_bytes());
     Ok(())
 }
@@ -222,7 +224,7 @@ unsafe fn utf16_to_utf16(
 fn run_utf16_to_utf16(src: &[u16], mut dst: &mut [u16]) -> Result<bool> {
     let mut all_latin1 = true;
     for ch in core::char::decode_utf16(src.iter().map(|i| u16::from_le(*i))) {
-        let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
+        let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
         all_latin1 = all_latin1 && u8::try_from(u32::from(ch)).is_ok();
         let result = ch.encode_utf16(dst);
         let size = result.len();
@@ -305,7 +307,7 @@ unsafe fn utf8_to_utf16(
 }
 
 fn run_utf8_to_utf16(src: &[u8], dst: &mut [u16]) -> Result<usize> {
-    let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
+    let src = core::str::from_utf8(src).map_err(|_| format_err!("invalid utf8 encoding"))?;
     let mut amt = 0;
     for (i, dst) in src.encode_utf16().zip(dst) {
         *dst = i.to_le();
@@ -358,7 +360,7 @@ unsafe fn utf16_to_utf8(
     let mut dst_written = 0;
 
     for ch in core::char::decode_utf16(src_iter) {
-        let ch = ch.map_err(|_| anyhow!("invalid utf16 encoding"))?;
+        let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
 
         // If the destination doesn't have enough space for this character
         // then the loop is ended and this function will be called later with a
@@ -969,11 +971,6 @@ fn error_context_transfer(
     let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
     let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
     instance.error_context_transfer(store, src_idx, src_table, dst_table)
-}
-
-#[cfg(feature = "component-model-async")]
-fn check_blocking(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
-    crate::component::concurrent::check_blocking(store)
 }
 
 #[cfg(feature = "component-model-async")]

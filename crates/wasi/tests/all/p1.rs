@@ -1,7 +1,7 @@
 use crate::store::Ctx;
-use anyhow::Result;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::Result;
 use wasmtime::{Linker, Module};
 use wasmtime_wasi::p1::{WasiP1Ctx, add_to_linker_async};
 

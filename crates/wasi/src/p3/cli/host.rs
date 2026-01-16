@@ -7,7 +7,6 @@ use crate::p3::bindings::cli::{
     terminal_stdin, terminal_stdout,
 };
 use crate::p3::cli::{TerminalInput, TerminalOutput};
-use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -18,7 +17,7 @@ use wasmtime::component::{
     Access, Accessor, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
     StreamReader, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
+use wasmtime::{AsContextMut as _, StoreContextMut, error::Context as _, format_err};
 
 struct InputStreamProducer {
     rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
@@ -206,7 +205,7 @@ impl stdin::HostWithStore for WasiCli {
             },
         );
         let future = FutureReader::new(&mut store, async {
-            anyhow::Ok(match result_rx.await {
+            wasmtime::error::Ok(match result_rx.await {
                 Ok(err) => Err(err),
                 Err(_) => Ok(()),
             })
@@ -287,10 +286,10 @@ impl exit::Host for WasiCliCtxView<'_> {
             Ok(()) => 0,
             Err(()) => 1,
         };
-        Err(anyhow!(I32Exit(status)))
+        Err(format_err!(I32Exit(status)))
     }
 
     fn exit_with_code(&mut self, status_code: u8) -> wasmtime::Result<()> {
-        Err(anyhow!(I32Exit(status_code.into())))
+        Err(format_err!(I32Exit(status_code.into())))
     }
 }

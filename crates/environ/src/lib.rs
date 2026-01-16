@@ -80,9 +80,17 @@ pub mod fact;
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
 
-// Temporarily re-export `anyhow` as `wasmtime_environ::error` to ease the
-// migration to the `wasmtime-internal-error` crate.
-pub use anyhow as error;
+// Reexport the error crate as a submodule for convenience.
+#[doc(inline)]
+pub use wasmtime_error as error;
+
+#[cfg(feature = "anyhow")]
+pub use wasmtime_error::ToWasmtimeResult;
+
+// Only for use with `bindgen!`-generated code.
+#[doc(hidden)]
+#[cfg(feature = "anyhow")]
+pub use anyhow;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

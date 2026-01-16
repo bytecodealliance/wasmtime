@@ -6,7 +6,6 @@ use crate::p3::bindings::sockets::types::{
 };
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
-use anyhow::Context as _;
 use bytes::BytesMut;
 use core::iter;
 use core::pin::Pin;
@@ -21,6 +20,7 @@ use wasmtime::component::{
     Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_socket<'a>(
@@ -331,7 +331,7 @@ impl HostTcpSocketWithStore for WasiSockets {
             None => Ok((
                 StreamReader::new(&mut store, iter::empty()),
                 FutureReader::new(&mut store, async {
-                    anyhow::Ok(Err(ErrorCode::InvalidState))
+                    wasmtime::error::Ok(Err(ErrorCode::InvalidState))
                 }),
             )),
         }

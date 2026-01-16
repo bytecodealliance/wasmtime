@@ -16,7 +16,7 @@ pub struct TrapInformation {
 // The code can be accessed from the c-api, where the possible values are
 // translated into enum values defined there:
 //
-// * `wasm_trap_code` in c-api/src/trap.rs, and
+// *  the const assertions in c-api/src/trap.rs, and
 // * `wasmtime_trap_code_enum` in c-api/include/wasmtime/trap.h.
 //
 // These need to be kept in sync.
@@ -56,13 +56,6 @@ pub enum Trap {
 
     /// Execution has potentially run too long and may be interrupted.
     Interrupt,
-
-    /// When the `component-model` feature is enabled this trap represents a
-    /// function that was `canon lift`'d, then `canon lower`'d, then called.
-    /// This combination of creation of a function in the component model
-    /// generates a function that always traps and, when called, produces this
-    /// flavor of trap.
-    AlwaysTrapAdapter,
 
     /// When wasm code is configured to consume fuel and it runs out of fuel
     /// then this trap will be raised.
@@ -128,13 +121,6 @@ pub enum Trap {
     /// encoding operation.
     DebugAssertEqualCodeUnits,
 
-    /// Debug assertion generated for a fused adapter regarding the expected
-    /// value of the `may_enter` flag for an instance.
-    ///
-    /// TODO: Remove this once
-    /// https://github.com/bytecodealliance/wasmtime/pull/12153 has been merged.
-    DebugAssertMayEnterUnset,
-
     /// Debug assertion generated for a fused adapter regarding the alignment of
     /// a pointer.
     DebugAssertPointerAligned,
@@ -155,7 +141,8 @@ pub enum Trap {
     /// A component passed an unaligned pointer when lifting or lowering a
     /// value.
     UnalignedPointer,
-    // if adding a variant here be sure to update the `check!` macro below
+    // if adding a variant here be sure to update the `check!` macro below, and
+    // remember to update `trap.rs` and `trap.h` as mentioned above
 }
 
 impl Trap {
@@ -183,7 +170,6 @@ impl Trap {
             BadConversionToInteger
             UnreachableCodeReached
             Interrupt
-            AlwaysTrapAdapter
             OutOfFuel
             AtomicWaitNonSharedMemory
             NullReference
@@ -201,7 +187,6 @@ impl Trap {
             InvalidChar
             DebugAssertStringEncodingFinished
             DebugAssertEqualCodeUnits
-            DebugAssertMayEnterUnset
             DebugAssertPointerAligned
             DebugAssertUpperBitsUnset
             StringOutOfBounds
@@ -230,7 +215,6 @@ impl fmt::Display for Trap {
             BadConversionToInteger => "invalid conversion to integer",
             UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
-            AlwaysTrapAdapter => "degenerate component adapter called",
             OutOfFuel => "all fuel consumed by WebAssembly",
             AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
             NullReference => "null reference",
@@ -248,7 +232,6 @@ impl fmt::Display for Trap {
             InvalidChar => "invalid `char` bit pattern",
             DebugAssertStringEncodingFinished => "should have finished string encoding",
             DebugAssertEqualCodeUnits => "code units should be equal",
-            DebugAssertMayEnterUnset => "`may_enter` flag should be unset",
             DebugAssertPointerAligned => "pointer should be aligned",
             DebugAssertUpperBitsUnset => "upper bits should be unset",
             StringOutOfBounds => "string content out-of-bounds",

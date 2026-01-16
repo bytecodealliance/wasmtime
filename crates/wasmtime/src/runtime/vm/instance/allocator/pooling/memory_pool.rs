@@ -680,10 +680,7 @@ impl SlabConstraints {
         let guard_bytes = HostAlignedByteCount::new_rounded_up_u64(tunables.memory_guard_size)
             .context("guard region is too large")?;
 
-        let num_slots = limits
-            .total_memories
-            .try_into()
-            .context("too many memories")?;
+        let num_slots = usize::try_from(limits.total_memories).context("too many memories")?;
 
         let constraints = SlabConstraints {
             max_memory_bytes,

@@ -266,9 +266,9 @@ impl<T: ?Sized + StdoutStream + Sync> StdoutStream for Arc<T> {
 mod test {
     use crate::cli::{AsyncStdoutStream, StdinStream, StdoutStream};
     use crate::p2::{self, OutputStream};
-    use anyhow::Result;
     use bytes::Bytes;
     use tokio::io::AsyncReadExt;
+    use wasmtime::Result;
 
     #[test]
     fn memory_stdin_stream() {

@@ -1,7 +1,6 @@
 //! Utility types for converting Rust & Tokio I/O types into WASI I/O types,
 //! and vice versa.
 
-use anyhow::Result;
 use bytes::Bytes;
 use std::io;
 use std::sync::Arc;
@@ -9,6 +8,7 @@ use std::task::{Poll, ready};
 use std::{future::Future, mem, pin::Pin};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
+use wasmtime::Result;
 use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::{
     DynInputStream, DynOutputStream, OutputStream, Pollable, StreamError, StreamResult,
@@ -281,7 +281,7 @@ where
 
     fn write(&mut self, mut bytes: bytes::Bytes) -> StreamResult<()> {
         let WriteState::Ready(_) = self else {
-            return Err(StreamError::Trap(anyhow::anyhow!(
+            return Err(StreamError::Trap(wasmtime::format_err!(
                 "unpermitted: must call check_write first"
             )));
         };

@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use super::cli_tests::get_wasmtime_command;
-use anyhow::Result;
 use std::process::Stdio;
+use wasmtime::Result;
 
 pub fn run_wasmtime_piped(component_path: &str) -> Result<()> {
     let mut producer = get_wasmtime_command()?

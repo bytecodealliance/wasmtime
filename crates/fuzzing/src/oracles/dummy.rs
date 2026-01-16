@@ -1,7 +1,6 @@
 //! Dummy implementations of things that a Wasm module can import.
 
-use anyhow::Context;
-use wasmtime::*;
+use wasmtime::{error::Context as _, *};
 
 /// Create a set of dummy functions/globals/etc for the given imports.
 pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {

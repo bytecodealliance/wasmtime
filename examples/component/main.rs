@@ -1,9 +1,8 @@
-use anyhow::Context;
 use std::{fs, path::Path};
-
 use wasmtime::{
-    Config, Engine, Result, Store,
+    Config, Engine, Result, Store, ToWasmtimeResult as _,
     component::{Component, HasSelf, Linker, bindgen},
+    error::Context as _,
 };
 
 // Generate bindings of the guest and host components.
@@ -30,8 +29,10 @@ impl host::Host for MyState {
 fn convert_to_component(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     let bytes = &fs::read(&path).context("failed to read input file")?;
     wit_component::ComponentEncoder::default()
-        .module(&bytes)?
+        .module(&bytes)
+        .to_wasmtime_result()?
         .encode()
+        .to_wasmtime_result()
 }
 
 fn main() -> Result<()> {

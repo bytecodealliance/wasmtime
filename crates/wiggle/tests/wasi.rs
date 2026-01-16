@@ -385,7 +385,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         &mut self,
         _memory: &mut GuestMemory<'_>,
         _rval: types::Exitcode,
-    ) -> anyhow::Error {
+    ) -> wiggle::error::Error {
         unimplemented!("proc_exit")
     }
 

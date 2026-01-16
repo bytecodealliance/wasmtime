@@ -1,9 +1,9 @@
 use crate::p2::{OutputStream, Pollable, StreamError};
-use anyhow::anyhow;
 use bytes::Bytes;
 use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
+use wasmtime::format_err;
 
 #[derive(Debug)]
 struct WorkerState {
@@ -11,7 +11,7 @@ struct WorkerState {
     items: std::collections::VecDeque<Bytes>,
     write_budget: usize,
     flush_pending: bool,
-    error: Option<anyhow::Error>,
+    error: Option<wasmtime::Error>,
     write_ready_changed: Option<Waker>,
 }
 
@@ -169,7 +169,7 @@ impl OutputStream for AsyncWriteStream {
         let mut state = self.worker.state();
         state.check_error()?;
         if state.flush_pending {
-            return Err(StreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(format_err!(
                 "write not permitted while flush pending"
             )));
         }
@@ -178,7 +178,7 @@ impl OutputStream for AsyncWriteStream {
                 state.write_budget = remaining_budget;
                 state.items.push_back(bytes);
             }
-            None => return Err(StreamError::Trap(anyhow!("write exceeded budget"))),
+            None => return Err(StreamError::Trap(format_err!("write exceeded budget"))),
         }
         drop(state);
         self.worker.new_work.notify_one();

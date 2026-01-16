@@ -1,5 +1,4 @@
-use crate::{codegen::CodeGenError, isa::reg::Reg, masm::StackSlot};
-use anyhow::{Result, anyhow};
+use crate::{Result, codegen::CodeGenError, format_err, isa::reg::Reg, masm::StackSlot};
 use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmValType;
@@ -125,7 +124,7 @@ impl From<Memory> for Val {
 }
 
 impl TryFrom<u32> for Val {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         i32::try_from(value).map(Val::i32).map_err(Into::into)
     }
@@ -334,7 +333,7 @@ impl Stack {
         if self.len() >= n {
             Ok(self.len() - n)
         } else {
-            Err(anyhow!(CodeGenError::missing_values_in_stack()))
+            Err(format_err!(CodeGenError::missing_values_in_stack()))
         }
     }
 

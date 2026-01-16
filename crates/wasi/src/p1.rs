@@ -76,7 +76,6 @@ use crate::p2::bindings::{
 };
 use crate::p2::{FsError, IsATTY};
 use crate::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
-use anyhow::{Context, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
 use std::mem::{self, size_of, size_of_val};
 use std::slice;
@@ -84,6 +83,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
+use wasmtime::{bail, error::Context as _};
 use wasmtime_wasi_io::{
     bindings::wasi::io::streams,
     streams::{StreamError, StreamResult},
@@ -718,7 +718,7 @@ enum FdWrite {
 pub fn add_to_linker_async<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     crate::p1::wasi_snapshot_preview1::add_to_linker(linker, f)
 }
 
@@ -792,7 +792,7 @@ pub fn add_to_linker_async<T: Send + 'static>(
 pub fn add_to_linker_sync<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     sync::add_wasi_snapshot_preview1_to_linker(linker, f)
 }
 
@@ -815,8 +815,8 @@ wiggle::from_witx!({
 });
 
 pub(crate) mod sync {
-    use anyhow::Result;
     use std::future::Future;
+    use wasmtime::Result;
 
     wiggle::wasmtime_integration!({
         witx: ["witx/p1/wasi_snapshot_preview1.witx"],
@@ -945,7 +945,7 @@ impl From<types::Advice> for filesystem::Advice {
 }
 
 impl TryFrom<filesystem::DescriptorType> for types::Filetype {
-    type Error = anyhow::Error;
+    type Error = wasmtime::Error;
 
     fn try_from(ty: filesystem::DescriptorType) -> Result<Self, Self::Error> {
         match ty {
@@ -2552,10 +2552,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         &mut self,
         _memory: &mut GuestMemory<'_>,
         status: types::Exitcode,
-    ) -> anyhow::Error {
+    ) -> wasmtime::Error {
         // Check that the status is within WASI's range.
         if status >= 126 {
-            return anyhow::Error::msg("exit with invalid exit status outside of [0..126)");
+            return wasmtime::Error::msg("exit with invalid exit status outside of [0..126)");
         }
         crate::I32Exit(status as i32).into()
     }

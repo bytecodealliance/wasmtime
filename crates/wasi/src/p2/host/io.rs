@@ -20,13 +20,13 @@ impl From<async_streams::StreamError> for streams::StreamError {
 }
 
 impl streams::Host for ResourceTable {
-    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+    fn convert_stream_error(&mut self, err: StreamError) -> wasmtime::Result<streams::StreamError> {
         Ok(AsyncHost::convert_stream_error(self, err)?.into())
     }
 }
 
 impl streams::HostOutputStream for ResourceTable {
-    fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<OutputStream>) -> wasmtime::Result<()> {
         in_tokio(async { AsyncHostOutputStream::drop(self, stream).await })
     }
 
@@ -58,7 +58,10 @@ impl streams::HostOutputStream for ResourceTable {
         })
     }
 
-    fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(
+        &mut self,
+        stream: Resource<OutputStream>,
+    ) -> wasmtime::Result<Resource<Pollable>> {
         Ok(AsyncHostOutputStream::subscribe(self, stream)?)
     }
 
@@ -99,7 +102,7 @@ impl streams::HostOutputStream for ResourceTable {
 }
 
 impl streams::HostInputStream for ResourceTable {
-    fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<InputStream>) -> wasmtime::Result<()> {
         in_tokio(async { AsyncHostInputStream::drop(self, stream).await })
     }
 
@@ -119,7 +122,7 @@ impl streams::HostInputStream for ResourceTable {
         in_tokio(async { AsyncHostInputStream::blocking_skip(self, stream, len).await })
     }
 
-    fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(&mut self, stream: Resource<InputStream>) -> wasmtime::Result<Resource<Pollable>> {
         AsyncHostInputStream::subscribe(self, stream)
     }
 }

@@ -160,6 +160,7 @@ impl TypeChecker<'_> {
             (InterfaceType::Stream(_), _) => false,
             (InterfaceType::ErrorContext(_), InterfaceType::ErrorContext(_)) => true,
             (InterfaceType::ErrorContext(_), _) => false,
+            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
         }
     }
 
@@ -893,6 +894,7 @@ impl Type {
             InterfaceType::Future(index) => Type::Future(instance.future_type(*index)),
             InterfaceType::Stream(index) => Type::Stream(instance.stream_type(*index)),
             InterfaceType::ErrorContext(_) => Type::ErrorContext,
+            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
         }
     }
 

@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use http::header::CONTENT_LENGTH;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
@@ -7,6 +6,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::thread::JoinHandle;
 use tokio::net::TcpListener;
 use tracing::{debug, trace, warn};
+use wasmtime::{Result, error::Context as _};
 use wasmtime_wasi_http::io::TokioIo;
 
 async fn test(

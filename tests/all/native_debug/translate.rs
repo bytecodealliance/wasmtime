@@ -1,10 +1,10 @@
 use super::dump::{DwarfDumpSection, get_dwarfdump};
 use super::obj::compile_cranelift;
-use anyhow::{Result, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::fs::read;
 use tempfile::NamedTempFile;
 use test_programs_artifacts::*;
+use wasmtime::{Result, format_err};
 
 fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     println!("check {wasm_path}");

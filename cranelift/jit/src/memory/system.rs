@@ -9,8 +9,7 @@ use std::io;
 use std::mem;
 use std::ptr;
 
-use super::BranchProtection;
-use super::JITMemoryProvider;
+use super::{BranchProtection, JITMemoryKind, JITMemoryProvider};
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
@@ -263,15 +262,11 @@ impl JITMemoryProvider for SystemMemoryProvider {
         self.code.set_readable_and_executable(branch_protection)
     }
 
-    fn allocate_readexec(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.code.allocate(size, align)
-    }
-
-    fn allocate_readwrite(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.writable.allocate(size, align)
-    }
-
-    fn allocate_readonly(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.readonly.allocate(size, align)
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8> {
+        match kind {
+            JITMemoryKind::Executable => self.code.allocate(size, align),
+            JITMemoryKind::Writable => self.writable.allocate(size, align),
+            JITMemoryKind::ReadOnly => self.readonly.allocate(size, align),
+        }
     }
 }

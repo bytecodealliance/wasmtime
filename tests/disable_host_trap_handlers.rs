@@ -7,7 +7,7 @@
 //! This will ensure that various trapping scenarios all work and additionally
 //! signal handlers are not registered.
 
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::{Config, Engine, Instance, Module, Store, Trap};
 
 #[test]

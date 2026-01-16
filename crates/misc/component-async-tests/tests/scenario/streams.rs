@@ -1,6 +1,5 @@
 use {
     super::util::{config, make_component},
-    anyhow::Result,
     component_async_tests::{
         Ctx, closed_streams,
         util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
@@ -19,7 +18,7 @@ use {
         time::Duration,
     },
     wasmtime::{
-        Engine, Store, StoreContextMut,
+        Engine, Result, Store, StoreContextMut,
         component::{
             Destination, FutureReader, Lift, Linker, ResourceTable, Source, StreamConsumer,
             StreamProducer, StreamReader, StreamResult, VecBuffer,
@@ -120,7 +119,6 @@ pub async fn async_closed_streams() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -164,7 +162,7 @@ pub async fn async_closed_streams() -> Result<()> {
                                 input_tx.send(value).await?;
                             }
                             drop(input_tx);
-                            anyhow::Ok(())
+                            wasmtime::error::Ok(())
                         },
                         async {
                             for &value in &values {
@@ -193,7 +191,7 @@ pub async fn async_closed_streams() -> Result<()> {
             .run_concurrent(async |_| {
                 _ = input_tx.send(value);
                 assert_eq!(value, output_rx.await?);
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             })
             .await??;
     }
@@ -281,7 +279,6 @@ pub async fn async_closed_stream() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -416,7 +413,6 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -464,7 +460,7 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
                     .collect::<Vec<_>>()
             );
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await?
 }

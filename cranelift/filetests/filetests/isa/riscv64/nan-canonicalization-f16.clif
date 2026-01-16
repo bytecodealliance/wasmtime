@@ -1,0 +1,9 @@
+test compile
+set enable_nan_canonicalization=true
+target riscv64 has_zfhmin has_zfh
+
+function %fadd_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = fadd v0, v1
+    return v2
+}

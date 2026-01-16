@@ -3,8 +3,8 @@
 //! an example of setup for asynchronous usage, see
 //! `tests/all/epoch_interruption.rs`
 
-use anyhow::Error;
 use std::sync::Arc;
+use wasmtime::Error;
 use wasmtime::{Config, Engine, Instance, Module, Store};
 
 fn main() -> Result<(), Error> {

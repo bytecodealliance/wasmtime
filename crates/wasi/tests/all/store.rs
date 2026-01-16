@@ -1,5 +1,5 @@
-use anyhow::Result;
 use tempfile::TempDir;
+use wasmtime::Result;
 use wasmtime::component::ResourceTable;
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{

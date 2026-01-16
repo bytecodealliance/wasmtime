@@ -31,7 +31,8 @@ struct Component;
 
 impl Guest for Component {
     async fn run() {
-        ready::set_ready(true);
+        let thing = ready::Thing::new();
+        thing.set_ready(true);
         continue_::set_continue(true);
 
         unsafe {

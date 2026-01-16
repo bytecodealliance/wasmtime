@@ -3,9 +3,9 @@ use crate::{
     wasm_exporttype_vec_t, wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t,
     wasmtime_error_t,
 };
-use anyhow::Context;
 use std::ffi::CStr;
 use std::os::raw::c_char;
+use wasmtime::error::Context;
 use wasmtime::{Engine, Module};
 
 #[derive(Clone)]

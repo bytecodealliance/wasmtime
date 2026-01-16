@@ -1,7 +1,7 @@
 use super::PREOPENED_DIR_NAME;
 use crate::check::artifacts_dir;
-use anyhow::Result;
 use std::path::Path;
+use wasmtime::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};

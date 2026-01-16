@@ -111,7 +111,7 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_args = (0..16).map(|x| unsafe { XReg::new_unchecked(x) });
+        let mut x_args = (0..15).map(|x| unsafe { XReg::new_unchecked(x) });
         let mut f_args = (0..16).map(|f| unsafe { FReg::new_unchecked(f) });
         #[cfg(not(pulley_disable_interp_simd))]
         let mut v_args = (0..16).map(|v| unsafe { VReg::new_unchecked(v) });

@@ -5,17 +5,17 @@ pub mod witx;
 
 use crate::backend::{BackendError, Id, NamedTensor as BackendNamedTensor};
 use crate::wit::generated_::wasi::nn::tensor::TensorType;
-use anyhow::anyhow;
 use core::fmt;
 pub use registry::{GraphRegistry, InMemoryRegistry};
 use std::path::Path;
 use std::sync::Arc;
+use wasmtime::format_err;
 
 /// Construct an in-memory registry from the available backends and a list of
 /// `(<backend name>, <graph directory>)`. This assumes graphs can be loaded
 /// from a local directory, which is a safe assumption currently for the current
 /// model types.
-pub fn preload(preload_graphs: &[(String, String)]) -> anyhow::Result<(Vec<Backend>, Registry)> {
+pub fn preload(preload_graphs: &[(String, String)]) -> wasmtime::Result<(Vec<Backend>, Registry)> {
     let mut backends = backend::list();
     let mut registry = InMemoryRegistry::new();
     for (kind, path) in preload_graphs {
@@ -23,9 +23,9 @@ pub fn preload(preload_graphs: &[(String, String)]) -> anyhow::Result<(Vec<Backe
         let backend = backends
             .iter_mut()
             .find(|b| b.encoding() == kind_)
-            .ok_or(anyhow!("unsupported backend: {kind}"))?
+            .ok_or(format_err!("unsupported backend: {kind}"))?
             .as_dir_loadable()
-            .ok_or(anyhow!("{kind} does not support directory loading"))?;
+            .ok_or(format_err!("{kind} does not support directory loading"))?;
         registry.load(backend, Path::new(path))?;
     }
     Ok((backends, Registry::from(registry)))

@@ -1,8 +1,7 @@
-use crate::p3::bindings::http::handler::{Host, HostWithStore};
+use crate::p3::bindings::http::client::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use crate::p3::body::{Body, BodyExt as _};
 use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView};
-use anyhow::Context as _;
 use core::task::{Context, Poll, Waker};
 use http_body_util::BodyExt as _;
 use std::sync::Arc;
@@ -10,6 +9,7 @@ use tokio::sync::oneshot;
 use tokio::task::{self, JoinHandle};
 use tracing::debug;
 use wasmtime::component::{Accessor, Resource};
+use wasmtime::error::Context as _;
 
 /// A wrapper around [`JoinHandle`], which will [`JoinHandle::abort`] the task
 /// when dropped
@@ -34,7 +34,7 @@ async fn io_task_result(
 }
 
 impl HostWithStore for WasiHttp {
-    async fn handle<T>(
+    async fn send<T>(
         store: &Accessor<T, Self>,
         req: Resource<Request>,
     ) -> HttpResult<Resource<Response>> {

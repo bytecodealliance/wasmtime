@@ -1,6 +1,6 @@
 use super::Ctx;
-use anyhow::Result;
 use std::time::Duration;
+use wasmtime::Result;
 use wasmtime::component::Accessor;
 
 pub mod bindings {

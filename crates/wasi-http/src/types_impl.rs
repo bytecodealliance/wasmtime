@@ -7,10 +7,10 @@ use crate::types::{
     HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam, remove_forbidden_headers,
 };
 use crate::{HttpError, HttpResult, WasiHttpImpl, WasiHttpView, get_content_length};
-use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
+use wasmtime::{error::Context as _, format_err};
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
@@ -559,7 +559,7 @@ where
         _status: u16,
         _headers: Resource<Headers>,
     ) -> HttpResult<()> {
-        Err(HttpError::trap(anyhow!("not implemented")))
+        Err(HttpError::trap(format_err!("not implemented")))
     }
 }
 

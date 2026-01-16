@@ -113,7 +113,7 @@ impl StoreOpaque {
             heap.memory
                 .grow(delta_pages_for_alloc, limiter)
                 .await?
-                .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
+                .ok_or_else(|| format_err!("failed to grow GC heap"))?;
         }
         heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
 

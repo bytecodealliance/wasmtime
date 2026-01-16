@@ -214,7 +214,7 @@ impl CodeMemory {
             published: false,
             registered: false,
             enable_branch_protection: enable_branch_protection
-                .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
+                .ok_or_else(|| format_err!("missing `{}` section", obj::ELF_WASM_BTI))?,
             needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,

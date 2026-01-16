@@ -90,7 +90,7 @@ impl GcHeapPool {
             .alloc()
             .map(|slot| GcHeapAllocationIndex(slot.0))
             .ok_or_else(|| {
-                anyhow!(
+                format_err!(
                     "maximum concurrent GC heap limit of {} reached",
                     self.max_gc_heaps
                 )

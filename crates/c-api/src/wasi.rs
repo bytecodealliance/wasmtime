@@ -1,7 +1,6 @@
 //! The WASI embedding API definitions for Wasmtime.
 
 use crate::wasm_byte_vec_t;
-use anyhow::Result;
 use bytes::Bytes;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
@@ -10,6 +9,7 @@ use std::pin::Pin;
 use std::slice;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncWrite};
+use wasmtime::Result;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi_io::streams::StreamError;
@@ -204,7 +204,7 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
             .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
 
         if wrote != bytes.len() {
-            return Err(StreamError::LastOperationFailed(anyhow::anyhow!(
+            return Err(StreamError::LastOperationFailed(wasmtime::format_err!(
                 "Partial writes in wasip2 implementation are not allowed"
             )));
         }

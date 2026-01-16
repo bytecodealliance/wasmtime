@@ -681,3 +681,29 @@ fn func_subtyping() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn heap_type_matches_noexn() -> Result<()> {
+    // Test that NoExn only matches exception-related types.
+    // NoExn should NOT match unrelated heap types like Func, Extern, Any, etc.
+
+    // NoExn should match exception hierarchy types
+    assert!(HeapType::NoExn.matches(&HeapType::Exn));
+    assert!(HeapType::NoExn.matches(&HeapType::NoExn));
+
+    // NoExn should NOT match types outside the exception hierarchy
+    assert!(!HeapType::NoExn.matches(&HeapType::Func));
+    assert!(!HeapType::NoExn.matches(&HeapType::NoFunc));
+    assert!(!HeapType::NoExn.matches(&HeapType::Extern));
+    assert!(!HeapType::NoExn.matches(&HeapType::NoExtern));
+    assert!(!HeapType::NoExn.matches(&HeapType::Any));
+    assert!(!HeapType::NoExn.matches(&HeapType::Eq));
+    assert!(!HeapType::NoExn.matches(&HeapType::I31));
+    assert!(!HeapType::NoExn.matches(&HeapType::Struct));
+    assert!(!HeapType::NoExn.matches(&HeapType::Array));
+    assert!(!HeapType::NoExn.matches(&HeapType::None));
+    assert!(!HeapType::NoExn.matches(&HeapType::Cont));
+    assert!(!HeapType::NoExn.matches(&HeapType::NoCont));
+
+    Ok(())
+}

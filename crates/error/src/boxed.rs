@@ -19,7 +19,9 @@ pub(crate) unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemor
     if let Some(ptr) = NonNull::new(ptr) {
         Ok(ptr)
     } else {
-        out_of_line_slow_path!(Err(OutOfMemory::new()))
+        out_of_line_slow_path! {
+            Err(OutOfMemory::new(layout.size()))
+        }
     }
 }
 

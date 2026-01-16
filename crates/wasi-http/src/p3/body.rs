@@ -1,6 +1,5 @@
 use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
 use crate::p3::{WasiHttp, WasiHttpCtxView};
-use anyhow::Context as _;
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
@@ -18,6 +17,7 @@ use wasmtime::component::{
     Access, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
 
 /// The concrete type behind a `wasi:http/types.body` resource.

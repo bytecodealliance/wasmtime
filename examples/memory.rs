@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     // load_fn up our exports from the instance
     let memory = instance
         .get_memory(&mut store, "memory")
-        .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
+        .ok_or(wasmtime::format_err!("failed to find `memory` export"))?;
     let size = instance.get_typed_func::<(), i32>(&mut store, "size")?;
     let load_fn = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
     let store_fn = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;

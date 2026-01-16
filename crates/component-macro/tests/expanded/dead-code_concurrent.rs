@@ -206,7 +206,7 @@ pub mod a {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f<T>(
+                fn f<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = LiveType> + Send;
             }

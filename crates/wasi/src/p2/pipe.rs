@@ -7,13 +7,13 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use anyhow::anyhow;
 use bytes::Bytes;
 use std::pin::{Pin, pin};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
+use wasmtime::format_err;
 use wasmtime_wasi_io::{
     poll::Pollable,
     streams::{InputStream, OutputStream, StreamError},
@@ -99,7 +99,7 @@ impl OutputStream for MemoryOutputPipe {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut buf = self.buffer.lock().unwrap();
         if bytes.len() > self.capacity - buf.len() {
-            return Err(StreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(format_err!(
                 "write beyond capacity of MemoryOutputPipe"
             )));
         }
@@ -240,7 +240,7 @@ impl InputStream for AsyncReadStream {
                 Err(e)
             }
             Err(TryRecvError::Empty) => Ok(Bytes::new()),
-            Err(TryRecvError::Disconnected) => Err(StreamError::Trap(anyhow!(
+            Err(TryRecvError::Disconnected) => Err(StreamError::Trap(format_err!(
                 "AsyncReadStream sender died - should be impossible"
             ))),
         }

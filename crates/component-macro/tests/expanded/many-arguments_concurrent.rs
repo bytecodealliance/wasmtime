@@ -273,7 +273,7 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn many_args<T>(
+                fn many_args<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a1: u64,
                     a2: u64,
@@ -292,7 +292,7 @@ pub mod foo {
                     a15: u64,
                     a16: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn big_argument<T>(
+                fn big_argument<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: BigStruct,
                 ) -> impl ::core::future::Future<Output = ()> + Send;

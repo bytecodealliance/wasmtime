@@ -3,7 +3,7 @@
 use wasmtime::*;
 
 #[test]
-fn test_module_no_name() -> anyhow::Result<()> {
+fn test_module_no_name() -> wasmtime::Result<()> {
     let engine = Engine::default();
     let wat = r#"
         (module
@@ -18,7 +18,7 @@ fn test_module_no_name() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_module_name() -> anyhow::Result<()> {
+fn test_module_name() -> wasmtime::Result<()> {
     let engine = Engine::default();
     let wat = r#"
         (module $from_name_section

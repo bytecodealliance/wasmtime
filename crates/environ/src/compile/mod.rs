@@ -97,7 +97,7 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
 
     /// Enables clif output in the directory specified.
     fn clif_dir(&mut self, _path: &path::Path) -> Result<()> {
-        anyhow::bail!("clif output not supported");
+        bail!("clif output not supported");
     }
 
     /// Returns the currently configured target triple that compilation will
@@ -364,7 +364,7 @@ pub trait Compiler: Send + Sync {
             Pulley32 | Pulley32be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY32),
             Pulley64 | Pulley64be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY64),
             architecture => {
-                anyhow::bail!("target architecture {architecture:?} is unsupported");
+                bail!("target architecture {architecture:?} is unsupported");
             }
         };
         let mut obj = Object::new(

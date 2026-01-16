@@ -1,7 +1,7 @@
-use anyhow::Context;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use target_lexicon::Triple;
+use wasmtime::error::Context as _;
 use wasmtime::*;
 use wasmtime_environ::TripleExt;
 use wasmtime_test_macros::wasmtime_test;

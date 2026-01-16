@@ -121,7 +121,7 @@ impl TypeChecker<'_> {
             let idx = actual
                 .exports
                 .get(name)
-                .ok_or_else(|| anyhow!("module export `{name}` not defined"))?;
+                .ok_or_else(|| format_err!("module export `{name}` not defined"))?;
             let actual = actual.type_of(*idx);
             matching::entity_ty(self.engine, expected, &actual)
                 .with_context(|| format!("module export `{name}` has the wrong type"))?;
@@ -136,7 +136,7 @@ impl TypeChecker<'_> {
             let expected = expected
                 .imports
                 .get(&(module.to_string(), name.to_string()))
-                .ok_or_else(|| anyhow!("module import `{module}::{name}` not defined"))?;
+                .ok_or_else(|| format_err!("module import `{module}::{name}` not defined"))?;
             matching::entity_ty(self.engine, &actual, expected)
                 .with_context(|| format!("module import `{module}::{name}` has the wrong type"))?;
         }

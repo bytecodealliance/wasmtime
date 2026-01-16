@@ -1773,6 +1773,14 @@
 (decl i64_from_offset (i64) Offset32)
 (extern extractor infallible i64_from_offset i64_from_offset)
 
+(type SImm20 extern (enum))
+
+(decl pure partial memarg_imm_from_offset (SImm20) Offset32)
+(extern extractor memarg_imm_from_offset memarg_imm_from_offset)
+
+(decl pure partial memarg_imm_from_offset_plus_bias (Offset32 u8) SImm20)
+(extern constructor memarg_imm_from_offset_plus_bias memarg_imm_from_offset_plus_bias)
+
 ;; Accessors for `MemFlags`.
 
 (decl littleendian () MemFlags)
@@ -1787,6 +1795,9 @@
 ;; Accessors for `MemArg`.
 
 (type MemArg extern (enum))
+
+(decl memarg_reg_plus_reg_plus_off (Reg Reg SImm20 MemFlags) MemArg)
+(extern constructor memarg_reg_plus_reg_plus_off memarg_reg_plus_reg_plus_off)
 
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
@@ -1828,8 +1839,8 @@
 (rule (lower_address flags addr @ (value_type (ty_addr64 _)) (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
 
-(rule 1 (lower_address flags (has_type (ty_addr64 _) (iadd x y)) (i64_from_offset 0))
-      (memarg_reg_plus_reg x y 0 flags))
+(rule 1 (lower_address flags (has_type (ty_addr64 _) (iadd x y)) (memarg_imm_from_offset z))
+      (memarg_reg_plus_reg_plus_off x y z flags))
 
 (rule 1 (lower_address flags
                      (symbol_value (symbol_value_data name (RelocDistance.Near) sym_offset))
@@ -1845,8 +1856,9 @@
 (rule (lower_address_bias flags addr @ (value_type $I64) (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
 
-(rule 1 (lower_address_bias flags (has_type $I64 (iadd x y)) (i64_from_offset 0) bias)
-      (memarg_reg_plus_reg x y bias flags))
+(rule 1 (lower_address_bias flags (has_type $I64 (iadd x y)) z bias)
+      (if-let final_offset (memarg_imm_from_offset_plus_bias z bias))
+      (memarg_reg_plus_reg_plus_off x y final_offset flags))
 
 
 ;; Test whether a `load` address will be lowered to a `MemArg::Symbol`.

@@ -1,6 +1,6 @@
 use crate::util::PipeProducer;
-use anyhow::Result;
 use futures::channel::mpsc;
+use wasmtime::Result;
 use wasmtime::component::{Accessor, Resource, StreamReader};
 
 use super::Ctx;

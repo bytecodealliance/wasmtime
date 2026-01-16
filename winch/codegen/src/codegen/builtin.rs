@@ -1,11 +1,10 @@
 //! Builtin function handling.
 
 use crate::{
-    CallingConvention,
+    CallingConvention, Result,
     abi::{ABI, ABISig},
     codegen::env::ptr_type_from_ptr_size,
 };
-use anyhow::Result;
 use std::sync::Arc;
 use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmValType};
 

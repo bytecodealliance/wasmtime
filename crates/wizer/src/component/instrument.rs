@@ -1,8 +1,8 @@
 use crate::ModuleContext;
 use crate::component::info::{Accessor, RawSection};
 use crate::component::{ComponentContext, WIZER_INSTANCE};
-use anyhow::{Result, bail};
 use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
+use wasmtime::{Result, bail};
 
 /// Instrumentation phase of wizening a component.
 ///

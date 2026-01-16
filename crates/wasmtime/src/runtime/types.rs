@@ -1233,7 +1233,7 @@ impl HeapType {
             (HeapType::Any, _) => false,
 
             (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
-            (HeapType::NoExn, _) => true,
+            (HeapType::NoExn, _) => false,
 
             (HeapType::ConcreteExn(_), HeapType::Exn) => true,
             (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
@@ -2705,7 +2705,7 @@ impl FuncType {
             .results()
             .map(|ty| ty.default_value())
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| anyhow!("function results do not have a default value"))?;
+            .ok_or_else(|| format_err!("function results do not have a default value"))?;
         Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
@@ -3000,7 +3000,7 @@ impl GlobalType {
         let val = self
             .content()
             .default_value()
-            .ok_or_else(|| anyhow!("global type has no default value"))?;
+            .ok_or_else(|| format_err!("global type has no default value"))?;
         RuntimeGlobal::new(store, self.clone(), val)
     }
 

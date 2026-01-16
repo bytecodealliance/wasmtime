@@ -86,7 +86,7 @@ pub trait HostBazWithStore: wasmtime::component::HasData + Send {
     ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
     where
         Self: Sized;
-    fn foo<T>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         self_: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -194,7 +194,7 @@ pub struct TheWorldIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
 pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithStore + Send {
-    fn foo<T>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -399,7 +399,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
                 where
                     Self: Sized;
-                fn foo<T>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -407,7 +407,7 @@ pub mod foo {
             pub trait HostBar: Send {}
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {}
             pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {
-                fn foo<T>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }

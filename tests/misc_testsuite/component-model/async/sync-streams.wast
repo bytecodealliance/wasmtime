@@ -63,6 +63,7 @@
         ;; (stream.read $tx $bufp 4) will block and, because called
         ;; synchronously, switch to the caller who will write and rendezvous
         (local.set $bufp (i32.const 16))
+
         (local.set $ret (call $stream.read (local.get $rx) (local.get $bufp) (i32.const 4)))
         (if (i32.ne (i32.const 0x41 (; COMPLETED=0 | (4<<4) ;)) (local.get $ret))
           (then unreachable))
@@ -94,18 +95,18 @@
       (export "stream.drop-readable" (func $stream.drop-readable))
       (export "stream.drop-writable" (func $stream.drop-writable))
     ))))
-    (func (export "get") (result (stream u8)) (canon lift
+    (func (export "get") async (result (stream u8)) (canon lift
       (core func $cm "get")
       async (memory $memory "mem") (callback (func $cm "get_cb"))
     ))
-    (func (export "set") (param "in" (stream u8)) (canon lift
+    (func (export "set") async (param "in" (stream u8)) (canon lift
       (core func $cm "set")
       async (memory $memory "mem") (callback (func $cm "set_cb"))
     ))
   )
   (component $D
-    (import "get" (func $get (result (stream u8))))
-    (import "set" (func $set (param "in" (stream u8))))
+    (import "get" (func $get async (result (stream u8))))
+    (import "set" (func $set async (param "in" (stream u8))))
 
     (core module $Memory (memory (export "mem") 1))
     (core instance $memory (instantiate $Memory))
@@ -172,7 +173,7 @@
       (export "get" (func $get'))
       (export "set" (func $set'))
     ))))
-    (func (export "run") (result u32) (canon lift (core func $dm "run")))
+    (func (export "run") async (result u32) (canon lift (core func $dm "run")))
   )
 
   (instance $c (instantiate $C))

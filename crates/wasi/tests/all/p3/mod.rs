@@ -1,9 +1,8 @@
 use crate::store::{Ctx, MyWasiCtx};
-use anyhow::{Context as _, anyhow};
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime::Result;
 use wasmtime::component::{Component, Linker};
+use wasmtime::{Result, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 
 async fn run(path: &str) -> Result<()> {
@@ -42,128 +41,128 @@ async fn run_allow_blocking_current_thread(
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
         .0
-        .map_err(|()| anyhow!("`wasi:cli/run#run` failed"))
+        .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
 foreach_p3!(assert_test_exists);
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_cli() -> anyhow::Result<()> {
+async fn p3_cli() -> wasmtime::Result<()> {
     run(P3_CLI_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_clocks_sleep() -> anyhow::Result<()> {
+async fn p3_clocks_sleep() -> wasmtime::Result<()> {
     run(P3_CLOCKS_SLEEP_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_filesystem_file_read_write() -> anyhow::Result<()> {
+async fn p3_filesystem_file_read_write() -> wasmtime::Result<()> {
     run(P3_FILESYSTEM_FILE_READ_WRITE_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_filesystem_file_read_write_blocking() -> anyhow::Result<()> {
+async fn p3_filesystem_file_read_write_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_FILESYSTEM_FILE_READ_WRITE_COMPONENT, true).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_random_imports() -> anyhow::Result<()> {
+async fn p3_random_imports() -> wasmtime::Result<()> {
     run(P3_RANDOM_IMPORTS_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_ip_name_lookup() -> anyhow::Result<()> {
+async fn p3_sockets_ip_name_lookup() -> wasmtime::Result<()> {
     run(P3_SOCKETS_IP_NAME_LOOKUP_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_bind() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_bind() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_BIND_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_connect() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_connect() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_CONNECT_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_listen() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_listen() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_LISTEN_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_sample_application() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_sample_application() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_SAMPLE_APPLICATION_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_sockopts() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_sockopts() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_SOCKOPTS_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_states() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_states() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_STATES_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_tcp_streams() -> anyhow::Result<()> {
+async fn p3_sockets_tcp_streams() -> wasmtime::Result<()> {
     run(P3_SOCKETS_TCP_STREAMS_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_bind() -> anyhow::Result<()> {
+async fn p3_sockets_udp_bind() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_BIND_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_connect() -> anyhow::Result<()> {
+async fn p3_sockets_udp_connect() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_CONNECT_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_receive() -> anyhow::Result<()> {
+async fn p3_sockets_udp_receive() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_RECEIVE_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_sample_application() -> anyhow::Result<()> {
+async fn p3_sockets_udp_sample_application() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_SAMPLE_APPLICATION_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_send() -> anyhow::Result<()> {
+async fn p3_sockets_udp_send() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_SEND_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_sockopts() -> anyhow::Result<()> {
+async fn p3_sockets_udp_sockopts() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_SOCKOPTS_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_sockets_udp_states() -> anyhow::Result<()> {
+async fn p3_sockets_udp_states() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_STATES_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_readdir() -> anyhow::Result<()> {
+async fn p3_readdir() -> wasmtime::Result<()> {
     run(P3_READDIR_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_readdir_blocking() -> anyhow::Result<()> {
+async fn p3_readdir_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_READDIR_COMPONENT, true).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_file_write() -> anyhow::Result<()> {
+async fn p3_file_write() -> wasmtime::Result<()> {
     run(P3_FILE_WRITE_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_file_write_blocking() -> anyhow::Result<()> {
+async fn p3_file_write_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
 

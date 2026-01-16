@@ -21,7 +21,6 @@ p3 = ["wasmtime-wasi/p3", "dep:tokio-util"]
 component-model-async = ["futures/alloc", "wasmtime/component-model-async"]
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true, default-features = false }

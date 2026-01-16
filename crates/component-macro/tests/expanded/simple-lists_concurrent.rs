@@ -192,16 +192,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn simple_list1<T>(
+                fn simple_list1<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     l: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn simple_list2<T>(
+                fn simple_list2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u32>,
                 > + Send;
-                fn simple_list3<T>(
+                fn simple_list3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::Vec<u32>,
                     b: wasmtime::component::__internal::Vec<u32>,
@@ -211,7 +211,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u32>,
                     ),
                 > + Send;
-                fn simple_list4<T>(
+                fn simple_list4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     l: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::Vec<u32>,

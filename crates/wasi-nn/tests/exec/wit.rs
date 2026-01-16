@@ -1,9 +1,8 @@
 use super::PREOPENED_DIR_NAME;
 use crate::check::artifacts_dir;
-use anyhow::{Result, anyhow};
 use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Result, Store, format_err};
 use wasmtime_wasi::p2::bindings::sync::Command;
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxView};
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -24,7 +23,7 @@ pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     let mut store = Store::new(&engine, Ctx::new(&artifacts_dir(), preload_model, backend)?);
     let command = Command::instantiate(&mut store, &module, &linker)?;
     let result = command.wasi_cli_run().call_run(&mut store)?;
-    result.map_err(|_| anyhow!("failed to run command"))
+    result.map_err(|_| format_err!("failed to run command"))
 }
 
 /// The host state for running wasi-nn component tests.

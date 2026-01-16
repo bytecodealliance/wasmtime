@@ -321,7 +321,7 @@ fn compile_module(
 ) -> Option<Module> {
     log_wasm(bytes);
 
-    fn is_pcc_error(e: &anyhow::Error) -> bool {
+    fn is_pcc_error(e: &wasmtime::Error) -> bool {
         // NOTE: please keep this predicate in sync with the display format of CodegenError,
         // defined in `wasmtime/cranelift/codegen/src/result.rs`
         e.to_string().to_lowercase().contains("proof-carrying-code")
@@ -400,7 +400,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
 
 fn unwrap_instance(
     store: &Store<StoreLimits>,
-    instance: anyhow::Result<Instance>,
+    instance: wasmtime::Result<Instance>,
 ) -> Option<Instance> {
     let e = match instance {
         Ok(i) => return Some(i),
@@ -460,7 +460,7 @@ pub fn differential(
     name: &str,
     args: &[DiffValue],
     result_tys: &[DiffValueType],
-) -> anyhow::Result<bool> {
+) -> wasmtime::Result<bool> {
     log::debug!("Evaluating: `{name}` with {args:?}");
     let lhs_results = match lhs.evaluate(name, args, result_tys) {
         Ok(Some(results)) => Ok(results),
@@ -1324,7 +1324,7 @@ mod tests {
                 let ok =
                     Validator::new_with_features(WasmFeatures::all() ^ feature).validate_all(&wasm);
                 if ok.is_err() {
-                    anyhow::bail!("generated a module with {feature:?} but that wasn't expected");
+                    wasmtime::bail!("generated a module with {feature:?} but that wasn't expected");
                 }
             }
 

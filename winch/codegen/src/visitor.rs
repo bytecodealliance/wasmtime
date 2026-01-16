@@ -17,10 +17,9 @@ use crate::masm::{
     V128LoadExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind,
     V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
-
 use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
-use anyhow::{Result, anyhow, bail, ensure};
+use crate::{Result, bail, ensure, format_err};
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
@@ -48,7 +47,7 @@ macro_rules! def_unsupported {
                 fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                     $($(let _ = $arg;)*)?
 
-                    Err(anyhow!(CodeGenError::unimplemented_wasm_instruction()))
+                    Err(format_err!(CodeGenError::unimplemented_wasm_instruction()))
                 }
             );
         )*
@@ -1695,7 +1694,7 @@ where
 
         match heap_type {
             WasmHeapType::Func => self.emit_lazy_init_funcref(table_index),
-            _ => Err(anyhow!(CodeGenError::unsupported_wasm_type())),
+            _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
         }
     }
 
@@ -1786,7 +1785,7 @@ where
                 self.context.free_reg(base);
                 Ok(())
             }
-            _ => Err(anyhow!(CodeGenError::unsupported_wasm_type())),
+            _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
         }
     }
 
@@ -1883,7 +1882,7 @@ where
                 self.context.stack.push(TypedReg::i32(top).into());
                 Ok(())
             }
-            _ => Err(anyhow!(CodeGenError::unsupported_32_bit_platform())),
+            _ => Err(format_err!(CodeGenError::unsupported_32_bit_platform())),
         }
     }
 
@@ -4617,7 +4616,7 @@ where
 }
 
 impl TryFrom<WasmValType> for OperandSize {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
     fn try_from(ty: WasmValType) -> Result<OperandSize> {
         let ty = match ty {
             WasmValType::I32 | WasmValType::F32 => OperandSize::S32,

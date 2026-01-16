@@ -1,4 +1,4 @@
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, Type};
 use wasmtime::{Engine, Module, Precompiled, Store};

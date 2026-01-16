@@ -3,9 +3,8 @@
 
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{Error, Result, anyhow};
 use wasm_spec_interpreter::SpecValue;
-use wasmtime::Trap;
+use wasmtime::{Error, Result, Trap, format_err};
 
 /// A wrapper for `wasm-spec-interpreter` as a [`DiffEngine`].
 pub struct SpecInterpreter;
@@ -41,7 +40,7 @@ impl DiffEngine for SpecInterpreter {
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let instance = wasm_spec_interpreter::instantiate(wasm)
-            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {e}"))?;
+            .map_err(|e| format_err!("failed to instantiate in spec interpreter: {e}"))?;
         Ok(Box::new(SpecInstance { instance }))
     }
 
@@ -73,7 +72,7 @@ impl DiffInstance for SpecInstance {
         let arguments = arguments.iter().map(SpecValue::from).collect();
         match wasm_spec_interpreter::interpret(&self.instance, function_name, Some(arguments)) {
             Ok(results) => Ok(Some(results.into_iter().map(SpecValue::into).collect())),
-            Err(err) => Err(anyhow!(err)),
+            Err(err) => Err(format_err!(err)),
         }
     }
 

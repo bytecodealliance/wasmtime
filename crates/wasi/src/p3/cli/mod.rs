@@ -71,7 +71,7 @@ where
 pub fn add_to_linker_with_options<T>(
     linker: &mut Linker<T>,
     exit_options: &exit::LinkOptions,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     T: WasiCliView + 'static,
 {

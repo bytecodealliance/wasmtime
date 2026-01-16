@@ -484,12 +484,12 @@ pub async fn default_send_request(
 mod tests {
     use super::*;
     use crate::p3::DefaultWasiHttpCtx;
-    use anyhow::Result;
     use core::future::Future;
     use core::pin::pin;
     use core::str::FromStr;
     use core::task::{Context, Poll, Waker};
     use http_body_util::{BodyExt, Empty, Full};
+    use wasmtime::Result;
     use wasmtime::{Engine, Store};
     use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 

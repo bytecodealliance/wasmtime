@@ -3,10 +3,10 @@ use crate::filesystem::File;
 use crate::p2::bindings::filesystem::types;
 use crate::p2::{InputStream, OutputStream, Pollable, StreamError, StreamResult};
 use crate::runtime::AbortOnDropJoinHandle;
-use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
 use std::mem;
+use wasmtime::format_err;
 
 pub type FsResult<T> = Result<T, FsError>;
 
@@ -287,7 +287,7 @@ impl OutputStream for FileOutputStream {
             OutputState::Closed => return Err(StreamError::Closed),
             OutputState::Waiting(_) | OutputState::Error(_) => {
                 // a write is pending - this call was not permitted
-                return Err(StreamError::Trap(anyhow!(
+                return Err(StreamError::Trap(format_err!(
                     "write not permitted: check_write not called first"
                 )));
             }

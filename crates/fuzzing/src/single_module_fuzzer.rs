@@ -239,7 +239,7 @@ struct FuzzInput<'a> {
 /// and the module ends with a custom section indicating it's a fuzz input
 /// then the contents of the custom section are returned along with the
 /// contents of the original module.
-fn extract_fuzz_input(data: &[u8]) -> anyhow::Result<FuzzInput<'_>> {
+fn extract_fuzz_input(data: &[u8]) -> wasmtime::Result<FuzzInput<'_>> {
     use wasmparser::{Parser, Payload};
     let mut prev_end = 8;
     for section in Parser::new(0).parse_all(data) {
@@ -267,7 +267,7 @@ fn extract_fuzz_input(data: &[u8]) -> anyhow::Result<FuzzInput<'_>> {
             prev_end = range.end;
         }
     }
-    anyhow::bail!("no input found")
+    wasmtime::bail!("no input found")
 }
 
 #[cfg(test)]

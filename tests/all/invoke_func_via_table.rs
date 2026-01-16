@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::Context as _;
+use wasmtime::error::Context as _;
 use wasmtime::*;
 
 #[test]

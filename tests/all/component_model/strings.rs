@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use super::REALLOC_AND_FREE;
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 
@@ -314,10 +314,10 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     );
 
     let component = Component::new(engine, &component)?;
-    let mut store = Store::new(engine, ());
 
-    let mut test_overflow = |size: u32| -> Result<()> {
+    let test_overflow = |size: u32| -> Result<()> {
         println!("src={src} dst={dst} size={size:#x}");
+        let mut store = Store::new(engine, ());
         let instance = Linker::new(engine).instantiate(&mut store, &component)?;
         let func = instance.get_typed_func::<(u32,), ()>(&mut store, "f")?;
         let trap = func
@@ -524,7 +524,7 @@ fn test_raw_when_encoded(
     dst: &str,
     bytes: &[u8],
     len: u32,
-) -> Result<Option<anyhow::Error>> {
+) -> Result<Option<wasmtime::Error>> {
     let component = format!(
         r#"
 (component

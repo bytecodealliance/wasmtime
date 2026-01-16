@@ -1,10 +1,6 @@
 use crate::Abi;
 use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
-use crate::error::Context;
-use crate::error::anyhow;
-use crate::error::ensure;
-use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, FuncKey, ModuleEnvironment, ModuleInternedTypeIndex,
@@ -606,6 +602,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
 
                     // We could in theory inline these trampolines, so it could
                     // potentially make sense to record that we know this
@@ -1204,7 +1201,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     component
                         .get(unchecked_range.start..unchecked_range.end)
                         .ok_or_else(|| {
-                            anyhow!(
+                            format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
                                 unchecked_range.start,
                                 unchecked_range.end,
@@ -1681,7 +1678,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 kind: &str,
                 import: &str,
                 name: &str,
-            ) -> core::result::Result<(), anyhow::Error> {
+            ) -> Result<()> {
                 let expected_len = expected.len();
                 let actual_len = actual.len();
                 ensure!(

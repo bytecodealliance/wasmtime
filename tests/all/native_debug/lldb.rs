@@ -1,10 +1,10 @@
-use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
 use test_programs_artifacts::*;
+use wasmtime::{Result, bail, format_err};
 
 macro_rules! assert_test_exists {
     ($name:ident) => {

@@ -29,7 +29,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
         });
 
         let mut result = match f.results.len() {
-            0 if f.noreturn => quote!(wiggle::anyhow::Error),
+            0 if f.noreturn => quote!(wiggle::error::Error),
             0 => quote!(()),
             1 => {
                 let (ok, err) = match &**f.results[0].tref.type_() {

@@ -16,7 +16,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 log = { workspace = true }
 rand = "0.8"
 wasi-common = { workspace = true, features = ["exit"]}

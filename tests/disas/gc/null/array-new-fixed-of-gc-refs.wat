@@ -34,11 +34,11 @@
 ;; @0025                               v17 = load.i64 notrap aligned readonly v0+32
 ;; @0025                               v18 = load.i32 notrap aligned v17
 ;;                                     v82 = iconst.i32 7
-;; @0025                               v21 = uadd_overflow_trap v18, v82, user18  ; v82 = 7
+;; @0025                               v21 = uadd_overflow_trap v18, v82, user17  ; v82 = 7
 ;;                                     v89 = iconst.i32 -8
 ;; @0025                               v23 = band v21, v89  ; v89 = -8
 ;;                                     v74 = iconst.i32 24
-;; @0025                               v24 = uadd_overflow_trap v23, v74, user18  ; v74 = 24
+;; @0025                               v24 = uadd_overflow_trap v23, v74, user17  ; v74 = 24
 ;; @0025                               v56 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0025                               v26 = load.i64 notrap aligned v56+32
 ;; @0025                               v25 = uextend.i64 v24

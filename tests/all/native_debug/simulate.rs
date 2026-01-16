@@ -1,8 +1,8 @@
 use super::dump::{DwarfDumpSection, get_dwarfdump};
 use super::obj::compile_cranelift;
-use anyhow::{Result, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use tempfile::NamedTempFile;
+use wasmtime::{Result, format_err};
 use wat::parse_str;
 
 #[allow(dead_code, reason = "used by conditionally-defined tests below")]

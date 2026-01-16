@@ -311,7 +311,7 @@ pub use wasmtime_wasi_io::streams::{
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
     let options = bindings::LinkOptions::default();
     add_to_linker_with_options_async(linker, &options)
 }
@@ -320,7 +320,7 @@ pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Resul
 pub fn add_to_linker_with_options_async<T: WasiView>(
     linker: &mut Linker<T>,
     options: &bindings::LinkOptions,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_async_io_to_linker(linker)?;
     add_nonblocking_to_linker(linker, options)?;
 
@@ -335,7 +335,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 fn add_nonblocking_to_linker<'a, T: WasiView, O>(
     linker: &mut Linker<T>,
     options: &'a O,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     bindings::sockets::network::LinkOptions: From<&'a O>,
     bindings::cli::exit::LinkOptions: From<&'a O>,
@@ -371,7 +371,7 @@ where
 /// present in the `wasi:http/proxy` world.
 pub fn add_to_linker_proxy_interfaces_async<T: WasiView>(
     linker: &mut Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_async_io_to_linker(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
@@ -381,12 +381,12 @@ pub fn add_to_linker_proxy_interfaces_async<T: WasiView>(
 #[doc(hidden)]
 pub fn add_to_linker_proxy_interfaces_sync<T: WasiView>(
     linker: &mut Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_sync_wasi_io(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
 
-fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
     use crate::p2::bindings::{cli, clocks, random};
 
     let l = linker;
@@ -455,7 +455,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
 /// ```
 pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let options = bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
 }
@@ -464,7 +464,7 @@ pub fn add_to_linker_sync<T: WasiView>(
 pub fn add_to_linker_with_options_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
     options: &bindings::sync::LinkOptions,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_nonblocking_to_linker(linker, options)?;
     add_sync_wasi_io(linker)?;
 
@@ -479,7 +479,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
 /// [`add_to_linker_proxy_interfaces_sync`].
 fn add_sync_wasi_io<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let l = linker;
     wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     bindings::sync::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
@@ -499,7 +499,7 @@ impl HasData for HasIo {
 // that's not possible with these two traits in separate crates. For now this
 // is some small duplication but if this gets worse over time then we'll want
 // to massage this.
-fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> anyhow::Result<()> {
+fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> wasmtime::Result<()> {
     wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::streams::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;

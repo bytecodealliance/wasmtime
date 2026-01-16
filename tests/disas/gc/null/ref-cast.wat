@@ -57,7 +57,7 @@
 ;; @001e                               jump block4(v23)
 ;;
 ;;                                 block4(v24: i32):
-;; @001e                               trapz v24, user19
+;; @001e                               trapz v24, user18
 ;;                                     v25 = load.i32 notrap v36
 ;; @0021                               jump block1
 ;;

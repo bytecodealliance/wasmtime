@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use super::{Param, Type, make_echo_component, make_echo_component_with_params};
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::types::{self, Case, ComponentItem, Field};
 use wasmtime::component::{Component, Linker, ResourceType, Val};
 use wasmtime::{Module, Store};

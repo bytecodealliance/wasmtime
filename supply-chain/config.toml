@@ -205,6 +205,9 @@ audit-as-crates-io = true
 [policy.wasmtime-wasi-tls-nativetls]
 audit-as-crates-io = true
 
+[policy.wasmtime-wasi-tls-openssl]
+audit-as-crates-io = true
+
 [policy.wasmtime-wast]
 audit-as-crates-io = true
 

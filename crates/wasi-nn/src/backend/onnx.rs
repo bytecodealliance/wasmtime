@@ -112,14 +112,14 @@ impl OnnxExecutionContext {
                 if i < list.len() {
                     i
                 } else {
-                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                    return Err(BackendError::BackendAccess(wasmtime::format_err!(
                         "incorrect tensor index: {i} >= {}",
                         list.len()
                     )));
                 }
             }
             Id::Name(n) => list.iter().position(|s| s.shape.name == n).ok_or_else(|| {
-                BackendError::BackendAccess(anyhow::anyhow!("unknown tensor name: {n}"))
+                BackendError::BackendAccess(wasmtime::format_err!("unknown tensor name: {n}"))
             })?,
         };
         Ok(index)
@@ -168,12 +168,12 @@ impl BackendExecutionContext for OnnxExecutionContext {
                                 if idx < self.inputs.len() {
                                     idx
                                 } else {
-                                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
-                                        "Input index out of range: {idx}"
-                                    )));
+                                    return Err(BackendError::BackendAccess(
+                                        wasmtime::format_err!("Input index out of range: {idx}"),
+                                    ));
                                 }
                             } else {
-                                return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                                return Err(BackendError::BackendAccess(wasmtime::format_err!(
                                     "Unknown input tensor name: {}",
                                     input.name
                                 )));
@@ -249,7 +249,7 @@ impl BackendExecutionContext for OnnxExecutionContext {
         if let Some(tensor) = &output.tensor {
             Ok(tensor.clone())
         } else {
-            Err(BackendError::BackendAccess(anyhow::anyhow!(
+            Err(BackendError::BackendAccess(wasmtime::format_err!(
                 "missing output tensor: {}; has `compute` been called?",
                 output.shape.name
             )))
@@ -259,7 +259,7 @@ impl BackendExecutionContext for OnnxExecutionContext {
 
 impl From<ort::Error> for BackendError {
     fn from(e: ort::Error) -> Self {
-        BackendError::BackendAccess(anyhow::anyhow!("{e}"))
+        BackendError::BackendAccess(wasmtime::format_err!("{e}"))
     }
 }
 
@@ -300,9 +300,9 @@ impl Shape {
         })
     }
 
-    fn matches(&self, tensor: &Tensor) -> anyhow::Result<()> {
+    fn matches(&self, tensor: &Tensor) -> wasmtime::Result<()> {
         if self.dimensions.len() != tensor.dimensions.len() {
-            return Err(anyhow::anyhow!(
+            return Err(wasmtime::format_err!(
                 "input tensor cardinality does not match model: {:?} != {:?}",
                 self.dimensions,
                 tensor.dimensions
@@ -311,7 +311,7 @@ impl Shape {
             for (&shape_dim, &tensor_dim) in self.dimensions.iter().zip(tensor.dimensions.iter()) {
                 let tensor_dim = tensor_dim as i64;
                 if !is_dynamic_dimension(shape_dim) && shape_dim != tensor_dim {
-                    return Err(anyhow::anyhow!(
+                    return Err(wasmtime::format_err!(
                         "input tensor dimensions do not match model: {:?} != {:?}",
                         self.dimensions,
                         tensor.dimensions
@@ -320,7 +320,7 @@ impl Shape {
             }
         }
         if self.ty != tensor.ty {
-            return Err(anyhow::anyhow!(
+            return Err(wasmtime::format_err!(
                 "input tensor type does not match model: {:?} != {:?}",
                 self.ty,
                 tensor.ty
@@ -337,7 +337,7 @@ fn convert_value_type(vt: &ValueType) -> Result<(Vec<i64>, TensorType), BackendE
             let ty = (*ty).try_into()?;
             Ok((dimensions, ty))
         }
-        _ => Err(BackendError::BackendAccess(anyhow::anyhow!(
+        _ => Err(BackendError::BackendAccess(wasmtime::format_err!(
             "unsupported input type: {vt:?}"
         ))),
     }
@@ -345,7 +345,7 @@ fn convert_value_type(vt: &ValueType) -> Result<(Vec<i64>, TensorType), BackendE
 
 fn convert_i64(i: &i64) -> Result<u32, BackendError> {
     u32::try_from(*i).map_err(|d| -> BackendError {
-        anyhow::anyhow!("unable to convert dimension to u32: {d}").into()
+        wasmtime::format_err!("unable to convert dimension to u32: {d}").into()
     })
 }
 
@@ -358,7 +358,7 @@ impl TryFrom<TensorElementType> for TensorType {
             TensorElementType::Uint8 => Ok(TensorType::U8),
             TensorElementType::Int32 => Ok(TensorType::I32),
             TensorElementType::Int64 => Ok(TensorType::I64),
-            _ => Err(BackendError::BackendAccess(anyhow::anyhow!(
+            _ => Err(BackendError::BackendAccess(wasmtime::format_err!(
                 "unsupported tensor type: {ty:?}"
             ))),
         }
@@ -376,7 +376,7 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
                     .map(|d| *d as i64) // TODO: fewer conversions
                     .collect();
                 let ort_tensor = OrtTensor::<f32>::from_array((dimensions, data)).map_err(|e| {
-                    BackendError::BackendAccess(anyhow::anyhow!(
+                    BackendError::BackendAccess(wasmtime::format_err!(
                         "failed to create ONNX session input: {e}"
                     ))
                 })?;
@@ -387,7 +387,7 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
             }
         },
         None => {
-            return Err(BackendError::BackendAccess(anyhow::anyhow!(
+            return Err(BackendError::BackendAccess(wasmtime::format_err!(
                 "missing input tensor: {}",
                 slot.shape.name
             )));

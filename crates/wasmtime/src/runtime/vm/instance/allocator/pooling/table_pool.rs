@@ -32,7 +32,7 @@ impl TablePool {
         let table_size = HostAlignedByteCount::new_rounded_up(
             crate::runtime::vm::table::NOMINAL_MAX_TABLE_ELEM_SIZE
                 .checked_mul(config.limits.table_elements)
-                .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
+                .ok_or_else(|| format_err!("table size exceeds addressable memory"))?,
         )?;
 
         let max_total_tables = usize::try_from(config.limits.total_tables).unwrap();

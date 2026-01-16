@@ -60,6 +60,8 @@ mod context;
 mod error;
 mod oom;
 mod ptr;
+#[cfg(feature = "anyhow")]
+mod to_wasmtime_result;
 mod vtable;
 
 #[doc(hidden)]
@@ -70,6 +72,8 @@ pub use backtrace::disable_backtrace;
 pub use context::Context;
 pub use error::*;
 pub use oom::OutOfMemory;
+#[cfg(feature = "anyhow")]
+pub use to_wasmtime_result::ToWasmtimeResult;
 
 /// A result of either `Ok(T)` or an [`Err(Error)`][Error].
 pub type Result<T, E = Error> = core::result::Result<T, E>;

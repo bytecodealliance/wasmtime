@@ -1,11 +1,11 @@
 #![cfg(not(miri))]
 
-use anyhow::{Result, bail};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, ExitStatus, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
+use wasmtime::{Result, bail};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
 // If the `stdin` is `Some`, opens the file and redirects to the child's stdin.
@@ -448,7 +448,7 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
-            Ok::<_, anyhow::Error>(String::from_utf8(output.stdout).unwrap())
+            Ok::<_, wasmtime::Error>(String::from_utf8(output.stdout).unwrap())
         }?;
         assert_eq!(stdout, "Hello, world!\n");
     }
@@ -1104,7 +1104,6 @@ fn increase_stack_size() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::{Context, Result, bail};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
     use std::io::{self, BufRead, BufReader, Read, Write};
@@ -1114,6 +1113,7 @@ mod test_programs {
     use std::thread::{self, JoinHandle};
     use test_programs_artifacts::*;
     use tokio::net::TcpStream;
+    use wasmtime::{Result, bail, error::Context as _};
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
@@ -2182,6 +2182,25 @@ start a print 1234
         Ok(())
     }
 
+    #[test]
+    fn p2_cli_p3_hello_stdout_post_return_invoke() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "-Sp3",
+            "--invoke",
+            "run()",
+            P3_CLI_HELLO_STDOUT_POST_RETURN_COMPONENT,
+        ]);
+        if cfg!(feature = "component-model-async") {
+            let output = output?;
+            assert_eq!(output, "hello, world\nhello again, after return\nok\n");
+        } else {
+            assert!(output.is_err());
+        }
+        Ok(())
+    }
+
     mod invoke {
         use super::*;
 
@@ -2391,7 +2410,7 @@ start a print 1234
 
                         conn_task.await??;
 
-                        anyhow::Ok(())
+                        wasmtime::error::Ok(())
                     }
                 })
             }
@@ -2487,7 +2506,7 @@ start a print 1234
 
                         conn_task.await??;
 
-                        anyhow::Ok(())
+                        wasmtime::error::Ok(())
                     }
                 })
             }

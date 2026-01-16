@@ -2,9 +2,8 @@ use crate::{
     WasmtimeStoreContext, WasmtimeStoreContextMut, handle_result, wasm_extern_t, wasm_ref_t,
     wasm_store_t, wasm_tabletype_t, wasmtime_error_t, wasmtime_val_t,
 };
-use anyhow::anyhow;
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, Ref, RootScope, Table, TableType};
+use wasmtime::{Extern, Ref, RootScope, Table, TableType, format_err};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -125,7 +124,7 @@ pub unsafe extern "C" fn wasmtime_table_new(
     handle_result(
         init.to_val(&mut scope)
             .ref_()
-            .ok_or_else(|| anyhow!("wasmtime_table_new init value is not a reference"))
+            .ok_or_else(|| format_err!("wasmtime_table_new init value is not a reference"))
             .and_then(|init| Table::new(scope, tt.ty().ty.clone(), init)),
         |table| *out = table,
     )
@@ -167,7 +166,7 @@ pub unsafe extern "C" fn wasmtime_table_set(
     handle_result(
         val.to_val(&mut scope)
             .ref_()
-            .ok_or_else(|| anyhow!("wasmtime_table_set value is not a reference"))
+            .ok_or_else(|| format_err!("wasmtime_table_set value is not a reference"))
             .and_then(|val| table.set(scope, index, val)),
         |()| {},
     )
@@ -190,7 +189,7 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     handle_result(
         val.to_val(&mut scope)
             .ref_()
-            .ok_or_else(|| anyhow!("wasmtime_table_grow value is not a reference"))
+            .ok_or_else(|| format_err!("wasmtime_table_grow value is not a reference"))
             .and_then(|val| table.grow(scope, delta, val)),
         |prev| *prev_size = prev,
     )

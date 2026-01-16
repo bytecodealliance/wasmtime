@@ -52,7 +52,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         Ok(())
     };
 
-    r.map_err(move |trap: anyhow::Error| {
+    r.map_err(move |trap: EnvError| {
         let stdout = stdout
             .try_into_inner()
             .expect("sole ref to stdout")

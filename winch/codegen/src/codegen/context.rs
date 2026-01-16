@@ -1,11 +1,10 @@
-use anyhow::{Result, bail, ensure};
-use wasmparser::{Ieee32, Ieee64};
-use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
-
 use super::ControlStackFrame;
 use crate::{
+    Result,
     abi::{ABIOperand, ABIResults, RetArea, vmctx},
+    bail,
     codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
+    ensure,
     frame::Frame,
     isa::reg::RegClass,
     masm::{
@@ -16,6 +15,8 @@ use crate::{
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
+use wasmparser::{Ieee32, Ieee64};
+use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 /// The code generation context.
 /// The code generation context is made up of three
@@ -609,7 +610,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         }
         .map_or_else(
             || Ok(RegImm::reg(self.pop_to_reg(masm, None)?.into())),
-            Ok::<_, anyhow::Error>,
+            Ok::<_, crate::Error>,
         )?;
 
         let dst = self.pop_to_reg(masm, None)?;
@@ -850,7 +851,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                         masm.load(addr, scratch.writable(), slot.ty.try_into()?)?;
                         let stack_slot = masm.push(scratch.inner(), slot.ty.try_into()?)?;
                         *v = Val::mem(slot.ty, stack_slot);
-                        anyhow::Ok(())
+                        wasmtime_environ::error::Ok(())
                     })?;
                 }
                 _ => {}

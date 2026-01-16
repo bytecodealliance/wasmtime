@@ -90,7 +90,7 @@ pub unsafe extern "C" fn wasmtime_instance_new(
 }
 
 pub(crate) fn handle_instantiate(
-    instance: anyhow::Result<Instance>,
+    instance: wasmtime::Result<Instance>,
     instance_ptr: &mut Instance,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {

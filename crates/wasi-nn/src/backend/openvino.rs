@@ -198,13 +198,13 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
 
 impl From<InferenceError> for BackendError {
     fn from(e: InferenceError) -> Self {
-        BackendError::BackendAccess(anyhow::Error::new(e))
+        BackendError::BackendAccess(wasmtime::Error::new(e))
     }
 }
 
 impl From<SetupError> for BackendError {
     fn from(e: SetupError) -> Self {
-        BackendError::BackendAccess(anyhow::Error::new(e))
+        BackendError::BackendAccess(wasmtime::Error::new(e))
     }
 }
 

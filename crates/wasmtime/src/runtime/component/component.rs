@@ -682,10 +682,7 @@ impl Component {
     /// For more information see
     /// [`Module::image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
-        let range = self.inner.code.text_range();
-        let start = range.start.raw() as *const u8;
-        let end = range.end.raw() as *const u8;
-        start..end
+        self.inner.code.image().as_ptr_range()
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
@@ -911,7 +908,7 @@ impl InstanceExportLookup for ComponentExportIndex {
 #[cfg(test)]
 mod tests {
     use crate::component::Component;
-    use crate::{Config, Engine};
+    use crate::{CodeBuilder, Config, Engine};
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
@@ -936,5 +933,28 @@ mod tests {
             let init = &module.env_module().memory_initialization;
             assert!(matches!(init, MemoryInitialization::Static { .. }));
         }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn image_range_is_whole_image() {
+        let wat = r#"
+                (component
+                    (core module
+                        (memory 1)
+                        (data (i32.const 0) "1234")
+                        (func (export "f") (param i32) (result i32)
+                            local.get 0)))
+            "#;
+        let engine = Engine::default();
+        let mut builder = CodeBuilder::new(&engine);
+        builder.wasm_binary_or_text(wat.as_bytes(), None).unwrap();
+        let bytes = builder.compile_component_serialized().unwrap();
+
+        let comp = unsafe { Component::deserialize(&engine, &bytes).unwrap() };
+        let image_range = comp.image_range();
+        let len = image_range.end.addr() - image_range.start.addr();
+        // Length may be strictly greater if it becomes page-aligned.
+        assert!(len >= bytes.len());
     }
 }

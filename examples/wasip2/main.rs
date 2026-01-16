@@ -83,5 +83,5 @@ fn main() -> Result<()> {
     let (result,) = typed.call(&mut store, ())?;
     // Required, see documentation of TypedFunc::call
     typed.post_return(&mut store)?;
-    result.map_err(|_| anyhow::anyhow!("error"))
+    result.map_err(|_| wasmtime::format_err!("error"))
 }

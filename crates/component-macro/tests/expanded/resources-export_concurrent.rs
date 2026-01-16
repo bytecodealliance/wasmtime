@@ -329,7 +329,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/simple-export` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -486,7 +486,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-import` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -648,7 +648,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export1` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -744,7 +744,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export2` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };

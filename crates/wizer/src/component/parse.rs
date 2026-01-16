@@ -1,10 +1,10 @@
 use crate::component::ComponentContext;
-use anyhow::{Result, bail};
 use std::collections::hash_map::Entry;
 use wasmparser::{
     CanonicalFunction, ComponentAlias, ComponentExternalKind, ComponentOuterAliasKind, Encoding,
     Instance, Parser, Payload,
 };
+use wasmtime::{Result, bail};
 
 /// Parse the given Wasm bytes into a `ComponentContext` tree.
 ///
@@ -19,7 +19,7 @@ use wasmparser::{
 /// * Component-level start functions are not supported.
 ///
 /// Some of these restrictions are likely to be loosened over time, however.
-pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ComponentContext<'a>> {
+pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> wasmtime::Result<ComponentContext<'a>> {
     let mut component = ComponentContext::default();
     let parser = Parser::new(0).parse_all(full_wasm);
     parse_into(Some(&mut component), full_wasm, parser)?;
@@ -30,7 +30,7 @@ fn parse_into<'a>(
     mut cx: Option<&mut ComponentContext<'a>>,
     full_wasm: &'a [u8],
     mut iter: impl Iterator<Item = wasmparser::Result<Payload<'a>>>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let mut stack = Vec::new();
     while let Some(payload) = iter.next() {
         let payload = payload?;

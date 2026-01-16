@@ -111,7 +111,7 @@ mod generated {
         fn nn_errno_from_wasi_nn_error(
             &mut self,
             e: WasiNnError,
-        ) -> anyhow::Result<types::NnErrno> {
+        ) -> wasmtime::Result<types::NnErrno> {
             tracing::debug!("host error: {:?}", e);
             match e {
                 WasiNnError::BackendError(_) => Ok(types::NnErrno::RuntimeError),

@@ -63,7 +63,7 @@ mod winch_engine_features;
 pub(crate) fn ref_types_module(
     use_epochs: bool,
     source: &str,
-) -> anyhow::Result<(wasmtime::Store<()>, wasmtime::Module)> {
+) -> wasmtime::Result<(wasmtime::Store<()>, wasmtime::Module)> {
     use wasmtime::*;
 
     let _ = env_logger::try_init();
@@ -132,7 +132,7 @@ trait ErrorExt {
     fn assert_contains(&self, msg: &str);
 }
 
-impl ErrorExt for anyhow::Error {
+impl ErrorExt for wasmtime::Error {
     fn assert_contains(&self, msg: &str) {
         if self.chain().any(|e| e.to_string().contains(msg)) {
             return;

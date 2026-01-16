@@ -189,6 +189,10 @@ macro_rules! bail {
 /// ```
 #[macro_export]
 macro_rules! ensure {
+    ( $condition:expr ) => {{
+        $crate::ensure!($condition, concat!("Condition failed: `", stringify!($condition), "`"))
+    }};
+
     ( $condition:expr , $( $args:tt )* ) => {{
         if $crate::macros::ensure::not($condition) {
             $crate::bail!( $( $args )* );
@@ -330,7 +334,7 @@ pub mod formatting {
                     Ok(())
                 }
                 Err(_) => {
-                    self.oom = Some(OutOfMemory::new());
+                    self.oom = Some(OutOfMemory::new(self.message.len() + s.len()));
                     Err(fmt::Error)
                 }
             }

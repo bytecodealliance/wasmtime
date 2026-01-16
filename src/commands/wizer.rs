@@ -1,10 +1,9 @@
 use crate::commands::run::{CliInstance, Preloads, RunCommand};
 use crate::common::{RunCommon, RunTarget};
-use anyhow::{Context, Result};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use wasmtime::Module;
+use wasmtime::{Module, Result, error::Context as _};
 use wasmtime_wizer::Wizer;
 
 #[derive(clap::Parser)]

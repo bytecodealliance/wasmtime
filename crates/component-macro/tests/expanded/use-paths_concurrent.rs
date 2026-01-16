@@ -203,7 +203,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -242,7 +242,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -281,7 +281,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -322,7 +322,7 @@ pub mod d {
         assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn b<T>(
+        fn b<T: Send>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = Foo> + Send;
     }

@@ -1,7 +1,7 @@
 //! The module that implements the `wasmtime config` command.
 
-use anyhow::Result;
 use clap::{Parser, Subcommand};
+use wasmtime::Result;
 
 const CONFIG_NEW_AFTER_HELP: &str =
     "If no file path is specified, the system configuration file path will be used.";

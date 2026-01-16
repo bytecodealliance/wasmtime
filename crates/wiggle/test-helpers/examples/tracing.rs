@@ -1,5 +1,5 @@
-use anyhow::Result;
 use wiggle::GuestMemory;
+use wiggle::error::Result;
 use wiggle_test::{HostMemory, WasiCtx, impl_errno};
 
 /// The `errors` argument to the wiggle gives us a hook to map a rich error

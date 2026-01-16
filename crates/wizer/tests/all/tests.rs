@@ -1,7 +1,9 @@
-use anyhow::{Context, Result};
 use std::process::Command;
 use wasm_encoder::ConstExpr;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
+use wasmtime::{
+    Config, Engine, Instance, Linker, Module, Result, Store, ToWasmtimeResult as _,
+    error::Context as _,
+};
 use wasmtime_wasi::{WasiCtxBuilder, p1};
 use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
@@ -73,18 +75,18 @@ async fn wizen_and_run_wasm(
 
     let instance = linker.instantiate_async(&mut store, &module).await?;
 
-    let run = instance
-        .get_func(&mut store, "run")
-        .ok_or_else(|| anyhow::anyhow!("the test Wasm module does not export a `run` function"))?;
+    let run = instance.get_func(&mut store, "run").ok_or_else(|| {
+        wasmtime::format_err!("the test Wasm module does not export a `run` function")
+    })?;
 
     let mut actual = vec![wasmtime::Val::I32(0)];
     run.call_async(&mut store, args, &mut actual).await?;
-    anyhow::ensure!(actual.len() == 1, "expected one result");
+    wasmtime::ensure!(actual.len() == 1, "expected one result");
     let actual = match actual[0] {
         wasmtime::Val::I32(x) => x,
-        _ => anyhow::bail!("expected an i32 result"),
+        _ => wasmtime::bail!("expected an i32 result"),
     };
-    anyhow::ensure!(
+    wasmtime::ensure!(
         expected == actual,
         "expected `{expected}`, found `{actual}`",
     );
@@ -105,7 +107,7 @@ async fn fails_wizening(wat: &str) -> Result<()> {
         .validate_all(&wasm)
         .context("initial Wasm should be valid")?;
 
-    anyhow::ensure!(
+    wasmtime::ensure!(
         get_wizer()
             .run(&mut store()?, &wasm, instantiate)
             .await
@@ -319,7 +321,7 @@ async fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
 }
 
 #[tokio::test]
-async fn reject_table_grow_with_reference_types_enabled() -> anyhow::Result<()> {
+async fn reject_table_grow_with_reference_types_enabled() -> wasmtime::Result<()> {
     let wat = r#"
       (module
         (elem declare func $f)
@@ -349,7 +351,7 @@ async fn reject_table_grow_with_reference_types_enabled() -> anyhow::Result<()> 
 }
 
 #[tokio::test]
-async fn indirect_call_with_reference_types() -> anyhow::Result<()> {
+async fn indirect_call_with_reference_types() -> wasmtime::Result<()> {
     let wat = r#"
       (module
         (type $sig (func (result i32)))
@@ -576,7 +578,7 @@ async fn rename_functions() -> Result<()> {
     wizer.func_rename("func_a", "func_b");
     wizer.func_rename("func_b", "func_c");
     let wasm = wizer.run(&mut store()?, &wasm, instantiate).await?;
-    let wat = wasmprinter::print_bytes(&wasm)?;
+    let wat = wasmprinter::print_bytes(&wasm).to_wasmtime_result()?;
 
     let expected_wat = r#"
 (module
@@ -602,7 +604,7 @@ async fn rename_functions() -> Result<()> {
 }
 
 #[tokio::test]
-async fn wasi_reactor() -> anyhow::Result<()> {
+async fn wasi_reactor() -> wasmtime::Result<()> {
     run_wat(
         &[],
         42,
@@ -628,7 +630,7 @@ async fn wasi_reactor() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn wasi_reactor_initializer_as_init_func() -> anyhow::Result<()> {
+async fn wasi_reactor_initializer_as_init_func() -> wasmtime::Result<()> {
     let wat = r#"
       (module
         (global $g (mut i32) i32.const 0)
@@ -652,7 +654,7 @@ async fn wasi_reactor_initializer_as_init_func() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn wasi_reactor_initializer_with_keep_init() -> anyhow::Result<()> {
+async fn wasi_reactor_initializer_with_keep_init() -> wasmtime::Result<()> {
     let wat = r#"
       (module
         (global $g (mut i32) i32.const 0)

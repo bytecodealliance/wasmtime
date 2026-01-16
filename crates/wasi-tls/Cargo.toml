@@ -12,7 +12,6 @@ description = "Wasmtime implementation of the wasi-tls API"
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true, features = [
     "net",

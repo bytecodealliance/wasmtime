@@ -26,11 +26,11 @@
 ;;                                     v36 = ishl v6, v35  ; v35 = 3
 ;;                                     v33 = iconst.i64 32
 ;; @0022                               v8 = ushr v36, v33  ; v33 = 32
-;; @0022                               trapnz v8, user18
+;; @0022                               trapnz v8, user17
 ;; @0022                               v5 = iconst.i32 32
 ;;                                     v42 = iconst.i32 3
 ;;                                     v43 = ishl v3, v42  ; v42 = 3
-;; @0022                               v10 = uadd_overflow_trap v5, v43, user18  ; v5 = 32
+;; @0022                               v10 = uadd_overflow_trap v5, v43, user17  ; v5 = 32
 ;; @0022                               v12 = iconst.i32 -1476395008
 ;; @0022                               v13 = iconst.i32 0
 ;;                                     v40 = iconst.i32 8

@@ -12,14 +12,14 @@ use wiggle::{GuestError, GuestMemory, GuestPtr};
 pub fn add_to_linker_async<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     wasi_unstable::add_to_linker(linker, f)
 }
 
 pub fn add_to_linker_sync<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     sync::add_wasi_unstable_to_linker(linker, f)
 }
 
@@ -38,8 +38,8 @@ wiggle::from_witx!({
 });
 
 mod sync {
-    use anyhow::Result;
     use std::future::Future;
+    use wasmtime::Result;
 
     wiggle::wasmtime_integration!({
         witx: ["witx/p0/wasi_unstable.witx"],
@@ -550,7 +550,7 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         &mut self,
         memory: &mut GuestMemory<'_>,
         status: types::Exitcode,
-    ) -> anyhow::Error {
+    ) -> wasmtime::Error {
         Snapshot1::proc_exit(self, memory, status)
     }
 
@@ -585,7 +585,7 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         _ri_data: types::IovecArray,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_recv unsupported")))
+        Err(Error::trap(wasmtime::Error::msg("sock_recv unsupported")))
     }
 
     fn sock_send(
@@ -595,7 +595,7 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         _si_data: types::CiovecArray,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_send unsupported")))
+        Err(Error::trap(wasmtime::Error::msg("sock_send unsupported")))
     }
 
     fn sock_shutdown(
@@ -604,7 +604,9 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         _fd: types::Fd,
         _how: types::Sdflags,
     ) -> Result<(), Error> {
-        Err(Error::trap(anyhow::Error::msg("sock_shutdown unsupported")))
+        Err(Error::trap(wasmtime::Error::msg(
+            "sock_shutdown unsupported",
+        )))
     }
 }
 

@@ -139,7 +139,7 @@ pub use self::values::Val;
 
 pub(crate) use self::instance::RuntimeImport;
 pub(crate) use self::resources::HostResourceData;
-pub(crate) use self::store::ComponentInstanceId;
+pub(crate) use self::store::{ComponentInstanceId, RuntimeInstance};
 
 // Re-export wasm_wave crate so the compatible version of this dep doesn't have to be
 // tracked separately from wasmtime.
@@ -467,6 +467,16 @@ pub(crate) use self::store::ComponentStoreData;
 ///     //
 ///     // By default this is `wasmtime`.
 ///     wasmtime_crate: path::to::wasmtime,
+///
+///     // Whether to use `anyhow::Result` for trappable host-defined function
+///     // imports, rather than `wasmtime::Result`.
+///     //
+///     // By default, this is false and `wasmtime::Result` is used instead of
+///     // `anyhow::Result`.
+///     //
+///     // When enabled, the generated code requires the `"anyhow"` cargo feature
+///     // to also be enabled in the `wasmtime` crate.
+///     anyhow: false,
 ///
 ///     // This is an in-source alternative to using `WASMTIME_DEBUG_BINDGEN`.
 ///     //

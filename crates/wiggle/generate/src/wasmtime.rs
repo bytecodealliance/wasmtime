@@ -56,7 +56,7 @@ pub fn link_module(
         pub fn #func_name<T, U>(
             linker: &mut wiggle::wasmtime_crate::Linker<T>,
             get_cx: impl Fn(&mut T) -> #u + Send + Sync + Copy + 'static,
-        ) -> wiggle::anyhow::Result<()>
+        ) -> wiggle::error::Result<()>
             where
                 T: 'static,
                 U: #ctx_bound #send_bound
@@ -126,7 +126,7 @@ fn generate_func(
                 let ctx = get_cx(caller.data_mut());
                 (wiggle::GuestMemory::Shared(m.data()), ctx)
             }
-            _ => wiggle::anyhow::bail!("missing required memory export"),
+            _ => wiggle::error::bail!("missing required memory export"),
         };
         Ok(<#ret_ty>::from(#abi_func(ctx, &mut mem #(, #arg_names)*) #await_ ?))
     };
@@ -150,7 +150,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::anyhow::Result<#ret_ty> {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::error::Result<#ret_ty> {
                         let result = async { #body };
                         #block_with(result)?
                     },
@@ -163,7 +163,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::anyhow::Result<#ret_ty> {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::error::Result<#ret_ty> {
                         #body
                     },
                 )?;

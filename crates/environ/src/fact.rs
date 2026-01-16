@@ -88,8 +88,6 @@ pub struct Module<'a> {
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
 
-    imported_check_blocking: Option<FuncIndex>,
-
     imported_trap: Option<FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
@@ -102,6 +100,8 @@ pub struct Module<'a> {
     helper_worklist: Vec<(FunctionId, Helper)>,
 
     exports: Vec<(u32, String)>,
+
+    task_may_block: Option<GlobalIndex>,
 }
 
 struct AdapterData {
@@ -114,9 +114,6 @@ struct AdapterData {
     /// The core wasm function that this adapter will be calling (the original
     /// function that was `canon lift`'d)
     callee: FuncIndex,
-    /// FIXME(#4185) should be plumbed and handled as part of the new reentrance
-    /// rules not yet implemented here.
-    called_as_export: bool,
 }
 
 /// Configuration options which apply at the "global adapter" level.
@@ -124,7 +121,12 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    /// The Wasmtime-assigned component instance index where the options were
+    /// originally specified.
     instance: RuntimeComponentInstanceIndex,
+    /// The ancestors (i.e. chain of instantiating instances) of the instance
+    /// specified in the `instance` field.
+    ancestors: Vec<RuntimeComponentInstanceIndex>,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
     /// The global that represents the instance flags for where this adapter
@@ -262,9 +264,9 @@ impl<'a> Module<'a> {
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
-            imported_check_blocking: None,
             imported_trap: None,
             exports: Vec::new(),
+            task_may_block: None,
         }
     }
 
@@ -307,9 +309,6 @@ impl<'a> Module<'a> {
                 lift,
                 lower,
                 callee,
-                // FIXME(#4185) should be plumbed and handled as part of the new
-                // reentrance rules not yet implemented here.
-                called_as_export: true,
             },
         );
 
@@ -321,6 +320,7 @@ impl<'a> Module<'a> {
     fn import_options(&mut self, ty: TypeFuncIndex, options: &AdapterOptionsDfg) -> AdapterOptions {
         let AdapterOptionsDfg {
             instance,
+            ancestors,
             string_encoding,
             post_return: _, // handled above
             callback,
@@ -399,6 +399,7 @@ impl<'a> Module<'a> {
 
         AdapterOptions {
             instance: *instance,
+            ancestors: ancestors.clone(),
             ty,
             flags,
             post_return: None,
@@ -458,6 +459,25 @@ impl<'a> Module<'a> {
         self.imported.insert(def.clone(), idx.index());
         self.imports.push(Import::CoreDef(def));
         idx
+    }
+
+    fn import_task_may_block(&mut self) -> GlobalIndex {
+        if let Some(task_may_block) = self.task_may_block {
+            task_may_block
+        } else {
+            let task_may_block = self.import_global(
+                "instance",
+                "task_may_block",
+                GlobalType {
+                    val_type: ValType::I32,
+                    mutable: true,
+                    shared: false,
+                },
+                CoreDef::TaskMayBlock,
+            );
+            self.task_may_block = Some(task_may_block);
+            task_may_block
+        }
     }
 
     fn import_transcoder(&mut self, transcoder: transcode::Transcoder) -> FuncIndex {
@@ -717,17 +737,6 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_check_blocking(&mut self) -> FuncIndex {
-        self.import_simple(
-            "async",
-            "check-blocking",
-            &[],
-            &[],
-            Import::CheckBlocking,
-            |me| &mut me.imported_check_blocking,
-        )
-    }
-
     fn import_trap(&mut self) -> FuncIndex {
         self.import_simple(
             "runtime",
@@ -882,9 +891,6 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
-    /// An intrinsic used by FACT-generated modules to check whether an
-    /// async-typed function may be called via a sync lower.
-    CheckBlocking,
     /// An intrinsic for trapping the instance with a specific trap code.
     Trap,
 }

@@ -1,0 +1,59 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %sgt_slt_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sgt v0, v1
+    v3 = icmp slt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %slt_sgt_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp slt v0, v1
+    v3 = icmp sgt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %ugt_ult_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ugt v0, v1
+    v3 = icmp ult v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %ult_ugt_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ult v0, v1
+    v3 = icmp ugt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %sgt_slt_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = icmp sgt v0, v1
+    v3 = icmp slt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %slt_sgt_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp slt v0, v1
+    v3 = icmp sgt v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+function %ugt_ult_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp ugt v0, v1
+    v3 = icmp ult v0, v1
+    v4 = band v2, v3
+    return v4
+}

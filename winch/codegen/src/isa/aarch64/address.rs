@@ -1,14 +1,13 @@
 //! Aarch64 addressing mode.
 
-use anyhow::{Context, Result, anyhow};
+use super::regs;
+use crate::reg::Reg;
+use crate::{Context as _, Result, format_err};
 use cranelift_codegen::VCodeConstant;
 use cranelift_codegen::{
     ir::types,
     isa::aarch64::inst::{AMode, PairAMode, SImm7Scaled, SImm9},
 };
-
-use super::regs;
-use crate::reg::Reg;
 
 /// Aarch64 indexing mode.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -108,7 +107,7 @@ impl Address {
 // and `cranelift-codegen`s addressing mode representation for aarch64.
 
 impl TryFrom<Address> for PairAMode {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(addr: Address) -> Result<Self> {
         use Address::*;
@@ -126,7 +125,7 @@ impl TryFrom<Address> for PairAMode {
                     Ok(PairAMode::SPPostIndexed { simm7 })
                 }
             }
-            other => Err(anyhow!(
+            other => Err(format_err!(
                 "Could not convert {other:?} to addressing mode for register pairs"
             )),
         }
@@ -134,7 +133,7 @@ impl TryFrom<Address> for PairAMode {
 }
 
 impl TryFrom<Address> for AMode {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(addr: Address) -> Result<Self> {
         use Address::*;
@@ -144,7 +143,7 @@ impl TryFrom<Address> for AMode {
             IndexedSPOffset { offset, indexing } => {
                 let simm9 = SImm9::maybe_from_i64(offset).ok_or_else(|| {
                     // TODO: non-string error
-                    anyhow!("Failed to convert {offset} to signed 9-bit offset")
+                    format_err!("Failed to convert {offset} to signed 9-bit offset")
                 })?;
 
                 if indexing == Pre {

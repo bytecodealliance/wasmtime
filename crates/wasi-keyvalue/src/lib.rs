@@ -81,8 +81,8 @@ mod generated {
 }
 
 use self::generated::wasi::keyvalue;
-use anyhow::Result;
 use std::collections::HashMap;
+use wasmtime::Result;
 use wasmtime::component::{HasData, Resource, ResourceTable, ResourceTableError};
 
 #[doc(hidden)]

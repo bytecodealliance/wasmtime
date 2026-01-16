@@ -7,14 +7,14 @@ use crate::runtime::in_tokio;
 use wasmtime::component::Resource;
 
 impl sync_filesystem::Host for WasiFilesystemCtxView<'_> {
-    fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<sync_filesystem::ErrorCode> {
+    fn convert_error_code(&mut self, err: FsError) -> wasmtime::Result<sync_filesystem::ErrorCode> {
         Ok(async_filesystem::Host::convert_error_code(self, err)?.into())
     }
 
     fn filesystem_error_code(
         &mut self,
         err: Resource<streams::Error>,
-    ) -> anyhow::Result<Option<sync_filesystem::ErrorCode>> {
+    ) -> wasmtime::Result<Option<sync_filesystem::ErrorCode>> {
         Ok(async_filesystem::Host::filesystem_error_code(self, err)?.map(|e| e.into()))
     }
 }
@@ -191,7 +191,7 @@ impl sync_filesystem::HostDescriptor for WasiFilesystemCtxView<'_> {
         })
     }
 
-    fn drop(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> wasmtime::Result<()> {
         async_filesystem::HostDescriptor::drop(self, fd)
     }
 
@@ -277,7 +277,7 @@ impl sync_filesystem::HostDescriptor for WasiFilesystemCtxView<'_> {
         &mut self,
         a: Resource<sync_filesystem::Descriptor>,
         b: Resource<sync_filesystem::Descriptor>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         in_tokio(async { async_filesystem::HostDescriptor::is_same_object(self, a, b).await })
     }
     fn metadata_hash(
@@ -317,7 +317,7 @@ impl sync_filesystem::HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
     fn drop(
         &mut self,
         stream: Resource<sync_filesystem::DirectoryEntryStream>,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         async_filesystem::HostDirectoryEntryStream::drop(self, stream)
     }
 }

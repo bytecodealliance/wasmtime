@@ -91,6 +91,8 @@ indices! {
     pub struct TypeListIndex(u32);
     /// Index pointing to a map type in the component model.
     pub struct TypeMapIndex(u32);
+    /// Index pointing to a fixed size list type in the component model.
+    pub struct TypeFixedLengthListIndex(u32);
     /// Index pointing to a future type in the component model.
     pub struct TypeFutureIndex(u32);
 
@@ -299,6 +301,7 @@ pub struct ComponentTypes {
     pub(super) stream_tables: PrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
     pub(super) error_context_tables:
         PrimaryMap<TypeComponentLocalErrorContextTableIndex, TypeErrorContextTable>,
+    pub(super) fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeFixedLengthList>,
 }
 
 impl TypeTrace for ComponentTypes {
@@ -374,6 +377,7 @@ impl ComponentTypes {
             InterfaceType::Enum(i) => &self[*i].abi,
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
+            InterfaceType::FixedLengthList(i) => &self[*i].abi,
         }
     }
 
@@ -424,6 +428,7 @@ impl_index! {
     impl Index<TypeFutureTableIndex> for ComponentTypes { TypeFutureTable => future_tables }
     impl Index<TypeStreamTableIndex> for ComponentTypes { TypeStreamTable => stream_tables }
     impl Index<TypeComponentLocalErrorContextTableIndex> for ComponentTypes { TypeErrorContextTable => error_context_tables }
+    impl Index<TypeFixedLengthListIndex> for ComponentTypes { TypeFixedLengthList => fixed_length_lists }
 }
 
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
@@ -602,6 +607,7 @@ pub enum InterfaceType {
     Future(TypeFutureTableIndex),
     Stream(TypeStreamTableIndex),
     ErrorContext(TypeComponentLocalErrorContextTableIndex),
+    FixedLengthList(TypeFixedLengthListIndex),
 }
 
 /// Bye information about a type in the canonical ABI, with metadata for both
@@ -1189,6 +1195,17 @@ pub struct TypeMap {
     pub key: InterfaceType,
     /// The value type of the map.
     pub value: InterfaceType,
+}
+
+/// Shape of a "fixed size list" interface type.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeFixedLengthList {
+    /// The element type of the list.
+    pub element: InterfaceType,
+    /// The fixed length of the list.
+    pub size: u32,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
 }
 
 /// Maximum number of flat types, for either params or results.

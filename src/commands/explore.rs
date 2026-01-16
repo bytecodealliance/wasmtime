@@ -1,10 +1,9 @@
 //! The module that implements the `wasmtime explore` command.
 
-use anyhow::{Context, Result};
 use clap::Parser;
 use std::{borrow::Cow, path::PathBuf};
 use tempfile::tempdir;
-use wasmtime::Strategy;
+use wasmtime::{Result, Strategy, error::Context as _};
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.

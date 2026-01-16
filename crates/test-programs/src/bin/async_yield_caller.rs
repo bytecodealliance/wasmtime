@@ -21,14 +21,15 @@ struct Component;
 
 impl Guest for Component {
     async fn run() {
-        ready::set_ready(false);
+        let thing = ready::Thing::new();
+        thing.set_ready(false);
         continue_::set_continue(true);
 
-        let mut ready = Some(Box::pin(ready::when_ready()));
+        let mut ready = Some(Box::pin(thing.when_ready()));
         let mut run = Some(Box::pin(run::run()));
-        future::poll_fn(move |cx| {
+        future::poll_fn(|cx| {
             let ready_poll = ready.as_mut().map(|v| v.as_mut().poll(cx));
-            ready::set_ready(true);
+            thing.set_ready(true);
             let run_poll = run.as_mut().map(|v| v.as_mut().poll(cx));
 
             match (run_poll, ready_poll) {

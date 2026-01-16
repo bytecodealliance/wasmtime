@@ -123,7 +123,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(socket.remote_address()?.into())
     }
 
-    fn is_listening(&mut self, this: Resource<TcpSocket>) -> Result<bool, anyhow::Error> {
+    fn is_listening(&mut self, this: Resource<TcpSocket>) -> Result<bool, wasmtime::Error> {
         let socket = self.table.get(&this)?;
 
         Ok(socket.is_listening())
@@ -132,7 +132,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     fn address_family(
         &mut self,
         this: Resource<TcpSocket>,
-    ) -> Result<IpAddressFamily, anyhow::Error> {
+    ) -> Result<IpAddressFamily, wasmtime::Error> {
         let socket = self.table.get(&this)?;
         Ok(socket.address_family().into())
     }
@@ -240,7 +240,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn subscribe(&mut self, this: Resource<TcpSocket>) -> anyhow::Result<Resource<DynPollable>> {
+    fn subscribe(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
@@ -262,7 +262,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn drop(&mut self, this: Resource<TcpSocket>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<TcpSocket>) -> Result<(), wasmtime::Error> {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = self.table.delete(this)?;

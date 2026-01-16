@@ -1,5 +1,5 @@
 use crate::Wizer;
-use anyhow::bail;
+use ::wasmtime::{Result, bail};
 
 mod info;
 mod instrument;
@@ -20,7 +20,7 @@ impl Wizer {
     pub fn instrument_component<'a>(
         &self,
         wasm: &'a [u8],
-    ) -> anyhow::Result<(ComponentContext<'a>, Vec<u8>)> {
+    ) -> Result<(ComponentContext<'a>, Vec<u8>)> {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
@@ -36,7 +36,7 @@ impl Wizer {
         &self,
         mut cx: ComponentContext<'_>,
         instance: &mut impl ComponentInstanceState,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         if !self.func_renames.is_empty() {
             bail!("components do not support renaming functions");
         }

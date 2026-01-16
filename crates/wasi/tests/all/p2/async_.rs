@@ -1,7 +1,7 @@
 use crate::store::{Ctx, MyWasiCtx};
-use anyhow::Result;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::Result;
 use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::Command;
@@ -30,7 +30,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow::anyhow!("run returned a failure"))
+        .map_err(|()| wasmtime::format_err!("run returned a failure"))
 }
 
 foreach_p1!(assert_test_exists);
