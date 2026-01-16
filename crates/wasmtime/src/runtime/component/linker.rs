@@ -773,7 +773,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ) -> Result<()> {
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
+            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
@@ -783,6 +783,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     #[cfg(feature = "async")]
     pub fn resource_async<F>(&mut self, name: &str, ty: ResourceType, dtor: F) -> Result<()>
     where
+        T: Send,
         F: Fn(StoreContextMut<'_, T>, u32) -> Box<dyn Future<Output = Result<()>> + Send + '_>
             + Send
             + Sync
