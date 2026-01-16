@@ -19,6 +19,7 @@ pub use self::signals::*;
 use crate::ThrownException;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
+use crate::runtime::vm::stack_switching::VMStackChain;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
 #[cfg(all(feature = "debug", feature = "gc"))]
@@ -940,8 +941,28 @@ impl CallThreadState {
 
     pub(crate) fn entry_trap_handler(&self) -> Handler {
         unsafe {
+            fn running_on_continuation(stack_chain: *const VMStackChain) -> bool {
+                unsafe {
+                    match *stack_chain {
+                        VMStackChain::Continuation(_) => true,
+                        _ => false,
+                    }
+                }
+            }
             let vm_store_context = self.vm_store_context.as_ref();
-            let fp = *vm_store_context.last_wasm_entry_fp.get();
+            let vm_stack_chain = vm_store_context.stack_chain.get();
+            // The effects of trapping should not be delimited by the
+            // continuation stack segment we are running on, but
+            // rather the initial continuation stack segment, i.e. the
+            // toplevel part of the program. Therefore we must
+            // retrieve the entry fp of the initial stack.
+            let fp = if running_on_continuation(vm_stack_chain) {
+                let initial_stack_limits =
+                    (*vm_stack_chain).clone().into_stack_limits_iter().last();
+                (*initial_stack_limits.unwrap_or_else(|| panic!("Attempting to find the stack limits of the initial stacks from within a suspended continuation."))).last_wasm_entry_fp
+            } else {
+                *vm_store_context.last_wasm_entry_fp.get()
+            };
             let sp = *vm_store_context.last_wasm_entry_sp.get();
             let pc = *vm_store_context.last_wasm_entry_trap_handler.get();
             Handler { pc, sp, fp }
