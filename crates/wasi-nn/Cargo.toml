@@ -70,6 +70,10 @@ openvino = ["dep:openvino"]
 onnx = ["dep:ort"]
 # Use prebuilt ONNX Runtime binaries from ort.
 onnx-download = ["onnx", "ort/download-binaries"]
+# CUDA execution provider for NVIDIA GPU support (requires CUDA toolkit)
+onnx-cuda = ["onnx", "ort/cuda"]
+# Enable tracing for ONNX Runtime
+ort-tracing = ["onnx", "ort/tracing"]
 # WinML is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
 # PyTorch is available on all platforms; requires Libtorch to be installed
