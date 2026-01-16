@@ -89,7 +89,6 @@ mod no_imports_concurrent {
     async fn run() -> Result<()> {
         let mut config = Config::new();
         config.wasm_component_model_async(true);
-        config.async_support(true);
         let engine = &Engine::new(&config)?;
 
         let component = Component::new(
@@ -221,7 +220,6 @@ mod one_import_concurrent {
     async fn run() -> Result<()> {
         let mut config = Config::new();
         config.wasm_component_model_async(true);
-        config.async_support(true);
         let engine = &Engine::new(&config)?;
 
         let component = Component::new(

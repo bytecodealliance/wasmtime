@@ -22,6 +22,7 @@ pub use i31::*;
 
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
+use crate::store::Asyncness;
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
@@ -68,9 +69,9 @@ impl GcStore {
     }
 
     /// Asynchronously perform garbage collection within this heap.
-    pub async fn gc(&mut self, async_yield: bool, roots: GcRootsIter<'_>) {
+    pub async fn gc(&mut self, asyncness: Asyncness, roots: GcRootsIter<'_>) {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
-        collect_async(collection, async_yield).await;
+        collect_async(collection, asyncness).await;
     }
 
     /// Get the kind of the given GC reference.

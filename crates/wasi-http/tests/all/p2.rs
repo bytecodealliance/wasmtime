@@ -132,7 +132,6 @@ async fn run_wasi_http(
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
     config.wasm_component_model(true);
-    config.async_support(true);
     let engine = Engine::new(&config)?;
     let component = Component::from_file(&engine, component_filename)?;
 

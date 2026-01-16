@@ -12,8 +12,8 @@ use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
-#[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
+#[cfg(feature = "component-model-async")]
+use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{NameMap, NameMapIntern};
 
@@ -243,7 +243,7 @@ impl<T: 'static> Linker<T> {
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(t, dtor) => RuntimeImport::Resource {
                     ty: *t,
-                    _dtor: dtor.clone(),
+                    dtor: dtor.clone(),
                     dtor_funcref: component.resource_drop_func_ref(dtor),
                 },
 
@@ -273,19 +273,18 @@ impl<T: 'static> Linker<T> {
     /// a runtime trap or a runtime limit being exceeded.
     pub fn instantiate(
         &self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         component: &Component,
     ) -> Result<Instance> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use async instantiation when async support is enabled"
-        );
+        let store = store.as_context_mut();
+        store.0.validate_sync_call()?;
         self.instantiate_pre(component)?.instantiate(store)
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
     ///
-    /// This is exactly like [`Linker::instantiate`] except for async stores.
+    /// This is exactly like [`Linker::instantiate`] except for [asynchronous
+    /// execution](crate#async).
     ///
     /// # Errors
     ///
@@ -302,10 +301,6 @@ impl<T: 'static> Linker<T> {
     where
         T: Send,
     {
-        assert!(
-            store.as_context().async_support(),
-            "must use sync instantiation when async support is disabled"
-        );
         self.instantiate_pre(component)?
             .instantiate_async(store)
             .await
@@ -412,14 +407,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// # Blocking / Async Behavior
     ///
     /// The host function `func` provided here is a blocking function from the
-    /// perspective of WebAssembly, regardless of how [`Config::async_support`]
-    /// is defined. This function can be used both with sync and async stores
-    /// and will always define a blocking function.
+    /// perspective of WebAssembly. WebAssembly, and Rust, will be blocked until
+    /// `func` completes.
     ///
     /// To define a function which is async on the host, but blocking to the
     /// guest, see the [`func_wrap_async`] method.
     ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
     //
     // TODO: needs more words and examples
@@ -449,24 +442,19 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// # Blocking / Async Behavior
     ///
-    /// This function can only be called when [`Config::async_support`] is
-    /// enabled. The function defined which WebAssembly calls will still appear
-    /// as blocking from the perspective of WebAssembly itself. The host,
-    /// however, can perform asynchronous operations without blocking the thread
+    /// The function defined which WebAssembly calls will still appear as
+    /// blocking from the perspective of WebAssembly itself. The host, however,
+    /// can perform asynchronous operations without blocking the thread
     /// performing a call.
     ///
-    /// When [`Config::async_support`] is enabled then all WebAssembly is
-    /// invoked on a separate stack within a Wasmtime-managed fiber. This means
-    /// that if the future returned by `F` is not immediately ready then the
-    /// fiber will be suspended to block WebAssembly but not the host. When the
-    /// future becomes ready again the fiber will be resumed to continue
-    /// execution within WebAssembly.
+    /// When defining host functions with this function, WebAssembly is invoked
+    /// on a separate stack within a Wasmtime-managed fiber (through the
+    /// `call_async`-style of invocation). This means that if the future
+    /// returned by `F` is not immediately ready then the fiber will be
+    /// suspended to block WebAssembly but not the host. When the future
+    /// becomes ready again the fiber will be resumed to continue execution
+    /// within WebAssembly.
     ///
-    /// # Panics
-    ///
-    /// This function panics if [`Config::async_support`] is set to `false`.
-    ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
     #[cfg(feature = "async")]
     pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
@@ -481,10 +469,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_async` without enabling async support in the config"
-        );
         self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)))?;
         Ok(())
     }
@@ -519,14 +503,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// # Blocking / Async Behavior
     ///
-    /// This function can only be called when [`Config::async_support`] is
-    /// enabled. Unlike [`Self::func_wrap`] and [`Self::func_wrap_async`] this
-    /// function is asynchronous even from the perspective of guest WebAssembly.
-    /// This means that if `f` is not immediately resolved then the call from
+    /// Unlike [`Self::func_wrap`] and [`Self::func_wrap_async`] this function
+    /// is asynchronous even from the perspective of guest WebAssembly. This
+    /// means that if `f` is not immediately resolved then the call from
     /// WebAssembly will still return immediately (assuming it was lowered with
-    /// `async`). The closure `f` should not block the current thread and should
-    /// only perform blocking via `async` meaning that `f` won't block either
-    /// WebAssembly nor the host.
+    /// `async`). The closure `f` should not block the current thread and
+    /// should only perform blocking via `async` meaning that `f` won't block
+    /// either WebAssembly nor the host.
     ///
     /// Note that WebAssembly components can lower host functions both with and
     /// without `async`. That means that even if a host function is defined in
@@ -535,11 +518,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// `f` provided here completes. If a guest lowers this function with
     /// `async`, though, then no blocking will happen.
     ///
-    /// # Panics
-    ///
-    /// This function panics if [`Config::async_support`] is set to `false`.
-    ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`Config::wasm_component_model_async`]: crate::Config::wasm_component_model_async
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
     #[cfg(feature = "component-model-async")]
@@ -553,10 +531,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
         self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)))?;
         Ok(())
     }
@@ -691,10 +665,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_new_async` without enabling async support in the config"
-        );
         self.insert(name, Definition::Func(HostFunc::func_new_async(func)))?;
         Ok(())
     }
@@ -720,10 +690,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
         self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)))?;
         Ok(())
     }
@@ -784,10 +750,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `resource_async` without enabling async support in the config"
-        );
         let dtor = Arc::new(crate::func::HostFunc::wrap_async(
             &self.engine,
             move |cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.into(), param),
@@ -806,10 +768,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `resource_concurrent` without enabling async support in the config"
-        );
         // TODO: This isn't really concurrent -- it requires exclusive access to
         // the store for the duration of the call, preventing guest code from
         // running until it completes.  We should make it concurrent and clean

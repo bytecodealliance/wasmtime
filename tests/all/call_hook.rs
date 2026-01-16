@@ -116,9 +116,7 @@ fn call_wrapped_func() -> Result<(), Error> {
 // Create an async Func, call it directly:
 #[tokio::test]
 async fn call_wrapped_async_func() -> Result<(), Error> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
     store.call_hook(sync_call_hook);
     let f = Func::wrap_async(
@@ -239,9 +237,7 @@ fn call_linked_func() -> Result<(), Error> {
 // Use the Linker to define an async func, call it through WebAssembly:
 #[tokio::test]
 async fn call_linked_func_async() -> Result<(), Error> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
     store.call_hook(sync_call_hook);
 
@@ -330,9 +326,7 @@ fn instantiate() -> Result<(), Error> {
 
 #[tokio::test]
 async fn instantiate_async() -> Result<(), Error> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
     store.call_hook(sync_call_hook);
 
@@ -564,9 +558,7 @@ async fn basic_async_hook() -> Result<(), Error> {
             sync_call_hook(ctx, ch)
         }
     }
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
     store.call_hook_async(HandlerR {});
 
@@ -655,9 +647,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
         }
     }
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, State::default());
     store.call_hook_async(HandlerR {});
 
@@ -733,9 +723,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
         }
     }
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store = Store::new(&engine, 0);
     store.call_hook_async(Handler);
 

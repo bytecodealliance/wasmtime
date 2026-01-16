@@ -4,7 +4,7 @@
  * \brief Wasmtime async functionality
  *
  * Async functionality in Wasmtime is well documented here:
- * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support
+ * https://docs.wasmtime.dev/api/wasmtime/#async
  *
  * All WebAssembly executes synchronously, but an async support enables the Wasm
  * code be executed on a separate stack, so it can be paused and resumed. There
@@ -46,20 +46,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * \brief Whether or not to enable support for asynchronous functions in
- * Wasmtime.
- *
- * When enabled, the config can optionally define host functions with async.
- * Instances created and functions called with this Config must be called
- * through their asynchronous APIs, however. For example using
- * wasmtime_func_call will panic when used with this config.
- *
- * For more information see the Rust documentation at
- * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support
- */
-WASMTIME_CONFIG_PROP(void, async_support, bool)
 
 /**
  * \brief Configures the size of the stacks used for asynchronous execution.

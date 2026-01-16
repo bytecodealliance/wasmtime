@@ -822,7 +822,7 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             move |mut caller: Caller<'_, StoreLimits>, _params, results| {
                 log::info!("gc_ops: GC");
                 if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
-                    caller.gc(None);
+                    caller.gc(None)?;
                 }
 
                 let a = ExternRef::new(
@@ -1000,7 +1000,7 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
         }
 
         // Do a final GC after running the Wasm.
-        store.gc(None);
+        store.gc(None)?;
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));

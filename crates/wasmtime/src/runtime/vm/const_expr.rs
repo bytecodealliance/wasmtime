@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm;
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
 #[cfg(feature = "gc")]
 use crate::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
@@ -33,12 +33,16 @@ impl Default for ConstExprEvaluator {
 /// The context within which a particular const expression is evaluated.
 pub struct ConstEvalContext {
     pub(crate) instance: InstanceId,
+    pub(crate) asyncness: Asyncness,
 }
 
 impl ConstEvalContext {
     /// Create a new context.
-    pub fn new(instance: InstanceId) -> Self {
-        Self { instance }
+    pub fn new(instance: InstanceId, asyncness: Asyncness) -> Self {
+        Self {
+            instance,
+            asyncness,
+        }
     }
 
     fn global_get(&mut self, store: &mut StoreOpaque, index: GlobalIndex) -> Result<Val> {
@@ -75,7 +79,8 @@ impl ConstEvalContext {
     ) -> Result<Val> {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = StructRef::_new_async(store, limiter, &allocator, &fields).await?;
+        let struct_ref =
+            StructRef::_new_async(store, limiter, &allocator, &fields, self.asyncness).await?;
         Ok(Val::AnyRef(Some(struct_ref.into())))
     }
 
@@ -202,9 +207,6 @@ impl ConstExprEvaluator {
     fn return_one(&mut self, val: Val) -> &Val {
         self.simple = val;
         &self.simple
-        // self.stack.clear();
-        // self.stack.push(val);
-        // &self.stack[0]
     }
 
     #[cold]
@@ -338,9 +340,15 @@ impl ConstExprEvaluator {
                     let elem = self.pop()?;
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
-                            .await?;
+                    let array = ArrayRef::_new_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elem,
+                        len,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -357,9 +365,15 @@ impl ConstExprEvaluator {
                         .expect("type should have a default value");
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
-                            .await?;
+                    let array = ArrayRef::_new_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elem,
+                        len,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -389,9 +403,14 @@ impl ConstExprEvaluator {
                         .collect::<smallvec::SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_fixed_async(store, limiter.as_deref_mut(), &pre, &elems)
-                            .await?;
+                    let array = ArrayRef::_new_fixed_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elems,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }

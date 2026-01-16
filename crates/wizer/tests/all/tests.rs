@@ -21,7 +21,6 @@ fn get_wizer() -> Wizer {
 fn store() -> Result<Store<p1::WasiP1Ctx>> {
     let mut wasi = WasiCtxBuilder::new();
     let mut config = Config::new();
-    config.async_support(true);
     config.relaxed_simd_deterministic(true);
     let engine = Engine::new(&config)?;
     Ok(Store::new(&engine, wasi.build_p1()))

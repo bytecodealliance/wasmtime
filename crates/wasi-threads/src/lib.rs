@@ -17,13 +17,18 @@ const WASI_ENTRY_POINT: &str = "wasi_thread_start";
 pub struct WasiThreadsCtx<T> {
     instance_pre: Arc<InstancePre<T>>,
     tid: AtomicI32,
+    use_async: bool,
 }
 
 impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
-    pub fn new(module: Module, linker: Arc<Linker<T>>) -> Result<Self> {
+    pub fn new(module: Module, linker: Arc<Linker<T>>, use_async: bool) -> Result<Self> {
         let instance_pre = Arc::new(linker.instantiate_pre(&module)?);
         let tid = AtomicI32::new(0);
-        Ok(Self { instance_pre, tid })
+        Ok(Self {
+            instance_pre,
+            tid,
+            use_async,
+        })
     }
 
     pub fn spawn(&self, host: T, thread_start_arg: i32) -> Result<i32> {
@@ -60,6 +65,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
 
         // Start a Rust thread running a new instance of the current module.
         let builder = thread::Builder::new().name(format!("wasi-thread-{wasi_thread_id}"));
+        let use_async = self.use_async;
         builder.spawn(move || {
             // Catch any panic failures in host code; e.g., if a WASI module
             // were to crash, we want all threads to exit, not just this one.
@@ -67,7 +73,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 // Each new instance is created in its own store.
                 let mut store = Store::new(&instance_pre.module().engine(), host);
 
-                let instance = if instance_pre.module().engine().is_async() {
+                let instance = if use_async {
                     wasmtime_wasi::runtime::in_tokio(instance_pre.instantiate_async(&mut store))
                 } else {
                     instance_pre.instantiate(&mut store)
@@ -86,7 +92,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 log::trace!(
                     "spawned thread id = {wasi_thread_id}; calling start function `{WASI_ENTRY_POINT}` with: {thread_start_arg}"
                 );
-                let res = if instance_pre.module().engine().is_async() {
+                let res = if use_async {
                     wasmtime_wasi::runtime::in_tokio(
                         thread_entry_point
                             .call_async(&mut store, (wasi_thread_id, thread_start_arg)),

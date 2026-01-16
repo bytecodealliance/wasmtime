@@ -140,6 +140,8 @@ where
     ///   instance is currently calling a host function.
     /// * If a previous function call occurred and the corresponding
     ///   `post_return` hasn't been invoked yet.
+    /// * If `store` requires using [`Self::call_async`] instead, see
+    ///   [crate documentation](crate#async) for more info.
     ///
     /// In general there are many ways that things could go wrong when copying
     /// types in and out of a wasm module with the canonical ABI, and certain
@@ -154,24 +156,19 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in an asynchronous store. This
-    /// only works with functions defined within a synchronous store. Also
-    /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use `call_async` when async support is enabled on the config"
-        );
+    /// Panics if `store` does not own this function.
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
+        let store = store.as_context_mut();
+        store.0.validate_sync_call()?;
         self.call_impl(store, params)
     }
 
-    /// Exactly like [`Self::call`], except for use on asynchronous stores.
+    /// Exactly like [`Self::call`], except for invoking WebAssembly
+    /// [asynchronously](crate#async).
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in a synchronous store. This
-    /// only works with functions defined within an asynchronous store. Also
-    /// panics if `store` does not own this function.
+    /// Panics if `store` does not own this function.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,
@@ -182,10 +179,6 @@ where
         Return: 'static,
     {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` when async support is not enabled on the config"
-        );
 
         #[cfg(feature = "component-model-async")]
         if store.0.cm_concurrency_enabled() {
@@ -321,10 +314,6 @@ where
         let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
             assert!(store.0.cm_concurrency_enabled());
-            assert!(
-                store.0.async_support(),
-                "cannot use `call_concurrent` when async support is not enabled on the config"
-            );
 
             let prepared =
                 self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {

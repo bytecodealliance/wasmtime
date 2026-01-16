@@ -43,8 +43,8 @@
 //! virtual filesystem.
 //!
 //! Implementations of the `WasiFile` and `WasiDir` traits are provided
-//! for synchronous embeddings (i.e. Config::async_support(false)) in
-//! `wasi_common::sync` and for Tokio embeddings in `wasi_common::tokio`.
+//! for synchronous embeddings in `wasi_common::sync` and for Tokio embeddings
+//! in `wasi_common::tokio`.
 //!
 //! ## Traits for the rest of WASI's features
 //!

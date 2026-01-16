@@ -150,9 +150,9 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 mod async_yield;
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 pub use crate::runtime::vm::async_yield::*;
 
 #[cfg(feature = "gc-null")]
@@ -459,12 +459,18 @@ impl fmt::Display for WasmFault {
 
 /// Asserts that the future `f` is ready and returns its output.
 ///
-/// This function is intended to be used when `async_support` is verified as
-/// disabled. Internals of Wasmtime are generally `async` when they optionally
-/// can be, meaning that synchronous entrypoints will invoke this function
-/// after invoking the asynchronous internals. Due to `async_support` being
-/// disabled there should be no way to introduce a yield point meaning that all
-/// futures built from internal functions should always be ready.
+/// This function is intended to be used with `Store::validate_sync_call`.
+/// Internals of Wasmtime are generally `async` when they optionally can be,
+/// meaning that synchronous entrypoints will invoke this function after
+/// invoking the asynchronous internals. The `validate_sync_call` method
+/// ensures that during this `async` function call there won't actually be any
+/// yield points. If a yield point could possibly happen, then
+/// `validate_sync_call` will fail.
+///
+/// If `validate_sync_call` passes, then this function is an extra assert that
+/// yes, indeed, we coded everything correctly in Wasmtime and there shouldn't
+/// be any yield points in the future provided, so its result should be ready
+/// immediately.
 ///
 /// # Panics
 ///
@@ -484,7 +490,7 @@ pub fn assert_ready<F: Future>(f: F) -> F::Output {
 /// is available. If it isn't then `None` is returned and an appropriate panic
 /// message should be generated recommending to use an async function (e.g.
 /// `grow_async` instead of `grow`).
-pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+fn one_poll<F: Future>(f: F) -> Option<F::Output> {
     let mut context = Context::from_waker(&Waker::noop());
     match pin!(f).poll(&mut context) {
         Poll::Ready(output) => Some(output),

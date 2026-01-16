@@ -41,7 +41,6 @@ pub fn init() {
     STATE.get_or_init(|| {
         let mut config = Config::new();
         config.wasm_component_model_async(true);
-        config.async_support(true);
         let engine = Engine::new(&config).unwrap();
         let component = compile(&engine);
         let mut linker = Linker::new(&engine);

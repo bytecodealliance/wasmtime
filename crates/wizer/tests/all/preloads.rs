@@ -21,9 +21,7 @@ const PRELOAD2: &'static str = r#"
 
 async fn run_with_preloads(args: &[wasmtime::Val], wat: &str) -> Result<wasmtime::Val> {
     let wasm = wat_to_wasm(wat)?;
-    let mut config = wasmtime::Config::new();
-    config.async_support(true);
-    let engine = wasmtime::Engine::new(&config)?;
+    let engine = wasmtime::Engine::default();
     let mut store = wasmtime::Store::new(&engine, ());
     let mod1 = Module::new(store.engine(), PRELOAD1)?;
     let mod2 = Module::new(store.engine(), PRELOAD2)?;

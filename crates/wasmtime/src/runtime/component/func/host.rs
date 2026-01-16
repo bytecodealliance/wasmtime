@@ -20,7 +20,7 @@ use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
-#[cfg(feature = "component-model-async")]
+#[cfg(feature = "async")]
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -50,6 +50,10 @@ pub struct HostFunc {
     /// type is a zero-sized-type. Host functions are allowed, though, to close
     /// over the environment as well.
     func: Box<dyn Any + Send + Sync>,
+
+    /// Whether or not this host function was defined in such a way that async
+    /// stack switching is required when calling it.
+    requires_async: bool,
 }
 
 impl core::fmt::Debug for HostFunc {
@@ -65,7 +69,7 @@ enum HostResult<T> {
 }
 
 impl HostFunc {
-    fn new<T, F, P, R>(func: F) -> Arc<HostFunc>
+    fn new<T, F, P, R>(requires_async: bool, func: F) -> Arc<HostFunc>
     where
         T: 'static,
         R: Send + Sync + 'static,
@@ -75,6 +79,7 @@ impl HostFunc {
             entrypoint: F::cabi_entrypoint,
             typecheck: F::typecheck,
             func: Box::new(func),
+            requires_async,
         })
     }
 
@@ -86,9 +91,12 @@ impl HostFunc {
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
     {
-        Self::new(StaticHostFn::<_, false>::new(move |store, params| {
-            HostResult::Done(func(store, params))
-        }))
+        Self::new(
+            false,
+            StaticHostFn::<_, false>::new(move |store, params| {
+                HostResult::Done(func(store, params))
+            }),
+        )
     }
 
     /// Equivalent for `Linker::func_wrap_async`
@@ -103,13 +111,16 @@ impl HostFunc {
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
     {
-        Self::new(StaticHostFn::<_, false>::new(move |store, params| {
-            HostResult::Done(
-                store
-                    .block_on(|store| Pin::from(func(store, params)))
-                    .and_then(|r| r),
-            )
-        }))
+        Self::new(
+            true,
+            StaticHostFn::<_, false>::new(move |store, params| {
+                HostResult::Done(
+                    store
+                        .block_on(|store| Pin::from(func(store, params)))
+                        .and_then(|r| r),
+                )
+            }),
+        )
     }
 
     /// Equivalent for `Linker::func_wrap_concurrent`
@@ -125,12 +136,15 @@ impl HostFunc {
         R: ComponentNamedList + Lower + 'static,
     {
         let func = Arc::new(func);
-        Self::new(StaticHostFn::<_, true>::new(move |store, params| {
-            let func = func.clone();
-            HostResult::Future(Box::pin(
-                store.wrap_call(move |accessor| func(accessor, params)),
-            ))
-        }))
+        Self::new(
+            true,
+            StaticHostFn::<_, true>::new(move |store, params| {
+                let func = func.clone();
+                HostResult::Future(Box::pin(
+                    store.wrap_call(move |accessor| func(accessor, params)),
+                ))
+            }),
+        )
     }
 
     /// Equivalent of `Linker::func_new`
@@ -142,16 +156,20 @@ impl HostFunc {
             + Sync
             + 'static,
     {
-        Self::new(DynamicHostFn::<_, false>::new(
-            move |store, ty, mut params_and_results, result_start| {
-                let (params, results) = params_and_results.split_at_mut(result_start);
-                let result = func(store, ty, params, results).map(move |()| params_and_results);
-                HostResult::Done(result)
-            },
-        ))
+        Self::new(
+            false,
+            DynamicHostFn::<_, false>::new(
+                move |store, ty, mut params_and_results, result_start| {
+                    let (params, results) = params_and_results.split_at_mut(result_start);
+                    let result = func(store, ty, params, results).map(move |()| params_and_results);
+                    HostResult::Done(result)
+                },
+            ),
+        )
     }
 
     /// Equivalent of `Linker::func_new_async`
+    #[cfg(feature = "async")]
     pub(crate) fn func_new_async<T, F>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
@@ -165,18 +183,21 @@ impl HostFunc {
             + Sync
             + 'static,
     {
-        Self::new(DynamicHostFn::<_, false>::new(
-            move |store, ty, mut params_and_results, result_start| {
-                let (params, results) = params_and_results.split_at_mut(result_start);
-                let result = store
-                    .with_blocking(|store, cx| {
-                        cx.block_on(Pin::from(func(store, ty, params, results)))
-                    })
-                    .and_then(|r| r);
-                let result = result.map(move |()| params_and_results);
-                HostResult::Done(result)
-            },
-        ))
+        Self::new(
+            true,
+            DynamicHostFn::<_, false>::new(
+                move |store, ty, mut params_and_results, result_start| {
+                    let (params, results) = params_and_results.split_at_mut(result_start);
+                    let result = store
+                        .with_blocking(|store, cx| {
+                            cx.block_on(Pin::from(func(store, ty, params, results)))
+                        })
+                        .and_then(|r| r);
+                    let result = result.map(move |()| params_and_results);
+                    HostResult::Done(result)
+                },
+            ),
+        )
     }
 
     /// Equivalent of `Linker::func_new_concurrent`
@@ -195,18 +216,21 @@ impl HostFunc {
             + 'static,
     {
         let func = Arc::new(func);
-        Self::new(DynamicHostFn::<_, true>::new(
-            move |store, ty, mut params_and_results, result_start| {
-                let func = func.clone();
-                HostResult::Future(Box::pin(store.wrap_call(move |accessor| {
-                    Box::pin(async move {
-                        let (params, results) = params_and_results.split_at_mut(result_start);
-                        func(accessor, ty, params, results).await?;
-                        Ok(params_and_results)
-                    })
-                })))
-            },
-        ))
+        Self::new(
+            true,
+            DynamicHostFn::<_, true>::new(
+                move |store, ty, mut params_and_results, result_start| {
+                    let func = func.clone();
+                    HostResult::Future(Box::pin(store.wrap_call(move |accessor| {
+                        Box::pin(async move {
+                            let (params, results) = params_and_results.split_at_mut(result_start);
+                            func(accessor, ty, params, results).await?;
+                            Ok(params_and_results)
+                        })
+                    })))
+                },
+            ),
+        )
     }
 
     pub fn typecheck(&self, ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
@@ -219,6 +243,10 @@ impl HostFunc {
             callee: NonNull::new(self.entrypoint as *mut _).unwrap().into(),
             data: data.into(),
         }
+    }
+
+    pub fn requires_async(&self) -> bool {
+        self.requires_async
     }
 }
 

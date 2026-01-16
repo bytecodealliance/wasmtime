@@ -1,7 +1,9 @@
 //! Implementation of `exnref` in Wasmtime.
 
-use crate::runtime::vm::{VMGcRef, VMStore};
-use crate::store::{StoreId, StoreResourceLimiter};
+use crate::runtime::vm::VMGcRef;
+use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Result,
@@ -191,11 +193,11 @@ impl ExnRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error
+    /// will be returned because [`ExnRef::new_async`] should be used instead.
     ///
-    /// Panics if your engine is configured for async; use
-    /// [`ExnRef::new_async`][crate::ExnRef::new_async] to perform
-    /// synchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
@@ -205,14 +207,17 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
         vm::assert_ready(Self::_new_async(
             store,
             limiter.as_mut(),
             allocator,
             tag,
             fields,
+            Asyncness::No,
         ))
     }
 
@@ -238,10 +243,6 @@ impl ExnRef {
     ///
     /// # Panics
     ///
-    /// Panics if your engine is not configured for async; use
-    /// [`ExnRef::new`][crate::ExnRef::new] to perform synchronous
-    /// allocation instead.
-    ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
     #[cfg(feature = "async")]
@@ -252,7 +253,15 @@ impl ExnRef {
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), allocator, tag, fields).await
+        Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            tag,
+            fields,
+            Asyncness::Yes,
+        )
+        .await
     }
 
     pub(crate) async fn _new_async(
@@ -261,10 +270,11 @@ impl ExnRef {
         allocator: &ExnRefPre,
         tag: &Tag,
         fields: &[Val],
+        asyncness: Asyncness,
     ) -> Result<Rooted<ExnRef>> {
         Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_unchecked(store, allocator, tag, fields)
             })
             .await

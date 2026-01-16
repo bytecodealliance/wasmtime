@@ -15,7 +15,7 @@ use wasmtime::component::HasData;
 ///
 /// ```
 /// use wasmtime::component::Linker;
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime_wasi::random::*;
 ///
 /// struct MyStoreState {
@@ -23,9 +23,7 @@ use wasmtime::component::HasData;
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///     let mut linker = Linker::new(&engine);
 ///
 ///     wasmtime_wasi::p2::bindings::random::random::add_to_linker::<MyStoreState, WasiRandom>(

@@ -1315,7 +1315,6 @@ fn pass_host_borrow_to_guest() -> Result<()> {
 async fn drop_on_owned_resource() -> Result<()> {
     let mut config = wasmtime::Config::new();
     config.wasm_component_model_async(true);
-    config.async_support(true);
     let engine = &wasmtime::Engine::new(&config)?;
     let c = Component::new(
         &engine,

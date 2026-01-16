@@ -1,8 +1,10 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::{self, ExportMemory, VMStore};
+use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
@@ -259,9 +261,11 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
-            .expect("must use `new_async` when async resource limiters are in use")
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new(store, limiter.as_mut(), ty))
     }
 
     /// Async variant of [`Memory::new`]. You must use this variant with
@@ -573,14 +577,14 @@ impl Memory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     ///
+    /// This function will return an error if the [`Store`](`crate::Store`) has
+    /// a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
+    /// async resource limiter, use [`Memory::grow_async`] instead.
+    ///
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    ///
-    /// This function will panic if the [`Store`](`crate::Store`) has a
-    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
-    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
-    /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
     /// # Examples
     ///
@@ -604,9 +608,8 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
-            .expect("must use `grow_async` if an async resource limiter is used")
+        let (mut limiter, store) = store.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(self._grow(store, limiter.as_mut(), delta))
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a

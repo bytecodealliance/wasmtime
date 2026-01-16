@@ -36,6 +36,7 @@ mod limits;
 mod linker;
 mod memory;
 mod memory_creator;
+mod missing_async;
 mod module;
 mod module_serialize;
 mod name;

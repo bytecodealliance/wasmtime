@@ -12,7 +12,7 @@ use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
 use crate::runtime::vm::{self, VMFuncRef};
-use crate::store::{AsStoreOpaque, StoreOpaque};
+use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
@@ -729,7 +729,7 @@ pub(crate) enum RuntimeImport {
         // function being used across multiple instances simultaneously. Or
         // otherwise this makes `InstancePre::instantiate` possible to create
         // separate instances all sharing the same host function.
-        _dtor: Arc<crate::func::HostFunc>,
+        dtor: Arc<crate::func::HostFunc>,
 
         // A raw function which is filled out (including `wasm_call`) which
         // points to the internals of the `_dtor` field. This is read and
@@ -768,7 +768,11 @@ impl<'a> Instantiator<'a> {
         })
     }
 
-    async fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    async fn run<T>(
+        &mut self,
+        store: &mut StoreContextMut<'_, T>,
+        asyncness: Asyncness,
+    ) -> Result<()> {
         let env_component = self.component.env_component();
 
         // Before all initializers are processed configure all destructors for
@@ -873,7 +877,8 @@ impl<'a> Instantiator<'a> {
                     // if required.
 
                     let i = unsafe {
-                        crate::Instance::new_started(store, module, imports.as_ref()).await?
+                        crate::Instance::new_started(store, module, imports.as_ref(), asyncness)
+                            .await?
                     };
                     self.instance_mut(store.0).push_instance_id(i.id());
                 }
@@ -1086,6 +1091,7 @@ pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    requires_async: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -1096,6 +1102,7 @@ impl<T: 'static> Clone for InstancePre<T> {
             component: self.component.clone(),
             imports: self.imports.clone(),
             resource_types: self.resource_types.clone(),
+            requires_async: self.requires_async,
             _marker: self._marker,
         }
     }
@@ -1113,10 +1120,20 @@ impl<T: 'static> InstancePre<T> {
         imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
+        let mut requires_async = false;
+        for (_, import) in imports.iter() {
+            requires_async = requires_async
+                || match import {
+                    RuntimeImport::Func(f) => f.requires_async(),
+                    RuntimeImport::Module(_) => false,
+                    RuntimeImport::Resource { dtor, .. } => dtor.requires_async(),
+                };
+        }
         InstancePre {
             component,
             imports,
             resource_types,
+            requires_async,
             _marker: marker::PhantomData,
         }
     }
@@ -1145,12 +1162,18 @@ impl<T: 'static> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use async instantiation when async support is enabled"
-        );
-        vm::assert_ready(self._instantiate(store))
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        let store = store.as_context_mut();
+
+        // If this instance requires an async host, set that flag in the store,
+        // and then afterwards assert nothing else in the store, nor this
+        // instance, required async.
+        if self.requires_async {
+            store.0.set_async_required();
+        }
+        store.0.validate_sync_call()?;
+
+        vm::assert_ready(self._instantiate(store, Asyncness::No))
     }
     /// Performs the instantiation process into the store specified.
     ///
@@ -1159,17 +1182,24 @@ impl<T: 'static> InstancePre<T> {
     // TODO: needs more docs
     #[cfg(feature = "async")]
     pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        self._instantiate(store).await
+        self._instantiate(store, Asyncness::Yes).await
     }
 
-    async fn _instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    async fn _instantiate(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        asyncness: Asyncness,
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
+        if self.requires_async {
+            store.0.set_async_required();
+        }
         store
             .engine()
             .allocator()
             .increment_component_instance_count()?;
         let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
-        instantiator.run(&mut store).await.map_err(|e| {
+        instantiator.run(&mut store, asyncness).await.map_err(|e| {
             store
                 .engine()
                 .allocator()

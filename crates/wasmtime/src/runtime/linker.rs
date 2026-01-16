@@ -447,9 +447,6 @@ impl<T> Linker<T> {
     ///
     /// This method panics in the following situations:
     ///
-    /// * This linker is not associated with an [async
-    ///   config](crate::Config::async_support).
-    ///
     /// * If the given function type is not associated with the same engine as
     ///   this linker.
     #[cfg(feature = "async")]
@@ -471,10 +468,6 @@ impl<T> Linker<T> {
             + 'static,
         T: Send + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_new_async` without enabling async support in the config"
-        );
         self.func_insert(module, name, HostFunc::new_async(&self.engine, ty, func))
     }
 
@@ -561,10 +554,6 @@ impl<T> Linker<T> {
             + 'static,
         T: Send + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_async` without enabling async support on the config",
-        );
         self.func_insert(module, name, HostFunc::wrap_async(&self.engine, func))
     }
 

@@ -287,8 +287,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // The `async` flag is used to indicate that a Rust-level `async`
 ///         // function is used on the host. This means that the host is allowed
 ///         // to do async I/O. Note though that to WebAssembly itself the
-///         // function will still be blocking. This requires
-///         // `Config::async_support` to be `true` as well.
+///         // function will still be blocking.
 ///         "wasi:io/poll.poll": async,
 ///
 ///         // The `store` flag means that the host function will have access

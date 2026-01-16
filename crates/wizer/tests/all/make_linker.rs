@@ -7,7 +7,6 @@ async fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<
     let _ = env_logger::try_init();
 
     let mut config = wasmtime::Config::new();
-    config.async_support(true);
     wasmtime::Cache::from_file(None)
         .map(|cache| config.cache(Some(cache)))
         .unwrap();

@@ -70,9 +70,7 @@ pub fn engine() -> Engine {
 }
 
 pub fn async_engine() -> Engine {
-    let mut config = config();
-    config.async_support(true);
-    Engine::new(&config).unwrap()
+    Engine::default()
 }
 
 /// Newtype wrapper for `f32` whose `PartialEq` impl considers NaNs equal to each other.

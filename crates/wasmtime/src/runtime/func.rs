@@ -120,7 +120,7 @@ impl NoFunc {
 /// might have an `async` function in Rust, however, which you'd like to make
 /// available from WebAssembly. Wasmtime supports asynchronously calling
 /// WebAssembly through native stack switching. You can get some more
-/// information about [asynchronous configs](crate::Config::async_support), but
+/// information about [asynchronous configs](crate#async), but
 /// from the perspective of `Func` it's important to know that whether or not
 /// your [`Store`](crate::Store) is asynchronous will dictate whether you call
 /// functions through [`Func::call`] or [`Func::call_async`] (or the typed
@@ -444,9 +444,6 @@ impl Func {
     ///
     /// # Panics
     ///
-    /// This function will panic if `store` is not associated with an [async
-    /// config](crate::Config::async_support).
-    ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
     ///
@@ -479,7 +476,7 @@ impl Func {
     ///
     /// // Using `new_async` we can hook up into calling our async
     /// // `get_row_count` function.
-    /// let engine = Engine::new(Config::new().async_support(true))?;
+    /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, MyDatabase {
     ///     // ...
     /// });
@@ -513,10 +510,7 @@ impl Func {
         T: Send + 'static,
     {
         let store = store.as_context_mut().0;
-        assert!(
-            store.async_support(),
-            "cannot use `new_async` without enabling async support in the config"
-        );
+
         let host = HostFunc::new_async(store.engine(), ty, func);
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
@@ -806,10 +800,6 @@ impl Func {
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
     /// result and the arguments are passed within a tuple. For more information
     /// see the [`Func`] documentation.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if called with a non-asynchronous store.
     #[cfg(feature = "async")]
     pub fn wrap_async<T, F, P, R>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
     where
@@ -822,10 +812,6 @@ impl Func {
         T: Send + 'static,
     {
         let store = store.as_context_mut().0;
-        assert!(
-            store.async_support(),
-            concat!("cannot use `wrap_async` without enabling async support on the config")
-        );
         let host = HostFunc::wrap_async(store.engine(), func);
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
@@ -910,6 +896,8 @@ impl Func {
     ///   `params`.
     /// * Any host-originating error originally returned from a function defined
     ///   via [`Func::new`], for example.
+    /// * The `store` provided is configured to require `call_async` to be used
+    ///   instead, such as with epochs or fuel.
     ///
     /// Errors typically indicate that execution of WebAssembly was halted
     /// mid-way and did not complete after the error condition happened.
@@ -918,9 +906,7 @@ impl Func {
     ///
     /// # Panics
     ///
-    /// This function will panic if called on a function belonging to an async
-    /// store. Asynchronous stores must always use `call_async`. Also panics if
-    /// `store` does not own this function.
+    /// Panics if `store` does not own this function.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn call(
@@ -929,11 +915,8 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use `call_async` when async support is enabled on the config",
-        );
         let mut store = store.as_context_mut();
+        store.0.validate_sync_call()?;
 
         self.call_impl_check_args(&mut store, params, results)?;
 
@@ -1048,8 +1031,7 @@ impl Func {
     /// asynchronously.
     ///
     /// This function is the same as [`Func::call`] except that it is
-    /// asynchronous. This is only compatible with stores associated with an
-    /// [asynchronous config](crate::Config::async_support).
+    /// asynchronous.
     ///
     /// It's important to note that the execution of WebAssembly will happen
     /// synchronously in the `poll` method of the future returned from this
@@ -1059,7 +1041,7 @@ impl Func {
     /// in a "blocking context".
     ///
     /// For more information see the documentation on [asynchronous
-    /// configs](crate::Config::async_support).
+    /// configs](crate#async).
     ///
     /// # Errors
     ///
@@ -1078,10 +1060,6 @@ impl Func {
         results: &mut [Val],
     ) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` without enabling async support in the config",
-        );
 
         self.call_impl_check_args(&mut store, params, results)?;
 
@@ -1499,7 +1477,7 @@ impl EntryStoreContext {
         // stack. This means that the previous stack limit is no longer relevant
         // because we're on a separate stack.
         if unsafe { *store.0.vm_store_context().stack_limit.get() } != usize::MAX
-            && !store.0.async_support()
+            && !store.0.can_block()
         {
             stack_limit = None;
         }
@@ -2090,8 +2068,8 @@ impl<T> Caller<'_, T> {
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
-        self.store.gc(why);
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()> {
+        self.store.gc(why)
     }
 
     /// Perform garbage collection asynchronously.
@@ -2171,6 +2149,11 @@ impl<'a, T: 'static> From<Caller<'a, T>> for StoreContextMut<'a, T> {
 pub struct HostFunc {
     ctx: StoreBox<VMArrayCallHostFuncContext>,
 
+    /// Whether or not this function was defined with an `async` host function,
+    /// meaning that it is only invokable when wasm is itself on a fiber to
+    /// support suspension on `Poll::Pending`.
+    requires_async: bool,
+
     // Stored to unregister this function's signature with the engine when this
     // is dropped.
     engine: Engine,
@@ -2198,10 +2181,15 @@ impl HostFunc {
     ///
     /// This is an internal private constructor for this type intended to only
     /// be used by other constructors of this type below.
-    fn new_raw(engine: &Engine, ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
+    fn new_raw(
+        engine: &Engine,
+        ctx: StoreBox<VMArrayCallHostFuncContext>,
+        requires_async: bool,
+    ) -> Self {
         HostFunc {
             ctx,
             engine: engine.clone(),
+            requires_async,
         }
     }
 
@@ -2382,7 +2370,7 @@ impl HostFunc {
     where
         T: 'static,
     {
-        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func))
+        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func), false)
     }
 
     /// Analog of [`Func::new`]
@@ -2411,6 +2399,7 @@ impl HostFunc {
                 func(caller.sub_caller(), params, results)?;
                 Self::store_untyped_results(caller.store, &ty, vec, values)
             }),
+            false,
         )
     }
 
@@ -2453,6 +2442,7 @@ impl HostFunc {
                     })
                 },
             ),
+            true,
         )
     }
 
@@ -2529,7 +2519,7 @@ impl HostFunc {
             // wasmtime's ambient correctness.
             unsafe { Self::store_typed_results(caller.store.0, ret, args) }
         });
-        HostFunc::new_raw(engine, ctx)
+        HostFunc::new_raw(engine, ctx, false)
     }
 
     /// Analog of [`Func::wrap_async`]
@@ -2559,7 +2549,7 @@ impl HostFunc {
                 unsafe { Self::store_typed_results(caller.store.0, ret.into_fallible(), args) }
             })
         });
-        HostFunc::new_raw(engine, ctx)
+        HostFunc::new_raw(engine, ctx, true)
     }
 
     /// Loads the typed parameters from `params`
@@ -2681,6 +2671,13 @@ impl HostFunc {
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
         self.validate_store(store);
+
+        // This function could be called by a guest at any time, and it requires
+        // fibers, so the store now required async entrypoints.
+        if self.requires_async {
+            store.set_async_required();
+        }
+
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(Box::new(self), modules);
         // SAFETY: this funcref was just pushed within `store`, so it's safe to
@@ -2705,6 +2702,10 @@ impl HostFunc {
 
     pub(crate) fn func_ref(&self) -> &VMFuncRef {
         unsafe { self.ctx.get().as_ref().func_ref() }
+    }
+
+    pub(crate) fn requires_async(&self) -> bool {
+        self.requires_async
     }
 }
 

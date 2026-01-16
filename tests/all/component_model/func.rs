@@ -927,7 +927,6 @@ async fn async_reentrance() -> Result<()> {
     config.wasm_component_model_async(true);
     config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
-    config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
@@ -1140,7 +1139,6 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     config.wasm_component_model_async(true);
     config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
-    config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
@@ -1297,7 +1295,6 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
@@ -1753,7 +1750,6 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());

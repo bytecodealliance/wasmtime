@@ -994,7 +994,7 @@ async fn async_then_sync_trap() -> Result<()> {
     }
 
     let mut async_store = Store::new(
-        &Engine::new(Config::new().async_support(true)).unwrap(),
+        &Engine::default(),
         AsyncCtx {
             sync_instance,
             sync_store,
@@ -1057,7 +1057,7 @@ async fn sync_then_async_trap() -> Result<()> {
         )
     "#;
 
-    let mut async_store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), ());
+    let mut async_store = Store::new(&Engine::default(), ());
 
     let async_module = Module::new(async_store.engine(), wat)?;
 
@@ -1644,16 +1644,6 @@ fn same_module_multiple_stores() -> Result<()> {
             assert_eq!(actual_frame.func_name(), Some(expected_frame));
         }
     }
-
-    Ok(())
-}
-
-#[test]
-fn async_stack_size_ignored_if_disabled() -> Result<()> {
-    let mut config = Config::new();
-    config.async_support(false);
-    config.max_wasm_stack(8 << 20);
-    Engine::new(&config)?;
 
     Ok(())
 }
