@@ -501,7 +501,7 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg(feature = "async")]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
