@@ -381,6 +381,15 @@ impl<T> Linker<T> {
         Ok(self)
     }
 
+    fn func_insert(&mut self, module: &str, name: &str, func: HostFunc) -> Result<&mut Self>
+    where
+        T: 'static,
+    {
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
+
     /// Creates a [`Func::new`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
@@ -399,11 +408,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        assert!(ty.comes_from_same_engine(self.engine()));
-        let func = HostFunc::new(&self.engine, ty, func);
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, HostFunc::new(&self.engine, ty, func))
     }
 
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
@@ -428,12 +433,9 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        assert!(ty.comes_from_same_engine(self.engine()));
         // SAFETY: the contract of this function is the same as `new_unchecked`.
         let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func) };
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, func)
     }
 
     /// Creates a [`Func::new_async`]-style function named in this linker.
@@ -472,14 +474,7 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
-        assert!(ty.comes_from_same_engine(self.engine()));
-        self.func_new(module, name, ty, move |caller, params, results| {
-            let instance = caller.caller();
-            caller.store.with_blocking(|store, cx| {
-                let caller = Caller::new(store, instance);
-                cx.block_on(core::pin::Pin::from(func(caller, params, results)))
-            })?
-        })
+        self.func_insert(module, name, HostFunc::new_async(&self.engine, ty, func))
     }
 
     /// Define a host function within this linker.
@@ -547,10 +542,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let func = HostFunc::wrap(&self.engine, func);
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, HostFunc::wrap(&self.engine, func))
     }
 
     /// Asynchronous analog of [`Linker::func_wrap`].
@@ -572,21 +564,7 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support on the config",
         );
-        let func =
-            HostFunc::wrap_inner(&self.engine, move |caller: Caller<'_, T>, args: Params| {
-                let instance = caller.caller();
-                let result = caller.store.block_on(|store| {
-                    let caller = Caller::new(store, instance);
-                    func(caller, args).into()
-                });
-                match result {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => Args::fallible_from_error(e),
-                }
-            });
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, HostFunc::wrap_async(&self.engine, func))
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.

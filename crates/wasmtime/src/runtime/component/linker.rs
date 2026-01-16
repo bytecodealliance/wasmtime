@@ -771,9 +771,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
+            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
@@ -792,12 +792,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `resource_async` without enabling async support in the config"
         );
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_async(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                cx.as_context_mut()
-                    .block_on(|store| dtor(store, param).into())?
-            },
+            move |cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.into(), param),
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
@@ -823,23 +820,20 @@ impl<T: 'static> LinkerInstance<'_, T> {
         // up the implementation to avoid using e.g. `Accessor::new` and
         // `tls::set` directly.
         let dtor = Arc::new(dtor);
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_async(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
                 let dtor = dtor.clone();
-                cx.as_context_mut().block_on(move |mut store| {
-                    Box::pin(async move {
-                        let accessor =
-                            &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
-                        let mut future = std::pin::pin!(dtor(accessor, param));
-                        std::future::poll_fn(|cx| {
-                            crate::component::concurrent::tls::set(store.0, || {
-                                future.as_mut().poll(cx)
-                            })
-                        })
-                        .await
+                Box::new(async move {
+                    let mut store = cx.as_context_mut();
+                    let accessor =
+                        &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
+                    let mut future = std::pin::pin!(dtor(accessor, param));
+                    std::future::poll_fn(|cx| {
+                        crate::component::concurrent::tls::set(store.0, || future.as_mut().poll(cx))
                     })
-                })?
+                    .await
+                })
             },
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;

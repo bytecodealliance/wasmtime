@@ -371,17 +371,16 @@ impl Func {
     /// Panics if the given function type is not associated with this store's
     /// engine.
     pub fn new<T: 'static>(
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
-        assert!(ty.comes_from_same_engine(store.as_context().engine()));
-        let ty_clone = ty.clone();
-        unsafe {
-            Func::new_unchecked(store, ty, move |caller, values| {
-                Func::invoke_host_func_for_wasm(caller, &ty_clone, values, &func)
-            })
-        }
+        let store = store.as_context_mut().0;
+        let host = HostFunc::new(store.engine(), ty, func);
+
+        // SAFETY: the `T` used by `func` matches the `T` of the store we're
+        // inserting into via this function's type signature.
+        unsafe { host.into_func(store) }
     }
 
     /// Creates a new [`Func`] with the given arguments, although has fewer
@@ -417,7 +416,6 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
-        assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let store = store.as_context_mut().0;
 
         // SAFETY: the contract required by `new_unchecked` is the same as the
@@ -502,7 +500,7 @@ impl Func {
     /// # }
     /// ```
     #[cfg(feature = "async")]
-    pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
+    pub fn new_async<T, F>(mut store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
                 Caller<'a, T>,
@@ -514,24 +512,16 @@ impl Func {
             + 'static,
         T: 'static,
     {
+        let store = store.as_context_mut().0;
         assert!(
-            store.as_context().async_support(),
+            store.async_support(),
             "cannot use `new_async` without enabling async support in the config"
         );
-        assert!(ty.comes_from_same_engine(store.as_context().engine()));
-        return Func::new(
-            store,
-            ty,
-            move |Caller { store, caller }, params, results| {
-                store.with_blocking(|store, cx| {
-                    cx.block_on(core::pin::Pin::from(func(
-                        Caller { store, caller },
-                        params,
-                        results,
-                    )))
-                })?
-            },
-        );
+        let host = HostFunc::new_async(store.engine(), ty, func);
+
+        // SAFETY: the `T` used by `func` matches the `T` of the store we're
+        // inserting into via this function's type signature.
+        unsafe { host.into_func(store) }
     }
 
     /// Creates a new `Func` from a store and a funcref within that store.
@@ -812,22 +802,6 @@ impl Func {
         unsafe { host.into_func(store) }
     }
 
-    #[cfg(feature = "async")]
-    fn wrap_inner<F, T, Params, Results>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
-    where
-        F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
-        Params: WasmTyList,
-        Results: WasmRet,
-        T: 'static,
-    {
-        let store = store.as_context_mut().0;
-        let host = HostFunc::wrap_inner(store.engine(), func);
-
-        // SAFETY: The `T` the closure takes is the same as the `T` of the store
-        // we're inserting into via the type signature above.
-        unsafe { host.into_func(store) }
-    }
-
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
     /// result and the arguments are passed within a tuple. For more information
     /// see the [`Func`] documentation.
@@ -836,7 +810,7 @@ impl Func {
     ///
     /// This function will panic if called with a non-asynchronous store.
     #[cfg(feature = "async")]
-    pub fn wrap_async<T, F, P, R>(store: impl AsContextMut<Data = T>, func: F) -> Func
+    pub fn wrap_async<T, F, P, R>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
     where
         F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
             + Send
@@ -846,16 +820,16 @@ impl Func {
         R: WasmRet,
         T: 'static,
     {
+        let store = store.as_context_mut().0;
         assert!(
-            store.as_context().async_support(),
+            store.async_support(),
             concat!("cannot use `wrap_async` without enabling async support on the config")
         );
-        Func::wrap_inner(store, move |Caller { store, caller }, args| {
-            match store.block_on(|store| func(Caller { store, caller }, args).into()) {
-                Ok(ret) => ret.into_fallible(),
-                Err(e) => R::fallible_from_error(e),
-            }
-        })
+        let host = HostFunc::wrap_async(store.engine(), func);
+
+        // SAFETY: The `T` the closure takes is the same as the `T` of the store
+        // we're inserting into via the type signature above.
+        unsafe { host.into_func(store) }
     }
 
     /// Returns the underlying wasm type that this `Func` has.
@@ -1949,7 +1923,7 @@ macro_rules! impl_into_func {
 for_each_function_signature!(impl_into_func);
 
 /// Trait implemented for various tuples made up of types which implement
-/// [`WasmTy`] that can be passed to [`Func::wrap_inner`] and
+/// [`WasmTy`] that can be passed to [`Func::wrap_async`] and
 /// [`HostContext::from_closure`].
 pub unsafe trait WasmTyList {
     /// Get the value type that each Type in the list represents.
@@ -2028,16 +2002,6 @@ pub struct Caller<'a, T: 'static> {
 }
 
 impl<T> Caller<'_, T> {
-    #[cfg(feature = "async")]
-    pub(crate) fn new(store: StoreContextMut<'_, T>, caller: Instance) -> Caller<'_, T> {
-        Caller { store, caller }
-    }
-
-    #[cfg(feature = "async")]
-    pub(crate) fn caller(&self) -> Instance {
-        self.caller
-    }
-
     /// Executes `f` with an appropriate `Caller`.
     ///
     /// This is the entrypoint for host functions in core wasm. The `store` and
@@ -2257,6 +2221,12 @@ impl<T: 'static> AsContextMut for Caller<'_, T> {
     }
 }
 
+impl<'a, T: 'static> From<Caller<'a, T>> for StoreContextMut<'a, T> {
+    fn from(caller: Caller<'a, T>) -> Self {
+        caller.store
+    }
+}
+
 // State stored inside a `VMArrayCallHostFuncContext`.
 struct HostFuncState<F> {
     // The actual host function.
@@ -2457,6 +2427,40 @@ impl HostFunc {
         }
     }
 
+    /// Analog of [`Func::new_async`]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the given
+    /// engine.
+    #[cfg(feature = "async")]
+    pub fn new_async<T, F>(engine: &Engine, ty: FuncType, func: F) -> Self
+    where
+        F: for<'a> Fn(
+                Caller<'a, T>,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+        T: 'static,
+    {
+        HostFunc::new(
+            engine,
+            ty,
+            move |Caller { store, caller }, params, results| {
+                store.with_blocking(|store, cx| {
+                    cx.block_on(core::pin::Pin::from(func(
+                        Caller { store, caller },
+                        params,
+                        results,
+                    )))
+                })?
+            },
+        )
+    }
+
     /// Analog of [`Func::new_unchecked`]
     ///
     /// # Panics
@@ -2498,19 +2502,6 @@ impl HostFunc {
         HostFunc::_new(engine, ctx.into())
     }
 
-    /// Analog of [`Func::wrap_inner`]
-    #[cfg(any(feature = "component-model", feature = "async"))]
-    pub fn wrap_inner<F, T, Params, Results>(engine: &Engine, func: F) -> Self
-    where
-        F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
-        Params: WasmTyList,
-        Results: WasmRet,
-        T: 'static,
-    {
-        let ctx = HostContext::from_closure(engine, func);
-        HostFunc::_new(engine, ctx)
-    }
-
     /// Analog of [`Func::wrap`]
     pub fn wrap<T, Params, Results>(
         engine: &Engine,
@@ -2521,6 +2512,29 @@ impl HostFunc {
     {
         let ctx = func.into_func(engine);
         HostFunc::_new(engine, ctx)
+    }
+
+    /// Analog of [`Func::wrap_async`]
+    #[cfg(feature = "async")]
+    pub fn wrap_async<T, F, P, R>(engine: &Engine, func: F) -> Self
+    where
+        F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+        P: WasmTyList,
+        R: WasmRet,
+        T: 'static,
+    {
+        HostFunc::_new(
+            engine,
+            HostContext::from_closure(engine, move |Caller { store, caller }, args| {
+                match store.block_on(|store| func(Caller { store, caller }, args).into()) {
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => R::fallible_from_error(e),
+                }
+            }),
+        )
     }
 
     /// Requires that this function's signature is already registered within
