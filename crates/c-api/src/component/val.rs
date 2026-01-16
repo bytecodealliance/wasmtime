@@ -272,8 +272,8 @@ pub enum wasmtime_component_val_t {
     Option(Option<Box<Self>>),
     Result(wasmtime_component_valresult_t),
     Flags(wasmtime_component_valflags_t),
-    Map(wasmtime_component_valmap_t),
     Resource(Box<wasmtime_component_resource_any_t>),
+    Map(wasmtime_component_valmap_t),
 }
 
 impl Default for wasmtime_component_val_t {
