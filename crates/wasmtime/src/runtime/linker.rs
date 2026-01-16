@@ -449,7 +449,7 @@ impl<T> Linker<T> {
     ///
     /// * If the given function type is not associated with the same engine as
     ///   this linker.
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg(feature = "async")]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -855,7 +855,7 @@ impl<T> Linker<T> {
     /// Define automatic instantiations of a [`Module`] in this linker.
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg(feature = "async")]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
