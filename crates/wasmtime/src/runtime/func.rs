@@ -2515,7 +2515,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::wrap_async`]
-    #[cfg(any(feature = "component-model", feature = "async"))]
+    #[cfg(feature = "async")]
     pub fn wrap_async<T, F, P, R>(engine: &Engine, func: F) -> Self
     where
         F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
