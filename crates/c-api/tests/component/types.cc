@@ -193,10 +193,11 @@ TEST(types, valtype_map) {
   config.wasm_component_model_map(true);
   Engine engine(std::move(config));
   auto component =
-      Component::compile(engine,
-                         "(component (import \"f\" (func (result (map u32 string)))))")
+      Component::compile(
+          engine, "(component (import \"f\" (func (result (map u32 string)))))")
           .unwrap();
-  auto ty = *component.type().import_get(engine, "f")->component_func().result();
+  auto ty =
+      *component.type().import_get(engine, "f")->component_func().result();
   EXPECT_TRUE(ty.is_map());
   auto map_ty = ty.map();
   EXPECT_TRUE(map_ty.key().is_u32());
