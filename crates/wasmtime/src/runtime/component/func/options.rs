@@ -2,12 +2,10 @@ use crate::StoreContextMut;
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
-use crate::component::{Instance, ResourceType};
+use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
-use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
-};
+use crate::runtime::vm::component::{CallContexts, ComponentInstance, HandleTable, ResourceTables};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::pin::Pin;
@@ -260,10 +258,10 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -422,10 +420,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<RuntimeInstance>)> {
         let idx = self.resource_tables().guest_resource_lift_own(idx, ty)?;
-        let (dtor, flags) = self.instance.dtor_and_flags(ty);
-        Ok((idx, dtor, flags))
+        let (dtor, instance) = self.instance.dtor_and_instance(ty);
+        Ok((idx, dtor, instance))
     }
 
     /// Lifts a `borrow` resource from the guest at the `idx` specified.
@@ -443,10 +441,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was

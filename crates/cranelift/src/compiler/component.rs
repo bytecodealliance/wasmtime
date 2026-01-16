@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::{TRAP_INTERNAL_ASSERT, compiler::Compiler};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -20,7 +20,6 @@ struct TrampolineCompiler<'a> {
     offsets: VMComponentOffsets<u8>,
     block0: ir::Block,
     signature: &'a WasmFuncType,
-    tunables: &'a Tunables,
 }
 
 /// What host functions can be called, used in `translate_hostcall` below.
@@ -100,7 +99,6 @@ impl<'a> TrampolineCompiler<'a> {
         component: &'a Component,
         types: &'a ComponentTypesBuilder,
         signature: &'a WasmFuncType,
-        tunables: &'a Tunables,
     ) -> TrampolineCompiler<'a> {
         let isa = &*compiler.isa;
         let func = ir::Function::with_name_signature(
@@ -117,7 +115,6 @@ impl<'a> TrampolineCompiler<'a> {
             offsets: VMComponentOffsets::new(isa.pointer_bytes(), component),
             block0,
             signature,
-            tunables,
         }
     }
 
@@ -157,21 +154,6 @@ impl<'a> TrampolineCompiler<'a> {
                             me.index_value(*lower_ty),
                             me.index_value(*options),
                         ]);
-                    },
-                );
-            }
-            Trampoline::AlwaysTrap => {
-                if self.tunables.signals_based_traps {
-                    self.builder.ins().trap(TRAP_ALWAYS);
-                    return;
-                }
-                self.translate_libcall(
-                    host::trap,
-                    TrapSentinel::Falsy,
-                    WasmArgs::InRegisters,
-                    |me, params| {
-                        let code = wasmtime_environ::Trap::AlwaysTrapAdapter as u8;
-                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(code)));
                     },
                 );
             }
@@ -1130,13 +1112,8 @@ impl<'a> TrampolineCompiler<'a> {
         //      brif should_run_destructor, run_destructor_block, return_block
         //
         //    run_destructor_block:
-        //      ;; test may_enter, but only if the component instances
-        //      ;; differ
-        //      flags = load.i32 vmctx+$instance_flags_offset
-        //      masked = band flags, $FLAG_MAY_ENTER
-        //      trapz masked, CANNOT_ENTER_CODE
-        //
-        //      ;; set may_block to false, saving the old value to restore later
+        //      ;; set may_block to false, saving the old value to restore
+        //      ;; later, but only if the component instances differ
         //      old_may_block = load.i32 vmctx+$may_block_offset
         //      store 0, vmctx+$may_block_offset
         //
@@ -1184,25 +1161,13 @@ impl<'a> TrampolineCompiler<'a> {
 
         self.builder.switch_to_block(run_destructor_block);
 
-        // If this is a defined resource within the component itself then a
-        // check needs to be emitted for the `may_enter` flag. Note though
-        // that this check can be elided if the resource table resides in
-        // the same component instance that defined the resource as the
-        // component is calling itself.
+        // If this is a defined resource within the component itself then the
+        // `may_block` field must be updated. Note though that this update can
+        // be elided if the resource table resides in the same component
+        // instance that defined the resource as the component is calling
+        // itself.
         let old_may_block = if let Some(def) = resource_def {
             if self.types[resource].unwrap_concrete_instance() != def.instance {
-                let flags = self.builder.ins().load(
-                    ir::types::I32,
-                    trusted,
-                    vmctx,
-                    i32::try_from(self.offsets.instance_flags(def.instance)).unwrap(),
-                );
-                let masked = self
-                    .builder
-                    .ins()
-                    .band_imm(flags, i64::from(FLAG_MAY_ENTER));
-                self.builder.ins().trapz(masked, TRAP_CANNOT_ENTER);
-
                 // Stash the old value of `may_block` and then set it to false.
                 let old_may_block = self.builder.ins().load(
                     ir::types::I32,
@@ -1434,7 +1399,7 @@ impl ComponentCompiler for Compiler {
         types: &ComponentTypesBuilder,
         key: FuncKey,
         abi: Abi,
-        tunables: &Tunables,
+        _tunables: &Tunables,
         symbol: &str,
     ) -> Result<CompiledFunctionBody> {
         let (abi2, trampoline_index) = key.unwrap_component_trampoline();
@@ -1466,14 +1431,7 @@ impl ComponentCompiler for Compiler {
         }
 
         let mut compiler = self.function_compiler();
-        let mut c = TrampolineCompiler::new(
-            self,
-            &mut compiler,
-            &component.component,
-            types,
-            sig,
-            tunables,
-        );
+        let mut c = TrampolineCompiler::new(self, &mut compiler, &component.component, types, sig);
 
         // If we are crossing the Wasm-to-native boundary, we need to save the
         // exit FP and return address for stack walking purposes. However, we
@@ -1512,7 +1470,7 @@ impl ComponentCompiler for Compiler {
 
     fn compile_intrinsic(
         &self,
-        tunables: &Tunables,
+        _tunables: &Tunables,
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,
         intrinsic: UnsafeIntrinsic,
@@ -1557,7 +1515,6 @@ impl ComponentCompiler for Compiler {
             &component.component,
             &types,
             &wasm_func_ty,
-            tunables,
         );
 
         match intrinsic {

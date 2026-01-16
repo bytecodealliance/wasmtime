@@ -563,6 +563,12 @@ impl WastContext {
             .dwarf(self.generate_dwarf)
             .convert(filename, wast, ast)
             .to_wasmtime_result()?;
+
+        // Clear out any modules, if any, from a previous `*.wast` file being
+        // run, if any.
+        if !self.modules_by_filename.is_empty() {
+            self.modules_by_filename = Arc::default();
+        }
         let modules_by_filename = Arc::get_mut(&mut self.modules_by_filename).unwrap();
         for (name, bytes) in ast.wasms.drain(..) {
             let prev = modules_by_filename.insert(name, bytes);

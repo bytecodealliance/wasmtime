@@ -194,7 +194,7 @@ fn is() {
     assert!(!e.is::<OutOfMemory>());
 
     // `is<T>` is true for `Error::from(OutOfMemory)`.
-    let e = Error::from(OutOfMemory::new());
+    let e = Error::from(OutOfMemory::new(5));
     assert!(e.is::<OutOfMemory>());
     assert!(!e.is::<TestError>());
     assert!(!e.is::<&str>());
@@ -212,7 +212,7 @@ fn is_for_root_cause_with_initial_error_source() {
 #[cfg(feature = "backtrace")]
 fn backtrace() {
     // Backtrace on OOM.
-    let e = Error::from(OutOfMemory::new());
+    let e = Error::from(OutOfMemory::new(5));
     assert_eq!(e.backtrace().status(), BacktraceStatus::Disabled);
 
     let backtraces_enabled =
@@ -425,7 +425,7 @@ fn downcast() {
     assert_eq!(error.downcast::<TestError>().unwrap().0, 42);
 
     // Error::from(oom)
-    let error = Error::from(OutOfMemory::new());
+    let error = Error::from(OutOfMemory::new(5));
     let error = error.downcast::<&str>().unwrap_err();
     let error = error.downcast::<TestError>().unwrap_err();
     assert!(error.downcast::<OutOfMemory>().is_ok());
@@ -433,21 +433,21 @@ fn downcast() {
     // First in context chain.
     let error = Error::new(TestError(42))
         .context("yikes")
-        .context(OutOfMemory::new());
+        .context(OutOfMemory::new(5));
     let error = error.downcast::<String>().unwrap_err();
     assert!(error.downcast::<OutOfMemory>().is_ok());
 
     // Middle in context chain.
     let error = Error::new(TestError(42))
         .context("yikes")
-        .context(OutOfMemory::new());
+        .context(OutOfMemory::new(5));
     let error = error.downcast::<String>().unwrap_err();
     assert_eq!(error.downcast::<&str>().unwrap(), "yikes");
 
     // Last in context chain.
     let error = Error::new(TestError(42))
         .context("yikes")
-        .context(OutOfMemory::new());
+        .context(OutOfMemory::new(5));
     let error = error.downcast::<String>().unwrap_err();
     assert_eq!(error.downcast::<TestError>().unwrap().0, 42);
 
@@ -508,7 +508,7 @@ fn downcast_ref() {
     assert!(e.downcast_ref::<OutOfMemory>().is_none());
 
     // `Error::from(OutOfMemory)`
-    let e = Error::from(OutOfMemory::new());
+    let e = Error::from(OutOfMemory::new(5));
     assert!(e.downcast_ref::<OutOfMemory>().is_some());
     assert!(e.downcast_ref::<TestError>().is_none());
     assert!(e.downcast_ref::<&str>().is_none());
@@ -545,7 +545,7 @@ fn downcast_mut() {
     assert_eq!(e.downcast_ref::<TestError>().unwrap().0, 37);
 
     // `Error::from(OutOfMemory)`
-    let mut e = Error::from(OutOfMemory::new());
+    let mut e = Error::from(OutOfMemory::new(5));
     assert!(e.downcast_mut::<OutOfMemory>().is_some());
     assert!(e.downcast_mut::<TestError>().is_none());
     assert!(e.downcast_mut::<&str>().is_none());
@@ -553,7 +553,7 @@ fn downcast_mut() {
 
 #[test]
 fn context_on_oom() {
-    let error = Error::new(OutOfMemory::new());
+    let error = Error::new(OutOfMemory::new(5));
     let error = error.context("yikes");
     assert!(error.is::<OutOfMemory>());
     assert!(
@@ -745,7 +745,7 @@ Error {
 
 #[test]
 fn fmt_debug_alternate_with_oom() {
-    let error = Error::new(OutOfMemory::new());
+    let error = Error::new(OutOfMemory::new(5));
 
     let actual = format!("{error:#?}");
     let actual = actual.trim();
@@ -754,7 +754,9 @@ fn fmt_debug_alternate_with_oom() {
     let expected = r#"
 Error {
     inner: Oom(
-        OutOfMemory,
+        OutOfMemory {
+            requested_allocation_size: 5,
+        },
     ),
 }
     "#
@@ -877,4 +879,27 @@ fn chain_with_leaf_sources() {
     assert_eq!(e.to_string(), "TestError(42)");
 
     assert!(chain.next().is_none());
+}
+
+#[test]
+fn oom_requested_allocation_size() {
+    // Check that a bunch of interesting allocation sizes roundtrip.
+    for shift in 0..30 {
+        let bytes = (1 << shift) - 1;
+        let oom = OutOfMemory::new(bytes);
+        assert_eq!(oom.requested_allocation_size(), bytes);
+
+        let bytes = 1 << shift;
+        let oom = OutOfMemory::new(bytes);
+        assert_eq!(oom.requested_allocation_size(), bytes);
+
+        let bytes = (1 << shift) + 1;
+        let oom = OutOfMemory::new(bytes);
+        assert_eq!(oom.requested_allocation_size(), bytes);
+    }
+
+    // We will round down if the allocation size is too large, but make no
+    // specific guarantees about that behavior.
+    let oom = OutOfMemory::new(usize::MAX);
+    assert!(oom.requested_allocation_size() <= usize::try_from(isize::MAX).unwrap());
 }

@@ -1,3 +1,4 @@
+use crate::component::RuntimeInstance;
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
@@ -614,6 +615,15 @@ impl Func {
         LowerReturn: Copy,
     {
         let export = self.lifted_core_func(store.0);
+        let (_options, _flags, _ty, raw_options) = self.abi_info(store.0);
+        let instance = RuntimeInstance {
+            instance: self.instance.id().instance(),
+            index: raw_options.instance,
+        };
+
+        if !store.0.may_enter(instance) {
+            bail!(crate::Trap::CannotEnterComponent);
+        }
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
@@ -788,9 +798,6 @@ impl Func {
             );
             let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
 
-            // This is a sanity-check assert which shouldn't ever trip.
-            assert!(!flags.may_enter());
-
             // Unset the "needs post return" flag now that post-return is being
             // processed. This will cause future invocations of this method to
             // panic, even if the function call below traps.
@@ -802,10 +809,6 @@ impl Func {
 
             // If the function actually had a `post-return` configured in its
             // canonical options that's executed here.
-            //
-            // Note that if this traps (returns an error) this function
-            // intentionally leaves the instance in a "poisoned" state where it
-            // can no longer be entered because `may_enter` is `false`.
             if let Some(func) = post_return {
                 crate::Func::call_unchecked_raw(
                     &mut store,
@@ -816,9 +819,8 @@ impl Func {
             }
 
             // And finally if everything completed successfully then the "may
-            // enter" and "may leave" flags are set to `true` again here which
-            // enables further use of the component.
-            flags.set_may_enter(true);
+            // leave" flags is set to `true` again here which enables further
+            // use of the component.
             flags.set_may_leave(true);
 
             let (calls, host_table, _, instance) = store
@@ -943,25 +945,11 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
-        may_enter: bool,
+        call_post_return_automatically: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
         let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
         let async_ = options.async_;
-
-        // Test the "may enter" flag which is a "lock" on this instance.
-        // This is immediately set to `false` afterwards and note that
-        // there's no on-cleanup setting this flag back to true. That's an
-        // intentional design aspect where if anything goes wrong internally
-        // from this point on the instance is considered "poisoned" and can
-        // never be entered again. The only time this flag is set to `true`
-        // again is after post-return logic has completed successfully.
-        unsafe {
-            if !flags.may_enter() {
-                bail!(crate::Trap::CannotEnterComponent);
-            }
-            flags.set_may_enter(false);
-        }
 
         // Perform the actual lowering, where while this is running the
         // component is forbidden from calling imports.
@@ -975,14 +963,10 @@ impl Func {
         unsafe { flags.set_may_leave(true) };
         result?;
 
-        // If this is an async function and `may_enter == true` then we're
-        // allowed to reenter the component at this point, and otherwise flag a
-        // post-return call being required as we're about to enter wasm and
-        // afterwards need a post-return.
+        // If needed, flag a post-return call being required as we're about to
+        // enter wasm and afterwards need a post-return.
         unsafe {
-            if may_enter && async_ {
-                flags.set_may_enter(true);
-            } else {
+            if !(call_post_return_automatically && async_) {
                 flags.set_needs_post_return(true);
             }
         }

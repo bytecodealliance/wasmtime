@@ -2929,6 +2929,7 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Future(_) => "future",
         InterfaceType::Stream(_) => "stream",
         InterfaceType::ErrorContext(_) => "error-context",
+        InterfaceType::FixedLengthList(_) => "list<_, N>",
     }
 }
 

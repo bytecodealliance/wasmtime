@@ -6,6 +6,7 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "round-trip",
+        imports: { default: trappable },
     });
 }
 
@@ -18,9 +19,9 @@ pub mod non_concurrent_export_bindings {
 }
 
 impl bindings::local::local::baz::HostWithStore for Ctx {
-    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> String {
+    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> wasmtime::Result<String> {
         crate::util::sleep(Duration::from_millis(10)).await;
-        format!("{s} - entered host - exited host")
+        Ok(format!("{s} - entered host - exited host"))
     }
 }
 

@@ -4713,6 +4713,7 @@ dependencies = [
  "wasmparser 0.244.0",
  "wasmprinter",
  "wasmtime-internal-component-util",
+ "wasmtime-internal-error",
  "wat",
 ]
 
@@ -5119,6 +5120,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures",
+ "tracing",
  "wasmtime",
 ]
 

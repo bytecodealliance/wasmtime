@@ -5,7 +5,9 @@ use crate::component::Instance;
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::{ResourcePair, RuntimeInstance};
+use crate::runtime::component::RuntimeInstance;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;

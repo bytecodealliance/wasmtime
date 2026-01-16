@@ -140,6 +140,7 @@ impl Config {
             component_model_threading,
             component_model_error_context,
             component_model_gc,
+            component_model_fixed_length_lists,
             simd,
             exceptions,
             legacy_exceptions: _,
@@ -165,6 +166,8 @@ impl Config {
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
+        self.module_config.component_model_fixed_length_lists =
+            component_model_fixed_length_lists.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -290,6 +293,8 @@ impl Config {
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
+        cfg.wasm.component_model_fixed_length_lists =
+            Some(self.module_config.component_model_fixed_length_lists);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);

@@ -22,6 +22,7 @@ pub struct ModuleConfig {
     pub component_model_threading: bool,
     pub component_model_error_context: bool,
     pub component_model_gc: bool,
+    pub component_model_fixed_length_lists: bool,
     pub legacy_exceptions: bool,
     pub shared_memory: bool,
 }
@@ -79,6 +80,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_threading: false,
             component_model_error_context: false,
             component_model_gc: false,
+            component_model_fixed_length_lists: false,
             legacy_exceptions: false,
             shared_memory: false,
             function_references_enabled: config.gc_enabled,

@@ -41,7 +41,7 @@
 ;;                                 block2(v8: i64, v9: i64):
 ;;                                     v62 = iconst.i64 1
 ;;                                     v63 = icmp eq v8, v62  ; v62 = 1
-;; @003b                               trapnz v63, user22
+;; @003b                               trapnz v63, user21
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
@@ -120,7 +120,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0043                               v7 = iconst.i32 0
 ;; @0043                               v9 = call fn0(v0, v7)  ; v7 = 0
-;; @0045                               trapz v9, user16
+;; @0045                               trapz v9, user15
 ;; @0045                               v13 = call fn1(v0, v9, v7, v7)  ; v7 = 0, v7 = 0
 ;; @0045                               v14 = load.i64 notrap aligned v13+72
 ;; @004e                               jump block3
@@ -131,14 +131,14 @@
 ;;                                     v134 = ishl v16, v130  ; v130 = 64
 ;;                                     v136 = ireduce.i64 v134
 ;;                                     v138 = bor v136, v13
-;; @004e                               trapz v138, user16
+;; @004e                               trapz v138, user15
 ;; @004e                               v24 = load.i64 notrap aligned v138+72
 ;; @0045                               v15 = uextend.i128 v13
 ;; @0045                               v18 = bor v134, v15
 ;;                                     v140 = ushr v18, v130  ; v130 = 64
 ;; @004e                               v23 = ireduce.i64 v140
 ;; @004e                               v25 = icmp eq v24, v23
-;; @004e                               trapz v25, user23
+;; @004e                               trapz v25, user22
 ;;                                     v125 = iconst.i64 1
 ;; @004e                               v26 = iadd v24, v125  ; v125 = 1
 ;; @004e                               store notrap aligned v26, v138+72

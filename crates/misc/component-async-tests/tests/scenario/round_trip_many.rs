@@ -1,8 +1,5 @@
 use std::iter;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU32, Ordering::Relaxed},
-};
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use std::time::Duration;
 
 use super::util::{config, make_component};
@@ -208,7 +205,6 @@ async fn test_round_trip_many(
                 wasi: WasiCtxBuilder::new().inherit_stdio().build(),
                 table: ResourceTable::default(),
                 continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
             },
         )
     };
