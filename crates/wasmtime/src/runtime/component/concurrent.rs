@@ -65,14 +65,14 @@ use crate::{
 };
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
-use futures::future::{self, Either, FutureExt};
+use futures::future::{self, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
 use std::any::Any;
 use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::cell::UnsafeCell;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::fmt;
 use std::future::Future;
 use std::marker::PhantomData;
@@ -1152,11 +1152,15 @@ impl<T> StoreContextMut<'_, T> {
             };
             let mut next = pin!(reset.futures.as_mut().unwrap().next());
 
+            enum PollResult<R> {
+                Complete(R),
+                ProcessWork(Vec<WorkItem>),
+            }
             let result = future::poll_fn(|cx| {
                 // First, poll the future we were passed as an argument and
                 // return immediately if it's ready.
                 if let Poll::Ready(value) = tls::set(reset.store.0, || future.as_mut().poll(cx)) {
-                    return Poll::Ready(Ok(Either::Left(value)));
+                    return Poll::Ready(Ok(PollResult::Complete(value)));
                 }
 
                 // Next, poll `ConcurrentState::futures` (which includes any
@@ -1174,64 +1178,59 @@ impl<T> StoreContextMut<'_, T> {
                     Poll::Pending => Poll::Pending,
                 };
 
-                // Next, check the "high priority" work queue and return
-                // immediately if it has at least one item.
+                // Next, collect the next batch of work items to process, if any.
+                // This will be either all of the high-priority work items, or if
+                // there are none, a single low-priority work item.
                 let state = reset.store.0.concurrent_state_mut();
-                let ready = mem::take(&mut state.high_priority);
-                let ready = if ready.is_empty() {
-                    // Next, check the "low priority" work queue and return
-                    // immediately if it has at least one item.
-                    let ready = mem::take(&mut state.low_priority);
-                    if ready.is_empty() {
-                        return match next {
-                            Poll::Ready(true) => {
-                                // In this case, one of the futures in
-                                // `ConcurrentState::futures` completed
-                                // successfully, so we return now and continue
-                                // the outer loop in case there is another one
-                                // ready to complete.
-                                Poll::Ready(Ok(Either::Right(Vec::new())))
-                            }
-                            Poll::Ready(false) => {
-                                // Poll the future we were passed one last time
-                                // in case one of `ConcurrentState::futures` had
-                                // the side effect of unblocking it.
-                                if let Poll::Ready(value) =
-                                    tls::set(reset.store.0, || future.as_mut().poll(cx))
-                                {
-                                    Poll::Ready(Ok(Either::Left(value)))
-                                } else {
-                                    // In this case, there are no more pending
-                                    // futures in `ConcurrentState::futures`,
-                                    // there are no remaining work items, _and_
-                                    // the future we were passed as an argument
-                                    // still hasn't completed.
-                                    if trap_on_idle {
-                                        // `trap_on_idle` is true, so we exit
-                                        // immediately.
-                                        Poll::Ready(Err(format_err!(crate::Trap::AsyncDeadlock)))
-                                    } else {
-                                        // `trap_on_idle` is false, so we assume
-                                        // that future will wake up and give us
-                                        // more work to do when it's ready to.
-                                        Poll::Pending
-                                    }
-                                }
-                            }
-                            // There is at least one pending future in
-                            // `ConcurrentState::futures` and we have nothing
-                            // else to do but wait for now, so we return
-                            // `Pending`.
-                            Poll::Pending => Poll::Pending,
-                        };
-                    } else {
-                        ready
-                    }
-                } else {
-                    ready
-                };
+                let ready = state.collect_work_items_to_run();
+                if !ready.is_empty() {
+                    return Poll::Ready(Ok(PollResult::ProcessWork(ready)));
+                }
 
-                Poll::Ready(Ok(Either::Right(ready)))
+                // Finally, if we have nothing else to do right now, determine what to do
+                // based on whether there are any pending futures in
+                // `ConcurrentState::futures`.
+                return match next {
+                    Poll::Ready(true) => {
+                        // In this case, one of the futures in
+                        // `ConcurrentState::futures` completed
+                        // successfully, so we return now and continue
+                        // the outer loop in case there is another one
+                        // ready to complete.
+                        Poll::Ready(Ok(PollResult::ProcessWork(Vec::new())))
+                    }
+                    Poll::Ready(false) => {
+                        // Poll the future we were passed one last time
+                        // in case one of `ConcurrentState::futures` had
+                        // the side effect of unblocking it.
+                        if let Poll::Ready(value) =
+                            tls::set(reset.store.0, || future.as_mut().poll(cx))
+                        {
+                            Poll::Ready(Ok(PollResult::Complete(value)))
+                        } else {
+                            // In this case, there are no more pending
+                            // futures in `ConcurrentState::futures`,
+                            // there are no remaining work items, _and_
+                            // the future we were passed as an argument
+                            // still hasn't completed.
+                            if trap_on_idle {
+                                // `trap_on_idle` is true, so we exit
+                                // immediately.
+                                Poll::Ready(Err(format_err!(crate::Trap::AsyncDeadlock)))
+                            } else {
+                                // `trap_on_idle` is false, so we assume
+                                // that future will wake up and give us
+                                // more work to do when it's ready to.
+                                Poll::Pending
+                            }
+                        }
+                    }
+                    // There is at least one pending future in
+                    // `ConcurrentState::futures` and we have nothing
+                    // else to do but wait for now, so we return
+                    // `Pending`.
+                    Poll::Pending => Poll::Pending,
+                };
             })
             .await;
 
@@ -1243,10 +1242,10 @@ impl<T> StoreContextMut<'_, T> {
             match result? {
                 // The future we were passed as an argument completed, so we
                 // return the result.
-                Either::Left(value) => break Ok(value),
+                PollResult::Complete(value) => break Ok(value),
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
-                Either::Right(ready) => {
+                PollResult::ProcessWork(ready) => {
                     struct Dispose<'a, T: 'static, I: Iterator<Item = WorkItem>> {
                         store: StoreContextMut<'a, T>,
                         ready: I,
@@ -4787,7 +4786,7 @@ pub struct ConcurrentState {
     /// The "high priority" work queue for this store's event loop.
     high_priority: Vec<WorkItem>,
     /// The "low priority" work queue for this store's event loop.
-    low_priority: Vec<WorkItem>,
+    low_priority: VecDeque<WorkItem>,
     /// A place to stash the reason a fiber is suspending so that the code which
     /// resumed it will know under what conditions the fiber should be resumed
     /// again.
@@ -4822,7 +4821,7 @@ impl Default for ConcurrentState {
             table: AlwaysMut::new(ResourceTable::new()),
             futures: AlwaysMut::new(Some(FuturesUnordered::new())),
             high_priority: Vec::new(),
-            low_priority: Vec::new(),
+            low_priority: VecDeque::new(),
             suspend_reason: None,
             worker: None,
             worker_item: None,
@@ -4873,30 +4872,43 @@ impl ConcurrentState {
             fibers.push(fiber);
         }
 
-        let mut take_items = |list| {
-            for item in mem::take(list) {
-                match item {
-                    WorkItem::ResumeFiber(fiber) => {
-                        fibers.push(fiber);
-                    }
-                    WorkItem::PushFuture(future) => {
-                        self.futures
-                            .get_mut()
-                            .as_mut()
-                            .unwrap()
-                            .push(future.into_inner());
-                    }
-                    _ => {}
-                }
+        let mut handle_item = |item| match item {
+            WorkItem::ResumeFiber(fiber) => {
+                fibers.push(fiber);
             }
+            WorkItem::PushFuture(future) => {
+                self.futures
+                    .get_mut()
+                    .as_mut()
+                    .unwrap()
+                    .push(future.into_inner());
+            }
+            _ => {}
         };
 
-        take_items(&mut self.high_priority);
-        take_items(&mut self.low_priority);
+        for item in mem::take(&mut self.high_priority) {
+            handle_item(item);
+        }
+        for item in mem::take(&mut self.low_priority) {
+            handle_item(item);
+        }
 
         if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
         }
+    }
+
+    /// Collect the next set of work items to run. This will be either all
+    /// high-priority items, or a single low-priority item if there are no
+    /// high-priority items.
+    fn collect_work_items_to_run(&mut self) -> Vec<WorkItem> {
+        let mut ready = mem::take(&mut self.high_priority);
+        if ready.is_empty() {
+            if let Some(item) = self.low_priority.pop_back() {
+                ready.push(item);
+            }
+        }
+        ready
     }
 
     fn push<V: Send + Sync + 'static>(
@@ -4951,7 +4963,7 @@ impl ConcurrentState {
 
     fn push_low_priority(&mut self, item: WorkItem) {
         log::trace!("push low priority: {item:?}");
-        self.low_priority.push(item);
+        self.low_priority.push_front(item);
     }
 
     fn push_work_item(&mut self, item: WorkItem, high_priority: bool) {
