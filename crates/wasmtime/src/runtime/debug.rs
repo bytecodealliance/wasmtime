@@ -1,6 +1,7 @@
 //! Debugging API.
 
 use crate::Result;
+use crate::vm::ExportMemory;
 use crate::{
     AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
@@ -16,8 +17,9 @@ use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
-    DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
+    DefinedFuncIndex, EntityIndex, FrameInstPos, FrameStackShape, FrameStateSlot,
+    FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
+    FuncKey, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -62,6 +64,84 @@ impl<'a, T> StoreContextMut<'a, T> {
 
         let (breakpoints, registry) = self.0.breakpoints_and_registry_mut();
         Some(breakpoints.edit(registry))
+    }
+
+    /// Get access to any entity within an instance's entity index
+    /// spaces.
+    ///
+    /// This permits accessing entities (globals, tables, memories,
+    /// tags) whether they are exported or not. However, it is only
+    /// available for purposes of debugging, and so is only permitted
+    /// when `guest_debug` is enabled in the Engine's
+    /// configuration. The intent of the Wasmtime API is to enforce
+    /// the Wasm type system's encapsulation even in the host API,
+    /// except where necessary for developer tooling.
+    ///
+    /// This supports accesses to memories, tables, and globals. In
+    /// particular it does not support functions or tags:
+    ///
+    /// - This method does not support taking a reference to
+    ///   non-exported functions, because the engine may not generate
+    ///   the trampolines necessary to call these or may compile them
+    ///   in a way that uses the knowledge that they can only be
+    ///   referenced internally.
+    ///
+    /// - This method does not support taking a reference to
+    ///   non-exported tags because there is nothing that can be done
+    ///   with them (until throwing new exceptions from debug hooks is
+    ///   supported).
+    ///
+    /// `None` is returned for any entity index that is out-of-bounds,
+    /// or for function or tag `EntityIndex`s.
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_entity(
+        mut self,
+        instance: Instance,
+        entity: EntityIndex,
+    ) -> Option<crate::Extern> {
+        if !self.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let env_module = instance.module(&mut self).env_module();
+        match entity {
+            EntityIndex::Function(_) | EntityIndex::Tag(_) => None,
+            EntityIndex::Memory(i) => {
+                if env_module.memories.is_valid(i) {
+                    let instance = self.0.instance(instance.id());
+                    match instance.get_exported_memory(self.0.id(), i) {
+                        ExportMemory::Unshared(m) => Some(crate::Extern::Memory(m)),
+                        ExportMemory::Shared(m, _i) => Some(crate::Extern::SharedMemory(
+                            crate::SharedMemory::from_raw(m, self.engine().clone()),
+                        )),
+                    }
+                } else {
+                    None
+                }
+            }
+            EntityIndex::Table(i) => {
+                if env_module.tables.is_valid(i) {
+                    let instance = self.0.instance(instance.id());
+                    Some(crate::Extern::Table(
+                        instance.get_exported_table(self.0.id(), i),
+                    ))
+                } else {
+                    None
+                }
+            }
+            EntityIndex::Global(i) => {
+                if env_module.globals.is_valid(i) {
+                    let instance = self.0.instance(instance.id());
+                    Some(crate::Extern::Global(
+                        instance.get_exported_global(self.0.id(), i),
+                    ))
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 

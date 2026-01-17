@@ -4,8 +4,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameParentResult,
-    Func, Instance, Module, Store, StoreContextMut, Val,
+    Func, Global, GlobalType, Instance, Module, Mutability, Store, StoreContextMut, Val, ValType,
 };
+use wasmtime_environ::{EntityIndex, GlobalIndex, MemoryIndex, TableIndex};
 
 #[test]
 fn debugging_does_not_work_with_signal_based_traps() {
@@ -13,6 +14,25 @@ fn debugging_does_not_work_with_signal_based_traps() {
     config.guest_debug(true).signals_based_traps(true);
     let err = Engine::new(&config).expect_err("invalid config should produce an error");
     assert!(format!("{err:?}").contains("cannot use signals-based traps"));
+}
+
+#[test]
+fn debugging_apis_are_denied_without_debugging() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, "(module (global $g (mut i32) (i32.const 0)))")?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    assert!(store.debug_frames().is_none());
+    assert!(
+        store
+            .debug_entity(instance, EntityIndex::Global(GlobalIndex::from_u32(0)))
+            .is_none()
+    );
+
+    Ok(())
 }
 
 fn get_module_and_store<C: Fn(&mut Config)>(
@@ -302,6 +322,97 @@ fn debug_frames_on_store_with_no_wasm_activation() -> wasmtime::Result<()> {
         .debug_frames()
         .expect("Debug frames should be available");
     assert!(frames.done());
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn private_entity_access() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_gc(true);
+    config.gc_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "i" (global (mut i32)))
+          (global $g (mut i32) (i32.const 0))
+          (memory $m 1 1)
+          (table $t 10 10 i31ref)
+          (func (export "main")
+            ;; $g := 42
+            i32.const 42
+            global.set $g
+            ;; $m[1024] := 1
+            i32.const 1024
+            i32.const 1
+            i32.store8 $m
+            ;; $t[1] := (ref.i31 (i32.const 100))
+            i32.const 1
+            i32.const 100
+            ref.i31
+            table.set $t))
+        "#,
+    )?;
+
+    let host_global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::I32, Mutability::Var),
+        Val::I32(1000),
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[Extern::Global(host_global)])?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    func.call(&mut store, &[], &mut [])?;
+
+    // Nothing is exported except for `main`, yet we can still access
+    // (below).
+    let exports = instance.exports(&mut store).collect::<Vec<_>>();
+    assert_eq!(exports.len(), 1);
+    assert!(exports.into_iter().next().unwrap().into_func().is_some());
+
+    let g = store
+        .debug_entity(instance, EntityIndex::Global(GlobalIndex::from_u32(1)))
+        .unwrap()
+        .into_global()
+        .unwrap();
+    assert_eq!(g.get(&mut store).unwrap_i32(), 42);
+
+    let m = store
+        .debug_entity(instance, EntityIndex::Memory(MemoryIndex::from_u32(0)))
+        .unwrap()
+        .into_memory()
+        .unwrap();
+    assert_eq!(m.data(&mut store)[1024], 1);
+
+    let t = store
+        .debug_entity(instance, EntityIndex::Table(TableIndex::from_u32(0)))
+        .unwrap()
+        .into_table()
+        .unwrap();
+    let t_val = t.get(&mut store, 1).unwrap();
+    let t_val = t_val.as_any().unwrap().unwrap().unwrap_i31(&store).unwrap();
+    assert_eq!(t_val.get_u32(), 100);
+
+    // Check that we can access an imported entity in the instance's
+    // index space.
+    let host_global_import = store
+        .debug_entity(instance, EntityIndex::Global(GlobalIndex::from_u32(0)))
+        .unwrap()
+        .into_global()
+        .unwrap();
+    assert_eq!(host_global_import.get(&mut store).unwrap_i32(), 1000);
+
+    // Check that out-of-bounds returns `None` rather than panic'ing.
+    assert!(
+        store
+            .debug_entity(instance, EntityIndex::Global(GlobalIndex::from_u32(2)))
+            .is_none()
+    );
+
     Ok(())
 }
 
