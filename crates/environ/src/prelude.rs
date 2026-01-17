@@ -19,6 +19,7 @@
 //!
 //! and then `use crate::*` works as usual.
 
+pub use crate::collections::{OomArc, OomBox};
 pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
 pub use alloc::borrow::ToOwned;
 pub use alloc::boxed::Box;

@@ -8,6 +8,7 @@ use wasmtime_test_util::wast::WastTest;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rustc-check-cfg=cfg(arc_try_new)");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 

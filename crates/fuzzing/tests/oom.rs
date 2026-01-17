@@ -3,8 +3,8 @@ use std::{
     fmt::{self, Write},
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
-use wasmtime::Config;
-use wasmtime_error::{Error, OutOfMemory, Result, format_err};
+use wasmtime::{Config, Engine, Error, Result, error::OutOfMemory, format_err};
+use wasmtime_environ::collections::*;
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -32,10 +32,38 @@ fn smoke_test_missed_oom() -> Result<()> {
 }
 
 #[test]
+#[cfg(arc_try_new)]
+fn oom_arc_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let _arc = OomArc::new(42)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn oom_box_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let _box = OomBox::new(42)?;
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
         config.enable_compiler(false);
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn engine_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let _ = Engine::new(&config)?;
         Ok(())
     })
 }

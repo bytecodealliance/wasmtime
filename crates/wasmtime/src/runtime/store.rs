@@ -1937,10 +1937,12 @@ impl StoreOpaque {
             let gc_runtime = engine
                 .gc_runtime()
                 .context("no GC runtime: GC disabled at compile time or configuration time")?;
-            let (index, heap) =
-                engine
-                    .allocator()
-                    .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index, mem)?;
+            let (index, heap) = engine.allocator().allocate_gc_heap(
+                engine,
+                &***gc_runtime,
+                mem_alloc_index,
+                mem,
+            )?;
 
             Ok(GcStore::new(index, heap))
         }
