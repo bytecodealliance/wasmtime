@@ -1,12 +1,10 @@
 //! Utility module to create trampolines in/out WebAssembly module.
 
-mod func;
 mod global;
 mod memory;
 mod table;
 mod tag;
 
-pub use self::func::*;
 pub use self::global::*;
 pub(crate) use memory::MemoryCreatorProxy;
 

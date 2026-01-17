@@ -820,9 +820,6 @@ impl<T: 'static> InstancePre<T> {
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
                     if f.func_ref().wasm_call.is_none() {
-                        // `f` needs its `VMFuncRef::wasm_call` patched with a
-                        // Wasm-to-native trampoline.
-                        debug_assert!(matches!(f.host_ctx(), crate::HostContext::Array(_)));
                         func_refs.push(VMFuncRef {
                             wasm_call: module
                                 .wasm_to_array_trampoline(f.sig_index())
