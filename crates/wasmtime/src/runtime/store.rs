@@ -116,6 +116,8 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
+#[cfg(feature = "debug")]
+use wasmtime_environ::EntityIndex;
 use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
@@ -1261,6 +1263,45 @@ impl<T> Store<T> {
     #[cfg(feature = "debug")]
     pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.as_context_mut().debug_frames()
+    }
+
+    /// Get access to any entity within an instance's entity index
+    /// spaces.
+    ///
+    /// This permits accessing entities (globals, tables, memories,
+    /// tags) whether they are exported or not. However, it is only
+    /// available for purposes of debugging, and so is only permitted
+    /// when `guest_debug` is enabled in the Engine's
+    /// configuration. The intent of the Wasmtime API is to enforce
+    /// the Wasm type system's encapsulation even in the host API,
+    /// except where necessary for developer tooling.
+    ///
+    /// This supports accesses to memories, tables, and globals. In
+    /// particular it does not support functions or tags:
+    ///
+    /// - This method does not support taking a reference to
+    ///   non-exported functions, because the engine may not generate
+    ///   the trampolines necessary to call these or may compile them
+    ///   in a way that uses the knowledge that they can only be
+    ///   referenced internally.
+    ///
+    /// - This method does not support taking a reference to
+    ///   non-exported tags because there is nothing that can be done
+    ///   with them (until throwing new exceptions from debug hooks is
+    ///   supported).
+    ///
+    /// `None` is returned for any entity index that is out-of-bounds,
+    /// or for function or tag `EntityIndex`s.
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    #[cfg(feature = "debug")]
+    pub fn debug_entity(
+        &mut self,
+        instance: Instance,
+        entity: EntityIndex,
+    ) -> Option<crate::Extern> {
+        self.as_context_mut().debug_entity(instance, entity)
     }
 
     /// Start an edit session to update breakpoints.
