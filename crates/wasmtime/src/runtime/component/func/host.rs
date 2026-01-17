@@ -78,9 +78,8 @@ impl HostFunc {
         })
     }
 
-    /// Creates a new, statically typed, synchronous, host function from the
-    /// `func` provided.
-    pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
+    /// Equivalent for `Linker::func_wrap`
+    pub(crate) fn func_wrap<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
@@ -92,10 +91,30 @@ impl HostFunc {
         }))
     }
 
-    /// Creates a new, statically typed, asynchronous, host function from the
-    /// `func` provided.
+    /// Equivalent for `Linker::func_wrap_async`
+    #[cfg(feature = "async")]
+    pub(crate) fn func_wrap_async<T, F, P, R>(func: F) -> Arc<HostFunc>
+    where
+        T: 'static,
+        F: Fn(StoreContextMut<'_, T>, P) -> Box<dyn Future<Output = Result<R>> + Send + '_>
+            + Send
+            + Sync
+            + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
+    {
+        Self::new(StaticHostFn::<_, false>::new(move |store, params| {
+            HostResult::Done(
+                store
+                    .block_on(|store| Pin::from(func(store, params)))
+                    .and_then(|r| r),
+            )
+        }))
+    }
+
+    /// Equivalent for `Linker::func_wrap_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn from_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
@@ -114,10 +133,10 @@ impl HostFunc {
         }))
     }
 
-    /// Creates a new, dynamically typed, synchronous, host function from the
-    /// `func` provided.
-    pub(crate) fn new_dynamic<T: 'static, F>(func: F) -> Arc<HostFunc>
+    /// Equivalent of `Linker::func_new`
+    pub(crate) fn func_new<T, F>(func: F) -> Arc<HostFunc>
     where
+        T: 'static,
         F: Fn(StoreContextMut<'_, T>, ComponentFunc, &[Val], &mut [Val]) -> Result<()>
             + Send
             + Sync
@@ -132,10 +151,37 @@ impl HostFunc {
         ))
     }
 
-    /// Creates a new, dynamically typed, asynchronous, host function from the
-    /// `func` provided.
+    /// Equivalent of `Linker::func_new_async`
+    pub(crate) fn func_new_async<T, F>(func: F) -> Arc<HostFunc>
+    where
+        T: 'static,
+        F: for<'a> Fn(
+                StoreContextMut<'a, T>,
+                ComponentFunc,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(DynamicHostFn::<_, false>::new(
+            move |store, ty, mut params_and_results, result_start| {
+                let (params, results) = params_and_results.split_at_mut(result_start);
+                let result = store
+                    .with_blocking(|store, cx| {
+                        cx.block_on(Pin::from(func(store, ty, params, results)))
+                    })
+                    .and_then(|r| r);
+                let result = result.map(move |()| params_and_results);
+                HostResult::Done(result)
+            },
+        ))
+    }
+
+    /// Equivalent of `Linker::func_new_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn new_dynamic_concurrent<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new_concurrent<T, F>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: for<'a> Fn(

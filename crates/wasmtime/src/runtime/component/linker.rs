@@ -429,7 +429,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::from_closure(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap(func)))?;
         Ok(())
     }
 
@@ -485,10 +485,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support in the config"
         );
-        let ff = move |store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
-            store.block_on(|store| f(store, params).into())?
-        };
-        self.func_wrap(name, ff)
+        self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)))?;
+        Ok(())
     }
 
     /// Defines a new host-provided async function into this [`LinkerInstance`].
@@ -559,7 +557,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_concurrent` without enabling async support in the config"
         );
-        self.insert(name, Definition::Func(HostFunc::from_concurrent(f)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)))?;
         Ok(())
     }
 
@@ -670,7 +668,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         + Sync
         + 'static,
     ) -> Result<()> {
-        self.insert(name, Definition::Func(HostFunc::new_dynamic(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new(func)))?;
         Ok(())
     }
 
@@ -681,7 +679,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// For documentation on blocking behavior see [`Self::func_wrap_async`].
     #[cfg(feature = "async")]
-    pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_new_async<F>(&mut self, name: &str, func: F) -> Result<()>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
@@ -697,11 +695,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
-        let ff = move |store: StoreContextMut<'_, T>, ty, params: &[Val], results: &mut [Val]| {
-            store
-                .with_blocking(|store, cx| cx.block_on(Pin::from(f(store, ty, params, results)))?)
-        };
-        return self.func_new(name, ff);
+        self.insert(name, Definition::Func(HostFunc::func_new_async(func)))?;
+        Ok(())
     }
 
     /// Define a new host-provided async function using dynamic types.
@@ -729,7 +724,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_concurrent` without enabling async support in the config"
         );
-        self.insert(name, Definition::Func(HostFunc::new_dynamic_concurrent(f)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)))?;
         Ok(())
     }
 
