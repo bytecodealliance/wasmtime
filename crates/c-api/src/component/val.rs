@@ -45,6 +45,15 @@ crate::declare_vecs! {
         copy: wasmtime_component_valflags_copy,
         delete: wasmtime_component_valflags_delete,
     )
+    (
+        name: wasmtime_component_valmap_t,
+        ty: wasmtime_component_valmap_entry_t,
+        new: wasmtime_component_valmap_new,
+        empty: wasmtime_component_valmap_new_empty,
+        uninit: wasmtime_component_valmap_new_uninit,
+        copy: wasmtime_component_valmap_copy,
+        delete: wasmtime_component_valmap_delete,
+    )
 }
 
 impl From<&wasmtime_component_vallist_t> for Vec<Val> {
@@ -63,11 +72,41 @@ impl From<&[Val]> for wasmtime_component_vallist_t {
     }
 }
 
+impl From<&wasmtime_component_valmap_t> for Vec<(Val, Val)> {
+    fn from(value: &wasmtime_component_valmap_t) -> Self {
+        value
+            .as_slice()
+            .iter()
+            .map(|entry| (Val::from(&entry.key), Val::from(&entry.value)))
+            .collect()
+    }
+}
+
+impl From<&[(Val, Val)]> for wasmtime_component_valmap_t {
+    fn from(value: &[(Val, Val)]) -> Self {
+        value
+            .iter()
+            .map(|(k, v)| wasmtime_component_valmap_entry_t {
+                key: wasmtime_component_val_t::from(k),
+                value: wasmtime_component_val_t::from(v),
+            })
+            .collect::<Vec<_>>()
+            .into()
+    }
+}
+
 #[derive(Clone)]
 #[repr(C)]
 pub struct wasmtime_component_valrecord_entry_t {
     name: wasm_name_t,
     val: wasmtime_component_val_t,
+}
+
+#[derive(Clone, Default)]
+#[repr(C)]
+pub struct wasmtime_component_valmap_entry_t {
+    key: wasmtime_component_val_t,
+    value: wasmtime_component_val_t,
 }
 
 impl Default for wasmtime_component_valrecord_entry_t {
@@ -234,6 +273,7 @@ pub enum wasmtime_component_val_t {
     Result(wasmtime_component_valresult_t),
     Flags(wasmtime_component_valflags_t),
     Resource(Box<wasmtime_component_resource_any_t>),
+    Map(wasmtime_component_valmap_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -275,6 +315,7 @@ impl From<&wasmtime_component_val_t> for Val {
             }
             wasmtime_component_val_t::Result(x) => Val::Result(x.into()),
             wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
+            wasmtime_component_val_t::Map(x) => Val::Map(x.into()),
             wasmtime_component_val_t::Resource(x) => Val::Resource(x.resource),
         }
     }
@@ -309,6 +350,7 @@ impl From<&Val> for wasmtime_component_val_t {
             ),
             Val::Result(x) => wasmtime_component_val_t::Result(x.into()),
             Val::Flags(x) => wasmtime_component_val_t::Flags(x.as_slice().into()),
+            Val::Map(x) => wasmtime_component_val_t::Map(x.as_slice().into()),
             Val::Resource(resource_any) => {
                 wasmtime_component_val_t::Resource(Box::new(wasmtime_component_resource_any_t {
                     resource: *resource_any,

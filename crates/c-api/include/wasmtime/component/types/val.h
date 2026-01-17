@@ -335,6 +335,43 @@ WASM_API_EXTERN bool wasmtime_component_stream_type_ty(
     const wasmtime_component_stream_type_t *ty,
     struct wasmtime_component_valtype_t *type_ret);
 
+// ----------- maps ------------------------------------------------------------
+
+/// \brief Opaque type representing a component map type.
+typedef struct wasmtime_component_map_type wasmtime_component_map_type_t;
+
+/// \brief Clones a component map type.
+///
+/// The returned pointer must be deallocated with
+/// `wasmtime_component_map_type_delete`.
+WASM_API_EXTERN wasmtime_component_map_type_t *
+wasmtime_component_map_type_clone(const wasmtime_component_map_type_t *ty);
+
+/// \brief Compares two component map types for equality.
+WASM_API_EXTERN bool
+wasmtime_component_map_type_equal(const wasmtime_component_map_type_t *a,
+                                  const wasmtime_component_map_type_t *b);
+
+/// \brief Deallocates a component map type.
+WASM_API_EXTERN void
+wasmtime_component_map_type_delete(wasmtime_component_map_type_t *ptr);
+
+/// \brief Returns the key type of a component map type.
+///
+/// The returned type must be deallocated with
+/// `wasmtime_component_valtype_delete`.
+WASM_API_EXTERN void
+wasmtime_component_map_type_key(const wasmtime_component_map_type_t *ty,
+                                struct wasmtime_component_valtype_t *type_ret);
+
+/// \brief Returns the value type of a component map type.
+///
+/// The returned type must be deallocated with
+/// `wasmtime_component_valtype_delete`.
+WASM_API_EXTERN void wasmtime_component_map_type_value(
+    const wasmtime_component_map_type_t *ty,
+    struct wasmtime_component_valtype_t *type_ret);
+
 // ----------- valtype ---------------------------------------------------------
 
 /// \brief Value of #wasmtime_component_valtype_kind_t meaning that
@@ -415,6 +452,9 @@ WASM_API_EXTERN bool wasmtime_component_stream_type_ty(
 /// \brief Value of #wasmtime_component_valtype_kind_t meaning that
 /// #wasmtime_component_valtype_t is an `error context` WIT type.
 #define WASMTIME_COMPONENT_VALTYPE_ERROR_CONTEXT 25
+/// \brief Value of #wasmtime_component_valtype_kind_t meaning that
+/// #wasmtime_component_valtype_t is a `map` WIT type.
+#define WASMTIME_COMPONENT_VALTYPE_MAP 26
 
 /// \brief Discriminant used in #wasmtime_component_valtype_t::kind
 typedef uint8_t wasmtime_component_valtype_kind_t;
@@ -457,6 +497,9 @@ typedef union wasmtime_component_valtype_union {
   /// Field used if #wasmtime_component_valtype_t::kind is
   /// #WASMTIME_COMPONENT_VALTYPE_STREAM
   wasmtime_component_stream_type_t *stream;
+  /// Field used if #wasmtime_component_valtype_t::kind is
+  /// #WASMTIME_COMPONENT_VALTYPE_MAP
+  wasmtime_component_map_type_t *map;
 } wasmtime_component_valtype_union_t;
 
 /// \brief Represents a single value type in the component model.

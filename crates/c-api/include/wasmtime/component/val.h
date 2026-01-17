@@ -266,9 +266,13 @@ typedef uint8_t wasmtime_component_valkind_t;
 /// \brief Value of #wasmtime_component_valkind_t meaning that
 /// #wasmtime_component_val_t is a resource
 #define WASMTIME_COMPONENT_RESOURCE 21
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a map
+#define WASMTIME_COMPONENT_MAP 22
 
 struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
+struct wasmtime_component_valmap_entry;
 
 #define DECLARE_VEC(name, type)                                                \
   /** \brief A vec of a type */                                                \
@@ -296,6 +300,7 @@ DECLARE_VEC(wasmtime_component_valrecord,
             struct wasmtime_component_valrecord_entry)
 DECLARE_VEC(wasmtime_component_valtuple, struct wasmtime_component_val)
 DECLARE_VEC(wasmtime_component_valflags, wasm_name_t)
+DECLARE_VEC(wasmtime_component_valmap, struct wasmtime_component_valmap_entry)
 
 #undef DECLARE_VEC
 
@@ -366,6 +371,8 @@ typedef union {
   wasmtime_component_valresult_t result;
   /// Field used if #wasmtime_component_val_t::kind is #WASMTIME_COMPONENT_FLAGS
   wasmtime_component_valflags_t flags;
+  /// Field used if #wasmtime_component_val_t::kind is #WASMTIME_COMPONENT_MAP
+  wasmtime_component_valmap_t map;
   /// Field used if #wasmtime_component_val_t::kind is
   /// #WASMTIME_COMPONENT_RESOURCE
   wasmtime_component_resource_any_t *resource;
@@ -388,6 +395,15 @@ typedef struct wasmtime_component_valrecord_entry {
   /// The value of this entry
   wasmtime_component_val_t val;
 } wasmtime_component_valrecord_entry_t;
+
+/// \brief A pair of a key and a value that represents one entry in a value
+/// with kind #WASMTIME_COMPONENT_MAP
+typedef struct wasmtime_component_valmap_entry {
+  /// The key of this entry
+  wasmtime_component_val_t key;
+  /// The value of this entry
+  wasmtime_component_val_t value;
+} wasmtime_component_valmap_entry_t;
 
 /// \brief Allocates a new `wasmtime_component_val_t` on the heap, initializing
 /// it with the contents of `val`.
