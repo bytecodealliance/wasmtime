@@ -321,6 +321,7 @@ impl<T> StoreContextMut<'_, T> {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
+    #[cfg(feature = "component-model")]
     pub(crate) fn block_on<R>(
         self,
         f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
