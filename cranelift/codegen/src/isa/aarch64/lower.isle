@@ -535,38 +535,37 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(type IsFneg (enum (Result (negate u64) (value Value))))
+(rule 1 (lower (has_type ty (fma x y z))) (fmadd ty x y z))
+(rule 2 (lower (has_type (ty_scalar_float ty) (fma x y (fneg z)))) (fnmsub ty x y z))
 
-(decl pure is_fneg (Value) IsFneg)
-(rule 1 (is_fneg (fneg n)) (IsFneg.Result 1 n))
-(rule 0 (is_fneg n) (IsFneg.Result 0 n))
+;; Constructors matching the scalar behavior of aarch64. If you're confused like
+;; I was reading over these, they are:
+;;
+;; * fmadd - multiply, then add
+;; * fnmadd - multiply, then negate, then subtract
+;; * fmsub - multiply, then negate, then add
+;; * fnmsub - multiply, then subtract
+(decl fmadd (Type Value Value Value) Reg)
+(decl fnmadd (Type Value Value Value) Reg)
+(decl fmsub (Type Value Value Value) Reg)
+(decl fnmsub (Type Value Value Value) Reg)
 
-(decl pure is_fneg_neg (IsFneg) u64)
-(rule (is_fneg_neg (IsFneg.Result n _)) n)
+;; Switch `fm{add,sub}` to `fnm{add,sub}` if one of the operands are negated
+;; instruction instead
+(rule 2 (fmadd ty (fneg x) y z) (fmsub ty x y z))
+(rule 3 (fmadd ty x (fneg y) z) (fmsub ty x y z))
+(rule 2 (fnmsub ty (fneg x) y z) (fnmadd ty x y z))
+(rule 3 (fnmsub ty x (fneg y) z) (fnmadd ty x y z))
 
-(decl pure get_fneg_value (IsFneg) Value)
-(rule (get_fneg_value (IsFneg.Result _ v)) v)
+;; Scalar cases
+(rule 0 (fmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(rule 0 (fnmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
+(rule 0 (fmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+(rule 0 (fnmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
 
-(decl fmadd_series (Type u64 u64 Value Value Value) InstOutput)
-;; MAdd: + x * y + z
-(rule 0 (fmadd_series (ty_scalar_float ty) 0 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
-;; MSub: - x * y + z
-(rule 0 (fmadd_series (ty_scalar_float ty) 1 0 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
-;; NMAdd: - x * y - z
-(rule 0 (fmadd_series (ty_scalar_float ty) 1 1 x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
-;; NMSub: + x * y - z
-(rule 0 (fmadd_series (ty_scalar_float ty) 0 1 x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
-
-(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z_src)))
-  (let
-      ((x_res IsFneg (is_fneg x_src))
-       (y_res IsFneg (is_fneg y_src))
-       (z_res IsFneg (is_fneg z_src)))
-      (fmadd_series ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (is_fneg_neg z_res) (get_fneg_value x_res) (get_fneg_value y_res) (get_fneg_value z_res))))
-
-;; Delegate vector-based lowerings to helpers below
-(rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
-        (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+;; Vector cases
+(rule 1 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+(rule 1 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
 
 ;; Lowers a fused-multiply-add operation handling various forms of the
 ;; instruction to get maximal coverage of what's available on AArch64.
@@ -602,21 +601,6 @@
 (rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle64_from_imm n n))) z size @ (VectorSize.Size64x2))
         (if-let true (u64_lt n 2))
         (vec_fmla_elem op z x y size n))
-
-;; Special case: if one of the multiplicands is `fneg` then peel that away,
-;; reverse the operation being performed, and then recurse on `lower_fmla`
-;; again to generate the actual instruction.
-;;
-;; Note that these are the highest priority cases for `lower_fmla` to peel
-;; away as many `fneg` operations as possible.
-(rule 5 (lower_fmla op (fneg x) y z size)
-        (lower_fmla (neg_fmla op) x y z size))
-(rule 6 (lower_fmla op x (fneg y) z size)
-        (lower_fmla (neg_fmla op) x y z size))
-
-(decl neg_fmla (VecALUModOp) VecALUModOp)
-(rule (neg_fmla (VecALUModOp.Fmla)) (VecALUModOp.Fmls))
-(rule (neg_fmla (VecALUModOp.Fmls)) (VecALUModOp.Fmla))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
