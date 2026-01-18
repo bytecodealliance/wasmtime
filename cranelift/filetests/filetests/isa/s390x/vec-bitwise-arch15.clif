@@ -1,0 +1,135 @@
+test compile precise-output
+target s390x arch15
+
+function %band_band_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r1, 0xf88(%r10)
+;   br %r14
+
+function %band_band_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x01
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %bor_bor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = bor.i64x2 v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = bor.i64x2 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x7f
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %band_band_nota_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v0
+  v4 = band.i64x2 v3, v1
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r2, 0xf88(%r10)
+;   br %r14
+
+function %band_band_notb_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v1
+  v4 = band.i64x2 v0, v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v25, %v24, %v26, 2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x89
+;   .byte 0x80, 0x02
+;   mc 0x7fe, 0x88
+
+function %band_band_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v2
+  v4 = band.i64x2 v0, v1
+  v5 = band.i64x2 v4, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x02
+;   .byte 0x9f, 0x88
+;   br %r14
+
