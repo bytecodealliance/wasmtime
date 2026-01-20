@@ -2198,7 +2198,7 @@ impl HostFunc {
     ///
     /// This is an internal private constructor for this type intended to only
     /// be used by other constructors of this type below.
-    fn _new(engine: &Engine, ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
+    fn new_raw(engine: &Engine, ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
         HostFunc {
             ctx,
             engine: engine.clone(),
@@ -2382,7 +2382,7 @@ impl HostFunc {
     where
         T: 'static,
     {
-        HostFunc::_new(engine, Self::vmctx_sync(engine, ty, func))
+        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func))
     }
 
     /// Analog of [`Func::new`]
@@ -2401,7 +2401,7 @@ impl HostFunc {
     {
         // NB: this is "duplicated" below in `new_async`, so try to keep the
         // two in sync.
-        HostFunc::_new(
+        HostFunc::new_raw(
             engine,
             Self::vmctx_sync(engine, ty.clone(), move |mut caller, values| {
                 // SAFETY: Wasmtime in general provides the guarantee that
@@ -2435,7 +2435,7 @@ impl HostFunc {
     {
         // NB: this is "duplicated" above in `new`, so try to keep the two in
         // sync.
-        HostFunc::_new(
+        HostFunc::new_raw(
             engine,
             Self::vmctx_async(
                 engine,
@@ -2455,6 +2455,7 @@ impl HostFunc {
             ),
         )
     }
+
     /// Loads the the parameters of `ty` from `params` into a vector.
     ///
     /// This additionally pushes space onto the vector for all results to split
@@ -2528,7 +2529,7 @@ impl HostFunc {
             // wasmtime's ambient correctness.
             unsafe { Self::store_typed_results(caller.store.0, ret, args) }
         });
-        HostFunc::_new(engine, ctx)
+        HostFunc::new_raw(engine, ctx)
     }
 
     /// Analog of [`Func::wrap_async`]
@@ -2558,7 +2559,7 @@ impl HostFunc {
                 unsafe { Self::store_typed_results(caller.store.0, ret.into_fallible(), args) }
             })
         });
-        HostFunc::_new(engine, ctx)
+        HostFunc::new_raw(engine, ctx)
     }
 
     /// Loads the typed parameters from `params`
@@ -2593,9 +2594,11 @@ impl HostFunc {
     where
         R: WasmRet,
     {
-        if !ret.compatible_with_store(store) {
-            bail!("host function attempted to return cross-`Store` value to Wasm")
-        }
+        ensure!(
+            ret.compatible_with_store(store),
+            "host function attempted to return cross-`Store` value to Wasm",
+        );
+
         let mut store = if R::may_gc() {
             AutoAssertNoGc::new(store)
         } else {
