@@ -13,7 +13,7 @@ use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 /// # fn _foo() -> Result<()> {
 /// use wasmtime_environ::collections::try_new;
 ///
-/// let boxed = try_new::<Box<u32>>::(36)?;
+/// let boxed = try_new::<Box<u32>>(36)?;
 /// assert_eq!(*boxed, 36);
 /// # Ok(())
 /// # }
