@@ -1,9 +1,11 @@
+#[cfg(feature = "component-model-async")]
+use crate::component::RuntimeInstance;
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::store::{ComponentInstanceId, StoreComponentInstanceId};
 use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
-    RuntimeInstance, TypedFunc, types::ComponentItem,
+    TypedFunc, types::ComponentItem,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -838,6 +840,7 @@ impl<'a> Instantiator<'a> {
         for initializer in env_component.initializers.iter() {
             match initializer {
                 GlobalInitializer::InstantiateModule(m, component_instance) => {
+                    #[cfg(feature = "component-model-async")]
                     let instance = self.id;
                     let module;
                     let imports = match m {
@@ -885,6 +888,11 @@ impl<'a> Instantiator<'a> {
                     } else {
                         false
                     };
+
+                    #[cfg(not(feature = "component-model-async"))]
+                    {
+                        _ = component_instance;
+                    }
 
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
