@@ -543,7 +543,7 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
     #[cfg(feature = "component-model")]
-    concurrent_state: concurrent::ConcurrentState,
+    concurrent_state: Option<concurrent::ConcurrentState>,
 
     /// State related to the executor of wasm code.
     ///
@@ -771,7 +771,15 @@ impl<T> Store<T> {
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
-            concurrent_state: Default::default(),
+            concurrent_state: if engine
+                .config()
+                .enabled_features
+                .contains(wasmparser::WasmFeatures::CM_ASYNC)
+            {
+                Some(Default::default())
+            } else {
+                None
+            },
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
         };
@@ -2562,14 +2570,14 @@ at https://bytecodealliance.org/security.
         &mut vm::component::HandleTable,
         &mut crate::component::HostResourceData,
         Pin<&mut vm::component::ComponentInstance>,
-        &mut concurrent::ConcurrentState,
+        Option<&mut concurrent::ConcurrentState>,
     ) {
         (
             &mut self.component_calls,
             &mut self.component_host_table,
             &mut self.host_resource_data,
             instance.id().from_data_get_mut(&mut self.store_data),
-            &mut self.concurrent_state,
+            self.concurrent_state.as_mut(),
         )
     }
 
@@ -2580,7 +2588,7 @@ at https://bytecodealliance.org/security.
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
-        &mut self.concurrent_state
+        self.concurrent_state.as_mut().unwrap()
     }
 
     #[cfg(feature = "async")]
