@@ -1,6 +1,6 @@
 ## 41.0.0
 
-Unreleased.
+Released 2026-01-20.
 
 ### Added
 
