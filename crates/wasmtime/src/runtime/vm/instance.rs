@@ -197,12 +197,8 @@ impl Instance {
         // SAFETY: this vmctx was allocated with the same layout above, so it
         // should be safe to initialize with the same values here.
         unsafe {
-            ret.get_mut().initialize_vmctx(
-                module,
-                req.runtime_info.offsets(),
-                req.store,
-                req.imports,
-            );
+            ret.get_mut()
+                .initialize_vmctx(module, req.store, req.imports);
         }
         ret
     }
@@ -1330,7 +1326,6 @@ impl Instance {
     unsafe fn initialize_vmctx(
         mut self: Pin<&mut Self>,
         module: &Module,
-        offsets: &VMOffsets<HostPtr>,
         store: &StoreOpaque,
         imports: Imports,
     ) {
@@ -1339,6 +1334,7 @@ impl Instance {
         // SAFETY: the type of the magic field is indeed `u32` and this function
         // is initializing its value.
         unsafe {
+            let offsets = self.runtime_info.offsets();
             self.vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx_magic())
                 .write(VMCONTEXT_MAGIC);
         }
@@ -1365,6 +1361,7 @@ impl Instance {
         unsafe {
             static BUILTINS: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray::INIT;
             let ptr = BUILTINS.expose_provenance();
+            let offsets = self.runtime_info.offsets();
             self.vmctx_plus_offset_raw(offsets.ptr.vmctx_builtin_functions())
                 .write(VmPtr::from(ptr));
         }
@@ -1375,6 +1372,7 @@ impl Instance {
         // validity of each item itself is a contract the caller must uphold.
         debug_assert_eq!(imports.functions.len(), module.num_imported_funcs);
         unsafe {
+            let offsets = self.runtime_info.offsets();
             ptr::copy_nonoverlapping(
                 imports.functions.as_ptr(),
                 self.vmctx_plus_offset_raw(offsets.vmctx_imported_functions_begin())
@@ -1422,6 +1420,7 @@ impl Instance {
         // here and the various types of pointers and such here should all be
         // valid.
         unsafe {
+            let offsets = self.runtime_info.offsets();
             let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_tables_begin());
             let tables = self.as_mut().tables_mut();
             for i in 0..module.num_defined_tables() {
@@ -1440,6 +1439,7 @@ impl Instance {
         // here and the various types of pointers and such here should all be
         // valid.
         unsafe {
+            let offsets = self.runtime_info.offsets();
             let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_memories_begin());
             let mut owned_ptr = self.vmctx_plus_offset_raw(offsets.vmctx_owned_memories_begin());
             let memories = self.as_mut().memories_mut();
@@ -1485,6 +1485,7 @@ impl Instance {
         // here and the various types of pointers and such here should all be
         // valid.
         unsafe {
+            let offsets = self.runtime_info.offsets();
             let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_tags_begin());
             for i in 0..module.num_defined_tags() {
                 let defined_index = DefinedTagIndex::new(i);
