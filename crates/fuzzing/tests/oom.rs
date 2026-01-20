@@ -33,17 +33,19 @@ fn smoke_test_missed_oom() -> Result<()> {
 
 #[test]
 #[cfg(arc_try_new)]
-fn oom_arc_new() -> Result<()> {
+fn try_new_arc() -> Result<()> {
+    use std::sync::Arc;
+
     OomTest::new().test(|| {
-        let _arc = OomArc::new(42)?;
+        let _arc = try_new::<Arc<u32>>(42)?;
         Ok(())
     })
 }
 
 #[test]
-fn oom_box_new() -> Result<()> {
+fn try_new_box() -> Result<()> {
     OomTest::new().test(|| {
-        let _box = OomBox::new(42)?;
+        let _box = try_new::<Box<u32>>(36)?;
         Ok(())
     })
 }
