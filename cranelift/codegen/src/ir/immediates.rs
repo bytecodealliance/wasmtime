@@ -706,7 +706,23 @@ macro_rules! ieee_float {
                 pub fn round_ties_even(self) -> Self {
                     // TODO: when libm v0.2.16 is published line below can be used instead
                     // Self::with_float(Libm::<$float_ty>::roundeven(self.$as_float()))
-                    Self::with_float(self.$as_float().round_ties_even())
+                    return Self::with_float(self.$as_float().roundeven());
+
+                    trait Roundeven {
+                        fn roundeven(self) -> Self;
+                    }
+
+                    impl Roundeven for f32 {
+                        fn roundeven(self) -> Self {
+                            libm::roundevenf(self)
+                        }
+                    }
+
+                    impl Roundeven for f64 {
+                        fn roundeven(self) -> Self {
+                            libm::roundeven(self)
+                        }
+                    }
                 }
             )?
         }
