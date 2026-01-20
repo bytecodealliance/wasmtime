@@ -541,10 +541,10 @@
 ;; Constructors matching the scalar behavior of aarch64. If you're confused like
 ;; I was reading over these, they are:
 ;;
-;; * fmadd - multiply, then add
-;; * fnmadd - multiply, then negate, then subtract
-;; * fmsub - multiply, then negate, then add
-;; * fnmsub - multiply, then subtract
+;; * fmadd   r =   a * b  + c   /   multiply, then add
+;; * fnmadd  r = -(a * b) - c   /   multiply, then negate, then subtract
+;; * fmsub   r = -(a * b) + c   /   multiply, then negate, then add
+;; * fnmsub  r =   a * b  - c   /   multiply, then subtract
 (decl fmadd (Type Value Value Value) Reg)
 (decl fnmadd (Type Value Value Value) Reg)
 (decl fmsub (Type Value Value Value) Reg)
