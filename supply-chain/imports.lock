@@ -129,6 +129,10 @@ audited_as = "40.0.1"
 version = "42.0.0"
 audited_as = "40.0.1"
 
+[[unpublished.wasmtime-internal-debugger]]
+version = "42.0.0"
+audited_as = "41.0.0"
+
 [[unpublished.wasmtime-internal-error]]
 version = "42.0.0"
 audited_as = "0.0.0"
@@ -1296,6 +1300,11 @@ trusted-publisher = "github:bytecodealliance/wasmtime"
 [[publisher.wasmtime-internal-cranelift]]
 version = "40.0.1"
 when = "2026-01-07"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
+[[publisher.wasmtime-internal-debugger]]
+version = "41.0.0"
+when = "2026-01-20"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-error]]
