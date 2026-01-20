@@ -61,10 +61,10 @@ fn call_wrapped_func() -> Result<(), Error> {
         Func::new_unchecked(&mut store, func_ty, |caller: Caller<State>, space| {
             verify(caller.data());
 
-            assert_eq!(space[0].get_i32(), 1i32);
-            assert_eq!(space[1].get_i64(), 2i64);
-            assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
-            assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
+            assert_eq!(space[0].assume_init_ref().get_i32(), 1i32);
+            assert_eq!(space[1].assume_init_ref().get_i64(), 2i64);
+            assert_eq!(space[2].assume_init_ref().get_f32(), 3.0f32.to_bits());
+            assert_eq!(space[3].assume_init_ref().get_f64(), 4.0f64.to_bits());
             Ok(())
         })
     });

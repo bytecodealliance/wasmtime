@@ -12,6 +12,7 @@ use core::fmt::{self, Debug};
 #[cfg(feature = "async")]
 use core::future::Future;
 use core::marker;
+use core::mem::MaybeUninit;
 use log::warn;
 
 /// Structure used to link wasm modules/instances together.
@@ -428,7 +429,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [MaybeUninit<ValRaw>]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self>
     where
         T: 'static,
@@ -468,7 +469,7 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
         assert!(
             self.engine.config().async_support,
@@ -542,7 +543,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        self.func_insert(module, name, HostFunc::wrap(&self.engine, func))
+        self.func_insert(module, name, func.into_func(&self.engine))
     }
 
     /// Asynchronous analog of [`Linker::func_wrap`].
@@ -558,7 +559,7 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
         assert!(
             self.engine.config().async_support,
