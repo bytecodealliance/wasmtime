@@ -1,4 +1,5 @@
 use crate::Config;
+use crate::RRConfig;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
@@ -262,6 +263,30 @@ impl Engine {
     #[inline]
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
+    }
+
+    /// Returns whether the engine is configured to support execution recording
+    #[inline]
+    pub fn is_recording(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => false,
+            RRConfig::None => false,
+        }
+    }
+
+    /// Returns whether the engine is configured to support execution replaying
+    #[inline]
+    pub fn is_replaying(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => false,
+            RRConfig::None => false,
+        }
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by

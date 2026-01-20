@@ -521,6 +521,7 @@ component-model-async = [
   "wasmtime-wasi-http?/p3",
   "dep:futures",
 ]
+rr = ["wasmtime/rr", "component-model", "wasmtime-cli-flags/rr", "run"]
 
 # This feature, when enabled, will statically compile out all logging statements
 # throughout Wasmtime and its dependencies.
