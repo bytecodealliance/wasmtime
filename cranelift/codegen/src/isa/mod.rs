@@ -50,7 +50,7 @@ use crate::CodegenResult;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::{UnwindInfoKind, systemv::RegisterMappingError};
-use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
+use crate::machinst::{CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
@@ -329,7 +329,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &CompiledCode,
+        result: &crate::machinst::CompiledCode,
         kind: UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
 
