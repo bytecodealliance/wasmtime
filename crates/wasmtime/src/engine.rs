@@ -1,4 +1,6 @@
 use crate::Config;
+#[cfg(feature = "rr")]
+use crate::RRConfig;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
@@ -95,7 +97,7 @@ impl Engine {
     /// the compiler setting `unwind_info` to `true`, but explicitly
     /// disable these two compiler settings will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
-        let config = config.clone();
+        let mut config = config.clone();
         let (mut tunables, features) = config.validate()?;
 
         #[cfg(feature = "runtime")]
@@ -256,6 +258,26 @@ impl Engine {
     #[inline]
     pub fn is_async(&self) -> bool {
         self.config().async_support
+    }
+
+    /// Returns whether the engine is configured to support execution recording
+    #[cfg(feature = "rr")]
+    #[inline]
+    pub fn is_recording(&self) -> bool {
+        match self.config().rr_config {
+            RRConfig::Recording => true,
+            _ => false,
+        }
+    }
+
+    /// Returns whether the engine is configured to support execution replaying
+    #[cfg(feature = "rr")]
+    #[inline]
+    pub fn is_replaying(&self) -> bool {
+        match self.config().rr_config {
+            RRConfig::Replaying => true,
+            _ => false,
+        }
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by
