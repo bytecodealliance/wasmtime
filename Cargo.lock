@@ -2645,6 +2645,7 @@ checksum = "1fa7e49bd669d32d7bc2a15ec540a527e7764aec722a45467814005725bcd721"
 dependencies = [
  "ort-sys",
  "smallvec 2.0.0-alpha.10",
+ "tracing",
 ]
 
 [[package]]
