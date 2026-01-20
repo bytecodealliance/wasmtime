@@ -2973,10 +2973,6 @@
 (rule 1 (fnmadd ty (sinkable_load x) y z) (x64_vfnmadd132 ty y z x))
 (rule 2 (fnmadd ty x (sinkable_load y) z) (x64_vfnmadd132 ty x z y))
 
-;; Like `fmadd` if one argument is negated switch which one is being codegen'd
-(rule 3 (fnmadd ty (fneg x) y z) (fmadd ty x y z))
-(rule 4 (fnmadd ty x (fneg y) z) (fmadd ty x y z))
-
 
 (rule 2 (lower (has_type ty (fma x y (fneg z))))
       (if-let true (use_fma))
@@ -3003,10 +2999,6 @@
 (rule (fnmsub ty x y z) (x64_vfnmsub213 ty x y z))
 (rule 1 (fnmsub ty (sinkable_load x) y z) (x64_vfnmsub132 ty y z x))
 (rule 2 (fnmsub ty x (sinkable_load y) z) (x64_vfnmsub132 ty x z y))
-
-;; Like `fmsub` if one argument is negated switch which one is being codegen'd
-(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
-(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
 
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
