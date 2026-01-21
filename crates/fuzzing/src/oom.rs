@@ -97,6 +97,10 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
                 OomState::DidOom => {
+                    log::trace!(
+                        "Attempt to allocate {layout:?} after OOM:\n{:?}",
+                        Backtrace::new(),
+                    );
                     panic!("OOM test attempted to allocate after OOM: {layout:?}")
                 }
             }
