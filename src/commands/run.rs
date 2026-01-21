@@ -618,26 +618,34 @@ impl RunCommand {
             .expect("found export index");
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
+        self.call_func(store, &params, func, &mut results).await?;
 
+        println!("{}", DisplayFuncResults(&results));
+        Ok(instance)
+    }
+
+    async fn call_func(
+        &self,
+        store: &mut Store<Host>,
+        params: &[wasmtime::component::Val],
+        func: wasmtime::component::Func,
+        results: &mut Vec<wasmtime::component::Val>,
+    ) -> Result<(), Error> {
         #[cfg(feature = "component-model-async")]
-        {
+        if self.run.common.wasm.component_model_async.unwrap_or(false) {
             store
                 .run_concurrent(async |store| {
-                    let task = func.call_concurrent(store, &params, &mut results).await?;
+                    let task = func.call_concurrent(store, params, results).await?;
                     task.block(store).await;
                     wasmtime::error::Ok(())
                 })
                 .await??;
-        }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            func.call_async(&mut *store, &params, &mut results).await?;
-            func.post_return_async(&mut *store).await?;
+            return Ok(());
         }
 
-        println!("{}", DisplayFuncResults(&results));
-
-        Ok(instance)
+        func.call_async(&mut *store, &params, results).await?;
+        func.post_return_async(&mut *store).await?;
+        Ok(())
     }
 
     /// Execute the default behavior for components on the CLI, looking for

@@ -771,11 +771,7 @@ impl<T> Store<T> {
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
-            concurrent_state: if engine
-                .config()
-                .enabled_features
-                .contains(wasmparser::WasmFeatures::CM_ASYNC)
-            {
+            concurrent_state: if engine.config().cm_concurrency_enabled() {
                 Some(Default::default())
             } else {
                 None
@@ -862,7 +858,9 @@ impl<T> Store<T> {
         // in their `Drop::drop` implementations, in which case they'll need to
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
-        ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
+        if self.inner.concurrent_state.is_some() {
+            ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
+        }
 
         // Ensure all fiber stacks, even cached ones, are all flushed out to the
         // instance allocator.
@@ -2586,8 +2584,14 @@ at https://bytecodealliance.org/security.
         &mut self.async_state
     }
 
+    #[cfg(feature = "component-model")]
+    pub(crate) fn concurrent_state(&self) -> Option<&concurrent::ConcurrentState> {
+        self.concurrent_state.as_ref()
+    }
+
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
+        debug_assert!(self.engine().config().cm_concurrency_enabled());
         self.concurrent_state.as_mut().unwrap()
     }
 

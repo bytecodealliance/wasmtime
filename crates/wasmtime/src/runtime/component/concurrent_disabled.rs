@@ -150,21 +150,3 @@ unsafe impl Lower for StreamAny {
         match self.0 {}
     }
 }
-
-impl StoreOpaque {
-    pub(crate) fn check_blocking(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
-        if self.trapped() {
-            return false;
-        }
-
-        let flags = self
-            .component_instance(instance.instance)
-            .instance_flags(instance.index);
-
-        unsafe { !flags.needs_post_return() }
-    }
-}

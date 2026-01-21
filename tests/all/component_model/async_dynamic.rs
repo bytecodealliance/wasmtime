@@ -2,8 +2,10 @@ use wasmtime::component::{Component, FutureAny, FutureReader, Linker, StreamAny,
 use wasmtime::{Config, Engine, Result, Store};
 
 #[test]
-fn simple_type_conversions() {
-    let engine = Engine::default();
+fn simple_type_conversions() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
     let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) });
@@ -19,6 +21,8 @@ fn simple_type_conversions() {
     assert!(s.clone().try_into_stream_reader::<u64>().is_err());
     let s = s.try_into_stream_reader::<u32>().unwrap();
     s.try_into_stream_any(&mut store).unwrap().close(&mut store);
+
+    Ok(())
 }
 
 #[test]

@@ -55,6 +55,7 @@ use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
+use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, HandleTable, ResourceTables};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
@@ -891,6 +892,10 @@ impl<T> Store<T> {
     where
         T: Send + 'static,
     {
+        ensure!(
+            self.as_context().0.cm_concurrency_enabled(),
+            "cannot use `run_concurrent` without enabling component-model async"
+        );
         self.as_context_mut().run_concurrent(fun).await
     }
 
@@ -987,8 +992,6 @@ impl<T> StoreContextMut<'_, T> {
     ///
     /// # Store-blocking behavior
     ///
-    ///
-    ///
     /// At this time there are certain situations in which the `Future` returned
     /// by the `AsyncFnOnce` passed to this function will not be polled for an
     /// extended period of time, despite one or more `Waker::wake` events having
@@ -1059,6 +1062,10 @@ impl<T> StoreContextMut<'_, T> {
     where
         T: Send + 'static,
     {
+        ensure!(
+            self.0.cm_concurrency_enabled(),
+            "cannot use `run_concurrent` without enabling component-model async"
+        );
         self.do_run_concurrent(fun, false).await
     }
 
@@ -1080,6 +1087,7 @@ impl<T> StoreContextMut<'_, T> {
     where
         T: Send + 'static,
     {
+        debug_assert!(self.0.cm_concurrency_enabled());
         check_recursive_run();
         let token = StoreToken::new(self.as_context_mut());
 
@@ -1390,7 +1398,8 @@ impl StoreOpaque {
     /// - The top-level instance is not already on the current task's call stack.
     /// - The instance is not in need of a post-return function call.
     /// - `self` has not been poisoned due to a trap.
-    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
+    pub(crate) fn may_enter_concurrent(&mut self, instance: RuntimeInstance) -> bool {
+        debug_assert!(self.cm_concurrency_enabled());
         let state = self.concurrent_state_mut();
         if let Some(caller) = state.guest_thread {
             instance != state.get_mut(caller.task).unwrap().instance
@@ -1512,7 +1521,8 @@ impl StoreOpaque {
             .set_task_may_block(may_block)
     }
 
-    pub(crate) fn check_blocking(&mut self) -> Result<()> {
+    pub(crate) fn check_blocking_concurrent(&mut self) -> Result<()> {
+        debug_assert!(self.cm_concurrency_enabled());
         let state = self.concurrent_state_mut();
         let task = state.guest_thread.unwrap().task;
         let instance = state.get_mut(task).unwrap().instance.instance;

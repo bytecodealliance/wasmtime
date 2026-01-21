@@ -12,7 +12,7 @@ use crate::component::{
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
     Error, Result, bail,
     error::{Context as _, format_err},
@@ -1123,6 +1123,8 @@ impl<T> FutureReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
+        assert!(store.as_context().0.cm_concurrency_enabled());
+
         struct Producer<P>(P);
 
         impl<D, T: func::Lower + 'static, P: FutureProducer<D, Item = T>> StreamProducer<D>
@@ -1450,6 +1452,11 @@ where
 {
     /// Create a new `GuardedFutureReader` with the specified `accessor` and `reader`.
     pub fn new(accessor: A, reader: FutureReader<T>) -> Self {
+        assert!(
+            accessor
+                .as_accessor()
+                .with(|a| a.as_context().0.cm_concurrency_enabled())
+        );
         Self {
             reader: Some(reader),
             accessor,
@@ -1503,6 +1510,7 @@ impl<T> StreamReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
+        assert!(store.as_context().0.cm_concurrency_enabled());
         Self::new_(
             store
                 .as_context_mut()
@@ -1778,6 +1786,11 @@ where
     /// Create a new `GuardedStreamReader` with the specified `accessor` and
     /// `reader`.
     pub fn new(accessor: A, reader: StreamReader<T>) -> Self {
+        assert!(
+            accessor
+                .as_accessor()
+                .with(|a| a.as_context().0.cm_concurrency_enabled())
+        );
         Self {
             reader: Some(reader),
             accessor,
