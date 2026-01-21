@@ -33,4 +33,10 @@ impl ExportMemory {
             ExportMemory::Shared(..) => None,
         }
     }
+    pub fn shared(self) -> Option<SharedMemory> {
+        match self {
+            ExportMemory::Unshared(_) => None,
+            ExportMemory::Shared(m, _) => Some(m),
+        }
+    }
 }

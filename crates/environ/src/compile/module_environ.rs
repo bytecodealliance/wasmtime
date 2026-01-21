@@ -608,6 +608,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
+                if self.tunables.debug_guest {
+                    // All functions are potentially reachable and
+                    // callable by the guest debugger, so they must
+                    // all be flagged as escaping.
+                    self.flag_func_escaped(func_index);
+                }
                 self.result
                     .function_body_inputs
                     .push(FunctionBodyData { validator, body });

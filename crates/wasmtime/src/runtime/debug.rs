@@ -1,7 +1,6 @@
 //! Debugging API.
 
 use crate::Result;
-use crate::vm::ExportMemory;
 use crate::{
     AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
@@ -17,9 +16,9 @@ use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
-    DefinedFuncIndex, EntityIndex, FrameInstPos, FrameStackShape, FrameStateSlot,
-    FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
-    FuncKey, Trap,
+    DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
+    FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType, FuncIndex, FuncKey,
+    GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -65,82 +64,226 @@ impl<'a, T> StoreContextMut<'a, T> {
         let (breakpoints, registry) = self.0.breakpoints_and_registry_mut();
         Some(breakpoints.edit(registry))
     }
+}
 
-    /// Get access to any entity within an instance's entity index
-    /// spaces.
+impl Instance {
+    /// Get access to a global within this instance's globals index
+    /// space.
     ///
-    /// This permits accessing entities (globals, tables, memories,
-    /// tags) whether they are exported or not. However, it is only
-    /// available for purposes of debugging, and so is only permitted
-    /// when `guest_debug` is enabled in the Engine's
-    /// configuration. The intent of the Wasmtime API is to enforce
-    /// the Wasm type system's encapsulation even in the host API,
-    /// except where necessary for developer tooling.
+    /// This permits accessing globals whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
     ///
-    /// This supports accesses to memories, tables, and globals. In
-    /// particular it does not support functions or tags:
-    ///
-    /// - This method does not support taking a reference to
-    ///   non-exported functions, because the engine may not generate
-    ///   the trampolines necessary to call these or may compile them
-    ///   in a way that uses the knowledge that they can only be
-    ///   referenced internally.
-    ///
-    /// - This method does not support taking a reference to
-    ///   non-exported tags because there is nothing that can be done
-    ///   with them (until throwing new exceptions from debug hooks is
-    ///   supported).
-    ///
-    /// `None` is returned for any entity index that is out-of-bounds,
-    /// or for function or tag `EntityIndex`s.
+    /// `None` is returned for any global index that is out-of-bounds.
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_entity(
-        mut self,
-        instance: Instance,
-        entity: EntityIndex,
-    ) -> Option<crate::Extern> {
-        if !self.engine().tunables().debug_guest {
+    pub fn debug_global(
+        &self,
+        mut store: impl AsContextMut,
+        global_index: u32,
+    ) -> Option<crate::Global> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
             return None;
         }
 
-        let env_module = instance.module(&mut self).env_module();
-        match entity {
-            EntityIndex::Function(_) | EntityIndex::Tag(_) => None,
-            EntityIndex::Memory(i) => {
-                if env_module.memories.is_valid(i) {
-                    let instance = self.0.instance(instance.id());
-                    match instance.get_exported_memory(self.0.id(), i) {
-                        ExportMemory::Unshared(m) => Some(crate::Extern::Memory(m)),
-                        ExportMemory::Shared(m, _i) => Some(crate::Extern::SharedMemory(
-                            crate::SharedMemory::from_raw(m, self.engine().clone()),
-                        )),
-                    }
-                } else {
-                    None
-                }
-            }
-            EntityIndex::Table(i) => {
-                if env_module.tables.is_valid(i) {
-                    let instance = self.0.instance(instance.id());
-                    Some(crate::Extern::Table(
-                        instance.get_exported_table(self.0.id(), i),
-                    ))
-                } else {
-                    None
-                }
-            }
-            EntityIndex::Global(i) => {
-                if env_module.globals.is_valid(i) {
-                    let instance = self.0.instance(instance.id());
-                    Some(crate::Extern::Global(
-                        instance.get_exported_global(self.0.id(), i),
-                    ))
-                } else {
-                    None
-                }
-            }
+        let instance = &store[self.id];
+        let env_module = self.module(&store).env_module();
+        // N.B.: `from_bits` here rather than `from_u32` so we don't
+        // panic on `u32::MAX`. A `u32::MAX` will become an invalid
+        // entity index which will properly return `None` below.
+        let global = GlobalIndex::from_bits(global_index);
+        if env_module.globals.is_valid(global) {
+            Some(instance.get_exported_global(store.id(), global))
+        } else {
+            None
+        }
+    }
+
+    /// Get access to a memory (unshared only) within this instance's
+    /// memory index space.
+    ///
+    /// This permits accessing memories whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
+    ///
+    /// `None` is returned for any memory index that is out-of-bounds.
+    ///
+    /// `None` is returned for any shared memory (use
+    /// `debug_shared_memory` instead).
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_memory(
+        &self,
+        mut store: impl AsContextMut,
+        memory_index: u32,
+    ) -> Option<crate::Memory> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let instance = &store[self.id];
+        let env_module = self.module(&store).env_module();
+        let memory = MemoryIndex::from_bits(memory_index);
+        if env_module.memories.is_valid(memory) {
+            Some(
+                instance
+                    .get_exported_memory(store.id(), memory)
+                    .unshared()?,
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Get access to a shared memory within this instance's memory
+    /// index space.
+    ///
+    /// This permits accessing memories whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
+    ///
+    /// `None` is returned for any memory index that is out-of-bounds.
+    ///
+    /// `None` is returned for any unshared memory (use `debug_memory`
+    /// instead).
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_shared_memory(
+        &self,
+        mut store: impl AsContextMut,
+        memory_index: u32,
+    ) -> Option<crate::SharedMemory> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let instance = &store[self.id];
+        let env_module = self.module(&store).env_module();
+        let memory = MemoryIndex::from_bits(memory_index);
+        if env_module.memories.is_valid(memory) {
+            Some(crate::SharedMemory::from_raw(
+                instance.get_exported_memory(store.id(), memory).shared()?,
+                store.engine().clone(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Get access to a table within this instance's table index
+    /// space.
+    ///
+    /// This permits accessing tables whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
+    ///
+    /// `None` is returned for any table index that is out-of-bounds.
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_table(
+        &self,
+        mut store: impl AsContextMut,
+        table_index: u32,
+    ) -> Option<crate::Table> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let instance = &store[self.id];
+        let env_module = self.module(&store).env_module();
+        let table = TableIndex::from_bits(table_index);
+        if env_module.tables.is_valid(table) {
+            Some(instance.get_exported_table(store.id(), table))
+        } else {
+            None
+        }
+    }
+
+    /// Get access to a function within this instance's function index
+    /// space.
+    ///
+    /// This permits accessing functions whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
+    ///
+    /// `None` is returned for any function index that is
+    /// out-of-bounds.
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_function(
+        &self,
+        mut store: impl AsContextMut,
+        function_index: u32,
+    ) -> Option<crate::Func> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let env_module = self.module(&store).env_module();
+        let func = FuncIndex::from_bits(function_index);
+        if env_module.functions.is_valid(func) {
+            let store_id = store.id();
+            let (instance, registry) = store.instance_and_module_registry_mut(self.id());
+            // SAFETY: the `store` and `registry` are associated with
+            // this instance as we fetched teh instance directly from
+            // the store above.
+            unsafe { Some(instance.get_exported_func(registry, store_id, func)) }
+        } else {
+            None
+        }
+    }
+
+    /// Get access to a tag within this instance's tag index space.
+    ///
+    /// This permits accessing tags whether they are exported or
+    /// not. However, it is only available for purposes of debugging,
+    /// and so is only permitted when `guest_debug` is enabled in the
+    /// Engine's configuration. The intent of the Wasmtime API is to
+    /// enforce the Wasm type system's encapsulation even in the host
+    /// API, except where necessary for developer tooling.
+    ///
+    /// `None` is returned for any tag index that is out-of-bounds.
+    ///
+    /// `None` is returned if guest-debugging is not enabled in the
+    /// engine configuration for this Store.
+    pub fn debug_tag(&self, mut store: impl AsContextMut, tag_index: u32) -> Option<crate::Tag> {
+        let store = store.as_context_mut().0;
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let instance = &store[self.id];
+        let env_module = self.module(&store).env_module();
+        let tag = TagIndex::from_bits(tag_index);
+        if env_module.tags.is_valid(tag) {
+            Some(instance.get_exported_tag(store.id(), tag))
+        } else {
+            None
         }
     }
 }
