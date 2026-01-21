@@ -422,10 +422,12 @@ fn private_entity_access() -> wasmtime::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg(target_pointer_width = "64")] // Threads not supported on 32-bit systems.
 fn private_entity_access_shared_memory() -> wasmtime::Result<()> {
     let mut config = Config::default();
     config.guest_debug(true);
     config.shared_memory(true);
+    config.wasm_threads(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
