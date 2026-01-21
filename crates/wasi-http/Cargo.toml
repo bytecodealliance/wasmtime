@@ -43,10 +43,11 @@ rustls = { workspace = true, optional = true }
 webpki-roots = { workspace = true, optional = true }
 
 [dev-dependencies]
+wasmtime-wasi-http = { path = ".", features = ['default-send-request'] }
 test-programs-artifacts = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift'] }
+wasmtime = { workspace = true, features = ['cranelift', 'anyhow'] }
 tokio = { workspace = true, features = ['fs', 'macros'] }
 futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 sha2 = "0.10.2"
