@@ -36,7 +36,7 @@ use wasmtime_environ::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Instance {
-    id: StoreInstanceId,
+    pub(crate) id: StoreInstanceId,
 }
 
 // Double-check that the C representation in `instance.h` matches our in-Rust
