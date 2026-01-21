@@ -394,7 +394,7 @@ impl Instance {
         self._module(store.into().0)
     }
 
-    fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
+    pub(crate) fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
         store.module_for_instance(self.id).unwrap()
     }
 

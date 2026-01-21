@@ -249,6 +249,12 @@ impl<'instance> Export<'instance> {
         self.definition.into_memory()
     }
 
+    /// Consume this `Export` and return the contained `SharedMemory`, if it's
+    /// a shared memory, or `None` otherwise.
+    pub fn into_shared_memory(self) -> Option<SharedMemory> {
+        self.definition.into_shared_memory()
+    }
+
     /// Consume this `Export` and return the contained `Global`, if it's a global,
     /// or `None` otherwise.
     pub fn into_global(self) -> Option<Global> {
