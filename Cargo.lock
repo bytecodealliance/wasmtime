@@ -4771,6 +4771,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "backtrace",
+ "cranelift-bitset",
  "env_logger 0.11.5",
  "futures",
  "indexmap 2.11.4",
