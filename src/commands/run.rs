@@ -618,13 +618,15 @@ impl RunCommand {
             .expect("found export index");
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
-        self.call_func(store, &params, func, &mut results).await?;
+        self.call_component_func(store, &params, func, &mut results)
+            .await?;
 
         println!("{}", DisplayFuncResults(&results));
         Ok(instance)
     }
 
-    async fn call_func(
+    #[cfg(feature = "component-model")]
+    async fn call_component_func(
         &self,
         store: &mut Store<Host>,
         params: &[wasmtime::component::Val],
