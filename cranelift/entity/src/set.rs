@@ -170,7 +170,7 @@ where
         self.bitset.remove(index)
     }
 
-    /// Removes and returns the entity from the set if it exists.
+    /// Removes and returns the highest-index entity from the set if it exists.
     pub fn pop(&mut self) -> Option<K> {
         let index = self.bitset.pop()?;
         Some(K::new(index))
