@@ -2,7 +2,7 @@
 
 use crate::Result;
 use crate::{
-    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, ExternRef, Func, Instance, Module,
+    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
@@ -16,9 +16,9 @@ use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
-    DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType, FuncIndex, FuncKey,
-    GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap,
+    DefinedFuncIndex, EntityIndex, FrameInstPos, FrameStackShape, FrameStateSlot,
+    FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
+    FuncIndex, FuncKey, GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap,
 };
 use wasmtime_unwinder::Frame;
 
@@ -86,22 +86,11 @@ impl Instance {
         mut store: impl AsContextMut,
         global_index: u32,
     ) -> Option<crate::Global> {
-        let store = store.as_context_mut().0;
-        if !store.engine().tunables().debug_guest {
-            return None;
-        }
-
-        let instance = &store[self.id];
-        let env_module = self.module(&store).env_module();
-        // N.B.: `from_bits` here rather than `from_u32` so we don't
-        // panic on `u32::MAX`. A `u32::MAX` will become an invalid
-        // entity index which will properly return `None` below.
-        let global = GlobalIndex::from_bits(global_index);
-        if env_module.globals.is_valid(global) {
-            Some(instance.get_exported_global(store.id(), global))
-        } else {
-            None
-        }
+        self.debug_export(
+            store.as_context_mut().0,
+            GlobalIndex::from_bits(global_index).into(),
+        )
+        .and_then(|s| s.into_global())
     }
 
     /// Get access to a memory (unshared only) within this instance's
@@ -126,23 +115,11 @@ impl Instance {
         mut store: impl AsContextMut,
         memory_index: u32,
     ) -> Option<crate::Memory> {
-        let store = store.as_context_mut().0;
-        if !store.engine().tunables().debug_guest {
-            return None;
-        }
-
-        let instance = &store[self.id];
-        let env_module = self.module(&store).env_module();
-        let memory = MemoryIndex::from_bits(memory_index);
-        if env_module.memories.is_valid(memory) {
-            Some(
-                instance
-                    .get_exported_memory(store.id(), memory)
-                    .unshared()?,
-            )
-        } else {
-            None
-        }
+        self.debug_export(
+            store.as_context_mut().0,
+            MemoryIndex::from_bits(memory_index).into(),
+        )
+        .and_then(|s| s.into_memory())
     }
 
     /// Get access to a shared memory within this instance's memory
@@ -167,22 +144,11 @@ impl Instance {
         mut store: impl AsContextMut,
         memory_index: u32,
     ) -> Option<crate::SharedMemory> {
-        let store = store.as_context_mut().0;
-        if !store.engine().tunables().debug_guest {
-            return None;
-        }
-
-        let instance = &store[self.id];
-        let env_module = self.module(&store).env_module();
-        let memory = MemoryIndex::from_bits(memory_index);
-        if env_module.memories.is_valid(memory) {
-            Some(crate::SharedMemory::from_raw(
-                instance.get_exported_memory(store.id(), memory).shared()?,
-                store.engine().clone(),
-            ))
-        } else {
-            None
-        }
+        self.debug_export(
+            store.as_context_mut().0,
+            MemoryIndex::from_bits(memory_index).into(),
+        )
+        .and_then(|s| s.into_shared_memory())
     }
 
     /// Get access to a table within this instance's table index
@@ -204,19 +170,11 @@ impl Instance {
         mut store: impl AsContextMut,
         table_index: u32,
     ) -> Option<crate::Table> {
-        let store = store.as_context_mut().0;
-        if !store.engine().tunables().debug_guest {
-            return None;
-        }
-
-        let instance = &store[self.id];
-        let env_module = self.module(&store).env_module();
-        let table = TableIndex::from_bits(table_index);
-        if env_module.tables.is_valid(table) {
-            Some(instance.get_exported_table(store.id(), table))
-        } else {
-            None
-        }
+        self.debug_export(
+            store.as_context_mut().0,
+            TableIndex::from_bits(table_index).into(),
+        )
+        .and_then(|s| s.into_table())
     }
 
     /// Get access to a function within this instance's function index
@@ -239,23 +197,11 @@ impl Instance {
         mut store: impl AsContextMut,
         function_index: u32,
     ) -> Option<crate::Func> {
-        let store = store.as_context_mut().0;
-        if !store.engine().tunables().debug_guest {
-            return None;
-        }
-
-        let env_module = self.module(&store).env_module();
-        let func = FuncIndex::from_bits(function_index);
-        if env_module.functions.is_valid(func) {
-            let store_id = store.id();
-            let (instance, registry) = store.instance_and_module_registry_mut(self.id());
-            // SAFETY: the `store` and `registry` are associated with
-            // this instance as we fetched teh instance directly from
-            // the store above.
-            unsafe { Some(instance.get_exported_func(registry, store_id, func)) }
-        } else {
-            None
-        }
+        self.debug_export(
+            store.as_context_mut().0,
+            FuncIndex::from_bits(function_index).into(),
+        )
+        .and_then(|s| s.into_func())
     }
 
     /// Get access to a tag within this instance's tag index space.
@@ -272,19 +218,29 @@ impl Instance {
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
     pub fn debug_tag(&self, mut store: impl AsContextMut, tag_index: u32) -> Option<crate::Tag> {
-        let store = store.as_context_mut().0;
+        self.debug_export(
+            store.as_context_mut().0,
+            TagIndex::from_bits(tag_index).into(),
+        )
+        .and_then(|s| s.into_tag())
+    }
+
+    fn debug_export(&self, store: &mut StoreOpaque, index: EntityIndex) -> Option<Extern> {
         if !store.engine().tunables().debug_guest {
             return None;
         }
 
-        let instance = &store[self.id];
-        let env_module = self.module(&store).env_module();
-        let tag = TagIndex::from_bits(tag_index);
-        if env_module.tags.is_valid(tag) {
-            Some(instance.get_exported_tag(store.id(), tag))
-        } else {
-            None
+        let env_module = self._module(store).env_module();
+        if !env_module.is_valid(index) {
+            return None;
         }
+        let store_id = store.id();
+        let (instance, registry) = store.instance_and_module_registry_mut(self.id());
+        // SAFETY: the `store` and `registry` are associated with
+        // this instance as we fetched the instance directly from
+        // the store above.
+        let export = unsafe { instance.get_export_by_index_mut(registry, store_id, index) };
+        Some(Extern::from_wasmtime_export(export, store))
     }
 }
 

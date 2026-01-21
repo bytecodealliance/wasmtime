@@ -648,6 +648,17 @@ impl Module {
     pub fn num_defined_tags(&self) -> usize {
         self.tags.len() - self.num_imported_tags
     }
+
+    /// Tests whether `index` is valid for this module.
+    pub fn is_valid(&self, index: EntityIndex) -> bool {
+        match index {
+            EntityIndex::Function(i) => self.functions.is_valid(i),
+            EntityIndex::Table(i) => self.tables.is_valid(i),
+            EntityIndex::Memory(i) => self.memories.is_valid(i),
+            EntityIndex::Global(i) => self.globals.is_valid(i),
+            EntityIndex::Tag(i) => self.tags.is_valid(i),
+        }
+    }
 }
 
 impl TypeTrace for Module {
