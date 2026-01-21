@@ -635,6 +635,11 @@ jobs:
       env:
         RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
 
+    # Run OOM tests with `Arc::try_new` usage enabled.
+    - run: cargo test -p wasmtime-fuzzing --test oom
+      env:
+        RUSTFLAGS: "--cfg arc_try_new"
+
     # Ensure that fuzzers still build.
     #
     # Install the OCaml packages necessary for fuzz targets that use the

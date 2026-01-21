@@ -70,6 +70,7 @@ v8 = "139.0.0"
 [dev-dependencies]
 wat = { workspace = true }
 rand = { version = "0.8.0", features = ["small_rng"] }
+wasmtime-environ = { workspace = true }
 
 # Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
 # commands like `cargo test --workspace` or similar to not need an ocaml

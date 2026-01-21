@@ -3,8 +3,8 @@ use std::{
     fmt::{self, Write},
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
-use wasmtime::Config;
-use wasmtime_error::{Error, OutOfMemory, Result, format_err};
+use wasmtime::{Config, Error, Result, error::OutOfMemory, format_err};
+use wasmtime_environ::collections::*;
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -29,6 +29,25 @@ fn smoke_test_missed_oom() -> Result<()> {
         "should have missed an OOM, got: {err}"
     );
     Ok(())
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn try_new_arc() -> Result<()> {
+    use std::sync::Arc;
+
+    OomTest::new().test(|| {
+        let _arc = try_new::<Arc<u32>>(42)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn try_new_box() -> Result<()> {
+    OomTest::new().test(|| {
+        let _box = try_new::<Box<u32>>(36)?;
+        Ok(())
+    })
 }
 
 #[test]
