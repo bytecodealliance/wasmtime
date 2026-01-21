@@ -1569,6 +1569,11 @@ when = "2025-11-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-internal-debugger]]
+version = "41.0.0"
+when = "2026-01-20"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
 [[publisher.wasmtime-internal-explorer]]
 version = "39.0.1"
 when = "2025-11-24"
