@@ -133,6 +133,7 @@ harness = false
 [features]
 default = [
   'async',
+  'backtrace',
   'cache',
   'gc',
   'gc-drc',
@@ -158,6 +159,9 @@ default = [
 
 # Enables conversion helpers between `anyhow::Error` and `wasmtime::Error`.
 anyhow = ["wasmtime-environ/anyhow"]
+
+# Enables backtrace capturing in `wasmtime::Error`.
+backtrace = ["std", "wasmtime-environ/backtrace"]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of

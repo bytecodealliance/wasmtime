@@ -57,6 +57,7 @@ required-features = ['component-model', 'compile']
 
 [features]
 anyhow = ["wasmtime-error/anyhow"]
+backtrace = ["std", "wasmtime-error/backtrace"]
 component-model = [
   "dep:wasmtime-component-util",
   "dep:semver",
@@ -81,4 +82,5 @@ std = [
   'object/std',
   'wasmparser/std',
   'indexmap/std',
+  'wasmtime-error/std',
 ]
