@@ -812,6 +812,7 @@ dependencies = [
  "cranelift-bitset",
  "serde",
  "serde_derive",
+ "wasmtime-internal-error",
 ]
 
 [[package]]
