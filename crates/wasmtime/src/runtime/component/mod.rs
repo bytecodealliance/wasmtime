@@ -767,8 +767,9 @@ pub(crate) mod concurrent_disabled;
 pub(crate) use concurrent_disabled as concurrent;
 
 impl crate::runtime::store::StoreOpaque {
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn cm_concurrency_enabled(&self) -> bool {
-        let enabled = cfg!(feature = "component-model-async") && self.concurrent_state().is_some();
+        let enabled = self.concurrent_state().is_some();
         debug_assert_eq!(enabled, self.engine().config().cm_concurrency_enabled());
         enabled
     }

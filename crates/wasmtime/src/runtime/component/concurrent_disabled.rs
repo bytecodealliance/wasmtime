@@ -1,7 +1,6 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
-use crate::store::StoreOpaque;
+use crate::component::{ComponentType, Lift, Lower, Val};
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;

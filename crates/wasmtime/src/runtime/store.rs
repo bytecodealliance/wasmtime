@@ -2584,7 +2584,7 @@ at https://bytecodealliance.org/security.
         &mut self.async_state
     }
 
-    #[cfg(feature = "component-model")]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state(&self) -> Option<&concurrent::ConcurrentState> {
         self.concurrent_state.as_ref()
     }
