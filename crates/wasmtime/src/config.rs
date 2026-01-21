@@ -2540,25 +2540,26 @@ impl Config {
 
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
-                let mut _allocator = Box::new(OnDemandInstanceAllocator::new(
+                let mut _allocator = try_new::<Box<_>>(OnDemandInstanceAllocator::new(
                     self.mem_creator.clone(),
                     stack_size,
                     stack_zeroing,
-                ));
+                ))?;
                 #[cfg(feature = "async")]
                 if let Some(stack_creator) = &self.stack_creator {
                     _allocator.set_stack_creator(stack_creator.clone());
                 }
-                Ok(_allocator)
+                Ok(_allocator as _)
             }
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
                 let mut config = config.config;
                 config.stack_size = stack_size;
                 config.async_stack_zeroing = stack_zeroing;
-                Ok(Box::new(crate::runtime::vm::PoolingInstanceAllocator::new(
-                    &config, tunables,
-                )?))
+                let allocator = try_new::<Box<_>>(
+                    crate::runtime::vm::PoolingInstanceAllocator::new(&config, tunables)?,
+                )?;
+                Ok(allocator as _)
             }
         }
     }
@@ -2581,14 +2582,14 @@ impl Config {
             Ok(Some(match self.collector.try_not_auto()? {
                 #[cfg(feature = "gc-drc")]
                 Collector::DeferredReferenceCounting => {
-                    Arc::new(crate::runtime::vm::DrcCollector::default()) as Arc<dyn GcRuntime>
+                    try_new::<Arc<_>>(crate::runtime::vm::DrcCollector::default())? as _
                 }
                 #[cfg(not(feature = "gc-drc"))]
                 Collector::DeferredReferenceCounting => unreachable!(),
 
                 #[cfg(feature = "gc-null")]
                 Collector::Null => {
-                    Arc::new(crate::runtime::vm::NullCollector::default()) as Arc<dyn GcRuntime>
+                    try_new::<Arc<_>>(crate::runtime::vm::NullCollector::default())? as _
                 }
                 #[cfg(not(feature = "gc-null"))]
                 Collector::Null => unreachable!(),

@@ -3,7 +3,7 @@ use std::{
     fmt::{self, Write},
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
-use wasmtime::{Config, Error, Result, error::OutOfMemory, format_err};
+use wasmtime::{error::OutOfMemory, *};
 use wasmtime_environ::collections::*;
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
@@ -55,6 +55,17 @@ fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
         config.enable_compiler(false);
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn engine_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let _ = Engine::new(&config)?;
         Ok(())
     })
 }
