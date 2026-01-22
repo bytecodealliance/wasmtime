@@ -2,7 +2,7 @@
 
 use crate::scalar::{self, ScalarBitSet, ScalarBitSetStorage};
 use alloc::boxed::Box;
-use core::{alloc::Layout, cmp, iter, mem};
+use core::{cmp, iter, mem};
 use wasmtime_error::OutOfMemory;
 
 /// A large bit set backed by dynamically-sized storage.
@@ -295,39 +295,20 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
         let to_grow = cmp::max(to_grow, 4);
 
         let new_len = self.elems.len() + to_grow;
-        let layout = Layout::array::<ScalarBitSet<T>>(new_len).unwrap();
-
-        // Safety: we just ensured that the new length is non-zero.
-        debug_assert_ne!(layout.size(), 0);
-        let ptr = unsafe { alloc::alloc::alloc(layout) };
-        if ptr.is_null() {
-            return Err(OutOfMemory::new(layout.size()));
-        }
-
-        let ptr = ptr.cast::<ScalarBitSet<T>>();
-
-        for (i, bitset) in self
-            .elems
-            .iter()
-            .copied()
-            .chain(iter::repeat(ScalarBitSet::new()).take(to_grow))
-            .enumerate()
-        {
-            // Safety: the pointer points to a block that is valid for an array
-            // of length `new_len` and indexing by `i` is within that block.
-            debug_assert!(i < new_len);
-            unsafe {
-                ptr.add(i).write(bitset);
+        match wasmtime_core::alloc::new_boxed_slice_from_iter(
+            new_len,
+            self.elems
+                .iter()
+                .copied()
+                .chain(iter::repeat(ScalarBitSet::new())),
+        ) {
+            Ok(new_elems) => {
+                self.elems = new_elems;
+                Ok(())
             }
+            Err(wasmtime_core::alloc::BoxedSliceFromIterError::Oom(oom)) => Err(oom),
+            Err(wasmtime_core::alloc::BoxedSliceFromIterError::TooFewItems) => unreachable!(),
         }
-
-        // Safety: `ptr` points to a memory block that is valid for an array of
-        // `ScalarBitSet`s, was allocated by the global allocator, and was fully
-        // initialized by the previous loop.
-        let new_elems = unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(ptr, new_len)) };
-
-        self.elems = new_elems;
-        Ok(())
     }
 
     /// Insert `i` into this bitset.
