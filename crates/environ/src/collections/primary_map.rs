@@ -1,3 +1,4 @@
+use core::ops::{Index, IndexMut};
 use cranelift_entity::EntityRef;
 use wasmtime_error::OutOfMemory;
 
@@ -165,5 +166,25 @@ where
     /// this is only here to help borrow two elements simultaneously with miri.
     pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
         self.inner.get_raw_mut(k)
+    }
+}
+
+impl<K, V> Index<K> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Output = V;
+
+    fn index(&self, k: K) -> &V {
+        &self.inner[k]
+    }
+}
+
+impl<K, V> IndexMut<K> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn index_mut(&mut self, k: K) -> &mut V {
+        &mut self.inner[k]
     }
 }
