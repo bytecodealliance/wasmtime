@@ -271,6 +271,8 @@ where
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
     ///
+    /// Panics if component-model-async is not enabled in this store's config.
+    ///
     /// # Example
     ///
     /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
@@ -313,7 +315,10 @@ where
     {
         let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
-            assert!(store.0.cm_concurrency_enabled());
+            assert!(
+                store.0.cm_concurrency_enabled(),
+                "cannot use `call_concurrent` when component-model-async is not enabled on the config"
+            );
 
             let prepared =
                 self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {

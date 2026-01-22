@@ -1116,6 +1116,10 @@ pub struct FutureReader<T> {
 
 impl<T> FutureReader<T> {
     /// Create a new future with the specified producer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if component-model-async is not enabled in this store's config.
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl FutureProducer<S::Data, Item = T>,
@@ -1123,7 +1127,10 @@ impl<T> FutureReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        assert!(store.as_context().0.cm_concurrency_enabled());
+        assert!(
+            store.as_context().0.cm_concurrency_enabled(),
+            "cannot use `FutureReader::new` when component-model-async is not enabled on the config"
+        );
 
         struct Producer<P>(P);
 
@@ -1451,11 +1458,16 @@ where
     A: AsAccessor,
 {
     /// Create a new `GuardedFutureReader` with the specified `accessor` and `reader`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if component-model-async is not enabled in this store's config.
     pub fn new(accessor: A, reader: FutureReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
-                .with(|a| a.as_context().0.cm_concurrency_enabled())
+                .with(|a| a.as_context().0.cm_concurrency_enabled()),
+            "cannot use `GuardedFutureReader` when component-model-async is not enabled on the config"
         );
         Self {
             reader: Some(reader),
@@ -1503,6 +1515,10 @@ pub struct StreamReader<T> {
 
 impl<T> StreamReader<T> {
     /// Create a new stream with the specified producer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if component-model-async is not enabled in this store's config.
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl StreamProducer<S::Data, Item = T>,
@@ -1510,7 +1526,10 @@ impl<T> StreamReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        assert!(store.as_context().0.cm_concurrency_enabled());
+        assert!(
+            store.as_context().0.cm_concurrency_enabled(),
+            "cannot use `StreamReader` when component-model-async is not enabled on the config"
+        );
         Self::new_(
             store
                 .as_context_mut()
@@ -1785,11 +1804,16 @@ where
 {
     /// Create a new `GuardedStreamReader` with the specified `accessor` and
     /// `reader`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if component-model-async is not enabled in this store's config.
     pub fn new(accessor: A, reader: StreamReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
-                .with(|a| a.as_context().0.cm_concurrency_enabled())
+                .with(|a| a.as_context().0.cm_concurrency_enabled()),
+            "cannot use `GuardedStreamReader` when component-model-async is not enabled on the config"
         );
         Self {
             reader: Some(reader),
