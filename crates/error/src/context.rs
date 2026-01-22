@@ -140,7 +140,7 @@ where
     {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => out_of_line_slow_path!(Err(Error::new(e).context(context))),
+            Err(e) => Err(Error::new(e).context(context)),
         }
     }
 
@@ -152,7 +152,7 @@ where
     {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => out_of_line_slow_path!(Err(Error::new(e).context(f()))),
+            Err(e) => Err(Error::new(e).context(f())),
         }
     }
 }
@@ -164,7 +164,7 @@ impl<T> Context<T, Error> for Result<T> {
     {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => out_of_line_slow_path!(Err(e.context(context))),
+            Err(e) => Err(e.context(context)),
         }
     }
 
@@ -175,7 +175,7 @@ impl<T> Context<T, Error> for Result<T> {
     {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => out_of_line_slow_path!(Err(e.context(f()))),
+            Err(e) => Err(e.context(f())),
         }
     }
 }
@@ -187,10 +187,10 @@ impl<T> Context<T, core::convert::Infallible> for Option<T> {
     {
         match self {
             Some(x) => Ok(x),
-            None => out_of_line_slow_path!(Err(Error::from_error_ext(ContextError {
+            None => Err(Error::from_error_ext(ContextError {
                 context,
-                error: None
-            }))),
+                error: None,
+            })),
         }
     }
 
@@ -201,10 +201,10 @@ impl<T> Context<T, core::convert::Infallible> for Option<T> {
     {
         match self {
             Some(x) => Ok(x),
-            None => out_of_line_slow_path!(Err(Error::from_error_ext(ContextError {
+            None => Err(Error::from_error_ext(ContextError {
                 context: f(),
-                error: None
-            }))),
+                error: None,
+            })),
         }
     }
 }

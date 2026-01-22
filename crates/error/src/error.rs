@@ -757,7 +757,7 @@ impl Error {
             Ok(boxed) => Error {
                 inner: boxed.into(),
             },
-            Err(oom) => out_of_line_slow_path!(Error { inner: oom.into() }),
+            Err(oom) => Error { inner: oom.into() },
         }
     }
 
