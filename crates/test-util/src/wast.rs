@@ -185,9 +185,13 @@ fn component_test_config(test: &Path) -> TestConfig {
 
     if let Some(parent) = test.parent() {
         if parent.ends_with("async")
-            || ["trap-in-post-return.wast"]
-                .into_iter()
-                .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
+            || [
+                "trap-in-post-return.wast",
+                "resources.wast",
+                "multiple-resources.wast",
+            ]
+            .into_iter()
+            .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
         {
             ret.component_model_async = Some(true);
             ret.component_model_async_stackful = Some(true);
