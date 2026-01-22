@@ -4,6 +4,7 @@ mod arc;
 mod boxed;
 mod try_new;
 
+pub use boxed::{BoxedSliceFromIterError, new_boxed_slice_from_iter};
 pub use try_new::{TryNew, try_new};
 
 use core::{alloc::Layout, ptr::NonNull};
