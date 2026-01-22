@@ -180,7 +180,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
         }
         (true, true) => {
-            assert!(module.enable_async);
+            assert!(module.tunables.component_model_concurrency);
 
             // In the async->async case, we must compile a couple of helper functions:
             //
@@ -209,7 +209,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (false, true) => {
-            assert!(module.enable_async);
+            assert!(module.tunables.component_model_concurrency);
 
             // Like the async->async case above, for the sync->async case we
             // also need `async-start` and `async-return` helper functions to
@@ -235,7 +235,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (true, false) => {
-            assert!(module.enable_async);
+            assert!(module.tunables.component_model_concurrency);
 
             // As with the async->async and sync->async cases above, for the
             // async->sync case we use `async-start` and `async-return` helper
@@ -759,7 +759,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Trap::CannotLeaveComponent,
         );
 
-        let old_task_may_block = if self.module.enable_async {
+        let old_task_may_block = if self.module.tunables.component_model_concurrency {
             // Save, clear, and later restore the `may_block` field.
             let task_may_block = self.module.import_task_may_block();
             let old_task_may_block = if self.types[adapter.lift.ty].async_ {
@@ -871,7 +871,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(exit.as_u32()));
         }
 
-        if self.module.enable_async {
+        if self.module.tunables.component_model_concurrency {
             // Pop the task we pushed earlier off of the current task stack.
             //
             // FIXME: Apply the optimizations described in #12311.
@@ -1993,7 +1993,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // In debug mode verify the first result consumed the entire string,
         // otherwise simply discard it.
-        if self.module.debug {
+        if self.module.tunables.debug_adapter_modules {
             self.instruction(LocalGet(src.len.idx));
             self.instruction(LocalGet(src_len_tmp.idx));
             self.ptr_sub(src_mem_opts);
@@ -2020,7 +2020,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // If the first transcode was enough then assert that the returned
         // amount of destination items written equals the byte size.
-        if self.module.debug {
+        if self.module.tunables.debug_adapter_modules {
             self.instruction(Else);
 
             self.instruction(LocalGet(dst.len.idx));
@@ -2191,7 +2191,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // Assert that the untagged code unit length is the same as the
         // source code unit length.
-        if self.module.debug {
+        if self.module.tunables.debug_adapter_modules {
             self.instruction(LocalGet(dst.len.idx));
             self.ptr_uconst(dst_mem_opts, !UTF16_TAG);
             self.ptr_and(dst_mem_opts);
@@ -3464,7 +3464,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     fn assert_aligned(&mut self, ty: &InterfaceType, mem: &Memory) {
         let mem_opts = mem.mem_opts();
-        if !self.module.debug {
+        if !self.module.tunables.debug_adapter_modules {
             return;
         }
         let align = self.types.align(mem_opts, ty);
@@ -3654,7 +3654,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn assert_i64_upper_bits_not_set(&mut self, local: u32) {
-        if !self.module.debug {
+        if !self.module.tunables.debug_adapter_modules {
             return;
         }
         self.instruction(LocalGet(local));

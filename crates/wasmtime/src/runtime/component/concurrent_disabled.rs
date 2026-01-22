@@ -1,6 +1,7 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, Lift, Lower, Val};
+use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
+use crate::store::StoreOpaque;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -147,5 +148,24 @@ unsafe impl Lower for StreamAny {
         _offset: usize,
     ) -> Result<()> {
         match self.0 {}
+    }
+}
+
+impl StoreOpaque {
+    pub(crate) fn enter_sync_call(
+        &mut self,
+        _guest_caller: Option<RuntimeInstance>,
+        _callee_async: bool,
+        _callee: RuntimeInstance,
+    ) -> Result<()> {
+        // If we've reached here, the user somehow managed to enable the
+        // `component-model-async` runtime config feature without enabling the
+        // corresponding compile-time feature.
+        unreachable!()
+    }
+
+    pub(crate) fn exit_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
+        // See comment in `enter_sync_call`
+        unreachable!()
     }
 }

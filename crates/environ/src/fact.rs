@@ -24,7 +24,7 @@ use crate::component::{
     RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
-use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
+use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, Tunables};
 use crate::{ModuleInternedTypeIndex, prelude::*};
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -52,10 +52,8 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
 
 /// Representation of an adapter module.
 pub struct Module<'a> {
-    /// Whether or not debug code is inserted into the adapters themselves.
-    debug: bool,
-    /// Whether the `component-model-async` feature is enabled
-    enable_async: bool,
+    /// Compilation configuration
+    tunables: &'a Tunables,
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
@@ -246,10 +244,9 @@ enum HelperLocation {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypesBuilder, debug: bool, enable_async: bool) -> Module<'a> {
+    pub fn new(types: &'a ComponentTypesBuilder, tunables: &'a Tunables) -> Module<'a> {
         Module {
-            debug,
-            enable_async,
+            tunables,
             types,
             core_types: Default::default(),
             core_imports: Default::default(),

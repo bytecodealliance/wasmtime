@@ -125,7 +125,7 @@ pub struct Config {
     #[cfg(feature = "gc")]
     collector: Collector,
     profiling_strategy: ProfilingStrategy,
-    pub(crate) tunables: ConfigTunables,
+    tunables: ConfigTunables,
 
     #[cfg(feature = "cache")]
     pub(crate) cache: Option<Cache>,
@@ -290,20 +290,6 @@ impl Config {
             "cannot configure compiler settings for `Config`s \
              created by `Config::without_compiler`",
         )
-    }
-
-    pub(crate) fn enable_component_model_concurrency(&self) -> bool {
-        self.enabled_features.contains(WasmFeatures::CM_ASYNC)
-            || self
-                .enabled_features
-                .contains(WasmFeatures::CM_ASYNC_BUILTINS)
-            || self
-                .enabled_features
-                .contains(WasmFeatures::CM_ASYNC_STACKFUL)
-            || self.enabled_features.contains(WasmFeatures::CM_THREADING)
-            || self
-                .enabled_features
-                .contains(WasmFeatures::CM_ERROR_CONTEXT)
     }
 
     /// Configure whether Wasm compilation is enabled.
@@ -2444,7 +2430,10 @@ impl Config {
             );
         }
 
-        tunables.component_model_concurrency = self.enable_component_model_concurrency();
+        #[cfg(feature = "component-model")]
+        {
+            tunables.component_model_concurrency = self.cm_concurrency_enabled();
+        }
 
         Ok((tunables, features))
     }
@@ -2938,17 +2927,13 @@ impl Config {
     #[inline]
     pub(crate) fn cm_concurrency_enabled(&self) -> bool {
         cfg!(feature = "component-model-async")
-            && (self.enabled_features.contains(WasmFeatures::CM_ASYNC)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ASYNC_BUILTINS)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ASYNC_STACKFUL)
-                || self.enabled_features.contains(WasmFeatures::CM_THREADING)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ERROR_CONTEXT))
+            && self.enabled_features.intersects(
+                WasmFeatures::CM_ASYNC
+                    | WasmFeatures::CM_ASYNC_BUILTINS
+                    | WasmFeatures::CM_ASYNC_STACKFUL
+                    | WasmFeatures::CM_THREADING
+                    | WasmFeatures::CM_ERROR_CONTEXT,
+            )
     }
 }
 

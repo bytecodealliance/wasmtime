@@ -208,11 +208,7 @@ impl<'data> Translator<'_, 'data> {
         // the module using standard core wasm translation, and then fills out
         // the dfg metadata for each adapter.
         for (module_id, adapter_module) in state.adapter_modules.iter() {
-            let mut module = fact::Module::new(
-                self.types.types(),
-                self.tunables.debug_adapter_modules,
-                self.tunables.component_model_concurrency,
-            );
+            let mut module = fact::Module::new(self.types.types(), self.tunables);
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());

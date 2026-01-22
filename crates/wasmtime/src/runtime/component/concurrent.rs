@@ -1870,6 +1870,17 @@ impl StoreOpaque {
 }
 
 impl Instance {
+    fn check_may_leave(
+        self,
+        store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
+    ) -> Result<()> {
+        store.check_may_leave(RuntimeInstance {
+            instance: self.id().instance(),
+            index: caller,
+        })
+    }
+
     /// Get the next pending event for the specified task and (optional)
     /// waitable set, along with the waitable handle if applicable.
     fn get_event(
@@ -2380,10 +2391,7 @@ impl Instance {
         string_encoding: u8,
         caller_info: CallerInfo,
     ) -> Result<()> {
-        store.0.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store.0, caller_instance)?;
 
         if let (CallerInfo::Sync { .. }, true) = (&caller_info, callee_async) {
             // A task may only call an async-typed function via a sync lower if
@@ -2929,10 +2937,7 @@ impl Instance {
         options: OptionsIndex,
         storage: &[ValRaw],
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         let state = store.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
@@ -2990,10 +2995,7 @@ impl Instance {
         store: &mut StoreOpaque,
         caller: RuntimeComponentInstanceIndex,
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         let state = store.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
@@ -3080,10 +3082,7 @@ impl Instance {
         store: &mut StoreOpaque,
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store, caller_instance)?;
 
         let set = store.concurrent_state_mut().push(WaitableSet::default())?;
         let handle = store
@@ -3103,10 +3102,7 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         set: u32,
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store, caller_instance)?;
 
         let rep = store
             .handle_table(RuntimeInstance {
@@ -3136,10 +3132,7 @@ impl Instance {
         waitable_handle: u32,
         set_handle: u32,
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store, caller_instance)?;
 
         let mut instance = self.id().get_mut(store);
         let waitable =
@@ -3169,10 +3162,7 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         task_id: u32,
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store, caller_instance)?;
 
         self.waitable_join(store, caller_instance, task_id, 0)?;
 
@@ -3241,10 +3231,7 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         if !self.options(store, options).async_ {
             // The caller may only call `waitable-set.wait` from an async task
@@ -3286,10 +3273,7 @@ impl Instance {
         set: u32,
         payload: u32,
     ) -> Result<u32> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         let &CanonicalOptions {
             cancellable,
@@ -3336,10 +3320,7 @@ impl Instance {
         start_func_idx: u32,
         context: i32,
     ) -> Result<u32> {
-        store.0.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: runtime_instance,
-        })?;
+        self.check_may_leave(store.0, runtime_instance)?;
 
         log::trace!("creating new thread");
 
@@ -3475,10 +3456,7 @@ impl Instance {
         yielding: bool,
         to_thread: Option<u32>,
     ) -> Result<WaitResult> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         if to_thread.is_none() {
             let state = store.concurrent_state_mut();
@@ -3629,10 +3607,7 @@ impl Instance {
         async_: bool,
         task_id: u32,
     ) -> Result<u32> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller_instance,
-        })?;
+        self.check_may_leave(store, caller_instance)?;
 
         if !async_ {
             // The caller may only sync call `subtask.cancel` from an async task
@@ -3788,10 +3763,7 @@ impl Instance {
         caller: RuntimeComponentInstanceIndex,
         slot: u32,
     ) -> Result<u32> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         store.concurrent_state_mut().context_get(slot)
     }
@@ -3803,10 +3775,7 @@ impl Instance {
         slot: u32,
         value: u32,
     ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })?;
+        self.check_may_leave(store, caller)?;
 
         store.concurrent_state_mut().context_set(slot, value)
     }
@@ -4095,10 +4064,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_write(
@@ -4123,10 +4089,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_read(
@@ -4152,10 +4115,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_write(
@@ -4181,10 +4141,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_read(
@@ -4207,10 +4164,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         ty: TypeFutureTableIndex,
         writer: u32,
     ) -> Result<()> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance.guest_drop_writable(self, TransmitIndex::Future(ty), writer)
     }
@@ -4227,10 +4181,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_write(
@@ -4261,10 +4212,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance
             .guest_read(
@@ -4290,10 +4238,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         ty: TypeStreamTableIndex,
         writer: u32,
     ) -> Result<()> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance.guest_drop_writable(self, TransmitIndex::Stream(ty), writer)
     }
@@ -4307,10 +4252,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         err_ctx_handle: u32,
         debug_msg_address: u32,
     ) -> Result<()> {
-        self.check_may_leave(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: caller,
-        })?;
+        instance.check_may_leave(self, caller)?;
 
         instance.error_context_debug_message(
             StoreContextMut(self),

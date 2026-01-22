@@ -1,4 +1,3 @@
-#[cfg(feature = "component-model-async")]
 use crate::component::RuntimeInstance;
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
@@ -840,7 +839,6 @@ impl<'a> Instantiator<'a> {
         for initializer in env_component.initializers.iter() {
             match initializer {
                 GlobalInitializer::InstantiateModule(m, component_instance) => {
-                    #[cfg(feature = "component-model-async")]
                     let instance = self.id;
                     let module;
                     let imports = match m {
@@ -871,10 +869,9 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    #[cfg(feature = "component-model-async")]
                     let exit = if let (&Some(component_instance), true) = (
                         component_instance,
-                        store.engine().config().enable_component_model_concurrency(),
+                        store.engine().config().cm_concurrency_enabled(),
                     ) {
                         store.0.enter_sync_call(
                             None,
@@ -888,11 +885,6 @@ impl<'a> Instantiator<'a> {
                     } else {
                         false
                     };
-
-                    #[cfg(not(feature = "component-model-async"))]
-                    {
-                        _ = component_instance;
-                    }
 
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
@@ -908,7 +900,6 @@ impl<'a> Instantiator<'a> {
                             .await?
                     };
 
-                    #[cfg(feature = "component-model-async")]
                     if exit {
                         store.0.exit_sync_call(false)?;
                     }

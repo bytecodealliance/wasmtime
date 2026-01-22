@@ -610,14 +610,12 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        #[cfg(feature = "component-model-async")]
-        let exit = if store.engine().config().enable_component_model_concurrency() {
+        let concurrency_enabled = store.engine().config().cm_concurrency_enabled();
+
+        if concurrency_enabled {
             let async_type = self.abi_async(store.0);
             store.0.enter_sync_call(None, async_type, instance)?;
-            true
-        } else {
-            false
-        };
+        }
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
@@ -698,8 +696,12 @@ impl Func {
             },
         );
 
-        #[cfg(feature = "component-model-async")]
-        if exit {
+        if concurrency_enabled {
+            // Note that we need not wait until after the post-return function
+            // is called to do this, because a post-return function is not
+            // allowed to leave the instance (i.e. call an import or intrinsic),
+            // so there's no need for a thread or task to be on the stack when
+            // it runs.
             store.0.exit_sync_call(false)?;
         }
 
