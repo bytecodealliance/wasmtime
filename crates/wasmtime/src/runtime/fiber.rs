@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
+use crate::store::{AsStoreOpaque, Asyncness, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
 use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
@@ -381,8 +381,13 @@ impl StoreOpaque {
     /// previous state" to "async is now required". There's no reasonable way to
     /// iterate through a store and recompute this if epoch settings, for
     /// example, are dynamically changed.
-    pub(crate) fn set_async_required(&mut self) {
-        self.fiber_async_state_mut().async_required = true;
+    pub(crate) fn set_async_required(&mut self, asyncness: Asyncness) {
+        match asyncness {
+            Asyncness::Yes => {
+                self.fiber_async_state_mut().async_required = true;
+            }
+            Asyncness::No => {}
+        }
     }
 }
 

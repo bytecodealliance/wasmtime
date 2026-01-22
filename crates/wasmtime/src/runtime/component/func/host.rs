@@ -16,6 +16,7 @@ use crate::runtime::vm::component::{
     ComponentInstance, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use crate::runtime::vm::{VMOpaqueContext, VMStore};
+use crate::store::Asyncness;
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -53,7 +54,7 @@ pub struct HostFunc {
 
     /// Whether or not this host function was defined in such a way that async
     /// stack switching is required when calling it.
-    requires_async: bool,
+    asyncness: Asyncness,
 }
 
 impl core::fmt::Debug for HostFunc {
@@ -69,7 +70,15 @@ enum HostResult<T> {
 }
 
 impl HostFunc {
-    fn new<T, F, P, R>(requires_async: bool, func: F) -> Arc<HostFunc>
+    /// Creates a new host function based on the implementation of `func`.
+    ///
+    /// The `asyncness` parameter indicates whether the `func` requires
+    /// wasm to be on a fiber. This is used to propagate to the `Store` during
+    /// instantiation to ensure that this guarantee is met.
+    ///
+    /// Note that if `asyncness` is mistaken then that'll result in panics
+    /// in Wasmtime, but not memory unsafety.
+    fn new<T, F, P, R>(asyncness: Asyncness, func: F) -> Arc<HostFunc>
     where
         T: 'static,
         R: Send + Sync + 'static,
@@ -79,7 +88,7 @@ impl HostFunc {
             entrypoint: F::cabi_entrypoint,
             typecheck: F::typecheck,
             func: Box::new(func),
-            requires_async,
+            asyncness,
         })
     }
 
@@ -92,7 +101,7 @@ impl HostFunc {
         R: ComponentNamedList + Lower + 'static,
     {
         Self::new(
-            false,
+            Asyncness::No,
             StaticHostFn::<_, false>::new(move |store, params| {
                 HostResult::Done(func(store, params))
             }),
@@ -112,7 +121,7 @@ impl HostFunc {
         R: ComponentNamedList + Lower + 'static,
     {
         Self::new(
-            true,
+            Asyncness::Yes,
             StaticHostFn::<_, false>::new(move |store, params| {
                 HostResult::Done(
                     store
@@ -137,7 +146,7 @@ impl HostFunc {
     {
         let func = Arc::new(func);
         Self::new(
-            true,
+            Asyncness::Yes,
             StaticHostFn::<_, true>::new(move |store, params| {
                 let func = func.clone();
                 HostResult::Future(Box::pin(
@@ -157,7 +166,7 @@ impl HostFunc {
             + 'static,
     {
         Self::new(
-            false,
+            Asyncness::No,
             DynamicHostFn::<_, false>::new(
                 move |store, ty, mut params_and_results, result_start| {
                     let (params, results) = params_and_results.split_at_mut(result_start);
@@ -184,7 +193,7 @@ impl HostFunc {
             + 'static,
     {
         Self::new(
-            true,
+            Asyncness::Yes,
             DynamicHostFn::<_, false>::new(
                 move |store, ty, mut params_and_results, result_start| {
                     let (params, results) = params_and_results.split_at_mut(result_start);
@@ -217,7 +226,7 @@ impl HostFunc {
     {
         let func = Arc::new(func);
         Self::new(
-            true,
+            Asyncness::Yes,
             DynamicHostFn::<_, true>::new(
                 move |store, ty, mut params_and_results, result_start| {
                     let func = func.clone();
@@ -245,8 +254,8 @@ impl HostFunc {
         }
     }
 
-    pub fn requires_async(&self) -> bool {
-        self.requires_async
+    pub fn asyncness(&self) -> Asyncness {
+        self.asyncness
     }
 }
 

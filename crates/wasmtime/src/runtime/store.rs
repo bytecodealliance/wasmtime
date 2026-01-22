@@ -1322,7 +1322,7 @@ impl<T> Store<T> {
         T: Send,
     {
         // Debug hooks rely on async support, so async entrypoints are required.
-        self.inner.set_async_required();
+        self.inner.set_async_required(Asyncness::Yes);
 
         assert!(
             self.engine().tunables().debug_guest,
@@ -2353,7 +2353,7 @@ impl StoreOpaque {
 
         // All future entrypoints must be async to handle the case that fuel
         // runs out and an async yield is needed.
-        self.set_async_required();
+        self.set_async_required(Asyncness::Yes);
 
         self.fuel_yield_interval = interval.and_then(|i| NonZeroU64::new(i));
         // Reset the fuel active + reserve states by resetting the amount.
@@ -2815,8 +2815,10 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(not(feature = "async"))]
-    pub(crate) fn set_async_required(&mut self) {
-        panic!("shouldn't require async if the feature isn't enabled");
+    pub(crate) fn set_async_required(&mut self, asyncness: Asyncness) {
+        match asyncness {
+            Asyncness::No => {}
+        }
     }
 }
 
@@ -3053,6 +3055,18 @@ pub enum Asyncness {
     /// itself `async`.
     #[cfg(feature = "async")]
     Yes,
+}
+
+impl core::ops::BitOr for Asyncness {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Asyncness::No, Asyncness::No) => Asyncness::No,
+            #[cfg(feature = "async")]
+            (Asyncness::Yes, _) | (_, Asyncness::Yes) => Asyncness::Yes,
+        }
+    }
 }
 
 #[cfg(test)]

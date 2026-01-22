@@ -1091,7 +1091,7 @@ pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
-    requires_async: bool,
+    asyncness: Asyncness,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -1102,7 +1102,7 @@ impl<T: 'static> Clone for InstancePre<T> {
             component: self.component.clone(),
             imports: self.imports.clone(),
             resource_types: self.resource_types.clone(),
-            requires_async: self.requires_async,
+            asyncness: self.asyncness,
             _marker: self._marker,
         }
     }
@@ -1120,20 +1120,20 @@ impl<T: 'static> InstancePre<T> {
         imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
-        let mut requires_async = false;
+        let mut asyncness = Asyncness::No;
         for (_, import) in imports.iter() {
-            requires_async = requires_async
-                || match import {
-                    RuntimeImport::Func(f) => f.requires_async(),
-                    RuntimeImport::Module(_) => false,
-                    RuntimeImport::Resource { dtor, .. } => dtor.requires_async(),
+            asyncness = asyncness
+                | match import {
+                    RuntimeImport::Func(f) => f.asyncness(),
+                    RuntimeImport::Module(_) => Asyncness::No,
+                    RuntimeImport::Resource { dtor, .. } => dtor.asyncness(),
                 };
         }
         InstancePre {
             component,
             imports,
             resource_types,
-            requires_async,
+            asyncness,
             _marker: marker::PhantomData,
         }
     }
@@ -1168,9 +1168,7 @@ impl<T: 'static> InstancePre<T> {
         // If this instance requires an async host, set that flag in the store,
         // and then afterwards assert nothing else in the store, nor this
         // instance, required async.
-        if self.requires_async {
-            store.0.set_async_required();
-        }
+        store.0.set_async_required(self.asyncness);
         store.0.validate_sync_call()?;
 
         vm::assert_ready(self._instantiate(store, Asyncness::No))
@@ -1191,9 +1189,7 @@ impl<T: 'static> InstancePre<T> {
         asyncness: Asyncness,
     ) -> Result<Instance> {
         let mut store = store.as_context_mut();
-        if self.requires_async {
-            store.0.set_async_required();
-        }
+        store.0.set_async_required(self.asyncness);
         store
             .engine()
             .allocator()

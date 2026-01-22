@@ -788,9 +788,11 @@ pub struct InstancePre<T> {
     /// This is an `Arc<[T]>` for the same reason as `items`.
     func_refs: Arc<[VMFuncRef]>,
 
-    /// Whether or not any import in `items` is flagged as `requires_async`.
-    /// This is used to update the corresponding flag on the store.
-    requires_async: bool,
+    /// Whether or not any import in `items` is flagged as needing async.
+    ///
+    /// This is used to update stores during instantiation as to whether they
+    /// require async entrypoints.
+    asyncness: Asyncness,
 
     _marker: core::marker::PhantomData<fn() -> T>,
 }
@@ -803,7 +805,7 @@ impl<T> Clone for InstancePre<T> {
             items: self.items.clone(),
             host_funcs: self.host_funcs,
             func_refs: self.func_refs.clone(),
-            requires_async: self.requires_async,
+            asyncness: self.asyncness,
             _marker: self._marker,
         }
     }
@@ -823,7 +825,7 @@ impl<T: 'static> InstancePre<T> {
 
         let mut func_refs = vec![];
         let mut host_funcs = 0;
-        let mut requires_async = false;
+        let mut asyncness = Asyncness::No;
         for item in &items {
             match item {
                 Definition::Extern(_, _) => {}
@@ -837,7 +839,7 @@ impl<T: 'static> InstancePre<T> {
                             ..*f.func_ref()
                         });
                     }
-                    requires_async = requires_async || f.requires_async();
+                    asyncness = asyncness | f.asyncness();
                 }
             }
         }
@@ -847,7 +849,7 @@ impl<T: 'static> InstancePre<T> {
             items: items.into(),
             host_funcs,
             func_refs: func_refs.into(),
-            requires_async,
+            asyncness,
             _marker: core::marker::PhantomData,
         })
     }
@@ -881,7 +883,7 @@ impl<T: 'static> InstancePre<T> {
             &self.items,
             self.host_funcs,
             &self.func_refs,
-            self.requires_async,
+            self.asyncness,
         )?;
 
         // Note that this is specifically done after `pre_instantiate_raw` to
@@ -920,7 +922,7 @@ impl<T: 'static> InstancePre<T> {
             &self.items,
             self.host_funcs,
             &self.func_refs,
-            self.requires_async,
+            self.asyncness,
         )?;
 
         // This unsafety should be handled by the type-checking performed by the
@@ -944,7 +946,7 @@ fn pre_instantiate_raw(
     items: &Arc<[Definition]>,
     host_funcs: usize,
     func_refs: &Arc<[VMFuncRef]>,
-    requires_async: bool,
+    asyncness: Asyncness,
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
@@ -967,9 +969,7 @@ fn pre_instantiate_raw(
         funcrefs.push_instance_pre_func_refs(func_refs.clone());
     }
 
-    if requires_async {
-        store.set_async_required();
-    }
+    store.set_async_required(asyncness);
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
     let mut imports = OwnedImports::new(module);

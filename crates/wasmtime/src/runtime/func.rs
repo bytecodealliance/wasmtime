@@ -4,7 +4,7 @@ use crate::runtime::vm::{
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
     VMStoreContext,
 };
-use crate::store::{AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
+use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, ModuleExport, Ref,
@@ -2152,7 +2152,10 @@ pub struct HostFunc {
     /// Whether or not this function was defined with an `async` host function,
     /// meaning that it is only invokable when wasm is itself on a fiber to
     /// support suspension on `Poll::Pending`.
-    requires_async: bool,
+    ///
+    /// This is used to propagate to an `InstancePre` and then eventually into a
+    /// `Store` as to whether the store requires async entrypoints.
+    asyncness: Asyncness,
 
     // Stored to unregister this function's signature with the engine when this
     // is dropped.
@@ -2184,12 +2187,12 @@ impl HostFunc {
     fn new_raw(
         engine: &Engine,
         ctx: StoreBox<VMArrayCallHostFuncContext>,
-        requires_async: bool,
+        asyncness: Asyncness,
     ) -> Self {
         HostFunc {
             ctx,
             engine: engine.clone(),
-            requires_async,
+            asyncness,
         }
     }
 
@@ -2370,7 +2373,7 @@ impl HostFunc {
     where
         T: 'static,
     {
-        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func), false)
+        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func), Asyncness::No)
     }
 
     /// Analog of [`Func::new`]
@@ -2399,7 +2402,7 @@ impl HostFunc {
                 func(caller.sub_caller(), params, results)?;
                 Self::store_untyped_results(caller.store, &ty, vec, values)
             }),
-            false,
+            Asyncness::No,
         )
     }
 
@@ -2442,7 +2445,7 @@ impl HostFunc {
                     })
                 },
             ),
-            true,
+            Asyncness::Yes,
         )
     }
 
@@ -2519,7 +2522,7 @@ impl HostFunc {
             // wasmtime's ambient correctness.
             unsafe { Self::store_typed_results(caller.store.0, ret, args) }
         });
-        HostFunc::new_raw(engine, ctx, false)
+        HostFunc::new_raw(engine, ctx, Asyncness::No)
     }
 
     /// Analog of [`Func::wrap_async`]
@@ -2549,7 +2552,7 @@ impl HostFunc {
                 unsafe { Self::store_typed_results(caller.store.0, ret.into_fallible(), args) }
             })
         });
-        HostFunc::new_raw(engine, ctx, true)
+        HostFunc::new_raw(engine, ctx, Asyncness::Yes)
     }
 
     /// Loads the typed parameters from `params`
@@ -2674,9 +2677,7 @@ impl HostFunc {
 
         // This function could be called by a guest at any time, and it requires
         // fibers, so the store now required async entrypoints.
-        if self.requires_async {
-            store.set_async_required();
-        }
+        store.set_async_required(self.asyncness);
 
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(Box::new(self), modules);
@@ -2704,8 +2705,8 @@ impl HostFunc {
         unsafe { self.ctx.get().as_ref().func_ref() }
     }
 
-    pub(crate) fn requires_async(&self) -> bool {
-        self.requires_async
+    pub(crate) fn asyncness(&self) -> Asyncness {
+        self.asyncness
     }
 }
 

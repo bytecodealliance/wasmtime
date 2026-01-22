@@ -4,7 +4,7 @@ use crate::fiber::{self};
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMStore;
-use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
+use crate::store::{Asyncness, ResourceLimiterInner, StoreInner, StoreOpaque};
 use crate::{Store, StoreContextMut, UpdateDeadline};
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
@@ -63,7 +63,7 @@ impl<T> Store<T> {
 
         // Save the limiter accessor function:
         inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
-        inner.set_async_required();
+        inner.set_async_required(Asyncness::Yes);
     }
 
     /// Configures an async function that runs on calls and returns between
@@ -84,7 +84,7 @@ impl<T> Store<T> {
     #[cfg(feature = "call-hook")]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
         self.inner.call_hook = Some(crate::store::CallHookInner::Async(Box::new(hook)));
-        self.inner.set_async_required();
+        self.inner.set_async_required(Asyncness::Yes);
     }
 
     /// Perform garbage collection asynchronously.
@@ -169,7 +169,7 @@ impl<T> StoreInner<T> {
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         // All future entrypoints must be async to handle the case that an epoch
         // changes and a yield is required.
-        self.set_async_required();
+        self.set_async_required(Asyncness::Yes);
 
         self.epoch_deadline_behavior =
             Some(Box::new(move |_store| Ok(UpdateDeadline::Yield(delta))));
