@@ -10,8 +10,6 @@
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
 #![no_std]
-#![cfg_attr(arc_try_new, allow(unstable_features))]
-#![cfg_attr(arc_try_new, feature(allocator_api))]
 
 #[cfg(feature = "std")]
 #[macro_use]

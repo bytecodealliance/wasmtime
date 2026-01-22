@@ -19,6 +19,7 @@ use std::time::Duration;
 const CRATES_TO_PUBLISH: &[&str] = &[
     // pulley
     "wasmtime-internal-error",
+    "wasmtime-internal-core",
     "cranelift-bitset",
     "wasmtime-internal-math",
     "pulley-macros",

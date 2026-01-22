@@ -4715,6 +4715,7 @@ dependencies = [
  "wasmparser 0.244.0",
  "wasmprinter",
  "wasmtime-internal-component-util",
+ "wasmtime-internal-core",
  "wasmtime-internal-error",
  "wat",
 ]
@@ -4856,6 +4857,13 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-component-util"
 version = "42.0.0"
+
+[[package]]
+name = "wasmtime-internal-core"
+version = "42.0.0"
+dependencies = [
+ "wasmtime-internal-error",
+]
 
 [[package]]
 name = "wasmtime-internal-cranelift"
