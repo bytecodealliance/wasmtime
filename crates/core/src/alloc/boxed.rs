@@ -165,14 +165,8 @@ pub fn new_boxed_slice_from_iter<T>(
         boxed
     };
 
-    // Convert the `Box<[MaybeUninit<T>]>` into a `Box<[T]>`.
-    let boxed = {
-        let ptr = Box::into_raw(boxed);
-        let ptr = core::ptr::slice_from_raw_parts_mut(ptr.cast::<T>(), ptr.len());
-        // Safety: `ptr` points to `len` initialized `T` elements allocated by
-        // the global allocator.
-        unsafe { Box::from_raw(ptr) }
-    };
+    // Safety: we initialized all elements.
+    let boxed = unsafe { boxed.assume_init() };
 
     Ok(boxed)
 }
