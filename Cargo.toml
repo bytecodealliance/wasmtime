@@ -477,6 +477,7 @@ default = [
   "wasi-tls",
 
   # Most features of Wasmtime are enabled by default.
+  "backtrace",
   "wat",
   "parallel-compilation",
   "pooling-allocator",
@@ -540,6 +541,7 @@ wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hype
 wasi-config = ["dep:wasmtime-wasi-config"]
 wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
+backtrace = ["wasmtime/backtrace"]
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast?/component-model",
