@@ -942,12 +942,7 @@ impl CallThreadState {
     pub(crate) fn entry_trap_handler(&self) -> Handler {
         unsafe {
             fn running_on_continuation(stack_chain: *const VMStackChain) -> bool {
-                unsafe {
-                    match *stack_chain {
-                        VMStackChain::Continuation(_) => true,
-                        _ => false,
-                    }
-                }
+                unsafe { matches!(*stack_chain, VMStackChain::Continuation(_)) }
             }
             let vm_store_context = self.vm_store_context.as_ref();
             let vm_stack_chain = vm_store_context.stack_chain.get();
