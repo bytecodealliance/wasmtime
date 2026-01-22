@@ -15,44 +15,6 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-/// Internal macro to mark a block as a slow path, pulling it out into its own
-/// cold function that is never inlined.
-///
-/// This should be applied to the whole consequent/alternative block for a
-/// conditional, never to a single expression within a larger block.
-///
-/// # Example
-///
-/// ```ignore
-/// fn hot_function(x: u32) -> Result<()> {
-///     if very_rare_condition(x) {
-///         return out_of_line_slow_path!({
-///             // Handle the rare case...
-///             //
-///             // This pulls the handling of the rare condition out into
-///             // its own, separate function, which keeps the generated code
-///             // tight, handling only the common cases inline.
-///             Ok(())
-///         });
-///     }
-///
-///     // Handle the common case inline...
-///     Ok(())
-/// }
-/// ```
-macro_rules! out_of_line_slow_path {
-    ( $e:expr ) => {{
-        #[cold]
-        #[inline(never)]
-        #[track_caller]
-        fn out_of_line_slow_path<T>(f: impl FnOnce() -> T) -> T {
-            f()
-        }
-
-        out_of_line_slow_path(|| $e)
-    }};
-}
-
 #[cfg(feature = "backtrace")]
 mod backtrace;
 mod boxed;

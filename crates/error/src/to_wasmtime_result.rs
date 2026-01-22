@@ -45,7 +45,7 @@ impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
     fn to_wasmtime_result(self) -> Result<T> {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => out_of_line_slow_path! { Err(crate::Error::from_anyhow(e)) },
+            Err(e) => Err(crate::Error::from_anyhow(e)),
         }
     }
 }
