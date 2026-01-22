@@ -3009,6 +3009,23 @@ impl Config {
         self.shared_memory = enable;
         self
     }
+
+    #[cfg(feature = "component-model")]
+    #[inline]
+    pub(crate) fn cm_concurrency_enabled(&self) -> bool {
+        cfg!(feature = "component-model-async")
+            && (self.enabled_features.contains(WasmFeatures::CM_ASYNC)
+                || self
+                    .enabled_features
+                    .contains(WasmFeatures::CM_ASYNC_BUILTINS)
+                || self
+                    .enabled_features
+                    .contains(WasmFeatures::CM_ASYNC_STACKFUL)
+                || self.enabled_features.contains(WasmFeatures::CM_THREADING)
+                || self
+                    .enabled_features
+                    .contains(WasmFeatures::CM_ERROR_CONTEXT))
+    }
 }
 
 impl Default for Config {

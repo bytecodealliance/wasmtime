@@ -331,7 +331,7 @@ pub struct LiftContext<'a> {
         not(feature = "component-model-async"),
         allow(unused, reason = "easier to not #[cfg] away")
     )]
-    concurrent_state: &'a mut ConcurrentState,
+    concurrent_state: Option<&'a mut ConcurrentState>,
 }
 
 #[doc(hidden)]
@@ -408,7 +408,7 @@ impl<'a> LiftContext<'a> {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
-        self.concurrent_state
+        self.concurrent_state.as_deref_mut().unwrap()
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its

@@ -186,8 +186,9 @@ where
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
+
         #[cfg(feature = "component-model-async")]
-        {
+        if store.0.cm_concurrency_enabled() {
             use crate::component::concurrent::TaskId;
             use crate::runtime::vm::SendSyncPtr;
             use core::ptr::NonNull;
@@ -236,18 +237,16 @@ where
             };
 
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            wrapper
+            return wrapper
                 .store
                 .as_context_mut()
                 .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
-                .await?
+                .await?;
         }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            store
-                .on_fiber(|store| self.call_impl(store, params))
-                .await?
-        }
+
+        store
+            .on_fiber(|store| self.call_impl(store, params))
+            .await?
     }
 
     /// Start a concurrent call to this function.
@@ -321,6 +320,7 @@ where
     {
         let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
+            assert!(store.0.cm_concurrency_enabled());
             assert!(
                 store.0.async_support(),
                 "cannot use `call_concurrent` when async support is not enabled on the config"
@@ -379,6 +379,7 @@ where
         Return: 'static,
     {
         use crate::component::storage::slice_to_storage;
+        debug_assert!(store.0.cm_concurrency_enabled());
 
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
             Params::flatten_count()

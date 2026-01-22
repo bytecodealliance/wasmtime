@@ -263,26 +263,24 @@ impl Func {
         let store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
-        {
-            store
+        if store.0.cm_concurrency_enabled() {
+            return store
                 .run_concurrent_trap_on_idle(async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
                         .map(drop)
                 })
-                .await?
+                .await?;
         }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            assert!(
-                store.0.async_support(),
-                "cannot use `call_async` without enabling async support in the config"
-            );
-            let mut store = store;
-            store
-                .on_fiber(|store| self.call_impl(store, params, results))
-                .await?
-        }
+
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` without enabling async support in the config"
+        );
+        let mut store = store;
+        store
+            .on_fiber(|store| self.call_impl(store, params, results))
+            .await?
     }
 
     fn check_params_results<T>(

@@ -543,7 +543,7 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
     #[cfg(feature = "component-model")]
-    concurrent_state: concurrent::ConcurrentState,
+    concurrent_state: Option<concurrent::ConcurrentState>,
 
     /// State related to the executor of wasm code.
     ///
@@ -771,7 +771,11 @@ impl<T> Store<T> {
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
-            concurrent_state: Default::default(),
+            concurrent_state: if engine.config().cm_concurrency_enabled() {
+                Some(Default::default())
+            } else {
+                None
+            },
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
         };
@@ -854,7 +858,9 @@ impl<T> Store<T> {
         // in their `Drop::drop` implementations, in which case they'll need to
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
-        ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
+        if self.inner.concurrent_state.is_some() {
+            ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
+        }
 
         // Ensure all fiber stacks, even cached ones, are all flushed out to the
         // instance allocator.
@@ -2562,14 +2568,14 @@ at https://bytecodealliance.org/security.
         &mut vm::component::HandleTable,
         &mut crate::component::HostResourceData,
         Pin<&mut vm::component::ComponentInstance>,
-        &mut concurrent::ConcurrentState,
+        Option<&mut concurrent::ConcurrentState>,
     ) {
         (
             &mut self.component_calls,
             &mut self.component_host_table,
             &mut self.host_resource_data,
             instance.id().from_data_get_mut(&mut self.store_data),
-            &mut self.concurrent_state,
+            self.concurrent_state.as_mut(),
         )
     }
 
@@ -2579,8 +2585,14 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state(&self) -> Option<&concurrent::ConcurrentState> {
+        self.concurrent_state.as_ref()
+    }
+
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
-        &mut self.concurrent_state
+        debug_assert!(self.engine().config().cm_concurrency_enabled());
+        self.concurrent_state.as_mut().unwrap()
     }
 
     #[cfg(feature = "async")]
