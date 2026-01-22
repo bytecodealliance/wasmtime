@@ -743,6 +743,8 @@ dependencies = [
  "arbitrary",
  "serde",
  "serde_derive",
+ "wasmtime-internal-core",
+ "wasmtime-internal-error",
 ]
 
 [[package]]
@@ -4714,6 +4716,7 @@ dependencies = [
  "wasmparser 0.244.0",
  "wasmprinter",
  "wasmtime-internal-component-util",
+ "wasmtime-internal-core",
  "wasmtime-internal-error",
  "wat",
 ]
@@ -4770,6 +4773,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "backtrace",
+ "cranelift-bitset",
  "env_logger 0.11.5",
  "futures",
  "indexmap 2.11.4",
@@ -4854,6 +4858,13 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-component-util"
 version = "42.0.0"
+
+[[package]]
+name = "wasmtime-internal-core"
+version = "42.0.0"
+dependencies = [
+ "wasmtime-internal-error",
+]
 
 [[package]]
 name = "wasmtime-internal-cranelift"
