@@ -1849,23 +1849,39 @@ impl ConstExpr {
     /// We use this for certain table optimizations that rely on
     /// knowing for sure that index 0 is not referenced.
     pub fn provably_nonzero_i32(&self) -> bool {
-        assert!(self.ops.len() > 0);
-        if self.ops.len() > 1 {
-            // Compound expressions not yet supported: conservatively
-            // return `false` (we can't prove nonzero).
-            return false;
-        }
-        // Exactly one op at this point.
-        match self.ops[0] {
-            // An actual zero value -- definitely not nonzero!
-            ConstOp::I32Const(0) => false,
-            // Any other constant value -- provably nonzero, if above
-            // did not match.
-            ConstOp::I32Const(_) => true,
-            // Anything else: we can't prove anything.
+        match self.const_eval() {
+            Some(GlobalConstValue::I32(x)) => x != 0,
+
+            // Conservatively return `false` for non-const-eval-able expressions
+            // as well as everything else.
             _ => false,
         }
     }
+
+    /// Attempt to evaluate the given const-expr at compile time.
+    pub fn const_eval(&self) -> Option<GlobalConstValue> {
+        // TODO: Actually maintain an evaluation stack and handle `i32.add`,
+        // `i32.sub`, etc... const ops.
+        match self.ops() {
+            [ConstOp::I32Const(x)] => Some(GlobalConstValue::I32(*x)),
+            [ConstOp::I64Const(x)] => Some(GlobalConstValue::I64(*x)),
+            [ConstOp::F32Const(x)] => Some(GlobalConstValue::F32(*x)),
+            [ConstOp::F64Const(x)] => Some(GlobalConstValue::F64(*x)),
+            [ConstOp::V128Const(x)] => Some(GlobalConstValue::V128(*x)),
+            _ => None,
+        }
+    }
+}
+
+/// A global's constant value, known at compile time.
+#[expect(missing_docs, reason = "self-describing variants")]
+#[derive(Clone, Copy)]
+pub enum GlobalConstValue {
+    I32(i32),
+    I64(i64),
+    F32(u32),
+    F64(u64),
+    V128(u128),
 }
 
 /// The subset of Wasm opcodes that are constant.
