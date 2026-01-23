@@ -10,11 +10,17 @@ version.workspace = true
 [dependencies]
 # This crate should have *very* minimal dependencies! Don't add new ones
 # lightly.
-wasmtime-error = { workspace = true }
 libm = { workspace = true }
+anyhow = { workspace = true, optional = true }
 
 [lints]
 workspace = true
 
 [features]
+# Enable the use of the `std` crate.
 std = []
+# Enable backtraces in errors.
+backtrace = ["std"]
+# Enable the `From<Error> for anyhow::Error` implementation and
+# `Error::from_anyhow` constructor.
+anyhow = ["dep:anyhow"]

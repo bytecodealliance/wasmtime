@@ -1,6 +1,6 @@
 use core::ops::{Index, IndexMut};
 use cranelift_entity::EntityRef;
-use wasmtime_error::OutOfMemory;
+use wasmtime_core::error::OutOfMemory;
 
 /// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
 /// all methods that allocate.

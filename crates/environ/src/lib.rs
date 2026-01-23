@@ -81,12 +81,12 @@ pub mod fact;
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
 
-// Reexport the error crate as a submodule for convenience.
+// Reexport the error module for convenience.
 #[doc(inline)]
-pub use wasmtime_error as error;
+pub use wasmtime_core::error;
 
 #[cfg(feature = "anyhow")]
-pub use wasmtime_error::ToWasmtimeResult;
+pub use self::error::ToWasmtimeResult;
 
 // Only for use with `bindgen!`-generated code.
 #[doc(hidden)]

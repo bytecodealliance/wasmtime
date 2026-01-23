@@ -11,7 +11,7 @@ use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_error::OutOfMemory;
+use wasmtime_core::error::OutOfMemory;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

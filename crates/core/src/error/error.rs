@@ -2,8 +2,7 @@ use super::boxed::try_new_uninit_box;
 use super::context::ContextError;
 use super::ptr::{MutPtr, OwnedPtr, SharedPtr};
 use super::vtable::Vtable;
-use crate::{OutOfMemory, Result};
-use alloc::boxed::Box;
+use crate::error::{OutOfMemory, Result};
 use core::{
     any::TypeId,
     fmt::{self, Debug},
@@ -13,6 +12,7 @@ use core::{
 };
 #[cfg(feature = "backtrace")]
 use std::backtrace::{Backtrace, BacktraceStatus};
+use std_alloc::boxed::Box;
 
 /// Internal extension trait for errors.
 ///
@@ -146,7 +146,7 @@ impl BoxedDynError {
         #[cfg(feature = "backtrace")]
         let backtrace = match error.take_backtrace() {
             Some(bt) => bt,
-            None => crate::backtrace::capture(),
+            None => crate::error::backtrace::capture(),
         };
 
         let boxed = try_new_uninit_box()?;
@@ -241,7 +241,7 @@ impl BoxedDynError {
 /// early-returns an error unconditionally.
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{bail, ensure, Result};
 ///
 /// fn my_fallible_function(x: u32) -> Result<()> {
@@ -263,7 +263,7 @@ impl BoxedDynError {
 /// [`format_err!`][crate::format_err] macro is preferred:
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{format_err, Error};
 ///
 /// let x = 42;
@@ -274,7 +274,7 @@ impl BoxedDynError {
 /// macro, you can use either [`Error::new`] or [`Error::msg`]:
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::Error;
 ///
 /// let messages = ["yikes", "uh oh", "ouch"];
@@ -314,8 +314,8 @@ impl BoxedDynError {
 /// # fn _foo() {
 /// #![cfg(all(feature = "backtrace", not(miri)))]
 /// # let _ = unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
-/// # use wasmtime_internal_error as wasmtime;
-/// use wasmtime::{bail, Context as _, Result};
+/// # use wasmtime_internal_core as wasmtime;
+/// use wasmtime::error::{bail, Context as _, Result};
 ///
 /// fn uno() -> Result<()> {
 ///     bail!("ouch")
@@ -378,7 +378,7 @@ impl BoxedDynError {
 /// ```
 /// # fn _foo() {
 /// #![cfg(feature = "anyhow")]
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 ///
 /// fn foo() -> Result<(), wasmtime::Error> {
 ///     wasmtime::bail!("decontamination failure")
@@ -405,7 +405,7 @@ impl BoxedDynError {
 /// ```
 /// # fn _foo() {
 /// #![cfg(feature = "anyhow")]
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 ///
 /// fn baz() -> Result<(), anyhow::Error> {
 ///     anyhow::bail!("oops I ate worms")
@@ -522,7 +522,7 @@ impl From<Error> for Box<dyn core::error::Error + 'static> {
 /// # Example
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// let wasmtime_error = wasmtime::Error::msg("whoops");
 /// let anyhow_error = anyhow::Error::from(wasmtime_error);
 /// ```
@@ -582,7 +582,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// let error = Error::new(std::fmt::Error);
@@ -621,7 +621,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// let error = Error::msg("hello");
@@ -653,7 +653,7 @@ impl Error {
     /// ```
     /// # fn _foo() {
     /// #![cfg(all(feature = "std", feature = "anyhow"))]
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use std::error::Error;
     ///
     /// // You happen to have a boxed error trait object.
@@ -682,7 +682,7 @@ impl Error {
     /// ```
     /// # fn _foo() {
     /// #![cfg(all(feature = "std", feature = "anyhow"))]
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// let anyhow_error = anyhow::Error::msg("failed to flim the flam");
     /// let wasmtime_error = wasmtime::Error::from_anyhow(anyhow_error);
     /// assert_eq!(
@@ -718,7 +718,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// let error = Error::msg("root cause");
@@ -786,7 +786,7 @@ impl Error {
     /// ```
     /// # fn _foo() {
     /// #![cfg(feature = "backtrace")]
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use std::backtrace::BacktraceStatus;
     /// use wasmtime::Error;
     ///
@@ -814,7 +814,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// let error = Error::msg("root cause");
@@ -837,7 +837,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// let error = Error::msg("ghosts");
@@ -861,8 +861,8 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
-    /// use wasmtime::{Error, OutOfMemory};
+    /// # use wasmtime_internal_core as wasmtime;
+    /// use wasmtime::error::{Error, OutOfMemory};
     ///
     /// let oom = Error::from(OutOfMemory::new(1234));
     /// assert!(oom.is::<OutOfMemory>());
@@ -911,8 +911,8 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
-    /// use wasmtime::{Error, OutOfMemory};
+    /// # use wasmtime_internal_core as wasmtime;
+    /// use wasmtime::error::{Error, OutOfMemory};
     ///
     /// let error = Error::msg("whoops");
     ///
@@ -971,8 +971,8 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
-    /// use wasmtime::{Error, OutOfMemory};
+    /// # use wasmtime_internal_core as wasmtime;
+    /// use wasmtime::error::{Error, OutOfMemory};
     ///
     /// let error = Error::msg("whoops");
     ///
@@ -1038,8 +1038,8 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// # use wasmtime_internal_error as wasmtime;
-    /// use wasmtime::{Error, OutOfMemory};
+    /// # use wasmtime_internal_core as wasmtime;
+    /// use wasmtime::error::{Error, OutOfMemory};
     ///
     /// let mut error = Error::msg("whoops");
     ///
@@ -1143,7 +1143,7 @@ impl Error {
     ///     }
     /// }
     ///
-    /// # use wasmtime_internal_error as wasmtime;
+    /// # use wasmtime_internal_core::error as wasmtime;
     /// use wasmtime::Error;
     ///
     /// // Create an `Error`.

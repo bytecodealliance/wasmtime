@@ -1,7 +1,7 @@
 use super::{TryNew, try_alloc};
+use crate::error::OutOfMemory;
 use core::{alloc::Layout, mem::MaybeUninit};
 use std_alloc::boxed::Box;
-use wasmtime_error::OutOfMemory;
 
 /// Allocate an `Box<MaybeUninit<T>>` with uninitialized contents, returning
 /// `Err(OutOfMemory)` on allocation failure.

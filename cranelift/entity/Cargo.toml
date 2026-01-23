@@ -19,7 +19,7 @@ workspace = true
 cranelift-bitset = { workspace=true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
-wasmtime-error = { workspace = true }
+wasmtime-core = { workspace = true }
 
 [features]
 enable-serde = ["serde", "serde_derive", "cranelift-bitset/enable-serde"]

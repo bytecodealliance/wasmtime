@@ -2,8 +2,8 @@
 //! various places instead of safe references because our type-punning would
 //! trigger UB otherwise.
 
-use alloc::boxed::Box;
 use core::{marker::PhantomData, ptr::NonNull};
+use std_alloc::boxed::Box;
 
 /// A raw, owned pointer.
 ///

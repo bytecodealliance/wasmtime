@@ -3,7 +3,7 @@
 use crate::scalar::{self, ScalarBitSet, ScalarBitSetStorage};
 use alloc::boxed::Box;
 use core::{cmp, iter, mem};
-use wasmtime_error::OutOfMemory;
+use wasmtime_core::error::OutOfMemory;
 
 /// A large bit set backed by dynamically-sized storage.
 ///

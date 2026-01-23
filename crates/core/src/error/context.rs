@@ -1,12 +1,12 @@
-use crate::{
+use crate::error::{
     Error, ErrorExt, OutOfMemory, Result,
     boxed::try_new_uninit_box,
     error::{OomOrDynError, OomOrDynErrorMut, OomOrDynErrorRef},
 };
-use alloc::boxed::Box;
 use core::any::TypeId;
 use core::fmt;
 use core::ptr::NonNull;
+use std_alloc::boxed::Box;
 
 mod sealed {
     use super::*;
@@ -35,10 +35,10 @@ mod sealed {
 /// # Example
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{Context as _, Result};
 /// # #[cfg(feature = "backtrace")]
-/// # wasmtime_internal_error::disable_backtrace();
+/// # wasmtime_internal_core::error::disable_backtrace();
 ///
 /// fn u32_to_u8(x: u32) -> Result<u8> {
 ///     let y = u8::try_from(x).with_context(|| {
@@ -84,8 +84,8 @@ mod sealed {
 /// fallible function returns an `Option`:
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
-/// use wasmtime::{Context as _, Result};
+/// # use wasmtime_internal_core as wasmtime;
+/// use wasmtime::error::{Context as _, Result};
 ///
 /// fn try_get<T>(slice: &[T], i: usize) -> Result<&T> {
 ///     let elem: Option<&T> = slice.get(i);

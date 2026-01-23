@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```
-//! use wasmtime_internal_core::slab::{Id, Slab};
+//! use wasmtime_internal_core::slab::Slab;
 //!
 //! let mut slab = Slab::new();
 //!

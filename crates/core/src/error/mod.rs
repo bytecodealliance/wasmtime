@@ -1,19 +1,9 @@
-//! Wasmtime's universal error handling crate.
+//! Wasmtime's universal error handling types.
 //!
 //! 99% API-compatible with `anyhow`, but additionally handles out-of-memory
 //! errors, instead of aborting the process.
 //!
 //! See the [`Error`] documentation for more details.
-
-#![no_std]
-#![deny(missing_docs)]
-#![doc(test(attr(deny(warnings))))]
-#![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
-#![cfg_attr(docsrs, feature(doc_cfg))]
-
-extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std;
 
 #[cfg(feature = "backtrace")]
 mod backtrace;
@@ -29,6 +19,7 @@ mod vtable;
 #[doc(hidden)]
 pub mod macros;
 
+pub use crate::{bail, ensure, format_err};
 #[cfg(feature = "backtrace")]
 pub use backtrace::disable_backtrace;
 pub use context::Context;
