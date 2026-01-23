@@ -55,11 +55,13 @@ pub fn init() {
     });
 
     fn compile(engine: &Engine) -> Component {
-        let wasm = test_programs_artifacts::FUZZ_ASYNC_COMPONENT;
+        let wasm_path = test_programs_artifacts::FUZZ_ASYNC_COMPONENT;
+        let wasm = test_programs_artifacts::fuzz_async_component_bytes!();
+        let wasm = &wasm[..];
         let cwasm_cache = std::env::var("COMPONENT_ASYNC_CWASM_CACHE").ok();
         if let Some(path) = &cwasm_cache
             && let Ok(cwasm_mtime) = std::fs::metadata(&path).and_then(|m| m.modified())
-            && let Ok(wasm_mtime) = std::fs::metadata(wasm).and_then(|m| m.modified())
+            && let Ok(wasm_mtime) = std::fs::metadata(wasm_path).and_then(|m| m.modified())
             && cwasm_mtime > wasm_mtime
         {
             log::debug!("Using cached component async cwasm at {path}");
@@ -72,7 +74,7 @@ pub fn init() {
             let mut config = wasm_compose::config::Config::default();
             let tempdir = tempfile::TempDir::new().unwrap();
             let path = tempdir.path().join("fuzz-async.wasm");
-            std::fs::copy(wasm, &path).unwrap();
+            std::fs::write(&path, wasm).unwrap();
             config.definitions.push(path.clone());
 
             wasm_compose::composer::ComponentComposer::new(&path, &config)
