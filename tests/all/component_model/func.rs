@@ -3517,6 +3517,62 @@ fn thread_index_via_sync_host_call() -> Result<()> {
 }
 
 #[test]
+fn thread_index_via_resource_drop_from_host() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func (export "dtor") (param i32)
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (type $r (resource (rep i32) (dtor (func $m "dtor"))))
+  (core func $new (canon resource.new $r))
+  (core module $m2
+    (import "" "new" (func $new (param i32) (result i32)))
+    (func (export "new") (result i32)
+       (call $new (i32.const 100))
+    )
+  )
+  (core instance $m2 (instantiate $m2 (with "" (instance
+    (export "new" (func $new))
+  ))))
+  (func $new (result (own $r)) (canon lift (core func $m2 "new")))
+  (component $c
+    (import "r" (type $r (sub resource)))
+    (import "new" (func $new (result (own $r))))
+    (export $r-export "r" (type $r))
+    (export "new" (func $new) (func (result (own $r-export))))
+  )
+  (instance $c (instantiate $c
+    (with "r" (type $r))
+    (with "new" (func $new))
+  ))
+  (export "i" (instance $c))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+    let (resource,) = run.call_and_post_return(&mut store, ())?;
+    resource.resource_drop(&mut store)?;
+    Ok(())
+}
+
+#[test]
 fn thread_index_via_sync_host_call_and_sync_guest_call() -> Result<()> {
     let component = r#"
 (component
