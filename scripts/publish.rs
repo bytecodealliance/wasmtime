@@ -54,7 +54,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle-macro",
     // wasmtime
     "wasmtime-internal-versioned-export-macros",
-    "wasmtime-internal-slab",
     "wasmtime-internal-wit-bindgen",
     "wasmtime-internal-component-macro",
     "wasmtime-internal-jit-debug",

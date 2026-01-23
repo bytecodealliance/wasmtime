@@ -13,8 +13,8 @@ use crate::{
     type_registry::TypeRegistry,
     vm::{SendSyncPtr, VMFuncRef},
 };
+use wasmtime_core::slab::{Id, Slab};
 use wasmtime_environ::VMSharedTypeIndex;
-use wasmtime_slab::{Id, Slab};
 
 /// An identifier into the `FuncRefTable`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

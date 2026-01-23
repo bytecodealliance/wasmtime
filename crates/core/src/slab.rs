@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```
-//! use wasmtime_internal_slab::{Id, Slab};
+//! use wasmtime_internal_core::slab::{Id, Slab};
 //!
 //! let mut slab = Slab::new();
 //!
@@ -79,7 +79,7 @@
 //!
 //! ```rust
 //! pub struct GenerationalId {
-//!     id: wasmtime_internal_slab::Id,
+//!     id: wasmtime_internal_core::slab::Id,
 //!     generation: u32,
 //! }
 //!
@@ -89,7 +89,7 @@
 //! }
 //!
 //! pub struct GenerationalSlab<T> {
-//!     slab: wasmtime_internal_slab::Slab<GenerationalEntry<T>>,
+//!     slab: wasmtime_internal_core::slab::Slab<GenerationalEntry<T>>,
 //!     generation: u32,
 //! }
 //!
@@ -127,15 +127,9 @@
 //! }
 //! ```
 
-#![no_std]
-#![forbid(unsafe_code)]
-#![deny(missing_docs, missing_debug_implementations)]
-
-extern crate alloc;
-
-use alloc::vec::Vec;
 use core::fmt;
 use core::num::NonZeroU32;
+use std_alloc::vec::Vec;
 
 /// An identifier for an allocated value inside a `slab`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -17,3 +17,4 @@ extern crate std;
 
 pub mod alloc;
 pub mod math;
+pub mod slab;

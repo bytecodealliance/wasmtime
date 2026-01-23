@@ -1338,11 +1338,6 @@ version = "40.0.1"
 when = "2026-01-07"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
-[[publisher.wasmtime-internal-slab]]
-version = "40.0.1"
-when = "2026-01-07"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
 [[publisher.wasmtime-internal-unwinder]]
 version = "40.0.1"
 when = "2026-01-07"

@@ -21,12 +21,12 @@ use core::{
         Ordering::{AcqRel, Acquire, Release},
     },
 };
+use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, GcLayout, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
     SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType, iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
-use wasmtime_slab::{Id as SlabId, Slab};
 
 // ### Notes on the Lifetime Management of Types
 //
