@@ -887,7 +887,7 @@ impl<T> Store<T> {
     {
         ensure!(
             self.as_context().0.concurrency_support(),
-            "cannot use `run_concurrent` Config::concurrency_support disabled",
+            "cannot use `run_concurrent` when Config::concurrency_support disabled",
         );
         self.as_context_mut().run_concurrent(fun).await
     }
@@ -984,7 +984,7 @@ impl<T> StoreContextMut<'_, T> {
     /// example within the async closure provided here.
     ///
     /// This function will unconditionally return an error if
-    /// [`Config::concurrency_support]` is disabled.
+    /// [`Config::concurrency_support`] is disabled.
     ///
     /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     ///
@@ -1062,7 +1062,7 @@ impl<T> StoreContextMut<'_, T> {
     {
         ensure!(
             self.0.concurrency_support(),
-            "cannot use `run_concurrent` Config::concurrency_support disabled",
+            "cannot use `run_concurrent` when Config::concurrency_support disabled",
         );
         self.do_run_concurrent(fun, false).await
     }
