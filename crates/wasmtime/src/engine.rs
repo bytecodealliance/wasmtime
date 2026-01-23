@@ -70,6 +70,7 @@ struct EngineInner {
     /// The canonical empty `ModuleRuntimeInfo`, so that each store doesn't need
     /// allocate its own copy when creating its default caller instance or GC
     /// heap.
+    #[cfg(feature = "runtime")]
     empty_module_runtime_info: ModuleRuntimeInfo,
 }
 
@@ -127,6 +128,7 @@ impl Engine {
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
+        #[cfg(feature = "runtime")]
         let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(
             wasmtime_environ::Module::new(wasmtime_environ::StaticModuleIndex::from_u32(0)),
         )?)?;
@@ -159,6 +161,7 @@ impl Engine {
                 config,
                 tunables,
                 features,
+                #[cfg(feature = "runtime")]
                 empty_module_runtime_info,
             })?,
         })
@@ -631,6 +634,7 @@ information about this check\
         self.target().is_pulley()
     }
 
+    #[cfg(feature = "runtime")]
     pub(crate) fn empty_module_runtime_info(&self) -> &ModuleRuntimeInfo {
         &self.inner.empty_module_runtime_info
     }
