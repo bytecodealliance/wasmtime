@@ -22,6 +22,7 @@ use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::{SmallVec, smallvec};
 use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
+use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
@@ -31,7 +32,6 @@ use wasmtime_environ::{
     WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
-use wasmtime_math::f64_cvt_to_int_bounds;
 
 #[derive(Debug)]
 pub(crate) enum Extension {

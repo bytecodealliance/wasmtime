@@ -194,6 +194,11 @@ mod tests {
     }
 
     #[test]
+    fn try_new() {
+        <Box<_> as TryNew>::try_new(4).unwrap();
+    }
+
+    #[test]
     fn new_boxed_slice_from_iter_smoke_test() {
         let slice = new_boxed_slice_from_iter(3, [42, 36, 1337]).unwrap();
         assert_eq!(&*slice, &[42, 36, 1337]);

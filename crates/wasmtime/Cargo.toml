@@ -30,7 +30,7 @@ wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
 pulley-interpreter = { workspace = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
@@ -347,7 +347,7 @@ std = [
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
-  'wasmtime-math/std',
+  'wasmtime-core/std',
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",

@@ -32,7 +32,7 @@ cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 itertools = { workspace = true }
 pulley-interpreter = { workspace = true, optional = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
 wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
 
 [features]

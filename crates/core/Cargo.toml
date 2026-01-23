@@ -11,8 +11,10 @@ version.workspace = true
 # This crate should have *very* minimal dependencies! Don't add new ones
 # lightly.
 wasmtime-error = { workspace = true }
+libm = { workspace = true }
 
 [lints]
 workspace = true
 
 [features]
+std = []

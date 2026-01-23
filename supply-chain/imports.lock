@@ -125,6 +125,10 @@ audited_as = "40.0.1"
 version = "42.0.0"
 audited_as = "40.0.1"
 
+[[unpublished.wasmtime-internal-core]]
+version = "42.0.0"
+audited_as = "0.0.0"
+
 [[unpublished.wasmtime-internal-cranelift]]
 version = "42.0.0"
 audited_as = "40.0.1"
@@ -1330,11 +1334,6 @@ when = "2026-01-07"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-icache-coherence]]
-version = "40.0.1"
-when = "2026-01-07"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-internal-math]]
 version = "40.0.1"
 when = "2026-01-07"
 trusted-publisher = "github:bytecodealliance/wasmtime"

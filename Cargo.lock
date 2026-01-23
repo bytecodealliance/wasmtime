@@ -780,7 +780,7 @@ dependencies = [
  "smallvec 1.15.1",
  "souper-ir",
  "target-lexicon",
- "wasmtime-internal-math",
+ "wasmtime-internal-core",
 ]
 
 [[package]]
@@ -2810,7 +2810,7 @@ dependencies = [
  "log",
  "pulley-macros",
  "termcolor",
- "wasmtime-internal-math",
+ "wasmtime-internal-core",
 ]
 
 [[package]]
@@ -4543,11 +4543,11 @@ dependencies = [
  "wasmtime-internal-cache",
  "wasmtime-internal-component-macro",
  "wasmtime-internal-component-util",
+ "wasmtime-internal-core",
  "wasmtime-internal-cranelift",
  "wasmtime-internal-fiber",
  "wasmtime-internal-jit-debug",
  "wasmtime-internal-jit-icache-coherence",
- "wasmtime-internal-math",
  "wasmtime-internal-slab",
  "wasmtime-internal-unwinder",
  "wasmtime-internal-versioned-export-macros",
@@ -4863,6 +4863,7 @@ version = "42.0.0"
 name = "wasmtime-internal-core"
 version = "42.0.0"
 dependencies = [
+ "libm",
  "wasmtime-internal-error",
 ]
 
@@ -4886,7 +4887,7 @@ dependencies = [
  "thiserror 2.0.17",
  "wasmparser 0.244.0",
  "wasmtime-environ",
- "wasmtime-internal-math",
+ "wasmtime-internal-core",
  "wasmtime-internal-unwinder",
  "wasmtime-internal-versioned-export-macros",
 ]
@@ -4954,13 +4955,6 @@ dependencies = [
  "libc",
  "wasmtime-environ",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "wasmtime-internal-math"
-version = "42.0.0"
-dependencies = [
- "libm",
 ]
 
 [[package]]
@@ -5412,8 +5406,8 @@ dependencies = [
  "thiserror 2.0.17",
  "wasmparser 0.244.0",
  "wasmtime-environ",
+ "wasmtime-internal-core",
  "wasmtime-internal-cranelift",
- "wasmtime-internal-math",
 ]
 
 [[package]]
