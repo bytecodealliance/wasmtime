@@ -1,6 +1,6 @@
 use super::TryNew;
+use crate::error::OutOfMemory;
 use std_alloc::sync::Arc;
-use wasmtime_error::OutOfMemory;
 
 /// XXX: Stable Rust doesn't actually give us any method to build fallible
 /// allocation for `Arc<T>`, so this is only actually fallible when using

@@ -6,8 +6,8 @@ pub use core::format_args;
 pub use core::result::Result::Err;
 
 use super::{Error, OutOfMemory};
-use alloc::string::String;
 use core::fmt::{self, write};
+use std_alloc::string::String;
 
 /// Construct an [`Error`](crate::Error) via string formatting or another error.
 ///
@@ -20,7 +20,7 @@ use core::fmt::{self, write};
 /// string template and the rest of the arguments are format arguments:
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{format_err, Error};
 ///
 /// let x = 42;
@@ -44,7 +44,7 @@ use core::fmt::{self, write};
 /// ```
 /// # fn _foo() {
 /// #![cfg(feature = "std")]
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use std::fmt;
 /// use wasmtime::{format_err, Error};
 ///
@@ -75,7 +75,7 @@ use core::fmt::{self, write};
 /// ```
 /// # fn _foo() {
 /// #![cfg(feature = "anyhow")]
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::format_err;
 ///
 /// let anyhow_error: anyhow::Error = anyhow::anyhow!("aw crap");
@@ -87,18 +87,18 @@ use core::fmt::{self, write};
 macro_rules! format_err {
     // Format-style invocation without explicit format arguments.
     ( $message:literal $(,)? ) => {
-        $crate::Error::from_format_args($crate::macros::format_args!($message))
+        $crate::error::Error::from_format_args($crate::error::macros::format_args!($message))
     };
 
     // Format-style invocation with explicit format arguments.
     ( $message:literal , $( $args:tt )* ) => {
-        $crate::Error::from_format_args($crate::macros::format_args!($message , $( $args )* ))
+        $crate::error::Error::from_format_args($crate::error::macros::format_args!($message , $( $args )* ))
     };
 
     // Do either `Error::new($error)` or `Error::msg($error)` depending on
     // whether `$error` implements `core::error::Error` or not.
     ( $error:expr $(,)? ) => {{
-        use $crate::macros::ctor_specialization::*;
+        use $crate::error::macros::ctor_specialization::*;
         let error = $error;
         (&&&error).wasmtime_error_choose_ctor().construct(error)
     }};
@@ -112,7 +112,7 @@ macro_rules! format_err {
 #[deprecated = "Use `format_err!(...)` instead"]
 macro_rules! anyhow {
     ( $( $args:tt )* ) => {
-        $crate::format_err!( $( $args )* )
+        $crate::error::format_err!( $( $args )* )
     };
 }
 
@@ -128,7 +128,7 @@ macro_rules! anyhow {
 /// # Example
 ///
 /// ```
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{bail, Result};
 ///
 /// fn error_on_none(option: Option<u32>) -> Result<u32> {
@@ -150,7 +150,7 @@ macro_rules! anyhow {
 #[macro_export]
 macro_rules! bail {
     ( $($args:tt)* ) => {{
-        return $crate::macros::Err($crate::format_err!( $( $args )* ));
+        return $crate::error::macros::Err($crate::error::format_err!( $( $args )* ));
     }};
 }
 
@@ -170,7 +170,7 @@ macro_rules! bail {
 /// # Example
 ///
 /// ```rust
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::{ensure, Result};
 ///
 /// fn checked_div(a: u32, b: u32) -> Result<u32> {
@@ -190,12 +190,12 @@ macro_rules! bail {
 #[macro_export]
 macro_rules! ensure {
     ( $condition:expr ) => {{
-        $crate::ensure!($condition, concat!("Condition failed: `", stringify!($condition), "`"))
+        $crate::error::ensure!($condition, concat!("Condition failed: `", stringify!($condition), "`"))
     }};
 
     ( $condition:expr , $( $args:tt )* ) => {{
-        if $crate::macros::ensure::not($condition) {
-            $crate::bail!( $( $args )* );
+        if $crate::error::macros::ensure::not($condition) {
+            $crate::error::bail!( $( $args )* );
         }
     }};
 }

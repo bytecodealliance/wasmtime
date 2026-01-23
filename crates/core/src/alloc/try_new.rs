@@ -1,4 +1,4 @@
-use wasmtime_error::OutOfMemory;
+use crate::error::OutOfMemory;
 
 /// Helper function to invoke `<T as TryNew>::try_new`.
 ///
@@ -6,7 +6,7 @@ use wasmtime_error::OutOfMemory;
 ///
 /// ```
 /// # use wasmtime_internal_core::alloc::*;
-/// # use wasmtime_error::Result;
+/// # use wasmtime_internal_core::error::Result;
 /// # fn _foo() -> Result<()> {
 /// let boxed = try_new::<Box<u32>>(36)?;
 /// assert_eq!(*boxed, 36);

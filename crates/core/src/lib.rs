@@ -9,6 +9,9 @@
 #![deny(missing_docs)]
 #![cfg_attr(arc_try_new, allow(unstable_features))]
 #![cfg_attr(arc_try_new, feature(allocator_api))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(test(attr(deny(warnings))))]
+#![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
 extern crate alloc as std_alloc;
 
@@ -16,5 +19,6 @@ extern crate alloc as std_alloc;
 extern crate std;
 
 pub mod alloc;
+pub mod error;
 pub mod math;
 pub mod slab;

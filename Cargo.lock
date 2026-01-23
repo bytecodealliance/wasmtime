@@ -744,7 +744,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "wasmtime-internal-core",
- "wasmtime-internal-error",
 ]
 
 [[package]]
@@ -812,7 +811,7 @@ dependencies = [
  "cranelift-bitset",
  "serde",
  "serde_derive",
- "wasmtime-internal-error",
+ "wasmtime-internal-core",
 ]
 
 [[package]]
@@ -4717,7 +4716,6 @@ dependencies = [
  "wasmprinter",
  "wasmtime-internal-component-util",
  "wasmtime-internal-core",
- "wasmtime-internal-error",
  "wat",
 ]
 
@@ -4799,7 +4797,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-cli-flags",
  "wasmtime-environ",
- "wasmtime-internal-error",
+ "wasmtime-internal-core",
  "wasmtime-test-util",
  "wasmtime-wasi",
  "wasmtime-wast",
@@ -4863,8 +4861,8 @@ version = "42.0.0"
 name = "wasmtime-internal-core"
 version = "42.0.0"
 dependencies = [
+ "anyhow",
  "libm",
- "wasmtime-internal-error",
 ]
 
 [[package]]
@@ -4900,13 +4898,6 @@ dependencies = [
  "log",
  "tokio",
  "wasmtime",
-]
-
-[[package]]
-name = "wasmtime-internal-error"
-version = "42.0.0"
-dependencies = [
- "anyhow",
 ]
 
 [[package]]

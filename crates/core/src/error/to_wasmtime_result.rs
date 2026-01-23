@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::error::{Error, Result};
 
 /// Extension trait for easily converting `anyhow::Result`s into
 /// `wasmtime::Result`s.
@@ -14,7 +14,7 @@ use crate::Result;
 /// ```
 /// # fn _foo() {
 /// #![cfg(feature = "anyhow")]
-/// # use wasmtime_internal_error as wasmtime;
+/// # use wasmtime_internal_core::error as wasmtime;
 /// use wasmtime::ToWasmtimeResult as _;
 ///
 /// fn returns_anyhow_result() -> anyhow::Result<u32> {
@@ -45,7 +45,7 @@ impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
     fn to_wasmtime_result(self) -> Result<T> {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => Err(crate::Error::from_anyhow(e)),
+            Err(e) => Err(Error::from_anyhow(e)),
         }
     }
 }

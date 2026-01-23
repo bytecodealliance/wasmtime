@@ -148,9 +148,6 @@ audit-as-crates-io = true
 [policy.wasmtime-internal-debugger]
 audit-as-crates-io = true
 
-[policy.wasmtime-internal-error]
-audit-as-crates-io = true
-
 [policy.wasmtime-internal-explorer]
 audit-as-crates-io = true
 

@@ -1,7 +1,9 @@
-use super::{ConcreteError, DynError, ErrorExt, OomOrDynErrorMut, OomOrDynErrorRef, OutOfMemory};
-use crate::ptr::{MutPtr, OwnedPtr, SharedPtr};
-use alloc::boxed::Box;
+use crate::error::ptr::{MutPtr, OwnedPtr, SharedPtr};
+use crate::error::{
+    ConcreteError, DynError, ErrorExt, OomOrDynErrorMut, OomOrDynErrorRef, OutOfMemory,
+};
 use core::{any::TypeId, fmt, ptr::NonNull};
+use std_alloc::boxed::Box;
 
 /// A vtable containing the `ErrorExt` methods for some type `T`.
 ///

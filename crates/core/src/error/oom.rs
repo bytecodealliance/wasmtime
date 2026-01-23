@@ -1,4 +1,4 @@
-use crate::error::OomOrDynError;
+use crate::error::{Error, OomOrDynError};
 use core::{fmt, mem, ptr::NonNull};
 
 /// Out-of-memory error.
@@ -63,9 +63,9 @@ impl OutOfMemory {
     const _SAME_ALIGN_AS_OOM_OR_DYN_ERROR: () =
         assert!(mem::align_of::<OutOfMemory>() == mem::align_of::<OomOrDynError>());
     const _SAME_SIZE_AS_ERROR: () =
-        assert!(mem::size_of::<OutOfMemory>() == mem::size_of::<crate::Error>());
+        assert!(mem::size_of::<OutOfMemory>() == mem::size_of::<Error>());
     const _SAME_ALIGN_AS_ERROR: () =
-        assert!(mem::align_of::<OutOfMemory>() == mem::align_of::<crate::Error>());
+        assert!(mem::align_of::<OutOfMemory>() == mem::align_of::<Error>());
 
     /// Construct a new `OutOfMemory` error.
     ///
@@ -77,7 +77,7 @@ impl OutOfMemory {
     /// # Example
     ///
     /// ```rust
-    /// # use wasmtime_internal_error::OutOfMemory;
+    /// # use wasmtime_internal_core::error::OutOfMemory;
     /// # extern crate alloc;
     /// use alloc::alloc::{Layout, alloc};
     /// use core::ptr::NonNull;
@@ -118,7 +118,7 @@ impl OutOfMemory {
     /// # Example
     ///
     /// ```rust
-    /// # use wasmtime_internal_error::OutOfMemory;
+    /// # use wasmtime_internal_core::error::OutOfMemory;
     /// let oom = OutOfMemory::new(8192);
     /// assert_eq!(oom.requested_allocation_size(), 8192);
     /// ```

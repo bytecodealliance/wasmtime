@@ -1,8 +1,8 @@
 use super::{OutOfMemory, Result};
-use alloc::boxed::Box;
 use core::alloc::Layout;
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
+use std_alloc::boxed::Box;
 
 /// Try to allocate a block of memory that fits the given layout, or return an
 /// `OutOfMemory` error.
@@ -14,7 +14,7 @@ use core::ptr::NonNull;
 pub(crate) unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemory> {
     // Safety: same as our safety conditions.
     debug_assert!(layout.size() > 0);
-    let ptr = unsafe { alloc::alloc::alloc(layout) };
+    let ptr = unsafe { std_alloc::alloc::alloc(layout) };
 
     if let Some(ptr) = NonNull::new(ptr) {
         Ok(ptr)
@@ -26,7 +26,7 @@ pub(crate) unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemor
 /// Create a `Box<T>`, or return an `OutOfMemory` error.
 #[inline]
 pub(crate) fn try_new_uninit_box<T>() -> Result<Box<MaybeUninit<T>>, OutOfMemory> {
-    let layout = alloc::alloc::Layout::new::<MaybeUninit<T>>();
+    let layout = std_alloc::alloc::Layout::new::<MaybeUninit<T>>();
 
     if layout.size() == 0 {
         // NB: no actual allocation takes place when boxing zero-sized types.

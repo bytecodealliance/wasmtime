@@ -1,5 +1,5 @@
 use cranelift_entity::{EntityRef, Keys, SetIter};
-use wasmtime_error::OutOfMemory;
+use wasmtime_core::error::OutOfMemory;
 
 /// Like `cranelift_entity::EntitySet` but enforces fallible allocation for all
 /// methods that allocate.

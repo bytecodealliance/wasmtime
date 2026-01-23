@@ -7,8 +7,8 @@ mod try_new;
 pub use boxed::{BoxedSliceFromIterError, new_boxed_slice_from_iter};
 pub use try_new::{TryNew, try_new};
 
+use crate::error::OutOfMemory;
 use core::{alloc::Layout, ptr::NonNull};
-use wasmtime_error::OutOfMemory;
 
 /// Try to allocate a block of memory that fits the given layout, or return an
 /// `OutOfMemory` error.
