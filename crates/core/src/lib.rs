@@ -12,4 +12,8 @@
 
 extern crate alloc as std_alloc;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 pub mod alloc;
+pub mod math;

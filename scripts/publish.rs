@@ -21,7 +21,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-internal-error",
     "wasmtime-internal-core",
     "cranelift-bitset",
-    "wasmtime-internal-math",
     "pulley-macros",
     "pulley-interpreter",
     // cranelift

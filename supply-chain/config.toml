@@ -139,6 +139,9 @@ audit-as-crates-io = true
 [policy.wasmtime-internal-component-util]
 audit-as-crates-io = true
 
+[policy.wasmtime-internal-core]
+audit-as-crates-io = true
+
 [policy.wasmtime-internal-cranelift]
 audit-as-crates-io = true
 
@@ -158,9 +161,6 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.wasmtime-internal-jit-icache-coherence]
-audit-as-crates-io = true
-
-[policy.wasmtime-internal-math]
 audit-as-crates-io = true
 
 [policy.wasmtime-internal-slab]

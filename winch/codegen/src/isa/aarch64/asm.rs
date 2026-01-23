@@ -32,7 +32,7 @@ use cranelift_codegen::{
     settings,
 };
 use regalloc2::RegClass;
-use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
+use wasmtime_core::math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 impl From<OperandSize> for inst::OperandSize {
     fn from(size: OperandSize) -> Self {

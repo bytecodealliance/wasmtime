@@ -13,7 +13,7 @@ use core::ops::ControlFlow;
 use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use pulley_macros::interp_disable_if_cfg;
-use wasmtime_math::{WasmFloat, f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
+use wasmtime_core::math::{WasmFloat, f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]

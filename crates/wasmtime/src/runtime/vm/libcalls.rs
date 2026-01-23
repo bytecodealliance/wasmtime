@@ -69,6 +69,7 @@ use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
+use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
     DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
     TableIndex, Trap,
@@ -1451,35 +1452,35 @@ fn update_mem_size(store: &mut dyn VMStore, instance: InstanceId, num_pages: u32
 }
 
 fn floor_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_floor(val)
+    val.wasm_floor()
 }
 
 fn floor_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_floor(val)
+    val.wasm_floor()
 }
 
 fn ceil_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_ceil(val)
+    val.wasm_ceil()
 }
 
 fn ceil_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_ceil(val)
+    val.wasm_ceil()
 }
 
 fn trunc_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_trunc(val)
+    val.wasm_trunc()
 }
 
 fn trunc_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_trunc(val)
+    val.wasm_trunc()
 }
 
 fn nearest_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_nearest(val)
+    val.wasm_nearest()
 }
 
 fn nearest_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_nearest(val)
+    val.wasm_nearest()
 }
 
 // This intrinsic is only used on x86_64 platforms as an implementation of
@@ -1617,10 +1618,10 @@ fn fma_f32x4(
 
         U {
             mem: [
-                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[2], y[2], z[2]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[3], y[3], z[3]),
+                x[0].wasm_mul_add(y[0], z[0]),
+                x[1].wasm_mul_add(y[1], z[1]),
+                x[2].wasm_mul_add(y[2], z[2]),
+                x[3].wasm_mul_add(y[3], z[3]),
             ],
         }
         .reg
@@ -1645,10 +1646,7 @@ fn fma_f64x2(
         let z = U { reg: z }.mem;
 
         U {
-            mem: [
-                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
-            ],
+            mem: [x[0].wasm_mul_add(y[0], z[0]), x[1].wasm_mul_add(y[1], z[1])],
         }
         .reg
     }

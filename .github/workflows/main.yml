@@ -1179,6 +1179,8 @@ jobs:
           - crate: "pulley-interpreter --all-features"
           - crate: "wasmtime-internal-error"
           - crate: "wasmtime-internal-error --all-features"
+          - crate: "wasmtime-internal-core"
+          - crate: "wasmtime-internal-core --all-features"
           - script: ./ci/miri-provenance-test.sh
           - script: ./ci/miri-wast.sh ./tests/spec_testsuite/table.wast
     needs: determine

@@ -26,3 +26,13 @@ impl<T> TryNew for Arc<T> {
         return Ok(Arc::new(value));
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{Arc, TryNew};
+
+    #[test]
+    fn try_new() {
+        Arc::try_new(4).unwrap();
+    }
+}
