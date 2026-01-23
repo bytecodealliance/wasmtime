@@ -1,7 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
 ;;! filter = "wasm[1]--function"
-;;! flags = "-C inlining=y"
+;;! flags = "-C inlining=y -Wconcurrency-support=n"
 
 ;; Same as `direct-adapter-calls.wat`, except we have enabled function inlining
 ;; so all the direct calls should get inlined.

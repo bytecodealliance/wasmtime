@@ -412,6 +412,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
+        /// Whether or not any concurrency infrastructure in Wasmtime is
+        /// enabled or not.
+        pub concurrency_support: Option<bool>,
     }
 
     enum Wasm {
@@ -1004,6 +1007,10 @@ impl CommonOptions {
 
         if let Some(enable) = self.wasm.gc_support {
             config.gc_support(enable);
+        }
+
+        if let Some(enable) = self.wasm.concurrency_support {
+            config.concurrency_support(enable);
         }
 
         if let Some(enable) = self.wasm.shared_memory {

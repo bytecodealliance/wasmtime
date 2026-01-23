@@ -7,8 +7,7 @@ use core::convert::Infallible;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
-#[derive(Default)]
-pub struct ConcurrentState;
+pub enum ConcurrentState {}
 
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
@@ -167,5 +166,13 @@ impl StoreOpaque {
     pub(crate) fn exit_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
         // See comment in `enter_sync_call`
         unreachable!()
+    }
+
+    pub(crate) fn check_blocking(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
+        self.may_enter_at_all(instance)
     }
 }

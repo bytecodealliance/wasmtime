@@ -869,10 +869,9 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    let exit = if let (&Some(component_instance), true) = (
-                        component_instance,
-                        store.engine().config().cm_concurrency_enabled(),
-                    ) {
+                    let exit = if let Some(component_instance) = *component_instance
+                        && store.0.concurrency_support()
+                    {
                         store.0.enter_sync_call(
                             None,
                             false,
