@@ -610,6 +610,11 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
+        if store.engine().config().cm_concurrency_enabled() {
+            let async_type = self.abi_async(store.0);
+            store.0.enter_sync_call(None, async_type, instance)?;
+        }
+
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
             params: Params,
@@ -688,6 +693,7 @@ impl Func {
                 _ => unreachable!(),
             },
         );
+
         return Ok(val);
     }
 
@@ -719,7 +725,7 @@ impl Func {
     pub fn post_return(&self, mut store: impl AsContextMut) -> Result<()> {
         let store = store.as_context_mut();
         store.0.validate_sync_call()?;
-        self.post_return_impl(store)
+        self.post_return_impl(store, false)
     }
 
     /// Exactly like [`Self::post_return`] except for invoke WebAssembly
@@ -730,10 +736,12 @@ impl Func {
         // Future optimization opportunity: conditionally use a fiber here since
         // some func's post_return will not need the async context (i.e. end up
         // calling async host functionality)
-        store.on_fiber(|store| self.post_return_impl(store)).await?
+        store
+            .on_fiber(|store| self.post_return_impl(store, true))
+            .await?
     }
 
-    fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
+    fn post_return_impl(&self, mut store: impl AsContextMut, async_: bool) -> Result<()> {
         let mut store = store.as_context_mut();
 
         let index = self.index;
@@ -803,6 +811,10 @@ impl Func {
                 guest: Some(instance.instance_states()),
             }
             .exit_call()?;
+
+            if !async_ && store.engine().config().cm_concurrency_enabled() {
+                store.0.exit_sync_call(false)?;
+            }
         }
         Ok(())
     }

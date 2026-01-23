@@ -24,7 +24,7 @@ use crate::component::{
     RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
-use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
+use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, Tunables};
 use crate::{ModuleInternedTypeIndex, prelude::*};
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -52,8 +52,8 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
 
 /// Representation of an adapter module.
 pub struct Module<'a> {
-    /// Whether or not debug code is inserted into the adapters themselves.
-    debug: bool,
+    /// Compilation configuration
+    tunables: &'a Tunables,
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
@@ -87,6 +87,9 @@ pub struct Module<'a> {
     imported_future_transfer: Option<FuncIndex>,
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
+
+    imported_enter_sync_call: Option<FuncIndex>,
+    imported_exit_sync_call: Option<FuncIndex>,
 
     imported_trap: Option<FuncIndex>,
 
@@ -241,9 +244,9 @@ enum HelperLocation {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypesBuilder, debug: bool) -> Module<'a> {
+    pub fn new(types: &'a ComponentTypesBuilder, tunables: &'a Tunables) -> Module<'a> {
         Module {
-            debug,
+            tunables,
             types,
             core_types: Default::default(),
             core_imports: Default::default(),
@@ -264,6 +267,8 @@ impl<'a> Module<'a> {
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
+            imported_enter_sync_call: None,
+            imported_exit_sync_call: None,
             imported_trap: None,
             exports: Vec::new(),
             task_may_block: None,
@@ -737,6 +742,28 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_enter_sync_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "enter-sync-call",
+            &[ValType::I32; 3],
+            &[],
+            Import::EnterSyncCall,
+            |me| &mut me.imported_enter_sync_call,
+        )
+    }
+
+    fn import_exit_sync_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "exit-sync-call",
+            &[],
+            &[],
+            Import::ExitSyncCall,
+            |me| &mut me.imported_exit_sync_call,
+        )
+    }
+
     fn import_trap(&mut self) -> FuncIndex {
         self.import_simple(
             "runtime",
@@ -893,6 +920,13 @@ pub enum Import {
     ErrorContextTransfer,
     /// An intrinsic for trapping the instance with a specific trap code.
     Trap,
+    /// An intrinsic used by FACT-generated modules to check whether an instance
+    /// may be entered for a sync-to-sync call and push a task onto the stack if
+    /// so.
+    EnterSyncCall,
+    /// An intrinsic used by FACT-generated modules to pop the task previously
+    /// pushed by `EnterSyncCall`.
+    ExitSyncCall,
 }
 
 impl Options {

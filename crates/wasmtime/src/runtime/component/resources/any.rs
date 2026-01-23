@@ -197,12 +197,30 @@ impl ResourceAny {
         };
         let mut args = [ValRaw::u32(rep)];
 
+        let exit = if let (Some(instance), true) = (
+            slot.instance,
+            store.engine().config().cm_concurrency_enabled(),
+        ) {
+            store.0.enter_sync_call(None, false, instance)?;
+            true
+        } else {
+            false
+        };
+
         // This should be safe because `dtor` has been checked to belong to the
         // `store` provided which means it's valid and still alive. Additionally
         // destructors have al been previously type-checked and are guaranteed
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
-        unsafe { crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args)) }
+        unsafe {
+            crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args))?;
+        }
+
+        if exit {
+            store.0.exit_sync_call(false)?;
+        }
+
+        Ok(())
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {

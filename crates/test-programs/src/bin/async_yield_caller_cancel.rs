@@ -9,10 +9,7 @@ mod bindings {
 }
 
 use {
-    bindings::{
-        exports::local::local::run::Guest,
-        local::local::{continue_, ready},
-    },
+    bindings::{exports::local::local::run::Guest, local::local::continue_},
     test_programs::async_::{STATUS_RETURNED, STATUS_STARTED, subtask_cancel},
 };
 
@@ -31,8 +28,6 @@ struct Component;
 
 impl Guest for Component {
     async fn run() {
-        let thing = ready::Thing::new();
-        thing.set_ready(true);
         continue_::set_continue(true);
 
         unsafe {

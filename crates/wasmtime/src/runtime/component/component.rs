@@ -653,7 +653,7 @@ impl Component {
         };
         for init in &self.env_component().initializers {
             match init {
-                GlobalInitializer::InstantiateModule(inst) => match inst {
+                GlobalInitializer::InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = self.static_module(*index);
                         resources.add(&module.resources_required());

@@ -16,7 +16,7 @@
        (local $r i32)
        (local.set $r (call $new (i32.const 100)))
 
-       (if (i32.ne (local.get $r) (i32.const 1)) (then (unreachable)))
+       (if (i32.ne (local.get $r) (i32.const 2)) (then (unreachable)))
        (if (i32.ne (call $rep (local.get $r)) (i32.const 100)) (then (unreachable)))
 
        (call $drop (local.get $r))
@@ -97,13 +97,13 @@
 
        ;; resources assigned sequentially
        (local.set $r1 (call $new (i32.const 100)))
-       (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
+       (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
 
        (local.set $r2 (call $new (i32.const 200)))
-       (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
+       (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
 
        (local.set $r3 (call $new (i32.const 300)))
-       (if (i32.ne (local.get $r3) (i32.const 3)) (then (unreachable)))
+       (if (i32.ne (local.get $r3) (i32.const 4)) (then (unreachable)))
 
        ;; representations all look good
        (if (i32.ne (call $rep (local.get $r1)) (i32.const 100)) (then (unreachable)))
@@ -114,8 +114,8 @@
        (call $drop (local.get $r2))
        (local.set $r2 (call $new (i32.const 400)))
 
-       ;; should have reused index 1
-       (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
+       ;; should have reused index 3
+       (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
 
        ;; representations all look good
        (if (i32.ne (call $rep (local.get $r1)) (i32.const 100)) (then (unreachable)))
@@ -137,13 +137,13 @@
        (if (i32.ne (call $rep (local.get $r3)) (i32.const 700)) (then (unreachable)))
 
        ;; indices should be lifo
-       (if (i32.ne (local.get $r1) (i32.const 3)) (then (unreachable)))
-       (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
-       (if (i32.ne (local.get $r3) (i32.const 1)) (then (unreachable)))
+       (if (i32.ne (local.get $r1) (i32.const 4)) (then (unreachable)))
+       (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
+       (if (i32.ne (local.get $r3) (i32.const 2)) (then (unreachable)))
 
        ;; bump one more time
        (local.set $r4 (call $new (i32.const 800)))
-       (if (i32.ne (local.get $r4) (i32.const 4)) (then (unreachable)))
+       (if (i32.ne (local.get $r4) (i32.const 5)) (then (unreachable)))
 
        ;; deallocate everything
        (call $drop (local.get $r1))
@@ -243,13 +243,13 @@
        (local.set $r2 (call $ctor (i32.const 200)))
 
        ;; assert r1/r2 are sequential
-       (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
-       (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
+       (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
+       (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
 
        ;; reallocate r1 and it should be reassigned the same index
        (call $drop (local.get $r1))
        (local.set $r1 (call $ctor (i32.const 300)))
-       (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
+       (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
 
        ;; internal values should match
        (call $assert (local.get $r1) (i32.const 300))
@@ -445,7 +445,7 @@
       (import "" "ctor" (func $ctor (param i32) (result i32)))
 
       (func $start
-        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 1)) (then (unreachable)))
+        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
       )
       (start $start)
     )
@@ -619,12 +619,12 @@
       (call $drop2 (call $new2 (i32.const 104)))
 
       ;; should be referencing the same namespace
-      (if (i32.ne (call $new1 (i32.const 105)) (i32.const 1)) (then (unreachable)))
-      (if (i32.ne (call $new2 (i32.const 105)) (i32.const 2)) (then (unreachable)))
+      (if (i32.ne (call $new1 (i32.const 105)) (i32.const 2)) (then (unreachable)))
+      (if (i32.ne (call $new2 (i32.const 105)) (i32.const 3)) (then (unreachable)))
 
       ;; use different drops out of order
-      (call $drop2 (i32.const 1))
-      (call $drop1 (i32.const 2))
+      (call $drop2 (i32.const 2))
+      (call $drop1 (i32.const 3))
     )
 
     (start $start)
@@ -704,8 +704,8 @@
 
       ;; indexes start at 1 and while they have distinct types they should be
       ;; within the same table.
-      (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
-      (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
+      (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
+      (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
 
       ;; nothing should be dropped yet
       (if (i32.ne (call $drops) (i32.const 0)) (then (unreachable)))
@@ -868,8 +868,8 @@
       (call $drop (local.get $r2))
 
       ;; table should be empty at this point, so a fresh allocation should get
-      ;; index 0
-      (if (i32.ne (call $ctor (i32.const 600)) (i32.const 1)) (then (unreachable)))
+      ;; index 2
+      (if (i32.ne (call $ctor (i32.const 600)) (i32.const 2)) (then (unreachable)))
     )
 
     (start $start)

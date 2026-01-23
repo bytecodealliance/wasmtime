@@ -2430,6 +2430,11 @@ impl Config {
             );
         }
 
+        #[cfg(feature = "component-model")]
+        {
+            tunables.component_model_concurrency = self.cm_concurrency_enabled();
+        }
+
         Ok((tunables, features))
     }
 
@@ -2922,17 +2927,13 @@ impl Config {
     #[inline]
     pub(crate) fn cm_concurrency_enabled(&self) -> bool {
         cfg!(feature = "component-model-async")
-            && (self.enabled_features.contains(WasmFeatures::CM_ASYNC)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ASYNC_BUILTINS)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ASYNC_STACKFUL)
-                || self.enabled_features.contains(WasmFeatures::CM_THREADING)
-                || self
-                    .enabled_features
-                    .contains(WasmFeatures::CM_ERROR_CONTEXT))
+            && self.enabled_features.intersects(
+                WasmFeatures::CM_ASYNC
+                    | WasmFeatures::CM_ASYNC_BUILTINS
+                    | WasmFeatures::CM_ASYNC_STACKFUL
+                    | WasmFeatures::CM_THREADING
+                    | WasmFeatures::CM_ERROR_CONTEXT,
+            )
     }
 }
 

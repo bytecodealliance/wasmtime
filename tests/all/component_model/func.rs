@@ -3455,8 +3455,259 @@ fn test_recurse(kind: RecurseKind) -> Result<()> {
         }
     };
 
-    let run = instance.get_typed_func::<(), ()>(&mut store, "export")?;
-    run.call(&mut store, ())?;
+    let export = instance.get_typed_func::<(), ()>(&mut store, "export")?;
+    export.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_during_init() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func $start
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+    (start $start)
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    linker.instantiate(&mut store, &component)?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func (export "run")
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (canon lift (core func $m "run")))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_and_post_return(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call_post_return() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (global $index (mut i32) (i32.const 0))
+    (func (export "run")
+       (global.set $index (call $thread-index))
+       (if (i32.eqz (global.get $index)) (then unreachable))
+    )
+    (func (export "run-post-return")
+       (local $index i32)
+       (local.set $index (call $thread-index))
+       (if (i32.eqz (local.get $index)) (then unreachable))
+       (if (i32.ne (local.get $index) (global.get $index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (canon lift (core func $m "run") (post-return (func $m "run-post-return"))))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_and_post_return(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call_cabi_realloc() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (global $index (mut i32) (i32.const 0))
+    (memory (export "memory") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+       (global.set $index (call $thread-index))
+       (if (i32.eqz (global.get $index)) (then unreachable))
+       (i32.const 100)
+    )
+    (func (export "run") (param i32 i32)
+       (local $index i32)
+       (local.set $index (call $thread-index))
+       (if (i32.eqz (local.get $index)) (then unreachable))
+       (if (i32.ne (local.get $index) (global.get $index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (param "s" string) (canon lift
+    (core func $m "run")
+    (memory $m "memory")
+    (realloc (func $m "realloc"))
+  ))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(&str,), ()>(&mut store, "run")?;
+    run.call_and_post_return(&mut store, ("hola",))?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_resource_drop_from_host() -> Result<()> {
+    let component = r#"
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func (export "dtor") (param i32)
+       (if (i32.eqz (call $thread-index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (type $r (resource (rep i32) (dtor (func $m "dtor"))))
+  (core func $new (canon resource.new $r))
+  (core module $m2
+    (import "" "new" (func $new (param i32) (result i32)))
+    (func (export "new") (result i32)
+       (call $new (i32.const 100))
+    )
+  )
+  (core instance $m2 (instantiate $m2 (with "" (instance
+    (export "new" (func $new))
+  ))))
+  (func $new (result (own $r)) (canon lift (core func $m2 "new")))
+  (component $c
+    (import "r" (type $r (sub resource)))
+    (import "new" (func $new (result (own $r))))
+    (export $r-export "r" (type $r))
+    (export "new" (func $new) (func (result (own $r-export))))
+  )
+  (instance $c (instantiate $c
+    (with "r" (type $r))
+    (with "new" (func $new))
+  ))
+  (export "i" (instance $c))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+    let (resource,) = run.call_and_post_return(&mut store, ())?;
+    resource.resource_drop(&mut store)?;
+    Ok(())
+}
+
+#[test]
+fn thread_index_via_sync_host_call_and_sync_guest_call() -> Result<()> {
+    let component = r#"
+(component
+  (component $c
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (func (export "run") (result i32)
+         (call $thread-index)
+      )
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+    ))))
+    (func (export "run") (result u32) (canon lift (core func $m "run")))
+  )
+  (instance $c (instantiate $c))
+
+  (component $d
+    (import "c" (instance $c
+      (export "run" (func (result u32)))
+    ))
+    (core func $run (canon lower (func $c "run")))
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (import "" "run" (func $run (result i32)))
+      (func (export "run")
+         (local $mine i32)
+         (local $theirs i32)
+         (local.set $mine (call $thread-index))
+         (if (i32.eqz (local.get $mine)) (then unreachable))
+         (local.set $theirs (call $run))
+         (if (i32.eqz (local.get $theirs)) (then unreachable))
+      )
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+      (export "run" (func $run))
+    ))))
+    (func (export "run") (canon lift (core func $m "run")))
+  )
+  (instance $d (instantiate $d (with "c" (instance $c))))
+  (func (export "run") (alias export $d "run"))
+)
+"#;
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_and_post_return(&mut store, ())?;
     Ok(())
 }
 
