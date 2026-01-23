@@ -2101,6 +2101,7 @@ impl<T> Caller<'_, T> {
     ///
     /// For more information see
     /// [`Store::fuel_async_yield_interval`](crate::Store::fuel_async_yield_interval)
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.store.fuel_async_yield_interval(interval)
     }

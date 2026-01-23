@@ -1089,6 +1089,7 @@ impl<T> Store<T> {
     ///
     /// This method will error if fuel is not enabled or `interval` is
     /// `Some(0)`.
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.inner.fuel_async_yield_interval(interval)
     }
@@ -1412,6 +1413,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Configures this `Store` to periodically yield while executing futures.
     ///
     /// For more information see [`Store::fuel_async_yield_interval`]
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.0.fuel_async_yield_interval(interval)
     }
@@ -2341,6 +2343,7 @@ impl StoreOpaque {
         Ok(())
     }
 
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         crate::ensure!(
             self.engine().tunables().consume_fuel,
