@@ -44,6 +44,7 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
@@ -284,19 +285,8 @@ struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 unsafe impl Send for VMStoreRawPtr {}
 unsafe impl Sync for VMStoreRawPtr {}
 
-/// Functionality required by this crate for a particular module. This
-/// is chiefly needed for lazy initialization of various bits of
-/// instance state.
-///
-/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
-/// so that it can get to signatures, metadata on functions, memory and
-/// funcref-table images, etc. All of these things are ordinarily known
-/// by the higher-level layers of Wasmtime. Specifically, the main
-/// implementation of this trait is provided by
-/// `wasmtime::module::ModuleInner`.  Since the runtime crate sits at
-/// the bottom of the dependence DAG though, we don't know or care about
-/// that; we just need some implementor of this trait for each
-/// allocation request.
+/// Functionality required by this crate for a particular module. This is
+/// chiefly needed for lazy initialization of various bits of instance state.
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
     Module(crate::Module),
@@ -315,19 +305,20 @@ pub struct BareModuleInfo {
 }
 
 impl ModuleRuntimeInfo {
-    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
+    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
         ModuleRuntimeInfo::bare_with_registered_type(module, None)
     }
 
     pub(crate) fn bare_with_registered_type(
         module: Arc<wasmtime_environ::Module>,
         registered_type: Option<RegisteredType>,
-    ) -> Self {
-        ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
+    ) -> Result<Self, OutOfMemory> {
+        let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
             _registered_type: registered_type,
-        }))
+        })?;
+        Ok(ModuleRuntimeInfo::Bare(info))
     }
 
     /// The underlying Module.

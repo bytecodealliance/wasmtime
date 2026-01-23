@@ -43,7 +43,7 @@ pub async fn create_table(
                 &ModuleRuntimeInfo::bare_with_registered_type(
                     module,
                     table.element().clone().into_registered_type(),
-                ),
+                )?,
                 imports,
             )
             .await

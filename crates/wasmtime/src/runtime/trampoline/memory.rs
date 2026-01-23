@@ -41,6 +41,7 @@ pub async fn create_memory(
     module
         .exports
         .insert(String::new(), EntityIndex::Memory(memory_id));
+    let info = ModuleRuntimeInfo::bare(Arc::new(module))?;
 
     // We create an instance in the on-demand allocator when creating handles
     // associated with external objects. The configured instance allocator
@@ -57,7 +58,7 @@ pub async fn create_memory(
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
-                &ModuleRuntimeInfo::bare(Arc::new(module)),
+                &info,
                 Default::default(),
             )
             .await

@@ -44,6 +44,11 @@ const array = [
     // On OSX all we need to do is configure our deployment target as old as
     // possible. For now 10.12 is the limit.
     "env": { "MACOSX_DEPLOYMENT_TARGET": "10.12" },
+    // Similar to https://github.com/bytecodealliance/wasmtime/pull/12245, we
+    // need to avoid a rustc bug that results in linker errors depending on the
+    // order and division of code into CGUs. This is fixed on nightly but not
+    // stable yet.
+    "rust": "wasmtime-ci-pinned-nightly",
   },
   {
     "build": "aarch64-macos",
