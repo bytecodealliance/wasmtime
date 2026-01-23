@@ -15,7 +15,7 @@
 
 use crate::prelude::*;
 use core::any::Any;
-use wasmtime_slab::{Id, Slab};
+use wasmtime_core::slab::{Id, Slab};
 
 /// Side table for each `externref`'s host data value.
 #[derive(Default)]

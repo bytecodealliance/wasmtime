@@ -27,7 +27,6 @@ wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-core = { workspace = true }
@@ -268,7 +267,6 @@ runtime = [
   "dep:smallvec",
   "dep:mach2",
   "dep:memfd",
-  "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
   "pulley-interpreter/interp",
@@ -343,6 +341,7 @@ addr2line = ["dep:addr2line", "dep:gimli", "std"]
 std = [
   'postcard/use-std',
   'wasmtime-environ/std',
+  'wasmtime-core/std',
   'object/std',
   'once_cell',
   'wasmtime-fiber?/std',

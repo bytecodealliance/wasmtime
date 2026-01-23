@@ -277,7 +277,6 @@ wasmtime-jit-debug = { path = "crates/jit-debug", version = "=42.0.0", package =
 wasmtime-component-util = { path = "crates/component-util", version = "=42.0.0", package = 'wasmtime-internal-component-util' }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=42.0.0", package = 'wasmtime-internal-component-macro' }
 wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", version = "=42.0.0", package = 'wasmtime-internal-versioned-export-macros' }
-wasmtime-slab = { path = "crates/slab", version = "=42.0.0", package = 'wasmtime-internal-slab' }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=42.0.0", package = 'wasmtime-internal-jit-icache-coherence' }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=42.0.0", package = 'wasmtime-internal-wit-bindgen' }
 wasmtime-unwinder = { path = "crates/unwinder", version = "=42.0.0", package = 'wasmtime-internal-unwinder' }

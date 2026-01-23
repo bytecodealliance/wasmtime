@@ -177,7 +177,7 @@ use core::{
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
 };
-use wasmtime_slab::{Id as SlabId, Slab};
+use wasmtime_core::slab::{Id as SlabId, Slab};
 
 mod sealed {
     use super::*;

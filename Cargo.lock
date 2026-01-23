@@ -4549,7 +4549,6 @@ dependencies = [
  "wasmtime-internal-fiber",
  "wasmtime-internal-jit-debug",
  "wasmtime-internal-jit-icache-coherence",
- "wasmtime-internal-slab",
  "wasmtime-internal-unwinder",
  "wasmtime-internal-versioned-export-macros",
  "wasmtime-internal-winch",
@@ -4957,10 +4956,6 @@ dependencies = [
  "wasmtime-environ",
  "windows-sys 0.61.2",
 ]
-
-[[package]]
-name = "wasmtime-internal-slab"
-version = "42.0.0"
 
 [[package]]
 name = "wasmtime-internal-unwinder"
