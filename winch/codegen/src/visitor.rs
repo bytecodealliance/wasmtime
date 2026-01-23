@@ -1798,7 +1798,7 @@ where
             &mut self.context,
             Callee::Builtin(elem_drop),
         )?;
-        Ok(())
+        self.context.pop_and_free(self.masm)
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) -> Self::Output {
@@ -1895,7 +1895,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        )
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
     fn visit_nop(&mut self) -> Self::Output {
