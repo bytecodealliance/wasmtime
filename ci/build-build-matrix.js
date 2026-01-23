@@ -46,9 +46,10 @@ const array = [
     "env": { "MACOSX_DEPLOYMENT_TARGET": "10.12" },
     // Similar to https://github.com/bytecodealliance/wasmtime/pull/12245, we
     // need to avoid a rustc bug that results in linker errors depending on the
-    // order and division of code into CGUs. This is fixed on nightly but not
-    // stable yet.
-    "rust": "wasmtime-ci-pinned-nightly",
+    // order and division of code into CGUs. This is fixed on beta but not
+    // stable yet. Once Rust 1.94 is released this configuration option can be
+    // deleted to use stable by default.
+    "rust": "beta-2026-01-20",
   },
   {
     "build": "aarch64-macos",
