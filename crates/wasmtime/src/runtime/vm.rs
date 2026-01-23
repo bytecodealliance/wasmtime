@@ -290,7 +290,7 @@ unsafe impl Sync for VMStoreRawPtr {}
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
     Module(crate::Module),
-    Bare(Box<BareModuleInfo>),
+    Bare(Arc<BareModuleInfo>),
 }
 
 /// A barebones implementation of ModuleRuntimeInfo that is useful for
