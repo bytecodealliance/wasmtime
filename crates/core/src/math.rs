@@ -23,7 +23,7 @@
 //! needed so they're implemented only in a single location here rather than
 //! multiple.
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "self-describing methods")]
 
 /// Returns the bounds for guarding a trapping f32-to-int conversion.
 ///

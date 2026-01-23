@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn try_new() {
-        Box::try_new(4).unwrap();
+        <Box<_> as TryNew>::try_new(4).unwrap();
     }
 
     #[test]

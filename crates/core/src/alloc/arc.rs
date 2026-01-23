@@ -33,6 +33,6 @@ mod test {
 
     #[test]
     fn try_new() {
-        Arc::try_new(4).unwrap();
+        <Arc<_> as TryNew>::try_new(4).unwrap();
     }
 }
