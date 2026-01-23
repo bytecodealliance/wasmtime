@@ -1411,6 +1411,8 @@ impl StoreOpaque {
         callee_async: bool,
         callee: RuntimeInstance,
     ) -> Result<()> {
+        log::trace!("enter sync call {callee:?}");
+
         let state = self.concurrent_state_mut();
         let thread = state.guest_thread;
         let instance = if let Some(thread) = thread {
@@ -1474,6 +1476,7 @@ impl StoreOpaque {
     pub(crate) fn exit_sync_call(&mut self, guest_caller: bool) -> Result<()> {
         let thread = self.set_thread(None).unwrap();
         let instance = self.concurrent_state_mut().get_mut(thread.task)?.instance;
+        log::trace!("exit sync call {instance:?}");
         Instance::from_wasmtime(self, instance.instance).cleanup_thread(
             self,
             thread,
