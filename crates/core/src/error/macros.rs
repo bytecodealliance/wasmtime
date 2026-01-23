@@ -9,10 +9,10 @@ use super::{Error, OutOfMemory};
 use core::fmt::{self, write};
 use std_alloc::string::String;
 
-/// Construct an [`Error`](crate::Error) via string formatting or another error.
+/// Construct an [`Error`] via string formatting or another error.
 ///
 /// Like `anyhow::format_err!` or `anyhow::anyhow!` but for
-/// [`wasmtime::Error`][crate::Error].
+/// [`wasmtime::Error`](Error).
 ///
 /// # String Formatting
 ///
@@ -37,9 +37,9 @@ use std_alloc::string::String;
 /// # From Another Error
 ///
 /// When a string literal is not the first argument, then it is treated as a
-/// foreign error and is converted into an [`Error`][crate::Error]. The argument
-/// must be of a type that can be passed to either
-/// [`Error::new`][crate::Error::new] or [`Error::msg`][crate::Error::msg]:
+/// foreign error and is converted into an [`Error`]. The argument
+/// must be of a type that can be passed to either [`Error::new`] or
+/// [`Error::msg`].
 ///
 /// ```
 /// # fn _foo() {
@@ -70,7 +70,7 @@ use std_alloc::string::String;
 /// The `format_err!` macro can always convert an `anyhow::Error` into a
 /// `wasmtime::Error`, but when the `"anyhow"` cargo feature is enabled the
 /// resulting error will also return true for
-/// [`error.is::<anyhow::Error>()`][crate::Error::is] invocations.
+/// [`error.is::<anyhow::Error>()`](Error::is) invocations.
 ///
 /// ```
 /// # fn _foo() {
@@ -104,7 +104,7 @@ macro_rules! format_err {
     }};
 }
 
-/// Identical to the [`format_err!`][crate::format_err] macro.
+/// Identical to the [`format_err!`] macro.
 ///
 /// This is provided for API compatibility with the `anyhow` crate, but you
 /// should prefer using `format_err!` instead.
@@ -120,10 +120,10 @@ macro_rules! anyhow {
 ///
 /// This helper is equivalent to `return Err(format_err!(...))`.
 ///
-/// See the docs for the [`format_err!`][crate::format_err] macro for details on
+/// See the docs for the [`format_err!`] macro for details on
 /// the kinds of errors that can be constructed.
 ///
-/// Like `anyhow::bail!` but for [`wasmtime::Error`][crate::Error].
+/// Like `anyhow::bail!` but for [`wasmtime::Error`](Error).
 ///
 /// # Example
 ///
@@ -165,7 +165,7 @@ macro_rules! bail {
 /// }
 /// ```
 ///
-/// Like `anyhow::ensure!` but for [`wasmtime::Error`][crate::Error].
+/// Like `anyhow::ensure!` but for [`wasmtime::Error`](Error).
 ///
 /// # Example
 ///

@@ -1524,8 +1524,7 @@ where
 ///
 /// An `OwnedRooted<T>` is a strong handle to a garbage-collected `T`,
 /// preventing its referent (and anything else transitively referenced) from
-/// being collected by the GC until [`unroot`][crate::OwnedRooted::unroot] is
-/// explicitly called.
+/// being collected by the GC until it is dropped.
 ///
 /// An `OwnedRooted<T>` keeps its rooted GC object alive at least
 /// until the `OwnedRooted<T>` itself is dropped. The

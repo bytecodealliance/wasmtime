@@ -79,7 +79,7 @@ pub enum Type {
     Poly(u32),
 
     /// The expression is a bitvector, currently modeled in the
-    /// logic QF_BV https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
+    /// logic QF_BV <https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt>
     /// This corresponds to Cranelift's Isle type:
     /// (type Value (primitive Value))
     BitVector,

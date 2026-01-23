@@ -276,6 +276,8 @@ where
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
     ///
+    /// [`Accessor`]: crate::component::Accessor
+    ///
     /// # Example
     ///
     /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:

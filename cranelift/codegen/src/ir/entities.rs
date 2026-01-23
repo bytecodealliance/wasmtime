@@ -57,7 +57,6 @@ impl Block {
 /// - [`f64const`](super::InstBuilder::f64const) for 64-bit float constants
 /// - [`f128const`](super::InstBuilder::f128const) for 128-bit float constants
 /// - [`vconst`](super::InstBuilder::vconst) for vector constants
-/// - [`null`](super::InstBuilder::null) for null reference constants
 ///
 /// Any `InstBuilder` instruction that has an output will also return a `Value`.
 ///

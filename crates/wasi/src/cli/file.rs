@@ -8,8 +8,10 @@ use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 
 /// This implementation will yield output streams that block on writes, and
-/// output directly to a file. If truly async output is required, [`AsyncStdoutStream`]
-/// should be used instead.
+/// output directly to a file. If truly async output is required,
+/// [`AsyncStdoutStream`] should be used instead.
+///
+/// [`AsyncStdoutStream`]: crate::cli::AsyncStdoutStream
 #[derive(Clone)]
 pub struct OutputFile {
     file: Arc<std::fs::File>,
@@ -85,6 +87,8 @@ impl AsyncWrite for OutputFile {
 /// This implementation will yield input streams that block on reads, and
 /// reads directly from a file. If truly async input is required,
 /// [`AsyncStdinStream`] should be used instead.
+///
+/// [`AsyncStdinStream`]: crate::cli::AsyncStdinStream
 #[derive(Clone)]
 pub struct InputFile {
     file: Arc<std::fs::File>,

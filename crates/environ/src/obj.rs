@@ -104,9 +104,8 @@ pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 /// This section is used at runtime to allow the unwinder to find
 /// exception handler blocks active at particular callsites.
 ///
-/// This section's format is defined by the
-/// [`wasmtime_unwinder::ExceptionTableBuilder`] data structure. Its
-/// code offsets are relative to the start of the text segment.
+/// This section's format is defined by the `ExceptionTableBuilder` data
+/// structure. Its code offsets are relative to the start of the text segment.
 pub const ELF_WASMTIME_EXCEPTIONS: &str = ".wasmtime.exceptions";
 
 /// A custom binary-encoded section of the wasmtime compilation
@@ -116,7 +115,7 @@ pub const ELF_WASMTIME_EXCEPTIONS: &str = ".wasmtime.exceptions";
 /// VM-level state from state stack slots.
 ///
 /// This section's format is defined by the
-/// [`wasmtime_environ::FrameTableBuilder`] data structure. Its code
+/// [`crate::compile::FrameTableBuilder`] data structure. Its code
 /// offsets are relative to the start of the text segment.
 pub const ELF_WASMTIME_FRAMES: &str = ".wasmtime.frames";
 

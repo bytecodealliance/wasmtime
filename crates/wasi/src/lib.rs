@@ -8,7 +8,7 @@
 //! default.
 //!
 //! For components and WASIp2, see [`p2`].
-//! For WASIp1 and core modules, see the [`preview1`] module documentation.
+//! For WASIp1 and core modules, see the [`p1`] module documentation.
 //!
 //! For WASIp3, see [`p3`]. WASIp3 support is experimental, unstable and incomplete.
 

@@ -128,7 +128,7 @@ impl core::fmt::LowerHex for AmodeOffset {
 /// Cranelift, this structure stores an optional [`KnownOffset`]. The following
 /// happens immediately before emission:
 /// - the [`KnownOffset`] is looked up, mapping it to an offset value
-/// - the [`Simm32`] value is added to the offset value
+/// - the [`AmodeOffset`] value is added to the offset value
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct AmodeOffsetPlusKnownOffset {
     pub simm32: AmodeOffset,

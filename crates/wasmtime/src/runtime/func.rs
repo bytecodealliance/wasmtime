@@ -1858,8 +1858,7 @@ macro_rules! impl_into_func {
 for_each_function_signature!(impl_into_func);
 
 /// Trait implemented for various tuples made up of types which implement
-/// [`WasmTy`] that can be passed to [`Func::wrap_async`] and
-/// [`HostContext::new_typed`].
+/// [`WasmTy`] that can be passed to [`Func::wrap_async`].
 pub unsafe trait WasmTyList {
     /// Get the value type that each Type in the list represents.
     fn valtypes() -> impl Iterator<Item = ValType>;
@@ -1978,14 +1977,19 @@ impl<T> Caller<'_, T> {
 
     /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
     ///
-    /// This is similar to [`Self::get_export`] but uses a [`ModuleExport`] value to avoid
-    /// string lookups where possible. [`ModuleExport`]s can be obtained by calling
-    /// [`Module::get_export_index`] on the [`Module`] that an instance was instantiated with.
+    /// This is similar to [`Self::get_export`] but uses a [`ModuleExport`]
+    /// value to avoid string lookups where possible. [`ModuleExport`]s can be
+    /// obtained by calling [`Module::get_export_index`] on the [`Module`] that
+    /// an instance was instantiated with.
     ///
     /// This method will search the module for an export with a matching entity index and return
     /// the value, if found.
     ///
     /// Returns `None` if there was no export with a matching entity index.
+    ///
+    /// [`Module::get_export_index`]: crate::Module::get_export_index
+    /// [`Module`]: crate::Module
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
@@ -2110,7 +2114,9 @@ impl<T> Caller<'_, T> {
     /// VM-level values (locals and operand stack), when debugging is
     /// enabled.
     ///
-    /// See ['Store::debug_frames`] for more details.
+    /// See [`Store::debug_frames`] for more details.
+    ///
+    /// [`Store::debug_frames`]: crate::Store::debug_frames
     #[cfg(feature = "debug")]
     pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.store.as_context_mut().debug_frames()
@@ -2180,8 +2186,9 @@ impl core::fmt::Debug for HostFunc {
 }
 
 impl HostFunc {
-    /// Requires that the signatuer in `HostContext` is already registered
-    /// within `Engine`, which is done by `HostContext`'s constructors.
+    /// Requires that the signature in `ctx` is already registered
+    /// within `Engine`, which is done by [`Self::vmctx_sync`] and
+    /// [`Self::vmctx_async`].
     ///
     /// This is an internal private constructor for this type intended to only
     /// be used by other constructors of this type below.

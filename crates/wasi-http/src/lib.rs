@@ -19,7 +19,7 @@
 //! [`wasi:http/types`]: crate::bindings::http::types::Host
 //! [`wasi:http/incoming-handler`]: crate::bindings::exports::wasi::http::incoming_handler::Guest
 //!
-//! This crate is very similar to [`wasmtime-wasi`] in the it uses the
+//! This crate is very similar to [`wasmtime_wasi`] in the it uses the
 //! `bindgen!` macro in Wasmtime to generate bindings to interfaces. Bindings
 //! are located in the [`bindings`] module.
 //!

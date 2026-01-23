@@ -733,7 +733,7 @@ impl Func {
     }
 
     /// Exactly like [`Self::post_return`] except for invoke WebAssembly
-    /// [asynchronously](crate::#async).
+    /// [asynchronously](crate#async).
     #[cfg(feature = "async")]
     pub async fn post_return_async(&self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();

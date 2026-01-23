@@ -1255,6 +1255,8 @@ impl<T> FutureReader<T> {
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future. Usage of this future after calling `close` will also cause
     /// a panic.
+    ///
+    /// [`Accessor`]: crate::component::Accessor
     pub fn close(&mut self, mut store: impl AsContextMut) {
         future_close(store.as_context_mut().0, &mut self.id)
     }
@@ -1441,6 +1443,8 @@ unsafe impl<T: ComponentType> func::Lift for FutureReader<T> {
 /// This is an RAII wrapper around [`FutureReader`] that ensures it is closed
 /// when dropped. This can be created through [`GuardedFutureReader::new`] or
 /// [`FutureReader::guard`].
+///
+/// [`Accessor`]: crate::component::Accessor
 pub struct GuardedFutureReader<T, A>
 where
     A: AsAccessor,
@@ -1786,6 +1790,8 @@ unsafe impl<T: ComponentType> func::Lift for StreamReader<T> {
 /// This is an RAII wrapper around [`StreamReader`] that ensures it is closed
 /// when dropped. This can be created through [`GuardedStreamReader::new`] or
 /// [`StreamReader::guard`].
+///
+/// [`Accessor`]: crate::component::Accessor
 pub struct GuardedStreamReader<T, A>
 where
     A: AsAccessor,

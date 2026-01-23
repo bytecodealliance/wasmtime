@@ -184,9 +184,9 @@ pub struct Rex {
     /// instruction lists the corresponding hexadecimal value of the opcode byte
     /// with low 3 bits as 000b. In non-64-bit mode, a register code, from 0
     /// through 7, is added to the hexadecimal value of the opcode byte. In
-    /// 64-bit mode, indicates the four bit field of REX.b and opcode[2:0] field
-    /// encodes the register operand of the instruction. “+ro” is applicable
-    /// only in 64-bit mode."
+    /// 64-bit mode, indicates the four bit field of REX.b and `opcode[2:0]`
+    /// field encodes the register operand of the instruction. “+ro” is
+    /// applicable only in 64-bit mode."
     pub opcode_mod: Option<OpcodeMod>,
 }
 
@@ -1173,9 +1173,9 @@ impl Vex {
     }
 
     /// An 8-bit immediate byte is present containing a source register
-    /// specifier in either imm8[7:4] (for 64-bit
-    /// mode) or imm8[6:4] (for 32-bit mode), and instruction-specific payload
-    /// in imm8[3:0].
+    /// specifier in either `imm8[7:4]` (for 64-bit
+    /// mode) or `imm8[6:4]` (for 32-bit mode), and instruction-specific payload
+    /// in `imm8[3:0]`.
     pub fn is4(self) -> Self {
         Self { is4: true, ..self }
     }

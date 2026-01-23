@@ -22,7 +22,7 @@ where
 }
 
 /// Extension trait providing fallible allocation for types like `Arc<T>` and
-/// `Box<T>.
+/// `Box<T>`.
 pub trait TryNew {
     /// The inner `T` type that is getting wrapped into an `Arc<T>` or `Box<T>`.
     type Value;
