@@ -8,7 +8,7 @@ use crate::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
 };
 use crate::{OpaqueRootScope, Val};
-use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
+use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalConstValue, GlobalIndex};
 #[cfg(feature = "gc")]
 use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
 
@@ -168,12 +168,12 @@ impl ConstExprEvaluator {
     /// for `i32.const N`.
     #[inline]
     pub fn try_simple(&mut self, expr: &ConstExpr) -> Option<&Val> {
-        match expr.ops() {
-            [ConstOp::I32Const(i)] => Some(self.return_one(Val::I32(*i))),
-            [ConstOp::I64Const(i)] => Some(self.return_one(Val::I64(*i))),
-            [ConstOp::F32Const(f)] => Some(self.return_one(Val::F32(*f))),
-            [ConstOp::F64Const(f)] => Some(self.return_one(Val::F64(*f))),
-            _ => None,
+        match expr.const_eval()? {
+            GlobalConstValue::I32(i) => Some(self.return_one(Val::I32(i))),
+            GlobalConstValue::I64(i) => Some(self.return_one(Val::I64(i))),
+            GlobalConstValue::F32(f) => Some(self.return_one(Val::F32(f))),
+            GlobalConstValue::F64(f) => Some(self.return_one(Val::F64(f))),
+            GlobalConstValue::V128(i) => Some(self.return_one(Val::V128(i.into()))),
         }
     }
 

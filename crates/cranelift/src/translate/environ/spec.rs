@@ -10,7 +10,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use smallvec::SmallVec;
-use wasmtime_environ::{ConstExpr, ConstOp, Tunables, TypeConvert, WasmHeapType};
+use wasmtime_environ::{GlobalConstValue, Tunables, TypeConvert, WasmHeapType};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -33,32 +33,6 @@ pub enum GlobalVariable {
 
     /// This is a global variable that needs to be handled by the environment.
     Custom,
-}
-
-/// A global's constant value, known at compile time.
-#[derive(Clone, Copy)]
-pub enum GlobalConstValue {
-    I32(i32),
-    I64(i64),
-    F32(u32),
-    F64(u64),
-    V128(u128),
-}
-
-impl GlobalConstValue {
-    /// Attempt to evaluate the given const-expr at compile time.
-    pub fn const_eval(init: &ConstExpr) -> Option<GlobalConstValue> {
-        // TODO: Actually maintain an evaluation stack and handle `i32.add`,
-        // `i32.sub`, etc... const ops.
-        match init.ops() {
-            [ConstOp::I32Const(x)] => Some(Self::I32(*x)),
-            [ConstOp::I64Const(x)] => Some(Self::I64(*x)),
-            [ConstOp::F32Const(x)] => Some(Self::F32(*x)),
-            [ConstOp::F64Const(x)] => Some(Self::F64(*x)),
-            [ConstOp::V128Const(x)] => Some(Self::V128(*x)),
-            _ => None,
-        }
-    }
 }
 
 /// Environment affecting the translation of a WebAssembly.

@@ -3,8 +3,8 @@ pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, GlobalConstValue, GlobalVariable, Heap, HeapData, StructFieldsVec,
-    TableData, TableSize, TargetEnvironment,
+    FuncTranslationStacks, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
+    TargetEnvironment,
 };
 use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
@@ -24,11 +24,11 @@ use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets,
-    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmValType,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
+    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -1429,7 +1429,7 @@ impl FuncEnvironment<'_> {
         if !self.module.globals[index].mutability {
             if let Some(index) = self.module.defined_global_index(index) {
                 let init = &self.module.global_initializers[index];
-                if let Some(value) = GlobalConstValue::const_eval(init) {
+                if let Some(value) = init.const_eval() {
                     return GlobalVariable::Constant { value };
                 }
             }
