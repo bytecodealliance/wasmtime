@@ -161,12 +161,25 @@ impl Instance {
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
-        memory_tys: &PrimaryMap<MemoryIndex, wasmtime_environ::Memory>,
     ) -> InstanceHandle {
         let module = req.runtime_info.env_module();
+        let memory_tys = &module.memories;
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
         let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
 
+        #[cfg(feature = "wmemcheck")]
+        let wmemcheck_state = if req.store.engine().config().wmemcheck {
+            let size = memory_tys
+                .iter()
+                .next()
+                .map(|memory| memory.1.limits.min)
+                .unwrap_or(0)
+                * 64
+                * 1024;
+            Some(Wmemcheck::new(size.try_into().unwrap()))
+        } else {
+            None
+        };
         #[cfg(not(feature = "wmemcheck"))]
         let _ = memory_tys;
 
@@ -178,20 +191,7 @@ impl Instance {
             dropped_elements,
             dropped_data,
             #[cfg(feature = "wmemcheck")]
-            wmemcheck_state: {
-                if req.store.engine().config().wmemcheck {
-                    let size = memory_tys
-                        .iter()
-                        .next()
-                        .map(|memory| memory.1.limits.min)
-                        .unwrap_or(0)
-                        * 64
-                        * 1024;
-                    Some(Wmemcheck::new(size.try_into().unwrap()))
-                } else {
-                    None
-                }
-            },
+            wmemcheck_state,
             store: None,
             vmctx: OwnedVMContext::new(),
         });
