@@ -91,7 +91,13 @@ public:
 
     /// Runs a garbage collection pass in the referenced store to collect loose
     /// `externref` values, if any are available.
-    void gc() { wasmtime_context_gc(ptr); }
+    Result<std::monostate> gc() {
+      auto *error = wasmtime_context_gc(ptr);
+      if (error != nullptr) {
+        return Error(error);
+      }
+      return std::monostate();
+    }
 
     /// Injects fuel to be consumed within this store.
     ///

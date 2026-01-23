@@ -67,10 +67,7 @@ fn engines() -> Vec<(Engine, IsAsync)> {
             .unwrap(),
             IsAsync::NoPooling,
         ),
-        (
-            Engine::new(config.async_support(true)).unwrap(),
-            IsAsync::Yes,
-        ),
+        (Engine::new(&config).unwrap(), IsAsync::Yes),
         (
             Engine::new(config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool)))
                 .unwrap(),

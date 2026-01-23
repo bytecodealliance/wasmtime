@@ -192,7 +192,7 @@ fn gc_access_during_call() -> wasmtime::Result<()> {
             let mut stack = caller.debug_frames().unwrap();
 
             // Do a GC while we hold the stack cursor.
-            stack.as_context_mut().gc(None);
+            stack.as_context_mut().gc(None).unwrap();
 
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 0);
@@ -502,7 +502,6 @@ async fn uncaught_exception_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
         },
         r#"
@@ -554,7 +553,6 @@ async fn caught_exception_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
         },
         r#"
@@ -609,7 +607,6 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
         },
         r#"
@@ -649,7 +646,6 @@ async fn hostcall_error_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
         },
         r#"
@@ -694,7 +690,6 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
         },
         r#"
@@ -836,7 +831,6 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.wasm_exceptions(true);
             config.compiler_inlining(true);
             unsafe {
@@ -849,7 +843,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
         local.get 0
         local.get 1
         i32.add)
-      
+
       (func (export "main") (param i32 i32) (result i32)
         local.get 0
         local.get 1
@@ -903,7 +897,6 @@ async fn epoch_events() -> wasmtime::Result<()> {
 
     let (module, mut store) = get_module_and_store(
         |config| {
-            config.async_support(true);
             config.epoch_interruption(true);
         },
         r#"

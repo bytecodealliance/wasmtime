@@ -6,7 +6,7 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
-use crate::store::{InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::store::{Asyncness, InstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::{OpaqueRootScope, Val};
 use core::{mem, ptr};
 use wasmtime_environ::{
@@ -493,14 +493,14 @@ fn check_table_init_bounds(
     store: &mut StoreOpaque,
     instance: InstanceId,
     module: &Module,
+    context: &mut ConstEvalContext,
+    const_evaluator: &mut ConstExprEvaluator,
 ) -> Result<()> {
-    let mut const_evaluator = ConstExprEvaluator::default();
     let mut store = OpaqueRootScope::new(store);
 
     for segment in module.table_initialization.segments.iter() {
-        let mut context = ConstEvalContext::new(instance);
         let start = const_evaluator
-            .eval_int(&mut store, &mut context, &segment.offset)
+            .eval_int(&mut store, context, &segment.offset)
             .expect("const expression should be valid");
         let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
@@ -565,6 +565,7 @@ async fn initialize_tables(
         Instance::table_init_segment(
             &mut store,
             limiter.as_deref_mut(),
+            context.asyncness,
             context.instance,
             const_evaluator,
             segment.table_index,
@@ -590,12 +591,12 @@ fn get_memory_init_start(
     store: &mut StoreOpaque,
     init: &MemoryInitializer,
     instance: InstanceId,
+    context: &mut ConstEvalContext,
+    const_evaluator: &mut ConstExprEvaluator,
 ) -> Result<u64> {
-    let mut context = ConstEvalContext::new(instance);
-    let mut const_evaluator = ConstExprEvaluator::default();
     let mut store = OpaqueRootScope::new(store);
     const_evaluator
-        .eval_int(&mut store, &mut context, &init.offset)
+        .eval_int(&mut store, context, &init.offset)
         .map(|v| {
             get_index(
                 v,
@@ -608,10 +609,12 @@ fn check_memory_init_bounds(
     store: &mut StoreOpaque,
     instance: InstanceId,
     initializers: &[MemoryInitializer],
+    context: &mut ConstEvalContext,
+    const_evaluator: &mut ConstExprEvaluator,
 ) -> Result<()> {
     for init in initializers {
         let memory = store.instance_mut(instance).get_memory(init.memory_index);
-        let start = get_memory_init_start(store, init, instance)?;
+        let start = get_memory_init_start(store, init, instance, context, const_evaluator)?;
         let end = usize::try_from(start)
             .ok()
             .and_then(|start| start.checked_add(init.data.len()));
@@ -729,12 +732,18 @@ fn initialize_memories(
     Ok(())
 }
 
-fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Module) -> Result<()> {
-    check_table_init_bounds(store, instance, module)?;
+fn check_init_bounds(
+    store: &mut StoreOpaque,
+    instance: InstanceId,
+    context: &mut ConstEvalContext,
+    const_evaluator: &mut ConstExprEvaluator,
+    module: &Module,
+) -> Result<()> {
+    check_table_init_bounds(store, instance, module, context, const_evaluator)?;
 
     match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
-            check_memory_init_bounds(store, instance, initializers)?;
+            check_memory_init_bounds(store, instance, initializers, context, const_evaluator)?;
         }
         // Statically validated already to have everything in-bounds.
         MemoryInitialization::Static { .. } => {}
@@ -805,17 +814,18 @@ pub async fn initialize_instance(
     instance: InstanceId,
     module: &Module,
     is_bulk_memory: bool,
+    asyncness: Asyncness,
 ) -> Result<()> {
+    let mut context = ConstEvalContext::new(instance, asyncness);
+    let mut const_evaluator = ConstExprEvaluator::default();
+
     // If bulk memory is not enabled, bounds check the data and element segments before
     // making any changes. With bulk memory enabled, initializers are processed
     // in-order and side effects are observed up to the point of an out-of-bounds
     // initializer, so the early checking is not desired.
     if !is_bulk_memory {
-        check_init_bounds(store, instance, module)?;
+        check_init_bounds(store, instance, &mut context, &mut const_evaluator, module)?;
     }
-
-    let mut context = ConstEvalContext::new(instance);
-    let mut const_evaluator = ConstExprEvaluator::default();
 
     initialize_globals(
         store,

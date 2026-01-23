@@ -4,7 +4,7 @@ use crate::fiber::{self};
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMStore;
-use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
+use crate::store::{Asyncness, ResourceLimiterInner, StoreInner, StoreOpaque};
 use crate::{Store, StoreContextMut, UpdateDeadline};
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
@@ -37,9 +37,12 @@ impl<T> Store<T> {
     ///
     /// Note that this limiter is only used to limit the creation/growth of
     /// resources in the future, this does not retroactively attempt to apply
-    /// limits to the [`Store`]. Additionally this must be used with an async
-    /// [`Store`] configured via
-    /// [`Config::async_support`](crate::Config::async_support).
+    /// limits to the [`Store`].
+    ///
+    /// After configuring this method it's required that synchronous APIs in
+    /// Wasmtime are no longer used, such as [`Func::call`](crate::Func::call).
+    /// Instead APIs such as [`Func::call_async`](crate::Func::call_async) must
+    /// be used instead.
     pub fn limiter_async(
         &mut self,
         mut limiter: impl (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync)
@@ -47,7 +50,6 @@ impl<T> Store<T> {
         + Sync
         + 'static,
     ) {
-        debug_assert!(self.inner.async_support());
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
         let (instance_limit, table_limit, memory_limit) = {
@@ -61,6 +63,7 @@ impl<T> Store<T> {
 
         // Save the limiter accessor function:
         inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
+        inner.set_async_required(Asyncness::Yes);
     }
 
     /// Configures an async function that runs on calls and returns between
@@ -81,6 +84,7 @@ impl<T> Store<T> {
     #[cfg(feature = "call-hook")]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
         self.inner.call_hook = Some(crate::store::CallHookInner::Async(Box::new(hook)));
+        self.inner.set_async_required(Asyncness::Yes);
     }
 
     /// Perform garbage collection asynchronously.
@@ -140,7 +144,12 @@ impl<'a, T> StoreContextMut<'a, T> {
     {
         let (mut limiter, store) = self.0.resource_limiter_and_store_opaque();
         store
-            .gc(limiter.as_mut(), None, why.map(|e| e.bytes_needed()))
+            .gc(
+                limiter.as_mut(),
+                None,
+                why.map(|e| e.bytes_needed()),
+                crate::store::Asyncness::Yes,
+            )
             .await;
     }
 
@@ -158,10 +167,10 @@ impl<'a, T> StoreContextMut<'a, T> {
 impl<T> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
-        assert!(
-            self.async_support(),
-            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
-        );
+        // All future entrypoints must be async to handle the case that an epoch
+        // changes and a yield is required.
+        self.set_async_required(Asyncness::Yes);
+
         self.epoch_deadline_behavior =
             Some(Box::new(move |_store| Ok(UpdateDeadline::Yield(delta))));
     }

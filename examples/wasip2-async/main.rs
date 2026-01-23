@@ -32,10 +32,7 @@ impl WasiView for ComponentRunStates {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Construct the wasm engine with async support enabled.
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 

@@ -108,7 +108,6 @@ async fn smoke_func_wrap() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 async fn resume_separate_thread() -> Result<()> {
     let mut config = wasmtime_test_util::component::config();
-    config.async_support(true);
     config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let component = format!(
@@ -185,7 +184,6 @@ async fn resume_separate_thread() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 async fn poll_through_wasm_activation() -> Result<()> {
     let mut config = wasmtime_test_util::component::config();
-    config.async_support(true);
     config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let component = format!(
@@ -325,7 +323,6 @@ async fn drop_resource_async() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 async fn task_deletion() -> Result<()> {
     let mut config = Config::new();
-    config.async_support(true);
     config.wasm_component_model_async(true);
     config.wasm_component_model_threading(true);
     config.wasm_component_model_async_stackful(true);
@@ -677,7 +674,6 @@ async fn task_deletion() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 async fn cancel_host_future() -> Result<()> {
     let mut config = Config::new();
-    config.async_support(true);
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
 
@@ -774,7 +770,6 @@ async fn run_wasm_in_call_async() -> Result<()> {
     _ = env_logger::try_init();
 
     let mut config = Config::new();
-    config.async_support(true);
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
 

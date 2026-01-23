@@ -729,7 +729,6 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());

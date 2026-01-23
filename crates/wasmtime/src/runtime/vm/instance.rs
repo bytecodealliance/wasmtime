@@ -19,7 +19,9 @@ use crate::runtime::vm::{
     GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGlobalKind, VMStore,
     VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
-use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::store::{
+    Asyncness, InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
+};
 use crate::vm::VMWasmCallFunction;
 use alloc::sync::Arc;
 use core::alloc::Layout;
@@ -947,6 +949,7 @@ impl Instance {
     pub(crate) async fn table_init(
         store: &mut StoreOpaque,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
+        asyncness: Asyncness,
         instance: InstanceId,
         table_index: TableIndex,
         elem_index: ElemIndex,
@@ -962,6 +965,7 @@ impl Instance {
         Self::table_init_segment(
             store,
             limiter,
+            asyncness,
             instance,
             &mut const_evaluator,
             table_index,
@@ -976,6 +980,7 @@ impl Instance {
     pub(crate) async fn table_init_segment(
         store: &mut StoreOpaque,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
+        asyncness: Asyncness,
         elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
@@ -1026,7 +1031,7 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                let mut context = ConstEvalContext::new(elements_instance_id);
+                let mut context = ConstEvalContext::new(elements_instance_id, asyncness);
                 for (i, expr) in positions.zip(exprs) {
                     let element = const_evaluator
                         .eval(&mut store, limiter.as_deref_mut(), &mut context, expr)

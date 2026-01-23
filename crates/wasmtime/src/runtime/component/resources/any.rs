@@ -148,22 +148,15 @@ impl ResourceAny {
     /// if one was specified).
     pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            !store.0.async_support(),
-            "must use `resource_drop_async` when async support is enabled on the config"
-        );
-        self.resource_drop_impl(&mut store.as_context_mut())
+        store.0.validate_sync_call()?;
+        self.resource_drop_impl(&mut store)
     }
 
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores
-    /// to execute the destructor asynchronously.
+    /// to execute the destructor [asynchronously](crate#async).
     #[cfg(feature = "async")]
     pub async fn resource_drop_async(self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `resource_drop_async` without enabling async support in the config"
-        );
         store
             .on_fiber(|store| self.resource_drop_impl(store))
             .await?

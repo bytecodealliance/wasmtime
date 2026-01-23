@@ -176,6 +176,106 @@
 //!
 //! [`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
 //!
+//! ## Async
+//!
+//! Wasmtime supports executing WebAssembly guests through Rust-level `async`
+//! functions. This enables Wasmtime to block the guest without blocking the
+//! host, interrupt infinite loops or long-running CPU-bound guests, and
+//! integrate with Rust host functions that are themselves `async`.
+//!
+//! Many functions in the embedding API have a sync variant and an async
+//! variant, for example [`Func::call`] and [`Func::call_async`]. Embedders
+//! may decide which is most appropriate for their use case, but if certain
+//! features of Wasmtime are configured then `*_async` variants of functions are
+//! required. If any of these features are used, for example, then `*_async`
+//! must be used:
+//!
+//! * Async core wasm host functions, for example via [`Linker::func_wrap_async`]
+//! * Async component host functions, for example via [`component::LinkerInstance::func_wrap_async`]
+//! * Async resource limiters, via [`Store::limiter_async`]
+//! * Async yields with fuel via [`Store::fuel_async_yield_interval`]
+//! * Async yields via epochs via [`Store::epoch_deadline_async_yield_and_update`]
+//!
+//! This is not an exhaustive list, but if any of these configurations/APIs are
+//! used then all `*_async` APIs must be used in Wasmtime. If synchronous APIs
+//! are used instead they will return an error.
+//!
+//! #### Asynchronous Wasm
+//!
+//! Core WebAssembly and synchronous WIT functions (e.g. WASIp2-and-prior)
+//! require that all imported functions appear synchronous from the perspective
+//! of the guest. Host functions which perform I/O and block, however, are often
+//! defined with `async` in Rust. Wasmtime's async support bridges this gap with
+//! asynchronous wasm execution.
+//!
+//! When using `*_async` APIs to execute WebAssembly Wasmtime will always
+//! represent its computation as a [`Future`]. The `poll` method of the futures
+//! returned by Wasmtime will perform the actual work of calling the
+//! WebAssembly. Wasmtime won't manage its own thread pools or similar, that's
+//! left up to the embedder.
+//!
+//! To implement futures in a way that WebAssembly sees asynchronous host
+//! functions as synchronous, all async Wasmtime futures will execute on a
+//! separately allocated native stack from the thread otherwise executing
+//! Wasmtime. This separate native stack can then be switched to and from.
+//! Using this whenever an `async` host function returns a future that
+//! resolves to `Pending` we switch away from the temporary stack back to
+//! the main stack and propagate the `Pending` status.
+//!
+//! #### Execution in `poll`
+//!
+//! The [`Future::poll`] method is the main driving force behind Rust's futures.
+//! That method's own documentation states "an implementation of `poll` should
+//! strive to return quickly, and should not block". This, however, can be at
+//! odds with executing WebAssembly code as part of the `poll` method itself. If
+//! your WebAssembly is untrusted then this could allow the `poll` method to
+//! take arbitrarily long in the worst case, likely blocking all other
+//! asynchronous tasks.
+//!
+//! To remedy this situation you have a few possible ways to solve this:
+//!
+//! * The most efficient solution is to enable
+//!   [`Config::epoch_interruption`] in conjunction with
+//!   [`crate::Store::epoch_deadline_async_yield_and_update`]. Coupled with
+//!   periodic calls to [`crate::Engine::increment_epoch`] this will cause
+//!   executing WebAssembly to periodically yield back according to the
+//!   epoch configuration settings. This enables [`Future::poll`] to take at
+//!   most a certain amount of time according to epoch configuration
+//!   settings and when increments happen. The benefit of this approach is
+//!   that the instrumentation in compiled code is quite lightweight, but a
+//!   downside can be that the scheduling is somewhat nondeterministic since
+//!   increments are usually timer-based which are not always deterministic.
+//!
+//!   Note that to prevent infinite execution of wasm it's recommended to
+//!   place a timeout on the entire future representing executing wasm code
+//!   and the periodic yields with epochs should ensure that when the
+//!   timeout is reached it's appropriately recognized.
+//!
+//! * Alternatively you can enable the
+//!   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
+//!   as [`crate::Store::fuel_async_yield_interval`] When doing so this will
+//!   configure Wasmtime futures to yield periodically while they're
+//!   executing WebAssembly code. After consuming the specified amount of
+//!   fuel wasm futures will return `Poll::Pending` from their `poll`
+//!   method, and will get automatically re-polled later. This enables the
+//!   `Future::poll` method to take roughly a fixed amount of time since
+//!   fuel is guaranteed to get consumed while wasm is executing. Unlike
+//!   epoch-based preemption this is deterministic since wasm always
+//!   consumes a fixed amount of fuel per-operation. The downside of this
+//!   approach, however, is that the compiled code instrumentation is
+//!   significantly more expensive than epoch checks.
+//!
+//!   Note that to prevent infinite execution of wasm it's recommended to
+//!   place a timeout on the entire future representing executing wasm code
+//!   and the periodic yields with epochs should ensure that when the
+//!   timeout is reached it's appropriately recognized.
+//!
+//! In all cases special care needs to be taken when integrating
+//! asynchronous wasm into your application. You should carefully plan where
+//! WebAssembly will execute and what compute resources will be allotted to
+//! it. If Wasmtime doesn't support exactly what you'd like just yet, please
+//! feel free to open an issue!
+//!
 //! ## Crate Features
 //!
 //! The `wasmtime` crate comes with a number of compile-time features that can
@@ -208,7 +308,7 @@
 //!
 //! * `async` - Enabled by default, this feature enables APIs and runtime
 //!   support for defining asynchronous host functions and calling WebAssembly
-//!   asynchronously. For more information see [`Config::async_support`].
+//!   asynchronously. For more information see [async documentation](#async)
 //!
 //! * `profiling` - Enabled by default, this feature compiles in support for
 //!   profiling guest code via a number of possible strategies. See

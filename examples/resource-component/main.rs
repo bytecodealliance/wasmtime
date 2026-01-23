@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use wasmtime::component::bindgen;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::component::{HasSelf, Resource};
-use wasmtime::{Config, Engine, Result, Store};
+use wasmtime::{Engine, Result, Store};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
@@ -121,10 +121,7 @@ impl example::kv_store::kvdb::HostConnection for ComponentRunStates {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Construct the wasm engine with async support enabled.
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut linker = Linker::new(&engine);
     let state = ComponentRunStates::new();
     let mut store = Store::new(&engine, state);

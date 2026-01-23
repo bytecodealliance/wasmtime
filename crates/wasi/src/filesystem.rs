@@ -22,7 +22,7 @@ use wasmtime::error::Context as _;
 ///
 /// ```
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime_wasi::filesystem::*;
 ///
 /// struct MyStoreState {
@@ -31,9 +31,7 @@ use wasmtime::error::Context as _;
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///     let mut linker = Linker::new(&engine);
 ///
 ///     wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker::<MyStoreState, WasiFilesystem>(

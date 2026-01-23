@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
 use wasmtime::component::*;
-use wasmtime::{CallHook, CallHookHandler, Config, Engine, Result, Store, StoreContextMut, bail};
+use wasmtime::{CallHook, CallHookHandler, Engine, Result, Store, StoreContextMut, bail};
 
 // Crate a synchronous Func, call it directly:
 #[test]
@@ -222,9 +222,7 @@ async fn call_wrapped_async_func() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 
@@ -469,9 +467,7 @@ async fn timeout_async_hook() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 
@@ -557,9 +553,7 @@ async fn drop_suspended_async_hook() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 

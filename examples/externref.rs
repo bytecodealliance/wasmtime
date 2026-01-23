@@ -23,7 +23,7 @@ fn main() -> Result<()> {
         Err(e) => match e.downcast::<GcHeapOutOfMemory<&str>>() {
             Ok(oom) => {
                 let (inner, oom) = oom.take_inner();
-                store.gc(Some(&oom));
+                store.gc(Some(&oom))?;
                 ExternRef::new(&mut store, inner)?
             }
             Err(e) => return Err(e),
@@ -70,7 +70,7 @@ fn main() -> Result<()> {
     assert!(Rooted::ref_eq(&store, &ret.unwrap(), &externref)?);
 
     println!("GCing within the store...");
-    store.gc(None);
+    store.gc(None)?;
 
     println!("Done.");
     Ok(())

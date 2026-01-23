@@ -404,7 +404,6 @@ impl ServeCommand {
             .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
-        config.async_support(true);
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);

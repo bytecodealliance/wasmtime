@@ -912,7 +912,6 @@ async fn total_stacks_limit() -> Result<()> {
     pool.total_stacks(TOTAL_STACKS)
         .total_core_instances(TOTAL_STACKS + 1);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;

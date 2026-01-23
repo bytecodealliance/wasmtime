@@ -33,9 +33,7 @@ async fn run_test(path: &str) -> Result<()> {
         wasi_tls_ctx: WasiTlsCtxBuilder::new().provider(provider).build(),
     };
 
-    let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
-    });
+    let engine = test_programs_artifacts::engine(|_config| {});
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
 

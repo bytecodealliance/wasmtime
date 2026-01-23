@@ -15,16 +15,14 @@
 //! ```
 //! use wasmtime::{
 //!     component::{Linker, ResourceTable},
-//!     Config, Engine, Result, Store,
+//!     Engine, Result, Store,
 //! };
 //! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let mut config = Config::new();
-//!     config.async_support(true);
-//!     let engine = Engine::new(&config)?;
+//!     let engine = Engine::default();
 //!
 //!     let mut store = Store::new(&engine, Ctx {
 //!         table: ResourceTable::new(),

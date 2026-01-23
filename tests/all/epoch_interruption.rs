@@ -8,7 +8,6 @@ use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
 fn build_engine(config: &mut Config) -> Result<Arc<Engine>> {
-    config.async_support(true);
     config.epoch_interruption(true);
     Ok(Arc::new(Engine::new(&config)?))
 }

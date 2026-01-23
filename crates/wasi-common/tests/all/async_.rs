@@ -18,9 +18,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
     let r = {
-        let engine = test_programs_artifacts::engine(|config| {
-            config.async_support(true);
-        });
+        let engine = test_programs_artifacts::engine(|_config| {});
         let mut linker = Linker::<WasiCtx>::new(&engine);
         add_to_linker(&mut linker, |cx| cx)?;
 

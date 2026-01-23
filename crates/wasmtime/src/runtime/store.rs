@@ -400,13 +400,19 @@ pub enum UpdateDeadline {
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
     /// Extend the deadline by the specified number of ticks after yielding to
-    /// the async executor loop. This can only be used with an async [`Store`]
-    /// configured via [`Config::async_support`](crate::Config::async_support).
+    /// the async executor loop.
+    ///
+    /// This can only be used when WebAssembly is invoked with `*_async`
+    /// methods. If WebAssembly was invoked with a synchronous method then
+    /// returning this variant will raise a trap.
     #[cfg(feature = "async")]
     Yield(u64),
     /// Extend the deadline by the specified number of ticks after yielding to
-    /// the async executor loop. This can only be used with an async [`Store`]
-    /// configured via [`Config::async_support`](crate::Config::async_support).
+    /// the async executor loop.
+    ///
+    /// This can only be used when WebAssembly is invoked with `*_async`
+    /// methods. If WebAssembly was invoked with a synchronous method then
+    /// returning this variant will raise a trap.
     ///
     /// The yield will be performed by the future provided; when using `tokio`
     /// it is recommended to provide [`tokio::task::yield_now`](https://docs.rs/tokio/latest/tokio/task/fn.yield_now.html)
@@ -1011,9 +1017,13 @@ impl<T> Store<T> {
     /// GC heap for that allocation, so that it will succeed on the next
     /// attempt.
     ///
-    /// This method is only available when the `gc` Cargo feature is enabled.
+    /// # Errors
+    ///
+    /// This method will fail if an [async limiter is
+    /// configured](Store::limiter_async) in which case [`Store::gc_async`] must
+    /// be used instead.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()> {
         StoreContextMut(&mut self.inner).gc(why)
     }
 
@@ -1056,10 +1066,10 @@ impl<T> Store<T> {
     ///
     /// When a [`Store`] is configured to consume fuel with
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
-    /// configure WebAssembly to be suspended and control will be yielded back to the
-    /// caller every `interval` units of fuel consumed. This is only suitable with use of
-    /// a store associated with an [async config](crate::Config::async_support) because
-    /// only then are futures used and yields are possible.
+    /// configure WebAssembly to be suspended and control will be yielded back
+    /// to the caller every `interval` units of fuel consumed. When using this
+    /// method it requires further invocations of WebAssembly to use `*_async`
+    /// entrypoints.
     ///
     /// The purpose of this behavior is to ensure that futures which represent
     /// execution of WebAssembly do not execute too long inside their
@@ -1077,8 +1087,9 @@ impl<T> Store<T> {
     ///
     /// # Error
     ///
-    /// This method will error if it is not called on a store associated with an [async
-    /// config](crate::Config::async_support).
+    /// This method will error if fuel is not enabled or `interval` is
+    /// `Some(0)`.
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.inner.fuel_async_yield_interval(interval)
     }
@@ -1293,8 +1304,6 @@ impl<T> Store<T> {
     ///
     /// # Panics
     ///
-    /// - Will panic if this store is not configured for async
-    ///   support.
     /// - Will panic if guest-debug support was not enabled via
     ///   [`crate::Config::guest_debug`].
     #[cfg(feature = "debug")]
@@ -1313,10 +1322,9 @@ impl<T> Store<T> {
         // be a `Store<T> where T: Send`.
         T: Send,
     {
-        assert!(
-            self.inner.async_support(),
-            "debug hooks rely on async support"
-        );
+        // Debug hooks rely on async support, so async entrypoints are required.
+        self.inner.set_async_required(Asyncness::Yes);
+
         assert!(
             self.engine().tunables().debug_guest,
             "debug hooks require guest debugging to be enabled"
@@ -1333,10 +1341,6 @@ impl<T> Store<T> {
 }
 
 impl<'a, T> StoreContext<'a, T> {
-    pub(crate) fn async_support(&self) -> bool {
-        self.0.async_support()
-    }
-
     /// Returns the underlying [`Engine`] this store is connected to.
     pub fn engine(&self) -> &Engine {
         self.0.engine()
@@ -1380,13 +1384,16 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`].
-    ///
-    /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
-        assert!(!self.0.async_support());
-        let (mut limiter, store) = self.0.resource_limiter_and_store_opaque();
-        vm::assert_ready(store.gc(limiter.as_mut(), None, why.map(|e| e.bytes_needed())));
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()> {
+        let (mut limiter, store) = self.0.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(store.gc(
+            limiter.as_mut(),
+            None,
+            why.map(|e| e.bytes_needed()),
+            Asyncness::No,
+        ));
+        Ok(())
     }
 
     /// Returns remaining fuel in this store.
@@ -1406,6 +1413,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Configures this `Store` to periodically yield while executing futures.
     ///
     /// For more information see [`Store::fuel_async_yield_interval`]
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.0.fuel_async_yield_interval(interval)
     }
@@ -1559,6 +1567,24 @@ impl<T> StoreInner<T> {
     fn flush_fiber_stack(&mut self) {
         // noop shim so code can assume this always exists.
     }
+
+    /// Splits this `StoreInner<T>` into a `limiter`/`StoerOpaque` borrow while
+    /// validating that an async limiter is not configured.
+    ///
+    /// This is used for sync entrypoints which need to fail if an async limiter
+    /// is configured as otherwise the async entrypoint must be used instead.
+    pub(crate) fn validate_sync_resource_limiter_and_store_opaque(
+        &mut self,
+    ) -> Result<(Option<StoreResourceLimiter<'_>>, &mut StoreOpaque)> {
+        let (limiter, store) = self.resource_limiter_and_store_opaque();
+        if !matches!(limiter, None | Some(StoreResourceLimiter::Sync(_))) {
+            bail!(
+                "when using an async resource limiter `*_async` functions must \
+             be used instead"
+            );
+        }
+        Ok((limiter, store))
+    }
 }
 
 fn get_fuel(injected_fuel: i64, fuel_reserve: u64) -> u64 {
@@ -1630,11 +1656,6 @@ impl StoreOpaque {
         bump(&mut self.table_count, self.table_limit, tables, "table")?;
 
         Ok(())
-    }
-
-    #[inline]
-    pub fn async_support(&self) -> bool {
-        cfg!(feature = "async") && self.engine().config().async_support
     }
 
     #[inline]
@@ -2051,7 +2072,7 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    async fn do_gc(&mut self) {
+    async fn do_gc(&mut self, asyncness: Asyncness) {
         // If the GC heap hasn't been initialized, there is nothing to collect.
         if self.gc_store.is_none() {
             return;
@@ -2063,10 +2084,9 @@ impl StoreOpaque {
         // call mutable methods on `self`.
         let mut roots = core::mem::take(&mut self.gc_roots_list);
 
-        self.trace_roots(&mut roots).await;
-        let async_yield = self.async_support();
+        self.trace_roots(&mut roots, asyncness).await;
         self.unwrap_gc_store_mut()
-            .gc(async_yield, unsafe { roots.iter() })
+            .gc(asyncness, unsafe { roots.iter() })
             .await;
 
         // Restore the GC roots for the next GC.
@@ -2077,28 +2097,25 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    async fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+    async fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList, asyncness: Asyncness) {
         log::trace!("Begin trace GC roots");
 
         // We shouldn't have any leftover, stale GC roots.
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
-        #[cfg(feature = "async")]
-        if self.async_support() {
+        if asyncness != Asyncness::No {
             vm::Yield::new().await;
         }
         #[cfg(feature = "stack-switching")]
         {
             self.trace_wasm_continuation_roots(gc_roots_list);
-            #[cfg(feature = "async")]
-            if self.async_support() {
+            if asyncness != Asyncness::No {
                 vm::Yield::new().await;
             }
         }
         self.trace_vmctx_roots(gc_roots_list);
-        #[cfg(feature = "async")]
-        if self.async_support() {
+        if asyncness != Asyncness::No {
             vm::Yield::new().await;
         }
         self.trace_user_roots(gc_roots_list);
@@ -2326,19 +2343,21 @@ impl StoreOpaque {
         Ok(())
     }
 
+    #[cfg(feature = "async")]
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         crate::ensure!(
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         crate::ensure!(
-            self.engine().config().async_support,
-            "async support is not configured in this store"
-        );
-        crate::ensure!(
             interval != Some(0),
             "fuel_async_yield_interval must not be 0"
         );
+
+        // All future entrypoints must be async to handle the case that fuel
+        // runs out and an async yield is needed.
+        self.set_async_required(Asyncness::Yes);
+
         self.fuel_yield_interval = interval.and_then(|i| NonZeroU64::new(i));
         // Reset the fuel active + reserve states by resetting the amount.
         self.set_fuel(self.get_fuel()?)
@@ -2777,6 +2796,33 @@ at https://bytecodealliance.org/security.
     pub(crate) fn get_epoch_deadline(&mut self) -> u64 {
         *self.vm_store_context.epoch_deadline.get_mut()
     }
+
+    #[inline]
+    pub(crate) fn validate_sync_call(&self) -> Result<()> {
+        #[cfg(feature = "async")]
+        if self.async_state.async_required {
+            bail!("store configuration requires that `*_async` functions are used instead");
+        }
+        Ok(())
+    }
+
+    /// Returns whether this store is presently on a fiber and is allowed to
+    /// block via `block_on` with fibers.
+    pub(crate) fn can_block(&mut self) -> bool {
+        #[cfg(feature = "async")]
+        if true {
+            return self.fiber_async_state_mut().can_block();
+        }
+
+        false
+    }
+
+    #[cfg(not(feature = "async"))]
+    pub(crate) fn set_async_required(&mut self, asyncness: Asyncness) {
+        match asyncness {
+            Asyncness::No => {}
+        }
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2983,6 +3029,46 @@ impl<T: 'static> AsStoreOpaque for StoreInner<T> {
 impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         T::as_store_opaque(self)
+    }
+}
+
+/// Helper enum to indicate, in some function contexts, whether `async` should
+/// be taken advantage of or not.
+///
+/// This is used throughout Wasmtime where internal functions are all `async`
+/// but external functions might be either sync or `async`. If the external
+/// function is sync, then internally Wasmtime shouldn't yield as it won't do
+/// anything. If the external function is `async`, however, yields are fine.
+///
+/// An example of this is GC. Right now GC will cooperatively yield after phases
+/// of GC have passed, but this cooperative yielding is only enabled with
+/// `Asyncness::Yes`.
+///
+/// This enum is additionally conditionally defined such that `Yes` is only
+/// present in `async`-enabled builds. That ensures that this compiles down to a
+/// zero-sized type in `async`-disabled builds in case that interests embedders.
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum Asyncness {
+    /// Don't do async things, don't yield, etc. It's ok to execute an `async`
+    /// function, but it should be validated ahead of time that when doing so a
+    /// yield isn't possible (e.g. `validate_sync_*` methods on Store.
+    No,
+
+    /// Async things is OK. This should only be used when the API entrypoint is
+    /// itself `async`.
+    #[cfg(feature = "async")]
+    Yes,
+}
+
+impl core::ops::BitOr for Asyncness {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Asyncness::No, Asyncness::No) => Asyncness::No,
+            #[cfg(feature = "async")]
+            (Asyncness::Yes, _) | (_, Asyncness::Yes) => Asyncness::Yes,
+        }
     }
 }
 

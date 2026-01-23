@@ -89,18 +89,13 @@ where
     ///
     /// # Panics
     ///
-    /// This function will panic if it is called when the underlying [`Func`] is
-    /// connected to an asynchronous store.
+    /// Panics if `store` does not contain this function.
     ///
     /// [`Trap`]: crate::Trap
     #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
-        assert!(
-            !store.0.async_support(),
-            "must use `call_async` with async stores"
-        );
-
+        store.0.validate_sync_call()?;
         let func = self.func.vm_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
     }
@@ -133,10 +128,6 @@ where
         Results: Sync,
     {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "must use `call` with non-async stores"
-        );
 
         store
             .on_fiber(|store| {

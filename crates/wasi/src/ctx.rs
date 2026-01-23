@@ -147,12 +147,11 @@ impl WasiCtxBuilder {
     /// on the host. This is currently done with Tokio's
     /// [`spawn_blocking`](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
     ///
-    /// When WebAssembly is used in a synchronous context, for example when
-    /// [`Config::async_support`] is disabled, then this asynchronous operation
-    /// is quickly turned back into a synchronous operation with a `block_on` in
-    /// Rust. This switching back-and-forth between a blocking a non-blocking
-    /// context can have overhead, and this option exists to help alleviate this
-    /// overhead.
+    /// When WebAssembly is used in a synchronous context then this asynchronous
+    /// operation is quickly turned back into a synchronous operation with a
+    /// `block_on` in Rust. This switching back-and-forth between a blocking a
+    /// non-blocking context can have overhead, and this option exists to help
+    /// alleviate this overhead.
     ///
     /// This option indicates that for WASI functions that are blocking from the
     /// perspective of WebAssembly it's ok to block the native thread as well.
@@ -160,8 +159,6 @@ impl WasiCtxBuilder {
     /// and instead blocking operations are performed on-thread (such as opening
     /// a file). This can improve the performance of WASI operations when async
     /// support is disabled.
-    ///
-    /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
     pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
         self.filesystem.allow_blocking_current_thread = enable;
         self

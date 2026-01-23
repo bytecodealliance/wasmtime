@@ -73,12 +73,7 @@ pub unsafe extern "C" fn run_wasi(
 }
 
 fn run(wasi_component: &[u8]) -> Result<String> {
-    // wasmtime-wasi-io requires an async store, because the wasi:io/poll
-    // interface will poll as Pending while execution is suspended and it is
-    // waiting for a Pollable to become Ready. This example provides a very
-    // small async executor which is entered below with `block_on`.
-    let mut config = super::config();
-    config.async_support(true);
+    let config = super::config();
     // For future: we could consider turning on fuel in the Config to meter
     // how long a wasm guest could execute for.
     let engine = Engine::new(&config)?;

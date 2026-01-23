@@ -466,7 +466,6 @@ mod test {
 
         let mut config = Config::new();
         config.guest_debug(true);
-        config.async_support(true);
         let engine = Engine::new(&config)?;
         let module = Module::new(
             &engine,
@@ -605,7 +604,6 @@ mod test {
 
         let mut config = Config::new();
         config.guest_debug(true);
-        config.async_support(true);
         let engine = Engine::new(&config)?;
         let module = Module::new(
             &engine,
@@ -644,7 +642,6 @@ mod test {
 
         let mut config = Config::new();
         config.guest_debug(true);
-        config.async_support(true);
         let engine = Engine::new(&config)?;
         let module = Module::new(
             &engine,

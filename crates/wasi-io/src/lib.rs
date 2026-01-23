@@ -50,7 +50,7 @@ use wasmtime::component::{HasData, ResourceTable};
 /// # Example
 ///
 /// ```
-/// use wasmtime::{Config, Engine};
+/// use wasmtime::Engine;
 /// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi_io::{IoView, add_to_linker_async};
 ///
@@ -61,9 +61,7 @@ use wasmtime::component::{HasData, ResourceTable};
 /// impl IoView for MyState {
 ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
-/// let mut config = Config::new();
-/// config.async_support(true);
-/// let engine = Engine::new(&config).unwrap();
+/// let engine = Engine::default();
 /// let mut linker: Linker<MyState> = Linker::new(&engine);
 /// add_to_linker_async(&mut linker).unwrap();
 /// ```
@@ -95,17 +93,15 @@ impl<T: ?Sized + IoView> IoView for Box<T> {
 /// provided.
 ///
 /// This function will add the `async` variant of all interfaces into the
-/// [`Linker`] provided. By `async` this means that this function is only
-/// compatible with [`Config::async_support(true)`][async]. For embeddings
-/// with async support disabled, you'll need to use other crates, such as the
-/// [`wasmtime-wasi`] crate, which provides an [`add_to_linker_sync`] that
-/// includes an appropriate wasi-io implementation based on this crate's.
+/// [`Linker`] provided. For embeddings which don't want to use async, you'll
+/// need to use other crates, such as the [`wasmtime-wasi`] crate, which
+/// provides an [`add_to_linker_sync`] that includes an appropriate wasi-io
+/// implementation based on this crate's.
 ///
 /// This function will add all interfaces implemented by this crate to the
 /// [`Linker`], which corresponds to the `wasi:io/imports` world supported by
 /// this crate.
 ///
-/// [async]: wasmtime::Config::async_support
 /// [`Linker`]: wasmtime::component::Linker
 /// [`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
 /// [`add_to_linker_sync`]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/p2/fn.add_to_linker_sync.html
@@ -114,14 +110,12 @@ impl<T: ?Sized + IoView> IoView for Box<T> {
 /// # Example
 ///
 /// ```
-/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime::{Engine, Result, Store};
 /// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi_io::IoView;
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker = Linker::<MyState>::new(&engine);
 ///     wasmtime_wasi_io::add_to_linker_async(&mut linker)?;

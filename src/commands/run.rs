@@ -130,7 +130,6 @@ impl RunCommand {
     /// Creates a new `Engine` with the configuration for this command.
     pub fn new_engine(&mut self) -> Result<Engine> {
         let mut config = self.run.common.config(None)?;
-        config.async_support(true);
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
@@ -1042,6 +1041,7 @@ impl RunCommand {
                 store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
                     module.clone(),
                     Arc::new(linker.clone()),
+                    true,
                 )?));
             }
         }

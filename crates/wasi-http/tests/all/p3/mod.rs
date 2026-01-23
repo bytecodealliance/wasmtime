@@ -117,7 +117,6 @@ impl WasiHttpView for Ctx {
 async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, path)?;
@@ -153,7 +152,6 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, component_filename)?;

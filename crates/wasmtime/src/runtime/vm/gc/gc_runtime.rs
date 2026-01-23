@@ -5,6 +5,7 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
     VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef,
 };
+use crate::store::Asyncness;
 use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
 use core::slice;
@@ -747,12 +748,12 @@ pub enum GcProgress {
 /// cooperatively yielding back to the event loop after each increment of work.
 pub async fn collect_async<'a>(
     mut collection: Box<dyn GarbageCollection<'a> + 'a>,
-    async_yield: bool,
+    asyncness: Asyncness,
 ) {
     loop {
         match collection.collect_increment() {
             GcProgress::Continue => {
-                if async_yield {
+                if asyncness != Asyncness::No {
                     #[cfg(feature = "async")]
                     crate::runtime::vm::Yield::new().await
                 }
@@ -771,7 +772,7 @@ mod collect_async_tests {
         fn _assert_send_sync<T: Send + Sync>(_: T) {}
 
         fn _foo<'a>(collection: Box<dyn GarbageCollection<'a>>) {
-            _assert_send_sync(collect_async(collection, true));
+            _assert_send_sync(collect_async(collection, Asyncness::Yes));
         }
     }
 }

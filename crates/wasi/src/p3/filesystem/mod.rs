@@ -27,7 +27,6 @@ pub type FilesystemError = TrappableError<types::ErrorCode>;
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///

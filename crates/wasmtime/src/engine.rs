@@ -251,13 +251,6 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    /// Returns whether the engine is configured to support async functions.
-    #[cfg(feature = "async")]
-    #[inline]
-    pub fn is_async(&self) -> bool {
-        self.config().async_support
-    }
-
     /// Detects whether the bytes provided are a precompiled object produced by
     /// Wasmtime.
     ///

@@ -49,7 +49,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
     let do_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
         // Do a GC with `externref`s on the stack in Wasm frames.
-        caller.gc(None);
+        caller.gc(None)
     });
     let instance = Instance::new(&mut store, &module, &[do_gc.into()])?;
     let func = instance.get_func(&mut store, "func").unwrap();
@@ -67,7 +67,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
         // Doing a GC should see that there aren't any `externref`s on the stack in
         // Wasm frames anymore.
-        scope.as_context_mut().gc(None);
+        scope.as_context_mut().gc(None)?;
 
         // But the scope should still be rooting `r`.
         assert!(!inner_dropped.load(SeqCst));
@@ -115,7 +115,7 @@ fn wasm_dropping_refs() -> Result<()> {
     }
 
     // After doing a GC, all the refs should have been dropped.
-    store.gc(None);
+    store.gc(None)?;
     assert_eq!(num_refs_dropped.load(SeqCst), 4096);
 
     return Ok(());
@@ -192,7 +192,7 @@ fn many_live_refs() -> Result<()> {
 
     many_live_refs.call(&mut store, &[], &mut [])?;
 
-    store.as_context_mut().gc(None);
+    store.as_context_mut().gc(None)?;
     assert_eq!(live_refs.load(SeqCst), 0);
 
     return Ok(());
@@ -248,7 +248,7 @@ fn drop_externref_via_table_set() -> Result<()> {
             table_set.call(&mut scope, &args, &mut [])?;
         }
 
-        scope.as_context_mut().gc(None);
+        scope.as_context_mut().gc(None)?;
         assert!(!foo_is_dropped.load(SeqCst));
         assert!(!bar_is_dropped.load(SeqCst));
 
@@ -258,7 +258,7 @@ fn drop_externref_via_table_set() -> Result<()> {
         }
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(foo_is_dropped.load(SeqCst));
     assert!(!bar_is_dropped.load(SeqCst));
 
@@ -636,9 +636,7 @@ fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
             );
         },
     )?;
-    linker.func_wrap("", "gc", |mut caller: Caller<()>| {
-        caller.gc(None);
-    })?;
+    linker.func_wrap("", "gc", |mut caller: Caller<()>| caller.gc(None))?;
 
     let instance = linker.instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
@@ -736,11 +734,11 @@ fn rooted_gets_collected_after_scope_exit() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         let _externref = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
 
-        scope.as_context_mut().gc(None);
+        scope.as_context_mut().gc(None)?;
         assert!(!flag.load(SeqCst), "not dropped when still rooted");
     }
 
-    store.as_context_mut().gc(None);
+    store.as_context_mut().gc(None)?;
     assert!(flag.load(SeqCst), "dropped after being unrooted");
 
     Ok(())
@@ -756,11 +754,11 @@ fn owned_rooted_gets_collected_after_unrooting() -> Result<()> {
         ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?.to_owned_rooted(&mut scope)?
     };
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(!flag.load(SeqCst), "not dropped when still rooted");
 
     drop(externref);
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst), "dropped after being unrooted");
 
     Ok(())
@@ -799,8 +797,8 @@ fn round_trip_gc_ref_through_func_wrap() -> Result<()> {
     let f = Func::wrap(
         &mut store,
         |mut caller: Caller<'_, _>, x: Rooted<ExternRef>| {
-            caller.gc(None);
-            x
+            caller.gc(None)?;
+            Ok(x)
         },
     );
     let f = f.typed::<Rooted<ExternRef>, Rooted<ExternRef>>(&store)?;
@@ -822,7 +820,7 @@ fn to_raw_from_raw_doesnt_leak() -> Result<()> {
         let _x = ExternRef::from_raw(&mut scope, raw);
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -845,7 +843,7 @@ fn table_fill_doesnt_leak() -> Result<()> {
         table.fill(&mut scope, 0, Ref::Extern(None), 10)?;
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -872,7 +870,7 @@ fn table_copy_doesnt_leak() -> Result<()> {
         Table::copy(&mut scope, &table, 0, &table, 5, 5)?;
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -899,7 +897,7 @@ fn table_set_doesnt_leak() -> Result<()> {
         table.set(&mut scope, 2, Ref::Extern(None))?;
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -924,7 +922,7 @@ fn table_grow_doesnt_leak() -> Result<()> {
         table.grow(&mut scope, 0, x.into())?;
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -1206,7 +1204,7 @@ fn drc_transitive_drop_cons_list() -> Result<()> {
 
     // Not holding the cons list alive anymore; should transitively drop
     // everything we created.
-    store.gc(None);
+    store.gc(None)?;
     assert_eq!(num_refs_dropped.load(SeqCst), len);
 
     Ok(())
@@ -1266,7 +1264,7 @@ fn drc_transitive_drop_nested_arrays_tree() -> Result<()> {
 
     // Not holding the tree alive anymore; should transitively drop everything
     // we created.
-    store.gc(None);
+    store.gc(None)?;
     assert_eq!(num_refs_dropped.load(SeqCst), expected);
 
     Ok(())
@@ -1308,7 +1306,7 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     }
 
     // Make sure the poison array is collected.
-    store.gc(None);
+    store.gc(None)?;
 
     // Allocate and then collect an array of GC refs from Wasm. This should not
     // trick the collector into tracing any poison and panicking.
@@ -1325,7 +1323,7 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
         "#,
     )?;
     let _instance = Instance::new(&mut store, &module, &[])?;
-    store.gc(None);
+    store.gc(None)?;
 
     Ok(())
 }
@@ -1485,7 +1483,7 @@ fn drc_gc_inbetween_host_calls() -> Result<()> {
         }
 
         assert!(!inner_dropped.load(SeqCst));
-        store.gc(None);
+        store.gc(None)?;
         assert!(inner_dropped.load(SeqCst));
         wasmtime::error::Ok(())
     };
@@ -1515,16 +1513,16 @@ fn owned_rooted() -> Result<()> {
         r.to_owned_rooted(&mut scope)?
     };
     assert!(!inner_dropped.load(SeqCst));
-    store.gc(None);
+    store.gc(None)?;
     assert!(!inner_dropped.load(SeqCst));
     let r2 = r.clone();
-    store.gc(None);
+    store.gc(None)?;
     assert!(!inner_dropped.load(SeqCst));
     drop(r);
-    store.gc(None);
+    store.gc(None)?;
     assert!(!inner_dropped.load(SeqCst));
     drop(r2);
-    store.gc(None);
+    store.gc(None)?;
     assert!(inner_dropped.load(SeqCst));
 
     Ok(())
@@ -1548,7 +1546,7 @@ fn owned_rooted_lots_of_root_creation() -> Result<()> {
         r.to_owned_rooted(&mut scope)?
     };
     assert!(!inner_dropped.load(SeqCst));
-    store.gc(None);
+    store.gc(None)?;
 
     for _ in 0..100_000 {
         let mut scope = RootScope::new(&mut store);
@@ -1559,11 +1557,11 @@ fn owned_rooted_lots_of_root_creation() -> Result<()> {
         drop(r3);
     }
 
-    store.gc(None);
+    store.gc(None)?;
     assert!(!inner_dropped.load(SeqCst));
 
     drop(r);
-    store.gc(None);
+    store.gc(None)?;
     assert!(inner_dropped.load(SeqCst));
 
     Ok(())
