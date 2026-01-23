@@ -2,8 +2,8 @@ use core::ops::{Index, IndexMut};
 use cranelift_entity::EntityRef;
 use wasmtime_error::OutOfMemory;
 
-/// Like `cranelift_entity::PrimaryMap` but enforces fallible allocation for all
-/// methods that allocate.
+/// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
+/// all methods that allocate.
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct PrimaryMap<K, V>
 where
@@ -16,120 +16,118 @@ impl<K, V> PrimaryMap<K, V>
 where
     K: EntityRef,
 {
-    /// Create a new empty map.
+    /// Same as [`cranelift_entity::PrimaryMap::new`].
     pub fn new() -> Self {
         Self {
             inner: cranelift_entity::PrimaryMap::new(),
         }
     }
 
-    /// Create a new empty map with the given capacity.
+    /// Same as [`cranelift_entity::PrimaryMap::try_with_capacity`].
     pub fn with_capacity(capacity: usize) -> Result<Self, OutOfMemory> {
         let mut map = Self::new();
         map.reserve(capacity)?;
         Ok(map)
     }
 
-    /// Check if `k` is a valid key in the map.
+    /// Same as [`cranelift_entity::PrimaryMap::is_valid`].
     pub fn is_valid(&self, k: K) -> bool {
         self.inner.is_valid(k)
     }
 
-    /// Get the element at `k` if it exists.
+    /// Same as [`cranelift_entity::PrimaryMap::get`].
     pub fn get(&self, k: K) -> Option<&V> {
         self.inner.get(k)
     }
 
-    /// Get the slice of values associated with the given range of keys, if any.
+    /// Same as [`cranelift_entity::PrimaryMap::get_range`].
     pub fn get_range(&self, range: core::ops::Range<K>) -> Option<&[V]> {
         self.inner.get_range(range)
     }
 
-    /// Get the element at `k` if it exists, mutable version.
+    /// Same as [`cranelift_entity::PrimaryMap::get_mut`].
     pub fn get_mut(&mut self, k: K) -> Option<&mut V> {
         self.inner.get_mut(k)
     }
 
-    /// Is this map completely empty?
+    /// Same as [`cranelift_entity::PrimaryMap::is_empty`].
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    /// Get the total number of entity references created.
+    /// Same as [`cranelift_entity::PrimaryMap::len`].
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    /// Iterate over all the keys in this map.
+    /// Same as [`cranelift_entity::PrimaryMap::keys`].
     pub fn keys(&self) -> cranelift_entity::Keys<K> {
         self.inner.keys()
     }
 
-    /// Iterate over all the values in this map.
+    /// Same as [`cranelift_entity::PrimaryMap::values`].
     pub fn values(&self) -> core::slice::Iter<'_, V> {
         self.inner.values()
     }
 
-    /// Iterate over all the values in this map, mutable edition.
+    /// Same as [`cranelift_entity::PrimaryMap::values_mut`].
     pub fn values_mut(&mut self) -> core::slice::IterMut<'_, V> {
         self.inner.values_mut()
     }
 
-    /// Get this map's underlying values as a slice.
+    /// Same as [`cranelift_entity::PrimaryMap::as_values_slice`].
     pub fn as_values_slice(&self) -> &[V] {
         self.inner.as_values_slice()
     }
 
-    /// Iterate over all the keys and values in this map.
+    /// Same as [`cranelift_entity::PrimaryMap::iter`].
     pub fn iter(&self) -> cranelift_entity::Iter<'_, K, V> {
         self.inner.iter()
     }
 
-    /// Iterate over all the keys and values in this map, mutable edition.
+    /// Same as [`cranelift_entity::PrimaryMap::iter_mut`].
     pub fn iter_mut(&mut self) -> cranelift_entity::IterMut<'_, K, V> {
         self.inner.iter_mut()
     }
 
-    /// Remove all entries from this map.
+    /// Same as [`cranelift_entity::PrimaryMap::clear`].
     pub fn clear(&mut self) {
         self.inner.clear()
     }
 
-    /// Get the key that will be assigned to the next pushed value.
+    /// Same as [`cranelift_entity::PrimaryMap::next_key`].
     pub fn next_key(&self) -> K {
         self.inner.next_key()
     }
 
-    /// Append `v` to the mapping, assigning a new key which is returned.
+    /// Same as [`cranelift_entity::PrimaryMap::push`] but returns an error on
+    /// allocation failure.
     pub fn push(&mut self, v: V) -> Result<K, OutOfMemory> {
         self.reserve(1)?;
         Ok(self.inner.push(v))
     }
 
-    /// Returns the last element that was inserted in the map.
+    /// Same as [`cranelift_entity::PrimaryMap::last`].
     pub fn last(&self) -> Option<(K, &V)> {
         self.inner.last()
     }
 
-    /// Returns the last element that was inserted in the map.
+    /// Same as [`cranelift_entity::PrimaryMap::last_mut`].
     pub fn last_mut(&mut self) -> Option<(K, &mut V)> {
         self.inner.last_mut()
     }
 
-    /// Reserves capacity for at least `additional` more elements to be inserted.
+    /// Same as [`cranelift_entity::PrimaryMap::try_reserve`].
     pub fn reserve(&mut self, additional: usize) -> Result<(), OutOfMemory> {
         self.inner.try_reserve(additional)
     }
 
-    /// Reserves the minimum capacity for exactly `additional` more elements to be inserted.
+    /// Same as [`cranelift_entity::PrimaryMap::try_reserve_exact`].
     pub fn reserve_exact(&mut self, additional: usize) -> Result<(), OutOfMemory> {
         self.inner.try_reserve_exact(additional)
     }
 
-    /// Returns mutable references to many elements at once.
-    ///
-    /// Returns an error if an element does not exist, or if the same key was passed more than
-    /// once.
+    /// Same as [`cranelift_entity::PrimaryMap::get_disjoint_mut`].
     pub fn get_disjoint_mut<const N: usize>(
         &mut self,
         indices: [K; N],
@@ -137,17 +135,7 @@ where
         self.inner.get_disjoint_mut(indices)
     }
 
-    /// Performs a binary search on the values with a key extraction function.
-    ///
-    /// Assumes that the values are sorted by the key extracted by the function.
-    ///
-    /// If the value is found then `Ok(K)` is returned, containing the entity key
-    /// of the matching value.
-    ///
-    /// If there are multiple matches, then any one of the matches could be returned.
-    ///
-    /// If the value is not found then Err(K) is returned, containing the entity key
-    /// where a matching element could be inserted while maintaining sorted order.
+    /// Same as [`cranelift_entity::PrimaryMap::binary_search_values_by_key`].
     pub fn binary_search_values_by_key<'a, B, F>(&'a self, b: &B, f: F) -> Result<K, K>
     where
         F: FnMut(&'a V) -> B,
@@ -156,14 +144,7 @@ where
         self.inner.binary_search_values_by_key(b, f)
     }
 
-    /// Analog of `get_raw` except that a raw pointer is returned rather than a
-    /// mutable reference.
-    ///
-    /// The default accessors of items in [`PrimaryMap`] will invalidate all
-    /// previous borrows obtained from the map according to miri. This function
-    /// can be used to acquire a pointer and then subsequently acquire a second
-    /// pointer later on without invalidating the first one. In other words
-    /// this is only here to help borrow two elements simultaneously with miri.
+    /// Same as [`cranelift_entity::PrimaryMap::get_raw_mut`].
     pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
         self.inner.get_raw_mut(k)
     }
