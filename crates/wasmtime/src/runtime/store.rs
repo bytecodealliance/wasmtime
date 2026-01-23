@@ -777,8 +777,15 @@ impl<T> Store<T> {
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
-            concurrent_state: if engine.config().cm_concurrency_enabled() {
-                Some(Default::default())
+            concurrent_state: if engine.tunables().concurrency_support {
+                #[cfg(feature = "component-model-async")]
+                {
+                    Some(Default::default())
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    unreachable!()
+                }
             } else {
                 None
             },
@@ -2604,14 +2611,17 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state(&self) -> Option<&concurrent::ConcurrentState> {
-        self.concurrent_state.as_ref()
+    pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
+        debug_assert!(self.concurrency_support());
+        self.concurrent_state.as_mut().unwrap()
     }
 
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
-        debug_assert!(self.engine().config().cm_concurrency_enabled());
-        self.concurrent_state.as_mut().unwrap()
+    #[inline]
+    #[cfg(feature = "component-model")]
+    pub(crate) fn concurrency_support(&self) -> bool {
+        let support = self.concurrent_state.is_some();
+        debug_assert_eq!(support, self.engine().tunables().concurrency_support);
+        support
     }
 
     #[cfg(feature = "async")]

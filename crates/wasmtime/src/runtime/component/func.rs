@@ -258,7 +258,7 @@ impl Func {
         let store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
-        if store.0.cm_concurrency_enabled() {
+        if store.0.concurrency_support() {
             return store
                 .run_concurrent_trap_on_idle(async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
@@ -353,6 +353,10 @@ impl Func {
     /// but the task will still progress and invoke callbacks and such until
     /// completion.
     ///
+    /// This function will return an error if [`Config::concurrency_support`] is
+    /// disabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     /// [`run_concurrent`]: crate::Store::run_concurrent
     /// [#11833]: https://github.com/bytecodealliance/wasmtime/issues/11833
     /// [`Accessor`]: crate::component::Accessor
@@ -610,7 +614,7 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        if store.engine().config().cm_concurrency_enabled() {
+        if store.0.concurrency_support() {
             let async_type = self.abi_async(store.0);
             store.0.enter_sync_call(None, async_type, instance)?;
         }
@@ -812,7 +816,7 @@ impl Func {
             }
             .exit_call()?;
 
-            if !async_ && store.engine().config().cm_concurrency_enabled() {
+            if !async_ && store.0.concurrency_support() {
                 store.0.exit_sync_call(false)?;
             }
         }

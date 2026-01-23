@@ -1119,7 +1119,9 @@ impl<T> FutureReader<T> {
     ///
     /// # Panics
     ///
-    /// Panics if component-model-async is not enabled in this store's config.
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl FutureProducer<S::Data, Item = T>,
@@ -1127,10 +1129,7 @@ impl<T> FutureReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        assert!(
-            store.as_context().0.cm_concurrency_enabled(),
-            "cannot use `FutureReader::new` when component-model-async is not enabled on the config"
-        );
+        assert!(store.as_context().0.concurrency_support());
 
         struct Producer<P>(P);
 
@@ -1461,13 +1460,14 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if component-model-async is not enabled in this store's config.
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new(accessor: A, reader: FutureReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
-                .with(|a| a.as_context().0.cm_concurrency_enabled()),
-            "cannot use `GuardedFutureReader` when component-model-async is not enabled on the config"
+                .with(|a| a.as_context().0.concurrency_support())
         );
         Self {
             reader: Some(reader),
@@ -1518,7 +1518,9 @@ impl<T> StreamReader<T> {
     ///
     /// # Panics
     ///
-    /// Panics if component-model-async is not enabled in this store's config.
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl StreamProducer<S::Data, Item = T>,
@@ -1526,10 +1528,7 @@ impl<T> StreamReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        assert!(
-            store.as_context().0.cm_concurrency_enabled(),
-            "cannot use `StreamReader` when component-model-async is not enabled on the config"
-        );
+        assert!(store.as_context().0.concurrency_support());
         Self::new_(
             store
                 .as_context_mut()
@@ -1807,13 +1806,14 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if component-model-async is not enabled in this store's config.
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new(accessor: A, reader: StreamReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
-                .with(|a| a.as_context().0.cm_concurrency_enabled()),
-            "cannot use `GuardedStreamReader` when component-model-async is not enabled on the config"
+                .with(|a| a.as_context().0.concurrency_support())
         );
         Self {
             reader: Some(reader),

@@ -180,7 +180,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
         }
         (true, true) => {
-            assert!(module.tunables.component_model_concurrency);
+            assert!(module.tunables.concurrency_support);
 
             // In the async->async case, we must compile a couple of helper functions:
             //
@@ -209,7 +209,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (false, true) => {
-            assert!(module.tunables.component_model_concurrency);
+            assert!(module.tunables.concurrency_support);
 
             // Like the async->async case above, for the sync->async case we
             // also need `async-start` and `async-return` helper functions to
@@ -235,7 +235,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (true, false) => {
-            assert!(module.tunables.component_model_concurrency);
+            assert!(module.tunables.concurrency_support);
 
             // As with the async->async and sync->async cases above, for the
             // async->sync case we use `async-start` and `async-return` helper
@@ -759,7 +759,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Trap::CannotLeaveComponent,
         );
 
-        let old_task_may_block = if self.module.tunables.component_model_concurrency {
+        let old_task_may_block = if self.module.tunables.concurrency_support {
             // Save, clear, and later restore the `may_block` field.
             let task_may_block = self.module.import_task_may_block();
             let old_task_may_block = if self.types[adapter.lift.ty].async_ {
@@ -871,7 +871,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(exit.as_u32()));
         }
 
-        if self.module.tunables.component_model_concurrency {
+        if self.module.tunables.concurrency_support {
             // Pop the task we pushed earlier off of the current task stack.
             //
             // FIXME: Apply the optimizations described in #12311.

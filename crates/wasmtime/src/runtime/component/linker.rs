@@ -531,6 +531,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
         self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)))?;
         Ok(())
     }
@@ -690,6 +693,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
         self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)))?;
         Ok(())
     }
@@ -768,6 +774,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
         // TODO: This isn't really concurrent -- it requires exclusive access to
         // the store for the duration of the call, preventing guest code from
         // running until it completes.  We should make it concurrent and clean

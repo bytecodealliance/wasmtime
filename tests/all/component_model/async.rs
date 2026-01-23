@@ -832,3 +832,48 @@ async fn run_wasm_in_call_async() -> Result<()> {
     run.call_async(&mut store, ()).await?;
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn require_concurrency_support() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+
+    assert!(
+        store
+            .run_concurrent(async |_| wasmtime::error::Ok(()))
+            .await
+            .is_err()
+    );
+
+    let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        StreamReader::<u32>::new(&mut store, Vec::new());
+    }));
+    assert!(ok.is_err());
+
+    let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        FutureReader::new(&mut store, async { wasmtime::error::Ok(0) })
+    }));
+    assert!(ok.is_err());
+
+    let mut linker = Linker::<()>::new(&engine);
+    let mut root = linker.root();
+
+    assert!(
+        root.func_wrap_concurrent::<(), (), _>("f1", |_, _| { todo!() })
+            .is_err()
+    );
+    assert!(
+        root.func_new_concurrent("f2", |_, _, _, _| { todo!() })
+            .is_err()
+    );
+    assert!(
+        root.resource_concurrent("f3", ResourceType::host::<u32>(), |_, _| { todo!() })
+            .is_err()
+    );
+
+    Ok(())
+}

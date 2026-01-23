@@ -197,10 +197,9 @@ impl ResourceAny {
         };
         let mut args = [ValRaw::u32(rep)];
 
-        let exit = if let (Some(instance), true) = (
-            slot.instance,
-            store.engine().config().cm_concurrency_enabled(),
-        ) {
+        let exit = if let Some(instance) = slot.instance
+            && store.0.concurrency_support()
+        {
             store.0.enter_sync_call(None, false, instance)?;
             true
         } else {

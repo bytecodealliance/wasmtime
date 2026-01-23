@@ -2358,6 +2358,10 @@ impl Config {
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
+        // By default this is enabled with the Cargo feature, and if the feature
+        // is missing this is disabled.
+        tunables.concurrency_support = cfg!(feature = "component-model-async");
+
         // If no target is explicitly specified then further refine `tunables`
         // for the configuration of this host depending on what platform
         // features were found available at compile time. This means that anyone
@@ -2430,9 +2434,23 @@ impl Config {
             );
         }
 
-        #[cfg(feature = "component-model")]
-        {
-            tunables.component_model_concurrency = self.cm_concurrency_enabled();
+        // Concurrency support is required for some component model features.
+        let requires_concurrency = WasmFeatures::CM_ASYNC
+            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_ASYNC_STACKFUL
+            | WasmFeatures::CM_THREADING
+            | WasmFeatures::CM_ERROR_CONTEXT;
+        if tunables.concurrency_support && !cfg!(feature = "component-model-async") {
+            bail!(
+                "concurrency support was requested but was not \
+                 compiled into this build of Wasmtime"
+            )
+        }
+        if !tunables.concurrency_support && features.intersects(requires_concurrency) {
+            bail!(
+                "concurrency support must be enabled to use the component \
+                 model async or threading features"
+            )
         }
 
         Ok((tunables, features))
@@ -2923,17 +2941,42 @@ impl Config {
         self
     }
 
-    #[cfg(feature = "component-model")]
-    #[inline]
-    pub(crate) fn cm_concurrency_enabled(&self) -> bool {
-        cfg!(feature = "component-model-async")
-            && self.enabled_features.intersects(
-                WasmFeatures::CM_ASYNC
-                    | WasmFeatures::CM_ASYNC_BUILTINS
-                    | WasmFeatures::CM_ASYNC_STACKFUL
-                    | WasmFeatures::CM_THREADING
-                    | WasmFeatures::CM_ERROR_CONTEXT,
-            )
+    /// Specifies whether support for concurrent execution of WebAssembly is
+    /// supported within this store.
+    ///
+    /// This configuration option affects whether runtime data structures are
+    /// initialized within a `Store` on creation to support concurrent execution
+    /// of WebAssembly guests. This is primarily applicable to the
+    /// [`Config::wasm_component_model_async`] configuration which is the first
+    /// time Wasmtime has supported concurrent execution of guests. This
+    /// configuration option, for example, enables usage of
+    /// [`Store::run_concurrent`], [`Func::call_concurrent`], [`StreamReader`],
+    /// etc.
+    ///
+    /// This configuration option can be manually disabled to avoid initializing
+    /// data structures in the [`Store`] related to concurrent execution. When
+    /// this option is disabled then APIs related to concurrency will all fail
+    /// with a panic. For example [`Store::run_concurrent`] will panic, creating
+    /// a [`StreamReader`] will panic, etc.
+    ///
+    /// The value of this option additionally affects whether a [`Config`] is
+    /// valid and the default set of enabled WebAssembly features. If this
+    /// option is disabled then component-model features related to concurrency
+    /// will all be disabled. If this option is enabled, then the options will
+    /// retain their normal defaults. It is not valid to create a [`Config`]
+    /// with component-model-async explicitly enabled and this option explicitly
+    /// disabled, however.
+    ///
+    /// This option defaults to `true`.
+    ///
+    /// [`Store`]: crate::Store
+    /// [`Store::run_concurrent`]: crate::Store::run_concurrent
+    /// [`Func::call_concurrent`]: crate::component::Func::call_concurrent
+    /// [`StreamReader`]: crate::component::StreamReader
+    #[cfg(feature = "component-model-async")]
+    pub fn concurrency_support(&mut self, enable: bool) -> &mut Self {
+        self.tunables.concurrency_support = Some(enable);
+        self
     }
 }
 

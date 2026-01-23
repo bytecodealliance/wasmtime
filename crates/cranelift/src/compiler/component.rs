@@ -1220,7 +1220,7 @@ impl<'a> TrampolineCompiler<'a> {
                     .ins()
                     .trapz(masked, TRAP_CANNOT_LEAVE_COMPONENT);
 
-                if self.compiler.tunables.component_model_concurrency {
+                if self.compiler.tunables.concurrency_support {
                     // Stash the old value of `may_block` and then set it to false.
                     let old_may_block = self.builder.ins().load(
                         ir::types::I32,

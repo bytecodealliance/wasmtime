@@ -764,38 +764,3 @@ pub(crate) mod concurrent_disabled;
 
 #[cfg(not(feature = "component-model-async"))]
 pub(crate) use concurrent_disabled as concurrent;
-
-impl crate::runtime::store::StoreOpaque {
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn cm_concurrency_enabled(&self) -> bool {
-        let enabled = self.concurrent_state().is_some();
-        debug_assert_eq!(enabled, self.engine().config().cm_concurrency_enabled());
-        enabled
-    }
-
-    pub(crate) fn check_blocking(&mut self) -> crate::Result<()> {
-        #[cfg(feature = "component-model-async")]
-        if self.cm_concurrency_enabled() {
-            return self.check_blocking_concurrent();
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
-        #[cfg(feature = "component-model-async")]
-        if self.cm_concurrency_enabled() {
-            return self.may_enter_concurrent(instance);
-        }
-
-        if self.trapped() {
-            return false;
-        }
-
-        let flags = self
-            .component_instance(instance.instance)
-            .instance_flags(instance.index);
-
-        unsafe { !flags.needs_post_return() }
-    }
-}

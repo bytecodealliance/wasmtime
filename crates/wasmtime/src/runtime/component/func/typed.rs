@@ -181,7 +181,7 @@ where
         let mut store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
-        if store.0.cm_concurrency_enabled() {
+        if store.0.concurrency_support() {
             use crate::component::concurrent::TaskId;
             use crate::runtime::vm::SendSyncPtr;
             use core::ptr::NonNull;
@@ -258,6 +258,11 @@ where
     /// representing the completion of the guest task and any transitive
     /// subtasks it might create.
     ///
+    /// This function will return an error if [`Config::concurrency_support`] is
+    /// disabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
+    ///
     /// # Progress and Cancellation
     ///
     /// For more information about how to make progress on the wasm task or how
@@ -270,8 +275,6 @@ where
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
-    ///
-    /// Panics if component-model-async is not enabled in this store's config.
     ///
     /// # Example
     ///
@@ -315,9 +318,9 @@ where
     {
         let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
-            assert!(
-                store.0.cm_concurrency_enabled(),
-                "cannot use `call_concurrent` when component-model-async is not enabled on the config"
+            ensure!(
+                store.0.concurrency_support(),
+                "cannot use `call_concurrent` Config::concurrency_support disabled",
             );
 
             let prepared =
@@ -373,7 +376,7 @@ where
         Return: 'static,
     {
         use crate::component::storage::slice_to_storage;
-        debug_assert!(store.0.cm_concurrency_enabled());
+        debug_assert!(store.0.concurrency_support());
 
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
             Params::flatten_count()

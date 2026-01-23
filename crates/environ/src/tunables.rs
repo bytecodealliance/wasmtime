@@ -143,7 +143,7 @@ define_tunables! {
 
         /// Whether any component model feature related to concurrency is
         /// enabled.
-        pub component_model_concurrency: bool,
+        pub concurrency_support: bool,
     }
 
     pub struct ConfigTunables {
@@ -219,7 +219,7 @@ impl Tunables {
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
-            component_model_concurrency: true,
+            concurrency_support: true,
         }
     }
 
