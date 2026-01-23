@@ -131,6 +131,7 @@ harness = false
 # for a particular embedding.
 [features]
 default = [
+  'anyhow',
   'async',
   'backtrace',
   'cache',
