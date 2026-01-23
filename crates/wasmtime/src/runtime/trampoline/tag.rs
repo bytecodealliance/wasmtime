@@ -48,7 +48,7 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_with_registered_type(module, Some(func_ty)),
+            &ModuleRuntimeInfo::bare_with_registered_type(module, Some(func_ty))?,
             imports,
         ))
     }

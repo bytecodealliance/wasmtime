@@ -5,7 +5,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
-use crate::runtime::vm::GcRuntime;
+use crate::runtime::vm::{GcRuntime, ModuleRuntimeInfo};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -66,6 +66,11 @@ struct EngineInner {
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
+
+    /// The canonical empty `ModuleRuntimeInfo`, so that each store doesn't need
+    /// allocate its own copy when creating its default caller instance or GC
+    /// heap.
+    empty_module_runtime_info: ModuleRuntimeInfo,
 }
 
 impl core::fmt::Debug for Engine {
@@ -122,6 +127,10 @@ impl Engine {
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
+        let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(
+            wasmtime_environ::Module::new(wasmtime_environ::StaticModuleIndex::from_u32(0)),
+        )?)?;
+
         Ok(Engine {
             inner: try_new::<Arc<_>>(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -150,6 +159,7 @@ impl Engine {
                 config,
                 tunables,
                 features,
+                empty_module_runtime_info,
             })?,
         })
     }
@@ -619,6 +629,10 @@ information about this check\
     /// `i686-unknown-linux-gnu` target would by default return `true` here.
     pub fn is_pulley(&self) -> bool {
         self.target().is_pulley()
+    }
+
+    pub(crate) fn empty_module_runtime_info(&self) -> &ModuleRuntimeInfo {
+        &self.inner.empty_module_runtime_info
     }
 }
 
