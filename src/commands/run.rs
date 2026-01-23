@@ -633,7 +633,7 @@ impl RunCommand {
         results: &mut Vec<wasmtime::component::Val>,
     ) -> Result<(), Error> {
         #[cfg(feature = "component-model-async")]
-        if self.run.common.wasm.component_model_async.unwrap_or(false) {
+        if self.run.common.wasm.concurrency_support.unwrap_or(true) {
             store
                 .run_concurrent(async |store| {
                     let task = func.call_concurrent(store, params, results).await?;
