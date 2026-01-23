@@ -2973,7 +2973,6 @@ impl Config {
     /// [`Store::run_concurrent`]: crate::Store::run_concurrent
     /// [`Func::call_concurrent`]: crate::component::Func::call_concurrent
     /// [`StreamReader`]: crate::component::StreamReader
-    #[cfg(feature = "component-model-async")]
     pub fn concurrency_support(&mut self, enable: bool) -> &mut Self {
         self.tunables.concurrency_support = Some(enable);
         self
