@@ -79,7 +79,7 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     Ok(result.ok().map(|_| (yields, *store)))
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_yield_at_func_entry(config: &mut Config) -> Result<()> {
     // Should yield at start of call to func $subfunc.
     assert_eq!(
@@ -103,7 +103,7 @@ async fn epoch_yield_at_func_entry(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_yield_at_loop_header(config: &mut Config) -> Result<()> {
     // Should yield at top of loop, once per five iters.
     assert_eq!(
@@ -129,7 +129,7 @@ async fn epoch_yield_at_loop_header(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_yield_immediate(config: &mut Config) -> Result<()> {
     // We should see one yield immediately when the initial deadline
     // is zero.
@@ -151,7 +151,7 @@ async fn epoch_yield_immediate(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_yield_only_once(config: &mut Config) -> Result<()> {
     // We should yield from the subfunction, and then when we return
     // to the outer function and hit another loop header, we should
@@ -183,7 +183,7 @@ async fn epoch_yield_only_once(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_interrupt_infinite_loop(config: &mut Config) -> Result<()> {
     assert_eq!(
         None,
@@ -210,7 +210,7 @@ async fn epoch_interrupt_infinite_loop(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_interrupt_function_entries(config: &mut Config) -> Result<()> {
     assert_eq!(
         None,
@@ -334,7 +334,7 @@ async fn epoch_interrupt_function_entries(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_callback_continue(config: &mut Config) -> Result<()> {
     assert_eq!(
         Some((0, 1)),
@@ -361,7 +361,7 @@ async fn epoch_callback_continue(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_callback_yield(config: &mut Config) -> Result<()> {
     assert_eq!(
         Some((1, 1)),
@@ -389,7 +389,7 @@ async fn epoch_callback_yield(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_callback_yield_custom(config: &mut Config) -> Result<()> {
     assert_eq!(
         Some((1, 1)),
@@ -417,7 +417,7 @@ async fn epoch_callback_yield_custom(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn epoch_callback_trap(config: &mut Config) -> Result<()> {
     assert_eq!(
         None,
@@ -440,7 +440,7 @@ async fn epoch_callback_trap(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(with = "#[tokio::test]")]
+#[wasmtime_test]
 async fn drop_future_on_epoch_yield(config: &mut Config) -> Result<()> {
     let wasm = "
     (module

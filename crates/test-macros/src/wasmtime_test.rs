@@ -51,8 +51,6 @@ use wasmtime_test_util::wast::Compiler;
 struct TestConfig {
     strategies: Vec<Compiler>,
     flags: wasmtime_test_util::wast::TestConfig,
-    /// The test attribute to use. Defaults to `#[test]`.
-    test_attribute: Option<proc_macro2::TokenStream>,
 }
 
 impl TestConfig {
@@ -113,12 +111,6 @@ impl TestConfig {
 
         Ok(())
     }
-
-    fn test_attribute_from(&mut self, meta: &ParseNestedMeta) -> Result<()> {
-        let v: syn::LitStr = meta.value()?.parse()?;
-        self.test_attribute = Some(v.value().parse()?);
-        Ok(())
-    }
 }
 
 impl Default for TestConfig {
@@ -130,7 +122,6 @@ impl Default for TestConfig {
                 Compiler::CraneliftPulley,
             ],
             flags: Default::default(),
-            test_attribute: None,
         }
     }
 }
@@ -204,8 +195,6 @@ pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
             test_config.strategies_from(&meta)
         } else if meta.path.is_ident("wasm_features") {
             test_config.wasm_features_from(&meta)
-        } else if meta.path.is_ident("with") {
-            test_config.test_attribute_from(&meta)
         } else {
             Err(meta.error("Unsupported attributes"))
         }
@@ -223,10 +212,11 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
 
-    let test_attr = test_config
-        .test_attribute
-        .clone()
-        .unwrap_or_else(|| quote! { #[test] });
+    let test_attr = if func.sig.asyncness.is_some() {
+        quote! { #[tokio::test] }
+    } else {
+        quote! { #[test] }
+    };
 
     for strategy in &test_config.strategies {
         let strategy_name = format!("{strategy:?}");
