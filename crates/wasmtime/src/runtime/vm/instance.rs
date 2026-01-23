@@ -37,8 +37,8 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
     ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
-    Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex,
-    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
+    PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap,
+    VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -199,8 +199,7 @@ impl Instance {
         // SAFETY: this vmctx was allocated with the same layout above, so it
         // should be safe to initialize with the same values here.
         unsafe {
-            ret.get_mut()
-                .initialize_vmctx(module, req.store, req.imports);
+            ret.get_mut().initialize_vmctx(req.store, req.imports);
         }
         ret
     }
@@ -1328,13 +1327,8 @@ impl Instance {
     /// The `VMContext` memory is assumed to be uninitialized; any field
     /// that we need in a certain state will be explicitly written by this
     /// function.
-    unsafe fn initialize_vmctx(
-        mut self: Pin<&mut Self>,
-        module: &Module,
-        store: &StoreOpaque,
-        imports: Imports,
-    ) {
-        assert!(ptr::eq(module, self.env_module().as_ref()));
+    unsafe fn initialize_vmctx(mut self: Pin<&mut Self>, store: &StoreOpaque, imports: Imports) {
+        let module = self.env_module().clone();
 
         // SAFETY: the type of the magic field is indeed `u32` and this function
         // is initializing its value.
