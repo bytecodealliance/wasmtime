@@ -137,7 +137,7 @@ fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> read:
         | constants::DW_TAG_imported_declaration
         | constants::DW_TAG_imported_module
         | constants::DW_TAG_module => false,
-        constants::DW_TAG_subprogram => die.attr(constants::DW_AT_declaration)?.is_some(),
+        constants::DW_TAG_subprogram => die.attr(constants::DW_AT_declaration).is_some(),
         _ => true,
     };
     Ok(result)
@@ -150,14 +150,14 @@ fn has_valid_code_range(
 ) -> read::Result<bool> {
     match die.tag() {
         constants::DW_TAG_subprogram => {
-            if let Some(ranges_attr) = die.attr_value(constants::DW_AT_ranges)? {
+            if let Some(ranges_attr) = die.attr_value(constants::DW_AT_ranges) {
                 let offset = match ranges_attr {
                     read::AttributeValue::RangeListsRef(val) => unit.ranges_offset_from_raw(val),
                     read::AttributeValue::DebugRngListsIndex(index) => unit.ranges_offset(index)?,
                     _ => return Ok(false),
                 };
                 let mut has_valid_base = if let Some(read::AttributeValue::Addr(low_pc)) =
-                    die.attr_value(constants::DW_AT_low_pc)?
+                    die.attr_value(constants::DW_AT_low_pc)
                 {
                     Some(at.can_translate_address(low_pc))
                 } else {
@@ -200,7 +200,7 @@ fn has_valid_code_range(
                     }
                 }
                 return Ok(false);
-            } else if let Some(low_pc) = die.attr_value(constants::DW_AT_low_pc)? {
+            } else if let Some(low_pc) = die.attr_value(constants::DW_AT_low_pc) {
                 if let read::AttributeValue::Addr(a) = low_pc {
                     return Ok(at.can_translate_address(a));
                 } else if let read::AttributeValue::DebugAddrIndex(i) = low_pc {
@@ -222,9 +222,8 @@ fn build_die_dependencies(
 ) -> read::Result<()> {
     let entry = die.entry();
     let offset = entry.offset().to_unit_section_offset(&unit);
-    let mut attrs = entry.attrs();
-    while let Some(attr) = attrs.next()? {
-        build_attr_dependencies(&attr, offset, unit, at, deps)?;
+    for attr in entry.attrs() {
+        build_attr_dependencies(attr, offset, unit, at, deps)?;
     }
 
     let mut children = die.children();
@@ -256,7 +255,7 @@ fn build_attr_dependencies(
             deps.add_edge(offset, ref_offset);
         }
         read::AttributeValue::DebugInfoRef(val) => {
-            let ref_offset = UnitSectionOffset::DebugInfoOffset(val);
+            let ref_offset = UnitSectionOffset(val.0);
             deps.add_edge(offset, ref_offset);
         }
         _ => (),

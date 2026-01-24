@@ -647,7 +647,9 @@ where
             | Operation::ImplicitValue { .. }
             | Operation::ImplicitPointer { .. }
             | Operation::EntryValue { .. }
-            | Operation::ParameterRef { .. } => {
+            | Operation::ParameterRef { .. }
+            | Operation::VariableValue { .. }
+            | Operation::Uninitialized => {
                 return Ok(None);
             }
             Operation::WasmGlobal { index: _ } | Operation::WasmStack { index: _ } => {

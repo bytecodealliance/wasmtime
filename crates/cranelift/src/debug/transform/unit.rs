@@ -62,9 +62,9 @@ fn get_base_type_name<'a>(
     unit: UnitRef<Reader<'a>>,
 ) -> Result<String, Error> {
     // FIXME remove recursion.
-    if let Some(die_ref) = type_entry.attr_value(gimli::DW_AT_type)? {
+    if let Some(die_ref) = type_entry.attr_value(gimli::DW_AT_type) {
         if let Some(ref die) = resolve_die_ref(unit, &die_ref)? {
-            if let Some(value) = die.attr_value(gimli::DW_AT_name)? {
+            if let Some(value) = die.attr_value(gimli::DW_AT_name) {
                 return Ok(String::from(unit.attr_string(value)?.to_string()?));
             }
             match die.tag() {
@@ -113,7 +113,7 @@ fn replace_pointer_type<'a>(
     parent_id: write::UnitEntryId,
     kind: WebAssemblyPtrKind,
     comp_unit: &mut write::Unit,
-    wasm_ptr_die_ref: write::Reference,
+    wasm_ptr_die_ref: write::DebugInfoRef,
     pointer_type_entry: &DebuggingInformationEntry<Reader<'a>>,
     unit: UnitRef<Reader<'a>>,
     out_strings: &mut write::StringTable,
@@ -154,7 +154,7 @@ fn replace_pointer_type<'a>(
         gimli::DW_AT_type = write::AttributeValue::UnitRef(wrapper_die_id)
     });
 
-    let base_type_id = pointer_type_entry.attr_value(gimli::DW_AT_type)?;
+    let base_type_id = pointer_type_entry.attr_value(gimli::DW_AT_type);
     // Build DW_TAG_reference_type for `T&`:
     //  .. DW_AT_type = <base_type>
     add_tag!(parent_id, gimli::DW_TAG_reference_type => ref_type as ref_type_id {});
@@ -268,8 +268,7 @@ pub(crate) fn clone_unit<'a>(
     dbi_log!("Cloning CU {:?}", log_get_cu_summary(unit));
 
     let (mut out_unit, out_unit_id, file_map, file_index_base) =
-        if let Some((depth_delta, entry)) = entries.next_dfs()? {
-            assert_eq!(depth_delta, 0);
+        if let Some(entry) = entries.next_dfs()? {
             let (out_line_program, debug_line_offset, file_map, file_index_base) =
                 clone_line_program(skeleton_unit, unit.name, addr_tr, out_encoding, out_strings)?;
 
@@ -297,7 +296,7 @@ pub(crate) fn clone_unit<'a>(
                     isa,
                 )?;
                 if split_unit.is_some() {
-                    if let Some((_, skeleton_entry)) = skeleton_unit.entries().next_dfs()? {
+                    if let Some(skeleton_entry) = skeleton_unit.entries().next_dfs()? {
                         clone_die_attributes(
                             skeleton_unit,
                             skeleton_entry,
@@ -329,50 +328,36 @@ pub(crate) fn clone_unit<'a>(
             dbi_log!("... skipped: empty CU (no DW_TAG_compile_unit entry)");
             return Ok(None); // empty
         };
-    let mut current_depth = 0;
     let mut skip_at_depth = None;
     let mut current_frame_base = InheritedAttr::new();
     let mut current_value_range = InheritedAttr::new();
     let mut current_scope_ranges = InheritedAttr::new();
     let mut current_subprogram = InheritedAttr::new();
-    while let Some((depth_delta, entry)) = entries.next_dfs()? {
-        current_depth += depth_delta;
+    while let Some(entry) = entries.next_dfs()? {
+        let current_depth = entry.depth();
         log_begin_input_die(unit, entry, current_depth);
 
         // If `skip_at_depth` is `Some` then we previously decided to skip over
-        // a node and all it's children. Let A be the last node processed, B be
-        // the first node skipped, C be previous node, and D the current node.
-        // Then `cached` is the difference from A to B, `depth` is the difference
-        // from B to C, and `depth_delta` is the differenc from C to D.
-        let depth_delta = if let Some((depth, cached)) = skip_at_depth {
-            // `new_depth` = B to D
-            let new_depth = depth + depth_delta;
-            // if D is below B continue to skip
-            if new_depth > 0 {
-                skip_at_depth = Some((new_depth, cached));
+        // a node and all it's children.
+        if let Some(depth) = skip_at_depth {
+            if current_depth > depth {
                 log_end_output_die_skipped(entry, unit, "unreachable", current_depth);
                 continue;
             }
-            // otherwise process D with `depth_delta` being the difference from A to D
             skip_at_depth = None;
-            new_depth + cached
-        } else {
-            depth_delta
-        };
+        }
 
         if !context
             .reachable
             .contains(&entry.offset().to_unit_section_offset(&unit))
         {
             // entry is not reachable: discarding all its info.
-            // Here B = C so `depth` is 0. A is the previous node so `cached` =
-            // `depth_delta`.
-            skip_at_depth = Some((0, depth_delta));
+            skip_at_depth = Some(current_depth);
             log_end_output_die_skipped(entry, unit, "unreachable", current_depth);
             continue;
         }
 
-        let new_stack_len = stack.len().wrapping_add(depth_delta as usize);
+        let new_stack_len = current_depth as usize + 1;
         current_frame_base.update(new_stack_len);
         current_scope_ranges.update(new_stack_len);
         current_value_range.update(new_stack_len);
@@ -391,8 +376,8 @@ pub(crate) fn clone_unit<'a>(
                 None
             }
         } else {
-            let high_pc = entry.attr_value(gimli::DW_AT_high_pc)?;
-            let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
+            let high_pc = entry.attr_value(gimli::DW_AT_high_pc);
+            let ranges = entry.attr_value(gimli::DW_AT_ranges);
             if high_pc.is_some() || ranges.is_some() {
                 let range_builder = RangeInfoBuilder::from(unit, entry)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
@@ -402,15 +387,11 @@ pub(crate) fn clone_unit<'a>(
             }
         };
 
-        if depth_delta <= 0 {
-            for _ in depth_delta..1 {
-                stack.pop();
-            }
-        } else {
-            assert_eq!(depth_delta, 1);
+        while stack.len() >= new_stack_len {
+            stack.pop();
         }
 
-        if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base)? {
+        if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base) {
             if let Some(expr) = compile_expression(&expr, unit.encoding(), None)? {
                 current_frame_base.push(new_stack_len, expr);
             }
