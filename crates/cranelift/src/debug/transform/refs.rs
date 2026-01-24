@@ -100,7 +100,7 @@ impl DebugInfoRefsMap {
                 if let Some((id, entry_id)) = self.map.get(&offset) {
                     die.set(
                         attr_name,
-                        write::AttributeValue::DebugInfoRef(write::Reference::Entry(
+                        write::AttributeValue::DebugInfoRef(write::DebugInfoRef::Entry(
                             *id, *entry_id,
                         )),
                     );

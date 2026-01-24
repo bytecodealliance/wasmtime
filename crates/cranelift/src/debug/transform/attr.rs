@@ -76,8 +76,7 @@ pub(crate) fn clone_die_attributes<'a>(
     let mut is_obj_ptr = false;
     prepare_die_context(unit, entry, &mut attr_context, &mut is_obj_ptr)?;
 
-    let mut attrs = entry.attrs();
-    while let Some(attr) = attrs.next()? {
+    for attr in entry.attrs() {
         match attr.name() {
             gimli::DW_AT_low_pc | gimli::DW_AT_high_pc | gimli::DW_AT_ranges => {
                 // Handled by RangeInfoBuilder.
@@ -420,13 +419,13 @@ fn is_obj_ptr_param<'a>(
     // why do we need this heuristic as well?
     // A: Declarations do not include DW_AT_object_pointer.
     if param_num == 0
-        && entry.attr_value(gimli::DW_AT_artificial)? == Some(AttributeValue::Flag(true))
+        && entry.attr_value(gimli::DW_AT_artificial) == Some(AttributeValue::Flag(true))
     {
         // Either this has no name (declarations omit them), or its explicitly "this".
-        let name = entry.attr_value(gimli::DW_AT_name)?;
+        let name = entry.attr_value(gimli::DW_AT_name);
         if name.is_none() || unit.attr_string(name.unwrap())?.slice().eq(b"this") {
             // Finally, a type check. We expect a pointer.
-            if let Some(type_attr) = entry.attr_value(gimli::DW_AT_type)? {
+            if let Some(type_attr) = entry.attr_value(gimli::DW_AT_type) {
                 if let Some(type_die) = resolve_die_ref(unit, &type_attr)? {
                     return Ok(type_die.tag() == gimli::DW_TAG_pointer_type);
                 }

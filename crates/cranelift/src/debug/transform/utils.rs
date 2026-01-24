@@ -9,7 +9,7 @@ use wasmtime_environ::error::Error;
 pub(crate) fn append_vmctx_info(
     comp_unit: &mut write::Unit,
     parent_id: write::UnitEntryId,
-    vmctx_ptr_die_ref: write::Reference,
+    vmctx_ptr_die_ref: write::DebugInfoRef,
     addr_tr: &AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
     scope_ranges: &[(u64, u64)],
@@ -51,7 +51,7 @@ pub(crate) fn append_vmctx_info(
 pub fn resolve_die_ref<'a, 'r>(
     unit: UnitRef<'a, Reader<'r>>,
     die_ref: &'a AttributeValue<Reader<'r>>,
-) -> Result<Option<DebuggingInformationEntry<'a, 'a, Reader<'r>>>, Error> {
+) -> Result<Option<DebuggingInformationEntry<Reader<'r>>>, Error> {
     let die = match die_ref {
         AttributeValue::UnitRef(unit_offs) => Some(unit.unit.entry(*unit_offs)?),
         // TODO-DebugInfo: support AttributeValue::DebugInfoRef. The trouble is that we don't have

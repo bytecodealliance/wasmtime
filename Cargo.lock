@@ -13,11 +13,11 @@ dependencies = [
 
 [[package]]
 name = "addr2line"
-version = "0.25.1"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
+checksum = "9698bf0769c641b18618039fe2ebd41eb3541f98433000f64e663fab7cea2c87"
 dependencies = [
- "gimli 0.32.3",
+ "gimli 0.33.0",
 ]
 
 [[package]]
@@ -762,7 +762,7 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "env_logger 0.11.5",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "hashbrown 0.15.2",
  "libm",
  "log",
@@ -828,7 +828,7 @@ dependencies = [
  "cranelift-reader",
  "file-per-thread-logger",
  "filecheck",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "libm",
  "log",
  "num_cpus",
@@ -1628,11 +1628,12 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.32.3"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+checksum = "0bf7f043f89559805f8c7cacc432749b2fa0d0a0a9ee46ce47164ed5ba7f126c"
 dependencies = [
- "fallible-iterator",
+ "fnv",
+ "hashbrown 0.16.1",
  "indexmap 2.11.4",
  "stable_deref_trait",
 ]
@@ -1702,6 +1703,12 @@ dependencies = [
  "foldhash",
  "serde",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "heck"
@@ -2013,7 +2020,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "serde",
  "serde_core",
 ]
@@ -4496,7 +4503,7 @@ dependencies = [
 name = "wasmtime"
 version = "42.0.0"
 dependencies = [
- "addr2line 0.25.1",
+ "addr2line 0.26.0",
  "async-trait",
  "bitflags 2.9.4",
  "bumpalo",
@@ -4508,7 +4515,7 @@ dependencies = [
  "env_logger 0.11.5",
  "futures",
  "fxprof-processed-profile",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "hashbrown 0.15.2",
  "indexmap 2.11.4",
  "ittapi",
@@ -4618,7 +4625,7 @@ dependencies = [
  "env_logger 0.11.5",
  "filecheck",
  "futures",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "http",
  "http-body-util",
  "hyper",
@@ -4699,7 +4706,7 @@ dependencies = [
  "cranelift-bitset",
  "cranelift-entity",
  "env_logger 0.11.5",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "indexmap 2.11.4",
  "log",
  "object 0.37.3",
@@ -4865,7 +4872,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-native",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "itertools 0.14.0",
  "log",
  "object 0.37.3",
@@ -4981,7 +4988,7 @@ name = "wasmtime-internal-winch"
 version = "42.0.0"
 dependencies = [
  "cranelift-codegen",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "log",
  "object 0.37.3",
  "target-lexicon",
@@ -5394,7 +5401,7 @@ version = "42.0.0"
 dependencies = [
  "cranelift-assembler-x64",
  "cranelift-codegen",
- "gimli 0.32.3",
+ "gimli 0.33.0",
  "regalloc2",
  "smallvec 1.15.1",
  "target-lexicon",
