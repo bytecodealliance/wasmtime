@@ -1982,6 +1982,12 @@ criteria = "safe-to-deploy"
 delta = "0.25.0 -> 0.25.1"
 notes = "Minor updates, looks like a minor bug fix, nothing awry."
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.25.1 -> 0.26.0"
+notes = "Nothing out of the ordinary for this update, all DWARF all the time."
+
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -6731,6 +6737,12 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-15"
 end = "2026-10-10"
 
+[[trusted.gimli]]
+criteria = "safe-to-deploy"
+user-id = 4415 # Philip Craig (philipc)
+start = "2019-04-25"
+end = "2027-01-24"
+
 [[trusted.h2]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -6742,6 +6754,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2025-12-02"
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-04-30"
+end = "2027-01-24"
 
 [[trusted.http]]
 criteria = "safe-to-deploy"
