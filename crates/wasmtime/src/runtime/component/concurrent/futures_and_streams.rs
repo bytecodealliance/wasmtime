@@ -3996,13 +3996,11 @@ impl Instance {
     pub(crate) fn error_context_new(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsIndex,
         debug_msg_address: u32,
         debug_msg_len: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         let lift_ctx = &mut LiftContext::new(store, options, self);
         let debug_msg = String::linear_lift_from_flat(
             lift_ctx,
@@ -4079,12 +4077,10 @@ impl Instance {
     pub(crate) fn future_cancel_read(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
             .map(|v| v.encode())
     }
@@ -4093,12 +4089,10 @@ impl Instance {
     pub(crate) fn future_cancel_write(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
             .map(|v| v.encode())
     }
@@ -4107,12 +4101,10 @@ impl Instance {
     pub(crate) fn stream_cancel_read(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
             .map(|v| v.encode())
     }
@@ -4121,12 +4113,10 @@ impl Instance {
     pub(crate) fn stream_cancel_write(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
             .map(|v| v.encode())
     }
@@ -4135,11 +4125,9 @@ impl Instance {
     pub(crate) fn future_drop_readable(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         reader: u32,
     ) -> Result<()> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_drop_readable(store, TransmitIndex::Future(ty), reader)
     }
 
@@ -4147,11 +4135,9 @@ impl Instance {
     pub(crate) fn stream_drop_readable(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         reader: u32,
     ) -> Result<()> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_drop_readable(store, TransmitIndex::Stream(ty), reader)
     }
 
@@ -4189,12 +4175,10 @@ impl Instance {
     pub(crate) fn error_context_drop(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
         let instance = self.id().get_mut(store);
-        instance.check_may_leave(caller)?;
 
         let local_handle_table = instance.table_for_error_context(ty);
 
@@ -4259,10 +4243,8 @@ impl Instance {
     pub(crate) fn future_new(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
     ) -> Result<ResourcePair> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_new(store, TransmitIndex::Future(ty))
     }
 
@@ -4270,10 +4252,8 @@ impl Instance {
     pub(crate) fn stream_new(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
     ) -> Result<ResourcePair> {
-        self.id().get(store).check_may_leave(caller)?;
         self.guest_new(store, TransmitIndex::Stream(ty))
     }
 
