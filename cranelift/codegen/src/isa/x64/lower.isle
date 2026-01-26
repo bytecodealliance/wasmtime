@@ -4261,13 +4261,17 @@
 ;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fcopysign a @ (value_type $F32) b)))
-      (let ((sign_bit Xmm (imm $F32 0x80000000)))
+      (let ((sign_bit Xmm (imm $F32 0x80000000))
+            (a Xmm a) ;; force into reg so we don't sink a 128-bit load.
+            (b Xmm b))
         (x64_orps
           (x64_andnps sign_bit a)
           (x64_andps sign_bit b))))
 
 (rule (lower (has_type $F64 (fcopysign a @ (value_type $F64) b)))
-      (let ((sign_bit Xmm (imm $F64 0x8000000000000000)))
+      (let ((sign_bit Xmm (imm $F64 0x8000000000000000))
+            (a Xmm a) ;; force into reg so we don't sink a 128-bit load.
+            (b Xmm b))
         (x64_orpd
           (x64_andnpd sign_bit a)
           (x64_andpd sign_bit b))))

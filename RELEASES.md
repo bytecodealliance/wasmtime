@@ -1,3 +1,16 @@
+## 36.0.5
+
+Released 2026-01-26.
+
+### Fixed
+
+* Fixed a bug in lowering of `f64.copysign` on x86-64 whereby when combined
+  with an `f64.load`, the resulting machine code could read 16 bytes rather
+  than 8 bytes. This could result in a segfault when Wasmtime is configured
+  without signals-based traps.
+
+--------------------------------------------------------------------------------
+
 ## 36.0.4
 
 Released 2026-01-14.
