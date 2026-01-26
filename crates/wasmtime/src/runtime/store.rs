@@ -85,6 +85,7 @@ use crate::ThrownException;
 use crate::component::ComponentStoreData;
 #[cfg(feature = "component-model")]
 use crate::component::concurrent;
+use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
 use crate::module::RegisteredModuleId;
@@ -474,7 +475,7 @@ pub struct StoreOpaque {
     #[cfg(feature = "stack-switching")]
     continuations: Vec<Box<VMContRef>>,
 
-    instances: PrimaryMap<InstanceId, StoreInstance>,
+    instances: wasmtime_environ::collections::PrimaryMap<InstanceId, StoreInstance>,
 
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
@@ -725,6 +726,13 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
+        Self::try_new(engine, data).expect(
+            "allocation failure during `Store::new` (use `Store::try_new` to handle such errors)",
+        )
+    }
+
+    /// Like `Store::new` but returns an error on allocation failure.
+    pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
         let store_data = StoreData::new();
         log::trace!("creating new store {:?}", store_data.id());
 
@@ -736,7 +744,7 @@ impl<T> Store<T> {
             vm_store_context: Default::default(),
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
-            instances: PrimaryMap::new(),
+            instances: wasmtime_environ::collections::PrimaryMap::new(),
             #[cfg(feature = "component-model")]
             num_component_instances: 0,
             signal_handler: None,
@@ -790,7 +798,7 @@ impl<T> Store<T> {
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
         };
-        let mut inner = Box::new(StoreInner {
+        let mut inner = try_new::<Box<_>>(StoreInner {
             inner,
             limiter: None,
             call_hook: None,
@@ -799,7 +807,7 @@ impl<T> Store<T> {
             data_no_provenance: ManuallyDrop::new(data),
             #[cfg(feature = "debug")]
             debug_handler: None,
-        });
+        })?;
 
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
@@ -825,22 +833,30 @@ impl<T> Store<T> {
             // (also no limiter is passed in) so it won't have an async await
             // point meaning that it should be ok to assert the future is
             // always ready.
-            let id = vm::assert_ready(inner.allocate_instance(
+            let result = vm::assert_ready(inner.allocate_instance(
                 None,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
                 info,
                 Default::default(),
-            ))
-            .expect("failed to allocate default callee");
+            ));
+            let id = match result {
+                Ok(id) => id,
+                Err(e) => {
+                    if e.is::<OutOfMemory>() {
+                        return Err(e);
+                    }
+                    panic!("instance allocator failed to allocate default callee")
+                }
+            };
             let default_caller_vmctx = inner.instance(id).vmctx();
             inner.default_caller_vmctx = default_caller_vmctx.into();
         }
 
-        Self {
+        Ok(Self {
             inner: ManuallyDrop::new(inner),
-        }
+        })
     }
 
     /// Access the underlying `T` data owned by this `Store`.
@@ -2712,7 +2728,7 @@ at https://bytecodealliance.org/security.
                 self.instances.push(StoreInstance {
                     handle,
                     kind: StoreInstanceKind::Real { module_id },
-                })
+                })?
             }
             AllocateInstanceKind::Dummy { .. } => {
                 log::trace!(
@@ -2722,7 +2738,7 @@ at https://bytecodealliance.org/security.
                 self.instances.push(StoreInstance {
                     handle,
                     kind: StoreInstanceKind::Dummy,
-                })
+                })?
             }
         };
 

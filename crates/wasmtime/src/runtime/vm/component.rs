@@ -28,6 +28,7 @@ use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(
@@ -317,7 +318,7 @@ impl ComponentInstance {
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
-    ) -> OwnedComponentInstance {
+    ) -> Result<OwnedComponentInstance, OutOfMemory> {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
         let mut instance_states = PrimaryMap::with_capacity(num_instances.try_into().unwrap());
@@ -342,11 +343,11 @@ impl ComponentInstance {
             store: VMStoreRawPtr(store),
             post_return_arg: None,
             vmctx: OwnedVMContext::new(),
-        });
+        })?;
         unsafe {
             ret.get_mut().initialize_vmctx();
         }
-        ret
+        Ok(ret)
     }
 
     #[inline]
