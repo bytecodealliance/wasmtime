@@ -295,7 +295,7 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
         let to_grow = cmp::max(to_grow, 4);
 
         let new_len = self.elems.len() + to_grow;
-        match wasmtime_core::alloc::new_boxed_slice_from_iter(
+        match wasmtime_core::alloc::new_boxed_slice_from_iter_with_len(
             new_len,
             self.elems
                 .iter()
@@ -306,8 +306,10 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
                 self.elems = new_elems;
                 Ok(())
             }
-            Err(wasmtime_core::alloc::BoxedSliceFromIterError::Oom(oom)) => Err(oom),
-            Err(wasmtime_core::alloc::BoxedSliceFromIterError::TooFewItems) => unreachable!(),
+            Err(wasmtime_core::alloc::BoxedSliceFromIterWithLenError::Oom(oom)) => Err(oom),
+            Err(wasmtime_core::alloc::BoxedSliceFromIterWithLenError::TooFewItems) => {
+                unreachable!()
+            }
         }
     }
 
