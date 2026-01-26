@@ -1,9 +1,9 @@
 use crate::error::OutOfMemory;
-use alloc::vec::Vec as StdVec;
 use core::{
     fmt,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
+use std_alloc::vec::Vec as StdVec;
 
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
 /// failure.
