@@ -217,7 +217,8 @@ impl WasiCtxBuilder {
     /// This will use [`envs`](WasiCtxBuilder::envs) to append all host-defined
     /// environment variables.
     pub fn inherit_env(&mut self) -> &mut Self {
-        self.envs(&std::env::vars().collect::<Vec<(String, String)>>())
+        self.cli.environment.extend(std::env::vars());
+        self
     }
 
     /// Appends a list of arguments to the argument array to pass to wasm.
@@ -237,7 +238,8 @@ impl WasiCtxBuilder {
     /// Appends all host process arguments to the list of arguments to get
     /// passed to wasm.
     pub fn inherit_args(&mut self) -> &mut Self {
-        self.args(&std::env::args().collect::<Vec<String>>())
+        self.cli.arguments.extend(std::env::args());
+        self
     }
 
     /// Configures a "preopened directory" to be available to WebAssembly.
