@@ -138,6 +138,8 @@ fn linker_new() -> Result<()> {
     })
 }
 
+#[test]
+#[cfg(arc_try_new)]
 fn store_try_new() -> Result<()> {
     let mut config = Config::new();
     config.enable_compiler(false);
