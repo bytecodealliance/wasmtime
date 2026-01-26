@@ -51,8 +51,8 @@ int main() {
 
   std::cout << "Running a gc..\n";
   if (!store.context().gc()) {
-      std::cerr << "> Error while collecting garbage\n";
-      return 1;
+    std::cerr << "> Error while collecting garbage\n";
+    return 1;
   }
 
   return 0;
