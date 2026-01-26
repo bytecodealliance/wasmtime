@@ -95,7 +95,10 @@ int main() {
   }
 
   std::cout << "GCing within the store...\n";
-  store.context().gc();
+  if (!store.context().gc()) {
+    std::cerr << "> Error while collecting garbage\n";
+    return 1;
+  }
 
   std::cout << "Done.\n";
   return 0;
