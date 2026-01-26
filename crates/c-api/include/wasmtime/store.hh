@@ -233,7 +233,7 @@ public:
 
   /// Runs a garbage collection pass in the referenced store to collect loose
   /// GC-managed objects, if any are available.
-  void gc() { context().gc(); }
+  Result<std::monostate> gc() { return context().gc(); }
 
 private:
   template <typename F>
