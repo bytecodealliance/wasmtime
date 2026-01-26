@@ -3,7 +3,7 @@ use crate::debug::Reader;
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{AttributeValue, DebuggingInformationEntry, UnitRef, write};
+use gimli::{AttributeValue, UnitRef, write};
 use wasmtime_environ::error::Error;
 
 pub(crate) fn append_vmctx_info(
@@ -50,10 +50,12 @@ pub(crate) fn append_vmctx_info(
 
 pub fn resolve_die_ref<'a, 'r>(
     unit: UnitRef<'a, Reader<'r>>,
-    die_ref: &'a AttributeValue<Reader<'r>>,
-) -> Result<Option<DebuggingInformationEntry<Reader<'r>>>, Error> {
+    die_ref: &AttributeValue<Reader<'r>>,
+) -> Result<Option<write::ConvertUnitEntry<'a, Reader<'r>>>, Error> {
     let die = match die_ref {
-        AttributeValue::UnitRef(unit_offs) => Some(unit.unit.entry(*unit_offs)?),
+        AttributeValue::UnitRef(unit_offs) => {
+            Some(write::ConvertUnitEntry::read(unit, *unit_offs)?)
+        }
         // TODO-DebugInfo: support AttributeValue::DebugInfoRef. The trouble is that we don't have
         // a fast way to go from a DI offset to a unit offset (which is needed to parse the DIE).
         // We would likely need to maintain a cache.

@@ -1,7 +1,7 @@
 use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
 use cranelift_codegen::{LabelValueLoc, ValueLabelsRanges, ir::ValueLabel, isa::TargetIsa};
-use gimli::{AttributeValue, DebuggingInformationEntry, LittleEndian, UnitOffset, UnitRef, write};
+use gimli::{AttributeValue, LittleEndian, UnitRef, write};
 
 macro_rules! dbi_log_enabled {
     () => {
@@ -45,49 +45,44 @@ pub fn log_get_cu_summary<'a, 'r>(unit: UnitRef<'a, Reader<'r>>) -> CompileUnitS
 }
 
 pub struct DieRefSummary<'a, 'r> {
-    unit: UnitRef<'a, Reader<'r>>,
-    unit_ref: UnitOffset,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 }
 
 impl<'a, 'r> fmt::Debug for DieRefSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let section_offs = self.unit_ref.to_unit_section_offset(&self.unit);
+        let section_offs = self
+            .entry
+            .offset
+            .to_unit_section_offset(&self.entry.read_unit);
         write!(f, "0x{:08x}", section_offs.0)
     }
 }
 
 pub fn log_get_die_ref<'a, 'r>(
-    unit: UnitRef<'a, Reader<'r>>,
-    unit_ref: UnitOffset,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 ) -> DieRefSummary<'a, 'r> {
-    DieRefSummary { unit, unit_ref }
+    DieRefSummary { entry }
 }
 
 struct DieDetailedSummary<'a, 'r> {
-    unit: UnitRef<'a, Reader<'r>>,
-    die: &'a DebuggingInformationEntry<Reader<'r>>,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 }
 
-pub fn log_begin_input_die<'r>(
-    unit: UnitRef<Reader<'r>>,
-    die: &DebuggingInformationEntry<Reader<'r>>,
-    depth: isize,
-) {
+pub fn log_begin_input_die<'a, 'r>(entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>) {
     dbi_log!(
         "=== Begin DIE at {:?} (depth = {}):\n{:?}",
-        log_get_die_ref(unit, die.offset()),
-        depth,
-        DieDetailedSummary { unit, die }
+        log_get_die_ref(entry),
+        entry.depth,
+        DieDetailedSummary { entry }
     );
 }
 
 impl<'a, 'r> fmt::Debug for DieDetailedSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let die = self.die;
-        let unit = self.unit;
-        write!(f, "{}\n", die.tag())?;
+        let unit = self.entry.read_unit;
+        write!(f, "{}\n", self.entry.tag)?;
 
-        for attr in die.attrs() {
+        for attr in &self.entry.attrs {
             write!(f, "  {} (", attr.name())?;
             let attr_value = attr.value();
             match attr_value {
@@ -233,35 +228,27 @@ impl<'a> fmt::Debug for OutDieDetailedSummary<'a> {
 }
 
 pub fn log_end_output_die(
-    input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: UnitRef<Reader<'_>>,
     die_id: write::UnitEntryId,
-    unit: &write::Unit,
-    strings: &write::StringTable,
-    depth: isize,
+    entry: &write::ConvertUnitEntry<'_, Reader<'_>>,
+    unit: &write::ConvertUnit<'_, Reader<'_>>,
 ) {
     dbi_log!(
         "=== End DIE at {:?} (depth = {}):\n{:?}",
-        log_get_die_ref(input_unit, input_die.offset()),
-        depth,
+        log_get_die_ref(entry),
+        entry.depth,
         OutDieDetailedSummary {
             die_id,
-            unit,
-            strings
+            unit: &unit.unit,
+            strings: &unit.strings,
         }
     );
 }
 
-pub fn log_end_output_die_skipped(
-    input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: UnitRef<Reader<'_>>,
-    reason: &str,
-    depth: isize,
-) {
+pub fn log_end_output_die_skipped(entry: &write::ConvertUnitEntry<'_, Reader<'_>>, reason: &str) {
     dbi_log!(
         "=== End DIE at {:?} (depth = {}):\n  Skipped as {}\n",
-        log_get_die_ref(input_unit, input_die.offset()),
-        depth,
+        log_get_die_ref(entry),
+        entry.depth,
         reason
     );
 }

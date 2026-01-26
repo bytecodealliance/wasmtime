@@ -1,6 +1,6 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
-use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, UnitRef, write};
+use gimli::{AttributeValue, RangeListsOffset, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::error::Error;
 
@@ -12,13 +12,10 @@ pub(crate) enum RangeInfoBuilder {
 }
 
 impl RangeInfoBuilder {
-    pub(crate) fn from(
-        unit: UnitRef<Reader<'_>>,
-        entry: &DebuggingInformationEntry<Reader<'_>>,
-    ) -> Result<Self, Error> {
+    pub(crate) fn from(entry: &write::ConvertUnitEntry<Reader<'_>>) -> Result<Self, Error> {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges) {
-            let r = unit.ranges_offset_from_raw(r);
-            return RangeInfoBuilder::from_ranges_ref(unit, r);
+            let r = entry.read_unit.ranges_offset_from_raw(r);
+            return RangeInfoBuilder::from_ranges_ref(entry.read_unit, r);
         };
 
         let low_pc = if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)
@@ -27,7 +24,7 @@ impl RangeInfoBuilder {
         } else if let Some(AttributeValue::DebugAddrIndex(i)) =
             entry.attr_value(gimli::DW_AT_low_pc)
         {
-            unit.address(i)?
+            entry.read_unit.address(i)?
         } else {
             return Ok(RangeInfoBuilder::Undefined);
         };
@@ -42,7 +39,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_ranges_ref(
-        unit: UnitRef<Reader<'_>>,
+        unit: UnitRef<'_, Reader<'_>>,
         ranges: RangeListsOffset,
     ) -> Result<Self, Error> {
         let mut ranges = unit.ranges(ranges)?;
@@ -62,10 +59,10 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_subprogram_die(
-        unit: UnitRef<Reader<'_>>,
-        entry: &DebuggingInformationEntry<Reader<'_>>,
+        entry: &write::ConvertUnitEntry<Reader<'_>>,
         addr_tr: &AddressTransform,
     ) -> Result<Self, Error> {
+        let unit = entry.read_unit;
         let addr = if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc) {
             addr
         } else if let Some(AttributeValue::DebugAddrIndex(i)) =

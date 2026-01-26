@@ -1,14 +1,12 @@
 use self::debug_transform_logging::dbi_log;
-use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
+use crate::debug::Compilation;
 use crate::debug::gc::build_dependencies;
-use crate::debug::{Compilation, Reader};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{Dwarf, DwarfPackage, LittleEndian, Section, Unit, UnitRef, UnitSectionOffset, write};
-use std::{collections::HashSet, fmt::Debug};
+use gimli::{DwarfPackage, LittleEndian, Section, write};
+use std::collections::HashSet;
 use synthetic::ModuleSyntheticUnit;
-use thiserror::Error;
 use wasmtime_environ::error::Error;
 use wasmtime_environ::{
     DefinedFuncIndex, ModuleTranslation, PrimaryMap, StaticModuleIndex, Tunables, prelude::*,
@@ -22,7 +20,6 @@ mod debug_transform_logging;
 mod expression;
 mod line_program;
 mod range_info_builder;
-mod refs;
 mod simulate;
 mod synthetic;
 mod unit;
@@ -41,14 +38,6 @@ impl<'a> Compilation<'a> {
             memory_offset: self.module_memory_offsets[module].clone(),
         }
     }
-}
-
-#[derive(Error, Debug)]
-#[error("Debug info transform error: {0}")]
-pub struct TransformError(&'static str);
-
-pub(crate) struct DebugInputContext<'a> {
-    reachable: &'a HashSet<UnitSectionOffset>,
 }
 
 fn load_dwp<'data>(
@@ -165,12 +154,8 @@ pub fn transform_dwarf(
         version: 4, // TODO: this should be configurable
         address_size: isa.pointer_bytes(),
     };
-    let mut out_strings = write::StringTable::default();
-    let mut out_units = write::UnitTable::default();
+    let mut out_dwarf = write::Dwarf::default();
 
-    let out_line_strings = write::LineStringTable::default();
-    let mut pending_di_refs = Vec::new();
-    let mut di_ref_map = DebugInfoRefsMap::new();
     let mut vmctx_ptr_die_refs = PrimaryMap::new();
 
     let mut translated = HashSet::new();
@@ -180,64 +165,58 @@ pub fn transform_dwarf(
 
         let addr_tr = &transforms[module];
         let di = &translation.debuginfo;
-        let reachable = build_dependencies(&di.dwarf, addr_tr)?.get_reachable();
 
         let out_module_synthetic_unit = ModuleSyntheticUnit::new(
             module,
             compilation,
             out_encoding,
-            &mut out_units,
-            &mut out_strings,
+            &mut out_dwarf.units,
+            &mut out_dwarf.strings,
         );
         // TODO-DebugInfo-Cleanup: move the simulation code to be per-module and delete this map.
         vmctx_ptr_die_refs.push(out_module_synthetic_unit.vmctx_ptr_die_ref());
 
-        let mut iter = di.dwarf.debug_info.units();
-        while let Some(header) = iter.next().unwrap_or(None) {
-            let unit = di.dwarf.unit(header)?;
-            let unit = unit.unit_ref(&di.dwarf);
-
-            let mut split_unit = None;
-            let mut split_reachable = None;
-
-            if unit.dwo_id.is_some() {
-                if let Some(dwarf_package) = &dwarf_package {
-                    if let Some((fused, fused_dwarf)) =
-                        replace_unit_from_split_dwarf(unit, dwarf_package)
-                    {
-                        split_reachable =
-                            Some(build_dependencies(&fused_dwarf, addr_tr)?.get_reachable());
-                        split_unit = Some((fused, fused_dwarf));
-                    }
-                }
-            }
-            let split_unit = split_unit
-                .as_ref()
-                .map(|(split_unit, split_dwarf)| split_unit.unit_ref(split_dwarf));
-            let context = DebugInputContext {
-                reachable: split_reachable.as_ref().unwrap_or(&reachable),
-            };
-
-            if let Some((id, ref_map, pending_refs)) = clone_unit(
-                compilation,
-                module,
-                unit,
-                split_unit,
-                &context,
-                &addr_tr,
-                out_encoding,
-                &out_module_synthetic_unit,
-                &mut out_units,
-                &mut out_strings,
-                &mut translated,
-                isa,
-            )? {
-                di_ref_map.insert(&header, id, ref_map);
-                pending_di_refs.push((id, pending_refs));
+        let mut filter = write::FilterUnitSection::new(&di.dwarf)?;
+        build_dependencies(&mut filter, addr_tr)?;
+        let mut convert = out_dwarf.convert_with_filter(filter)?;
+        while let Some((mut unit, root_entry)) = convert.read_unit()? {
+            if let Some(dwp) = dwarf_package.as_ref()
+                && let Some(dwo_id) = unit.read_unit.dwo_id
+                && let Ok(Some(split_dwarf)) = dwp.find_cu(dwo_id, unit.read_unit.dwarf)
+            {
+                let mut split_filter =
+                    write::FilterUnitSection::new_split(&split_dwarf, unit.read_unit)?;
+                build_dependencies(&mut split_filter, addr_tr)?;
+                let mut convert_split = unit.convert_split_with_filter(split_filter)?;
+                let (mut split_unit, split_root_entry) = convert_split.read_unit()?;
+                split_unit.unit.set_encoding(out_encoding);
+                clone_unit(
+                    compilation,
+                    module,
+                    &mut split_unit,
+                    &split_root_entry,
+                    Some(&root_entry),
+                    &addr_tr,
+                    &out_module_synthetic_unit,
+                    &mut translated,
+                    isa,
+                )?;
+            } else {
+                unit.unit.set_encoding(out_encoding);
+                clone_unit(
+                    compilation,
+                    module,
+                    &mut unit,
+                    &root_entry,
+                    None,
+                    &addr_tr,
+                    &out_module_synthetic_unit,
+                    &mut translated,
+                    isa,
+                )?;
             }
         }
     }
-    di_ref_map.patch(pending_di_refs.into_iter(), &mut out_units);
 
     generate_simulated_dwarf(
         compilation,
@@ -245,27 +224,10 @@ pub fn transform_dwarf(
         &translated,
         out_encoding,
         &vmctx_ptr_die_refs,
-        &mut out_units,
-        &mut out_strings,
+        &mut out_dwarf.units,
+        &mut out_dwarf.strings,
         isa,
     )?;
 
-    Ok(write::Dwarf {
-        units: out_units,
-        line_programs: vec![],
-        line_strings: out_line_strings,
-        strings: out_strings,
-    })
-}
-
-fn replace_unit_from_split_dwarf<'a>(
-    unit: UnitRef<Reader<'a>>,
-    dwp: &DwarfPackage<Reader<'a>>,
-) -> Option<(Unit<Reader<'a>>, Dwarf<Reader<'a>>)> {
-    let dwo_id = unit.dwo_id?;
-    let split_unit_dwarf = dwp.find_cu(dwo_id, unit.dwarf).ok()??;
-    let unit_header = split_unit_dwarf.debug_info.units().next().ok()??;
-    let mut split_unit = split_unit_dwarf.unit(unit_header).ok()?;
-    split_unit.copy_relocated_attributes(&unit);
-    Some((split_unit, split_unit_dwarf))
+    Ok(out_dwarf)
 }
