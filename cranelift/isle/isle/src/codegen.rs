@@ -11,6 +11,8 @@ use std::fmt::Write;
 use std::slice::Iter;
 use std::sync::Arc;
 
+const DEFAULT_MATCH_ARM_BODY_CLOSURE_THRESHOLD: usize = 256;
+
 /// Options for code generation.
 #[derive(Clone, Debug, Default)]
 pub struct CodegenOptions {
@@ -34,6 +36,11 @@ pub struct CodegenOptions {
     /// In Cranelift this is typically controlled by a cargo feature on the
     /// crate that includes the generated code (e.g. `cranelift-codegen`).
     pub split_match_arms: bool,
+
+    /// Threshold for splitting match arms into local closures.
+    ///
+    /// If `None`, a default threshold is used.
+    pub match_arm_split_threshold: Option<usize>,
 }
 
 /// A path prefix which should be replaced when printing file names.
@@ -79,6 +86,7 @@ struct BodyContext<'a, W> {
     term_name: &'a str,
     emit_logging: bool,
     split_match_arms: bool,
+    match_arm_split_threshold: Option<usize>,
 
     // Extra fields for iterator-returning terms.
     // These fields are used to generate optimized Rust code for iterator-returning terms.
@@ -97,6 +105,7 @@ impl<'a, W: Write> BodyContext<'a, W> {
         term_name: &'a str,
         emit_logging: bool,
         split_match_arms: bool,
+        match_arm_split_threshold: Option<usize>,
         iter_overflow_action: &'static str,
     ) -> Self {
         Self {
@@ -108,6 +117,7 @@ impl<'a, W: Write> BodyContext<'a, W> {
             term_name,
             emit_logging,
             split_match_arms,
+            match_arm_split_threshold,
             match_split: Default::default(),
             iter_overflow_action,
         }
@@ -460,6 +470,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                 term_name,
                 options.emit_logging,
                 options.split_match_arms,
+                options.match_arm_split_threshold,
                 "return;", // At top level, we just return.
             );
 
@@ -798,10 +809,12 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     // of constructor bodies)cause rustc to spend a lot of time in analysis passes.
                     // Wrap such bodies in a local closure to move the bulk of the work into a separate body
                     // without needing to know the types of captured locals.
-                    const MATCH_ARM_BODY_CLOSURE_THRESHOLD: usize = 256;
+                    let match_arm_body_closure_threshold = ctx
+                        .match_arm_split_threshold
+                        .unwrap_or(DEFAULT_MATCH_ARM_BODY_CLOSURE_THRESHOLD);
                     if ctx.split_match_arms
                         && ret_kind == ReturnKind::Iterator
-                        && Codegen::block_weight(&arm.body) > MATCH_ARM_BODY_CLOSURE_THRESHOLD
+                        && Codegen::block_weight(&arm.body) > match_arm_body_closure_threshold
                     {
                         let closure_id = ctx.match_split;
                         ctx.match_split += 1;
