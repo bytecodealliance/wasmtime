@@ -758,7 +758,7 @@ impl<'a> Instantiator<'a> {
             Arc::new(imported_resources),
             imports,
             store.traitobj(),
-        );
+        )?;
         let id = store.store_data_mut().push_component_instance(instance);
 
         Ok(Instantiator {

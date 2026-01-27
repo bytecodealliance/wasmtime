@@ -11,7 +11,7 @@ macro_rules! foreach_builtin_function {
             // Returns an index for wasm's `table.init`.
             table_init(vmctx: vmctx, table: u32, elem: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `elem.drop`.
-            elem_drop(vmctx: vmctx, elem: u32);
+            elem_drop(vmctx: vmctx, elem: u32) -> bool;
             // Returns an index for wasm's `memory.copy`
             memory_copy(vmctx: vmctx, dst_index: u32, dst: u64, src_index: u32, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `memory.fill` instruction.
@@ -21,7 +21,7 @@ macro_rules! foreach_builtin_function {
             // Returns a value for wasm's `ref.func` instruction.
             ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns an index for wasm's `data.drop` instruction.
-            data_drop(vmctx: vmctx, data: u32);
+            data_drop(vmctx: vmctx, data: u32) -> bool;
             // Returns a table entry after lazily initializing it.
             table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
             // Returns an index for Wasm's `table.grow` instruction for `funcref`s.

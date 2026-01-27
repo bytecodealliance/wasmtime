@@ -541,9 +541,10 @@ fn table_init(
 }
 
 // Implementation of `elem.drop`.
-fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) {
+fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) -> Result<()> {
     let elem_index = ElemIndex::from_u32(elem_index);
-    store.instance_mut(instance).elem_drop(elem_index)
+    store.instance_mut(instance).elem_drop(elem_index)?;
+    Ok(())
 }
 
 // Implementation of `memory.copy`.
@@ -606,9 +607,10 @@ fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> N
 }
 
 // Implementation of `data.drop`.
-fn data_drop(store: &mut dyn VMStore, instance: InstanceId, data_index: u32) {
+fn data_drop(store: &mut dyn VMStore, instance: InstanceId, data_index: u32) -> Result<()> {
     let data_index = DataIndex::from_u32(data_index);
-    store.instance_mut(instance).data_drop(data_index)
+    store.instance_mut(instance).data_drop(data_index)?;
+    Ok(())
 }
 
 // Returns a table entry after lazily initializing it.

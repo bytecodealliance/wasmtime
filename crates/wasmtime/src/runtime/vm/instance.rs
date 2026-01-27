@@ -34,11 +34,12 @@ use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
-    ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
-    PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap,
-    VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
+    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PrimaryMap,
+    PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap, VMCONTEXT_MAGIC,
+    VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -167,11 +168,11 @@ impl Instance {
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
-    ) -> InstanceHandle {
+    ) -> Result<InstanceHandle, OutOfMemory> {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
-        let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
-        let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
+        let dropped_elements = EntitySet::with_capacity(module.passive_elements.len())?;
+        let dropped_data = EntitySet::with_capacity(module.passive_data_map.len())?;
 
         #[cfg(feature = "wmemcheck")]
         let wmemcheck_state = if req.store.engine().config().wmemcheck {
@@ -200,14 +201,14 @@ impl Instance {
             wmemcheck_state,
             store: None,
             vmctx: OwnedVMContext::new(),
-        });
+        })?;
 
         // SAFETY: this vmctx was allocated with the same layout above, so it
         // should be safe to initialize with the same values here.
         unsafe {
             ret.get_mut().initialize_vmctx(req.store, req.imports);
         }
-        ret
+        Ok(ret)
     }
 
     /// Converts a raw `VMContext` pointer into a raw `Instance` pointer.
@@ -1050,13 +1051,18 @@ impl Instance {
     }
 
     /// Drop an element.
-    pub(crate) fn elem_drop(self: Pin<&mut Self>, elem_index: ElemIndex) {
+    pub(crate) fn elem_drop(
+        self: Pin<&mut Self>,
+        elem_index: ElemIndex,
+    ) -> Result<(), OutOfMemory> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
-        self.dropped_elements_mut().insert(elem_index);
+        self.dropped_elements_mut().insert(elem_index)?;
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
+
+        Ok(())
     }
 
     /// Get a locally-defined memory.
@@ -1218,11 +1224,16 @@ impl Instance {
     }
 
     /// Drop the given data segment, truncating its length to zero.
-    pub(crate) fn data_drop(self: Pin<&mut Self>, data_index: DataIndex) {
-        self.dropped_data_mut().insert(data_index);
+    pub(crate) fn data_drop(
+        self: Pin<&mut Self>,
+        data_index: DataIndex,
+    ) -> Result<(), OutOfMemory> {
+        self.dropped_data_mut().insert(data_index)?;
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
+
+        Ok(())
     }
 
     /// Get a table by index regardless of whether it is locally-defined
@@ -1891,7 +1902,7 @@ impl<T: InstanceLayout> OwnedInstance<T> {
     /// Allocates a new `OwnedInstance` and places `instance` inside of it.
     ///
     /// This will `instance`
-    pub(super) fn new(mut instance: T) -> OwnedInstance<T> {
+    pub(super) fn new(mut instance: T) -> Result<OwnedInstance<T>, OutOfMemory> {
         let layout = instance.layout();
         debug_assert!(layout.size() >= size_of_val(&instance));
         debug_assert!(layout.align() >= align_of_val(&instance));
@@ -1906,10 +1917,9 @@ impl<T: InstanceLayout> OwnedInstance<T> {
                 alloc::alloc::alloc(layout)
             }
         };
-        if ptr.is_null() {
-            alloc::alloc::handle_alloc_error(layout);
-        }
-        let instance_ptr = NonNull::new(ptr.cast::<T>()).unwrap();
+        let Some(instance_ptr) = NonNull::new(ptr.cast::<T>()) else {
+            return Err(OutOfMemory::new(layout.size()));
+        };
 
         // SAFETY: it's part of the unsafe contract of `InstanceLayout` that the
         // `add` here is appropriate for the layout allocated.
@@ -1938,7 +1948,7 @@ impl<T: InstanceLayout> OwnedInstance<T> {
         );
         debug_assert_eq!(vmctx_self_reference.addr(), ret.get().vmctx().addr());
 
-        ret
+        Ok(ret)
     }
 
     /// Gets the raw underlying `&Instance` from this handle.

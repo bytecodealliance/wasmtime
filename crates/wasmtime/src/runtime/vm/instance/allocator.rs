@@ -344,7 +344,7 @@ impl dyn InstanceAllocator + '_ {
                 request,
                 mem::take(&mut guard.memories),
                 mem::take(&mut guard.tables),
-            ))
+            )?)
         };
 
         struct DeallocateOnDrop<'a> {

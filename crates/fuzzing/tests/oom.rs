@@ -138,6 +138,19 @@ fn linker_new() -> Result<()> {
     })
 }
 
+#[test]
+#[cfg(arc_try_new)]
+fn store_try_new() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    OomTest::new().test(|| {
+        let _ = Store::try_new(&engine, ())?;
+        Ok(())
+    })
+}
+
 fn ok_if_not_oom(error: Error) -> Result<()> {
     if error.is::<OutOfMemory>() {
         Err(error)
