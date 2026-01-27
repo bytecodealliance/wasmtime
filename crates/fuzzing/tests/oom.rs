@@ -107,6 +107,41 @@ fn primary_map_try_reserve_exact() -> Result<()> {
 }
 
 #[test]
+fn vec_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _v = wasmtime_environ::collections::Vec::<usize>::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::<usize>::new();
+        v.reserve(10)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_reserve_exact() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::<usize>::new();
+        v.reserve_exact(3)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_push() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::new();
+        v.push(42)?;
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
