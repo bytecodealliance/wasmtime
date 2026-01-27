@@ -20,8 +20,8 @@ use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_o
 /// # Errors in Wasmtime
 ///
 /// Error-handling in Wasmtime is primarily done through the
-/// [`wasmtime::Error`][crate::Error] type where most results are a
-/// [`wasmtime::Result<T>`](crate::Result) which is an alias for [`Result<T,
+/// [`wasmtime::Error`] type where most results are a
+/// [`wasmtime::Result<T>`] which is an alias for [`Result<T,
 /// wasmtime::Error>`](std::result::Result). Errors in Wasmtime are represented
 /// with [`wasmtime::Error`] which acts as a container for any type of error in
 /// addition to optional context for this error. The "base" error or
@@ -36,6 +36,10 @@ use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_o
 /// [`context`](crate::Error::context). Inspecting a [`WasmBacktrace`] can be
 /// done with the [`downcast_ref`](crate::Error::downcast_ref) function. For
 /// information on this see the [`WasmBacktrace`] documentation.
+///
+/// [`wasmtime::Error`]: crate::Error
+/// [`wasmtime::Result<T>`]: crate::Result
+/// [`wasmtime::Error::root_cause`]: crate::Error::root_cause
 ///
 /// # Examples
 ///
@@ -139,10 +143,11 @@ pub(crate) fn from_runtime_box(
 ///
 /// This structure is attached to the [`wasmtime::Error`] returned from many
 /// Wasmtime functions that execute WebAssembly such as [`Instance::new`] or
-/// [`Func::call`]. This can be acquired with the [`wasmtime::Error::downcast`]
-/// family of methods to programmatically inspect the backtrace. Otherwise since
-/// it's part of the error returned this will get printed along with the rest of
-/// the error when the error is logged.
+/// [`Func::call`]. This can be acquired with the
+/// [`Error::downcast`](crate::Error::downcast) family of methods to
+/// programmatically inspect the backtrace. Otherwise since it's part of the
+/// error returned this will get printed along with the rest of the error when
+/// the error is logged.
 ///
 /// Capturing of wasm backtraces can be configured through the
 /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) method.
@@ -152,6 +157,7 @@ pub(crate) fn from_runtime_box(
 ///
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
+/// [`wasmtime::Error`]: crate::Error
 ///
 /// # Examples
 ///

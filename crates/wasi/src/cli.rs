@@ -30,6 +30,8 @@ pub use tokio::io::{Stderr, Stdin, Stdout, stderr, stdin, stdout};
 /// When using this type you can skip the [`WasiCliView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::cli::environment::add_to_linker`]: crate::p2::bindings::cli::environment::add_to_linker
+///
 /// # Examples
 ///
 /// ```

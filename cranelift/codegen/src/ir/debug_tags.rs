@@ -73,7 +73,7 @@ impl DebugTags {
     /// Set the tags on an instruction, overwriting existing tag list.
     ///
     /// Tags can only be set on call instructions (those for which
-    /// [`crate::Opcode::is_call()`] returns `true`) and on
+    /// [`crate::ir::Opcode::is_call()`] returns `true`) and on
     /// `sequence_point` instructions. This property is checked by the
     /// CLIF verifier.
     pub fn set(&mut self, inst: Inst, tags: impl IntoIterator<Item = DebugTag>) {

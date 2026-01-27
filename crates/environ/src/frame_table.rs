@@ -2,7 +2,7 @@
 //!
 //! This module contains utilities to interpret the `.wasmtime.frame`
 //! section in a compiled artifact as produced by
-//! [`crate::compile::frame_table::FrameTableBuilder`].
+//! [`crate::compile::FrameTableBuilder`].
 
 use crate::FuncKey;
 use alloc::vec::Vec;
@@ -63,7 +63,7 @@ pub struct FrameTable<'a> {
 
 impl<'a> FrameTable<'a> {
     /// Parse a frame table section from a byte-slice as produced by
-    /// [`crate::compile::frame_table::FrameTableBuilder`].
+    /// [`crate::compile::FrameTableBuilder`].
     pub fn parse(data: &'a [u8], original_text: &'a [u8]) -> anyhow::Result<FrameTable<'a>> {
         let mut data = Bytes(data);
         let num_frame_descriptors = data

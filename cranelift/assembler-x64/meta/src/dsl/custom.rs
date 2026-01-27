@@ -16,7 +16,7 @@ pub enum Customization {
     /// Modify how an instruction is emitted into the code buffer.
     Encode,
     /// Modify the instruction mnemonic (see [`crate::dsl::Inst::mnemonic`]);
-    /// this customization is irrelevant if [`CustomOperation::Display`] is also
+    /// this customization is irrelevant if [`Customization::Display`] is also
     /// specified.
     Mnemonic,
     /// Modify how a register allocator visits the operands of an instruction.

@@ -459,7 +459,7 @@ impl Wasmtime {
                             #[allow(clippy::all)]
                             pub mod {snake} {{
                                 #[allow(unused_imports)]
-                                use {wt}::component::__internal::{{Box}};
+                                use {wt}::component::__internal::Box;
 
                                 {module}
                             }}

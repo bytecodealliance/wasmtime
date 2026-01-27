@@ -321,7 +321,7 @@ impl CodeMemory {
     ///
     /// After this function executes all JIT code should be ready to execute.
     ///
-    /// The action may be reversed by calling [`unpublish`], as long
+    /// The action may be reversed by calling [`Self::unpublish`], as long
     /// as that method's safety requirements are upheld.
     pub fn publish(&mut self) -> Result<()> {
         assert!(!self.published);

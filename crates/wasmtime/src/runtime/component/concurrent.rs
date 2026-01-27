@@ -351,7 +351,7 @@ where
 /// This trait is similar to [`AsContextMut`] except that it's used when
 /// working with an [`Accessor`] instead of a [`StoreContextMut`]. The
 /// [`Accessor`] is the main type used in concurrent settings and is passed to
-/// functions such as [`Func::call_concurrent`] or [`FutureWriter::write`].
+/// functions such as [`Func::call_concurrent`].
 ///
 /// This trait is implemented for [`Accessor`] and `&T` where `T` implements
 /// this trait. This effectively means that regardless of the `D` in
@@ -361,7 +361,7 @@ where
 /// Acquiring an [`Accessor`] can be done through
 /// [`StoreContextMut::run_concurrent`] for example or in a host function
 /// through
-/// [`Linker::func_wrap_concurrent`](crate::component::Linker::func_wrap_concurrent).
+/// [`Linker::func_wrap_concurrent`](crate::component::LinkerInstance::func_wrap_concurrent).
 pub trait AsAccessor {
     /// The `T` in `Store<T>` that this accessor refers to.
     type Data: 'static;
@@ -943,7 +943,7 @@ impl<T> StoreContextMut<'_, T> {
     /// Note that the task will only make progress if and when the event loop
     /// for this instance is run.
     ///
-    /// The returned [`SpawnHandle`] may be used to cancel the task.
+    /// The returned [`JoinHandle`] may be used to cancel the task.
     pub fn spawn(mut self, task: impl AccessorTask<T>) -> JoinHandle
     where
         T: 'static,

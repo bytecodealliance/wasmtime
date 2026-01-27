@@ -52,8 +52,8 @@ use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 /// a runtime-defined type. For example an embedding that provides generic
 /// access to types in the host may want to take advantage of the dynamic nature
 /// of this type. Resources of type [`ResourceDynamic`] have a type of
-/// [`ResourceType::host_dynamic(ty)`] where `ty` is the value provided to the
-/// constructors of [`ResourceDynamic`].
+/// [`ResourceType::host_dynamic(ty)`](ResourceType::host_dynamic) where `ty` is
+/// the value provided to the constructors of [`ResourceDynamic`].
 ///
 /// A [`ResourceDynamic`] implements [`Lift`] and [`Lower`] in the same manner
 /// as [`Resource`], but the implementations may fail after type-checking unlike

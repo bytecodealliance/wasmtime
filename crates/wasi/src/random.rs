@@ -11,6 +11,8 @@ use wasmtime::component::HasData;
 /// When using this type you can skip the [`WasiRandomView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::random::random::add_to_linker`]: crate::p2::bindings::random::random::add_to_linker
+///
 /// # Examples
 ///
 /// ```

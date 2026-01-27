@@ -591,7 +591,7 @@ impl core::fmt::Display for Extension {
 /// In the future, we might want to model specific EFLAGS bits instead of the
 /// entire EFLAGS register.
 /// Some related discussion in this GitHub issue
-/// https://github.com/bytecodealliance/wasmtime/issues/10298
+/// <https://github.com/bytecodealliance/wasmtime/issues/10298>
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Eflags {
     None,

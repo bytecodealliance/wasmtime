@@ -15,6 +15,8 @@ use wasmtime::component::{HasData, ResourceTable};
 /// When using this type you can skip the [`WasiClocksView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker`]: crate::p2::bindings::clocks::monotonic_clock::add_to_linker
+///
 /// # Examples
 ///
 /// ```

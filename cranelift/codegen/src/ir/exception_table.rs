@@ -129,7 +129,7 @@ impl ExceptionTableData {
     /// `BlockArg::TryCallExn` in the exceptional-return cases, with
     /// types corresponding to native machine words and an arity
     /// corresponding to the number of payload values that the calling
-    /// convention and platform support. (See [`isa::CallConv`] for
+    /// convention and platform support. (See [`CallConv`](crate::isa::CallConv) for
     /// more details.)
     pub fn new(
         sig: SigRef,

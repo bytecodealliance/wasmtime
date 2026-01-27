@@ -261,7 +261,7 @@ jobs:
     env:
       MDBOOK_VERSION: 0.4.37
       MDBOOK_LANGTABS_VERSION: 0.1.1
-      RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
+      RUSTDOCFLAGS: -Dwarnings --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v4
@@ -304,11 +304,7 @@ jobs:
           --exclude wasm-spec-interpreter \
           --exclude calculator \
           --all-features
-      env:
-        RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
-      env:
-        RUSTDOCFLAGS: --cfg=docsrs
 
     # Assemble the documentation, and always upload it as an artifact for
     # inspection on PRs and such.

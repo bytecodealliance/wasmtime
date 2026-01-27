@@ -200,6 +200,8 @@ mod gc;
 /// operations is incorrect. In other words it's considered a programmer error
 /// rather than a recoverable error for the wrong [`Store`] to be used when
 /// calling APIs.
+///
+/// [`Memory`]: crate::Memory
 pub struct Store<T: 'static> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
@@ -1009,6 +1011,8 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent returns
     /// to host or wasm code as the trap propagates to the root call.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(feature = "call-hook")]
     pub fn call_hook(
         &mut self,
@@ -1227,11 +1231,7 @@ impl<T> Store<T> {
     /// `ThrownException` error type should propagate upward exactly
     /// and only when a pending exception is set.
     ///
-    /// To inspect or take the pending exception, use
-    /// [`peek_pending_exception`] and [`take_pending_exception`]. For
-    /// a convenient wrapper that invokes a closure and provides any
-    /// caught exception from the closure to a separate handler
-    /// closure, see [`StoreContextMut::catch`].
+    /// To take the pending exception, use [`Self::take_pending_exception`].
     ///
     /// This method is parameterized over `R` for convenience, but
     /// will always return an `Err`.
@@ -1262,7 +1262,7 @@ impl<T> Store<T> {
     ///
     /// This method is useful to implement ad-hoc exception plumbing
     /// in various ways, but for the most idiomatic handling, see
-    /// [`StoreContextMut::catch`].
+    /// [`StoreContextMut::throw`].
     #[cfg(feature = "gc")]
     pub fn take_pending_exception(&mut self) -> Option<Rooted<ExnRef>> {
         self.inner.take_pending_exception_rooted()
@@ -1274,13 +1274,13 @@ impl<T> Store<T> {
     /// only if a host-side callstack is propagating a
     /// [`crate::ThrownException`] error. The final consumer that
     /// catches the exception takes it; it may re-place it to re-throw
-    /// (using [`throw`]) if it chooses not to actually handle the
+    /// (using [`Self::throw`]) if it chooses not to actually handle the
     /// exception.
     ///
     /// This method is useful to tell whether a store is in this
     /// state, but should not be used as part of the ordinary
     /// exception-handling flow. For the most idiomatic handling, see
-    /// [`StoreContextMut::catch`].
+    /// [`StoreContextMut::throw`].
     #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
         self.inner.pending_exception.is_some()

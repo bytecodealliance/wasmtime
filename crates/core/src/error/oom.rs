@@ -5,12 +5,11 @@ use core::{fmt, mem, ptr::NonNull};
 ///
 /// This error is the sentinel for allocation failure due to memory exhaustion.
 ///
-/// Constructing an [`Error`][crate::Error] from an `OutOfMemory` does not
+/// Constructing an [`Error`] from an `OutOfMemory` does not
 /// allocate.
 ///
 /// Allocation failure inside any `Error` method that must allocate
-/// (e.g. [`Error::context`][crate::Error::context]) will propagate an
-/// `OutOfMemory` error.
+/// (e.g. [`Error::context`]) will propagate an `OutOfMemory` error.
 #[derive(Clone, Copy)]
 // NB: `OutOfMemory`'s representation must be the same as `OomOrDynError`
 // (and therefore also `Error`).

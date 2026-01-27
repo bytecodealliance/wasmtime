@@ -20,17 +20,16 @@ mod sealed {
 /// This extension trait, and its methods, are the primary way to create error
 /// chains. An error's debug output will include the full chain of
 /// errors. Errors in these chains are accessible via the
-/// [`Error::chain`][crate::Error::chain] and
-/// [`Error::root_cause`][crate::Error::root_cause] methods.
+/// [`Error::chain`] and [`Error::root_cause`] methods.
 ///
 /// After applying error context of type `C`, calling
-/// [`error.is::<C>()`][crate::Error::is] will return `true` for the new error
+/// [`error.is::<C>()`](Error::is) will return `true` for the new error
 /// (unless there was a memory allocation failure) in addition to any other
 /// types `T` for which it was already the case that `error.is::<T>()`.
 ///
 /// This boxes the inner `C` type, but if that box allocation fails, then this
 /// trait's functions return an `Error` where
-/// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+/// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
 ///
 /// # Example
 ///
@@ -112,7 +111,7 @@ pub trait Context<T, E>: sealed::Sealed {
     /// it should only be used when the `context` is already available or is
     /// effectively a constant. Otherwise, it effectively forces computation of
     /// the context, even when we aren't on an error path. The
-    /// [`Context::with_context`][crate::Context::with_context] method is
+    /// [`Context::with_context`](Context::with_context) method is
     /// preferred in these scenarios, as it lazily computes the error context,
     /// only doing so when we are actually on an error path.
     fn context<C>(self, context: C) -> Result<T, Error>

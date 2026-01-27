@@ -18,8 +18,8 @@
 //! support in this module is enough to run wasm modules but any customization
 //! beyond that [`WasiCtxBuilder`] already supports is not possible yet.
 //!
-//! [`WasiCtxBuilder`]: crate::p2::WasiCtxBuilder
-//! [`build_p1`]: crate::p2::WasiCtxBuilder::build_p1
+//! [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+//! [`build_p1`]: crate::WasiCtxBuilder::build_p1
 //!
 //! # Components vs Modules
 //!
@@ -105,8 +105,8 @@ use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 /// Instances of [`WasiP1Ctx`] are typically stored within the `T` of
 /// [`Store<T>`](wasmtime::Store).
 ///
-/// [`WasiCtxBuilder::build_p1`]: crate::p2::WasiCtxBuilder::build_p1
-/// [`WasiCtxBuilder`]: crate::p2::WasiCtxBuilder
+/// [`WasiCtxBuilder::build_p1`]: crate::WasiCtxBuilder::build_p1
+/// [`WasiCtxBuilder`]: crate::WasiCtxBuilder
 ///
 /// # Examples
 ///

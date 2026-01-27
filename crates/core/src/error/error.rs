@@ -235,9 +235,9 @@ impl BoxedDynError {
 /// it will automatically get constructed from the root cause error for you.
 ///
 /// Most often when creating an `Error`, you just want to early-exit from the
-/// function, returning `Err(...)`. The [`ensure!`][crate::ensure] macro
+/// function, returning `Err(...)`. The [`ensure!`](crate::ensure) macro
 /// early-returns an error when a condition is not met (similar to how `assert!`
-/// panics when a condition is not met) and the [`bail!`][crate::bail] macro
+/// panics when a condition is not met) and the [`bail!`](crate::bail) macro
 /// early-returns an error unconditionally.
 ///
 /// ```
@@ -260,7 +260,7 @@ impl BoxedDynError {
 /// ```
 ///
 /// If you do not want to early-return, just to create the `Error`, then the
-/// [`format_err!`][crate::format_err] macro is preferred:
+/// [`format_err!`](crate::format_err) macro is preferred:
 ///
 /// ```
 /// # use wasmtime_internal_core::error as wasmtime;
@@ -517,7 +517,7 @@ impl From<Error> for Box<dyn core::error::Error + 'static> {
     }
 }
 
-/// Convert a [`wasmtime::Error`][crate::Error] into an [`anyhow::Error`].
+/// Convert a [`wasmtime::Error`](Error) into an [`anyhow::Error`].
 ///
 /// # Example
 ///
@@ -572,12 +572,12 @@ impl Error {
     /// Construct a new `Error` from a type that implements
     /// `core::error::Error`.
     ///
-    /// Calling [`error.is::<E>()`][Error::is] will return `true` for the new
+    /// Calling [`error.is::<E>()`](Error::is) will return `true` for the new
     /// error (unless there was a memory allocation failure).
     ///
     /// This boxes the inner error, but if that box allocation fails, then this
     /// function returns an `Error` where
-    /// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+    /// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
     ///
     /// # Example
     ///
@@ -611,12 +611,12 @@ impl Error {
     /// Construct a new `Error` from any type that implements `Debug` and
     /// `Display`.
     ///
-    /// Calling [`error.is::<M>()`][Error::is] will return `true` for the new
+    /// Calling [`error.is::<M>()`](Error::is) will return `true` for the new
     /// error (unless there was a memory allocation failure).
     ///
     /// This boxes the inner `M` type, but if that box allocation fails, then
     /// this function returns an `Error` where
-    /// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+    /// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
     ///
     /// # Example
     ///
@@ -641,12 +641,12 @@ impl Error {
     /// `error.is::<anyhow::Error>()`.
     ///
     /// Calling [`error.is::<Box<dyn core::error::Error + Send + Sync +
-    /// 'static>>()`][Error::is] will return `true` for the new error (unless
+    /// 'static>>()`](Error::is) will return `true` for the new error (unless
     /// there was a memory allocation failure).
     ///
     /// This reboxes the inner error, but if that box allocation fails, then
     /// this function returns an `Error` where
-    /// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+    /// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
     ///
     /// # Example
     ///
@@ -670,12 +670,12 @@ impl Error {
 
     /// Convert an `anyhow::Error` into an `Error`.
     ///
-    /// Calling [`error.is::<anyhow::Error>()`][Error::is] will return `true`
+    /// Calling [`error.is::<anyhow::Error>()`](Error::is) will return `true`
     /// for the new error (unless there was a memory allocation failure).
     ///
     /// This reboxes the `anyhow::Error`, but if that box allocation fails, then
     /// this function returns an `Error` where
-    /// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+    /// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
     ///
     /// # Example
     ///
@@ -706,14 +706,16 @@ impl Error {
     /// is a method directly on [`Error`], there is no need for lazily-computing
     /// the error context (like `with_context` does).
     ///
-    /// Calling [`error.is::<C>()`][Error::is] will return `true` for the new
+    /// Calling [`error.is::<C>()`](Error::is) will return `true` for the new
     /// error (unless there was a memory allocation failure) in addition to any
     /// other types `T` for which it was already the case that
     /// `error.is::<T>()`.
     ///
     /// This boxes the inner `C` type, but if that box allocation fails, then
     /// this function returns an `Error` where
-    /// [`error.is::<OutOfMemory>()`][crate::OutOfMemory] is true.
+    /// [`error.is::<OutOfMemory>()`](OutOfMemory) is true.
+    ///
+    /// [`Context::context`]: crate::error::Context::context
     ///
     /// # Example
     ///

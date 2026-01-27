@@ -24,6 +24,8 @@ pub use udp::UdpSocket;
 /// When using this type you can skip the [`WasiSocketsView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::sockets::tcp::add_to_linker`]: crate::p2::bindings::sockets::tcp::add_to_linker
+///
 /// # Examples
 ///
 /// ```

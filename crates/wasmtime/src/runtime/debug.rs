@@ -680,7 +680,7 @@ impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
 /// a debug handler attached.
 #[derive(Debug)]
 pub enum DebugEvent<'a> {
-    /// A [`wasmtime::Error`] was raised by a hostcall.
+    /// A [`wasmtime::Error`](crate::Error) was raised by a hostcall.
     HostcallError(&'a crate::Error),
     /// An exception is thrown and caught by Wasm. The current state
     /// is at the throw-point.
@@ -739,6 +739,8 @@ pub enum DebugEvent<'a> {
 ///       another async stack, and the stack that polls the future
 ///       running a particular Wasm invocation could change after each
 ///       suspend point in the handler.
+///
+/// [`Store::run_concurrent`]: crate::Store::run_concurrent
 pub trait DebugHandler: Clone + Send + Sync + 'static {
     /// The data expected on the store that this handler is attached
     /// to.

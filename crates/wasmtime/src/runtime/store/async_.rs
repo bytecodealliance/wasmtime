@@ -81,6 +81,8 @@ impl<T> Store<T> {
     ///
     /// After this function returns a trap, it may be called for subsequent
     /// returns to host or wasm code as the trap propagates to the root call.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(feature = "call-hook")]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
         self.inner.call_hook = Some(crate::store::CallHookInner::Async(Box::new(hook)));

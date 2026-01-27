@@ -217,6 +217,13 @@
 //! [`wasi:sockets/udp-create-socket`]: bindings::sockets::udp_create_socket::Host
 //! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
+//! [`WasiCtx`]: crate::WasiCtx
+//! [`WasiCtxView`]: crate::WasiCtxView
+//! [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+//! [`WasiCtxBuilder::wall_clock`]: crate::WasiCtxBuilder::wall_clock
+//! [`WasiCtxBuilder::monotonic_clock`]: crate::WasiCtxBuilder::monotonic_clock
+//! [`StdinStream`]: crate::cli::StdinStream
+//! [`StdoutStream`]: crate::cli::StdoutStream
 
 use crate::WasiView;
 use crate::cli::{WasiCli, WasiCliView as _};
