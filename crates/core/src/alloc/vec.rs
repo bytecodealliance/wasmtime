@@ -1,6 +1,6 @@
 use crate::error::OutOfMemory;
 use core::{
-    fmt,
+    fmt, mem,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
 use std_alloc::vec::Vec as StdVec;
@@ -47,7 +47,7 @@ impl<T> Vec<T> {
             OutOfMemory::new(
                 self.len()
                     .saturating_add(additional)
-                    .saturating_mul(core::mem::size_of::<T>()),
+                    .saturating_mul(mem::size_of::<T>()),
             )
         })
     }
@@ -89,6 +89,7 @@ impl<T> Vec<T> {
         let ptr = self.as_mut_ptr();
         let len = self.len();
         let cap = self.capacity();
+        mem::forget(self);
         (ptr, len, cap)
     }
 
