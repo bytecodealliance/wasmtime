@@ -1,5 +1,5 @@
 use std::ffi::c_void;
-pub use wasmtime_environ::error::Result;
+pub use wasmtime_core::error::Result;
 
 pub(crate) fn pipeline_flush_mt() -> Result<()> {
     Ok(())

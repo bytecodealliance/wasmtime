@@ -4951,7 +4951,7 @@ version = "42.0.0"
 dependencies = [
  "cfg-if",
  "libc",
- "wasmtime-environ",
+ "wasmtime-internal-core",
  "windows-sys 0.61.2",
 ]
 
