@@ -3,9 +3,11 @@
 mod arc;
 mod boxed;
 mod try_new;
+mod vec;
 
 pub use boxed::{BoxedSliceFromIterError, new_boxed_slice_from_iter};
 pub use try_new::{TryNew, try_new};
+pub use vec::Vec;
 
 use crate::error::OutOfMemory;
 use core::{alloc::Layout, ptr::NonNull};
