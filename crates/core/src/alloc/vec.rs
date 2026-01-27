@@ -83,6 +83,23 @@ impl<T> Vec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::into_raw_parts`].
+    pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
+        // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
+        let ptr = self.as_mut_ptr();
+        let len = self.len();
+        let cap = self.capacity();
+        (ptr, len, cap)
+    }
+
+    /// Same as [`std::vec::Vec::from_raw_parts`].
+    pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Self {
+        Vec {
+            // Safety: Same as our unsafe contract.
+            inner: unsafe { StdVec::from_raw_parts(ptr, length, capacity) },
+        }
+    }
+
     /// Same as [`std::vec::Vec::drain`].
     pub fn drain<R>(&mut self, range: R) -> std_alloc::vec::Drain<'_, T>
     where
