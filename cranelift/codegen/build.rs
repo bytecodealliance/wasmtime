@@ -216,6 +216,9 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         // the generated code to help debug rule matching.
         options.emit_logging = std::env::var("CARGO_FEATURE_TRACE_LOG").is_ok();
 
+        // Enable optional match-arm splitting in iterator terms for faster compile times.
+        options.split_match_arms = std::env::var("CARGO_FEATURE_ISLE_SPLIT_MATCH").is_ok();
+
         if let Ok(out_dir) = std::env::var("OUT_DIR") {
             options.prefixes.push(isle::codegen::Prefix {
                 prefix: out_dir,

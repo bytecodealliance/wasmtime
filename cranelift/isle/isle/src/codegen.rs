@@ -28,6 +28,12 @@ pub struct CodegenOptions {
     /// In Cranelift this is typically controlled by a cargo feature on the
     /// crate that includes the generated code (e.g. `cranelift-codegen`).
     pub emit_logging: bool,
+
+    /// Split large match arms into local closures when generating iterator terms.
+    ///
+    /// In Cranelift this is typically controlled by a cargo feature on the
+    /// crate that includes the generated code (e.g. `cranelift-codegen`).
+    pub split_match_arms: bool,
 }
 
 /// A path prefix which should be replaced when printing file names.
@@ -72,6 +78,7 @@ struct BodyContext<'a, W> {
     is_bound: StableSet<BindingId>,
     term_name: &'a str,
     emit_logging: bool,
+    split_match_arms: bool,
 
     // Extra fields for iterator-returning terms.
     // These fields are used to generate optimized Rust code for iterator-returning terms.
@@ -89,6 +96,7 @@ impl<'a, W: Write> BodyContext<'a, W> {
         ruleset: &'a RuleSet,
         term_name: &'a str,
         emit_logging: bool,
+        split_match_arms: bool,
         iter_overflow_action: &'static str,
     ) -> Self {
         Self {
@@ -99,6 +107,7 @@ impl<'a, W: Write> BodyContext<'a, W> {
             is_bound: Default::default(),
             term_name,
             emit_logging,
+            split_match_arms,
             match_split: Default::default(),
             iter_overflow_action,
         }
@@ -450,6 +459,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                 ruleset,
                 term_name,
                 options.emit_logging,
+                options.split_match_arms,
                 "return;", // At top level, we just return.
             );
 
@@ -789,7 +799,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     // Wrap such bodies in a local closure to move the bulk of the work into a separate body
                     // without needing to know the types of captured locals.
                     const MATCH_ARM_BODY_CLOSURE_THRESHOLD: usize = 256;
-                    if ret_kind == ReturnKind::Iterator
+                    if ctx.split_match_arms
+                        && ret_kind == ReturnKind::Iterator
                         && Codegen::block_weight(&arm.body) > MATCH_ARM_BODY_CLOSURE_THRESHOLD
                     {
                         let closure_id = ctx.match_split;
