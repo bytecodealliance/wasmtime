@@ -6,7 +6,8 @@ use memmap2::MmapMut;
 #[cfg(not(any(
     feature = "selinux-fix",
     windows,
-    all(target_arch = "aarch64", target_os = "macos")
+    all(target_arch = "aarch64", target_os = "macos"),
+    all(target_os = "linux", target_arch = "x86_64"),
 )))]
 use std::alloc;
 use std::io;
@@ -40,7 +41,7 @@ impl PtrLen {
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, _executable: bool) -> io::Result<Self> {
         let alloc_size = region::page::ceil(size as *const ()) as usize;
         MmapMut::map_anon(alloc_size).map(|mut mmap| {
             // The order here is important; we assign the pointer first to get
@@ -53,22 +54,28 @@ impl PtrLen {
         })
     }
 
-    // macOS ARM64: Use mmap with MAP_JIT for W^X policy compliance.
+    // macOS ARM64: Use mmap for W^X policy compliance.
+    // Only passes MAP_JIT for pages that will actually be executable.
     #[cfg(all(
         target_arch = "aarch64",
         target_os = "macos",
         not(feature = "selinux-fix")
     ))]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, executable: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
         let alloc_size = region::page::ceil(size as *const ()) as usize;
+
+        let mut flags = libc::MAP_PRIVATE | libc::MAP_ANON;
+        if executable {
+            flags |= libc::MAP_JIT;
+        }
 
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
                 alloc_size,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_JIT,
+                flags,
                 -1,
                 0,
             )
@@ -78,12 +85,15 @@ impl PtrLen {
             return Err(io::Error::last_os_error());
         }
 
-        // Enable writing to MAP_JIT memory (W^X: start in write mode)
-        unsafe extern "C" {
-            fn pthread_jit_write_protect_np(enabled: libc::c_int);
-        }
-        unsafe {
-            pthread_jit_write_protect_np(0);
+        // Enable writing to MAP_JIT memory (W^X: start in write mode).
+        // Scoped here so write mode is only enabled when MAP_JIT pages are created.
+        if executable {
+            unsafe extern "C" {
+                fn pthread_jit_write_protect_np(enabled: libc::c_int);
+            }
+            unsafe {
+                pthread_jit_write_protect_np(0);
+            }
         }
 
         Ok(Self {
@@ -92,13 +102,52 @@ impl PtrLen {
         })
     }
 
-    // Non-macOS ARM64: Use standard allocator.
+    // Linux x86_64: Use mmap with a hint address to keep JIT code within 2GB
+    // of runtime symbols. Without this, the system allocator may place JIT code
+    // at arbitrary virtual addresses >2GB away, causing i32 overflow in x86_64
+    // PC-relative relocations (X86PCRel4, X86CallPCRel4).
+    #[cfg(all(
+        target_os = "linux",
+        target_arch = "x86_64",
+        not(feature = "selinux-fix"),
+    ))]
+    fn with_size(size: usize, _executable: bool) -> io::Result<Self> {
+        assert_ne!(size, 0);
+        let alloc_size = region::page::ceil(size as *const ()) as usize;
+
+        // Use this function's own address as the mmap hint. Since this code is
+        // linked into the same binary as the runtime symbols, the OS will try
+        // to allocate nearby, keeping JIT code within 32-bit relative range.
+        let hint = Self::with_size as *const () as *mut libc::c_void;
+        let ptr = unsafe {
+            libc::mmap(
+                hint,
+                alloc_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+        };
+
+        if ptr == libc::MAP_FAILED {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(Self {
+            ptr: ptr as *mut u8,
+            len: alloc_size,
+        })
+    }
+
+    // Other Unix platforms: Use standard allocator.
     #[cfg(all(
         not(target_os = "windows"),
         not(feature = "selinux-fix"),
-        not(all(target_arch = "aarch64", target_os = "macos"))
+        not(all(target_arch = "aarch64", target_os = "macos")),
+        not(all(target_os = "linux", target_arch = "x86_64")),
     ))]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, _executable: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
         let page_size = region::page::size();
         let alloc_size = region::page::ceil(size as *const ()) as usize;
@@ -117,7 +166,7 @@ impl PtrLen {
     }
 
     #[cfg(target_os = "windows")]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, _executable: bool) -> io::Result<Self> {
         use windows_sys::Win32::System::Memory::{
             MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc,
         };
@@ -144,7 +193,7 @@ impl PtrLen {
 
 // `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
 
-// macOS ARM64: Free MAP_JIT memory with munmap.
+// macOS ARM64: Free mmap'd memory with munmap.
 #[cfg(all(
     target_arch = "aarch64",
     target_os = "macos",
@@ -161,11 +210,29 @@ impl Drop for PtrLen {
     }
 }
 
+// Linux x86_64: Free mmap'd memory with munmap.
+#[cfg(all(
+    target_os = "linux",
+    target_arch = "x86_64",
+    not(feature = "selinux-fix"),
+))]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                let _ = region::protect(self.ptr, self.len, region::Protection::READ_WRITE);
+                libc::munmap(self.ptr as *mut libc::c_void, self.len);
+            }
+        }
+    }
+}
+
 // Other Unix platforms: Use standard allocator dealloc.
 #[cfg(all(
     not(target_os = "windows"),
     not(feature = "selinux-fix"),
-    not(all(target_arch = "aarch64", target_os = "macos"))
+    not(all(target_arch = "aarch64", target_os = "macos")),
+    not(all(target_os = "linux", target_arch = "x86_64")),
 ))]
 impl Drop for PtrLen {
     fn drop(&mut self) {
@@ -192,17 +259,19 @@ pub(crate) struct Memory {
     already_protected: usize,
     current: PtrLen,
     position: usize,
+    executable: bool,
 }
 
 unsafe impl Send for Memory {}
 
 impl Memory {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(executable: bool) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
+            executable,
         }
     }
 
@@ -229,7 +298,7 @@ impl Memory {
         self.finish_current();
 
         // TODO: Allocate more at a time.
-        self.current = PtrLen::with_size(size)?;
+        self.current = PtrLen::with_size(size, self.executable)?;
         self.position = size;
 
         Ok(self.current.ptr)
@@ -315,9 +384,9 @@ impl SystemMemoryProvider {
     /// Create a new memory handle with the given branch protection.
     pub fn new() -> Self {
         Self {
-            code: Memory::new(),
-            readonly: Memory::new(),
-            writable: Memory::new(),
+            code: Memory::new(true),
+            readonly: Memory::new(false),
+            writable: Memory::new(false),
         }
     }
 }
