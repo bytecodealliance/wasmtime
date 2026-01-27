@@ -50,10 +50,10 @@ impl FuncRefTable {
     /// The given `func_ref` must point to a valid `VMFuncRef` and must remain
     /// valid for the duration of this table's lifetime.
     pub unsafe fn intern(&mut self, func_ref: Option<SendSyncPtr<VMFuncRef>>) -> FuncRefTableId {
-        *self
-            .interned
-            .entry(func_ref)
-            .or_insert_with(|| FuncRefTableId(self.slab.alloc(func_ref)))
+        *self.interned.entry(func_ref).or_insert_with(|| {
+            // TODO(#12069): handle allocation failure here
+            FuncRefTableId(self.slab.alloc(func_ref).unwrap())
+        })
     }
 
     /// Get the `VMFuncRef` associated with the given ID.

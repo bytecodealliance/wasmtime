@@ -738,6 +738,13 @@ impl TypeRegistryInner {
 
         log::trace!("hash-consing map miss: making new registration");
 
+        // Reserve capacity before making any side effects (like incrementing
+        // other rec groups ref counts). We do not want to panic or
+        // `?`-propagate an error when we have applied partial side effects.
+        //
+        // TODO(#12069): handle allocation failure here.
+        self.types.reserve(non_canon_types.len()).unwrap();
+
         // Inter-group edges: increment the referenced group's ref
         // count, because these other rec groups shouldn't be dropped
         // while this rec group is still alive.
@@ -760,7 +767,9 @@ impl TypeRegistryInner {
         let shared_type_indices: Box<[_]> = non_canon_types
             .iter()
             .map(|(module_index, ty)| {
-                let engine_index = slab_id_to_shared_type_index(self.types.alloc(None));
+                let engine_index = slab_id_to_shared_type_index(
+                    self.types.alloc(None).expect("reserved capacity"),
+                );
                 log::trace!(
                     "reserved {engine_index:?} for {module_index:?} = non-canonical {ty:?}"
                 );

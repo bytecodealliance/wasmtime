@@ -14,14 +14,15 @@
 //! # Example
 //!
 //! ```
+//! # fn foo() -> wasmtime_internal_core::error::Result<()> {
 //! use wasmtime_internal_core::slab::Slab;
 //!
 //! let mut slab = Slab::new();
 //!
 //! // Insert some values into the slab.
-//! let rza = slab.alloc("Robert Fitzgerald Diggs");
-//! let gza = slab.alloc("Gary Grice");
-//! let bill = slab.alloc("Bill Gates");
+//! let rza = slab.alloc("Robert Fitzgerald Diggs")?;
+//! let gza = slab.alloc("Gary Grice")?;
+//! let bill = slab.alloc("Bill Gates")?;
 //!
 //! // Allocated elements can be accessed infallibly via indexing (and missing and
 //! // deallocated entries will panic).
@@ -39,7 +40,10 @@
 //! slab.dealloc(bill);
 //!
 //! // Allocate a new entry.
-//! let bill = slab.alloc("Bill Murray");
+//! let bill = slab.alloc("Bill Murray")?;
+//! # Ok(())
+//! # }
+//! # foo().unwrap();
 //! ```
 //!
 //! # Using `Id`s with the Wrong `Slab`
@@ -78,6 +82,8 @@
 //! the following:
 //!
 //! ```rust
+//! use wasmtime_internal_core::error::OutOfMemory;
+//!
 //! pub struct GenerationalId {
 //!     id: wasmtime_internal_core::slab::Id,
 //!     generation: u32,
@@ -94,10 +100,10 @@
 //! }
 //!
 //! impl<T> GenerationalSlab<T> {
-//!     pub fn alloc(&mut self, value: T) -> GenerationalId {
+//!     pub fn alloc(&mut self, value: T) -> Result<GenerationalId, OutOfMemory> {
 //!         let generation = self.generation;
-//!         let id = self.slab.alloc(GenerationalEntry { value, generation });
-//!         GenerationalId { id, generation }
+//!         let id = self.slab.alloc(GenerationalEntry { value, generation })?;
+//!         Ok(GenerationalId { id, generation })
 //!     }
 //!
 //!     pub fn get(&self, id: GenerationalId) -> Option<&T> {
@@ -127,9 +133,10 @@
 //! }
 //! ```
 
+use crate::alloc::Vec;
+use crate::error::OutOfMemory;
 use core::fmt;
 use core::num::NonZeroU32;
-use std_alloc::vec::Vec;
 
 /// An identifier for an allocated value inside a `slab`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -255,10 +262,10 @@ impl<T> Slab<T> {
     /// Construct a new, empty slab, pre-reserving space for at least `capacity`
     /// elements.
     #[inline]
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Result<Self, OutOfMemory> {
         let mut slab = Self::new();
-        slab.reserve(capacity);
-        slab
+        slab.reserve(capacity)?;
+        Ok(slab)
     }
 
     /// Ensure that there is space for at least `additional` elements in this
@@ -267,29 +274,31 @@ impl<T> Slab<T> {
     /// # Panics
     ///
     /// Panics if the new capacity exceeds `Self::MAX_CAPACITY`.
-    pub fn reserve(&mut self, additional: usize) {
+    pub fn reserve(&mut self, additional: usize) -> Result<(), OutOfMemory> {
         let cap = self.capacity();
         let len = self.len();
         assert!(cap >= len);
         if cap - len >= additional {
             // Already have `additional` capacity available.
-            return;
+            return Ok(());
         }
 
-        self.entries.reserve(additional);
+        self.entries.reserve(additional)?;
 
         // Maintain the invariant that `i <= MAX_CAPACITY` for all indices `i`
         // in `self.entries`.
         assert!(self.entries.capacity() <= Self::MAX_CAPACITY);
+
+        Ok(())
     }
 
-    fn double_capacity(&mut self) {
+    fn double_capacity(&mut self) -> Result<(), OutOfMemory> {
         // Double our capacity to amortize the cost of resizing. But make sure
         // we add some amount of minimum additional capacity, since doubling
         // zero capacity isn't useful.
         const MIN_CAPACITY: usize = 16;
         let additional = core::cmp::max(self.entries.capacity(), MIN_CAPACITY);
-        self.reserve(additional);
+        self.reserve(additional)
     }
 
     /// What is the capacity of this slab? That is, how many entries can it
@@ -336,7 +345,9 @@ impl<T> Slab<T> {
         self.free.take().or_else(|| {
             if self.entries.len() < self.entries.capacity() {
                 let index = EntryIndex::new(self.entries.len());
-                self.entries.push(Entry::Free { next_free: None });
+                self.entries
+                    .push(Entry::Free { next_free: None })
+                    .expect("have capacity");
                 Some(index)
             } else {
                 None
@@ -352,9 +363,9 @@ impl<T> Slab<T> {
     /// Panics if allocating this value requires reallocating the underlying
     /// storage, and the new capacity exceeds `Slab::MAX_CAPACITY`.
     #[inline]
-    pub fn alloc(&mut self, value: T) -> Id {
+    pub fn alloc(&mut self, value: T) -> Result<Id, OutOfMemory> {
         self.try_alloc(value)
-            .unwrap_or_else(|value| self.alloc_slow(value))
+            .or_else(|value| self.alloc_slow(value))
     }
 
     /// Get the `Id` that will be returned for the next allocation in this slab.
@@ -366,12 +377,13 @@ impl<T> Slab<T> {
 
     #[inline(never)]
     #[cold]
-    fn alloc_slow(&mut self, value: T) -> Id {
+    fn alloc_slow(&mut self, value: T) -> Result<Id, OutOfMemory> {
         // Reserve additional capacity, since we didn't have space for the
         // allocation.
-        self.double_capacity();
+        self.double_capacity()?;
         // After which the allocation will succeed.
-        self.try_alloc(value).ok().unwrap()
+        let id = self.try_alloc(value).ok().unwrap();
+        Ok(id)
     }
 
     /// Get a shared borrow of the value associated with `id`.

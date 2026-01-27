@@ -837,6 +837,8 @@ impl CallThreadState {
                     let exn = store
                         .as_store_opaque()
                         .pending_exception_owned_rooted()
+                        // TODO(#12069): handle allocation failure here
+                        .unwrap()
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
                 }
@@ -848,6 +850,8 @@ impl CallThreadState {
                     let exn = store
                         .as_store_opaque()
                         .pending_exception_owned_rooted()
+                        // TODO(#12069): handle allocation failure here
+                        .unwrap()
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
                         exn.clone(),

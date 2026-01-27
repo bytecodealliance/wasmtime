@@ -2780,13 +2780,18 @@ at https://bytecodealliance.org/security.
     /// Get an owned rooted reference to the pending exception,
     /// without taking it off the store.
     #[cfg(all(feature = "gc", feature = "debug"))]
-    pub(crate) fn pending_exception_owned_rooted(&mut self) -> Option<OwnedRooted<ExnRef>> {
+    pub(crate) fn pending_exception_owned_rooted(
+        &mut self,
+    ) -> Result<Option<OwnedRooted<ExnRef>>, crate::error::OutOfMemory> {
         let mut nogc = AutoAssertNoGc::new(self);
-        nogc.pending_exception.take().map(|vmexnref| {
-            let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
-            nogc.pending_exception = Some(cloned.into_exnref_unchecked());
-            OwnedRooted::new(&mut nogc, vmexnref.into())
-        })
+        nogc.pending_exception
+            .take()
+            .map(|vmexnref| {
+                let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+                nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+                OwnedRooted::new(&mut nogc, vmexnref.into())
+            })
+            .transpose()
     }
 
     #[cfg(feature = "gc")]
