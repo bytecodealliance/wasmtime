@@ -82,6 +82,14 @@ impl<T> Vec<T> {
         self.inner.push(value);
         Ok(())
     }
+
+    /// Same as [`std::vec::Vec::drain`].
+    pub fn drain<R>(&mut self, range: R) -> std_alloc::vec::Drain<'_, T>
+    where
+        R: core::ops::RangeBounds<usize>,
+    {
+        self.inner.drain(range)
+    }
 }
 
 impl<T> Deref for Vec<T> {
