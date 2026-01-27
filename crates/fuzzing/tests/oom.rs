@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 use wasmtime::{error::OutOfMemory, *};
-use wasmtime_environ::{PrimaryMap, collections::*};
+use wasmtime_environ::{PrimaryMap, SecondaryMap, collections::*};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -68,12 +68,12 @@ fn compound_bit_set_try_ensure_capacity() -> Result<()> {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Key(u32);
+wasmtime_environ::entity_impl!(Key);
+
 #[test]
 fn primary_map_try_with_capacity() -> Result<()> {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    struct Key(u32);
-    wasmtime_environ::entity_impl!(Key);
-
     OomTest::new().test(|| {
         let _map = PrimaryMap::<Key, u32>::try_with_capacity(32)?;
         Ok(())
@@ -82,10 +82,6 @@ fn primary_map_try_with_capacity() -> Result<()> {
 
 #[test]
 fn primary_map_try_reserve() -> Result<()> {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    struct Key(u32);
-    wasmtime_environ::entity_impl!(Key);
-
     OomTest::new().test(|| {
         let mut map = PrimaryMap::<Key, u32>::new();
         map.try_reserve(100)?;
@@ -95,13 +91,35 @@ fn primary_map_try_reserve() -> Result<()> {
 
 #[test]
 fn primary_map_try_reserve_exact() -> Result<()> {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    struct Key(u32);
-    wasmtime_environ::entity_impl!(Key);
-
     OomTest::new().test(|| {
         let mut map = PrimaryMap::<Key, u32>::new();
         map.try_reserve_exact(13)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _map = SecondaryMap::<Key, u32>::try_with_capacity(32)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_resize() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = SecondaryMap::<Key, u32>::new();
+        map.try_resize(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = SecondaryMap::<Key, u32>::new();
+        map.try_insert(Key::from_u32(42), 100)?;
         Ok(())
     })
 }
