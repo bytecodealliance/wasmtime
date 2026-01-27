@@ -306,10 +306,7 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
                 self.elems = new_elems;
                 Ok(())
             }
-            Err(wasmtime_core::alloc::BoxedSliceFromIterWithLenError::Oom(oom)) => Err(oom),
-            Err(wasmtime_core::alloc::BoxedSliceFromIterWithLenError::TooFewItems) => {
-                unreachable!()
-            }
+            Err(e) => Err(e.unwrap_oom()),
         }
     }
 

@@ -6,9 +6,9 @@ mod try_new;
 mod vec;
 
 pub use boxed::{
-    BoxedSliceFromFallibleIterError, BoxedSliceFromIterWithLenError,
+    BoxedSliceFromFallibleIterError, TooFewItemsOrOom, boxed_slice_write_iter,
     new_boxed_slice_from_fallible_iter, new_boxed_slice_from_iter,
-    new_boxed_slice_from_iter_with_len,
+    new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
 };
 pub use try_new::{TryNew, try_new};
 pub use vec::Vec;
