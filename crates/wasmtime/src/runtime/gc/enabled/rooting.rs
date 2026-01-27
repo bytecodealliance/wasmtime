@@ -1823,7 +1823,15 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+
+        let raw = match store.optional_gc_store_mut() {
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref),
+            None => {
+                debug_assert!(gc_ref.is_i31());
+                gc_ref.as_raw_non_zero_u32()
+            }
+        };
+
         ptr.write(val_raw(raw.get()));
         Ok(())
     }
