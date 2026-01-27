@@ -22,7 +22,7 @@ impl<T> Default for Vec<T> {
 
 impl<T: fmt::Debug> fmt::Debug for Vec<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(&self.inner).finish()
+        fmt::Debug::fmt(&self.inner, f)
     }
 }
 
@@ -43,9 +43,13 @@ impl<T> Vec<T> {
     /// Same as [`std::vec::Vec::reserve`] but returns an error on allocation
     /// failure.
     pub fn reserve(&mut self, additional: usize) -> Result<(), OutOfMemory> {
-        self.inner
-            .try_reserve(additional)
-            .map_err(|_| OutOfMemory::new(self.len().saturating_add(additional)))
+        self.inner.try_reserve(additional).map_err(|_| {
+            OutOfMemory::new(
+                self.len()
+                    .saturating_add(additional)
+                    .saturating_mul(core::mem::size_of::<T>()),
+            )
+        })
     }
 
     /// Same as [`std::vec::Vec::reserve_exact`] but returns an error on allocation
