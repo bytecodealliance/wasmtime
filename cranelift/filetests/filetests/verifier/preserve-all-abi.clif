@@ -1,0 +1,22 @@
+test verifier
+
+function %f0(i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 preserve_all { ; error: Signature with `preserve_all` ABI cannot have return values
+block0(v0: i8):
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+function %f1(i64) {
+    sig0 = () -> i8, i8, i8, i8 preserve_all ; error: Signature with `preserve_all` ABI cannot have return values
+
+block0(v0: i64):
+    v1, v2, v3, v4 = call_indirect sig0, v0()
+    return
+}
+
+function %f2() {
+    fn0 = %g() -> i8, i8, i8, i8 preserve_all ; error: Signature with `preserve_all` ABI cannot have return values
+
+block0():
+    v1, v2, v3, v4 = call fn0()
+    return
+}

@@ -2500,7 +2500,7 @@ impl<T> CallInfo<T> {
         // The temporary must be noted as clobbered unless there are
         // no returns (hence it isn't needed). The latter can only be
         // the case statically for an ABI when the ABI doesn't allow
-        // any returns at all (e.g., patchable-call ABI).
+        // any returns at all (e.g., preserve-all ABI).
         debug_assert!(
             self.defs.is_empty()
                 || M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())

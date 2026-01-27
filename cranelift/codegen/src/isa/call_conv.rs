@@ -53,7 +53,8 @@ pub enum CallConv {
     /// as little as possible.
     ///
     /// The ABI is based on the native register-argument ABI on each
-    /// respective platform. It does not support tail-calls.
+    /// respective platform. It does not support tail-calls. It also
+    /// does not support return values.
     PreserveAll,
 }
 
