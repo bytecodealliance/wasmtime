@@ -1,4 +1,4 @@
-use super::{TryNew, try_alloc};
+use super::{TryNew, Vec, try_alloc};
 use crate::error::OutOfMemory;
 use core::{
     alloc::Layout,
@@ -42,150 +42,114 @@ impl<T> TryNew for Box<T> {
     }
 }
 
-fn new_uninit_boxed_slice<T>(len: usize) -> Result<Box<[MaybeUninit<T>]>, OutOfMemory> {
-    let layout = Layout::array::<MaybeUninit<T>>(len)
-        .map_err(|_| OutOfMemory::new(len.saturating_mul(mem::size_of::<T>())))?;
+use drop_guard::DropGuard;
+mod drop_guard {
+    use super::*;
 
-    if layout.size() == 0 {
-        // NB: no actual allocation takes place when boxing zero-sized
-        // types.
-        return Ok(Box::new_uninit_slice(len));
+    /// RAII guard to handle dropping the already-initialized elements when we get
+    /// too few items or an iterator panics while constructing a boxed slice.
+    pub struct DropGuard<T> {
+        vec: Vec<T>,
     }
 
-    // Safety: we just ensured that the new length is non-zero.
-    debug_assert_ne!(layout.size(), 0);
-    let ptr = unsafe { try_alloc(layout)? };
-
-    let ptr = ptr.cast::<MaybeUninit<T>>().as_ptr();
-    let ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
-
-    // Safety: `ptr` points to a memory block that is valid for
-    // `[MaybeUninit<T>; len]` and which was allocated by the global memory
-    // allocator.
-    let boxed = unsafe { Box::from_raw(ptr) };
-    Ok(boxed)
-}
-
-/// RAII guard to handle dropping the initialized elements of the boxed
-/// slice in the cases where we get too few items or the iterator panics.
-struct DropGuard<T> {
-    boxed: Box<[MaybeUninit<T>]>,
-    init_len: usize,
-}
-
-impl<T> Drop for DropGuard<T> {
-    fn drop(&mut self) {
-        debug_assert!(self.init_len <= self.boxed.len());
-
-        if !mem::needs_drop::<T>() {
-            return;
+    impl<T> DropGuard<T> {
+        pub fn new(len: usize) -> Result<Self, OutOfMemory> {
+            let mut vec = Vec::new();
+            vec.reserve_exact(len)?;
+            Ok(DropGuard { vec })
         }
 
-        for elem in self.boxed.iter_mut().take(self.init_len) {
-            // Safety: the elements in `self.boxed[..self.init_len]` are
-            // valid and initialized and will not be used again.
-            unsafe {
-                core::ptr::drop_in_place(elem.as_mut_ptr());
+        pub fn init_len(&self) -> usize {
+            self.vec.len()
+        }
+
+        pub fn capacity(&self) -> usize {
+            self.vec.capacity()
+        }
+
+        pub fn push(&mut self, value: T) -> Result<(), OutOfMemory> {
+            self.vec.push(value)
+        }
+
+        /// Finish this guard and take its boxed slice out.
+        ///
+        /// Panics if `self.init_len() != self.capacity()`. Call
+        /// `self.shrink_to_fit()` if necessary.
+        pub fn finish(mut self) -> Box<[T]> {
+            assert_eq!(self.init_len(), self.capacity());
+            let vec = mem::take(&mut self.vec);
+            mem::forget(self);
+            let (ptr, len, cap) = vec.into_raw_parts();
+            debug_assert_eq!(len, cap);
+            let ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
+            unsafe { Box::from_raw(ptr) }
+        }
+
+        /// Shrink this guard's allocation such that `self.init_len() ==
+        /// self.capacity()`.
+        pub fn shrink_to_fit(&mut self) -> Result<(), OutOfMemory> {
+            if self.init_len() == self.capacity() {
+                return Ok(());
             }
-        }
-    }
-}
 
-impl<T> DropGuard<T> {
-    fn new(len: usize) -> Result<Self, OutOfMemory> {
-        Ok(DropGuard {
-            boxed: new_uninit_boxed_slice(len)?,
-            init_len: 0,
-        })
-    }
+            let len = self.init_len();
+            let cap = self.capacity();
+            let vec = mem::take(&mut self.vec);
 
-    /// Finish this guard and take its boxed slice out.
-    fn finish(mut self) -> Box<[MaybeUninit<T>]> {
-        self.init_len = 0;
-        let boxed = mem::take(&mut self.boxed);
-        mem::forget(self);
-        boxed
-    }
+            let old_layout = Layout::array::<T>(cap).expect(
+                "already have an allocation with this layout so should be able to recreate it",
+            );
+            let new_layout = Layout::array::<T>(len)
+                .expect("if `cap` is fine for an array layout, then `len` must be as well");
+            debug_assert_eq!(old_layout.align(), new_layout.align());
 
-    /// Reallocate this guard's boxed slice such that its length doubles.
-    fn double(&mut self) -> Result<(), OutOfMemory> {
-        let new_len = self.boxed.len().saturating_mul(2);
-        let new_len = core::cmp::max(new_len, 4);
-        self.realloc(new_len)
-    }
+            // Handle zero-sized reallocations, since the global `realloc` function
+            // does not.
+            if new_layout.size() == 0 {
+                debug_assert!(mem::size_of::<T>() == 0 || len == 0);
+                if len == 0 {
+                    debug_assert_eq!(self.capacity(), 0);
+                    debug_assert_eq!(self.init_len(), 0);
+                } else {
+                    debug_assert_eq!(mem::size_of::<T>(), 0);
+                    let ptr = core::ptr::dangling_mut::<T>();
+                    debug_assert!(!ptr.is_null());
+                    debug_assert!(ptr.is_aligned());
+                    // Safety: T's dangling pointer is always non-null and aligned.
+                    self.vec = unsafe { Vec::from_raw_parts(ptr, len, len) };
+                }
+                debug_assert_eq!(self.capacity(), self.init_len());
+                return Ok(());
+            }
 
-    /// Shrink this guard's boxed slice to exactly the initalized length.
-    fn shrink_to_fit(&mut self) -> Result<(), OutOfMemory> {
-        self.realloc(self.init_len)
-    }
+            let (ptr, _len, _cap) = vec.into_raw_parts();
+            debug_assert_eq!(len, _len);
+            debug_assert_eq!(cap, _cap);
 
-    /// Reallocate this guard's boxed slice to `new_len`.
-    ///
-    /// The number of initialized elements will remain the same, and `new_len`
-    /// must be greater than or equal to the initialized length.
-    fn realloc(&mut self, new_len: usize) -> Result<(), OutOfMemory> {
-        assert!(self.init_len <= new_len);
+            // Safety: `ptr` was allocated by the global allocator, its memory block
+            // is described by `old_layout`, the new size is non-zero, and the new
+            // size will not overflow `isize::MAX` when rounded up to the layout's
+            // alignment (this is checked in the construction of `new_layout`).
+            let new_ptr = unsafe {
+                std_alloc::alloc::realloc(ptr.cast::<u8>(), old_layout, new_layout.size())
+            };
 
-        if new_len == self.boxed.len() {
-            return Ok(());
-        }
-
-        let old_layout = Layout::array::<T>(self.boxed.len())
-            .expect("already have an allocation with this layout so should be able to recreate it");
-        let new_layout = Layout::array::<T>(new_len)
-            .map_err(|_| OutOfMemory::new(mem::size_of::<T>().saturating_mul(new_len)))?;
-        debug_assert_eq!(old_layout.align(), new_layout.align());
-
-        // Temporarily take the boxed slice out of `self` and reset
-        // `self.init_len` so that if we panic during reallocation, we never get
-        // mixed up and see invalid state on `self` inside our `Drop`
-        // implementation.
-        let init_len = mem::take(&mut self.init_len);
-        let boxed = mem::take(&mut self.boxed);
-        let ptr = Box::into_raw(boxed);
-
-        // Handle zero-sized reallocations, since the global `realloc` function
-        // does not.
-        if new_layout.size() == 0 {
-            debug_assert!(mem::size_of::<T>() == 0 || new_len == 0);
-            if new_len == 0 {
-                debug_assert_eq!(self.boxed.len(), 0);
-                debug_assert_eq!(self.init_len, 0);
+            // Update `self` based on whether the reallocation succeeded or not,
+            // either inserting the vec or reconstructing and replacing the old one.
+            if new_ptr.is_null() {
+                // Safety: The allocation failed so we retain ownership of `ptr`,
+                // which was a valid vec and we can safely make it a vec again.
+                self.vec = unsafe { Vec::from_raw_parts(ptr, len, cap) };
+                Err(OutOfMemory::new(new_layout.size()))
             } else {
-                self.boxed = Box::new_uninit_slice(new_len);
-                self.init_len = init_len;
+                let new_ptr = new_ptr.cast::<T>();
+                // Safety: The allocation succeeded, `new_ptr` was reallocated by
+                // the global allocator and points to a valid boxed slice of length
+                // `len`.
+                self.vec = unsafe { Vec::from_raw_parts(new_ptr, len, len) };
+                debug_assert_eq!(self.capacity(), self.init_len());
+                Ok(())
             }
-            return Ok(());
-        }
-
-        // Safety: `ptr` was allocated by the global allocator, its memory block
-        // is described by `old_layout`, the new size is non-zero, and the new
-        // size will not overflow `isize::MAX` when rounded up to the layout's
-        // alignment (this is checked in the fallible construction of
-        // `new_layout`).
-        let new_ptr =
-            unsafe { std_alloc::alloc::realloc(ptr.cast::<u8>(), old_layout, new_layout.size()) };
-
-        // Update `self` based on whether the allocation succeeded or not,
-        // either inserting in the new slice or replacing the old slice.
-        if new_ptr.is_null() {
-            // Safety: The allocation failed so we retain ownership of `ptr`,
-            // which was a valid boxed slice and we can safely make it a boxed
-            // slice again. The block's contents were not modified, so the old
-            // `init_len` remains valid.
-            self.boxed = unsafe { Box::from_raw(ptr) };
-            self.init_len = init_len;
-            Err(OutOfMemory::new(new_layout.size()))
-        } else {
-            let new_ptr = new_ptr.cast::<MaybeUninit<T>>();
-            let new_ptr = core::ptr::slice_from_raw_parts_mut(new_ptr, new_len);
-            // Safety: The allocation succeeded, `new_ptr` was allocated by the
-            // global allocator and points to a valid boxed slice of length
-            // `new_len`, and the old allocation's contents were copied over to
-            // the new allocation so the old `init_len` remains valid.
-            self.boxed = unsafe { Box::from_raw(new_ptr) };
-            self.init_len = init_len;
-            Ok(())
         }
     }
 }
@@ -237,28 +201,18 @@ pub fn new_boxed_slice_from_iter_with_len<T>(
     iter: impl IntoIterator<Item = T>,
 ) -> Result<Box<[T]>, BoxedSliceFromIterWithLenError> {
     let mut guard = DropGuard::new(len)?;
-    assert_eq!(len, guard.boxed.len());
+    assert_eq!(len, guard.capacity());
 
-    for (i, elem) in iter.into_iter().enumerate().take(len) {
-        debug_assert!(i < len);
-        debug_assert_eq!(guard.init_len, i);
-        guard.boxed[i].write(elem);
-        guard.init_len += 1;
+    for elem in iter.into_iter().take(len) {
+        guard.push(elem).expect("reserved capacity");
     }
 
-    debug_assert!(guard.init_len <= guard.boxed.len());
-
-    if guard.init_len < guard.boxed.len() {
+    if guard.init_len() < guard.capacity() {
         return Err(BoxedSliceFromIterWithLenError::TooFewItems);
     }
 
-    debug_assert_eq!(guard.init_len, guard.boxed.len());
-    let boxed = guard.finish();
-
-    // Safety: we initialized all elements.
-    let boxed = unsafe { boxed.assume_init() };
-
-    Ok(boxed)
+    debug_assert_eq!(guard.init_len(), guard.capacity());
+    Ok(guard.finish())
 }
 
 /// An error returned by [`new_boxed_slice_from_fallible_iter`].
@@ -318,34 +272,18 @@ pub fn new_boxed_slice_from_fallible_iter<T, E>(
     let len = max.unwrap_or_else(|| min);
 
     let mut guard = DropGuard::new(len)?;
-    assert_eq!(len, guard.boxed.len());
+    assert_eq!(len, guard.capacity());
 
-    for (i, result) in iter.enumerate() {
-        debug_assert_eq!(guard.init_len, i);
-        let elem = match result {
-            Ok(x) => x,
-            Err(e) => return Err(BoxedSliceFromFallibleIterError::IterError(e)),
-        };
-
-        if i >= guard.boxed.len() {
-            guard.double()?;
-        }
-        debug_assert!(i < guard.boxed.len());
-        guard.boxed[i].write(elem);
-        guard.init_len += 1;
+    for result in iter {
+        let elem = result.map_err(BoxedSliceFromFallibleIterError::IterError)?;
+        guard.push(elem)?;
     }
 
-    debug_assert!(guard.init_len <= guard.boxed.len());
+    debug_assert!(guard.init_len() <= guard.capacity());
     guard.shrink_to_fit()?;
-    debug_assert_eq!(guard.init_len, guard.boxed.len());
+    debug_assert_eq!(guard.init_len(), guard.capacity());
 
-    // Take the boxed slice out of the guard.
-    let boxed = guard.finish();
-
-    // Safety: we initialized all elements.
-    let boxed = unsafe { boxed.assume_init() };
-
-    Ok(boxed)
+    Ok(guard.finish())
 }
 
 /// Create a `Box<[T]>` from the given iterator's elements.
