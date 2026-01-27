@@ -42,21 +42,24 @@ impl<T> TryNew for Box<T> {
     }
 }
 
-use drop_guard::DropGuard;
-mod drop_guard {
+use boxed_slice_builder::BoxedSliceBuilder;
+mod boxed_slice_builder {
     use super::*;
 
-    /// RAII guard to handle dropping the already-initialized elements when we get
-    /// too few items or an iterator panics while constructing a boxed slice.
-    pub struct DropGuard<T> {
+    /// Builder for constructing and initalizing a boxed slice.
+    ///
+    /// Also acts as an RAII guard to handle dropping the already-initialized
+    /// elements when we get too few items or an iterator panics during
+    /// construction.
+    pub struct BoxedSliceBuilder<T> {
         vec: Vec<T>,
     }
 
-    impl<T> DropGuard<T> {
+    impl<T> BoxedSliceBuilder<T> {
         pub fn new(len: usize) -> Result<Self, OutOfMemory> {
             let mut vec = Vec::new();
             vec.reserve_exact(len)?;
-            Ok(DropGuard { vec })
+            Ok(BoxedSliceBuilder { vec })
         }
 
         pub fn init_len(&self) -> usize {
@@ -71,7 +74,7 @@ mod drop_guard {
             self.vec.push(value)
         }
 
-        /// Finish this guard and take its boxed slice out.
+        /// Finish this builder and take its boxed slice out.
         ///
         /// Panics if `self.init_len() != self.capacity()`. Call
         /// `self.shrink_to_fit()` if necessary.
@@ -85,7 +88,7 @@ mod drop_guard {
             unsafe { Box::from_raw(ptr) }
         }
 
-        /// Shrink this guard's allocation such that `self.init_len() ==
+        /// Shrink this builder's allocation such that `self.init_len() ==
         /// self.capacity()`.
         pub fn shrink_to_fit(&mut self) -> Result<(), OutOfMemory> {
             if self.init_len() == self.capacity() {
@@ -135,7 +138,8 @@ mod drop_guard {
             };
 
             // Update `self` based on whether the reallocation succeeded or not,
-            // either inserting the vec or reconstructing and replacing the old one.
+            // either inserting the new vec or reconstructing and replacing the
+            // old one.
             if new_ptr.is_null() {
                 // Safety: The allocation failed so we retain ownership of `ptr`,
                 // which was a valid vec and we can safely make it a vec again.
@@ -200,19 +204,19 @@ pub fn new_boxed_slice_from_iter_with_len<T>(
     len: usize,
     iter: impl IntoIterator<Item = T>,
 ) -> Result<Box<[T]>, BoxedSliceFromIterWithLenError> {
-    let mut guard = DropGuard::new(len)?;
-    assert_eq!(len, guard.capacity());
+    let mut builder = BoxedSliceBuilder::new(len)?;
+    assert_eq!(len, builder.capacity());
 
     for elem in iter.into_iter().take(len) {
-        guard.push(elem).expect("reserved capacity");
+        builder.push(elem).expect("reserved capacity");
     }
 
-    if guard.init_len() < guard.capacity() {
+    if builder.init_len() < builder.capacity() {
         return Err(BoxedSliceFromIterWithLenError::TooFewItems);
     }
 
-    debug_assert_eq!(guard.init_len(), guard.capacity());
-    Ok(guard.finish())
+    debug_assert_eq!(builder.init_len(), builder.capacity());
+    Ok(builder.finish())
 }
 
 /// An error returned by [`new_boxed_slice_from_fallible_iter`].
@@ -271,19 +275,19 @@ pub fn new_boxed_slice_from_fallible_iter<T, E>(
     let (min, max) = iter.size_hint();
     let len = max.unwrap_or_else(|| min);
 
-    let mut guard = DropGuard::new(len)?;
-    assert_eq!(len, guard.capacity());
+    let mut builder = BoxedSliceBuilder::new(len)?;
+    assert_eq!(len, builder.capacity());
 
     for result in iter {
         let elem = result.map_err(BoxedSliceFromFallibleIterError::IterError)?;
-        guard.push(elem)?;
+        builder.push(elem)?;
     }
 
-    debug_assert!(guard.init_len() <= guard.capacity());
-    guard.shrink_to_fit()?;
-    debug_assert_eq!(guard.init_len(), guard.capacity());
+    debug_assert!(builder.init_len() <= builder.capacity());
+    builder.shrink_to_fit()?;
+    debug_assert_eq!(builder.init_len(), builder.capacity());
 
-    Ok(guard.finish())
+    Ok(builder.finish())
 }
 
 /// Create a `Box<[T]>` from the given iterator's elements.
