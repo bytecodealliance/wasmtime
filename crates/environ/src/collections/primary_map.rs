@@ -1,4 +1,7 @@
-use core::ops::{Index, IndexMut};
+use core::{
+    fmt,
+    ops::{Index, IndexMut},
+};
 use cranelift_entity::EntityRef;
 use wasmtime_core::error::OutOfMemory;
 
@@ -10,6 +13,16 @@ where
     K: EntityRef,
 {
     inner: cranelift_entity::PrimaryMap<K, V>,
+}
+
+impl<K, V> fmt::Debug for PrimaryMap<K, V>
+where
+    K: EntityRef + fmt::Debug,
+    V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
+    }
 }
 
 impl<K, V> PrimaryMap<K, V>
