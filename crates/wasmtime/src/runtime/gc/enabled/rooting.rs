@@ -164,6 +164,7 @@
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
+    error::OutOfMemory,
     store::{AsStoreOpaque, AutoAssertNoGc, StoreId, StoreOpaque},
 };
 use crate::{ValRaw, prelude::*};
@@ -1047,7 +1048,7 @@ impl<T: GcRef> Rooted<T> {
     pub(crate) fn _to_owned_rooted(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = self.try_clone_gc_ref(&mut store)?;
-        Ok(OwnedRooted::new(&mut store, gc_ref))
+        Ok(OwnedRooted::new(&mut store, gc_ref)?)
     }
 
     /// Are these two `Rooted<T>`s the same GC root?
@@ -1627,7 +1628,10 @@ where
     /// `gc_ref` should be a GC reference pointing to an instance of the GC type
     /// that `T` represents. Failure to uphold this invariant is memory safe but
     /// will result in general incorrectness such as panics and wrong results.
-    pub(crate) fn new(store: &mut AutoAssertNoGc<'_>, gc_ref: VMGcRef) -> Self {
+    pub(crate) fn new(
+        store: &mut AutoAssertNoGc<'_>,
+        gc_ref: VMGcRef,
+    ) -> Result<Self, OutOfMemory> {
         // We always have the opportunity to trim and unregister stale
         // owned roots whenever we have a mut borrow to the store. We
         // take the opportunity to do so here to avoid tying growth of
@@ -1639,12 +1643,12 @@ where
         store.trim_gc_liveness_flags(false);
 
         let roots = store.gc_roots_mut();
-        let id = roots.owned_rooted.alloc(gc_ref);
+        let id = roots.owned_rooted.alloc(gc_ref)?;
         let liveness_flag = Arc::new(());
         roots
             .liveness_flags
             .push((Arc::downgrade(&liveness_flag), id));
-        OwnedRooted {
+        Ok(OwnedRooted {
             inner: GcRootIndex {
                 store_id: store.id(),
                 generation: 0,
@@ -1652,7 +1656,7 @@ where
             },
             liveness_flag,
             _phantom: marker::PhantomData,
-        }
+        })
     }
 
     #[inline]
