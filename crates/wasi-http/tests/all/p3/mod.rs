@@ -9,6 +9,8 @@ use http_body::Body;
 use http_body_util::{BodyExt as _, Collected, Empty, combinators::UnsyncBoxBody};
 use std::io::Write;
 use std::path::Path;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use test_programs_artifacts::*;
 use tokio::{fs, try_join};
 use wasm_compose::composer::ComponentComposer;
@@ -589,5 +591,93 @@ async fn p3_http_proxy() -> Result<()> {
     );
 
     assert_eq!(request_body, body.as_slice());
+    Ok(())
+}
+
+// Custom body wrapper that sends an empty frame at EOS while reporting is_end_stream() = true
+struct BodyWithEmptyFrameAtEos {
+    inner: http_body_util::StreamBody<
+        futures::channel::mpsc::Receiver<Result<http_body::Frame<Bytes>, ErrorCode>>,
+    >,
+    sent_empty: bool,
+    at_eos: bool,
+}
+
+impl http_body::Body for BodyWithEmptyFrameAtEos {
+    type Data = Bytes;
+    type Error = ErrorCode;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        // First, poll the underlying body
+        let this = &mut *self;
+        match Pin::new(&mut this.inner).poll_frame(cx) {
+            Poll::Ready(None) if !this.sent_empty => {
+                // When the underlying body ends, send an empty frame
+                // This simulates HTTP implementations that send empty frames at EOS
+                this.sent_empty = true;
+                this.at_eos = true;
+                Poll::Ready(Some(Ok(http_body::Frame::data(Bytes::new()))))
+            }
+            other => other,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        // Report end of stream once we've reached it
+        // This ensures is_end_stream() = true when we send the empty frame
+        self.at_eos
+    }
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_empty_frame_at_end_of_stream() -> Result<()> {
+    _ = env_logger::try_init();
+
+    // This test verifies the fix which handles the case where a zero-length frame is
+    // received when is_end_stream() is true. Without the fix, the StreamProducer would
+    // crash when the WASM guest tries to read such a frame.
+
+    let body = b"test";
+    let raw_body = Bytes::copy_from_slice(body);
+
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
+
+    let wrapped_body = BodyWithEmptyFrameAtEos {
+        inner: http_body_util::StreamBody::new(body_rx),
+        sent_empty: false,
+        at_eos: false,
+    };
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET);
+
+    // Use the echo component which actually reads from the stream
+    let response = futures::join!(
+        run_http(
+            P3_HTTP_ECHO_COMPONENT,
+            request.body(wrapped_body)?,
+            oneshot::channel().0
+        ),
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(raw_body)))
+                .await
+                .unwrap();
+            drop(body_tx);
+        }
+    )
+    .0?
+    .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+
+    // Verify the body was echoed correctly (empty frames should be filtered out by the fix)
+    let (_, collected_body) = response.into_parts();
+    let collected_body = collected_body.to_bytes();
+    assert_eq!(collected_body, body.as_slice());
     Ok(())
 }
