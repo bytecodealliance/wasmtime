@@ -5,7 +5,11 @@ mod boxed;
 mod try_new;
 mod vec;
 
-pub use boxed::{BoxedSliceFromIterError, new_boxed_slice_from_iter};
+pub use boxed::{
+    BoxedSliceFromFallibleIterError, BoxedSliceFromIterWithLenError,
+    new_boxed_slice_from_fallible_iter, new_boxed_slice_from_iter,
+    new_boxed_slice_from_iter_with_len,
+};
 pub use try_new::{TryNew, try_new};
 pub use vec::Vec;
 
