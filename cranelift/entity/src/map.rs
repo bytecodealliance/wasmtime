@@ -15,7 +15,7 @@ use serde::{
     de::{Deserializer, SeqAccess, Visitor},
     ser::{SerializeSeq, Serializer},
 };
-use wasmtime_core::error::OutOfMemory;
+use wasmtime_core::{alloc::PanicOnOom as _, error::OutOfMemory};
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///
@@ -113,14 +113,7 @@ where
 
     /// Insert the given key-value pair, returning the old value if it exists.
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
-        let i = k.index();
-        if i < self.elems.len() {
-            Some(core::mem::replace(&mut self.elems[i], v))
-        } else {
-            self.resize(i + 1);
-            self.elems[i] = v;
-            None
-        }
+        self.try_insert(k, v).panic_on_oom()
     }
 
     /// Like `insert` but returns an error on allocation failure.
