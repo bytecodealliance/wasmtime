@@ -33,6 +33,12 @@ runs:
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
           echo "version=nightly-2026-01-26" >> "$GITHUB_OUTPUT"
+        elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-oss-fuzz-pin" ]; then
+          # Do not change this number unless OSS-Fuzz has updated. If you update
+          # this version and do not update OSS-Fuzz then you will break our
+          # fuzzer build. Update OSS-Fuzz first, wait for that, then land the PR
+          # in Wasmtime that needs to update this.
+          echo "version=nightly-2026-01-28" >> "$GITHUB_OUTPUT"
         else
           echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi
