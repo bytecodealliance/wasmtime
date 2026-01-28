@@ -4927,9 +4927,9 @@ dependencies = [
 name = "wasmtime-internal-jit-icache-coherence"
 version = "41.0.1"
 dependencies = [
+ "anyhow",
  "cfg-if",
  "libc",
- "wasmtime-environ",
  "windows-sys 0.61.2",
 ]
 
