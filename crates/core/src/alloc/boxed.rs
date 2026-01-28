@@ -46,7 +46,7 @@ impl<T> TryNew for Box<T> {
 /// uninitialized contents, returning `Err(OutOfMemory)` on allocation failure.
 ///
 /// You can initialize the resulting boxed slice with
-/// [`wasmtime_core::alloc::boxed_slice_write_iter`].
+/// [`boxed_slice_write_iter`].
 pub fn new_uninit_boxed_slice<T>(len: usize) -> Result<Box<[MaybeUninit<T>]>, OutOfMemory> {
     let layout = Layout::array::<MaybeUninit<T>>(len)
         .map_err(|_| OutOfMemory::new(mem::size_of::<T>().saturating_mul(len)))?;
