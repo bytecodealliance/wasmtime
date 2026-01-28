@@ -3994,8 +3994,8 @@ impl FuncEnvironment<'_> {
             .returns()
     }
 
-    pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
-        self.isa.has_x86_blendv_lowering(ty)
+    pub fn use_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        self.isa.has_blendv_lowering(ty)
     }
 
     pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
