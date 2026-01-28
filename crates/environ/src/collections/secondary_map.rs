@@ -1,5 +1,5 @@
 use crate::error::OutOfMemory;
-use core::ops::Index;
+use core::{fmt, ops::Index};
 use cranelift_entity::{EntityRef, SecondaryMap as Inner};
 
 /// Like [`cranelift_entity::SecondaryMap`] but all allocation is fallible.
@@ -9,6 +9,16 @@ where
     V: Clone,
 {
     inner: Inner<K, V>,
+}
+
+impl<K, V> fmt::Debug for SecondaryMap<K, V>
+where
+    K: EntityRef + fmt::Debug,
+    V: fmt::Debug + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
+    }
 }
 
 impl<K, V> SecondaryMap<K, V>
