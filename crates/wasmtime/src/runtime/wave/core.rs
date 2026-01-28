@@ -70,11 +70,16 @@ impl WasmValue for crate::Val {
                 ));
             }
         }
-        let [l_val, h_val]: [Self; 2] = vals
-            .into_iter()
-            .collect::<Vec<_>>()
-            .try_into()
-            .map_err(|_| WasmValueError::Other("expected 2 values".to_string()))?;
+        let mut iter = vals.into_iter();
+        let Some(l_val) = iter.next() else {
+            return Err(WasmValueError::Other("expected 2 values".to_string()));
+        };
+        let Some(h_val) = iter.next() else {
+            return Err(WasmValueError::Other("expected 2 values".to_string()));
+        };
+        if iter.next().is_some() {
+            return Err(WasmValueError::Other("expected 2 values".to_string()));
+        }
 
         let (Some(l), Some(h)) = (l_val.i64(), h_val.i64()) else {
             return Err(WasmValueError::Other("expected 2 i64s (v64x2)".to_string()));
