@@ -42,6 +42,32 @@ impl<T> TryNew for Box<T> {
     }
 }
 
+/// Allocate a new `Box<[MaybeUninit<T>]>` of the given length with
+/// uninitialized contents, returning `Err(OutOfMemory)` on allocation failure.
+///
+/// You can initialize the resulting boxed slice with
+/// [`boxed_slice_write_iter`].
+pub fn new_uninit_boxed_slice<T>(len: usize) -> Result<Box<[MaybeUninit<T>]>, OutOfMemory> {
+    let layout = Layout::array::<MaybeUninit<T>>(len)
+        .map_err(|_| OutOfMemory::new(mem::size_of::<T>().saturating_mul(len)))?;
+
+    if layout.size() == 0 {
+        // NB: no actual allocation takes place when boxing zero-sized
+        // types.
+        return Ok(Box::new_uninit_slice(len));
+    }
+
+    // Safety: layout size is non-zero.
+    let ptr = unsafe { try_alloc(layout)? };
+
+    let ptr = ptr.cast::<MaybeUninit<T>>().as_ptr();
+    let ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
+
+    // Safety: The pointer's memory block was allocated by the global allocator
+    // and holds room for `[T; len]`.
+    Ok(unsafe { Box::from_raw(ptr) })
+}
+
 use boxed_slice_builder::BoxedSliceBuilder;
 mod boxed_slice_builder {
     use super::*;
@@ -59,7 +85,17 @@ mod boxed_slice_builder {
         pub fn new(len: usize) -> Result<Self, OutOfMemory> {
             let mut vec = Vec::new();
             vec.reserve_exact(len)?;
-            Ok(BoxedSliceBuilder { vec })
+            Ok(Self { vec })
+        }
+
+        pub fn from_boxed_slice(boxed: Box<[MaybeUninit<T>]>) -> Self {
+            let len = boxed.len();
+            let ptr = Box::into_raw(boxed);
+            let ptr = ptr.cast::<T>();
+            // Safety: the pointer was allocated by the global allocator and is
+            // valid for `[T; len]` since it was a boxed slice.
+            let vec = unsafe { Vec::from_raw_parts(ptr, 0, len) };
+            Self { vec }
         }
 
         pub fn init_len(&self) -> usize {
@@ -158,25 +194,56 @@ mod boxed_slice_builder {
     }
 }
 
+/// An error returned when an iterator yields too few items to fully initialize
+/// a `Box<[MaybeUninit<T>]>`.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy)]
+pub struct TooFewItems;
+
+impl core::fmt::Display for TooFewItems {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("iterator yielded too few items to fully initialize boxed slice")
+    }
+}
+
+impl core::error::Error for TooFewItems {}
+
 /// An error returned by [`new_boxed_slice_from_iter`].
 #[derive(Debug)]
-pub enum BoxedSliceFromIterWithLenError {
+pub enum TooFewItemsOrOom {
     /// The iterator did not yield enough items to fill the boxed slice.
-    TooFewItems,
+    TooFewItems(TooFewItems),
     /// Failed to allocate space for the boxed slice.
     Oom(OutOfMemory),
 }
 
-impl From<OutOfMemory> for BoxedSliceFromIterWithLenError {
+impl TooFewItemsOrOom {
+    /// Unwrap the inner `OutOfMemory` error, or panic if this is a different
+    /// error variant.
+    pub fn unwrap_oom(&self) -> OutOfMemory {
+        match self {
+            TooFewItemsOrOom::TooFewItems(_) => panic!("`unwrap_oom` on non-OOM error"),
+            TooFewItemsOrOom::Oom(oom) => *oom,
+        }
+    }
+}
+
+impl From<TooFewItems> for TooFewItemsOrOom {
+    fn from(e: TooFewItems) -> Self {
+        Self::TooFewItems(e)
+    }
+}
+
+impl From<OutOfMemory> for TooFewItemsOrOom {
     fn from(oom: OutOfMemory) -> Self {
         Self::Oom(oom)
     }
 }
 
-impl core::fmt::Display for BoxedSliceFromIterWithLenError {
+impl core::fmt::Display for TooFewItemsOrOom {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooFewItems => {
+            Self::TooFewItems(_) => {
                 f.write_str("The iterator did not yield enough items to fill the boxed slice")
             }
             Self::Oom(_) => f.write_str("Failed to allocate space for the boxed slice"),
@@ -184,13 +251,25 @@ impl core::fmt::Display for BoxedSliceFromIterWithLenError {
     }
 }
 
-impl core::error::Error for BoxedSliceFromIterWithLenError {
+impl core::error::Error for TooFewItemsOrOom {
     fn cause(&self) -> Option<&dyn core::error::Error> {
         match self {
-            Self::TooFewItems => None,
+            Self::TooFewItems(e) => Some(e),
             Self::Oom(oom) => Some(oom),
         }
     }
+}
+
+/// Initialize a `Box<[MaybeUninit<T>]>` slice by writing the elements of the
+/// given iterator into it.
+pub fn boxed_slice_write_iter<T>(
+    boxed: Box<[MaybeUninit<T>]>,
+    iter: impl IntoIterator<Item = T>,
+) -> Result<Box<[T]>, TooFewItems> {
+    let len = boxed.len();
+    let builder = BoxedSliceBuilder::from_boxed_slice(boxed);
+    assert_eq!(len, builder.capacity());
+    write_iter_into_builder(builder, iter)
 }
 
 /// Create a `Box<[T]>` of length `len` from the given iterator's elements.
@@ -203,16 +282,25 @@ impl core::error::Error for BoxedSliceFromIterWithLenError {
 pub fn new_boxed_slice_from_iter_with_len<T>(
     len: usize,
     iter: impl IntoIterator<Item = T>,
-) -> Result<Box<[T]>, BoxedSliceFromIterWithLenError> {
-    let mut builder = BoxedSliceBuilder::new(len)?;
+) -> Result<Box<[T]>, TooFewItemsOrOom> {
+    let builder = BoxedSliceBuilder::new(len)?;
     assert_eq!(len, builder.capacity());
+    let boxed = write_iter_into_builder(builder, iter)?;
+    Ok(boxed)
+}
+
+fn write_iter_into_builder<T>(
+    mut builder: BoxedSliceBuilder<T>,
+    iter: impl IntoIterator<Item = T>,
+) -> Result<Box<[T]>, TooFewItems> {
+    let len = builder.capacity();
 
     for elem in iter.into_iter().take(len) {
         builder.push(elem).expect("reserved capacity");
     }
 
     if builder.init_len() < builder.capacity() {
-        return Err(BoxedSliceFromIterWithLenError::TooFewItems);
+        return Err(TooFewItems);
     }
 
     debug_assert_eq!(builder.init_len(), builder.capacity());
@@ -345,8 +433,8 @@ mod tests {
         let (c_dropped, c) = SetFlagOnDrop::new();
 
         match new_boxed_slice_from_iter_with_len(4, [a, b, c]) {
-            Err(BoxedSliceFromIterWithLenError::TooFewItems) => {}
-            Ok(_) | Err(BoxedSliceFromIterWithLenError::Oom(_)) => unreachable!(),
+            Err(TooFewItemsOrOom::TooFewItems(_)) => {}
+            Ok(_) | Err(TooFewItemsOrOom::Oom(_)) => unreachable!(),
         }
 
         assert!(a_dropped.get());
@@ -393,5 +481,55 @@ mod tests {
             panic!("unexpected result: {result:?}");
         };
         assert_eq!(err, 30);
+    }
+
+    #[test]
+    fn new_uninit_boxed_slice_smoke_test() {
+        let slice = new_uninit_boxed_slice::<u32>(5).unwrap();
+        assert_eq!(slice.len(), 5);
+    }
+
+    #[test]
+    fn boxed_slice_write_iter_smoke_test() {
+        let uninit = new_uninit_boxed_slice(3).unwrap();
+        let init = boxed_slice_write_iter(uninit, [10, 20, 30]).unwrap();
+        assert_eq!(&*init, &[10, 20, 30]);
+    }
+
+    #[test]
+    fn boxed_slice_write_iter_with_too_few_elems() {
+        let (a_dropped, a) = SetFlagOnDrop::new();
+        let (b_dropped, b) = SetFlagOnDrop::new();
+        let (c_dropped, c) = SetFlagOnDrop::new();
+
+        let uninit = new_uninit_boxed_slice(4).unwrap();
+        match boxed_slice_write_iter(uninit, [a, b, c]) {
+            Err(_) => {}
+            Ok(_) => unreachable!(),
+        }
+
+        assert!(a_dropped.get());
+        assert!(b_dropped.get());
+        assert!(c_dropped.get());
+    }
+
+    #[test]
+    fn boxed_slice_write_iter_with_too_many_elems() {
+        let (a_dropped, a) = SetFlagOnDrop::new();
+        let (b_dropped, b) = SetFlagOnDrop::new();
+        let (c_dropped, c) = SetFlagOnDrop::new();
+
+        let uninit = new_uninit_boxed_slice(2).unwrap();
+        let slice = boxed_slice_write_iter(uninit, [a, b, c]).unwrap();
+
+        assert!(!a_dropped.get());
+        assert!(!b_dropped.get());
+        assert!(c_dropped.get());
+
+        drop(slice);
+
+        assert!(a_dropped.get());
+        assert!(b_dropped.get());
+        assert!(c_dropped.get());
     }
 }
