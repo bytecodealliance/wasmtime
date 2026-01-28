@@ -833,12 +833,14 @@ impl CallThreadState {
             let result = match &unwind {
                 #[cfg(feature = "gc")]
                 UnwindState::UnwindToWasm(_) => {
+                    use wasmtime_core::alloc::PanicOnOom;
+
                     assert!(store.as_store_opaque().has_pending_exception());
                     let exn = store
                         .as_store_opaque()
                         .pending_exception_owned_rooted()
                         // TODO(#12069): handle allocation failure here
-                        .unwrap()
+                        .panic_on_oom()
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
                 }
@@ -847,11 +849,13 @@ impl CallThreadState {
                     reason: UnwindReason::Trap(TrapReason::Exception),
                     ..
                 } => {
+                    use wasmtime_core::alloc::PanicOnOom;
+
                     let exn = store
                         .as_store_opaque()
                         .pending_exception_owned_rooted()
                         // TODO(#12069): handle allocation failure here
-                        .unwrap()
+                        .panic_on_oom()
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
                         exn.clone(),

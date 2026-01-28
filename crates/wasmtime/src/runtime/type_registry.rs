@@ -21,6 +21,7 @@ use core::{
         Ordering::{AcqRel, Acquire, Release},
     },
 };
+use wasmtime_core::alloc::PanicOnOom;
 use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, GcLayout, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
@@ -743,7 +744,7 @@ impl TypeRegistryInner {
         // `?`-propagate an error when we have applied partial side effects.
         //
         // TODO(#12069): handle allocation failure here.
-        self.types.reserve(non_canon_types.len()).unwrap();
+        self.types.reserve(non_canon_types.len()).panic_on_oom();
 
         // Inter-group edges: increment the referenced group's ref
         // count, because these other rec groups shouldn't be dropped

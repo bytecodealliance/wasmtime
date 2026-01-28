@@ -13,7 +13,10 @@ use crate::{
     type_registry::TypeRegistry,
     vm::{SendSyncPtr, VMFuncRef},
 };
-use wasmtime_core::slab::{Id, Slab};
+use wasmtime_core::{
+    alloc::PanicOnOom,
+    slab::{Id, Slab},
+};
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// An identifier into the `FuncRefTable`.
@@ -52,7 +55,7 @@ impl FuncRefTable {
     pub unsafe fn intern(&mut self, func_ref: Option<SendSyncPtr<VMFuncRef>>) -> FuncRefTableId {
         *self.interned.entry(func_ref).or_insert_with(|| {
             // TODO(#12069): handle allocation failure here
-            FuncRefTableId(self.slab.alloc(func_ref).unwrap())
+            FuncRefTableId(self.slab.alloc(func_ref).panic_on_oom())
         })
     }
 
