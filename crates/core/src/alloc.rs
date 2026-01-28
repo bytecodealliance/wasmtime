@@ -34,3 +34,28 @@ unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemory> {
         Err(OutOfMemory::new(layout.size()))
     }
 }
+
+/// An extension trait for ignoring `OutOfMemory` errors.
+///
+/// Use this to unwrap a `Result<T, OutOfMemory>` into its inner `T` or
+/// otherwise panic, leveraging the type system to be sure that you aren't ever
+/// accidentally unwrapping non-`OutOfMemory` errors.
+pub trait PanicOnOom {
+    /// The non-`OutOfMemory` result of calling `panic_on_oom`.
+    type Result;
+
+    /// Panic on `OutOfMemory` errors, returning the non-`OutOfMemory` result.
+    fn panic_on_oom(self) -> Self::Result;
+}
+
+impl<T> PanicOnOom for Result<T, OutOfMemory> {
+    type Result = T;
+
+    #[track_caller]
+    fn panic_on_oom(self) -> Self::Result {
+        match self {
+            Ok(x) => x,
+            Err(oom) => panic!("unhandled out-of-memory error: {oom}"),
+        }
+    }
+}

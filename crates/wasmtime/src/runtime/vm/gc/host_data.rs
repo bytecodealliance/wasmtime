@@ -15,7 +15,10 @@
 
 use crate::prelude::*;
 use core::any::Any;
-use wasmtime_core::slab::{Id, Slab};
+use wasmtime_core::{
+    alloc::PanicOnOom,
+    slab::{Id, Slab},
+};
 
 /// Side table for each `externref`'s host data value.
 #[derive(Default)]
@@ -40,7 +43,7 @@ impl ExternRefHostDataTable {
     /// Allocate a new `externref` host data value.
     pub fn alloc(&mut self, value: Box<dyn Any + Send + Sync>) -> ExternRefHostDataId {
         // TODO(#12069): handle allocation failure here
-        let id = self.slab.alloc(value).unwrap();
+        let id = self.slab.alloc(value).panic_on_oom();
         let id = ExternRefHostDataId(id);
         log::trace!("allocated new externref host data: {id:?}");
         id
