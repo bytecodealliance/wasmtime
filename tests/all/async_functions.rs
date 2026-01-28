@@ -1,5 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use wasmtime::*;
@@ -613,6 +615,49 @@ async fn resume_separate_thread3() {
         bail!("")
     });
     assert!(f.call(&mut store, &[], &mut []).is_err());
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn resume_separate_thread_tls() {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct IncOnDrop;
+    impl Drop for IncOnDrop {
+        fn drop(&mut self) {
+            COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    thread_local!(static FOO: IncOnDrop = IncOnDrop);
+
+    // This test will poll the following future on two threads.
+    // We verify that TLS destructors are run correctly.
+    execute_across_threads(async move {
+        let mut store = async_store();
+        let module = Module::new(
+            store.engine(),
+            "
+            (module
+                (import \"\" \"\" (func))
+                (start 0)
+            )
+            ",
+        )
+        .unwrap();
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
+            Box::new(async {
+                tokio::task::yield_now().await;
+                FOO.with(|_f| {});
+                Err::<(), _>(format_err!("test"))
+            })
+        });
+        let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
+        assert!(result.is_err());
+    })
+    .await;
+
+    assert_eq!(COUNTER.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
