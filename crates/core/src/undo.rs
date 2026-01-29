@@ -149,17 +149,17 @@ where
     /// Disable this `Undo` and return its inner value.
     ///
     /// This `Undo`'s cleanup function will never be called.
-    pub fn commit(mut guard: Self) -> T {
+    pub fn commit(guard: Self) -> T {
+        let mut guard = mem::ManuallyDrop::new(guard);
+
         // Safety: These `ManuallyDrop` fields will not be used again.
-        let inner = unsafe {
+        unsafe {
             // Make sure to drop `undo`, even though we aren't calling it, to
             // avoid leaking closed-over `Arc`s, for example.
             mem::ManuallyDrop::drop(&mut guard.undo);
 
             mem::ManuallyDrop::take(&mut guard.inner)
-        };
-        mem::forget(guard);
-        inner
+        }
     }
 }
 
