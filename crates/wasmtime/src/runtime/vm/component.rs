@@ -1006,7 +1006,7 @@ impl ComponentInstance {
         if unsafe { flags.may_leave() } {
             Ok(())
         } else {
-            Err(crate::format_err!(crate::Trap::CannotLeaveComponent))
+            Err(crate::Trap::CannotLeaveComponent.into())
         }
     }
 

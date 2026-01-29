@@ -100,3 +100,22 @@
     (func (export "run") async (result u32) (canon lift (core func $i "run"))))
 
 (assert_return (invoke "run") (u32.const 42))
+
+;; Test that `thread.index` is exempt from may-leave checks
+(component
+  (core func $thread.index (canon thread.index))
+
+  (core module $DM
+    (import "" "thread.index" (func $thread.index (result i32)))
+
+    (func (export "run"))
+    (func (export "post-return") call $thread.index drop)
+  )
+  (core instance $dm (instantiate $DM (with "" (instance
+    (export "thread.index" (func $thread.index))
+  ))))
+  (func (export "run")
+    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+)
+
+(assert_return (invoke "run"))
