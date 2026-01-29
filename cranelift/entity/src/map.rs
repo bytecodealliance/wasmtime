@@ -128,6 +128,18 @@ where
         }
     }
 
+    /// Remove the element at `k`, if it exists, replacing it with the default
+    /// value.
+    pub fn remove(&mut self, k: K) -> Option<V> {
+        let i = k.index();
+        if i < self.elems.len() {
+            let default = self.default.clone();
+            Some(core::mem::replace(&mut self.elems[i], default))
+        } else {
+            None
+        }
+    }
+
     /// Is this map completely empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -411,13 +423,21 @@ mod tests {
         assert_eq!(m.get(r3), Some(&42));
         assert_eq!(m[r3], 42);
 
+        let old = m.remove(r3);
+        assert_eq!(old, Some(42));
+        assert_eq!(m[r3], 0);
+        let old = m.remove(r3);
+        assert_eq!(old, Some(0));
+        m.resize(3);
+        let old = m.remove(r3);
+        assert_eq!(old, None);
+
         let v: Vec<E> = m.keys().collect();
-        assert_eq!(v, [r0, r1, r2, r3]);
+        assert_eq!(v, [r0, r1, r2]);
 
         let shared = &m;
         assert_eq!(shared[r0], 0);
         assert_eq!(shared[r1], 5);
         assert_eq!(shared[r2], 3);
-        assert_eq!(shared[r3], 42);
     }
 }
