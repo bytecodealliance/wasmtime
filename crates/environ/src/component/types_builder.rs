@@ -458,7 +458,7 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Stream(ty) => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::FixedSizeList(ty, size) => {
+            ComponentDefinedType::FixedLengthList(ty, size) => {
                 InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
             }
             ComponentDefinedType::Map(..) => {

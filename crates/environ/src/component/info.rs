@@ -1154,8 +1154,17 @@ pub enum Trampoline {
         start_func_table_idx: RuntimeTableIndex,
     },
 
-    /// Intrinsic used to implement the `thread.switch-to` component model builtin.
-    ThreadSwitchTo {
+    /// Intrinsic used to implement the `thread.suspend-to-suspended` component model builtin.
+    ThreadSuspendToSuspended {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.suspend-to` component model builtin.
+    ThreadSuspendTo {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance may receive notification
@@ -1172,14 +1181,14 @@ pub enum Trampoline {
         cancellable: bool,
     },
 
-    /// Intrinsic used to implement the `thread.resume-later` component model builtin.
-    ThreadResumeLater {
+    /// Intrinsic used to implement the `thread.unsuspend` component model builtin.
+    ThreadUnsuspend {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
     },
 
-    /// Intrinsic used to implement the `thread.yield-to` component model builtin.
-    ThreadYieldTo {
+    /// Intrinsic used to implement the `thread.yield-to-suspended` component model builtin.
+    ThreadYieldToSuspended {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance may receive notification
@@ -1254,10 +1263,11 @@ impl Trampoline {
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),
             ThreadNewIndirect { .. } => format!("thread-new-indirect"),
-            ThreadSwitchTo { .. } => format!("thread-switch-to"),
+            ThreadSuspendToSuspended { .. } => format!("thread-suspend-to-suspended"),
+            ThreadSuspendTo { .. } => format!("thread-suspend-to"),
             ThreadSuspend { .. } => format!("thread-suspend"),
-            ThreadResumeLater { .. } => format!("thread-resume-later"),
-            ThreadYieldTo { .. } => format!("thread-yield-to"),
+            ThreadUnsuspend { .. } => format!("thread-unsuspend"),
+            ThreadYieldToSuspended { .. } => format!("thread-yield-to-suspended"),
         }
     }
 }

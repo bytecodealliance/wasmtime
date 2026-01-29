@@ -132,7 +132,7 @@ pub trait RustGenerator<'a> {
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
-                    TypeDefKind::FixedSizeList(..) => todo!(),
+                    TypeDefKind::FixedLengthList(..) => todo!(),
                     TypeDefKind::Map(..) => todo!(),
                 }
             }
@@ -189,7 +189,7 @@ pub trait RustGenerator<'a> {
 
             TypeDefKind::Type(t) => self.ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         }
     }
