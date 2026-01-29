@@ -389,6 +389,8 @@ pub struct TermFlags {
     pub multi: bool,
     /// Whether the term is marked as `partial`.
     pub partial: bool,
+    /// Whether the term is marked as `rec`.
+    pub rec: bool,
 }
 
 impl TermFlags {
@@ -903,6 +905,7 @@ pub trait ExprVisitor {
         pure: bool,
         infallible: bool,
         multi: bool,
+        rec: bool,
     ) -> Self::ExprId;
 }
 
@@ -967,6 +970,7 @@ impl Expr {
                             flags.pure,
                             /* infallible = */ !flags.partial,
                             flags.multi,
+                            flags.rec,
                         )
                     }
                     TermKind::Decl {
@@ -1463,6 +1467,7 @@ impl TermEnv {
                         pure: decl.pure,
                         multi: decl.multi,
                         partial: decl.partial,
+                        rec: decl.rec,
                     };
                     self.terms.push(Term {
                         id: tid,

@@ -80,6 +80,8 @@ pub struct Decl {
     pub multi: bool,
     /// Whether this term's constructor can fail to match.
     pub partial: bool,
+    /// Whether this term is recursive.
+    pub rec: bool,
     pub pos: Pos,
 }
 
