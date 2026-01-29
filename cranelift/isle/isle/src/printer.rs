@@ -255,6 +255,7 @@ impl ToSExpr for Decl {
             pure,
             multi,
             partial,
+            rec,
             pos: _,
         } = self;
         let mut parts = vec![SExpr::atom("decl")];
@@ -266,6 +267,9 @@ impl ToSExpr for Decl {
         }
         if *partial {
             parts.push(SExpr::atom("partial"));
+        }
+        if *rec {
+            parts.push(SExpr::atom("rec"));
         }
         parts.push(term.to_sexpr());
         parts.push(SExpr::list(arg_tys));
