@@ -15,6 +15,17 @@ where
     inner: cranelift_entity::PrimaryMap<K, V>,
 }
 
+impl<K, V> Default for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn default() -> Self {
+        Self {
+            inner: cranelift_entity::PrimaryMap::default(),
+        }
+    }
+}
+
 impl<K, V> fmt::Debug for PrimaryMap<K, V>
 where
     K: EntityRef + fmt::Debug,
