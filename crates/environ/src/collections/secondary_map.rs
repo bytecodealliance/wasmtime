@@ -74,7 +74,7 @@ where
     }
 
     /// Same as [`cranelift_entity::SecondaryMap::remove`].
-    pub fn remove(&mut self, k:K) -> Option<V> {
+    pub fn remove(&mut self, k: K) -> Option<V> {
         self.inner.remove(k)
     }
 
