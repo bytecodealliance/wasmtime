@@ -138,6 +138,15 @@ impl<T> IndexMut<usize> for Vec<T> {
     }
 }
 
+impl<T> IntoIterator for Vec<T> {
+    type Item = T;
+    type IntoIter = std_alloc::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a Vec<T> {
     type Item = &'a T;
 
