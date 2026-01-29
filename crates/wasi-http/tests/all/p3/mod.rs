@@ -594,16 +594,17 @@ async fn p3_http_proxy() -> Result<()> {
     Ok(())
 }
 
-// Custom body wrapper that sends an empty frame at EOS while reporting is_end_stream() = true
-struct BodyWithEmptyFrameAtEos {
+// Custom body wrapper that sends a configurable frame at EOS while reporting is_end_stream() = true
+struct BodyWithFrameAtEos {
     inner: http_body_util::StreamBody<
         futures::channel::mpsc::Receiver<Result<http_body::Frame<Bytes>, ErrorCode>>,
     >,
-    sent_empty: bool,
+    final_frame: Option<Bytes>,
+    sent_final: bool,
     at_eos: bool,
 }
 
-impl http_body::Body for BodyWithEmptyFrameAtEos {
+impl http_body::Body for BodyWithFrameAtEos {
     type Data = Bytes;
     type Error = ErrorCode;
 
@@ -614,12 +615,16 @@ impl http_body::Body for BodyWithEmptyFrameAtEos {
         // First, poll the underlying body
         let this = &mut *self;
         match Pin::new(&mut this.inner).poll_frame(cx) {
-            Poll::Ready(None) if !this.sent_empty => {
-                // When the underlying body ends, send an empty frame
-                // This simulates HTTP implementations that send empty frames at EOS
-                this.sent_empty = true;
+            Poll::Ready(None) if !this.sent_final => {
+                // When the underlying body ends, send the configured final frame
+                // This simulates HTTP implementations that send frames at EOS
+                this.sent_final = true;
                 this.at_eos = true;
-                Poll::Ready(Some(Ok(http_body::Frame::data(Bytes::new()))))
+                if let Some(data) = this.final_frame.take() {
+                    Poll::Ready(Some(Ok(http_body::Frame::data(data))))
+                } else {
+                    Poll::Ready(None)
+                }
             }
             other => other,
         }
@@ -627,7 +632,7 @@ impl http_body::Body for BodyWithEmptyFrameAtEos {
 
     fn is_end_stream(&self) -> bool {
         // Report end of stream once we've reached it
-        // This ensures is_end_stream() = true when we send the empty frame
+        // This ensures is_end_stream() = true when we send the final frame
         self.at_eos
     }
 }
@@ -645,9 +650,10 @@ async fn p3_http_empty_frame_at_end_of_stream() -> Result<()> {
 
     let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
 
-    let wrapped_body = BodyWithEmptyFrameAtEos {
+    let wrapped_body = BodyWithFrameAtEos {
         inner: http_body_util::StreamBody::new(body_rx),
-        sent_empty: false,
+        final_frame: Some(Bytes::new()), // Send empty frame at EOS
+        sent_final: false,
         at_eos: false,
     };
 
@@ -679,5 +685,58 @@ async fn p3_http_empty_frame_at_end_of_stream() -> Result<()> {
     let (_, collected_body) = response.into_parts();
     let collected_body = collected_body.to_bytes();
     assert_eq!(collected_body, body.as_slice());
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_data_frame_at_end_of_stream() -> Result<()> {
+    _ = env_logger::try_init();
+
+    // This test verifies that when is_end_stream() is true but the frame contains data,
+    // we still process the data.
+
+    let body = b"test";
+    let final_data = b" final";
+    let raw_body = Bytes::copy_from_slice(body);
+    let final_frame = Bytes::copy_from_slice(final_data);
+
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
+
+    let wrapped_body = BodyWithFrameAtEos {
+        inner: http_body_util::StreamBody::new(body_rx),
+        final_frame: Some(final_frame), // Send data frame at EOS with is_end_stream() = true
+        sent_final: false,
+        at_eos: false,
+    };
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET);
+
+    // Use the echo component which actually reads from the stream
+    let response = futures::join!(
+        run_http(
+            P3_HTTP_ECHO_COMPONENT,
+            request.body(wrapped_body)?,
+            oneshot::channel().0
+        ),
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(raw_body)))
+                .await
+                .unwrap();
+            drop(body_tx);
+        }
+    )
+    .0?
+    .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+
+    // Verify the body was echoed correctly (the final frame's data should not be lost)
+    let (_, collected_body) = response.into_parts();
+    let collected_body = collected_body.to_bytes();
+    let expected = [body.as_slice(), final_data.as_slice()].concat();
+    assert_eq!(collected_body, expected.as_slice());
     Ok(())
 }

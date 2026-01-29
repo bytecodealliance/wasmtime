@@ -494,7 +494,7 @@ where
                         Ok(mut frame) => {
                             // Libraries like `Reqwest` generate a 0-length frame after sensing end-of-stream,
                             // so we have to check for the body's end-of-stream indicator here too
-                            if self.body.is_end_stream() {
+                            if frame.len() == 0 && self.body.is_end_stream() {
                                 break 'result Ok(None);
                             }
 
