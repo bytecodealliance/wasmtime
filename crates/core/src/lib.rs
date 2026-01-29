@@ -22,3 +22,4 @@ pub mod alloc;
 pub mod error;
 pub mod math;
 pub mod slab;
+pub mod undo;
