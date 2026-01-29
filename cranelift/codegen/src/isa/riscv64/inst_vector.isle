@@ -1501,7 +1501,7 @@
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_extractlane (Type VReg u8) Reg)
+(decl rec gen_extractlane (Type VReg u8) Reg)
 
 ;; When extracting lane 0 for floats, we can use `vfmv.f.s` directly.
 (rule 3 (gen_extractlane (ty_vec_fits_in_register ty) src 0)
@@ -1731,7 +1731,7 @@
 
 
 ;; Builds a vector mask corresponding to the FloatCC operation.
-(decl gen_fcmp_mask (Type FloatCC Value Value) VReg)
+(decl rec gen_fcmp_mask (Type FloatCC Value Value) VReg)
 
 ;; FloatCC.Equal
 

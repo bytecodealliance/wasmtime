@@ -1044,7 +1044,7 @@
 
 ;; Constructs a sequence of instructions that reverse all bits in `x` up to
 ;; the given type width.
-(decl gen_bitrev (Type XReg) XReg)
+(decl rec gen_bitrev (Type XReg) XReg)
 
 (rule 0 (gen_bitrev (ty_16_or_32 (ty_int ty)) x)
   (if-let shift_amt (u64_to_imm12 (u64_wrapping_sub 64 (ty_bits ty))))
@@ -1069,7 +1069,7 @@
 
 ;; Builds a sequence of instructions that swaps the bytes in `x` up to the given
 ;; type width.
-(decl gen_bswap (Type XReg) XReg)
+(decl rec gen_bswap (Type XReg) XReg)
 
 ;; This is only here to make the rule below work. bswap.i8 isn't valid
 (rule 0 (gen_bswap $I8 x) x)
@@ -2263,7 +2263,7 @@
 (rule 0 (lower (icmp cc x @ (value_type (fits_in_64 ty)) y))
   (lower_icmp cc x y))
 
-(decl lower_icmp (IntCC Value Value) XReg)
+(decl rec lower_icmp (IntCC Value Value) XReg)
 (rule 0 (lower_icmp cc x y)
   (lower_int_compare (icmp_to_int_compare cc x y)))
 
@@ -2352,7 +2352,7 @@
 (rule 20 (lower (icmp cc x @ (value_type $I128) y))
   (lower_icmp_i128 cc x y))
 
-(decl lower_icmp_i128 (IntCC ValueRegs ValueRegs) XReg)
+(decl rec lower_icmp_i128 (IntCC ValueRegs ValueRegs) XReg)
 (rule 0 (lower_icmp_i128 (IntCC.Equal) x y)
   (let ((lo XReg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
         (hi XReg (rv_xor (value_regs_get x 1) (value_regs_get y 1))))

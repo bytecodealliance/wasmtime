@@ -131,7 +131,7 @@
 ;; so that `iconst.i8 255` will give you a `-1_i64`.
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.  If it fits, it'll be masked accordingly in the constant.
-(decl iconst_s (Type i64) Value)
+(decl rec iconst_s (Type i64) Value)
 (extractor (iconst_s ty c) (inst_data_value_tupled (iconst_sextend_etor ty c)))
 (rule 0 (iconst_s ty c)
     (if-let c_masked (u64_and (i64_cast_unsigned c)
@@ -147,7 +147,7 @@
 ;; so that `iconst.i8 255` will give you a `255_u64`.
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.
-(decl iconst_u (Type u64) Value)
+(decl rec iconst_u (Type u64) Value)
 (extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
 (rule 0 (iconst_u ty c)
     (if-let true (u64_lt_eq c (ty_umax ty)))

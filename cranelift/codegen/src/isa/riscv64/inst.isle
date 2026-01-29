@@ -1873,7 +1873,7 @@
 ;; Immediate Loading rules
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
 ;; TODO: Load floats using `fld` instead of `ld`
-(decl imm (Type u64) Reg)
+(decl rec imm (Type u64) Reg)
 
 ;; Special-case 0.0 for floats to use the `(zero_reg)` directly.
 ;; See #7162 for why this doesn't fall out of the rules below.
@@ -2470,7 +2470,7 @@
 (rule 0 (load_op_reg_type _) $I64)
 
 ;; Helper constructor to build a load instruction.
-(decl gen_load (AMode LoadOP MemFlags) Reg)
+(decl rec gen_load (AMode LoadOP MemFlags) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
@@ -2661,7 +2661,7 @@
 (decl gen_stack_addr (StackSlot Offset32) Reg)
 (extern constructor gen_stack_addr gen_stack_addr)
 
-(decl gen_select_xreg (IntegerCompare XReg XReg) XReg)
+(decl rec gen_select_xreg (IntegerCompare XReg XReg) XReg)
 
 (rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
@@ -2994,7 +2994,7 @@
 
 ;; Generates a bitcast instruction.
 ;; Args are: src, src_ty, dst_ty
-(decl gen_bitcast (Reg Type Type) Reg)
+(decl rec gen_bitcast (Reg Type Type) Reg)
 
 (rule 9 (gen_bitcast r (ty_supported_float_size $F16) (ty_supported_vec _)) (if-let false (has_zvfh)) (rv_vfmv_sf r (vstate_from_type $F32)))
 (rule 8 (gen_bitcast r (ty_supported_vec ty) (ty_supported_float_size $F16)) (if-let false (has_zvfh)) (gen_bitcast (gen_bitcast r ty $I16) $I16 $F16))
@@ -3214,7 +3214,7 @@
 (convert FloatCompare IntegerCompare float_to_int_compare)
 
 ;; Compare two floating point numbers and return a zero/non-zero result.
-(decl fcmp_to_float_compare (FloatCC Type FReg FReg) FloatCompare)
+(decl rec fcmp_to_float_compare (FloatCC Type FReg FReg) FloatCompare)
 
 ;; Direct codegen for unordered comparisons is not that efficient, so invert
 ;; the comparison to get an ordered comparison and generate that. Then invert
