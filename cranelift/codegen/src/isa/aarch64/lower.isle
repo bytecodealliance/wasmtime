@@ -535,38 +535,37 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(type IsFneg (enum (Result (negate u64) (value Value))))
+(rule 1 (lower (has_type ty (fma x y z))) (fmadd ty x y z))
+(rule 2 (lower (has_type (ty_scalar_float ty) (fma x y (fneg z)))) (fnmsub ty x y z))
 
-(decl pure is_fneg (Value) IsFneg)
-(rule 1 (is_fneg (fneg n)) (IsFneg.Result 1 n))
-(rule 0 (is_fneg n) (IsFneg.Result 0 n))
+;; Constructors matching the scalar behavior of aarch64. If you're confused like
+;; I was reading over these, they are:
+;;
+;; * fmadd   r =   a * b  + c   /   multiply, then add
+;; * fnmadd  r = -(a * b) - c   /   multiply, then negate, then subtract
+;; * fmsub   r = -(a * b) + c   /   multiply, then negate, then add
+;; * fnmsub  r =   a * b  - c   /   multiply, then subtract
+(decl fmadd (Type Value Value Value) Reg)
+(decl fnmadd (Type Value Value Value) Reg)
+(decl fmsub (Type Value Value Value) Reg)
+(decl fnmsub (Type Value Value Value) Reg)
 
-(decl pure is_fneg_neg (IsFneg) u64)
-(rule (is_fneg_neg (IsFneg.Result n _)) n)
+;; Switch `fm{add,sub}` to `fnm{add,sub}` if one of the operands are negated
+;; instruction instead
+(rule 2 (fmadd ty (fneg x) y z) (fmsub ty x y z))
+(rule 3 (fmadd ty x (fneg y) z) (fmsub ty x y z))
+(rule 2 (fnmsub ty (fneg x) y z) (fnmadd ty x y z))
+(rule 3 (fnmsub ty x (fneg y) z) (fnmadd ty x y z))
 
-(decl pure get_fneg_value (IsFneg) Value)
-(rule (get_fneg_value (IsFneg.Result _ v)) v)
+;; Scalar cases
+(rule 0 (fmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(rule 0 (fnmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
+(rule 0 (fmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+(rule 0 (fnmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
 
-(decl fmadd_series (Type u64 u64 Value Value Value) InstOutput)
-;; MAdd: + x * y + z
-(rule 0 (fmadd_series (ty_scalar_float ty) 0 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
-;; MSub: - x * y + z
-(rule 0 (fmadd_series (ty_scalar_float ty) 1 0 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
-;; NMAdd: - x * y - z
-(rule 0 (fmadd_series (ty_scalar_float ty) 1 1 x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
-;; NMSub: + x * y - z
-(rule 0 (fmadd_series (ty_scalar_float ty) 0 1 x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
-
-(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z_src)))
-  (let
-      ((x_res IsFneg (is_fneg x_src))
-       (y_res IsFneg (is_fneg y_src))
-       (z_res IsFneg (is_fneg z_src)))
-      (fmadd_series ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (is_fneg_neg z_res) (get_fneg_value x_res) (get_fneg_value y_res) (get_fneg_value z_res))))
-
-;; Delegate vector-based lowerings to helpers below
-(rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
-        (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+;; Vector cases
+(rule 1 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+(rule 1 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
 
 ;; Lowers a fused-multiply-add operation handling various forms of the
 ;; instruction to get maximal coverage of what's available on AArch64.
@@ -602,21 +601,6 @@
 (rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle64_from_imm n n))) z size @ (VectorSize.Size64x2))
         (if-let true (u64_lt n 2))
         (vec_fmla_elem op z x y size n))
-
-;; Special case: if one of the multiplicands is `fneg` then peel that away,
-;; reverse the operation being performed, and then recurse on `lower_fmla`
-;; again to generate the actual instruction.
-;;
-;; Note that these are the highest priority cases for `lower_fmla` to peel
-;; away as many `fneg` operations as possible.
-(rule 5 (lower_fmla op (fneg x) y z size)
-        (lower_fmla (neg_fmla op) x y z size))
-(rule 6 (lower_fmla op x (fneg y) z size)
-        (lower_fmla (neg_fmla op) x y z size))
-
-(decl neg_fmla (VecALUModOp) VecALUModOp)
-(rule (neg_fmla (VecALUModOp.Fmla)) (VecALUModOp.Fmls))
-(rule (neg_fmla (VecALUModOp.Fmls)) (VecALUModOp.Fmla))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1351,13 +1335,17 @@
 ;; Note that bitwise negation is implemented here as
 ;;
 ;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
-(rule bnot_base_case -3 (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule bnot_base_case -4 (lower (has_type (fits_in_64 (ty_int ty)) (bnot x)))
       (orr_not ty (zero_reg) x))
 
+;; Implementation of `bnot` for floats.
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bnot x)))
+      (not x (float_vector_size_in_64 ty)))
+
 ;; Implementation of `bnot` for vector types.
-(rule -2 (lower (has_type (ty_vec64 ty) (bnot x))) 
+(rule -2 (lower (has_type (ty_vec64 ty) (bnot x)))
       (not x (vector_size ty)))
-(rule -1 (lower (has_type (ty_vec128 ty) (bnot x))) 
+(rule -1 (lower (has_type (ty_vec128 ty) (bnot x)))
       (not x (vector_size ty)))
 
 ;; Implementation of `bnot` for `i128`.
@@ -1371,7 +1359,7 @@
 
 ;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
 ;; value.
-(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
+(rule bnot_ishl 1 (lower (has_type (fits_in_64 (ty_int ty))
                        (bnot (ishl x (iconst k)))))
       (if-let amt (lshl_from_imm64 ty k))
       (orr_not_shift ty (zero_reg) x amt))
@@ -1383,16 +1371,16 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule band_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
+(rule band_fits_in_64 -5 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
       (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
 
-(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (band x y)))
+(rule -4 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (band x y)))
       (and_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `band` for vector types.
-(rule -2 (lower (has_type (ty_vec64 ty) (band x y))) 
+(rule -2 (lower (has_type (ty_vec64 ty) (band x y)))
       (and_vec x y (vector_size ty)))
-(rule -1 (lower (has_type (ty_vec128 ty) (band x y))) 
+(rule -1 (lower (has_type (ty_vec128 ty) (band x y)))
       (and_vec x y (vector_size ty)))
 
 (rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
@@ -1400,9 +1388,9 @@
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
 ;; forms early on.
-(rule band_not_right 1 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
+(rule band_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (band x (bnot y))))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
-(rule band_not_left 2 (lower (has_type (fits_in_64 ty) (band (bnot y) x)))
+(rule band_not_left 2 (lower (has_type (fits_in_64 (ty_int ty)) (band (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
@@ -1427,9 +1415,9 @@
       (orr_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `bor` for vector types.
-(rule -2 (lower (has_type (ty_vec64 ty) (bor x y))) 
+(rule -2 (lower (has_type (ty_vec64 ty) (bor x y)))
       (orr_vec x y (vector_size ty)))
-(rule -1 (lower (has_type (ty_vec128 ty) (bor x y))) 
+(rule -1 (lower (has_type (ty_vec128 ty) (bor x y)))
       (orr_vec x y (vector_size ty)))
 
 (rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
@@ -1437,22 +1425,22 @@
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
 ;; forms early on.
-(rule bor_not_right 1 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
+(rule bor_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
-(rule bor_not_left 2 (lower (has_type (fits_in_64 ty) (bor (bnot y) x)))
+(rule bor_not_left 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (bor (bnot y) x))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 
-(rule bor_not_right_vec64 5 (lower (has_type (ty_vec64 ty) (bor x (bnot y)))) 
+(rule bor_not_right_vec64 5 (lower (has_type (ty_vec64 ty) (bor x (bnot y))))
       (orn_vec x y (vector_size ty)))
-(rule bor_not_left_vec64 6 (lower (has_type (ty_vec64 ty) (bor (bnot y) x))) 
+(rule bor_not_left_vec64 6 (lower (has_type (ty_vec64 ty) (bor (bnot y) x)))
       (orn_vec x y (vector_size ty)))
 
-(rule bor_not_right_vec128 7 (lower (has_type (ty_vec128 ty) (bor x (bnot y)))) 
+(rule bor_not_right_vec128 7 (lower (has_type (ty_vec128 ty) (bor x (bnot y))))
       (orn_vec x y (vector_size ty)))
-(rule bor_not_left_vec128 8 (lower (has_type (ty_vec128 ty) (bor (bnot y) x))) 
+(rule bor_not_left_vec128 8 (lower (has_type (ty_vec128 ty) (bor (bnot y) x)))
       (orn_vec x y (vector_size ty)))
 
 
@@ -1481,13 +1469,13 @@
 (rule bxor_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
-(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bxor x y))) 
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bxor x y)))
       (eor_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `bxor` for vector types.
-(rule -2 (lower (has_type (ty_vec64 ty) (bxor x y))) 
+(rule -2 (lower (has_type (ty_vec64 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
-(rule -1 (lower (has_type (ty_vec128 ty) (bxor x y))) 
+(rule -1 (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
@@ -1496,9 +1484,9 @@
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule bxor_not_right 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
+(rule bxor_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
-(rule bxor_not_left 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
+(rule bxor_not_left 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))

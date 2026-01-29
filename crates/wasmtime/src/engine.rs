@@ -5,7 +5,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
-use crate::runtime::vm::GcRuntime;
+use crate::runtime::vm::{GcRuntime, ModuleRuntimeInfo};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -66,6 +66,12 @@ struct EngineInner {
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
+
+    /// The canonical empty `ModuleRuntimeInfo`, so that each store doesn't need
+    /// allocate its own copy when creating its default caller instance or GC
+    /// heap.
+    #[cfg(feature = "runtime")]
+    empty_module_runtime_info: ModuleRuntimeInfo,
 }
 
 impl core::fmt::Debug for Engine {
@@ -122,8 +128,13 @@ impl Engine {
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
+        #[cfg(feature = "runtime")]
+        let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(
+            wasmtime_environ::Module::new(wasmtime_environ::StaticModuleIndex::from_u32(0)),
+        )?)?;
+
         Ok(Engine {
-            inner: Arc::new(EngineInner {
+            inner: try_new::<Arc<_>>(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
@@ -150,7 +161,9 @@ impl Engine {
                 config,
                 tunables,
                 features,
-            }),
+                #[cfg(feature = "runtime")]
+                empty_module_runtime_info,
+            })?,
         })
     }
 
@@ -249,13 +262,6 @@ impl Engine {
     #[inline]
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
-    }
-
-    /// Returns whether the engine is configured to support async functions.
-    #[cfg(feature = "async")]
-    #[inline]
-    pub fn is_async(&self) -> bool {
-        self.config().async_support
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by
@@ -627,6 +633,11 @@ information about this check\
     pub fn is_pulley(&self) -> bool {
         self.target().is_pulley()
     }
+
+    #[cfg(feature = "runtime")]
+    pub(crate) fn empty_module_runtime_info(&self) -> &ModuleRuntimeInfo {
+        &self.inner.empty_module_runtime_info
+    }
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -748,7 +759,9 @@ impl Engine {
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
-        self.inner.allocator.as_ref()
+        let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
+            self.inner.allocator.as_ref();
+        &*r
     }
 
     pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {

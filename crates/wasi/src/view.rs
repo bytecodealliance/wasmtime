@@ -7,7 +7,7 @@ use wasmtime::component::ResourceTable;
 /// This crate's WASI Host implementations depend on the contents of
 /// [`WasiCtx`]. The `T` type [`Store<T>`][`Store`] is defined in each
 /// embedding of Wasmtime. These implementations are connected to the
-/// [`Linker<T>`][`Linker`] by [`add_to_linker`](crate::p2::add_to_linker)
+/// [`Linker<T>`][`Linker`] by [`add_to_linker_async`](crate::p2::add_to_linker_async)
 /// functions.
 ///
 /// # Example

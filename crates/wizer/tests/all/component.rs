@@ -1,5 +1,5 @@
 use wasmtime::component::{Component, Instance, Linker, Val};
-use wasmtime::{Config, Engine, Result, Store, bail, error::Context as _};
+use wasmtime::{Engine, Result, Store, ToWasmtimeResult as _, bail, error::Context as _};
 use wasmtime_wizer::Wizer;
 
 fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
@@ -8,7 +8,7 @@ fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
     let wasm = wat::parse_bytes(wasm)?;
     log::debug!(
         "testing wizening failure for wasm:\n{}",
-        wasmprinter::print_bytes(&wasm)?
+        wasmprinter::print_bytes(&wasm).to_wasmtime_result()?
     );
     match Wizer::new().instrument_component(&wasm) {
         Ok(_) => bail!("expected wizening to fail"),
@@ -120,9 +120,7 @@ fn unsupported_constructs() -> Result<()> {
 }
 
 fn store() -> Result<Store<()>> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     Ok(Store::new(&engine, ()))
 }
 

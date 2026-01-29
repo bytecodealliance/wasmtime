@@ -464,28 +464,28 @@ pub mod foo {
                 assert!(4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn e1_arg<T>(
+                fn e1_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: E1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn e1_result<T>(
+                fn e1_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = E1> + Send;
-                fn v1_arg<T>(
+                fn v1_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: V1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn v1_result<T>(
+                fn v1_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = V1> + Send;
-                fn bool_arg<T>(
+                fn bool_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: bool,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bool_result<T>(
+                fn bool_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = bool> + Send;
-                fn option_arg<T>(
+                fn option_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Option<bool>,
                     b: Option<()>,
@@ -494,7 +494,7 @@ pub mod foo {
                     e: Option<f32>,
                     g: Option<Option<bool>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_result<T>(
+                fn option_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -506,7 +506,7 @@ pub mod foo {
                         Option<Option<bool>>,
                     ),
                 > + Send;
-                fn casts<T>(
+                fn casts<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Casts1,
                     b: Casts2,
@@ -517,7 +517,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
                 > + Send;
-                fn result_arg<T>(
+                fn result_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -529,7 +529,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u8>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_result<T>(
+                fn result_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -544,36 +544,36 @@ pub mod foo {
                         >,
                     ),
                 > + Send;
-                fn return_result_sugar<T>(
+                fn return_result_sugar<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send;
-                fn return_result_sugar2<T>(
+                fn return_result_sugar2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send;
-                fn return_result_sugar3<T>(
+                fn return_result_sugar3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<MyErrno, MyErrno>,
                 > + Send;
-                fn return_result_sugar4<T>(
+                fn return_result_sugar4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<(i32, u32), MyErrno>,
                 > + Send;
-                fn return_option_sugar<T>(
+                fn return_option_sugar<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<i32>> + Send;
-                fn return_option_sugar2<T>(
+                fn return_option_sugar2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send;
-                fn result_simple<T>(
+                fn result_simple<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send;
-                fn is_clone_arg<T>(
+                fn is_clone_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: IsClone,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn is_clone_return<T>(
+                fn is_clone_return<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = IsClone> + Send;
             }

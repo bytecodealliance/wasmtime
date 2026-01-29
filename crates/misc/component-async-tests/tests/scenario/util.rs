@@ -11,7 +11,7 @@ use tokio::fs;
 use tokio::sync::Mutex;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, Result, Store, bail, format_err};
+use wasmtime::{Config, Engine, Result, Store, ToWasmtimeResult as _, bail, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 pub fn init_logger() {
@@ -38,7 +38,6 @@ pub fn config() -> Config {
     config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
-    config.async_support(true);
     config
 }
 
@@ -63,6 +62,7 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 pub async fn make_component(engine: &Engine, components: &[&str]) -> Result<Component> {
@@ -203,7 +203,6 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(std::sync::Mutex::new(None)),
         },
     );
 

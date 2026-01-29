@@ -52,11 +52,10 @@ if [[ "$build" = *-min ]]; then
   export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
   export CARGO_PROFILE_RELEASE_LTO=true
   build_std=-Zbuild-std=std,panic_abort
-  build_std_features=-Zbuild-std-features=std_detect_dlsym_getauxval
-  flags="$build_std $build_std_features --no-default-features --features disable-logging"
+  flags="$build_std --no-default-features --features disable-logging"
   cmake_flags="-DWASMTIME_DISABLE_ALL_FEATURES=ON"
   cmake_flags="$cmake_flags -DWASMTIME_FEATURE_DISABLE_LOGGING=ON"
-  cmake_flags="$cmake_flags -DWASMTIME_USER_CARGO_BUILD_OPTIONS:LIST=$build_std;$build_std_features"
+  cmake_flags="$cmake_flags -DWASMTIME_USER_CARGO_BUILD_OPTIONS:LIST=$build_std"
 else
   # For release builds the CLI is built a bit more feature-ful than the Cargo
   # defaults to provide artifacts that can do as much as possible.

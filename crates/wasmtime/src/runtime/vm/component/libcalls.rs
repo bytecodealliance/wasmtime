@@ -5,7 +5,9 @@ use crate::component::Instance;
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::{ResourcePair, RuntimeInstance};
+use crate::runtime::component::RuntimeInstance;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -669,6 +671,32 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u32) -> Result<()> 
     Err(wasmtime_environ::Trap::from_u8(u8::try_from(code).unwrap())
         .unwrap()
         .into())
+}
+
+#[cfg(feature = "component-model-async")]
+fn enter_sync_call(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller_instance: u32,
+    callee_async: u32,
+    callee_instance: u32,
+) -> Result<()> {
+    store.enter_sync_call(
+        Some(RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        }),
+        callee_async != 0,
+        RuntimeInstance {
+            instance: instance.id().instance(),
+            index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
+        },
+    )
+}
+
+#[cfg(feature = "component-model-async")]
+fn exit_sync_call(store: &mut dyn VMStore, _instance: Instance) -> Result<()> {
+    store.exit_sync_call(true)
 }
 
 #[cfg(feature = "component-model-async")]

@@ -24,14 +24,6 @@ impl Tag {
     }
 
     /// Create a new tag instance from a given TagType.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic when used with a [`Store`](`crate::Store`)
-    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
-    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`).
-    /// When using an async resource limiter, use [`Tag::new_async`]
-    /// instead.
     pub fn new(mut store: impl AsContextMut, ty: &TagType) -> Result<Tag> {
         generate_tag_export(store.as_context_mut().0, ty)
     }

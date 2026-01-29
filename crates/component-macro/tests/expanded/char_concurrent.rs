@@ -191,12 +191,12 @@ pub mod foo {
             use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
                 /// A function that accepts a character
-                fn take_char<T>(
+                fn take_char<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: char,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// A function that returns a character
-                fn return_char<T>(
+                fn return_char<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = char> + Send;
             }

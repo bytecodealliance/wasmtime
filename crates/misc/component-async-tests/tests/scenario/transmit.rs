@@ -1,6 +1,5 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::task::{self, Context, Poll};
 use std::time::Duration;
 
@@ -349,7 +348,6 @@ pub async fn async_readiness() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -403,7 +401,7 @@ mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
     });
 }
 
@@ -492,7 +490,6 @@ async fn test_cancel(mode: Mode) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -500,10 +497,12 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         cancel::CancelHost::instantiate_async(&mut store, &component, &linker).await?;
     store
         .run_concurrent(async move |accessor| {
-            cancel_host
+            let ((), task) = cancel_host
                 .local_local_cancel()
                 .call_run(accessor, mode, delay_millis())
-                .await
+                .await?;
+            task.block(accessor).await;
+            Ok::<_, wasmtime::Error>(())
         })
         .await??;
 
@@ -735,7 +734,6 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -938,7 +936,6 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 

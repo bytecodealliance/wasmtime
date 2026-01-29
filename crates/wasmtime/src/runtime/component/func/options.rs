@@ -2,12 +2,10 @@ use crate::StoreContextMut;
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
-use crate::component::{Instance, ResourceType};
+use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
-use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
-};
+use crate::runtime::vm::component::{CallContexts, ComponentInstance, HandleTable, ResourceTables};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::pin::Pin;
@@ -59,11 +57,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         options: OptionsIndex,
         instance: Instance,
     ) -> LowerContext<'a, T> {
-        #[cfg(all(debug_assertions, feature = "component-model-async"))]
-        if store.engine().config().async_support {
-            // Assert that we're running on a fiber, which is necessary in
-            // case we call the guest's realloc function.
-            store.0.with_blocking(|_, _| {});
+        // Debug-assert that if we can't block that blocking is indeed allowed.
+        // This'll catch when this is accidentally created outside of a fiber
+        // when we need to be on a fiber.
+        if cfg!(debug_assertions) && !store.0.can_block() {
+            store.0.validate_sync_call().unwrap();
         }
         let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
@@ -260,10 +258,10 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -333,7 +331,7 @@ pub struct LiftContext<'a> {
         not(feature = "component-model-async"),
         allow(unused, reason = "easier to not #[cfg] away")
     )]
-    concurrent_state: &'a mut ConcurrentState,
+    concurrent_state: Option<&'a mut ConcurrentState>,
 }
 
 #[doc(hidden)]
@@ -410,7 +408,7 @@ impl<'a> LiftContext<'a> {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
-        self.concurrent_state
+        self.concurrent_state.as_deref_mut().unwrap()
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its
@@ -422,10 +420,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<RuntimeInstance>)> {
         let idx = self.resource_tables().guest_resource_lift_own(idx, ty)?;
-        let (dtor, flags) = self.instance.dtor_and_flags(ty);
-        Ok((idx, dtor, flags))
+        let (dtor, instance) = self.instance.dtor_and_instance(ty);
+        Ok((idx, dtor, instance))
     }
 
     /// Lifts a `borrow` resource from the guest at the `idx` specified.
@@ -443,10 +441,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was

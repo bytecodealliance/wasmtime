@@ -21,12 +21,13 @@ use core::{
         Ordering::{AcqRel, Acquire, Release},
     },
 };
+use wasmtime_core::alloc::PanicOnOom;
+use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, GcLayout, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
     SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType, iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
-use wasmtime_slab::{Id as SlabId, Slab};
 
 // ### Notes on the Lifetime Management of Types
 //
@@ -738,6 +739,13 @@ impl TypeRegistryInner {
 
         log::trace!("hash-consing map miss: making new registration");
 
+        // Reserve capacity before making any side effects (like incrementing
+        // other rec groups ref counts). We do not want to panic or
+        // `?`-propagate an error when we have applied partial side effects.
+        //
+        // TODO(#12069): handle allocation failure here.
+        self.types.reserve(non_canon_types.len()).panic_on_oom();
+
         // Inter-group edges: increment the referenced group's ref
         // count, because these other rec groups shouldn't be dropped
         // while this rec group is still alive.
@@ -760,7 +768,9 @@ impl TypeRegistryInner {
         let shared_type_indices: Box<[_]> = non_canon_types
             .iter()
             .map(|(module_index, ty)| {
-                let engine_index = slab_id_to_shared_type_index(self.types.alloc(None));
+                let engine_index = slab_id_to_shared_type_index(
+                    self.types.alloc(None).expect("reserved capacity"),
+                );
                 log::trace!(
                     "reserved {engine_index:?} for {module_index:?} = non-canonical {ty:?}"
                 );

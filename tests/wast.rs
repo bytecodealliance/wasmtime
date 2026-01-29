@@ -142,7 +142,6 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
     };
 
     let mut cfg = Config::new();
-    cfg.async_support(true);
     cfg.shared_memory(true);
     wasmtime_test_util::wasmtime_wast::apply_test_config(&mut cfg, &test_config);
     wasmtime_test_util::wasmtime_wast::apply_wast_config(&mut cfg, &config);

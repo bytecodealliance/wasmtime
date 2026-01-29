@@ -14,10 +14,10 @@ use tokio::{fs, try_join};
 use wasm_compose::composer::ComponentComposer;
 use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Result, Store, error::Context as _, format_err};
+use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::p3::bindings::Proxy;
+use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p3::{
     self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
@@ -117,7 +117,6 @@ impl WasiHttpView for Ctx {
 async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, path)?;
@@ -153,7 +152,6 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, component_filename)?;
@@ -166,7 +164,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
-    let proxy = Proxy::instantiate_async(&mut store, &component, &linker).await?;
+    let service = Service::instantiate_async(&mut store, &component, &linker).await?;
     let (req, io) = Request::from_http(req);
     let (tx, rx) = tokio::sync::oneshot::channel();
     let ((handle_result, ()), res) = try_join!(
@@ -175,7 +173,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
                 .run_concurrent(async |store| {
                     try_join!(
                         async {
-                            let (res, task) = match proxy.handle(store, req).await? {
+                            let (res, task) = match service.handle(store, req).await? {
                                 Ok(pair) => pair,
                                 Err(err) => return Ok(Err(Some(err))),
                             };
@@ -359,6 +357,8 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
     let b_file = dir.path().join("b.wasm");
     fs::write(&b_file, b).await?;
 
+    // The middleware imports `wasi:http/handler` which matches the echo's
+    // `wasi:http/handler` export, so wasm-compose can link them automatically.
     ComponentComposer::new(
         &a_file,
         &wasm_compose::config::Config {
@@ -368,6 +368,7 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
         },
     )
     .compose()
+    .to_wasmtime_result()
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -411,7 +412,7 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
                         "local:local/chain-http".to_owned(),
                         InstantiationArg {
                             instance: "local:local/chain-http".into(),
-                            export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".into()),
+                            export: Some("wasi:http/handler@0.3.0-rc-2026-01-06".into()),
                         },
                     )]
                     .into_iter()
@@ -422,7 +423,8 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
             .collect(),
         },
     )
-    .compose()?;
+    .compose()
+    .to_wasmtime_result()?;
     fs::write(&path, &bytes).await?;
 
     test_http_echo(&path.to_str().unwrap(), true, host_to_host).await

@@ -1,4 +1,4 @@
-use test_programs::p3::wasi::http::handler::handle;
+use test_programs::p3::wasi::http::client::send;
 use test_programs::p3::wasi::http::types::{Fields, Method, Request, Scheme};
 use test_programs::p3::wit_future;
 
@@ -18,7 +18,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         // Don't set path/query
         // req.set_path_with_query(Some("/")).unwrap();
 
-        let res = handle(req).await;
+        let res = send(req).await;
         assert!(res.is_err());
         Ok(())
     }

@@ -44,6 +44,7 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
@@ -150,9 +151,9 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 mod async_yield;
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 pub use crate::runtime::vm::async_yield::*;
 
 #[cfg(feature = "gc-null")]
@@ -284,23 +285,12 @@ struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 unsafe impl Send for VMStoreRawPtr {}
 unsafe impl Sync for VMStoreRawPtr {}
 
-/// Functionality required by this crate for a particular module. This
-/// is chiefly needed for lazy initialization of various bits of
-/// instance state.
-///
-/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
-/// so that it can get to signatures, metadata on functions, memory and
-/// funcref-table images, etc. All of these things are ordinarily known
-/// by the higher-level layers of Wasmtime. Specifically, the main
-/// implementation of this trait is provided by
-/// `wasmtime::module::ModuleInner`.  Since the runtime crate sits at
-/// the bottom of the dependence DAG though, we don't know or care about
-/// that; we just need some implementor of this trait for each
-/// allocation request.
+/// Functionality required by this crate for a particular module. This is
+/// chiefly needed for lazy initialization of various bits of instance state.
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
     Module(crate::Module),
-    Bare(Box<BareModuleInfo>),
+    Bare(Arc<BareModuleInfo>),
 }
 
 /// A barebones implementation of ModuleRuntimeInfo that is useful for
@@ -315,19 +305,20 @@ pub struct BareModuleInfo {
 }
 
 impl ModuleRuntimeInfo {
-    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
+    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
         ModuleRuntimeInfo::bare_with_registered_type(module, None)
     }
 
     pub(crate) fn bare_with_registered_type(
         module: Arc<wasmtime_environ::Module>,
         registered_type: Option<RegisteredType>,
-    ) -> Self {
-        ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
+    ) -> Result<Self, OutOfMemory> {
+        let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
             _registered_type: registered_type,
-        }))
+        })?;
+        Ok(ModuleRuntimeInfo::Bare(info))
     }
 
     /// The underlying Module.
@@ -459,12 +450,18 @@ impl fmt::Display for WasmFault {
 
 /// Asserts that the future `f` is ready and returns its output.
 ///
-/// This function is intended to be used when `async_support` is verified as
-/// disabled. Internals of Wasmtime are generally `async` when they optionally
-/// can be, meaning that synchronous entrypoints will invoke this function
-/// after invoking the asynchronous internals. Due to `async_support` being
-/// disabled there should be no way to introduce a yield point meaning that all
-/// futures built from internal functions should always be ready.
+/// This function is intended to be used with `Store::validate_sync_call`.
+/// Internals of Wasmtime are generally `async` when they optionally can be,
+/// meaning that synchronous entrypoints will invoke this function after
+/// invoking the asynchronous internals. The `validate_sync_call` method
+/// ensures that during this `async` function call there won't actually be any
+/// yield points. If a yield point could possibly happen, then
+/// `validate_sync_call` will fail.
+///
+/// If `validate_sync_call` passes, then this function is an extra assert that
+/// yes, indeed, we coded everything correctly in Wasmtime and there shouldn't
+/// be any yield points in the future provided, so its result should be ready
+/// immediately.
 ///
 /// # Panics
 ///
@@ -484,7 +481,7 @@ pub fn assert_ready<F: Future>(f: F) -> F::Output {
 /// is available. If it isn't then `None` is returned and an appropriate panic
 /// message should be generated recommending to use an async function (e.g.
 /// `grow_async` instead of `grow`).
-pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+fn one_poll<F: Future>(f: F) -> Option<F::Output> {
     let mut context = Context::from_waker(&Waker::noop());
     match pin!(f).poll(&mut context) {
         Poll::Ready(output) => Some(output),

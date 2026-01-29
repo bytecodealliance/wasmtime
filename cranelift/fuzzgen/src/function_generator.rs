@@ -200,6 +200,14 @@ fn insert_cmp(
             (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
             (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
 
+            // Not implemented on aarch64 for vectors
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => {
+                args[0].is_vector()
+            }
+
             // These are not implemented on x86_64, for vectors.
             (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
                 args[0].is_vector()

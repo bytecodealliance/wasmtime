@@ -243,7 +243,10 @@ pub enum GlobalInitializer {
     /// involve running the `start` function of the instance as well if it's
     /// specified. This largely delegates to the same standard instantiation
     /// process as the rest of the core wasm machinery already uses.
-    InstantiateModule(InstantiateModule),
+    ///
+    /// The second field represents the component instance to which the module
+    /// belongs, if applicable.  This will be `None` for adapter modules.
+    InstantiateModule(InstantiateModule, Option<RuntimeComponentInstanceIndex>),
 
     /// A host function is being lowered, creating a core wasm function.
     ///
@@ -734,10 +737,6 @@ pub enum Trampoline {
         to64: bool,
     },
 
-    /// A small adapter which simply traps, used for degenerate lift/lower
-    /// combinations.
-    AlwaysTrap,
-
     /// A `resource.new` intrinsic which will inject a new resource into the
     /// table specified.
     ResourceNew {
@@ -1113,6 +1112,13 @@ pub enum Trampoline {
     /// code.
     Trap,
 
+    /// An intrinsic used by FACT-generated modules to push a task onto the
+    /// stack for a sync-to-sync, guest-to-guest call.
+    EnterSyncCall,
+    /// An intrinsic used by FACT-generated modules to pop the task previously
+    /// pushed by `EnterSyncCall`.
+    ExitSyncCall,
+
     /// Intrinsic used to implement the `context.get` component model builtin.
     ///
     /// The payload here represents that this is accessing the Nth slot of local
@@ -1199,7 +1205,6 @@ impl Trampoline {
                 let to = if *to64 { "64" } else { "32" };
                 format!("component-transcode-{op}-m{from}-m{to}")
             }
-            AlwaysTrap => format!("component-always-trap"),
             ResourceNew { ty, .. } => format!("component-resource-new[{}]", ty.as_u32()),
             ResourceRep { ty, .. } => format!("component-resource-rep[{}]", ty.as_u32()),
             ResourceDrop { ty, .. } => format!("component-resource-drop[{}]", ty.as_u32()),
@@ -1243,6 +1248,8 @@ impl Trampoline {
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
             Trap => format!("trap"),
+            EnterSyncCall => format!("enter-sync-call"),
+            ExitSyncCall => format!("exit-sync-call"),
             ContextGet { .. } => format!("context-get"),
             ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),

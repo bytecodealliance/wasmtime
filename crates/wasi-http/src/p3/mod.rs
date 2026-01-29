@@ -23,7 +23,7 @@ pub use response::Response;
 
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::types::DEFAULT_FORBIDDEN_HEADERS;
-use bindings::http::{handler, types};
+use bindings::http::{client, types};
 use bytes::Bytes;
 use core::ops::Deref;
 use http::HeaderName;
@@ -188,7 +188,6 @@ pub trait WasiHttpView: Send {
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///
@@ -225,7 +224,7 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + 'static,
 {
-    handler::add_to_linker::<_, WasiHttp>(linker, T::http)?;
+    client::add_to_linker::<_, WasiHttp>(linker, T::http)?;
     types::add_to_linker::<_, WasiHttp>(linker, T::http)?;
     Ok(())
 }

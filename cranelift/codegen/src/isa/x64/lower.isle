@@ -497,10 +497,14 @@
 (rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
   (bor (ishl x (u8_from_iconst xs)) (ushr y (u8_from_iconst ys)))))
   (if-let true (u64_eq (ty_bits ty) (u64_wrapping_add xs ys)))
+  (if-let true (u64_gt xs 0))
+  (if-let true (u64_gt ys 0))
   (x64_shld ty x y xs))
 (rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
   (bor (ushr y (u8_from_iconst ys)) (ishl x (u8_from_iconst xs)))))
   (if-let true (u64_eq (ty_bits ty) (u64_wrapping_add xs ys)))
+  (if-let true (u64_gt xs 0))
+  (if-let true (u64_gt ys 0))
   (x64_shld ty x y xs))
 
 
@@ -2969,10 +2973,6 @@
 (rule 1 (fnmadd ty (sinkable_load x) y z) (x64_vfnmadd132 ty y z x))
 (rule 2 (fnmadd ty x (sinkable_load y) z) (x64_vfnmadd132 ty x z y))
 
-;; Like `fmadd` if one argument is negated switch which one is being codegen'd
-(rule 3 (fnmadd ty (fneg x) y z) (fmadd ty x y z))
-(rule 4 (fnmadd ty x (fneg y) z) (fmadd ty x y z))
-
 
 (rule 2 (lower (has_type ty (fma x y (fneg z))))
       (if-let true (use_fma))
@@ -2999,10 +2999,6 @@
 (rule (fnmsub ty x y z) (x64_vfnmsub213 ty x y z))
 (rule 1 (fnmsub ty (sinkable_load x) y z) (x64_vfnmsub132 ty y z x))
 (rule 2 (fnmsub ty x (sinkable_load y) z) (x64_vfnmsub132 ty x z y))
-
-;; Like `fmsub` if one argument is negated switch which one is being codegen'd
-(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
-(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
 
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4261,13 +4257,17 @@
 ;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fcopysign a @ (value_type $F32) b)))
-      (let ((sign_bit Xmm (imm $F32 0x80000000)))
+      (let ((sign_bit Xmm (imm $F32 0x80000000))
+            (a Xmm a) ;; force into reg so we don't sink a 128-bit load.
+            (b Xmm b))
         (x64_orps
           (x64_andnps sign_bit a)
           (x64_andps sign_bit b))))
 
 (rule (lower (has_type $F64 (fcopysign a @ (value_type $F64) b)))
-      (let ((sign_bit Xmm (imm $F64 0x8000000000000000)))
+      (let ((sign_bit Xmm (imm $F64 0x8000000000000000))
+            (a Xmm a) ;; force into reg so we don't sink a 128-bit load.
+            (b Xmm b))
         (x64_orpd
           (x64_andnpd sign_bit a)
           (x64_andpd sign_bit b))))

@@ -12,16 +12,14 @@
 //!
 //! First a [`WasiCtxBuilder`] will be used and finalized with the [`build_p1`]
 //! method to create a [`WasiCtx`]. Next a [`wasmtime::Linker`] is configured
-//! with WASI imports by using the `add_to_linker_*` desired (sync or async
-//! depending on [`Config::async_support`]).
+//! with WASI imports by using the `add_to_linker_*` desired (sync or async).
 //!
 //! Note that WASIp1 is not as extensible or configurable as WASIp2 so the
 //! support in this module is enough to run wasm modules but any customization
 //! beyond that [`WasiCtxBuilder`] already supports is not possible yet.
 //!
-//! [`WasiCtxBuilder`]: crate::p2::WasiCtxBuilder
-//! [`build_p1`]: crate::p2::WasiCtxBuilder::build_p1
-//! [`Config::async_support`]: wasmtime::Config::async_support
+//! [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+//! [`build_p1`]: crate::WasiCtxBuilder::build_p1
 //!
 //! # Components vs Modules
 //!
@@ -107,8 +105,8 @@ use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 /// Instances of [`WasiP1Ctx`] are typically stored within the `T` of
 /// [`Store<T>`](wasmtime::Store).
 ///
-/// [`WasiCtxBuilder::build_p1`]: crate::p2::WasiCtxBuilder::build_p1
-/// [`WasiCtxBuilder`]: crate::p2::WasiCtxBuilder
+/// [`WasiCtxBuilder::build_p1`]: crate::WasiCtxBuilder::build_p1
+/// [`WasiCtxBuilder`]: crate::WasiCtxBuilder
 ///
 /// # Examples
 ///
@@ -662,11 +660,7 @@ enum FdWrite {
 /// arg.field`) or something otherwise "small" as it will be executed every time
 /// a WASI call is made.
 ///
-/// Note that this function is intended for use with
-/// [`Config::async_support(true)`]. If you're looking for a synchronous version
-/// see [`add_to_linker_sync`].
-///
-/// [`Config::async_support(true)`]: wasmtime::Config::async_support
+/// If you're looking for a synchronous version see [`add_to_linker_sync`].
 ///
 /// # Examples
 ///
@@ -677,9 +671,7 @@ enum FdWrite {
 /// use wasmtime_wasi::p1::{self, WasiP1Ctx};
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
 ///     p1::add_to_linker_async(&mut linker, |cx| cx)?;
@@ -703,9 +695,7 @@ enum FdWrite {
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
 ///     p1::add_to_linker_async(&mut linker, |cx| &mut cx.wasi)?;
@@ -736,24 +726,18 @@ pub fn add_to_linker_async<T: Send + 'static>(
 /// arg.field`) or something otherwise "small" as it will be executed every time
 /// a WASI call is made.
 ///
-/// Note that this function is intended for use with
-/// [`Config::async_support(false)`]. If you're looking for a synchronous version
-/// see [`add_to_linker_async`].
-///
-/// [`Config::async_support(false)`]: wasmtime::Config::async_support
+/// If you're looking for a synchronous version see [`add_to_linker_async`].
 ///
 /// # Examples
 ///
 /// If the `T` in `Linker<T>` is just `WasiP1Ctx`:
 ///
 /// ```no_run
-/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime::{Result, Linker, Engine};
 /// use wasmtime_wasi::p1::{self, WasiP1Ctx};
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
 ///     p1::add_to_linker_async(&mut linker, |cx| cx)?;
@@ -767,7 +751,7 @@ pub fn add_to_linker_async<T: Send + 'static>(
 /// If the `T` in `Linker<T>` is custom state:
 ///
 /// ```no_run
-/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime::{Result, Linker, Engine};
 /// use wasmtime_wasi::p1::{self, WasiP1Ctx};
 ///
 /// struct MyState {
@@ -777,9 +761,7 @@ pub fn add_to_linker_async<T: Send + 'static>(
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
 ///     p1::add_to_linker_async(&mut linker, |cx| &mut cx.wasi)?;

@@ -140,6 +140,8 @@ where
     ///   instance is currently calling a host function.
     /// * If a previous function call occurred and the corresponding
     ///   `post_return` hasn't been invoked yet.
+    /// * If `store` requires using [`Self::call_async`] instead, see
+    ///   [crate documentation](crate#async) for more info.
     ///
     /// In general there are many ways that things could go wrong when copying
     /// types in and out of a wasm module with the canonical ABI, and certain
@@ -154,24 +156,19 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in an asynchronous store. This
-    /// only works with functions defined within a synchronous store. Also
-    /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use `call_async` when async support is enabled on the config"
-        );
+    /// Panics if `store` does not own this function.
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
+        let store = store.as_context_mut();
+        store.0.validate_sync_call()?;
         self.call_impl(store, params)
     }
 
-    /// Exactly like [`Self::call`], except for use on asynchronous stores.
+    /// Exactly like [`Self::call`], except for invoking WebAssembly
+    /// [asynchronously](crate#async).
     ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in a synchronous store. This
-    /// only works with functions defined within an asynchronous store. Also
-    /// panics if `store` does not own this function.
+    /// Panics if `store` does not own this function.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,
@@ -182,12 +179,9 @@ where
         Return: 'static,
     {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` when async support is not enabled on the config"
-        );
+
         #[cfg(feature = "component-model-async")]
-        {
+        if store.0.concurrency_support() {
             use crate::component::concurrent::TaskId;
             use crate::runtime::vm::SendSyncPtr;
             use core::ptr::NonNull;
@@ -236,21 +230,22 @@ where
             };
 
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            wrapper
+            return wrapper
                 .store
                 .as_context_mut()
                 .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
-                .await?
+                .await?;
         }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            store
-                .on_fiber(|store| self.call_impl(store, params))
-                .await?
-        }
+
+        store
+            .on_fiber(|store| self.call_impl(store, params))
+            .await?
     }
 
     /// Start a concurrent call to this function.
+    ///
+    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
+    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
     ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
@@ -262,6 +257,11 @@ where
     /// Besides the task's return value, this returns a [`TaskExit`]
     /// representing the completion of the guest task and any transitive
     /// subtasks it might create.
+    ///
+    /// This function will return an error if [`Config::concurrency_support`] is
+    /// disabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     ///
     /// # Progress and Cancellation
     ///
@@ -275,6 +275,39 @@ where
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
+    ///
+    /// [`Accessor`]: crate::component::Accessor
+    ///
+    /// # Example
+    ///
+    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
+    ///
+    /// ```
+    /// # use {
+    /// #   wasmtime::{
+    /// #     error::{Result},
+    /// #     component::{Component, Linker, ResourceTable},
+    /// #     Config, Engine, Store
+    /// #   },
+    /// # };
+    /// #
+    /// # struct Ctx { table: ResourceTable }
+    /// #
+    /// # async fn foo() -> Result<()> {
+    /// # let mut config = Config::new();
+    /// # let engine = Engine::new(&config)?;
+    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
+    /// # let mut linker = Linker::new(&engine);
+    /// # let component = Component::new(&engine, "")?;
+    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
+    /// let my_typed_func = instance.get_typed_func::<(), ()>(&mut store, "my_typed_func")?;
+    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
+    ///    my_typed_func.call_concurrent(accessor, ()).await?;
+    ///    Ok(())
+    /// }).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,
@@ -287,9 +320,9 @@ where
     {
         let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
-            assert!(
-                store.0.async_support(),
-                "cannot use `call_concurrent` when async support is not enabled on the config"
+            ensure!(
+                store.0.concurrency_support(),
+                "cannot use `call_concurrent` Config::concurrency_support disabled",
             );
 
             let prepared =
@@ -345,6 +378,7 @@ where
         Return: 'static,
     {
         use crate::component::storage::slice_to_storage;
+        debug_assert!(store.0.concurrency_support());
 
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
             Params::flatten_count()
@@ -2895,6 +2929,7 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Future(_) => "future",
         InterfaceType::Stream(_) => "stream",
         InterfaceType::ErrorContext(_) => "error-context",
+        InterfaceType::FixedLengthList(_) => "list<_, N>",
     }
 }
 

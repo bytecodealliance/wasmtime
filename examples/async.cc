@@ -61,7 +61,6 @@ void exit_with_error(std::string msg, wasmtime_error_t *err,
 handle<wasm_engine_t, wasm_engine_delete> create_engine() {
   wasm_config_t *config = wasm_config_new();
   assert(config != nullptr);
-  wasmtime_config_async_support_set(config, true);
   wasmtime_config_consume_fuel_set(config, true);
   handle<wasm_engine_t, wasm_engine_delete> engine;
   // this takes ownership of config

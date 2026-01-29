@@ -13,7 +13,7 @@ use core::ops::ControlFlow;
 use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use pulley_macros::interp_disable_if_cfg;
-use wasmtime_math::{WasmFloat, f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
+use wasmtime_core::math::{WasmFloat, f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
@@ -111,7 +111,7 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_args = (0..16).map(|x| unsafe { XReg::new_unchecked(x) });
+        let mut x_args = (0..15).map(|x| unsafe { XReg::new_unchecked(x) });
         let mut f_args = (0..16).map(|f| unsafe { FReg::new_unchecked(f) });
         #[cfg(not(pulley_disable_interp_simd))]
         let mut v_args = (0..16).map(|v| unsafe { VReg::new_unchecked(v) });

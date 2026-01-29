@@ -18,11 +18,13 @@ use wasmtime::error::Context as _;
 /// When using this type you can skip the [`WasiFilesystemView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker`]: crate::p2::bindings::filesystem::types::add_to_linker
+///
 /// # Examples
 ///
 /// ```
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime_wasi::filesystem::*;
 ///
 /// struct MyStoreState {
@@ -31,9 +33,7 @@ use wasmtime::error::Context as _;
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///     let mut linker = Linker::new(&engine);
 ///
 ///     wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker::<MyStoreState, WasiFilesystem>(
@@ -662,9 +662,7 @@ pub struct File {
     ///
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. A copy is also needed for
-    /// [`spawn_blocking`].
-    ///
-    /// [`spawn_blocking`]: Self::spawn_blocking
+    /// `spawn_blocking`.
     pub file: Arc<cap_std::fs::File>,
     /// Permissions to enforce on access to the file. These permissions are
     /// specified by a user of the `crate::WasiCtxBuilder`, and are
@@ -771,9 +769,7 @@ pub struct Dir {
     /// The operating system file descriptor this struct is mediating access
     /// to.
     ///
-    /// Wrapped in an Arc because a copy is needed for [`spawn_blocking`].
-    ///
-    /// [`spawn_blocking`]: Self::spawn_blocking
+    /// Wrapped in an Arc because a copy is needed for `run_blocking`.
     pub dir: Arc<cap_std::fs::Dir>,
     /// Permissions to enforce on access to this directory. These permissions
     /// are specified by a user of the `crate::WasiCtxBuilder`, and

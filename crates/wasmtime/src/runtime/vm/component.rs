@@ -9,9 +9,9 @@
 use crate::Result;
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::module::ModuleRegistry;
-use crate::runtime::component::ComponentInstanceId;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ConcurrentInstanceState;
+use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
@@ -28,6 +28,7 @@ use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(
@@ -317,7 +318,7 @@ impl ComponentInstance {
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
-    ) -> OwnedComponentInstance {
+    ) -> Result<OwnedComponentInstance, OutOfMemory> {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
         let mut instance_states = PrimaryMap::with_capacity(num_instances.try_into().unwrap());
@@ -342,11 +343,11 @@ impl ComponentInstance {
             store: VMStoreRawPtr(store),
             post_return_arg: None,
             vmctx: OwnedVMContext::new(),
-        });
+        })?;
         unsafe {
             ret.get_mut().initialize_vmctx();
         }
-        ret
+        Ok(ret)
     }
 
     #[inline]
@@ -700,7 +701,7 @@ impl ComponentInstance {
             // SAFETY: this is a valid initialization of all globals which are
             // 32-bit values.
             unsafe {
-                *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
+                *def.as_i32_mut() = FLAG_MAY_LEAVE;
                 self.instance_flags(i).as_raw().write(def);
             }
         }
@@ -880,18 +881,20 @@ impl ComponentInstance {
     ///
     /// This will lookup the origin definition of the `ty` table and return the
     /// destructor/flags for that.
-    pub fn dtor_and_flags(
+    pub fn dtor_and_instance(
         &self,
         ty: TypeResourceTableIndex,
-    ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
+    ) -> (Option<NonNull<VMFuncRef>>, Option<RuntimeInstance>) {
         let resource = self.component.types()[ty].unwrap_concrete_ty();
         let dtor = self.resource_destructor(resource);
         let component = self.component.env_component();
-        let flags = component.defined_resource_index(resource).map(|i| {
-            let instance = component.defined_resource_instances[i];
-            self.instance_flags(instance)
-        });
-        (dtor, flags)
+        let instance = component
+            .defined_resource_index(resource)
+            .map(|i| RuntimeInstance {
+                instance: self.id(),
+                index: component.defined_resource_instances[i],
+            });
+        (dtor, instance)
     }
 
     /// Returns the store-local id that points to this component.
@@ -1117,22 +1120,6 @@ impl InstanceFlags {
                 *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
             } else {
                 *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
-            }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn may_enter(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_ENTER != 0 }
-    }
-
-    #[inline]
-    pub unsafe fn set_may_enter(&mut self, val: bool) {
-        unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_ENTER;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_ENTER;
             }
         }
     }

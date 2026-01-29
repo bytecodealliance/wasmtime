@@ -238,7 +238,7 @@ fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
     let global = instance.get_global(&mut store, "g").unwrap();
     global.set(&mut store, Val::ExnRef(Some(exn)))?;
 
-    store.gc(None);
+    store.gc(None)?;
 
     Ok(())
 }

@@ -430,8 +430,7 @@ async fn sleep(duration: std::time::Duration) {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn pulley_provenance_test_async_components() -> Result<()> {
-    let mut config = provenance_test_config();
-    config.async_support(true);
+    let config = provenance_test_config();
     let engine = Engine::new(&config)?;
     let component = if cfg!(miri) {
         unsafe {

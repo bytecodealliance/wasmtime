@@ -5,7 +5,7 @@
 
 use backtrace::Backtrace;
 use std::{alloc::GlobalAlloc, cell::Cell, mem, ptr, time};
-use wasmtime_error::{Error, OutOfMemory, Result, bail};
+use wasmtime_core::error::{Error, OutOfMemory, Result, bail};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -97,6 +97,10 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
                 OomState::DidOom => {
+                    log::trace!(
+                        "Attempt to allocate {layout:?} after OOM:\n{:?}",
+                        Backtrace::new(),
+                    );
                     panic!("OOM test attempted to allocate after OOM: {layout:?}")
                 }
             }
@@ -157,7 +161,7 @@ impl OomTest {
         // NB: `std::backtrace::Backtrace` doesn't have ways to handle
         // OOM. Ideally we would just disable the `"backtrace"` cargo feature,
         // but workspace feature resolution doesn't play nice with that.
-        wasmtime_error::disable_backtrace();
+        wasmtime_core::error::disable_backtrace();
 
         OomTest {
             max_iters: None,

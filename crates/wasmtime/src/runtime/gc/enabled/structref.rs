@@ -1,8 +1,10 @@
 //! Working with GC `struct` objects.
 
 use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{self, VMGcHeader, VMStore, VMStructRef};
+use crate::store::{Asyncness, StoreId};
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
+use crate::vm::{self, VMGcHeader, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
@@ -218,11 +220,12 @@ impl StructRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error
+    /// will be returned because [`StructRef::new_async`] should be used
+    /// instead.
     ///
-    /// Panics if your engine is configured for async; use
-    /// [`StructRef::new_async`][crate::StructRef::new_async] to perform
-    /// synchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
@@ -231,9 +234,17 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
-        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), allocator, fields))
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            fields,
+            Asyncness::No,
+        ))
     }
 
     /// Asynchronously allocate a new `struct` and get a reference to it.
@@ -265,7 +276,7 @@ impl StructRef {
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), allocator, fields).await
+        Self::_new_async(store, limiter.as_mut(), allocator, fields, Asyncness::Yes).await
     }
 
     pub(crate) async fn _new_async(
@@ -273,10 +284,11 @@ impl StructRef {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &StructRefPre,
         fields: &[Val],
+        asyncness: Asyncness,
     ) -> Result<Rooted<StructRef>> {
         Self::type_check_fields(store, allocator, fields)?;
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await

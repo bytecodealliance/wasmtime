@@ -4,7 +4,6 @@ use component_async_tests::util;
 use component_async_tests::{Ctx, sleep};
 use std::future;
 use std::pin::pin;
-use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
 use wasmtime::Result;
@@ -67,7 +66,6 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 

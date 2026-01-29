@@ -30,11 +30,13 @@ pub use tokio::io::{Stderr, Stdin, Stdout, stderr, stdin, stdout};
 /// When using this type you can skip the [`WasiCliView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::cli::environment::add_to_linker`]: crate::p2::bindings::cli::environment::add_to_linker
+///
 /// # Examples
 ///
 /// ```
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime_wasi::cli::*;
 ///
 /// struct MyStoreState {
@@ -43,9 +45,7 @@ pub use tokio::io::{Stderr, Stdin, Stdout, stderr, stdin, stdout};
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///     let mut linker = Linker::new(&engine);
 ///
 ///     wasmtime_wasi::p2::bindings::cli::environment::add_to_linker::<MyStoreState, WasiCli>(

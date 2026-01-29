@@ -139,10 +139,13 @@ audit-as-crates-io = true
 [policy.wasmtime-internal-component-util]
 audit-as-crates-io = true
 
+[policy.wasmtime-internal-core]
+audit-as-crates-io = true
+
 [policy.wasmtime-internal-cranelift]
 audit-as-crates-io = true
 
-[policy.wasmtime-internal-error]
+[policy.wasmtime-internal-debugger]
 audit-as-crates-io = true
 
 [policy.wasmtime-internal-explorer]
@@ -155,12 +158,6 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.wasmtime-internal-jit-icache-coherence]
-audit-as-crates-io = true
-
-[policy.wasmtime-internal-math]
-audit-as-crates-io = true
-
-[policy.wasmtime-internal-slab]
 audit-as-crates-io = true
 
 [policy.wasmtime-internal-unwinder]

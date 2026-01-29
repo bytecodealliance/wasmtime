@@ -1,14 +1,13 @@
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, Lift, Lower, Val};
+use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
-#[derive(Default)]
-pub struct ConcurrentState;
+pub enum ConcurrentState {}
 
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
@@ -152,7 +151,28 @@ unsafe impl Lower for StreamAny {
 }
 
 impl StoreOpaque {
-    pub(crate) fn check_blocking(&mut self) -> Result<()> {
+    pub(crate) fn enter_sync_call(
+        &mut self,
+        _guest_caller: Option<RuntimeInstance>,
+        _callee_async: bool,
+        _callee: RuntimeInstance,
+    ) -> Result<()> {
+        // If we've reached here, the user somehow managed to enable the
+        // `component-model-async` runtime config feature without enabling the
+        // corresponding compile-time feature.
+        unreachable!()
+    }
+
+    pub(crate) fn exit_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
+        // See comment in `enter_sync_call`
+        unreachable!()
+    }
+
+    pub(crate) fn check_blocking(&mut self) -> crate::Result<()> {
         Ok(())
+    }
+
+    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
+        self.may_enter_at_all(instance)
     }
 }

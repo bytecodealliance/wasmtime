@@ -5,6 +5,9 @@ use wasmtime::component::{
 };
 use wasmtime::{Result, Store, error::Context as _, format_err};
 
+#[cfg(feature = "wasmprinter")]
+use wasmtime::ToWasmtimeResult as _;
+
 impl Wizer {
     /// Same as [`Wizer::run`], except for components.
     pub async fn run_component<T: Send>(
@@ -18,7 +21,7 @@ impl Wizer {
         #[cfg(feature = "wasmprinter")]
         log::debug!(
             "instrumented wasm: {}",
-            wasmprinter::print_bytes(&instrumented_wasm)?,
+            wasmprinter::print_bytes(&instrumented_wasm).to_wasmtime_result()?,
         );
 
         let engine = store.engine();
@@ -76,7 +79,7 @@ impl Wizer {
     }
 }
 
-/// Impementation of [`InstanceState`] backed by Wasmtime.
+/// Impementation of [`ComponentInstanceState`] backed by Wasmtime.
 pub struct WasmtimeWizerComponent<'a, T: 'static> {
     /// The Wasmtime-based store that owns the `instance` field.
     pub store: &'a mut Store<T>,

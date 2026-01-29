@@ -153,7 +153,6 @@ pub struct Config {
     pub(crate) async_stack_zeroing: bool,
     #[cfg(feature = "async")]
     pub(crate) stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
-    pub(crate) async_support: bool,
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
@@ -260,7 +259,6 @@ impl Config {
             async_stack_zeroing: false,
             #[cfg(feature = "async")]
             stack_creator: None,
-            async_support: false,
             module_version: ModuleVersionStrategy::default(),
             parallel_compilation: !cfg!(miri),
             memory_guaranteed_dense_image_size: 16 << 20,
@@ -382,100 +380,10 @@ impl Config {
         Ok(self)
     }
 
-    /// Whether or not to enable support for asynchronous functions in Wasmtime.
-    ///
-    /// When enabled, the config can optionally define host functions with `async`.
-    /// Instances created and functions called with this `Config` *must* be called
-    /// through their asynchronous APIs, however. For example using
-    /// [`Func::call`](crate::Func::call) will panic when used with this config.
-    ///
-    /// # Asynchronous Wasm
-    ///
-    /// WebAssembly does not currently have a way to specify at the bytecode
-    /// level what is and isn't async. Host-defined functions, however, may be
-    /// defined as `async`. WebAssembly imports always appear synchronous, which
-    /// gives rise to a bit of an impedance mismatch here. To solve this
-    /// Wasmtime supports "asynchronous configs" which enables calling these
-    /// asynchronous functions in a way that looks synchronous to the executing
-    /// WebAssembly code.
-    ///
-    /// An asynchronous config must always invoke wasm code asynchronously,
-    /// meaning we'll always represent its computation as a
-    /// [`Future`](std::future::Future). The `poll` method of the futures
-    /// returned by Wasmtime will perform the actual work of calling the
-    /// WebAssembly. Wasmtime won't manage its own thread pools or similar,
-    /// that's left up to the embedder.
-    ///
-    /// To implement futures in a way that WebAssembly sees asynchronous host
-    /// functions as synchronous, all async Wasmtime futures will execute on a
-    /// separately allocated native stack from the thread otherwise executing
-    /// Wasmtime. This separate native stack can then be switched to and from.
-    /// Using this whenever an `async` host function returns a future that
-    /// resolves to `Pending` we switch away from the temporary stack back to
-    /// the main stack and propagate the `Pending` status.
-    ///
-    /// In general it's encouraged that the integration with `async` and
-    /// wasmtime is designed early on in your embedding of Wasmtime to ensure
-    /// that it's planned that WebAssembly executes in the right context of your
-    /// application.
-    ///
-    /// # Execution in `poll`
-    ///
-    /// The [`Future::poll`](std::future::Future::poll) method is the main
-    /// driving force behind Rust's futures. That method's own documentation
-    /// states "an implementation of `poll` should strive to return quickly, and
-    /// should not block". This, however, can be at odds with executing
-    /// WebAssembly code as part of the `poll` method itself. If your
-    /// WebAssembly is untrusted then this could allow the `poll` method to take
-    /// arbitrarily long in the worst case, likely blocking all other
-    /// asynchronous tasks.
-    ///
-    /// To remedy this situation you have a few possible ways to solve this:
-    ///
-    /// * The most efficient solution is to enable
-    ///   [`Config::epoch_interruption`] in conjunction with
-    ///   [`crate::Store::epoch_deadline_async_yield_and_update`]. Coupled with
-    ///   periodic calls to [`crate::Engine::increment_epoch`] this will cause
-    ///   executing WebAssembly to periodically yield back according to the
-    ///   epoch configuration settings. This enables `Future::poll` to take at
-    ///   most a certain amount of time according to epoch configuration
-    ///   settings and when increments happen. The benefit of this approach is
-    ///   that the instrumentation in compiled code is quite lightweight, but a
-    ///   downside can be that the scheduling is somewhat nondeterministic since
-    ///   increments are usually timer-based which are not always deterministic.
-    ///
-    ///   Note that to prevent infinite execution of wasm it's recommended to
-    ///   place a timeout on the entire future representing executing wasm code
-    ///   and the periodic yields with epochs should ensure that when the
-    ///   timeout is reached it's appropriately recognized.
-    ///
-    /// * Alternatively you can enable the
-    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
-    ///   as [`crate::Store::fuel_async_yield_interval`] When doing so this will
-    ///   configure Wasmtime futures to yield periodically while they're
-    ///   executing WebAssembly code. After consuming the specified amount of
-    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
-    ///   method, and will get automatically re-polled later. This enables the
-    ///   `Future::poll` method to take roughly a fixed amount of time since
-    ///   fuel is guaranteed to get consumed while wasm is executing. Unlike
-    ///   epoch-based preemption this is deterministic since wasm always
-    ///   consumes a fixed amount of fuel per-operation. The downside of this
-    ///   approach, however, is that the compiled code instrumentation is
-    ///   significantly more expensive than epoch checks.
-    ///
-    ///   Note that to prevent infinite execution of wasm it's recommended to
-    ///   place a timeout on the entire future representing executing wasm code
-    ///   and the periodic yields with epochs should ensure that when the
-    ///   timeout is reached it's appropriately recognized.
-    ///
-    /// In all cases special care needs to be taken when integrating
-    /// asynchronous wasm into your application. You should carefully plan where
-    /// WebAssembly will execute and what compute resources will be allotted to
-    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
-    /// feel free to open an issue!
+    #[doc(hidden)]
+    #[deprecated(note = "no longer has any effect")]
     #[cfg(feature = "async")]
-    pub fn async_support(&mut self, enable: bool) -> &mut Self {
-        self.async_support = enable;
+    pub fn async_support(&mut self, _enable: bool) -> &mut Self {
         self
     }
 
@@ -543,11 +451,12 @@ impl Config {
     /// suitable in concurrent environments since one thread capturing a
     /// backtrace won't block other threads.
     ///
-    /// Collected backtraces are attached via [`wasmtime::Error::context`] to
-    /// errors returned from host functions. The [`WasmBacktrace`] type can be
-    /// acquired via [`wasmtime::Error::downcast_ref`] to inspect the backtrace.
-    /// When this option is disabled then this context is never applied to
-    /// errors coming out of wasm.
+    /// Collected backtraces are attached via
+    /// [`Error::context`](crate::Error::context) to errors returned from host
+    /// functions. The [`WasmBacktrace`] type can be acquired via
+    /// [`Error::downcast_ref`](crate::Error::downcast_ref) to inspect the
+    /// backtrace. When this option is disabled then this context is never
+    /// applied to errors coming out of wasm.
     ///
     /// This option is `true` by default.
     ///
@@ -715,13 +624,12 @@ impl Config {
     /// itself and it's left to the embedder to determine how best to wake up
     /// indefinitely blocking code in the host.
     ///
-    /// The typical solution for this, however, is to use
-    /// [`Config::async_support(true)`](Config::async_support) and the `async`
-    /// variant of WASI host functions. This models computation as a Rust
-    /// `Future` which means that when blocking happens the future is only
-    /// suspended and control yields back to the main event loop. This gives the
-    /// embedder the opportunity to use `tokio::time::timeout` for example on a
-    /// wasm computation and have the desired effect of cancelling a blocking
+    /// The typical solution for this, however, is to use the `async` variant of
+    /// WASI host functions. This models computation as a Rust `Future` which
+    /// means that when blocking happens the future is only suspended and
+    /// control yields back to the main event loop. This gives the embedder the
+    /// opportunity to use `tokio::time::timeout` for example on a wasm
+    /// computation and have the desired effect of cancelling a blocking
     /// operation when a timeout expires.
     ///
     /// ## When to use fuel vs. epochs
@@ -831,8 +739,7 @@ impl Config {
     /// Configures whether or not stacks used for async futures are zeroed
     /// before (re)use.
     ///
-    /// When the [`async_support`](Config::async_support) method is enabled for
-    /// Wasmtime and the [`call_async`] variant of calling WebAssembly is used
+    /// When the [`call_async`] variant of calling WebAssembly is used
     /// then Wasmtime will create a separate runtime execution stack for each
     /// future produced by [`call_async`]. By default upon allocation, depending
     /// on the platform, these stacks might be filled with uninitialized
@@ -871,8 +778,9 @@ impl Config {
     /// supports.
     ///
     /// Feature validation is deferred until an engine is being built, thus by
-    /// enabling features here a caller may cause [`Engine::new`] to fail later,
-    /// if the feature configuration isn't supported.
+    /// enabling features here a caller may cause
+    /// [`Engine::new`](crate::Engine::new) to fail later, if the feature
+    /// configuration isn't supported.
     pub fn wasm_features(&mut self, flag: WasmFeatures, enable: bool) -> &mut Self {
         self.enabled_features.set(flag, enable);
         self.disabled_features.set(flag, !enable);
@@ -1293,6 +1201,16 @@ impl Config {
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_gc(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_GC, enable);
+        self
+    }
+
+    /// This corresponds to the 🔧 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_fixed_length_lists(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_FIXED_SIZE_LIST, enable);
         self
     }
 
@@ -2127,7 +2045,7 @@ impl Config {
     }
 
     /// Configures whether or not a coredump should be generated and attached to
-    /// the [`wasmtime::Error`] when a trap is raised.
+    /// the [`Error`](crate::Error) when a trap is raised.
     ///
     /// This option is disabled by default.
     #[cfg(feature = "coredump")]
@@ -2264,7 +2182,8 @@ impl Config {
             | WasmFeatures::CM_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
-            | WasmFeatures::CM_GC;
+            | WasmFeatures::CM_GC
+            | WasmFeatures::CM_FIXED_SIZE_LIST;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
@@ -2419,7 +2338,7 @@ impl Config {
         }
 
         #[cfg(any(feature = "async", feature = "stack-switching"))]
-        if self.async_support && self.max_wasm_stack > self.async_stack_size {
+        if self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
         }
         if self.max_wasm_stack == 0 {
@@ -2438,6 +2357,10 @@ impl Config {
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
+
+        // By default this is enabled with the Cargo feature, and if the feature
+        // is missing this is disabled.
+        tunables.concurrency_support = cfg!(feature = "component-model-async");
 
         // If no target is explicitly specified then further refine `tunables`
         // for the configuration of this host depending on what platform
@@ -2511,6 +2434,25 @@ impl Config {
             );
         }
 
+        // Concurrency support is required for some component model features.
+        let requires_concurrency = WasmFeatures::CM_ASYNC
+            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_ASYNC_STACKFUL
+            | WasmFeatures::CM_THREADING
+            | WasmFeatures::CM_ERROR_CONTEXT;
+        if tunables.concurrency_support && !cfg!(feature = "component-model-async") {
+            bail!(
+                "concurrency support was requested but was not \
+                 compiled into this build of Wasmtime"
+            )
+        }
+        if !tunables.concurrency_support && features.intersects(requires_concurrency) {
+            bail!(
+                "concurrency support must be enabled to use the component \
+                 model async or threading features"
+            )
+        }
+
         Ok((tunables, features))
     }
 
@@ -2529,25 +2471,26 @@ impl Config {
 
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
-                let mut _allocator = Box::new(OnDemandInstanceAllocator::new(
+                let mut _allocator = try_new::<Box<_>>(OnDemandInstanceAllocator::new(
                     self.mem_creator.clone(),
                     stack_size,
                     stack_zeroing,
-                ));
+                ))?;
                 #[cfg(feature = "async")]
                 if let Some(stack_creator) = &self.stack_creator {
                     _allocator.set_stack_creator(stack_creator.clone());
                 }
-                Ok(_allocator)
+                Ok(_allocator as _)
             }
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
                 let mut config = config.config;
                 config.stack_size = stack_size;
                 config.async_stack_zeroing = stack_zeroing;
-                Ok(Box::new(crate::runtime::vm::PoolingInstanceAllocator::new(
-                    &config, tunables,
-                )?))
+                let allocator = try_new::<Box<_>>(
+                    crate::runtime::vm::PoolingInstanceAllocator::new(&config, tunables)?,
+                )?;
+                Ok(allocator as _)
             }
         }
     }
@@ -2570,14 +2513,14 @@ impl Config {
             Ok(Some(match self.collector.try_not_auto()? {
                 #[cfg(feature = "gc-drc")]
                 Collector::DeferredReferenceCounting => {
-                    Arc::new(crate::runtime::vm::DrcCollector::default()) as Arc<dyn GcRuntime>
+                    try_new::<Arc<_>>(crate::runtime::vm::DrcCollector::default())? as _
                 }
                 #[cfg(not(feature = "gc-drc"))]
                 Collector::DeferredReferenceCounting => unreachable!(),
 
                 #[cfg(feature = "gc-null")]
                 Collector::Null => {
-                    Arc::new(crate::runtime::vm::NullCollector::default()) as Arc<dyn GcRuntime>
+                    try_new::<Arc<_>>(crate::runtime::vm::NullCollector::default())? as _
                 }
                 #[cfg(not(feature = "gc-null"))]
                 Collector::Null => unreachable!(),
@@ -2997,6 +2940,43 @@ impl Config {
         self.shared_memory = enable;
         self
     }
+
+    /// Specifies whether support for concurrent execution of WebAssembly is
+    /// supported within this store.
+    ///
+    /// This configuration option affects whether runtime data structures are
+    /// initialized within a `Store` on creation to support concurrent execution
+    /// of WebAssembly guests. This is primarily applicable to the
+    /// [`Config::wasm_component_model_async`] configuration which is the first
+    /// time Wasmtime has supported concurrent execution of guests. This
+    /// configuration option, for example, enables usage of
+    /// [`Store::run_concurrent`], [`Func::call_concurrent`], [`StreamReader`],
+    /// etc.
+    ///
+    /// This configuration option can be manually disabled to avoid initializing
+    /// data structures in the [`Store`] related to concurrent execution. When
+    /// this option is disabled then APIs related to concurrency will all fail
+    /// with a panic. For example [`Store::run_concurrent`] will panic, creating
+    /// a [`StreamReader`] will panic, etc.
+    ///
+    /// The value of this option additionally affects whether a [`Config`] is
+    /// valid and the default set of enabled WebAssembly features. If this
+    /// option is disabled then component-model features related to concurrency
+    /// will all be disabled. If this option is enabled, then the options will
+    /// retain their normal defaults. It is not valid to create a [`Config`]
+    /// with component-model-async explicitly enabled and this option explicitly
+    /// disabled, however.
+    ///
+    /// This option defaults to `true`.
+    ///
+    /// [`Store`]: crate::Store
+    /// [`Store::run_concurrent`]: crate::Store::run_concurrent
+    /// [`Func::call_concurrent`]: crate::component::Func::call_concurrent
+    /// [`StreamReader`]: crate::component::StreamReader
+    pub fn concurrency_support(&mut self, enable: bool) -> &mut Self {
+        self.tunables.concurrency_support = Some(enable);
+        self
+    }
 }
 
 impl Default for Config {
@@ -3056,7 +3036,7 @@ pub enum Strategy {
 
     /// A low-latency baseline compiler for WebAssembly.
     /// For more details regarding ISA support and Wasm proposals support
-    /// see https://docs.wasmtime.dev/stability-tiers.html#current-tier-status
+    /// see <https://docs.wasmtime.dev/stability-tiers.html#current-tier-status>
     Winch,
 }
 

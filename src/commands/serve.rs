@@ -403,7 +403,6 @@ impl ServeCommand {
             .common
             .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
-        config.async_support(true);
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
@@ -431,7 +430,7 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
-        let instance = match wasmtime_wasi_http::p3::bindings::ProxyPre::new(instance.clone()) {
+        let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
             Ok(pre) => ProxyPre::P3(pre),
             Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
         };

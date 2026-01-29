@@ -52,7 +52,7 @@ pub enum ProxyPre<T: 'static> {
     P2(p2::bindings::ProxyPre<T>),
     /// A `wasi:http/handler@0.3.x` pre-instance.
     #[cfg(feature = "p3")]
-    P3(p3::bindings::ProxyPre<T>),
+    P3(p3::bindings::ServicePre<T>),
 }
 
 impl<T: 'static> ProxyPre<T> {
@@ -75,7 +75,7 @@ pub enum Proxy {
     P2(p2::bindings::Proxy),
     /// A `wasi:http/handler@0.3.x` instance.
     #[cfg(feature = "p3")]
-    P3(p3::bindings::Proxy),
+    P3(p3::bindings::Service),
 }
 
 /// Represents a task to run using a `wasi:http/incoming-handler@0.2.x` or
@@ -144,7 +144,7 @@ pub struct StoreBundle<T: 'static> {
 /// Represents the application-specific state of a web server.
 pub trait HandlerState: 'static + Sync + Send {
     /// The type of the associated data for [`Store`]s created using
-    /// [`new_store`].
+    /// [`Self::new_store`].
     type StoreData: Send;
 
     /// Create a new [`Store`] for handling one or more requests.
@@ -530,7 +530,7 @@ where
 ///
 /// Note that this supports optional instance reuse, enabled when
 /// `S::max_instance_reuse_count()` returns a number greater than one.  See
-/// [`Self::push`] for details.
+/// [`Self::spawn`] for details.
 pub struct ProxyHandler<S: HandlerState>(Arc<ProxyHandlerInner<S>>);
 
 impl<S: HandlerState> Clone for ProxyHandler<S> {

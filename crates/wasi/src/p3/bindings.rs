@@ -23,7 +23,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.3.0-rc-2025-09-16;
+//!             include wasi:cli/command@0.3.0-rc-2026-01-06;
 //!
 //!             import custom-host;
 //!         }
@@ -61,7 +61,6 @@
 //!
 //! fn main() -> Result<()> {
 //!     let mut config = Config::default();
-//!     config.async_support(true);
 //!     config.wasm_component_model_async(true);
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
@@ -132,7 +131,6 @@ pub use self::generated::wasi::*;
 ///
 ///     // Configure and create `Engine`
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///
@@ -205,7 +203,6 @@ pub use self::generated::Command;
 ///
 ///     // Configure and create `Engine`
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///

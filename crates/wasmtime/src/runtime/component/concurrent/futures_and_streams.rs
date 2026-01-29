@@ -12,7 +12,7 @@ use crate::component::{
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
     Error, Result, bail,
     error::{Context as _, format_err},
@@ -1116,6 +1116,12 @@ pub struct FutureReader<T> {
 
 impl<T> FutureReader<T> {
     /// Create a new future with the specified producer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl FutureProducer<S::Data, Item = T>,
@@ -1123,6 +1129,8 @@ impl<T> FutureReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
+        assert!(store.as_context().0.concurrency_support());
+
         struct Producer<P>(P);
 
         impl<D, T: func::Lower + 'static, P: FutureProducer<D, Item = T>> StreamProducer<D>
@@ -1247,6 +1255,8 @@ impl<T> FutureReader<T> {
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future. Usage of this future after calling `close` will also cause
     /// a panic.
+    ///
+    /// [`Accessor`]: crate::component::Accessor
     pub fn close(&mut self, mut store: impl AsContextMut) {
         future_close(store.as_context_mut().0, &mut self.id)
     }
@@ -1433,6 +1443,8 @@ unsafe impl<T: ComponentType> func::Lift for FutureReader<T> {
 /// This is an RAII wrapper around [`FutureReader`] that ensures it is closed
 /// when dropped. This can be created through [`GuardedFutureReader::new`] or
 /// [`FutureReader::guard`].
+///
+/// [`Accessor`]: crate::component::Accessor
 pub struct GuardedFutureReader<T, A>
 where
     A: AsAccessor,
@@ -1449,7 +1461,18 @@ where
     A: AsAccessor,
 {
     /// Create a new `GuardedFutureReader` with the specified `accessor` and `reader`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new(accessor: A, reader: FutureReader<T>) -> Self {
+        assert!(
+            accessor
+                .as_accessor()
+                .with(|a| a.as_context().0.concurrency_support())
+        );
         Self {
             reader: Some(reader),
             accessor,
@@ -1496,6 +1519,12 @@ pub struct StreamReader<T> {
 
 impl<T> StreamReader<T> {
     /// Create a new stream with the specified producer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new<S: AsContextMut>(
         mut store: S,
         producer: impl StreamProducer<S::Data, Item = T>,
@@ -1503,6 +1532,7 @@ impl<T> StreamReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
+        assert!(store.as_context().0.concurrency_support());
         Self::new_(
             store
                 .as_context_mut()
@@ -1760,6 +1790,8 @@ unsafe impl<T: ComponentType> func::Lift for StreamReader<T> {
 /// This is an RAII wrapper around [`StreamReader`] that ensures it is closed
 /// when dropped. This can be created through [`GuardedStreamReader::new`] or
 /// [`StreamReader::guard`].
+///
+/// [`Accessor`]: crate::component::Accessor
 pub struct GuardedStreamReader<T, A>
 where
     A: AsAccessor,
@@ -1777,7 +1809,18 @@ where
 {
     /// Create a new `GuardedStreamReader` with the specified `accessor` and
     /// `reader`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Config::concurrency_support`] is not enabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     pub fn new(accessor: A, reader: StreamReader<T>) -> Self {
+        assert!(
+            accessor
+                .as_accessor()
+                .with(|a| a.as_context().0.concurrency_support())
+        );
         Self {
             reader: Some(reader),
             accessor,

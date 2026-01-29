@@ -41,7 +41,7 @@
 //! #   len: usize,
 //! # }
 //! #
-//! # fn main() -> wasmtime_environ::error::Result<()> {
+//! # fn main() -> wasmtime_core::error::Result<()> {
 //! #
 //! # let run_code = || {};
 //! # let code = vec![0u8; 64];

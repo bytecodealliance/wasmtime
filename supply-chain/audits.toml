@@ -1006,6 +1006,14 @@ start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[wildcard-audits.wasmtime-internal-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasmtime-internal-cranelift]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1029,6 +1037,30 @@ trusted-publisher = "github:bytecodealliance/wasmtime"
 start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-debugger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
+
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
 
 [[wildcard-audits.wasmtime-internal-explorer]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1771,6 +1803,14 @@ publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
+[[wildcard-audits.wit-bindgen-rust]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+start = "2025-08-13"
+end = "2027-01-12"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wit-bindgen-rust-lib]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1949,6 +1989,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.25.0 -> 0.25.1"
 notes = "Minor updates, looks like a minor bug fix, nothing awry."
+
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.25.1 -> 0.26.0"
+notes = "Nothing out of the ordinary for this update, all DWARF all the time."
 
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -5742,6 +5788,12 @@ criteria = "safe-to-deploy"
 delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasmtime-internal-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.0.0"
+notes = "Empty crate"
+
 [[audits.wasmtime-wasi-tls-openssl]]
 who = "Dave Bakker <github@davebakker.io>"
 criteria = "safe-to-deploy"
@@ -6699,6 +6751,12 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-15"
 end = "2026-10-10"
 
+[[trusted.gimli]]
+criteria = "safe-to-deploy"
+user-id = 4415 # Philip Craig (philipc)
+start = "2019-04-25"
+end = "2027-01-24"
+
 [[trusted.h2]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -6710,6 +6768,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2025-12-02"
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-04-30"
+end = "2027-01-24"
 
 [[trusted.http]]
 criteria = "safe-to-deploy"

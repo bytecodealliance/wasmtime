@@ -1,0 +1,26 @@
+[package]
+authors.workspace = true
+description = "INTERNAL: Wasmtime's core utilities and helpers with minimal dependencies"
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+name = "wasmtime-internal-core"
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+# This crate should have *very* minimal dependencies! Don't add new ones
+# lightly.
+libm = { workspace = true }
+anyhow = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[features]
+# Enable the use of the `std` crate.
+std = []
+# Enable backtraces in errors.
+backtrace = ["std"]
+# Enable the `From<Error> for anyhow::Error` implementation and
+# `Error::from_anyhow` constructor.
+anyhow = ["dep:anyhow"]

@@ -334,7 +334,6 @@ mod tests {
         let pool = small_pool_config();
         let mut config = Config::new();
         config.allocation_strategy(pool);
-        config.async_support(true);
         let engine = Engine::new(&config)?;
 
         let metrics = engine.pooling_allocator_metrics().unwrap();

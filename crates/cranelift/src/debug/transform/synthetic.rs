@@ -1,5 +1,5 @@
 use gimli::write::{
-    AttributeValue, LineProgram, Reference, StringTable, Unit, UnitEntryId, UnitId, UnitTable,
+    AttributeValue, DebugInfoRef, LineProgram, StringTable, Unit, UnitEntryId, UnitId, UnitTable,
 };
 use wasmtime_environ::StaticModuleIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
@@ -49,12 +49,12 @@ impl ModuleSyntheticUnit {
         }
     }
 
-    pub fn vmctx_ptr_die_ref(&self) -> Reference {
-        Reference::Entry(self.unit_id, self.vmctx_ptr_die_id)
+    pub fn vmctx_ptr_die_ref(&self) -> DebugInfoRef {
+        DebugInfoRef::Entry(self.unit_id, self.vmctx_ptr_die_id)
     }
 
-    pub fn wasm_ptr_die_ref(&self) -> Reference {
-        Reference::Entry(self.unit_id, self.wasm_ptr_die_id)
+    pub fn wasm_ptr_die_ref(&self) -> DebugInfoRef {
+        DebugInfoRef::Entry(self.unit_id, self.wasm_ptr_die_id)
     }
 
     fn create_unit(

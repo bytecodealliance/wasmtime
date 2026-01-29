@@ -18,7 +18,6 @@ tokio-openssl = { workspace = true }
 openssl = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }

@@ -1,10 +1,11 @@
+use cranelift_bitset::CompoundBitSet;
 use std::{
     alloc::{Layout, alloc},
     fmt::{self, Write},
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
-use wasmtime::Config;
-use wasmtime_error::{Error, OutOfMemory, Result, format_err};
+use wasmtime::{error::OutOfMemory, *};
+use wasmtime_environ::{PrimaryMap, SecondaryMap, collections::*};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -32,10 +33,173 @@ fn smoke_test_missed_oom() -> Result<()> {
 }
 
 #[test]
+#[cfg(arc_try_new)]
+fn try_new_arc() -> Result<()> {
+    use std::sync::Arc;
+
+    OomTest::new().test(|| {
+        let _arc = try_new::<Arc<u32>>(42)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn try_new_box() -> Result<()> {
+    OomTest::new().test(|| {
+        let _box = try_new::<Box<u32>>(36)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn compound_bit_set_try_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _bitset = CompoundBitSet::<usize>::try_with_capacity(32)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn compound_bit_set_try_ensure_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut bitset = CompoundBitSet::new();
+        bitset.try_ensure_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Key(u32);
+wasmtime_environ::entity_impl!(Key);
+
+#[test]
+fn primary_map_try_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _map = PrimaryMap::<Key, u32>::try_with_capacity(32)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn primary_map_try_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = PrimaryMap::<Key, u32>::new();
+        map.try_reserve(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn primary_map_try_reserve_exact() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = PrimaryMap::<Key, u32>::new();
+        map.try_reserve_exact(13)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _map = SecondaryMap::<Key, u32>::try_with_capacity(32)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_resize() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = SecondaryMap::<Key, u32>::new();
+        map.try_resize(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_try_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = SecondaryMap::<Key, u32>::new();
+        map.try_insert(Key::from_u32(42), 100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _v = wasmtime_environ::collections::Vec::<usize>::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::<usize>::new();
+        v.reserve(10)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_reserve_exact() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::<usize>::new();
+        v.reserve_exact(3)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_push() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = wasmtime_environ::collections::Vec::new();
+        v.push(42)?;
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
         config.enable_compiler(false);
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn engine_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let _ = Engine::new(&config)?;
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn linker_new() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let engine = Engine::new(&config)?;
+        let _linker = Linker::<()>::new(&engine);
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn store_try_new() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    OomTest::new().test(|| {
+        let _ = Store::try_new(&engine, ())?;
         Ok(())
     })
 }

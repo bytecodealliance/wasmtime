@@ -1,6 +1,6 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
-use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, UnitRef, write};
+use gimli::{AttributeValue, RangeListsOffset, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::error::Error;
 
@@ -12,28 +12,25 @@ pub(crate) enum RangeInfoBuilder {
 }
 
 impl RangeInfoBuilder {
-    pub(crate) fn from(
-        unit: UnitRef<Reader<'_>>,
-        entry: &DebuggingInformationEntry<Reader<'_>>,
-    ) -> Result<Self, Error> {
-        if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
-            let r = unit.ranges_offset_from_raw(r);
-            return RangeInfoBuilder::from_ranges_ref(unit, r);
+    pub(crate) fn from(entry: &write::ConvertUnitEntry<Reader<'_>>) -> Result<Self, Error> {
+        if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges) {
+            let r = entry.read_unit.ranges_offset_from_raw(r);
+            return RangeInfoBuilder::from_ranges_ref(entry.read_unit, r);
         };
 
-        let low_pc =
-            if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
-                addr
-            } else if let Some(AttributeValue::DebugAddrIndex(i)) =
-                entry.attr_value(gimli::DW_AT_low_pc)?
-            {
-                unit.address(i)?
-            } else {
-                return Ok(RangeInfoBuilder::Undefined);
-            };
+        let low_pc = if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)
+        {
+            addr
+        } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+            entry.attr_value(gimli::DW_AT_low_pc)
+        {
+            entry.read_unit.address(i)?
+        } else {
+            return Ok(RangeInfoBuilder::Undefined);
+        };
 
         Ok(
-            if let Some(AttributeValue::Udata(u)) = entry.attr_value(gimli::DW_AT_high_pc)? {
+            if let Some(AttributeValue::Udata(u)) = entry.attr_value(gimli::DW_AT_high_pc) {
                 RangeInfoBuilder::Ranges(vec![(low_pc, low_pc + u)])
             } else {
                 RangeInfoBuilder::Position(low_pc)
@@ -42,7 +39,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_ranges_ref(
-        unit: UnitRef<Reader<'_>>,
+        unit: UnitRef<'_, Reader<'_>>,
         ranges: RangeListsOffset,
     ) -> Result<Self, Error> {
         let mut ranges = unit.ranges(ranges)?;
@@ -62,30 +59,28 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_subprogram_die(
-        unit: UnitRef<Reader<'_>>,
-        entry: &DebuggingInformationEntry<Reader<'_>>,
+        entry: &write::ConvertUnitEntry<Reader<'_>>,
         addr_tr: &AddressTransform,
     ) -> Result<Self, Error> {
-        let addr =
-            if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
-                addr
-            } else if let Some(AttributeValue::DebugAddrIndex(i)) =
-                entry.attr_value(gimli::DW_AT_low_pc)?
-            {
-                unit.address(i)?
-            } else if let Some(AttributeValue::RangeListsRef(r)) =
-                entry.attr_value(gimli::DW_AT_ranges)?
-            {
-                let r = unit.ranges_offset_from_raw(r);
-                let mut ranges = unit.ranges(r)?;
-                if let Some(range) = ranges.next()? {
-                    range.begin
-                } else {
-                    return Ok(RangeInfoBuilder::Undefined);
-                }
+        let unit = entry.read_unit;
+        let addr = if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc) {
+            addr
+        } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+            entry.attr_value(gimli::DW_AT_low_pc)
+        {
+            unit.address(i)?
+        } else if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)
+        {
+            let r = unit.ranges_offset_from_raw(r);
+            let mut ranges = unit.ranges(r)?;
+            if let Some(range) = ranges.next()? {
+                range.begin
             } else {
                 return Ok(RangeInfoBuilder::Undefined);
-            };
+            }
+        } else {
+            return Ok(RangeInfoBuilder::Undefined);
+        };
 
         let index = addr_tr.find_func_index(addr);
         if index.is_none() {

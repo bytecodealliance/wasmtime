@@ -26,7 +26,7 @@ harness = false
 
 [dependencies]
 log = { workspace = true }
-rayon = { workspace = true }
+rayon = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, features = ['wasmparser'] }
 wasmparser = { workspace = true, features = ['validate', 'features'] }
@@ -38,14 +38,18 @@ criterion = { workspace = true }
 env_logger = { workspace = true }
 wasmprinter = { workspace = true }
 wat = { workspace = true }
-wasmtime = { workspace = true, features = ['default'] }
+wasmtime = { workspace = true, features = ['default', 'anyhow'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
 tokio = { workspace = true, features = ['macros'] }
 
 [features]
+default = ["rayon"]
+# Enables parallel snapshotting.
+# Needs to be disabled if compiling wizer to single-threaded targets like wasm32-unknown-unknown
+rayon = ["dep:rayon"]
 # Enable this dependency to get messages with WAT disassemblies when certain
 # internal panics occur.
-wasmprinter = ['dep:wasmprinter']
+wasmprinter = ['dep:wasmprinter', 'wasmtime/anyhow']
 
 # Enables default runtime implementations based on the `wasmtime` crate.
 wasmtime = [

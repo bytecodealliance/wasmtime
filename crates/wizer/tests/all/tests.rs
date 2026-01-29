@@ -1,6 +1,9 @@
 use std::process::Command;
 use wasm_encoder::ConstExpr;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Result, Store, error::Context as _};
+use wasmtime::{
+    Config, Engine, Instance, Linker, Module, Result, Store, ToWasmtimeResult as _,
+    error::Context as _,
+};
 use wasmtime_wasi::{WasiCtxBuilder, p1};
 use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
@@ -18,7 +21,6 @@ fn get_wizer() -> Wizer {
 fn store() -> Result<Store<p1::WasiP1Ctx>> {
     let mut wasi = WasiCtxBuilder::new();
     let mut config = Config::new();
-    config.async_support(true);
     config.relaxed_simd_deterministic(true);
     let engine = Engine::new(&config)?;
     Ok(Store::new(&engine, wasi.build_p1()))
@@ -575,7 +577,7 @@ async fn rename_functions() -> Result<()> {
     wizer.func_rename("func_a", "func_b");
     wizer.func_rename("func_b", "func_c");
     let wasm = wizer.run(&mut store()?, &wasm, instantiate).await?;
-    let wat = wasmprinter::print_bytes(&wasm)?;
+    let wat = wasmprinter::print_bytes(&wasm).to_wasmtime_result()?;
 
     let expected_wat = r#"
 (module

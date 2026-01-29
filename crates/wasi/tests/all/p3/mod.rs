@@ -16,7 +16,6 @@ async fn run_allow_blocking_current_thread(
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let mut linker = Linker::new(&engine);

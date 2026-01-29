@@ -2,7 +2,10 @@
 
 use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
-use crate::runtime::vm::{self, VMGcRef, VMStore};
+use crate::runtime::vm::{self, VMGcRef};
+use crate::store::Asyncness;
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::{
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
@@ -149,7 +152,9 @@ impl ExternRef {
     ///
     /// If the GC heap is at capacity, and there isn't room for allocating a new
     /// `externref`, this method will automatically trigger a synchronous
-    /// collection in an attempt to free up space in the GC heap.
+    /// collection in an attempt to free up space in the GC heap. Note that
+    /// [`ExternRef::new_async`] will perform an async GC if a synchronous GC is
+    /// not desired.
     ///
     /// # Errors
     ///
@@ -163,6 +168,10 @@ impl ExternRef {
     /// that value from the error and reuse it when attempting to allocate an
     /// `externref` again after dropping rooted GC references and then
     /// performing a collection or otherwise do with it whatever you see fit.
+    ///
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error will
+    /// be returned because [`ExternRef::new_async`] should be used instead.
     ///
     /// # Example
     ///
@@ -204,19 +213,20 @@ impl ExternRef {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `context` is configured for async; use
-    /// [`ExternRef::new_async`][crate::ExternRef::new_async] to perform
-    /// asynchronous allocation instead.
     pub fn new<T>(mut store: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
-        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), value))
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            value,
+            Asyncness::No,
+        ))
     }
 
     /// Asynchronously allocates a new `ExternRef` wrapping the given value.
@@ -300,13 +310,14 @@ impl ExternRef {
         T: 'static + Any + Send + Sync,
     {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), value).await
+        Self::_new_async(store, limiter.as_mut(), value, Asyncness::Yes).await
     }
 
     pub(crate) async fn _new_async<T>(
         store: &mut StoreOpaque,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         value: T,
+        asyncness: Asyncness,
     ) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
@@ -316,7 +327,7 @@ impl ExternRef {
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
 
         let gc_ref = store
-            .retry_after_gc_async(limiter, value, |store, value| {
+            .retry_after_gc_async(limiter, value, asyncness, |store, value| {
                 store
                     .require_gc_store_mut()?
                     .alloc_externref(value)

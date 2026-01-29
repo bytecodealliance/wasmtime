@@ -40,13 +40,13 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     sig0 = (i64 vmctx, i32) tail
+;;     sig0 = (i64 vmctx, i32) -> i8 tail
 ;;     fn0 = colocated u805306368:8 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0044                               v2 = iconst.i32 0
-;; @0044                               call fn0(v0, v2)  ; v2 = 0
+;; @0044                               v4 = call fn0(v0, v2)  ; v2 = 0
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:

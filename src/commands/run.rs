@@ -130,7 +130,6 @@ impl RunCommand {
     /// Creates a new `Engine` with the configuration for this command.
     pub fn new_engine(&mut self) -> Result<Engine> {
         let mut config = self.run.common.config(None)?;
-        config.async_support(true);
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
@@ -618,26 +617,36 @@ impl RunCommand {
             .expect("found export index");
 
         let mut results = vec![Val::Bool(false); func_type.results().len()];
+        self.call_component_func(store, &params, func, &mut results)
+            .await?;
 
+        println!("{}", DisplayFuncResults(&results));
+        Ok(instance)
+    }
+
+    #[cfg(feature = "component-model")]
+    async fn call_component_func(
+        &self,
+        store: &mut Store<Host>,
+        params: &[wasmtime::component::Val],
+        func: wasmtime::component::Func,
+        results: &mut Vec<wasmtime::component::Val>,
+    ) -> Result<(), Error> {
         #[cfg(feature = "component-model-async")]
-        {
+        if self.run.common.wasm.concurrency_support.unwrap_or(true) {
             store
                 .run_concurrent(async |store| {
-                    let task = func.call_concurrent(store, &params, &mut results).await?;
+                    let task = func.call_concurrent(store, params, results).await?;
                     task.block(store).await;
                     wasmtime::error::Ok(())
                 })
                 .await??;
-        }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            func.call_async(&mut *store, &params, &mut results).await?;
-            func.post_return_async(&mut *store).await?;
+            return Ok(());
         }
 
-        println!("{}", DisplayFuncResults(&results));
-
-        Ok(instance)
+        func.call_async(&mut *store, &params, results).await?;
+        func.post_return_async(&mut *store).await?;
+        Ok(())
     }
 
     /// Execute the default behavior for components on the CLI, looking for
@@ -1032,6 +1041,7 @@ impl RunCommand {
                 store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
                     module.clone(),
                     Arc::new(linker.clone()),
+                    true,
                 )?));
             }
         }

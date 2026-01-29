@@ -10,8 +10,8 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
-    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode, compile,
+    CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
+    compile,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
@@ -127,7 +127,7 @@ impl TargetIsa for X64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &CompiledCode,
+        result: &crate::machinst::CompiledCode,
         kind: crate::isa::unwind::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         emit_unwind_info(&result.buffer, kind)
@@ -216,7 +216,10 @@ pub fn emit_unwind_info(
     buffer: &MachBufferFinalized<Final>,
     kind: crate::isa::unwind::UnwindInfoKind,
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+    #[cfg(feature = "unwind")]
     use crate::isa::unwind::{UnwindInfo, UnwindInfoKind};
+    #[cfg(not(feature = "unwind"))]
+    let _ = buffer;
     Ok(match kind {
         #[cfg(feature = "unwind")]
         UnwindInfoKind::SystemV => {

@@ -147,12 +147,11 @@ impl WasiCtxBuilder {
     /// on the host. This is currently done with Tokio's
     /// [`spawn_blocking`](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
     ///
-    /// When WebAssembly is used in a synchronous context, for example when
-    /// [`Config::async_support`] is disabled, then this asynchronous operation
-    /// is quickly turned back into a synchronous operation with a `block_on` in
-    /// Rust. This switching back-and-forth between a blocking a non-blocking
-    /// context can have overhead, and this option exists to help alleviate this
-    /// overhead.
+    /// When WebAssembly is used in a synchronous context then this asynchronous
+    /// operation is quickly turned back into a synchronous operation with a
+    /// `block_on` in Rust. This switching back-and-forth between a blocking a
+    /// non-blocking context can have overhead, and this option exists to help
+    /// alleviate this overhead.
     ///
     /// This option indicates that for WASI functions that are blocking from the
     /// perspective of WebAssembly it's ok to block the native thread as well.
@@ -160,8 +159,6 @@ impl WasiCtxBuilder {
     /// and instead blocking operations are performed on-thread (such as opening
     /// a file). This can improve the performance of WASI operations when async
     /// support is disabled.
-    ///
-    /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
     pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
         self.filesystem.allow_blocking_current_thread = enable;
         self
@@ -220,7 +217,8 @@ impl WasiCtxBuilder {
     /// This will use [`envs`](WasiCtxBuilder::envs) to append all host-defined
     /// environment variables.
     pub fn inherit_env(&mut self) -> &mut Self {
-        self.envs(&std::env::vars().collect::<Vec<(String, String)>>())
+        self.cli.environment.extend(std::env::vars());
+        self
     }
 
     /// Appends a list of arguments to the argument array to pass to wasm.
@@ -240,7 +238,8 @@ impl WasiCtxBuilder {
     /// Appends all host process arguments to the list of arguments to get
     /// passed to wasm.
     pub fn inherit_args(&mut self) -> &mut Self {
-        self.args(&std::env::args().collect::<Vec<String>>())
+        self.cli.arguments.extend(std::env::args());
+        self
     }
 
     /// Configures a "preopened directory" to be available to WebAssembly.

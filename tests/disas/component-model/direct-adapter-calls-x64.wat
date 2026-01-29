@@ -1,7 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = 'compile'
 ;;! filter = "function"
-;;! flags = "-C inlining=n"
+;;! flags = "-C inlining=n -Wconcurrency-support=n"
 
 ;; Same as `direct-adapter-calls.wat` but shows full compilation down to x86_64
 ;; so that we can exercise our linker's ability to resolve relocations for
@@ -85,63 +85,41 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
 ;;       movq    0x10(%r10), %r10
-;;       addq    $0x30, %r10
+;;       addq    $0x20, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0x14e
-;;   79: subq    $0x20, %rsp
-;;       movq    %rbx, (%rsp)
-;;       movq    %r12, 8(%rsp)
-;;       movq    %r14, 0x10(%rsp)
-;;       movq    %r15, 0x18(%rsp)
+;;       ja      0xf2
+;;   79: subq    $0x10, %rsp
+;;       movq    %r12, (%rsp)
 ;;       movq    0x78(%rdi), %r12
-;;       movl    (%r12), %r8d
-;;       testl   $1, %r8d
-;;       je      0x13a
-;;   a5: movq    0x60(%rdi), %rbx
-;;       movl    (%rbx), %r9d
-;;       testl   $2, %r9d
-;;       je      0x126
-;;   b9: andl    $0xfffffffd, %r9d
-;;       movl    %r9d, (%rbx)
-;;       movq    0x90(%rdi), %r14
-;;       movq    %rdi, %r10
-;;       movl    (%r14), %r15d
-;;       movl    $0, (%r14)
-;;       movl    (%rbx), %esi
-;;       movq    %rsi, %rax
+;;       movl    (%r12), %r10d
+;;       testl   $1, %r10d
+;;       je      0xdd
+;;   96: movq    0x60(%rdi), %rsi
+;;       movl    (%rsi), %r10d
+;;       movq    %r10, %rax
 ;;       andl    $0xfffffffe, %eax
-;;       movl    %eax, (%rbx)
-;;       orl     $1, %esi
-;;       movl    %esi, (%rbx)
-;;       movq    0x40(%r10), %rdi
-;;       movq    %r10, %rsi
+;;       movl    %eax, (%rsi)
+;;       orl     $1, %r10d
+;;       movl    %r10d, (%rsi)
+;;       movq    %rdi, %rax
+;;       movq    0x40(%rax), %rdi
+;;       movq    %rax, %rsi
 ;;       callq   0
-;;       movl    (%r12), %ecx
-;;       movq    %rcx, %rdx
-;;       andl    $0xfffffffe, %edx
-;;       movl    %edx, (%r12)
-;;       orl     $1, %ecx
+;;       movl    (%r12), %esi
+;;       movq    %rsi, %rcx
+;;       andl    $0xfffffffe, %ecx
 ;;       movl    %ecx, (%r12)
-;;       orl     $2, (%rbx)
-;;       movl    %r15d, (%r14)
-;;       movq    (%rsp), %rbx
-;;       movq    8(%rsp), %r12
-;;       movq    0x10(%rsp), %r14
-;;       movq    0x18(%rsp), %r15
-;;       addq    $0x20, %rsp
+;;       orl     $1, %esi
+;;       movl    %esi, (%r12)
+;;       movq    (%rsp), %r12
+;;       addq    $0x10, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  126: movq    %rdi, %rsi
-;;  129: movq    0x48(%rsi), %rax
-;;  12d: movq    0x58(%rsi), %rdi
-;;  131: movl    $0x12, %edx
-;;  136: callq   *%rax
-;;  138: ud2
-;;  13a: movq    %rdi, %rsi
-;;  13d: movq    0x48(%rsi), %rcx
-;;  141: movq    0x58(%rsi), %rdi
-;;  145: movl    $0x18, %edx
-;;  14a: callq   *%rcx
-;;  14c: ud2
-;;  14e: ud2
+;;   dd: movq    %rdi, %rsi
+;;   e0: movq    0x48(%rsi), %r9
+;;   e4: movq    0x58(%rsi), %rdi
+;;   e8: movl    $0x17, %edx
+;;   ed: callq   *%r9
+;;   f0: ud2
+;;   f2: ud2

@@ -157,9 +157,7 @@ pub trait ResourceLimiter: Send {
 /// asynchronously if necessary.
 ///
 /// This trait is identical to [`ResourceLimiter`], except that the
-/// `memory_growing` and `table_growing` functions are `async`. Must be used
-/// with an async [`Store`](`crate::Store`) configured via
-/// [`Config::async_support`](crate::Config::async_support).
+/// `memory_growing` and `table_growing` functions are `async`.
 ///
 /// This trait is used with
 /// [`Store::limiter_async`](`crate::Store::limiter_async`)`: see those docs

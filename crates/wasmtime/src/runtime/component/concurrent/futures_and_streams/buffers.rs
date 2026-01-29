@@ -85,7 +85,7 @@ mod untyped {
 
 /// Trait representing a buffer which may be written to a `StreamWriter`.
 ///
-/// See also [`crate::component::Instance::stream`].
+/// See also [`crate::component::StreamProducer`].
 ///
 /// # Unsafety
 ///
@@ -117,7 +117,7 @@ pub unsafe trait WriteBuffer<T>: Send + Sync + 'static {
 
 /// Trait representing a buffer which may be used to read from a `StreamReader`.
 ///
-/// See also [`crate::component::Instance::stream`].
+/// See also [`crate::component::Source`].
 pub trait ReadBuffer<T>: Send + Sync + 'static {
     /// Move the specified items into this buffer.
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I);

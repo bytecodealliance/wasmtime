@@ -27,10 +27,9 @@ wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
 pulley-interpreter = { workspace = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
@@ -132,7 +131,9 @@ harness = false
 # for a particular embedding.
 [features]
 default = [
+  'anyhow',
   'async',
+  'backtrace',
   'cache',
   'gc',
   'gc-drc',
@@ -155,6 +156,12 @@ default = [
   'debug',
   'compile-time-builtins',
 ]
+
+# Enables conversion helpers between `anyhow::Error` and `wasmtime::Error`.
+anyhow = ["wasmtime-environ/anyhow"]
+
+# Enables backtrace capturing in `wasmtime::Error`.
+backtrace = ["std", "wasmtime-environ/backtrace"]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
@@ -261,7 +268,6 @@ runtime = [
   "dep:smallvec",
   "dep:mach2",
   "dep:memfd",
-  "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
   "pulley-interpreter/interp",
@@ -336,11 +342,12 @@ addr2line = ["dep:addr2line", "dep:gimli", "std"]
 std = [
   'postcard/use-std',
   'wasmtime-environ/std',
+  'wasmtime-core/std',
   'object/std',
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
-  'wasmtime-math/std',
+  'wasmtime-core/std',
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
@@ -397,7 +404,7 @@ custom-sync-primitives = []
 # Off-by-default support to profile the Pulley interpreter. This has a
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
-profile-pulley = ['pulley', 'profiling', 'pulley-interpreter/profile']
+profile-pulley = ['anyhow', 'pulley', 'profiling', 'pulley-interpreter/profile']
 
 # Enables support for the Component Model Async ABI, along with `future`,
 # `stream`, and `error-context` types.
@@ -423,4 +430,4 @@ debug = [
 ]
 
 # Enables support for defining compile-time builtins.
-compile-time-builtins = ['dep:wasm-compose', 'dep:tempfile']
+compile-time-builtins = ['anyhow', 'dep:wasm-compose', 'dep:tempfile']

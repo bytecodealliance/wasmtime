@@ -28,10 +28,10 @@ impl AsyncConfig {
         match self {
             AsyncConfig::Disabled => {}
             AsyncConfig::YieldWithFuel(_) => {
-                config.async_support(true).consume_fuel(true);
+                config.consume_fuel(true);
             }
             AsyncConfig::YieldWithEpochs { .. } => {
-                config.async_support(true).epoch_interruption(true);
+                config.epoch_interruption(true);
             }
         }
     }

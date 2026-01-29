@@ -17,9 +17,9 @@ use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
-    // pulley
+    "wasmtime-internal-core",
     "cranelift-bitset",
-    "wasmtime-internal-math",
+    // pulley
     "pulley-macros",
     "pulley-interpreter",
     // cranelift
@@ -52,9 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle-generate",
     "wiggle-macro",
     // wasmtime
-    "wasmtime-internal-error",
     "wasmtime-internal-versioned-export-macros",
-    "wasmtime-internal-slab",
     "wasmtime-internal-wit-bindgen",
     "wasmtime-internal-component-macro",
     "wasmtime-internal-jit-debug",

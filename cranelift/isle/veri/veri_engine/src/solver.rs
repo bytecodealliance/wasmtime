@@ -1615,8 +1615,11 @@ impl SolverCtx {
 }
 
 /// Overall query for single rule:
+///
+/// ```text
 /// <declare vars>
 /// (not (=> <assumptions> (= <LHS> <RHS>))))))
+/// ```
 pub fn run_solver(
     rule_sem: &RuleSemantics,
     rule: &Rule,

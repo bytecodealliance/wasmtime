@@ -1,6 +1,8 @@
 use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
+use std::error::Error;
+use std::fmt;
 use wasmtime::component::{HasData, ResourceTable};
 
 /// A helper struct which implements [`HasData`] for the `wasi:clocks` APIs.
@@ -13,11 +15,13 @@ use wasmtime::component::{HasData, ResourceTable};
 /// When using this type you can skip the [`WasiClocksView`] trait, for
 /// example.
 ///
+/// [`wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker`]: crate::p2::bindings::clocks::monotonic_clock::add_to_linker
+///
 /// # Examples
 ///
 /// ```
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime_wasi::clocks::*;
 ///
 /// struct MyStoreState {
@@ -26,9 +30,7 @@ use wasmtime::component::{HasData, ResourceTable};
 /// }
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///     let mut linker = Linker::new(&engine);
 ///
 ///     wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker::<MyStoreState, WasiClocks>(
@@ -162,20 +164,51 @@ pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
 }
 
 pub(crate) struct Datetime {
-    pub seconds: u64,
+    pub seconds: i64,
     pub nanoseconds: u32,
 }
 
 impl TryFrom<SystemTime> for Datetime {
-    type Error = wasmtime::Error;
+    type Error = DatetimeError;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        let duration =
-            time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
+        let epoch = SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH);
 
-        Ok(Self {
-            seconds: duration.as_secs(),
-            nanoseconds: duration.subsec_nanos(),
-        })
+        if time >= epoch {
+            let duration = time.duration_since(epoch)?;
+            Ok(Self {
+                seconds: duration.as_secs().try_into()?,
+                nanoseconds: duration.subsec_nanos(),
+            })
+        } else {
+            let duration = epoch.duration_since(time)?;
+            Ok(Self {
+                seconds: -duration.as_secs().try_into()?,
+                nanoseconds: duration.subsec_nanos(),
+            })
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DatetimeError;
+
+impl fmt::Display for DatetimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("couldn't represent time as a WASI `Datetime`")
+    }
+}
+
+impl Error for DatetimeError {}
+
+impl From<std::time::SystemTimeError> for DatetimeError {
+    fn from(_: std::time::SystemTimeError) -> Self {
+        DatetimeError
+    }
+}
+
+impl From<std::num::TryFromIntError> for DatetimeError {
+    fn from(_: std::num::TryFromIntError) -> Self {
+        DatetimeError
     }
 }

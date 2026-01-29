@@ -18,14 +18,12 @@ use wasmtime::component::Linker;
 /// # Example
 ///
 /// ```
-/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime::{Engine, Result, Store};
 /// use wasmtime::component::Linker;
 /// use wasmtime_wasi::random::{WasiRandomView, WasiRandomCtx};
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker = Linker::<MyState>::new(&engine);
 ///     wasmtime_wasi::p3::random::add_to_linker(&mut linker)?;

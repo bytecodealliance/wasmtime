@@ -185,9 +185,13 @@ fn component_test_config(test: &Path) -> TestConfig {
 
     if let Some(parent) = test.parent() {
         if parent.ends_with("async")
-            || ["trap-in-post-return.wast"]
-                .into_iter()
-                .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
+            || [
+                "trap-in-post-return.wast",
+                "resources.wast",
+                "multiple-resources.wast",
+            ]
+            .into_iter()
+            .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
         {
             ret.component_model_async = Some(true);
             ret.component_model_async_stackful = Some(true);
@@ -268,6 +272,7 @@ macro_rules! foreach_config_option {
             component_model_threading
             component_model_error_context
             component_model_gc
+            component_model_fixed_length_lists
             simd
             gc_types
             exceptions

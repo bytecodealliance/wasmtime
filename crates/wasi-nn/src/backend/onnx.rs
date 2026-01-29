@@ -7,12 +7,17 @@ use crate::backend::{Id, read};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use ort::{
+    execution_providers::{CPUExecutionProvider, ExecutionProviderDispatch},
     inputs,
     session::{Input, Output},
     session::{Session, SessionInputValue, builder::GraphOptimizationLevel},
     tensor::TensorElementType,
     value::{Tensor as OrtTensor, ValueType},
 };
+
+#[cfg(feature = "onnx-cuda")]
+use ort::execution_providers::CUDAExecutionProvider;
+
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -31,7 +36,11 @@ impl BackendInner for OnnxBackend {
             return Err(BackendError::InvalidNumberOfBuilders(1, builders.len()));
         }
 
+        // Configure execution providers based on target
+        let execution_providers = configure_execution_providers(target)?;
+
         let session = Session::builder()?
+            .with_execution_providers(execution_providers)?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .commit_from_memory(builders[0])?;
 
@@ -42,6 +51,38 @@ impl BackendInner for OnnxBackend {
 
     fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir> {
         Some(self)
+    }
+}
+
+/// Configure execution providers based on the target
+fn configure_execution_providers(
+    target: ExecutionTarget,
+) -> Result<Vec<ExecutionProviderDispatch>, BackendError> {
+    match target {
+        ExecutionTarget::Cpu => {
+            // Use CPU execution provider with default configuration
+            tracing::debug!("Using CPU execution provider");
+            Ok(vec![CPUExecutionProvider::default().build()])
+        }
+        ExecutionTarget::Gpu => {
+            #[cfg(feature = "onnx-cuda")]
+            {
+                // Use CUDA execution provider for GPU acceleration
+                tracing::debug!("Using Nvidia GPU CUDA execution provider");
+                Ok(vec![CUDAExecutionProvider::default().build()])
+            }
+            #[cfg(not(feature = "onnx-cuda"))]
+            {
+                tracing::warn!("GPU CUDA execution provider is not enabled, falling back to CPU");
+                Ok(vec![CPUExecutionProvider::default().build()])
+            }
+        }
+        ExecutionTarget::Tpu => {
+            tracing::warn!(
+                "TPU execution target is not supported for ONNX backend yet, falling back to CPU"
+            );
+            Ok(vec![CPUExecutionProvider::default().build()])
+        }
     }
 }
 

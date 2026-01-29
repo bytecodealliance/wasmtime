@@ -1,11 +1,13 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use wasmtime::*;
 
 fn async_store() -> Store<()> {
-    Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), ())
+    Store::new(&Engine::default(), ())
 }
 
 async fn run_smoke_test(store: &mut Store<()>, func: Func) {
@@ -247,7 +249,7 @@ async fn suspend_while_suspending() {
 
 #[tokio::test]
 async fn cancel_during_run() {
-    let mut store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), 0);
+    let mut store = Store::new(&Engine::default(), 0);
 
     let func_ty = FuncType::new(store.engine(), None, None);
     let async_thunk = Func::new_async(&mut store, func_ty, move |mut caller, _params, _results| {
@@ -292,7 +294,7 @@ async fn cancel_during_run() {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn iloop_with_fuel() {
-    let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
+    let engine = Engine::new(Config::new().consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
     store.set_fuel(10_000).unwrap();
     store.fuel_async_yield_interval(Some(100)).unwrap();
@@ -316,7 +318,7 @@ async fn iloop_with_fuel() {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn fuel_eventually_finishes() {
-    let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
+    let engine = Engine::new(Config::new().consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
     store.set_fuel(u64::MAX).unwrap();
     store.fuel_async_yield_interval(Some(10)).unwrap();
@@ -351,7 +353,6 @@ async fn async_with_pooling_stacks() {
         .max_memory_size(1 << 16)
         .table_elements(0);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
@@ -375,7 +376,6 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
         .max_memory_size(1 << 16)
         .table_elements(0);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
@@ -409,7 +409,6 @@ async fn async_mpk_protection() -> Result<()> {
         .max_memory_size(1 << 16)
         .table_elements(0);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
     config.memory_reservation(1 << 26);
     config.epoch_interruption(true);
@@ -620,6 +619,49 @@ async fn resume_separate_thread3() {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+async fn resume_separate_thread_tls() {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct IncOnDrop;
+    impl Drop for IncOnDrop {
+        fn drop(&mut self) {
+            COUNTER.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    thread_local!(static FOO: IncOnDrop = IncOnDrop);
+
+    // This test will poll the following future on two threads.
+    // We verify that TLS destructors are run correctly.
+    execute_across_threads(async move {
+        let mut store = async_store();
+        let module = Module::new(
+            store.engine(),
+            "
+            (module
+                (import \"\" \"\" (func))
+                (start 0)
+            )
+            ",
+        )
+        .unwrap();
+        let func = Func::wrap_async(&mut store, |_, _: ()| {
+            Box::new(async {
+                tokio::task::yield_now().await;
+                FOO.with(|_f| {});
+                Err::<(), _>(format_err!("test"))
+            })
+        });
+        let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
+        assert!(result.is_err());
+    })
+    .await;
+
+    assert_eq!(COUNTER.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn recursive_async() -> Result<()> {
     let _ = env_logger::try_init();
     let mut store = async_store();
@@ -791,9 +833,7 @@ where
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn non_stacky_async_activations() -> Result<()> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
     let mut store1: Store<Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>> =
         Store::new(&engine, None);
     let mut linker1 = Linker::new(&engine);
@@ -932,9 +972,7 @@ async fn non_stacky_async_activations() -> Result<()> {
 async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
     let _ = env_logger::try_init();
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let module = Module::new(
         &engine,
@@ -1007,7 +1045,6 @@ async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
     let _ = env_logger::try_init();
 
     let mut config = Config::new();
-    config.async_support(true);
     config.wasm_gc(true);
     let engine = Engine::new(&config)?;
 

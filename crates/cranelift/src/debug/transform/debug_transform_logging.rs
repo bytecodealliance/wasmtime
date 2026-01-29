@@ -1,10 +1,7 @@
 use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
 use cranelift_codegen::{LabelValueLoc, ValueLabelsRanges, ir::ValueLabel, isa::TargetIsa};
-use gimli::{
-    AttributeValue, DebuggingInformationEntry, LittleEndian, UnitOffset, UnitRef,
-    UnitSectionOffset, write,
-};
+use gimli::{AttributeValue, LittleEndian, UnitRef, write};
 
 macro_rules! dbi_log_enabled {
     () => {
@@ -29,8 +26,7 @@ pub struct CompileUnitSummary<'a, 'r> {
 impl<'a, 'r> fmt::Debug for CompileUnitSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let unit = self.unit;
-        let offs = get_offset_value(unit.header.offset());
-        write!(f, "0x{offs:08x} [")?;
+        write!(f, "0x{:08x} [", unit.header.offset().0)?;
         let comp_dir = match unit.comp_dir {
             Some(dir) => &dir.to_string_lossy(),
             None => "None",
@@ -49,51 +45,44 @@ pub fn log_get_cu_summary<'a, 'r>(unit: UnitRef<'a, Reader<'r>>) -> CompileUnitS
 }
 
 pub struct DieRefSummary<'a, 'r> {
-    unit: UnitRef<'a, Reader<'r>>,
-    unit_ref: UnitOffset,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 }
 
 impl<'a, 'r> fmt::Debug for DieRefSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let section_offs = self.unit_ref.to_unit_section_offset(&self.unit);
-        let offs = get_offset_value(section_offs);
-        write!(f, "0x{offs:08x}")
+        let section_offs = self
+            .entry
+            .offset
+            .to_unit_section_offset(&self.entry.read_unit);
+        write!(f, "0x{:08x}", section_offs.0)
     }
 }
 
 pub fn log_get_die_ref<'a, 'r>(
-    unit: UnitRef<'a, Reader<'r>>,
-    unit_ref: UnitOffset,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 ) -> DieRefSummary<'a, 'r> {
-    DieRefSummary { unit, unit_ref }
+    DieRefSummary { entry }
 }
 
 struct DieDetailedSummary<'a, 'r> {
-    unit: UnitRef<'a, Reader<'r>>,
-    die: &'a DebuggingInformationEntry<'a, 'a, Reader<'r>>,
+    entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>,
 }
 
-pub fn log_begin_input_die<'r>(
-    unit: UnitRef<Reader<'r>>,
-    die: &DebuggingInformationEntry<Reader<'r>>,
-    depth: isize,
-) {
+pub fn log_begin_input_die<'a, 'r>(entry: &'a write::ConvertUnitEntry<'a, Reader<'r>>) {
     dbi_log!(
         "=== Begin DIE at {:?} (depth = {}):\n{:?}",
-        log_get_die_ref(unit, die.offset()),
-        depth,
-        DieDetailedSummary { unit, die }
+        log_get_die_ref(entry),
+        entry.depth,
+        DieDetailedSummary { entry }
     );
 }
 
 impl<'a, 'r> fmt::Debug for DieDetailedSummary<'a, 'r> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let die = self.die;
-        let unit = self.unit;
-        write!(f, "{}\n", die.tag())?;
+        let unit = self.entry.read_unit;
+        write!(f, "{}\n", self.entry.tag)?;
 
-        let mut attrs = die.attrs();
-        while let Some(attr) = attrs.next().unwrap_or(None) {
+        for attr in &self.entry.attrs {
             write!(f, "  {} (", attr.name())?;
             let attr_value = attr.value();
             match attr_value {
@@ -150,8 +139,7 @@ impl<'a, 'r> fmt::Debug for DieDetailedSummary<'a, 'r> {
                 AttributeValue::Inline(value) => write!(f, "{value}"),
                 AttributeValue::Ordering(value) => write!(f, "{value}"),
                 AttributeValue::UnitRef(offset) => {
-                    let section_offset = offset.to_unit_section_offset(&unit);
-                    write!(f, "0x{:08x}", get_offset_value(section_offset))
+                    write!(f, "0x{:08x}", offset.to_unit_section_offset(&unit).0)
                 }
                 AttributeValue::DebugInfoRef(offset) => write!(f, "0x{:08x}", offset.0),
                 unexpected_attr => write!(f, "<unexpected attr: {unexpected_attr:?}>"),
@@ -226,8 +214,8 @@ impl<'a> fmt::Debug for OutDieDetailedSummary<'a> {
                 write::AttributeValue::Ordering(value) => write!(f, "{value}"),
                 write::AttributeValue::UnitRef(unit_ref) => write!(f, "{unit_ref:?}>"),
                 write::AttributeValue::DebugInfoRef(reference) => match reference {
-                    write::Reference::Symbol(index) => write!(f, "symbol #{index}>"),
-                    write::Reference::Entry(unit_id, die_id) => {
+                    write::DebugInfoRef::Symbol(index) => write!(f, "symbol #{index}>"),
+                    write::DebugInfoRef::Entry(unit_id, die_id) => {
                         write!(f, "{die_id:?} in {unit_id:?}>")
                     }
                 },
@@ -240,44 +228,29 @@ impl<'a> fmt::Debug for OutDieDetailedSummary<'a> {
 }
 
 pub fn log_end_output_die(
-    input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: UnitRef<Reader<'_>>,
     die_id: write::UnitEntryId,
-    unit: &write::Unit,
-    strings: &write::StringTable,
-    depth: isize,
+    entry: &write::ConvertUnitEntry<'_, Reader<'_>>,
+    unit: &write::ConvertUnit<'_, Reader<'_>>,
 ) {
     dbi_log!(
         "=== End DIE at {:?} (depth = {}):\n{:?}",
-        log_get_die_ref(input_unit, input_die.offset()),
-        depth,
+        log_get_die_ref(entry),
+        entry.depth,
         OutDieDetailedSummary {
             die_id,
-            unit,
-            strings
+            unit: &unit.unit,
+            strings: &unit.strings,
         }
     );
 }
 
-pub fn log_end_output_die_skipped(
-    input_die: &DebuggingInformationEntry<Reader<'_>>,
-    input_unit: UnitRef<Reader<'_>>,
-    reason: &str,
-    depth: isize,
-) {
+pub fn log_end_output_die_skipped(entry: &write::ConvertUnitEntry<'_, Reader<'_>>, reason: &str) {
     dbi_log!(
         "=== End DIE at {:?} (depth = {}):\n  Skipped as {}\n",
-        log_get_die_ref(input_unit, input_die.offset()),
-        depth,
+        log_get_die_ref(entry),
+        entry.depth,
         reason
     );
-}
-
-fn get_offset_value(offset: UnitSectionOffset) -> usize {
-    match offset {
-        UnitSectionOffset::DebugInfoOffset(offs) => offs.0,
-        UnitSectionOffset::DebugTypesOffset(offs) => offs.0,
-    }
 }
 
 pub fn log_get_value_name(value: ValueLabel) -> ValueNameSummary {

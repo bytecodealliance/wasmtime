@@ -3,19 +3,6 @@ use wasmtime::bail;
 use wasmtime::*;
 
 #[test]
-#[should_panic = "cannot use `func_new_async` without enabling async support"]
-fn async_required() {
-    let engine = Engine::default();
-    let mut linker = Linker::<()>::new(&engine);
-    drop(linker.func_new_async(
-        "",
-        "",
-        FuncType::new(&engine, None, None),
-        move |_caller, _params, _results| Box::new(async { Ok(()) }),
-    ));
-}
-
-#[test]
 fn wrap_func() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);

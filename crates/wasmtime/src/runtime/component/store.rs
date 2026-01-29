@@ -6,15 +6,52 @@ use crate::store::{StoreData, StoreId, StoreOpaque};
 use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
     instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
+
+    /// Whether an instance belonging to this store has trapped.
+    trapped: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ComponentInstanceId(u32);
 wasmtime_environ::entity_impl!(ComponentInstanceId);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct RuntimeInstance {
+    pub instance: ComponentInstanceId,
+    pub index: RuntimeComponentInstanceIndex,
+}
+
+impl StoreOpaque {
+    pub(crate) fn trapped(&self) -> bool {
+        self.store_data().components.trapped
+    }
+
+    pub(crate) fn set_trapped(&mut self) {
+        self.store_data_mut().components.trapped = true;
+    }
+
+    /// Returns `false` if the specified instance may not be entered, regardless
+    /// of what's on a task's call stack.
+    ///
+    /// If this returns `true`, the instance may be entered as long as it isn't
+    /// on the task's call stack, if applicable.
+    pub(crate) fn may_enter_at_all(&mut self, instance: RuntimeInstance) -> bool {
+        if self.trapped() {
+            return false;
+        }
+
+        let flags = self
+            .component_instance(instance.instance)
+            .instance_flags(instance.index);
+
+        unsafe { !flags.needs_post_return() }
+    }
+}
 
 impl StoreData {
     pub(crate) fn push_component_instance(
@@ -84,6 +121,14 @@ impl StoreData {
 impl StoreOpaque {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
         self.store_data().component_instance(id)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_instance_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> Pin<&mut ComponentInstance> {
+        self.store_data_mut().component_instance_mut(id)
     }
 }
 
