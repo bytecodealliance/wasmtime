@@ -83,6 +83,11 @@ impl<T> Vec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::pop`].
+    pub fn pop(&mut self) -> Option<T> {
+        self.inner.pop()
+    }
+
     /// Same as [`std::vec::Vec::into_raw_parts`].
     pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
         // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
