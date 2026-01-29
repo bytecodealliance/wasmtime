@@ -419,7 +419,7 @@ rustc-hash = { version = "2.1.1", default-features = false }
 libtest-mimic = "0.8.1"
 semver = { version = "1.0.27", default-features = false }
 ittapi = "0.4.0"
-libm = "0.2.15"
+libm = "0.2.16"
 tokio-rustls = "0.25.0"
 rustls = "0.22.0"
 tokio-native-tls = "0.3.1"
