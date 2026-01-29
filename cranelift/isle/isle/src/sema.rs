@@ -518,6 +518,17 @@ impl Term {
         )
     }
 
+    /// Is this term marked as recursive?
+    pub fn is_recursive(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                flags: TermFlags { rec: true, .. },
+                ..
+            }
+        )
+    }
+
     /// Does this term have a constructor?
     pub fn has_constructor(&self) -> bool {
         matches!(

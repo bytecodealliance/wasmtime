@@ -23,6 +23,7 @@ impl std::fmt::Debug for Errors {
                 Error::TypeError { msg, .. } => format!("type error: {msg}"),
                 Error::UnreachableError { msg, .. } => format!("unreachable rule: {msg}"),
                 Error::OverlapError { msg, .. } => format!("overlap error: {msg}"),
+                Error::RecursionError { msg, .. } => format!("recursion error: {msg}"),
                 Error::ShadowedError { .. } => {
                     "more general higher-priority rule shadows other rules".to_string()
                 }
@@ -33,7 +34,8 @@ impl std::fmt::Debug for Errors {
 
                 Error::ParseError { span, .. }
                 | Error::TypeError { span, .. }
-                | Error::UnreachableError { span, .. } => {
+                | Error::UnreachableError { span, .. }
+                | Error::RecursionError { span, .. } => {
                     vec![Label::primary(span.from.file, span)]
                 }
 
@@ -125,6 +127,15 @@ pub enum Error {
         /// present, the first rule is the one with the most overlaps (likely a fall-through
         /// wildcard case).
         rules: Vec<Span>,
+    },
+
+    ///
+    RecursionError {
+        /// The error message.
+        msg: String,
+
+        /// The location of the term declaration.
+        span: Span,
     },
 
     /// The rules can never match because another rule will always match first.
