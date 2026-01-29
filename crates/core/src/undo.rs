@@ -82,8 +82,8 @@ pub struct Undo<T, F>
 where
     F: FnOnce(T),
 {
-    inner: Option<T>,
-    undo: Option<F>,
+    inner: mem::ManuallyDrop<T>,
+    undo: mem::ManuallyDrop<F>,
 }
 
 impl<T, F> Drop for Undo<T, F>
@@ -91,10 +91,10 @@ where
     F: FnOnce(T),
 {
     fn drop(&mut self) {
-        if let Some(inner) = self.inner.take() {
-            let undo = self.undo.take().unwrap();
-            undo(inner);
-        }
+        // Safety: These `ManuallyDrop` fields will not be used again.
+        let inner = unsafe { mem::ManuallyDrop::take(&mut self.inner) };
+        let undo = unsafe { mem::ManuallyDrop::take(&mut self.undo) };
+        undo(inner);
     }
 }
 
@@ -118,7 +118,7 @@ where
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref().unwrap()
+        &self.inner
     }
 }
 
@@ -127,7 +127,7 @@ where
     F: FnOnce(T),
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.as_mut().unwrap()
+        &mut self.inner
     }
 }
 
@@ -141,8 +141,8 @@ where
     /// when dropped, unless the guard is disabled via `Undo::commit`.
     pub fn new(inner: T, undo: F) -> Self {
         Self {
-            inner: Some(inner),
-            undo: Some(undo),
+            inner: mem::ManuallyDrop::new(inner),
+            undo: mem::ManuallyDrop::new(undo),
         }
     }
 
@@ -150,7 +150,14 @@ where
     ///
     /// This `Undo`'s cleanup function will never be called.
     pub fn commit(mut guard: Self) -> T {
-        let inner = guard.inner.take().unwrap();
+        // Safety: These `ManuallyDrop` fields will not be used again.
+        let inner = unsafe {
+            // Make sure to drop `undo`, even though we aren't calling it, to
+            // avoid leaking closed-over `Arc`s, for example.
+            mem::ManuallyDrop::drop(&mut guard.undo);
+
+            mem::ManuallyDrop::take(&mut guard.inner)
+        };
         mem::forget(guard);
         inner
     }
