@@ -34,7 +34,7 @@ wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
 wasm-compose = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = { version = "1.0.7", default-features = false, features = ["std", "simd"] }
+wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true, features = ['async-await'] }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 serde_json = { workspace = true }
