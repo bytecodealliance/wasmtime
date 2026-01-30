@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
-#[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 pub use wasmparser::WasmFeatures;
 use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
