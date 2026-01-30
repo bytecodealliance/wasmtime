@@ -336,6 +336,7 @@ impl<'a> Parser<'a> {
         let pure = self.eat_sym_str("pure")?;
         let multi = self.eat_sym_str("multi")?;
         let partial = self.eat_sym_str("partial")?;
+        let rec = self.eat_sym_str("rec")?;
 
         let term = self.parse_ident()?;
 
@@ -355,6 +356,7 @@ impl<'a> Parser<'a> {
             pure,
             multi,
             partial,
+            rec,
             pos,
         })
     }
