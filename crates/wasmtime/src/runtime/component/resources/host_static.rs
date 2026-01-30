@@ -12,7 +12,7 @@ use crate::AsContextMut;
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::host::{HostResource, HostResourceType};
-use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType};
+use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType, Val};
 use crate::prelude::*;
 use core::fmt;
 use core::mem::MaybeUninit;
@@ -221,6 +221,10 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         HostResource::<Static<T>, ()>::typecheck(ty, types)
+    }
+
+    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+        Ok(Val::Resource(self.0.try_as_resource_any(store)?))
     }
 }
 

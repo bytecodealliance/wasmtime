@@ -6,7 +6,7 @@ use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::types::{self, FutureType, StreamType};
 use crate::component::{
-    ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader,
+    ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader, Val,
 };
 use crate::store::StoreOpaque;
 use crate::{AsContextMut, Result, bail, error::Context};
@@ -145,6 +145,10 @@ unsafe impl ComponentType for FutureAny {
             InterfaceType::Future(_) => Ok(()),
             other => bail!("expected `future`, found `{}`", desc(other)),
         }
+    }
+
+    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+        Ok(Val::Future(self.clone()))
     }
 }
 
@@ -312,6 +316,10 @@ unsafe impl ComponentType for StreamAny {
             InterfaceType::Stream(_) => Ok(()),
             other => bail!("expected `stream`, found `{}`", desc(other)),
         }
+    }
+
+    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+        Ok(Val::Stream(self.clone()))
     }
 }
 

@@ -1390,6 +1390,14 @@ unsafe impl<T: ComponentType> ComponentType for FutureReader<T> {
             other => bail!("expected `future`, found `{}`", func::desc(other)),
         }
     }
+
+    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+        // FIXME PCH
+        //Val::FutureReader(FutureReaderAny(self.rep))
+        todo!(
+            "FIXME Val doesn't have a FutureReader variant, and FutureReaderAny needs to be created"
+        )
+    }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
@@ -1737,6 +1745,14 @@ unsafe impl<T: ComponentType> ComponentType for StreamReader<T> {
             other => bail!("expected `stream`, found `{}`", func::desc(other)),
         }
     }
+
+    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+        // FIXME PCH
+        //Val::StreamReader(StreamReaderAny(self.rep))
+        todo!(
+            "FIXME Val doesn't have a StreamReader variant, and StreamReaderAny needs to be created"
+        )
+    }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
@@ -1917,6 +1933,10 @@ unsafe impl func::ComponentType for ErrorContext {
             InterfaceType::ErrorContext(_) => Ok(()),
             other => bail!("expected `error`, found `{}`", func::desc(other)),
         }
+    }
+
+    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+        Ok(Val::ErrorContext(ErrorContextAny(self.rep)))
     }
 }
 
