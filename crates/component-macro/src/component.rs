@@ -359,8 +359,15 @@ fn expand_record_for_component_type(
     let mut lower_field_declarations = TokenStream::new();
     let mut abi_list = TokenStream::new();
     let mut unique_types = HashSet::new();
+    let mut field_as_vals = TokenStream::new();
 
-    for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
+    for (
+        index,
+        syn::Field {
+            ident, ty, attrs, ..
+        },
+    ) in fields.iter().enumerate()
+    {
         let generic = format_ident!("T{}", index);
 
         lower_generic_params.extend(quote!(#generic: Copy,));
@@ -373,6 +380,15 @@ fn expand_record_for_component_type(
         ));
 
         unique_types.insert(ty);
+
+        let name = find_rename(attrs)?.unwrap_or_else(|| {
+            let ident = ident.as_ref().unwrap();
+            syn::LitStr::new(&ident.to_string(), ident.span())
+        });
+        field_as_vals.extend(quote!(
+            (#internal::String::from(#name),
+                #wt::component::ComponentType::as_val(&self.#ident, &mut store)? ),
+        ));
     }
 
     let generics = add_trait_bounds(generics, parse_quote!(#wt::component::ComponentType));
@@ -415,6 +431,12 @@ fn expand_record_for_component_type(
                 types: &#internal::InstanceType<'_>,
             ) -> #wt::Result<()> {
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
+            }
+
+            fn as_val(&self, mut store: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
+                Ok(#wt::component::Val::Record(vec![
+                    #field_as_vals
+                ]))
             }
         }
     };
@@ -961,10 +983,10 @@ impl Expander for ComponentTypeExpander {
         let mut lower_generic_args = TokenStream::new();
         let mut abi_list = TokenStream::new();
         let mut unique_types = HashSet::new();
+        let mut as_val_cases = TokenStream::new();
 
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
             let rename = find_rename(attrs)?;
-
             let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if let Some(ty) = ty {
@@ -982,10 +1004,17 @@ impl Expander for ComponentTypeExpander {
                 lower_generic_args.extend(quote!(<#ty as #wt::component::ComponentType>::Lower,));
 
                 unique_types.insert(ty);
+
+                as_val_cases.extend(quote!(
+                    Self::#ident(inner) => (#internal::String::from(#name), Some(#internal::Box::new(inner.as_val(store)?))),
+                ));
             } else {
                 abi_list.extend(quote!(None,));
                 case_names_and_checks.extend(quote!((#name, None),));
                 lower_payload_case_declarations.extend(quote!(#ident: [#wt::ValRaw; 0],));
+                as_val_cases.extend(quote!(
+                    Self::#ident => (#internal::String::from(#name), None),
+                ));
             }
         }
 
@@ -1032,6 +1061,13 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
+
+                fn as_val(&self, mut store: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
+                    let (variant_name, opt_payload) = match self {
+                        #as_val_cases
+                    };
+                    Ok(#wt::component::Val::Variant(variant_name, opt_payload))
+                }
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
@@ -1053,10 +1089,10 @@ impl Expander for ComponentTypeExpander {
 
         let mut case_names = TokenStream::new();
         let mut abi_list = TokenStream::new();
+        let mut as_val_cases = TokenStream::new();
 
         for VariantCase { attrs, ident, ty } in cases.iter() {
             let rename = find_rename(attrs)?;
-
             let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if ty.is_some() {
@@ -1067,6 +1103,7 @@ impl Expander for ComponentTypeExpander {
             }
             abi_list.extend(quote!(None,));
             case_names.extend(quote!(#name,));
+            as_val_cases.extend(quote!(Self::#ident => #internal::String::from(#name),));
         }
 
         let lower = format_ident!("Lower{}", name);
@@ -1093,6 +1130,10 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::enum_(#cases_len);
+
+                fn as_val(&self, _: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
+                    Ok(#wt::component::Val::Enum(match self { #as_val_cases }))
+                }
             }
 
             unsafe impl #internal::ComponentVariant for #name {
