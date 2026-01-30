@@ -67,7 +67,7 @@ where
     /// Returns `true` if `k` was not present in the set, i.e. this is a
     /// newly-added element. Returns `false` otherwise.
     pub fn insert(&mut self, k: K) -> Result<bool, OutOfMemory> {
-        self.inner.try_ensure_capacity(k.index())?;
+        self.inner.try_ensure_capacity(k.index() + 1)?;
         Ok(self.inner.insert(k))
     }
 
