@@ -3656,19 +3656,32 @@ fn emit_return_call_common_sequence<T>(
         // clobber-restore code (which also frees the fixed frame). Hence, there
         // is no need for the usual `mov sp, fp` here.
 
-        // `ldp fp, lr, [sp], #16`
-        Inst::LoadP64 {
-            rt: writable_fp_reg(),
-            rt2: writable_link_reg(),
-            mem: PairAMode::SPPostIndexed {
-                // TODO: we could fold the increment for incoming_args_diff here, as long as that
-                // value is less than 502*8, by adding it to `setup_area_size`.
-                // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
-                simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
-            },
-            flags: MemFlags::trusted(),
+        if setup_area_size == 8 {
+            // `ldr fp, [sp], #8`
+            Inst::ULoad64 {
+                rd: writable_fp_reg(),
+                mem: AMode::SPPostIndexed {
+                    simm9: SImm9::maybe_from_i64(i64::from(setup_area_size)).unwrap(),
+                },
+                flags: MemFlags::trusted(),
+            }
+            .emit(sink, emit_info, state);
+        } else {
+            // `ldp fp, lr, [sp], #16`
+            Inst::LoadP64 {
+                rt: writable_fp_reg(),
+                rt2: writable_link_reg(),
+                mem: PairAMode::SPPostIndexed {
+                    // TODO: we could fold the increment for incoming_args_diff here, as long as that
+                    // value is less than 502*8, by adding it to `setup_area_size`.
+                    // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
+                    simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64)
+                        .unwrap(),
+                },
+                flags: MemFlags::trusted(),
+            }
+            .emit(sink, emit_info, state);
         }
-        .emit(sink, emit_info, state);
     }
 
     // Adjust SP to account for the possible over-allocation in the prologue.
