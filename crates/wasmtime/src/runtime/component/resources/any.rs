@@ -13,7 +13,7 @@ use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::host::{HostResource, HostResourceType};
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
-use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
+use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType, Val};
 use crate::prelude::*;
 use crate::runtime::vm::ValRaw;
 use crate::{AsContextMut, StoreContextMut, Trap};
@@ -279,6 +279,10 @@ unsafe impl ComponentType for ResourceAny {
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => Ok(()),
             other => bail!("expected `own` or `borrow`, found `{}`", desc(other)),
         }
+    }
+
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Resource(*self))
     }
 }
 

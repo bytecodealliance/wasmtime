@@ -60,6 +60,10 @@ unsafe impl ComponentType for FutureAny {
     fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
         bail!("support for component-model-async disabled at compile time")
     }
+
+    fn to_val<S>(&self, _: crate::StoreContextMut<S>) -> Result<Val> {
+        bail!("support for component-model-async disabled at compile time")
+    }
 }
 
 unsafe impl Lift for FutureAny {
@@ -108,6 +112,10 @@ unsafe impl ComponentType for StreamAny {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+        bail!("support for component-model-async disabled at compile time")
+    }
+
+    fn to_val<S>(&self, _: crate::StoreContextMut<S>) -> Result<Val> {
         bail!("support for component-model-async disabled at compile time")
     }
 }
