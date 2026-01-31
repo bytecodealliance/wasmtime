@@ -252,7 +252,8 @@ impl GcStore {
 
     /// Deallocate an uninitialized struct.
     pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
-        self.gc_heap.dealloc_uninit_struct_or_exn(structref.into())
+        self.gc_heap
+            .dealloc_uninit_struct_or_exn(&mut self.host_data_table, structref.into())
     }
 
     /// Get the data for the given object reference.
@@ -291,7 +292,8 @@ impl GcStore {
 
     /// Deallocate an uninitialized array.
     pub fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) {
-        self.gc_heap.dealloc_uninit_array(arrayref);
+        self.gc_heap
+            .dealloc_uninit_array(&mut self.host_data_table, arrayref);
     }
 
     /// Get the length of the given array.
@@ -318,6 +320,7 @@ impl GcStore {
 
     /// Deallocate an uninitialized exception object.
     pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
-        self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into());
+        self.gc_heap
+            .dealloc_uninit_struct_or_exn(&mut self.host_data_table, exnref.into());
     }
 }

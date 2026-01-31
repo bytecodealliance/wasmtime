@@ -1800,3 +1800,131 @@ fn array_init_elem_oom() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn struct_new_init_failure_no_leak() -> Result<()> {
+    let mut store = crate::gc_store()?;
+    let ty = StructType::new(
+        store.engine(),
+        [
+            FieldType::new(Mutability::Var, StorageType::ValType(ValType::EXTERNREF)),
+            FieldType::new(Mutability::Var, StorageType::ValType(ValType::EXTERNREF)),
+        ],
+    )?;
+    let pre = StructRefPre::new(&mut store, ty);
+    let dropped = Arc::new(AtomicBool::new(false));
+    {
+        let mut scope = RootScope::new(&mut store);
+        let good = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        // Create an unrooted ref by letting its scope expire.
+        let bad = {
+            let mut tmp = RootScope::new(&mut scope);
+            ExternRef::new(&mut tmp, 0u32)?
+        };
+        assert!(
+            StructRef::new(
+                &mut scope,
+                &pre,
+                &[Val::ExternRef(Some(good)), Val::ExternRef(Some(bad))],
+            )
+            .is_err()
+        );
+    }
+    let _ = store.gc(None);
+    assert!(dropped.load(SeqCst), "field 0 externref was leaked");
+    Ok(())
+}
+
+#[test]
+fn array_new_fixed_init_failure_no_leak() -> Result<()> {
+    let mut store = crate::gc_store()?;
+    let ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Var, StorageType::ValType(ValType::EXTERNREF)),
+    );
+    let pre = ArrayRefPre::new(&mut store, ty);
+    let dropped = Arc::new(AtomicBool::new(false));
+    {
+        let mut scope = RootScope::new(&mut store);
+        let good = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        // Create an unrooted ref by letting its scope expire.
+        let bad = {
+            let mut tmp = RootScope::new(&mut scope);
+            ExternRef::new(&mut tmp, 0u32)?
+        };
+        assert!(
+            ArrayRef::new_fixed(
+                &mut scope,
+                &pre,
+                &[Val::ExternRef(Some(good)), Val::ExternRef(Some(bad))],
+            )
+            .is_err()
+        );
+    }
+    let _ = store.gc(None);
+    assert!(dropped.load(SeqCst), "element 0 externref was leaked");
+    Ok(())
+}
+
+#[test]
+fn zero_fill_prevents_stale_gc_ref_in_dealloc_uninit() -> Result<()> {
+    // Verify that alloc_raw zero-fills the object body. Without zero-fill,
+    // stale GC-ref bytes from a prior allocation would cause dealloc_uninit
+    // to spuriously dec-ref a still-live object.
+    let mut store = crate::gc_store()?;
+    let ty = StructType::new(
+        store.engine(),
+        [
+            FieldType::new(Mutability::Var, StorageType::ValType(ValType::EXTERNREF)),
+            FieldType::new(Mutability::Var, StorageType::ValType(ValType::EXTERNREF)),
+        ],
+    )?;
+    let pre = StructRefPre::new(&mut store, ty);
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    // Create E, put it in a struct, keep E alive via OwnedRooted.
+    let e_owned = {
+        let mut scope = RootScope::new(&mut store);
+        let e = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        let e_owned = e.to_owned_rooted(&mut scope)?;
+        let filler = ExternRef::new(&mut scope, 0u32)?;
+        let _s = StructRef::new(
+            &mut scope,
+            &pre,
+            &[Val::ExternRef(Some(e)), Val::ExternRef(Some(filler))],
+        )?;
+        e_owned
+    };
+    let _ = store.gc(None);
+
+    assert!(!dropped.load(SeqCst), "E should still be alive after GC");
+
+    // Reuse same heap region, fail on field 0 so nothing is initialized.
+    {
+        let mut scope = RootScope::new(&mut store);
+        let bad = {
+            let mut tmp = RootScope::new(&mut scope);
+            ExternRef::new(&mut tmp, 0u32)?
+        };
+        assert!(
+            StructRef::new(
+                &mut scope,
+                &pre,
+                &[Val::ExternRef(Some(bad)), Val::ExternRef(None)],
+            )
+            .is_err()
+        );
+    }
+
+    // Without zero-fill the spurious dec-ref would have freed E.
+    assert!(!dropped.load(SeqCst), "alloc_raw did not zero-fill");
+
+    // Release E and verify it gets collected.
+    drop(e_owned);
+    let _ = store.gc(None);
+    assert!(
+        dropped.load(SeqCst),
+        "E should be freed after dropping owned root"
+    );
+    Ok(())
+}
