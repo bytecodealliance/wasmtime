@@ -216,6 +216,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
     pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
+
+    /// The byte offset of the current function body in the wasm module.
+    /// Used to convert absolute srcloc offsets to relative offsets for branch hint lookup.
+    pub(crate) func_body_offset: usize,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -277,6 +281,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             stack_switching_values_buffer: None,
 
             state_slot: None,
+
+            func_body_offset: 0,
         }
     }
 
@@ -1201,6 +1207,34 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Does this function need a GC heap?
     pub fn needs_gc_heap(&self) -> bool {
         self.needs_gc_heap
+    }
+
+    /// Get a branch hint for the current function at the given absolute byte offset.
+    ///
+    /// The offset is converted to a relative offset from the function body start
+    /// before looking up in the branch hints map.
+    ///
+    /// Returns `Some(true)` if the branch is likely taken, `Some(false)` if unlikely taken,
+    /// or `None` if no hint exists for this offset.
+    pub fn get_branch_hint(&self, absolute_offset: usize) -> Option<bool> {
+        // Extract the DefinedFuncIndex from the current function's key
+        let def_func_index = match self.key {
+            FuncKey::DefinedWasmFunction(_, def_func_index) => def_func_index,
+            _ => return None,
+        };
+        // Convert absolute offset to relative offset from function body start
+        let relative_offset = absolute_offset.checked_sub(self.func_body_offset)?;
+        // Convert to full FuncIndex to look up in branch_hints
+        let func_index = self.module.func_index(def_func_index);
+        self.translation
+            .branch_hints
+            .get(&func_index.as_u32())
+            .and_then(|hints| {
+                hints
+                    .iter()
+                    .find(|(o, _)| *o as usize == relative_offset)
+                    .map(|(_, taken)| *taken)
+            })
     }
 
     /// Get the number of Wasm parameters for the given function.
