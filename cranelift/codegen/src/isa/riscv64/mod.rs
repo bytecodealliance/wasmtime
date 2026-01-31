@@ -205,7 +205,7 @@ impl TargetIsa for Riscv64Backend {
         true
     }
 
-    fn has_x86_blendv_lowering(&self, _: Type) -> bool {
+    fn has_blendv_lowering(&self, _: Type) -> bool {
         false
     }
 
