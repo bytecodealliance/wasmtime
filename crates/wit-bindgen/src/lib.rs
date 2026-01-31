@@ -12,6 +12,7 @@ use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
+use std::hash::RandomState;
 use std::io::{Read, Write};
 use std::mem;
 use std::process::{Command, Stdio};
@@ -75,7 +76,7 @@ struct Wasmtime {
     sizes: SizeAlign,
     interface_names: HashMap<InterfaceId, InterfaceName>,
     interface_last_seen_as_import: HashMap<InterfaceId, bool>,
-    trappable_errors: IndexMap<TypeId, String>,
+    trappable_errors: IndexMap<TypeId, String, RandomState>,
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
@@ -637,7 +638,7 @@ pub fn new<_T>(
                 uwriteln!(generator.src, "}}"); // end `impl {struct_name}Indices`
 
                 uwriteln!(generator.src, "impl {struct_name} {{");
-                let mut resource_methods = IndexMap::new();
+                let mut resource_methods = IndexMap::with_hasher(RandomState::new());
 
                 for (_, func) in iface.functions.iter() {
                     match func.kind.resource() {
@@ -1628,7 +1629,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         }
     }
@@ -2259,10 +2260,10 @@ impl<'a> InterfaceGenerator<'a> {
         let owner = TypeOwner::Interface(id);
         let wt = self.generator.wasmtime_path();
 
-        let mut required_conversion_traits = IndexSet::new();
+        let mut required_conversion_traits = IndexSet::with_hasher(RandomState::new());
         let extra_functions = {
             let mut functions = Vec::new();
-            let mut errors_converted = IndexMap::new();
+            let mut errors_converted = IndexMap::with_hasher(RandomState::new());
             let mut my_error_types = iface
                 .types
                 .iter()
@@ -3449,7 +3450,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         },
 

@@ -1123,10 +1123,20 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSwitchTo { func, cancellable } => {
+            ThreadSuspendToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadSwitchTo {
+                    dfg::Trampoline::ThreadSuspendToSuspended {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSuspendTo { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSuspendTo {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
@@ -1143,19 +1153,19 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadResumeLater { func } => {
+            ThreadUnsuspend { func } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadResumeLater {
+                    dfg::Trampoline::ThreadUnsuspend {
                         instance: frame.instance,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldTo { func, cancellable } => {
+            ThreadYieldToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadYieldTo {
+                    dfg::Trampoline::ThreadYieldToSuspended {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
