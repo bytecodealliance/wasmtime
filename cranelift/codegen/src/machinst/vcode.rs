@@ -1253,21 +1253,23 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 inst.index()
             };
+            let inst_to_offset = |inst_index: usize| {
+                // Skip over cold blocks.
+                for offset in &inst_offsets[inst_index..] {
+                    if *offset != NO_INST_OFFSET {
+                        return *offset;
+                    }
+                }
+                func_body_len
+            };
             let from_inst_index = prog_point_to_inst(from);
             let to_inst_index = prog_point_to_inst(to);
-            let from_offset = inst_offsets[from_inst_index];
-            let to_offset = if to_inst_index == inst_offsets.len() {
-                func_body_len
-            } else {
-                inst_offsets[to_inst_index]
-            };
+            let from_offset = inst_to_offset(from_inst_index);
+            let to_offset = inst_to_offset(to_inst_index);
 
             // Empty ranges or unavailable offsets can happen
             // due to cold blocks and branch removal (see above).
-            if from_offset == NO_INST_OFFSET
-                || to_offset == NO_INST_OFFSET
-                || from_offset == to_offset
-            {
+            if from_offset == to_offset {
                 continue;
             }
 
