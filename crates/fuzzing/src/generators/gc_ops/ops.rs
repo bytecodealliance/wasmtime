@@ -218,19 +218,6 @@ impl GcOps {
         module.finish()
     }
 
-    /// Computes the abstract stack depth after executing all operations
-    pub fn abstract_stack_depth(&self, index: usize) -> usize {
-        debug_assert!(index <= self.ops.len());
-        let mut stack: usize = 0;
-        for op in self.ops.iter().take(index) {
-            let pop = op.operands_len();
-            let push = op.results_len();
-            stack = stack.saturating_sub(pop);
-            stack += push;
-        }
-        stack
-    }
-
     /// Fixes this test case such that it becomes valid.
     ///
     /// This is necessary because a random mutation (e.g. removing an op in the
@@ -283,7 +270,7 @@ impl GcOps {
             let mut operand_types = Vec::new();
             op.operand_types(&mut operand_types);
             for ty in operand_types {
-                StackType::fixup_stack_type(ty, &mut stack, &mut new_ops, num_types);
+                StackType::fixup(ty, &mut stack, &mut new_ops, num_types);
             }
 
             // Finally, emit the op itself (updates stack abstractly)
@@ -336,10 +323,6 @@ macro_rules! define_gc_ops {
                 match self { $( Self::$op(..) => stringify!($op), )* }
             }
 
-            pub(crate) fn operands_len(&self) -> usize {
-                match self { $( Self::$op(..) => $params, )* }
-            }
-
             #[allow(unreachable_patterns, reason = "macro-generated code")]
             pub(crate) fn operand_types(&self, out: &mut Vec<StackType>) {
                 match self {
@@ -357,10 +340,6 @@ macro_rules! define_gc_ops {
                         }
                     ),*
                 }
-            }
-
-            pub(crate) fn results_len(&self) -> usize {
-                match self { $( Self::$op(..) => $results, )* }
             }
 
             #[allow(unreachable_patterns, reason = "macro-generated code")]
@@ -407,32 +386,24 @@ macro_rules! define_gc_ops {
                 }
             }
 
-            // TODO: This is stack-depth-biased generation. It needs to be updated.
+            /// Generate an arbitrary op without stack-depth awareness.
+            /// The fixup pass will make the sequence valid.
             pub(crate) fn generate(
                 ctx: &mut mutatis::Context,
                 ops: &GcOps,
-                stack: usize,
-            ) -> mutatis::Result<(GcOp, usize)> {
+            ) -> mutatis::Result<GcOp> {
                 let mut valid_choices: Vec<
-                    fn(&mut Context, &GcOpsLimits, usize) -> mutatis::Result<(GcOp, usize)>
+                    fn(&mut Context, &GcOpsLimits) -> mutatis::Result<GcOp>
                 > = vec![];
 
                 $(
-                    #[allow(unused_comparisons, reason = "macro-generated code")]
-                    if stack >= $params $($(
-                        && {
-                            let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
-                            (limit_fn)(&ops.limits) > 0
-                        }
-                    )*)? {
-                        valid_choices.push($op);
-                    }
+                    valid_choices.push($op);
                 )*
 
                 let f = *ctx.rng()
                     .choose(&valid_choices)
                     .expect("should always have a valid op choice");
-                (f)(ctx, &ops.limits, stack)
+                (f)(ctx, &ops.limits)
             }
         }
 
@@ -441,20 +412,20 @@ macro_rules! define_gc_ops {
             fn $op(
                 _ctx: &mut mutatis::Context,
                 _limits: &GcOpsLimits,
-                stack: usize,
-            ) -> mutatis::Result<(GcOp, usize)> {
-                #[allow(unused_comparisons, reason = "macro-generated code")]
-                { debug_assert!(stack >= $params); }
-
+            ) -> mutatis::Result<GcOp> {
                 let op = GcOp::$op(
                     $($({
                         let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
                         let limit = (limit_fn)(_limits);
-                        debug_assert!(limit > 0);
-                        m::range(0..=limit - 1).generate(_ctx)?
+                        // Generate a value even if limit is 0; fixup will handle it
+                        if limit > 0 {
+                            m::range(0..=limit - 1).generate(_ctx)?
+                        } else {
+                            0
+                        }
                     }),*)?
                 );
-                Ok((op, stack - $params + $results))
+                Ok(op)
             }
         )*
     };
@@ -482,17 +453,18 @@ define_gc_ops! {
     LocalSet(local_index: |ops| ops.num_params => u32)
         : (Some(StackType::ExternRef), 1) => (None, 0),
 
-    // Handled specially in result_types()
     StructNew(type_index: |ops| ops.max_types => u32)
-        : (None, 0) => (Some(StackType::Anything), 1),
+    : (None, 0) => (None, 0),
+
     TakeStructCall(type_index: |ops| ops.max_types => u32)
         : (Some(StackType::Struct(None)), 1) => (None, 0),
-    // Handled specially in operand_types()
-    // StackType::Anythng is just a placeholder
-    TakeTypedStructCall(type_index: |ops| ops.max_types => u32)
-        : (Some(StackType::Anything), 1) => (None, 0),
 
-    Drop : (Some(StackType::Anything), 1) => (None, 0),
+    TakeTypedStructCall(type_index: |ops| ops.max_types => u32)
+        : (None, 0) => (None, 0),
+
+    Drop : (Some(StackType::Any), 1) => (None, 0),
+
+
 
     Null : (None, 0) => (Some(StackType::ExternRef), 1),
 }

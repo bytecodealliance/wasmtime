@@ -93,8 +93,9 @@ impl Types {
 /// This is used to track the requirements for the operands of an operation.
 #[derive(Copy, Clone, Debug)]
 pub enum StackType {
-    /// Any value is used for reauested operand not a type left on stack (only for Drop and specially handled ops)
-    Anything,
+    /// Any value is used for reauested operand not a
+    ///type left on stack (only for Drop and specially handled ops)
+    Any,
     /// `externref`
     ExternRef,
     /// None = any non-null `(ref $*)`; Some(t) = exact `(ref $t)`
@@ -103,22 +104,14 @@ pub enum StackType {
 
 impl StackType {
     /// Fixes the stack type to match the given requirement.
-    pub fn fixup_stack_type(
-        req: StackType,
-        stack: &mut Vec<StackType>,
-        out: &mut Vec<GcOp>,
-        num_types: u32,
-    ) {
+    pub fn fixup(req: StackType, stack: &mut Vec<StackType>, out: &mut Vec<GcOp>, num_types: u32) {
         let mut result_types = Vec::new();
         match req {
-            Self::Anything => {
-                // Anything can accept any type - just pop if available
-                // If stack is empty, synthesize null (anyref compatible)
-                if stack.pop().is_none() {
-                    // Create a null externref
+            Self::Any => {
+                if stack.is_empty() {
                     Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
-                    stack.pop(); // consume just-synthesized externref
                 }
+                stack.pop(); // always consume exactly one value
             }
             Self::ExternRef => match stack.last() {
                 Some(Self::ExternRef) => {
@@ -159,7 +152,7 @@ impl StackType {
         result_types: &mut Vec<Self>,
     ) {
         out.push(op);
-
+        result_types.clear();
         op.result_types(result_types);
         for ty in result_types {
             let clamped_ty = match ty {

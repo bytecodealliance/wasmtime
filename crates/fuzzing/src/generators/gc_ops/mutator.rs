@@ -12,8 +12,7 @@ impl Mutate<GcOps> for GcOpsMutator {
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
-                    let stack = ops.abstract_stack_depth(idx);
-                    let (op, _new_stack_size) = GcOp::generate(ctx, &ops, stack)?;
+                    let op = GcOp::generate(ctx, &ops)?;
                     ops.ops.insert(idx, op);
                 }
                 Ok(())
