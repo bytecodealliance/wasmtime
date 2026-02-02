@@ -645,7 +645,6 @@ impl RunCommand {
         }
 
         func.call_async(&mut *store, &params, results).await?;
-        func.post_return_async(&mut *store).await?;
         Ok(())
     }
 

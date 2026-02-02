@@ -310,17 +310,7 @@ impl WastContext {
                         None => func.call(&mut *store, &values, &mut results),
                     };
                     Ok(match result {
-                        Ok(()) => {
-                            let result = match &replace.rt {
-                                Some(rt) => rt.block_on(func.post_return_async(&mut *store)),
-                                None => func.post_return(&mut *store),
-                            };
-
-                            match result {
-                                Ok(()) => Outcome::Ok(Results::Component(results)),
-                                Err(e) => Outcome::Trap(e),
-                            }
-                        }
+                        Ok(()) => Outcome::Ok(Results::Component(results)),
                         Err(e) => Outcome::Trap(e),
                     })
                 }

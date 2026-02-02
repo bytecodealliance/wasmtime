@@ -136,13 +136,9 @@ fn simple_type_assertions() -> Result<()> {
 
     let roundtrip = |store: &mut Store<()>, f: FutureReader<u32>| -> Result<()> {
         let (f,) = f_t_t.call(&mut *store, (f,))?;
-        f_t_t.post_return(&mut *store)?;
         let (f,) = f_t_a.call(&mut *store, (f,))?;
-        f_t_a.post_return(&mut *store)?;
         let (f,) = f_a_a.call(&mut *store, (f,))?;
-        f_a_a.post_return(&mut *store)?;
         let (mut f,) = f_a_t.call(&mut *store, (f,))?;
-        f_a_t.post_return(&mut *store)?;
         f.close(&mut *store);
         Ok(())
     };
@@ -151,23 +147,17 @@ fn simple_type_assertions() -> Result<()> {
     roundtrip(&mut store, f)?;
 
     let (f,) = mk_f_t.call(&mut store, ())?;
-    mk_f_t.post_return(&mut store)?;
     roundtrip(&mut store, f)?;
 
     let (f,) = mk_f_a.call(&mut store, ())?;
-    mk_f_a.post_return(&mut store)?;
     let f = f.try_into_future_reader::<u32>()?;
     roundtrip(&mut store, f)?;
 
     let roundtrip = |store: &mut Store<()>, s: StreamReader<u32>| -> Result<()> {
         let (s,) = s_t_t.call(&mut *store, (s,))?;
-        s_t_t.post_return(&mut *store)?;
         let (s,) = s_t_a.call(&mut *store, (s,))?;
-        s_t_a.post_return(&mut *store)?;
         let (s,) = s_a_a.call(&mut *store, (s,))?;
-        s_a_a.post_return(&mut *store)?;
         let (mut s,) = s_a_t.call(&mut *store, (s,))?;
-        s_a_t.post_return(&mut *store)?;
         s.close(&mut *store);
         Ok(())
     };
@@ -176,11 +166,9 @@ fn simple_type_assertions() -> Result<()> {
     roundtrip(&mut store, s)?;
 
     let (s,) = mk_s_t.call(&mut store, ())?;
-    mk_s_t.post_return(&mut store)?;
     roundtrip(&mut store, s)?;
 
     let (s,) = mk_s_a.call(&mut store, ())?;
-    mk_s_a.post_return(&mut store)?;
     let s = s.try_into_stream_reader::<u32>()?;
     roundtrip(&mut store, s)?;
 

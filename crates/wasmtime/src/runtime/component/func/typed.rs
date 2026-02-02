@@ -158,9 +158,11 @@ where
     ///
     /// Panics if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
-        self.call_impl(store, params)
+        let result = self.call_impl(store.as_context_mut(), params)?;
+        self.func.post_return_impl(store)?;
+        Ok(result)
     }
 
     /// Exactly like [`Self::call`], except for invoking WebAssembly
@@ -188,7 +190,7 @@ where
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), true, false, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
                     // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -326,7 +328,7 @@ where
             );
 
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
@@ -364,7 +366,6 @@ where
         self,
         store: StoreContextMut<'_, T>,
         host_future_present: bool,
-        call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -395,11 +396,8 @@ where
             self.func,
             param_count,
             host_future_present,
-            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
-                    lower(cx, ty, params_out)
-                })
+                func.with_lower_context(store, true, |cx, ty| lower(cx, ty, params_out))
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -581,18 +579,20 @@ where
         Return::linear_lift_from_memory(cx, ty, bytes)
     }
 
-    /// See [`Func::post_return`]
-    pub fn post_return(&self, store: impl AsContextMut) -> Result<()> {
-        self.func.post_return(store)
+    #[doc(hidden)]
+    #[deprecated(note = "no longer has any effect")]
+    pub fn post_return(&self, _store: impl AsContextMut) -> Result<()> {
+        Ok(())
     }
 
-    /// See [`Func::post_return_async`]
+    #[doc(hidden)]
+    #[deprecated(note = "no longer has any effect")]
     #[cfg(feature = "async")]
     pub async fn post_return_async<T: Send>(
         &self,
-        store: impl AsContextMut<Data = T>,
+        _store: impl AsContextMut<Data = T>,
     ) -> Result<()> {
-        self.func.post_return_async(store).await
+        Ok(())
     }
 }
 

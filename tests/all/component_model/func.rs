@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{REALLOC_AND_FREE, TypedFuncExt};
+use super::REALLOC_AND_FREE;
 use std::sync::Arc;
 use wasmtime::Result;
 use wasmtime::component::*;
@@ -33,7 +33,7 @@ fn thunks() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     instance
         .get_typed_func::<(), ()>(&mut store, "thunk")?
-        .call_and_post_return(&mut store, ())?;
+        .call(&mut store, ())?;
     let err = instance
         .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
         .call(&mut store, ())
@@ -188,28 +188,28 @@ fn integers() -> Result<()> {
     // Passing in 100 is valid for all primitives
     instance
         .get_typed_func::<(u8,), ()>(&mut store, "take-u8")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(i8,), ()>(&mut store, "take-s8")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(u16,), ()>(&mut store, "take-u16")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(i16,), ()>(&mut store, "take-s16")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(u32,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(i32,), ()>(&mut store, "take-s32")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(u64,), ()>(&mut store, "take-u64")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
     instance
         .get_typed_func::<(i64,), ()>(&mut store, "take-s64")?
-        .call_and_post_return(&mut store, (100,))?;
+        .call(&mut store, (100,))?;
 
     // This specific wasm instance traps if any value other than 100 is passed
     with_new_instance(&engine, &component, |store, instance| {
@@ -273,49 +273,49 @@ fn integers() -> Result<()> {
     assert_eq!(
         instance
             .get_typed_func::<(), (u8,)>(&mut store, "ret-u8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i8,)>(&mut store, "ret-s8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u16,)>(&mut store, "ret-u16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i16,)>(&mut store, "ret-s16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u32,)>(&mut store, "ret-u32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i32,)>(&mut store, "ret-s32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u64,)>(&mut store, "ret-u64")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i64,)>(&mut store, "ret-s64")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0,)
     );
 
@@ -323,49 +323,49 @@ fn integers() -> Result<()> {
     assert_eq!(
         instance
             .get_typed_func::<(), (u8,)>(&mut store, "retm1-u8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0xff,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i8,)>(&mut store, "retm1-s8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (-1,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u16,)>(&mut store, "retm1-u16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0xffff,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i16,)>(&mut store, "retm1-s16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (-1,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u32,)>(&mut store, "retm1-u32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0xffffffff,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i32,)>(&mut store, "retm1-s32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (-1,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u64,)>(&mut store, "retm1-u64")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (0xffffffff_ffffffff,)
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i64,)>(&mut store, "retm1-s64")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (-1,)
     );
 
@@ -374,37 +374,37 @@ fn integers() -> Result<()> {
     assert_eq!(
         instance
             .get_typed_func::<(), (u8,)>(&mut store, "retbig-u8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret as u8,),
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i8,)>(&mut store, "retbig-s8")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret as i8,),
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u16,)>(&mut store, "retbig-u16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret as u16,),
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i16,)>(&mut store, "retbig-s16")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret as i16,),
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (u32,)>(&mut store, "retbig-u32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret,),
     );
     assert_eq!(
         instance
             .get_typed_func::<(), (i32,)>(&mut store, "retbig-s32")?
-            .call_and_post_return(&mut store, ())?,
+            .call(&mut store, ())?,
         (ret as i32,),
     );
 
@@ -436,16 +436,16 @@ fn type_layers() -> Result<()> {
 
     instance
         .get_typed_func::<(Box<u32>,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (Box::new(2),))?;
+        .call(&mut store, (Box::new(2),))?;
     instance
         .get_typed_func::<(&u32,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (&2,))?;
+        .call(&mut store, (&2,))?;
     instance
         .get_typed_func::<(Arc<u32>,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (Arc::new(2),))?;
+        .call(&mut store, (Arc::new(2),))?;
     instance
         .get_typed_func::<(&Box<Arc<Box<u32>>>,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (&Box::new(Arc::new(Box::new(2))),))?;
+        .call(&mut store, (&Box::new(Arc::new(Box::new(2))),))?;
 
     Ok(())
 }
@@ -499,13 +499,9 @@ fn floats() -> Result<()> {
     let u64_to_f64 = instance.get_typed_func::<(u64,), (f64,)>(&mut store, "u64-to-f64")?;
 
     assert_eq!(f32_to_u32.call(&mut store, (1.0,))?, (1.0f32.to_bits(),));
-    f32_to_u32.post_return(&mut store)?;
     assert_eq!(f64_to_u64.call(&mut store, (2.0,))?, (2.0f64.to_bits(),));
-    f64_to_u64.post_return(&mut store)?;
     assert_eq!(u32_to_f32.call(&mut store, (3.0f32.to_bits(),))?, (3.0,));
-    u32_to_f32.post_return(&mut store)?;
     assert_eq!(u64_to_f64.call(&mut store, (4.0f64.to_bits(),))?, (4.0,));
-    u64_to_f64.post_return(&mut store)?;
 
     assert_eq!(
         u32_to_f32
@@ -514,7 +510,6 @@ fn floats() -> Result<()> {
             .to_bits(),
         CANON_32BIT_NAN | 1
     );
-    u32_to_f32.post_return(&mut store)?;
     assert_eq!(
         u64_to_f64
             .call(&mut store, (CANON_64BIT_NAN | 1,))?
@@ -522,18 +517,15 @@ fn floats() -> Result<()> {
             .to_bits(),
         CANON_64BIT_NAN | 1,
     );
-    u64_to_f64.post_return(&mut store)?;
 
     assert_eq!(
         f32_to_u32.call(&mut store, (f32::from_bits(CANON_32BIT_NAN | 1),))?,
         (CANON_32BIT_NAN | 1,)
     );
-    f32_to_u32.post_return(&mut store)?;
     assert_eq!(
         f64_to_u64.call(&mut store, (f64::from_bits(CANON_64BIT_NAN | 1),))?,
         (CANON_64BIT_NAN | 1,)
     );
-    f64_to_u64.post_return(&mut store)?;
 
     Ok(())
 }
@@ -564,15 +556,10 @@ fn bools() -> Result<()> {
     let bool_to_u32 = instance.get_typed_func::<(bool,), (u32,)>(&mut store, "bool-to-u32")?;
 
     assert_eq!(bool_to_u32.call(&mut store, (false,))?, (0,));
-    bool_to_u32.post_return(&mut store)?;
     assert_eq!(bool_to_u32.call(&mut store, (true,))?, (1,));
-    bool_to_u32.post_return(&mut store)?;
     assert_eq!(u32_to_bool.call(&mut store, (0,))?, (false,));
-    u32_to_bool.post_return(&mut store)?;
     assert_eq!(u32_to_bool.call(&mut store, (1,))?, (true,));
-    u32_to_bool.post_return(&mut store)?;
     assert_eq!(u32_to_bool.call(&mut store, (2,))?, (true,));
-    u32_to_bool.post_return(&mut store)?;
 
     Ok(())
 }
@@ -604,9 +591,7 @@ fn chars() -> Result<()> {
 
     let mut roundtrip = |x: char| -> Result<()> {
         assert_eq!(char_to_u32.call(&mut store, (x,))?, (x as u32,));
-        char_to_u32.post_return(&mut store)?;
         assert_eq!(u32_to_char.call(&mut store, (x as u32,))?, (x,));
-        u32_to_char.post_return(&mut store)?;
         Ok(())
     };
 
@@ -682,7 +667,7 @@ fn tuple_result() -> Result<()> {
     let input = (-1, 100, 3.0, 100.0);
     let output = instance
         .get_typed_func::<(i8, u16, f32, f64), ((i8, u16, f32, f64),)>(&mut store, "tuple")?
-        .call_and_post_return(&mut store, input)?;
+        .call(&mut store, input)?;
     assert_eq!((input,), output);
 
     let invalid_func =
@@ -773,23 +758,19 @@ fn strings() -> Result<()> {
     let mut roundtrip = |x: &str| -> Result<()> {
         let ret = list8_to_str.call(&mut store, (x.as_bytes(),))?.0;
         assert_eq!(ret.to_str(&store)?, x);
-        list8_to_str.post_return(&mut store)?;
 
         let utf16 = x.encode_utf16().collect::<Vec<_>>();
         let ret = list16_to_str.call(&mut store, (&utf16[..],))?.0;
         assert_eq!(ret.to_str(&store)?, x);
-        list16_to_str.post_return(&mut store)?;
 
         let ret = str_to_list8.call(&mut store, (x,))?.0;
         assert_eq!(
             ret.iter(&mut store).collect::<Result<Vec<_>>>()?,
             x.as_bytes()
         );
-        str_to_list8.post_return(&mut store)?;
 
         let ret = str_to_list16.call(&mut store, (x,))?.0;
         assert_eq!(ret.iter(&mut store).collect::<Result<Vec<_>>>()?, utf16,);
-        str_to_list16.post_return(&mut store)?;
 
         Ok(())
     };
@@ -803,29 +784,24 @@ fn strings() -> Result<()> {
     let ret = list8_to_str.call(&mut store, (b"\xff",))?.0;
     let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("invalid utf-8"), "{}", err);
-    list8_to_str.post_return(&mut store)?;
 
     let ret = list8_to_str
         .call(&mut store, (b"hello there \xff invalid",))?
         .0;
     let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("invalid utf-8"), "{}", err);
-    list8_to_str.post_return(&mut store)?;
 
     let ret = list16_to_str.call(&mut store, (&[0xd800],))?.0;
     let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
-    list16_to_str.post_return(&mut store)?;
 
     let ret = list16_to_str.call(&mut store, (&[0xdfff],))?.0;
     let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
-    list16_to_str.post_return(&mut store)?;
 
     let ret = list16_to_str.call(&mut store, (&[0xd800, 0xff00],))?.0;
     let err = ret.to_str(&store).unwrap_err();
     assert!(err.to_string().contains("unpaired surrogate"), "{}", err);
-    list16_to_str.post_return(&mut store)?;
 
     Ok(())
 }
@@ -2096,12 +2072,12 @@ fn some_traps() -> Result<()> {
     with_new_instance(&engine, &component, |store, instance| {
         instance
             .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-end-oob")?
-            .call_and_post_return(store, (&[],))
+            .call(store, (&[],))
     })?;
     with_new_instance(&engine, &component, |store, instance| {
         instance
             .get_typed_func::<(&[u8],), ()>(&mut *store, "take-list-end-oob")?
-            .call_and_post_return(store, (&[1, 2, 3, 4],))
+            .call(store, (&[1, 2, 3, 4],))
     })?;
     let err = with_new_instance(&engine, &component, |store, instance| {
         instance
@@ -2113,12 +2089,12 @@ fn some_traps() -> Result<()> {
     with_new_instance(&engine, &component, |store, instance| {
         instance
             .get_typed_func::<(&str,), ()>(&mut *store, "take-string-end-oob")?
-            .call_and_post_return(store, ("",))
+            .call(store, ("",))
     })?;
     with_new_instance(&engine, &component, |store, instance| {
         instance
             .get_typed_func::<(&str,), ()>(&mut *store, "take-string-end-oob")?
-            .call_and_post_return(store, ("abcd",))
+            .call(store, ("abcd",))
     })?;
     let err = with_new_instance(&engine, &component, |store, instance| {
         instance
@@ -2214,15 +2190,12 @@ fn char_bool_memory() -> Result<()> {
 
     let (ret,) = func.call(&mut store, (0, 'a' as u32))?;
     assert_eq!(ret, (false, 'a'));
-    func.post_return(&mut store)?;
 
     let (ret,) = func.call(&mut store, (1, '🍰' as u32))?;
     assert_eq!(ret, (true, '🍰'));
-    func.post_return(&mut store)?;
 
     let (ret,) = func.call(&mut store, (2, 'a' as u32))?;
     assert_eq!(ret, (true, 'a'));
-    func.post_return(&mut store)?;
 
     assert!(func.call(&mut store, (0, 0xd800)).is_err());
 
@@ -2434,26 +2407,20 @@ fn option() -> Result<()> {
     let option_u8_to_tuple = instance
         .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
     assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    option_u8_to_tuple.post_return(&mut store)?;
     assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    option_u8_to_tuple.post_return(&mut store)?;
     assert_eq!(
         option_u8_to_tuple.call(&mut store, (Some(100),))?,
         ((1, 100),)
     );
-    option_u8_to_tuple.post_return(&mut store)?;
 
     let option_u32_to_tuple = instance
         .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
     assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    option_u32_to_tuple.post_return(&mut store)?;
     assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    option_u32_to_tuple.post_return(&mut store)?;
     assert_eq!(
         option_u32_to_tuple.call(&mut store, (Some(100),))?,
         ((1, 100),)
     );
-    option_u32_to_tuple.post_return(&mut store)?;
 
     let option_string_to_tuple = instance.get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
         &mut store,
@@ -2462,39 +2429,30 @@ fn option() -> Result<()> {
     let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
     assert_eq!(a, 0);
     assert_eq!(b.to_str(&store)?, "");
-    option_string_to_tuple.post_return(&mut store)?;
     let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "");
-    option_string_to_tuple.post_return(&mut store)?;
     let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "hello");
-    option_string_to_tuple.post_return(&mut store)?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let to_option_u8 =
         instance.get_typed_func::<(u32, u32), (Option<u8>,)>(&mut store, "to-option-u8")?;
     assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, (None,));
-    to_option_u8.post_return(&mut store)?;
     assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, (Some(0),));
-    to_option_u8.post_return(&mut store)?;
     assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, (Some(0xfd),));
-    to_option_u8.post_return(&mut store)?;
     assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
 
     let instance = linker.instantiate(&mut store, &component)?;
     let to_option_u32 =
         instance.get_typed_func::<(u32, u32), (Option<u32>,)>(&mut store, "to-option-u32")?;
     assert_eq!(to_option_u32.call(&mut store, (0, 0))?, (None,));
-    to_option_u32.post_return(&mut store)?;
     assert_eq!(to_option_u32.call(&mut store, (1, 0))?, (Some(0),));
-    to_option_u32.post_return(&mut store)?;
     assert_eq!(
         to_option_u32.call(&mut store, (1, 0x1234fead))?,
         (Some(0x1234fead),)
     );
-    to_option_u32.post_return(&mut store)?;
     assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
 
     let instance = linker.instantiate(&mut store, &component)?;
@@ -2502,13 +2460,10 @@ fn option() -> Result<()> {
         .get_typed_func::<(u32, &str), (Option<WasmStr>,)>(&mut store, "to-option-string")?;
     let ret = to_option_string.call(&mut store, (0, ""))?.0;
     assert!(ret.is_none());
-    to_option_string.post_return(&mut store)?;
     let ret = to_option_string.call(&mut store, (1, ""))?.0;
     assert_eq!(ret.unwrap().to_str(&store)?, "");
-    to_option_string.post_return(&mut store)?;
     let ret = to_option_string.call(&mut store, (1, "cheesecake"))?.0;
     assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
-    to_option_string.post_return(&mut store)?;
     assert!(to_option_string.call(&mut store, (2, "")).is_err());
 
     Ok(())
@@ -2602,19 +2557,15 @@ fn expected() -> Result<()> {
     let take_expected_unit =
         instance.get_typed_func::<(Result<(), ()>,), (u32,)>(&mut store, "take-expected-unit")?;
     assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, (0,));
-    take_expected_unit.post_return(&mut store)?;
     assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, (1,));
-    take_expected_unit.post_return(&mut store)?;
 
     let take_expected_u8_f32 = instance
         .get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(&mut store, "take-expected-u8-f32")?;
     assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
-    take_expected_u8_f32.post_return(&mut store)?;
     assert_eq!(
         take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
         ((1, 2.0f32.to_bits()),)
     );
-    take_expected_u8_f32.post_return(&mut store)?;
 
     let take_expected_string = instance
         .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
@@ -2624,19 +2575,15 @@ fn expected() -> Result<()> {
     let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
     assert_eq!(a, 0);
     assert_eq!(b.to_str(&store)?, "hello");
-    take_expected_string.post_return(&mut store)?;
     let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
     assert_eq!(a, 1);
     assert_eq!(b.to_str(&store)?, "goodbye");
-    take_expected_string.post_return(&mut store)?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let to_expected_unit =
         instance.get_typed_func::<(u32,), (Result<(), ()>,)>(&mut store, "to-expected-unit")?;
     assert_eq!(to_expected_unit.call(&mut store, (0,))?, (Ok(()),));
-    to_expected_unit.post_return(&mut store)?;
     assert_eq!(to_expected_unit.call(&mut store, (1,))?, (Err(()),));
-    to_expected_unit.post_return(&mut store)?;
     let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
     assert!(err.to_string().contains("invalid expected"), "{}", err);
 
@@ -2644,19 +2591,15 @@ fn expected() -> Result<()> {
     let to_expected_s16_f32 = instance
         .get_typed_func::<(u32, u32), (Result<i16, f32>,)>(&mut store, "to-expected-s16-f32")?;
     assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, (Ok(0),));
-    to_expected_s16_f32.post_return(&mut store)?;
     assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, (Ok(100),));
-    to_expected_s16_f32.post_return(&mut store)?;
     assert_eq!(
         to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
         (Err(1.0),)
     );
-    to_expected_s16_f32.post_return(&mut store)?;
     let ret = to_expected_s16_f32
         .call(&mut store, (1, CANON_32BIT_NAN | 1))?
         .0;
     assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN | 1);
-    to_expected_s16_f32.post_return(&mut store)?;
     assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
 
     Ok(())
@@ -3008,7 +2951,7 @@ fn raw_slice_of_various_types() -> Result<()> {
 
     let list = instance
         .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "list-u8")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3019,7 +2962,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<i8>,)>(&mut store, "list-i8")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3031,7 +2974,7 @@ fn raw_slice_of_various_types() -> Result<()> {
 
     let list = instance
         .get_typed_func::<(), (WasmList<u16>,)>(&mut store, "list-u16")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3048,7 +2991,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<i16>,)>(&mut store, "list-i16")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3065,7 +3008,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3078,7 +3021,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<i32>,)>(&mut store, "list-i32")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3091,7 +3034,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<u64>,)>(&mut store, "list-u64")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3102,7 +3045,7 @@ fn raw_slice_of_various_types() -> Result<()> {
     );
     let list = instance
         .get_typed_func::<(), (WasmList<i64>,)>(&mut store, "list-i64")?
-        .call_and_post_return(&mut store, ())?
+        .call(&mut store, ())?
         .0;
     assert_eq!(
         list.as_le_slice(&store),
@@ -3460,8 +3403,73 @@ fn test_recurse(kind: RecurseKind) -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn thread_index_during_init() -> Result<()> {
+#[derive(Copy, Clone)]
+enum ApiStyle {
+    Sync,
+    Async,
+    Concurrent,
+}
+
+fn thread_config() -> Config {
+    let mut config = super::config();
+    config.wasm_component_model_threading(true);
+    config
+}
+
+async fn instantiate<T: Send>(
+    store: &mut Store<T>,
+    linker: &Linker<T>,
+    component: &Component,
+    style: ApiStyle,
+) -> Result<Instance> {
+    match style {
+        ApiStyle::Sync => linker.instantiate(store, &component),
+        ApiStyle::Async | ApiStyle::Concurrent => linker.instantiate_async(store, &component).await,
+    }
+}
+
+async fn call<
+    P: ComponentNamedList + Lower + 'static,
+    R: ComponentNamedList + Lift + 'static,
+    T: Send,
+>(
+    store: &mut Store<T>,
+    func: TypedFunc<P, R>,
+    params: P,
+    style: ApiStyle,
+) -> Result<R> {
+    match style {
+        ApiStyle::Sync => func.call(&mut *store, params),
+        ApiStyle::Async => func.call_async(&mut *store, params).await,
+        ApiStyle::Concurrent => Ok(store
+            .run_concurrent(async |access| func.call_concurrent(access, params).await)
+            .await??
+            .0),
+    }
+}
+
+async fn resource_drop<T: Send>(
+    store: &mut Store<T>,
+    resource: ResourceAny,
+    style: ApiStyle,
+) -> Result<()> {
+    match style {
+        ApiStyle::Sync => resource.resource_drop(store),
+        ApiStyle::Async | ApiStyle::Concurrent => resource.resource_drop_async(store).await,
+    }
+}
+
+#[tokio::test]
+async fn thread_index_via_instantiation_sync() -> Result<()> {
+    thread_index_via_instantiation(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_instantiation_async() -> Result<()> {
+    thread_index_via_instantiation(ApiStyle::Async).await
+}
+
+async fn thread_index_via_instantiation(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (core module $m
@@ -3477,18 +3485,30 @@ fn thread_index_during_init() -> Result<()> {
   ))))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    linker.instantiate(&mut store, &component)?;
+    instantiate(&mut store, &linker, &component, style).await?;
     Ok(())
 }
 
-#[test]
-fn thread_index_via_sync_host_call() -> Result<()> {
+#[tokio::test]
+async fn thread_index_via_call_sync() -> Result<()> {
+    thread_index_via_call(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_call_async() -> Result<()> {
+    thread_index_via_call(ApiStyle::Async).await
+}
+
+#[tokio::test]
+async fn thread_index_via_call_concurrent() -> Result<()> {
+    thread_index_via_call(ApiStyle::Concurrent).await
+}
+
+async fn thread_index_via_call(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (core module $m
@@ -3504,20 +3524,32 @@ fn thread_index_via_sync_host_call() -> Result<()> {
   (func (export "run") (canon lift (core func $m "run")))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
+    let instance = instantiate(&mut store, &linker, &component, style).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    run.call_and_post_return(&mut store, ())?;
+    call(&mut store, run, (), style).await?;
     Ok(())
 }
 
-#[test]
-fn thread_index_via_sync_host_call_post_return() -> Result<()> {
+#[tokio::test]
+async fn thread_index_via_post_return_sync() -> Result<()> {
+    thread_index_via_post_return(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_post_return_async() -> Result<()> {
+    thread_index_via_post_return(ApiStyle::Async).await
+}
+
+#[tokio::test]
+async fn thread_index_via_post_return_concurrent() -> Result<()> {
+    thread_index_via_post_return(ApiStyle::Concurrent).await
+}
+
+async fn thread_index_via_post_return(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (core module $m
@@ -3541,20 +3573,32 @@ fn thread_index_via_sync_host_call_post_return() -> Result<()> {
   (func (export "run") (canon lift (core func $m "run") (post-return (func $m "run-post-return"))))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
+    let instance = instantiate(&mut store, &linker, &component, style).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    run.call_and_post_return(&mut store, ())?;
+    call(&mut store, run, (), style).await?;
     Ok(())
 }
 
-#[test]
-fn thread_index_via_sync_host_call_cabi_realloc() -> Result<()> {
+#[tokio::test]
+async fn thread_index_via_cabi_realloc_sync() -> Result<()> {
+    thread_index_via_cabi_realloc(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_cabi_realloc_async() -> Result<()> {
+    thread_index_via_cabi_realloc(ApiStyle::Async).await
+}
+
+#[tokio::test]
+async fn thread_index_via_cabi_realloc_concurrent() -> Result<()> {
+    thread_index_via_cabi_realloc(ApiStyle::Concurrent).await
+}
+
+async fn thread_index_via_cabi_realloc(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (core module $m
@@ -3584,20 +3628,32 @@ fn thread_index_via_sync_host_call_cabi_realloc() -> Result<()> {
   ))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_typed_func::<(&str,), ()>(&mut store, "run")?;
-    run.call_and_post_return(&mut store, ("hola",))?;
+    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let run = instance.get_typed_func::<(String,), ()>(&mut store, "run")?;
+    call(&mut store, run, ("hola".to_string(),), style).await?;
     Ok(())
 }
 
-#[test]
-fn thread_index_via_resource_drop_from_host() -> Result<()> {
+#[tokio::test]
+async fn thread_index_via_resource_drop_sync() -> Result<()> {
+    thread_index_via_resource_drop(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_resource_drop_async() -> Result<()> {
+    thread_index_via_resource_drop(ApiStyle::Async).await
+}
+
+#[tokio::test]
+async fn thread_index_via_resource_drop_concurrent() -> Result<()> {
+    thread_index_via_resource_drop(ApiStyle::Concurrent).await
+}
+
+async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (core module $m
@@ -3635,25 +3691,37 @@ fn thread_index_via_resource_drop_from_host() -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
+    let instance = instantiate(&mut store, &linker, &component, style).await?;
     let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
     let func_index = instance
         .get_export_index(&mut store, Some(&instance_index), "new")
         .unwrap();
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
-    let (resource,) = run.call_and_post_return(&mut store, ())?;
-    resource.resource_drop(&mut store)?;
+    let (resource,) = call(&mut store, run, (), style).await?;
+    resource_drop(&mut store, resource, style).await?;
     Ok(())
 }
 
-#[test]
-fn thread_index_via_sync_host_call_and_sync_guest_call() -> Result<()> {
+#[tokio::test]
+async fn thread_index_via_guest_call_sync() -> Result<()> {
+    thread_index_via_guest_call(ApiStyle::Sync).await
+}
+
+#[tokio::test]
+async fn thread_index_via_guest_call_async() -> Result<()> {
+    thread_index_via_guest_call(ApiStyle::Async).await
+}
+
+#[tokio::test]
+async fn thread_index_via_guest_call_concurrent() -> Result<()> {
+    thread_index_via_guest_call(ApiStyle::Concurrent).await
+}
+
+async fn thread_index_via_guest_call(style: ApiStyle) -> Result<()> {
     let component = r#"
 (component
   (component $c
@@ -3699,15 +3767,13 @@ fn thread_index_via_sync_host_call_and_sync_guest_call() -> Result<()> {
   (func (export "run") (alias export $d "run"))
 )
 "#;
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&thread_config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
+    let instance = instantiate(&mut store, &linker, &component, style).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    run.call_and_post_return(&mut store, ())?;
+    call(&mut store, run, (), style).await?;
     Ok(())
 }
 

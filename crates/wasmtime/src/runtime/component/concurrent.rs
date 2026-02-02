@@ -50,7 +50,7 @@
 //! store.  This is equivalent to `StoreContextMut::spawn` but more convenient to use
 //! in host functions.
 
-use crate::component::func::{self, Func};
+use crate::component::func::{self, Func, call_post_return};
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
@@ -81,7 +81,6 @@ use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ops::DerefMut;
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
-use std::slice;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
@@ -1444,7 +1443,6 @@ impl StoreOpaque {
                     tx: None,
                     exit_tx: Arc::new(oneshot::channel().0),
                     host_future_present: false,
-                    call_post_return_automatically: false,
                     caller: state.guest_thread,
                 }
             },
@@ -2225,7 +2223,7 @@ impl Instance {
                 log::trace!(
                     "sync/async-stackful call: replaced {old_thread:?} with {guest_thread:?} as current thread",
                 );
-                let mut flags = self.id().get(store).instance_flags(callee_instance.index);
+                let flags = self.id().get(store).instance_flags(callee_instance.index);
 
                 store.maybe_push_call_context(guest_thread.task)?;
 
@@ -2244,12 +2242,9 @@ impl Instance {
                 // over must be valid.
                 let storage = call(store)?;
 
-                // This is a callback-less call, so the implicit thread has now completed
-                self.cleanup_thread(store, guest_thread, callee_instance.index)?;
-
                 if async_ {
                     let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
-                    if task.threads.is_empty() && !task.returned_or_cancelled() {
+                    if task.threads.len() == 1 && !task.returned_or_cancelled() {
                         bail!(Trap::NoAsyncResult);
                     }
                 } else {
@@ -2287,46 +2282,20 @@ impl Instance {
                         _ => unreachable!(),
                     };
 
-                    if store
-                        .concurrent_state_mut()
-                        .get_mut(guest_thread.task)?
-                        .call_post_return_automatically()
-                    {
-                        unsafe {
-                            flags.set_may_leave(false);
-                            flags.set_needs_post_return(false);
-                        }
-
-                        if let Some(func) = post_return {
-                            let mut store = token.as_context_mut(store);
-
-                            // SAFETY: `func` is a valid `*mut VMFuncRef` from
-                            // either `wasmtime-cranelift`-generated fused adapter
-                            // code or `component::Options`.  Per `wasmparser`
-                            // post-return signature validation, we know it takes a
-                            // single parameter.
-                            unsafe {
-                                crate::Func::call_unchecked_raw(
-                                    &mut store,
-                                    func.as_non_null(),
-                                    slice::from_ref(&post_return_arg).into(),
-                                )?;
-                            }
-                        }
-
-                        unsafe {
-                            flags.set_may_leave(true);
-                        }
+                    unsafe {
+                        call_post_return(
+                            token.as_context_mut(store),
+                            post_return.map(|v| v.as_non_null()),
+                            post_return_arg,
+                            flags,
+                        )?;
                     }
 
-                    self.task_complete(
-                        store,
-                        guest_thread.task,
-                        result,
-                        Status::Returned,
-                        post_return_arg,
-                    )?;
+                    self.task_complete(store, guest_thread.task, result, Status::Returned)?;
                 }
+
+                // This is a callback-less call, so the implicit thread has now completed
+                self.cleanup_thread(store, guest_thread, callee_instance.index)?;
 
                 store.set_thread(old_thread);
 
@@ -2975,13 +2944,7 @@ impl Instance {
         log::trace!("task.return for {guest_thread:?}");
 
         let result = (lift.lift)(store, storage)?;
-        self.task_complete(
-            store,
-            guest_thread.task,
-            result,
-            Status::Returned,
-            ValRaw::i32(0),
-        )
+        self.task_complete(store, guest_thread.task, result, Status::Returned)
     }
 
     /// Implements the `task.cancel` intrinsic.
@@ -3011,7 +2974,6 @@ impl Instance {
             guest_thread.task,
             Box::new(DummyResult),
             Status::ReturnCancelled,
-            ValRaw::i32(0),
         )
     }
 
@@ -3026,35 +2988,14 @@ impl Instance {
         guest_task: TableId<GuestTask>,
         result: Box<dyn Any + Send + Sync>,
         status: Status,
-        post_return_arg: ValRaw,
     ) -> Result<()> {
-        if store
-            .concurrent_state_mut()
-            .get_mut(guest_task)?
-            .call_post_return_automatically()
-        {
-            let (calls, host_table, _, instance) =
-                store.component_resource_state_with_instance(self);
-            ResourceTables {
-                calls,
-                host_table: Some(host_table),
-                guest: Some(instance.instance_states()),
-            }
-            .exit_call()?;
-        } else {
-            // As of this writing, the only scenario where `call_post_return_automatically`
-            // would be false for a `GuestTask` is for host-to-guest calls using
-            // `[Typed]Func::call_async`, in which case the `function_index`
-            // should be a non-`None` value.
-            let function_index = store
-                .concurrent_state_mut()
-                .get_mut(guest_task)?
-                .function_index
-                .unwrap();
-            self.id()
-                .get_mut(store)
-                .post_return_arg_set(function_index, post_return_arg);
+        let (calls, host_table, _, instance) = store.component_resource_state_with_instance(self);
+        ResourceTables {
+            calls,
+            host_table: Some(host_table),
+            guest: Some(instance.instance_states()),
         }
+        .exit_call()?;
 
         let state = store.concurrent_state_mut();
         let task = state.get_mut(guest_task)?;
@@ -4321,8 +4262,6 @@ enum Caller {
         /// If true, there's a host future that must be dropped before the task
         /// can be deleted.
         host_future_present: bool,
-        /// If true, call `post-return` function (if any) automatically.
-        call_post_return_automatically: bool,
         /// If `Some`, represents the `QualifiedThreadId` caller of the host
         /// function which called back into a guest.  Note that this thread
         /// could belong to an entirely unrelated top-level component instance
@@ -4656,7 +4595,6 @@ impl GuestTask {
                         // exited:
                         exit_tx: exit_tx.clone(),
                         host_future_present: false,
-                        call_post_return_automatically: true,
                         caller: *caller,
                     };
                 }
@@ -4671,17 +4609,6 @@ impl GuestTask {
         }
 
         Ok(())
-    }
-
-    fn call_post_return_automatically(&self) -> bool {
-        matches!(
-            self.caller,
-            Caller::Guest { .. }
-                | Caller::Host {
-                    call_post_return_automatically: true,
-                    ..
-                }
-        )
     }
 }
 
@@ -5300,7 +5227,6 @@ pub(crate) fn prepare_call<T, R>(
     handle: Func,
     param_count: usize,
     host_future_present: bool,
-    call_post_return_automatically: bool,
     lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
     + Sync
@@ -5348,7 +5274,6 @@ pub(crate) fn prepare_call<T, R>(
             tx: Some(tx),
             exit_tx: Arc::new(exit_tx),
             host_future_present,
-            call_post_return_automatically,
             caller,
         },
         callback.map(|callback| {
