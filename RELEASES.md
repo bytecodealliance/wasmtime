@@ -1,14 +1,3 @@
-## 41.0.2
-
-Released 2026-02-02.
-
-### Fixed
-
-* Reduce the dependencies of the `wasmtime-internal-jit-icache-coherence` crate.
-  [#12446](https://github.com/bytecodealliance/wasmtime/pull/12446)
-
---------------------------------------------------------------------------------
-
 ## 41.0.1
 
 Released 2026-01-26.
