@@ -31,6 +31,8 @@ pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
+pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: usize = 20;
+
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
 #[non_exhaustive]
@@ -144,8 +146,8 @@ pub struct Config {
     pub(crate) enabled_features: WasmFeatures,
     /// Same as `enabled_features`, but for those that are explicitly disabled.
     pub(crate) disabled_features: WasmFeatures,
-    pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
+    pub(crate) wasm_backtrace_max_frames: usize,
     pub(crate) native_unwind_info: Option<bool>,
     #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub(crate) async_stack_size: usize,
@@ -248,8 +250,8 @@ impl Config {
             // 1` forces this), or at least it passed when this change was
             // committed.
             max_wasm_stack: 512 * 1024,
-            wasm_backtrace: true,
             wasm_backtrace_details_env_used: false,
+            wasm_backtrace_max_frames: DEFAULT_WASM_BACKTRACE_MAX_FRAMES,
             native_unwind_info: None,
             enabled_features: WasmFeatures::empty(),
             disabled_features: WasmFeatures::empty(),
@@ -439,30 +441,23 @@ impl Config {
     /// Configures whether [`WasmBacktrace`] will be present in the context of
     /// errors returned from Wasmtime.
     ///
-    /// A backtrace may be collected whenever an error is returned from a host
-    /// function call through to WebAssembly or when WebAssembly itself hits a
-    /// trap condition, such as an out-of-bounds memory access. This flag
-    /// indicates, in these conditions, whether the backtrace is collected or
-    /// not.
-    ///
-    /// Currently wasm backtraces are implemented through frame pointer walking.
-    /// This means that collecting a backtrace is expected to be a fast and
-    /// relatively cheap operation. Additionally backtrace collection is
-    /// suitable in concurrent environments since one thread capturing a
-    /// backtrace won't block other threads.
-    ///
-    /// Collected backtraces are attached via
-    /// [`Error::context`](crate::Error::context) to errors returned from host
-    /// functions. The [`WasmBacktrace`] type can be acquired via
-    /// [`Error::downcast_ref`](crate::Error::downcast_ref) to inspect the
-    /// backtrace. When this option is disabled then this context is never
-    /// applied to errors coming out of wasm.
-    ///
-    /// This option is `true` by default.
+    /// This method is deprecated in favor of
+    /// [`Config::wasm_backtrace_max_frames`]. Calling `wasm_backtrace(false)`
+    /// is equivalent to `wasm_backtrace_max_frames(0)`, and
+    /// `wasm_backtrace(true)` will leave `wasm_backtrace_max_frames` unchanged
+    /// if the value is nonzero and will otherwise restore the default nonzero
+    /// value.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
+    #[deprecated = "use `wasm_backtrace_max_frames` instead"]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
-        self.wasm_backtrace = enable;
+        if enable {
+            if self.wasm_backtrace_max_frames == 0 {
+                self.wasm_backtrace_max_frames = DEFAULT_WASM_BACKTRACE_MAX_FRAMES;
+            }
+        } else {
+            self.wasm_backtrace_max_frames = 0;
+        }
         self
     }
 
@@ -501,6 +496,34 @@ impl Config {
         self
     }
 
+    /// Configures the maximum number of WebAssembly frames to collect in
+    /// backtraces.
+    ///
+    /// A backtrace may be collected whenever an error is returned from a host
+    /// function call through to WebAssembly or when WebAssembly itself hits a
+    /// trap condition, such as an out-of-bounds memory access. This flag
+    /// indicates, in these conditions, whether the backtrace is collected or
+    /// not and how many frames should be collected.
+    ///
+    /// Currently wasm backtraces are implemented through frame pointer walking.
+    /// This means that collecting a backtrace is expected to be a fast and
+    /// relatively cheap operation. Additionally backtrace collection is
+    /// suitable in concurrent environments since one thread capturing a
+    /// backtrace won't block other threads.
+    ///
+    /// Collected backtraces are attached via
+    /// [`Error::context`](crate::Error::context) to errors returned from host
+    /// functions. The [`WasmBacktrace`] type can be acquired via
+    /// [`Error::downcast_ref`](crate::Error::downcast_ref) to inspect the
+    /// backtrace. When this option is set to 0 then this context is never
+    /// applied to errors coming out of wasm.
+    ///
+    /// The default value is 20.
+    pub fn wasm_backtrace_max_frames(&mut self, limit: usize) -> &mut Self {
+        self.wasm_backtrace_max_frames = limit;
+        self
+    }
+
     /// Configures whether to generate native unwind information
     /// (e.g. `.eh_frame` on Linux).
     ///
@@ -508,8 +531,8 @@ impl Config {
     /// capturing mechanisms, such as the system's unwinder or the `backtrace`
     /// crate, determine how to unwind through Wasm frames. It does not affect
     /// whether Wasmtime can capture Wasm backtraces or not. The presence of
-    /// [`WasmBacktrace`] is controlled by the [`Config::wasm_backtrace`]
-    /// option.
+    /// [`WasmBacktrace`] is controlled by the
+    /// [`Config::wasm_backtrace_max_frames`] option.
     ///
     /// Native unwind information is included:
     /// - When targeting Windows, since the Windows ABI requires it.
