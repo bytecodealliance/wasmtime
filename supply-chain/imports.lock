@@ -778,8 +778,8 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.libm]]
-version = "0.2.15"
-when = "2025-05-06"
+version = "0.2.16"
+when = "2026-01-24"
 user-id = 55123
 user-login = "rust-lang-owner"
 
