@@ -1376,7 +1376,7 @@ pub(super) fn lower_future_to_index<U>(
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower future handles as `u32`s.
-unsafe impl<T: ComponentType> ComponentType for FutureReader<T> {
+unsafe impl<T: ComponentType + 'static> ComponentType for FutureReader<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
@@ -1391,17 +1391,19 @@ unsafe impl<T: ComponentType> ComponentType for FutureReader<T> {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
-        // FIXME PCH
-        //Val::FutureReader(FutureReaderAny(self.rep))
-        todo!(
-            "FIXME Val doesn't have a FutureReader variant, and FutureReaderAny needs to be created"
-        )
+    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+        Ok(Val::Future(FutureAny::try_from_future_reader(
+            store,
+            FutureReader {
+                id: self.id,
+                _phantom: PhantomData::<T>,
+            },
+        )?))
     }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lower for FutureReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
@@ -1426,7 +1428,7 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lift for FutureReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lift for FutureReader<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
@@ -1731,7 +1733,7 @@ pub(super) fn lower_stream_to_index<U>(
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower stream handles as `u32`s.
-unsafe impl<T: ComponentType> ComponentType for StreamReader<T> {
+unsafe impl<T: ComponentType + 'static> ComponentType for StreamReader<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
@@ -1746,17 +1748,19 @@ unsafe impl<T: ComponentType> ComponentType for StreamReader<T> {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
-        // FIXME PCH
-        //Val::StreamReader(StreamReaderAny(self.rep))
-        todo!(
-            "FIXME Val doesn't have a StreamReader variant, and StreamReaderAny needs to be created"
-        )
+    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+        Ok(Val::Stream(StreamAny::try_from_stream_reader(
+            store,
+            StreamReader {
+                id: self.id,
+                _phantom: PhantomData::<T>,
+            },
+        )?))
     }
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lower for StreamReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
@@ -1781,7 +1785,7 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lift for StreamReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lift for StreamReader<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
