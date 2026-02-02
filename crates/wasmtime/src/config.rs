@@ -99,6 +99,31 @@ impl core::hash::Hash for ModuleVersionStrategy {
     }
 }
 
+impl ModuleVersionStrategy {
+    /// Get the string-encoding version of the module.
+    pub fn as_str(&self) -> &str {
+        match &self {
+            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
+            Self::Custom(c) => c,
+            Self::None => "",
+        }
+    }
+}
+
+/// Configuration for record/replay
+#[derive(Clone)]
+#[non_exhaustive]
+pub enum RRConfig {
+    #[cfg(feature = "rr")]
+    /// Recording on store is enabled
+    Recording,
+    #[cfg(feature = "rr")]
+    /// Replaying on store is enabled
+    Replaying,
+    /// No record/replay is enabled
+    None,
+}
+
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
 ///
@@ -164,6 +189,7 @@ pub struct Config {
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
     pub(crate) x86_float_abi_ok: Option<bool>,
     pub(crate) shared_memory: bool,
+    pub(crate) rr_config: RRConfig,
 }
 
 /// User-provided configuration for the compiler.
@@ -273,6 +299,7 @@ impl Config {
             detect_host_feature: None,
             x86_float_abi_ok: None,
             shared_memory: false,
+            rr_config: RRConfig::None,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
@@ -2356,6 +2383,14 @@ impl Config {
             bail!("exceptions support requires garbage collection (GC) to be enabled in the build");
         }
 
+        match &self.rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Recording | RRConfig::Replaying => {
+                self.validate_rr_determinism_conflicts()?;
+            }
+            RRConfig::None => {}
+        };
+
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
         // By default this is enabled with the Cargo feature, and if the feature
@@ -2975,6 +3010,44 @@ impl Config {
     /// [`StreamReader`]: crate::component::StreamReader
     pub fn concurrency_support(&mut self, enable: bool) -> &mut Self {
         self.tunables.concurrency_support = Some(enable);
+        self
+    }
+
+    /// Validate if the current configuration has conflicting overrides that prevent
+    /// execution determinism. Returns an error if a conflict exists.
+    ///
+    /// Note: Keep this in sync with [`Config::enforce_determinism`].
+    #[inline]
+    #[cfg(feature = "rr")]
+    pub(crate) fn validate_rr_determinism_conflicts(&self) -> Result<()> {
+        if let Some(v) = self.tunables.relaxed_simd_deterministic {
+            if v == false {
+                bail!("Relaxed deterministic SIMD cannot be disabled when determinism is enforced");
+            }
+        }
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        if let Some(v) = self
+            .compiler_config
+            .as_ref()
+            .and_then(|c| c.settings.get("enable_nan_canonicalization"))
+        {
+            if v != "true" {
+                bail!("NaN canonicalization cannot be disabled when determinism is enforced");
+            }
+        }
+        Ok(())
+    }
+
+    /// Enable execution trace recording or replaying to the configuration.
+    ///
+    /// When either recording/replaying are enabled, validation fails if settings
+    /// that control determinism are not set appropriately. In particular, RR requires
+    /// doing the following:
+    /// * Enabling NaN canonicalization with [`Config::cranelift_nan_canonicalization`].
+    /// * Enabling deterministic relaxed SIMD with [`Config::relaxed_simd_deterministic`].
+    #[inline]
+    pub fn rr(&mut self, cfg: RRConfig) -> &mut Self {
+        self.rr_config = cfg;
         self
     }
 }

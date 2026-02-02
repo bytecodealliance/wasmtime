@@ -95,19 +95,13 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     };
 
     match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => {
-            let version = core::str::from_utf8(version)?;
-            if version != env!("CARGO_PKG_VERSION_MAJOR") {
-                bail!("Module was compiled with incompatible Wasmtime version '{version}'");
-            }
-        }
-        ModuleVersionStrategy::Custom(v) => {
+        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
+        _ => {
             let version = core::str::from_utf8(&version)?;
-            if version != v {
+            if version != engine.config().module_version.as_str() {
                 bail!("Module was compiled with incompatible version '{version}'");
             }
         }
-        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
     postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
 }
@@ -121,11 +115,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     let mut data = Vec::new();
     data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
+    let version = engine.config().module_version.as_str();
     // This precondition is checked in Config::module_version:
     assert!(
         version.len() < 256,
