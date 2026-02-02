@@ -116,13 +116,13 @@ fn main() {
 }
 
 pub fn bytes_to_f32_vec(data: Vec<u8>) -> Vec<f32> {
-    let chunks: Vec<&[u8]> = data.chunks(4).collect();
-    let v: Vec<f32> = chunks
-        .into_iter()
-        .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
-        .collect();
-
-    v.into_iter().collect()
+    assert_eq!(data.len() % 4, 0);
+    data.chunks(4)
+        .map(|c| {
+            let arr: [u8; 4] = c.try_into().unwrap();
+            f32::from_le_bytes(arr)
+        })
+        .collect()
 }
 
 // Take the image located at 'path', open it, resize it to height x width, and then converts
