@@ -5,7 +5,6 @@
 
 use crate::Engine;
 use crate::error::OutOfMemory;
-use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::GcRuntime;
@@ -27,7 +26,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{PrimaryMap, SecondaryMap, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -855,7 +854,7 @@ impl TypeRegistryInner {
         registry.insert_entry_trampolines(gc_runtime, &entry)?;
         registry.insert_entry_gc_layouts(gc_runtime, &entry)?;
 
-        let is_new_entry = registry.hash_consing_map.insert(entry.clone());
+        let is_new_entry = registry.hash_consing_map.insert(entry.clone())?;
         debug_assert!(is_new_entry);
 
         // We successfully registered the rec group! Commit our changes,
@@ -1226,10 +1225,8 @@ impl TypeRegistryInner {
 
         // This map contains rec groups, not types, so only reserve space for
         // one additional entry.
-        //
-        // TODO(#12069): handle OOM here.
         log::trace!("    hash_consing_map.reserve(1)");
-        hash_consing_map.reserve(1);
+        hash_consing_map.reserve(1)?;
 
         log::trace!("    types.reserve({num_types})");
         types.reserve(num_types)?;
