@@ -179,7 +179,7 @@ impl TargetIsa for X64Backend {
         self.x64_flags.has_sse41()
     }
 
-    fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
+    fn has_blendv_lowering(&self, ty: Type) -> bool {
         // The `blendvpd`, `blendvps`, and `pblendvb` instructions are all only
         // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
         // equivalent instruction which only looks at the top bit for a select

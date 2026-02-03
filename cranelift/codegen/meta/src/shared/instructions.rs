@@ -1667,7 +1667,7 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "x86_blendv",
+            "blendv",
             r#"
         A bitselect-lookalike instruction except with the semantics of
         `blendv`-related instructions on x86.
