@@ -1,6 +1,5 @@
 test compile
 set opt_level=speed_and_size
-set enable_verifier=1
 target aarch64
 
 function u0:1360(i8) -> i8 system_v {
