@@ -163,21 +163,11 @@ fn hash_set_reserve() -> Result<()> {
 fn hash_set_insert() -> Result<()> {
     OomTest::new().test(|| {
         let mut set = HashSet::<usize>::new();
-        set.insert(100)?;
-        Ok(())
-    })
-}
-
-#[test]
-fn hash_set_entry() -> Result<()> {
-    OomTest::new().test(|| {
-        let mut set = HashSet::<usize>::new();
-        for i in (0..10).filter(|x| *x % 2 == 0) {
+        for i in 0..1024 {
             set.insert(i)?;
         }
-        for i in 0..10 {
-            set.entry(i)?.or_insert();
-            assert!(set.contains(&i));
+        for i in 0..1024 {
+            set.insert(i)?;
         }
         Ok(())
     })

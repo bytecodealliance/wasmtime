@@ -1,9 +1,15 @@
 use crate::error::OutOfMemory;
 use core::{
+    borrow::Borrow,
     fmt,
     hash::{BuildHasher, Hash},
 };
-use hashbrown::{DefaultHashBuilder, Equivalent, hash_set as inner};
+
+#[cfg(feature = "std")]
+use std::{collections::hash_set as inner, hash::RandomState as DefaultHashBuilder};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{DefaultHashBuilder, hash_set as inner};
 
 /// A wrapper type around [`hashbrown::hash_set::HashSet`] that only exposes
 /// fallible allocation.
@@ -130,15 +136,20 @@ where
     /// Same as [`hashbrown::hash_set::HashSet::reserve`] but returns an error
     /// on allocation failure.
     pub fn reserve(&mut self, additional: usize) -> Result<(), OutOfMemory> {
-        self.inner
-            .try_reserve(additional)
-            .map_err(|_| OutOfMemory::new(self.len().saturating_add(additional)))
+        self.inner.try_reserve(additional).map_err(|_| {
+            OutOfMemory::new(
+                self.len()
+                    .saturating_add(additional)
+                    .saturating_mul(core::mem::size_of::<T>()),
+            )
+        })
     }
 
     /// Same as [`hashbrown::hash_set::HashSet::contains`].
     pub fn contains<Q>(&self, value: &Q) -> bool
     where
-        Q: Hash + Equivalent<T> + ?Sized,
+        Q: Hash + Eq + ?Sized,
+        T: Borrow<Q>,
     {
         self.inner.contains(value)
     }
@@ -146,19 +157,10 @@ where
     /// Same as [`hashbrown::hash_set::HashSet::get`].
     pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
-        Q: Hash + Equivalent<T> + ?Sized,
+        Q: Hash + Eq + ?Sized,
+        T: Borrow<Q>,
     {
         self.inner.get(value)
-    }
-
-    /// Same as [`hashbrown::hash_set::HashSet::entry`] but pre-reserves space
-    /// for the value if it is not contained and returns an error on allocation
-    /// failure.
-    pub fn entry(&mut self, value: T) -> Result<inner::Entry<'_, T, S>, OutOfMemory> {
-        if !self.contains(&value) {
-            self.reserve(1)?;
-        }
-        Ok(self.inner.entry(value))
     }
 
     /// Same as [`hashbrown::hash_set::HashSet::insert`] but returns an error on
@@ -171,7 +173,8 @@ where
     /// Same as [`hashbrown::hash_set::HashSet::remove`].
     pub fn remove<Q>(&mut self, value: &Q) -> bool
     where
-        Q: Hash + Equivalent<T> + ?Sized,
+        Q: Hash + Eq + ?Sized,
+        T: Borrow<Q>,
     {
         self.inner.remove(value)
     }
@@ -179,7 +182,8 @@ where
     /// Same as [`hashbrown::hash_set::HashSet::take`].
     pub fn take<Q>(&mut self, value: &Q) -> Option<T>
     where
-        Q: Hash + Equivalent<T> + ?Sized,
+        Q: Hash + Eq + ?Sized,
+        T: Borrow<Q>,
     {
         self.inner.take(value)
     }
