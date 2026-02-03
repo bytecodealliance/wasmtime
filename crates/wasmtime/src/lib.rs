@@ -409,12 +409,15 @@
 extern crate std;
 extern crate alloc;
 
-pub(crate) mod prelude {
-    pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
-    pub use wasmtime_environ::prelude::*;
-}
+// Internal `use` statement which isn't used in this module but enable
+// `use crate::prelude::*;` everywhere else within this crate, for example.
+use wasmtime_environ::prelude;
 
-pub(crate) use hashbrown::{hash_map, hash_set};
+// FIXME(#12069) should transition to OOM-handling versions of these collections
+// for all internal usage instead of using abort-on-OOM versions. Once that's
+// done this can be removed and the collections should be directly imported from
+// `wasmtime_environ::collections::*`.
+use wasmtime_environ::collections::oom_abort::{hash_map, hash_set};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
