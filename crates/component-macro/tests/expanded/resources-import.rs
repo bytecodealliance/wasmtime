@@ -360,7 +360,6 @@ const _: () = {
                 >::new_unchecked(self.some_world_func2)
             };
             let (ret0,) = callee.call(store.as_context_mut(), ())?;
-            callee.post_return(store.as_context_mut())?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -1208,7 +1207,6 @@ pub mod exports {
                             >::new_unchecked(self.handle)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }

@@ -687,7 +687,6 @@ pub mod exports {
                             >::new_unchecked(self.kebab_case)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_foo<S: wasmtime::AsContextMut>(
@@ -707,7 +706,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_function_with_dashes<S: wasmtime::AsContextMut>(
@@ -724,7 +722,6 @@ pub mod exports {
                             >::new_unchecked(self.function_with_dashes)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_function_with_no_weird_characters<
@@ -740,7 +737,6 @@ pub mod exports {
                             >::new_unchecked(self.function_with_no_weird_characters)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_apple<S: wasmtime::AsContextMut>(
@@ -757,7 +753,6 @@ pub mod exports {
                             >::new_unchecked(self.apple)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_apple_pear<S: wasmtime::AsContextMut>(
@@ -774,7 +769,6 @@ pub mod exports {
                             >::new_unchecked(self.apple_pear)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_apple_pear_grape<S: wasmtime::AsContextMut>(
@@ -791,7 +785,6 @@ pub mod exports {
                             >::new_unchecked(self.apple_pear_grape)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a0<S: wasmtime::AsContextMut>(
@@ -808,7 +801,6 @@ pub mod exports {
                             >::new_unchecked(self.a0)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     /// Comment out identifiers that collide when mapped to snake_case, for now; see
@@ -830,7 +822,6 @@ pub mod exports {
                             >::new_unchecked(self.is_xml)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_explicit<S: wasmtime::AsContextMut>(
@@ -847,7 +838,6 @@ pub mod exports {
                             >::new_unchecked(self.explicit)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_explicit_kebab<S: wasmtime::AsContextMut>(
@@ -864,7 +854,6 @@ pub mod exports {
                             >::new_unchecked(self.explicit_kebab)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     /// Identifiers with the same name as keywords are quoted.
@@ -882,7 +871,6 @@ pub mod exports {
                             >::new_unchecked(self.bool)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                 }

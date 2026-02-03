@@ -1685,7 +1685,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_e1_result<S: wasmtime::AsContextMut>(
@@ -1704,7 +1703,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_v1_arg<S: wasmtime::AsContextMut>(
@@ -1724,7 +1722,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_v1_result<S: wasmtime::AsContextMut>(
@@ -1743,7 +1740,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_bool_arg<S: wasmtime::AsContextMut>(
@@ -1763,7 +1759,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_bool_result<S: wasmtime::AsContextMut>(
@@ -1782,7 +1777,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_option_arg<S: wasmtime::AsContextMut>(
@@ -1817,7 +1811,6 @@ pub mod exports {
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_option_result<S: wasmtime::AsContextMut>(
@@ -1854,7 +1847,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_casts<S: wasmtime::AsContextMut>(
@@ -1884,7 +1876,6 @@ pub mod exports {
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_result_arg<S: wasmtime::AsContextMut>(
@@ -1919,7 +1910,6 @@ pub mod exports {
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_result_result<S: wasmtime::AsContextMut>(
@@ -1962,7 +1952,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar<S: wasmtime::AsContextMut>(
@@ -1981,7 +1970,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar2<S: wasmtime::AsContextMut>(
@@ -2000,7 +1988,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar3<S: wasmtime::AsContextMut>(
@@ -2019,7 +2006,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar4<S: wasmtime::AsContextMut>(
@@ -2038,7 +2024,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar<S: wasmtime::AsContextMut>(
@@ -2057,7 +2042,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar2<S: wasmtime::AsContextMut>(
@@ -2076,7 +2060,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_result_simple<S: wasmtime::AsContextMut>(
@@ -2095,7 +2078,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_is_clone_arg<S: wasmtime::AsContextMut>(
@@ -2115,7 +2097,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_is_clone_return<S: wasmtime::AsContextMut>(
@@ -2134,7 +2115,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                 }

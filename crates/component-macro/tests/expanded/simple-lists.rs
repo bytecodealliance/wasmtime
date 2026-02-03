@@ -444,7 +444,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list1)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_simple_list2<S: wasmtime::AsContextMut>(
@@ -458,7 +457,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_simple_list3<S: wasmtime::AsContextMut>(
@@ -484,7 +482,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list3)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_simple_list4<S: wasmtime::AsContextMut>(
@@ -507,7 +504,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

@@ -2161,10 +2161,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_u16_param<S: wasmtime::AsContextMut>(
@@ -2189,10 +2185,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -2219,10 +2211,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_u64_param<S: wasmtime::AsContextMut>(
@@ -2247,10 +2235,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -2277,10 +2261,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_s16_param<S: wasmtime::AsContextMut>(
@@ -2305,10 +2285,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -2335,10 +2311,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_s64_param<S: wasmtime::AsContextMut>(
@@ -2363,10 +2335,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -2393,10 +2361,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_f64_param<S: wasmtime::AsContextMut>(
@@ -2422,10 +2386,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_list_u8_ret<S: wasmtime::AsContextMut>(
@@ -2449,10 +2409,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2478,10 +2434,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_u32_ret<S: wasmtime::AsContextMut>(
@@ -2505,10 +2457,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2534,10 +2482,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s8_ret<S: wasmtime::AsContextMut>(
@@ -2561,10 +2505,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2590,10 +2530,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s32_ret<S: wasmtime::AsContextMut>(
@@ -2617,10 +2553,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2646,10 +2578,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_f32_ret<S: wasmtime::AsContextMut>(
@@ -2674,10 +2602,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_f64_ret<S: wasmtime::AsContextMut>(
@@ -2701,10 +2625,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2733,10 +2653,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_string_list_arg<S: wasmtime::AsContextMut>(
@@ -2761,10 +2677,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -2797,10 +2709,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2835,10 +2743,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_string_list<S: wasmtime::AsContextMut>(
@@ -2872,10 +2776,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_record_list<S: wasmtime::AsContextMut>(
@@ -2902,10 +2802,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -2934,10 +2830,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_variant_list<S: wasmtime::AsContextMut>(
@@ -2965,10 +2857,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
                     }
                     pub async fn call_load_store_everything<S: wasmtime::AsContextMut>(
@@ -2993,10 +2881,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }

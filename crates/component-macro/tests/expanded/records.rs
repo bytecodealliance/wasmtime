@@ -895,7 +895,6 @@ pub mod exports {
                             >::new_unchecked(self.tuple_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_tuple_result<S: wasmtime::AsContextMut>(
@@ -909,7 +908,6 @@ pub mod exports {
                             >::new_unchecked(self.tuple_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_empty_arg<S: wasmtime::AsContextMut>(
@@ -924,7 +922,6 @@ pub mod exports {
                             >::new_unchecked(self.empty_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_empty_result<S: wasmtime::AsContextMut>(
@@ -938,7 +935,6 @@ pub mod exports {
                             >::new_unchecked(self.empty_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_scalar_arg<S: wasmtime::AsContextMut>(
@@ -953,7 +949,6 @@ pub mod exports {
                             >::new_unchecked(self.scalar_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_scalar_result<S: wasmtime::AsContextMut>(
@@ -967,7 +962,6 @@ pub mod exports {
                             >::new_unchecked(self.scalar_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_flags_arg<S: wasmtime::AsContextMut>(
@@ -982,7 +976,6 @@ pub mod exports {
                             >::new_unchecked(self.flags_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_flags_result<S: wasmtime::AsContextMut>(
@@ -996,7 +989,6 @@ pub mod exports {
                             >::new_unchecked(self.flags_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_aggregate_arg<S: wasmtime::AsContextMut>(
@@ -1011,7 +1003,6 @@ pub mod exports {
                             >::new_unchecked(self.aggregate_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_aggregate_result<S: wasmtime::AsContextMut>(
@@ -1025,7 +1016,6 @@ pub mod exports {
                             >::new_unchecked(self.aggregate_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_typedef_inout<S: wasmtime::AsContextMut>(
@@ -1040,7 +1030,6 @@ pub mod exports {
                             >::new_unchecked(self.typedef_inout)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

@@ -368,7 +368,6 @@ pub mod exports {
                             >::new_unchecked(self.f32_param)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f64_param<S: wasmtime::AsContextMut>(
@@ -383,7 +382,6 @@ pub mod exports {
                             >::new_unchecked(self.f64_param)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
@@ -397,7 +395,6 @@ pub mod exports {
                             >::new_unchecked(self.f32_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
@@ -411,7 +408,6 @@ pub mod exports {
                             >::new_unchecked(self.f64_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

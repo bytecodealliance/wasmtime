@@ -1549,7 +1549,6 @@ pub mod exports {
                             >::new_unchecked(self.e1_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_e1_result<S: wasmtime::AsContextMut>(
@@ -1563,7 +1562,6 @@ pub mod exports {
                             >::new_unchecked(self.e1_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_v1_arg<S: wasmtime::AsContextMut>(
@@ -1578,7 +1576,6 @@ pub mod exports {
                             >::new_unchecked(self.v1_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_v1_result<S: wasmtime::AsContextMut>(
@@ -1592,7 +1589,6 @@ pub mod exports {
                             >::new_unchecked(self.v1_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_bool_arg<S: wasmtime::AsContextMut>(
@@ -1607,7 +1603,6 @@ pub mod exports {
                             >::new_unchecked(self.bool_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_bool_result<S: wasmtime::AsContextMut>(
@@ -1621,7 +1616,6 @@ pub mod exports {
                             >::new_unchecked(self.bool_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_option_arg<S: wasmtime::AsContextMut>(
@@ -1652,7 +1646,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_option_result<S: wasmtime::AsContextMut>(
@@ -1684,7 +1677,6 @@ pub mod exports {
                             >::new_unchecked(self.option_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_casts<S: wasmtime::AsContextMut>(
@@ -1710,7 +1702,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_result_arg<S: wasmtime::AsContextMut>(
@@ -1741,7 +1732,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_result_result<S: wasmtime::AsContextMut>(
@@ -1779,7 +1769,6 @@ pub mod exports {
                             >::new_unchecked(self.result_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar<S: wasmtime::AsContextMut>(
@@ -1793,7 +1782,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar2<S: wasmtime::AsContextMut>(
@@ -1807,7 +1795,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar3<S: wasmtime::AsContextMut>(
@@ -1821,7 +1808,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar3)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar4<S: wasmtime::AsContextMut>(
@@ -1835,7 +1821,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_option_sugar<S: wasmtime::AsContextMut>(
@@ -1849,7 +1834,6 @@ pub mod exports {
                             >::new_unchecked(self.return_option_sugar)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_option_sugar2<S: wasmtime::AsContextMut>(
@@ -1863,7 +1847,6 @@ pub mod exports {
                             >::new_unchecked(self.return_option_sugar2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_result_simple<S: wasmtime::AsContextMut>(
@@ -1877,7 +1860,6 @@ pub mod exports {
                             >::new_unchecked(self.result_simple)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_is_clone_arg<S: wasmtime::AsContextMut>(
@@ -1892,7 +1874,6 @@ pub mod exports {
                             >::new_unchecked(self.is_clone_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_is_clone_return<S: wasmtime::AsContextMut>(
@@ -1906,7 +1887,6 @@ pub mod exports {
                             >::new_unchecked(self.is_clone_return)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }
