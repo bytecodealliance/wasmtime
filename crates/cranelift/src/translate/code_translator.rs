@@ -3965,8 +3965,7 @@ fn translate_br_if(
     builder: &mut FunctionBuilder,
     env: &mut FuncEnvironment<'_>,
 ) {
-    // Check for branch hints before borrowing env mutably.
-    // The srcloc contains the byte offset of the current instruction.
+    // Get branch hint before `translate_br_if_args` borrows env mutably.
     let offset = builder.srcloc().bits() as usize;
     let branch_hint = env.get_branch_hint(offset);
 

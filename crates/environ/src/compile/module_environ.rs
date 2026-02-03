@@ -112,11 +112,7 @@ pub struct ModuleTranslation<'data> {
     types: Option<Types>,
 
     /// Branch hints parsed from the `metadata.code.branch_hint` custom section.
-    ///
-    /// Maps function index to a list of (func_offset, taken) pairs where
-    /// func_offset is the byte offset within the function body and taken
-    /// indicates whether the branch is likely to be taken.
-    pub branch_hints: HashMap<u32, Vec<(u32, bool)>>,
+    pub branch_hints: HashMap<u32, HashMap<u32, bool>>,
 }
 
 impl<'data> ModuleTranslation<'data> {
@@ -750,9 +746,9 @@ and for re-adding support for interface types you can see this issue:
             }
             KnownCustom::BranchHints(reader) => {
                 for func_hints in reader.into_iter().flatten() {
-                    let mut hints = Vec::new();
+                    let mut hints = HashMap::new();
                     for hint in func_hints.hints.into_iter().flatten() {
-                        hints.push((hint.func_offset, hint.taken));
+                        hints.insert(hint.func_offset, hint.taken);
                     }
                     if !hints.is_empty() {
                         self.result.branch_hints.insert(func_hints.func, hints);

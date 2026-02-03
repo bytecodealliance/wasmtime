@@ -316,8 +316,10 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
         let FunctionBodyData { validator, body } = input;
-        // Set the function body offset for branch hint lookup
         func_env.func_body_offset = body.get_binary_reader().original_position();
+        if let Some(hints) = translation.branch_hints.get(&func_index.as_u32()) {
+            func_env.set_branch_hints(hints);
+        }
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
         compiler.cx.func_translator.translate_body(
