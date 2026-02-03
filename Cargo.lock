@@ -4708,6 +4708,7 @@ dependencies = [
  "cranelift-entity",
  "env_logger 0.11.5",
  "gimli 0.33.0",
+ "hashbrown 0.15.2",
  "indexmap 2.11.4",
  "log",
  "object 0.37.3",
