@@ -81,9 +81,35 @@ where
     }
 }
 
+/// Analogue of [`Extend`] except handles OOM conditions.
+pub trait TryExtend<T> {
+    /// Extends `self` with the items from `iter`.
+    ///
+    /// Returns an error if allocation fails while adding items to `self`. If an
+    /// OOM happens then some items from `iter` may have been added to `self`
+    /// already. On OOM no further items from the iterator will be consumed.
+    fn try_extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
+    where
+        I: IntoIterator<Item = T>;
+}
+
+impl<T> TryExtend<T> for Vec<T> {
+    fn try_extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let iter = iter.into_iter();
+        self.reserve(iter.size_hint().0)?;
+        for item in iter {
+            self.push(item)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Box, TryCollect, Vec};
+    use super::{Box, TryCollect, TryExtend, Vec};
     use crate::error::{OutOfMemory, Result};
 
     #[test]
@@ -137,6 +163,17 @@ mod tests {
             .into_iter()
             .try_collect();
         assert!(v.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_extend() -> Result<(), OutOfMemory> {
+        let mut vec = Vec::new();
+        vec.try_extend([1, 2, 3].iter().cloned())?;
+        assert_eq!(&*vec, &[1, 2, 3]);
+
+        vec.try_extend([])?;
+        assert_eq!(&*vec, &[1, 2, 3]);
         Ok(())
     }
 }

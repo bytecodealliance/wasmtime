@@ -176,19 +176,6 @@ impl<T> Vec<T> {
             }
         }
     }
-
-    /// Same as [`std::vec::Vec::extend`].
-    pub fn extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
-    where
-        I: IntoIterator<Item = T>,
-    {
-        let iter = iter.into_iter();
-        self.reserve(iter.size_hint().0)?;
-        for item in iter {
-            self.push(item)?;
-        }
-        Ok(())
-    }
 }
 
 impl<T> Deref for Vec<T> {
@@ -285,17 +272,6 @@ mod tests {
 
         let vec = Vec::<i32>::with_capacity(2)?;
         assert_eq!(*vec.into_boxed_slice()?, []);
-        Ok(())
-    }
-
-    #[test]
-    fn test_extend() -> Result<(), OutOfMemory> {
-        let mut vec = Vec::new();
-        vec.extend([1, 2, 3].iter().cloned())?;
-        assert_eq!(&*vec, &[1, 2, 3]);
-
-        vec.extend([])?;
-        assert_eq!(&*vec, &[1, 2, 3]);
         Ok(())
     }
 }
