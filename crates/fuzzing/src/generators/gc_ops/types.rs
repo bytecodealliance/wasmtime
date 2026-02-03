@@ -93,27 +93,29 @@ impl Types {
 /// This is used to track the requirements for the operands of an operation.
 #[derive(Copy, Clone, Debug)]
 pub enum StackType {
-    /// Any value is used for reauested operand not a
-    ///type left on stack (only for Drop and specially handled ops)
-    Any,
     /// `externref`
     ExternRef,
-    /// None = any non-null `(ref $*)`; Some(t) = exact `(ref $t)`
+    /// `(ref $*)`;
     Struct(Option<u32>),
 }
 
 impl StackType {
     /// Fixes the stack type to match the given requirement.
-    pub fn fixup(req: StackType, stack: &mut Vec<StackType>, out: &mut Vec<GcOp>, num_types: u32) {
+    pub fn fixup(
+        req: Option<StackType>,
+        stack: &mut Vec<StackType>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+    ) {
         let mut result_types = Vec::new();
         match req {
-            Self::Any => {
+            None => {
                 if stack.is_empty() {
                     Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
                 }
                 stack.pop(); // always consume exactly one value
             }
-            Self::ExternRef => match stack.last() {
+            Some(Self::ExternRef) => match stack.last() {
                 Some(Self::ExternRef) => {
                     stack.pop();
                 }
@@ -122,7 +124,7 @@ impl StackType {
                     stack.pop(); // consume just-synthesized externref
                 }
             },
-            Self::Struct(wanted) => {
+            Some(Self::Struct(wanted)) => {
                 let ok = match (wanted, stack.last()) {
                     (Some(wanted), Some(Self::Struct(Some(s)))) => *s == wanted,
                     (None, Some(Self::Struct(_))) => true,
