@@ -328,11 +328,46 @@ fn alternate_debug_fmt_error() -> Result<()> {
 }
 
 #[test]
+fn vec_and_boxed_slice() -> Result<()> {
+    use wasmtime_core::alloc::Vec;
+
+    OomTest::new().test(|| {
+        // nonzero-sized type
+        let mut vec = Vec::new();
+        vec.push(1)?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
+        let mut vec = Vec::from(slice);
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
+        let vec = Vec::from(slice);
+        let slice = vec.into_boxed_slice()?; // len = 0, cap = 0
+        let mut vec = Vec::from(slice);
+        vec.push(2)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        let _ = vec.into_boxed_slice()?;
+
+        // zero-sized type
+        let mut vec = Vec::new();
+        vec.push(())?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
+        let mut vec = Vec::from(slice);
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
+        let vec = Vec::from(slice);
+        let _ = vec.into_boxed_slice()?; // len = 0, cap = 0
+
+        Ok(())
+    })
+}
+
+#[test]
 fn vec_try_collect() -> Result<()> {
     OomTest::new().test(|| {
         iter::repeat(1).take(0).try_collect::<Vec<_>, _>()?;
         iter::repeat(1).take(1).try_collect::<Vec<_>, _>()?;
         iter::repeat(1).take(100).try_collect::<Vec<_>, _>()?;
+        iter::repeat(()).take(100).try_collect::<Vec<_>, _>()?;
         Ok(())
     })
 }
@@ -345,6 +380,11 @@ fn vec_extend() -> Result<()> {
         vec.extend([])?;
         vec.extend([1])?;
         vec.extend([1, 2, 3, 4])?;
+
+        let mut vec = Vec::new();
+        vec.extend([])?;
+        vec.extend([()])?;
+        vec.extend([(), (), ()])?;
         Ok(())
     })
 }
