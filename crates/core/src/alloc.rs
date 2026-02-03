@@ -2,6 +2,7 @@
 
 mod arc;
 mod boxed;
+mod try_collect;
 mod try_new;
 mod vec;
 
@@ -10,6 +11,7 @@ pub use boxed::{
     new_boxed_slice_from_fallible_iter, new_boxed_slice_from_iter,
     new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
 };
+pub use try_collect::{TryCollect, TryExtend, TryFromIterator};
 pub use try_new::{TryNew, try_new};
 pub use vec::Vec;
 
@@ -32,6 +34,32 @@ unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemory> {
         Ok(ptr)
     } else {
         Err(OutOfMemory::new(layout.size()))
+    }
+}
+
+/// Tries to reallocate a block of memory, returning `OutOfMemory` on failure.
+///
+/// Analogue of [`alloc::alloc::realloc`].
+///
+/// # Safety
+///
+/// Same as `alloc::alloc::realloc`: `ptr` must be allocated with `layout`,
+/// `layout` must be nonzero in size, and `new_size` must be nonzero and valid.
+#[inline]
+unsafe fn try_realloc(
+    ptr: *mut u8,
+    layout: Layout,
+    new_size: usize,
+) -> Result<NonNull<u8>, OutOfMemory> {
+    // Safety: same as our safety conditions.
+    debug_assert!(layout.size() > 0);
+    debug_assert!(new_size > 0);
+    let ptr = unsafe { std_alloc::alloc::realloc(ptr, layout, new_size) };
+
+    if let Some(ptr) = NonNull::new(ptr) {
+        Ok(ptr)
+    } else {
+        Err(OutOfMemory::new(new_size))
     }
 }
 
