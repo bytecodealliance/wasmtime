@@ -386,7 +386,6 @@ pub mod exports {
                     >::new_unchecked(self.handle_request)
                 };
                 let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                callee.post_return(store.as_context_mut())?;
                 Ok(ret0)
             }
         }

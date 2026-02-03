@@ -420,7 +420,6 @@ pub mod exports {
                             >::new_unchecked(self.option_test)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

@@ -397,7 +397,6 @@ pub mod exports {
                     >::new_unchecked(self.handle_request)
                 };
                 let (ret0,) = callee.call_async(store.as_context_mut(), (arg0,)).await?;
-                callee.post_return_async(store.as_context_mut()).await?;
                 Ok(ret0)
             }
         }

@@ -34,23 +34,6 @@ impl StoreOpaque {
     pub(crate) fn set_trapped(&mut self) {
         self.store_data_mut().components.trapped = true;
     }
-
-    /// Returns `false` if the specified instance may not be entered, regardless
-    /// of what's on a task's call stack.
-    ///
-    /// If this returns `true`, the instance may be entered as long as it isn't
-    /// on the task's call stack, if applicable.
-    pub(crate) fn may_enter_at_all(&mut self, instance: RuntimeInstance) -> bool {
-        if self.trapped() {
-            return false;
-        }
-
-        let flags = self
-            .component_instance(instance.instance)
-            .instance_flags(instance.index);
-
-        unsafe { !flags.needs_post_return() }
-    }
 }
 
 impl StoreData {

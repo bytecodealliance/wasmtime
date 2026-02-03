@@ -26,14 +26,13 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
     })
 }
 
+#[deprecated(note = "no longer has any effect")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_func_post_return(
-    func: &Func,
-    mut context: WasmtimeStoreContextMut<'_>,
+    _func: &Func,
+    _context: WasmtimeStoreContextMut<'_>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let result = func.post_return(&mut context);
-
-    crate::handle_result(result, |_| {})
+    None
 }
 
 #[unsafe(no_mangle)]

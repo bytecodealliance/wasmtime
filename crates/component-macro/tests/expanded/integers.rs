@@ -696,7 +696,6 @@ pub mod exports {
                             >::new_unchecked(self.a1)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a2<S: wasmtime::AsContextMut>(
@@ -711,7 +710,6 @@ pub mod exports {
                             >::new_unchecked(self.a2)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a3<S: wasmtime::AsContextMut>(
@@ -726,7 +724,6 @@ pub mod exports {
                             >::new_unchecked(self.a3)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a4<S: wasmtime::AsContextMut>(
@@ -741,7 +738,6 @@ pub mod exports {
                             >::new_unchecked(self.a4)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a5<S: wasmtime::AsContextMut>(
@@ -756,7 +752,6 @@ pub mod exports {
                             >::new_unchecked(self.a5)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a6<S: wasmtime::AsContextMut>(
@@ -771,7 +766,6 @@ pub mod exports {
                             >::new_unchecked(self.a6)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a7<S: wasmtime::AsContextMut>(
@@ -786,7 +780,6 @@ pub mod exports {
                             >::new_unchecked(self.a7)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a8<S: wasmtime::AsContextMut>(
@@ -801,7 +794,6 @@ pub mod exports {
                             >::new_unchecked(self.a8)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a9<S: wasmtime::AsContextMut>(
@@ -827,7 +819,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_r1<S: wasmtime::AsContextMut>(
@@ -841,7 +832,6 @@ pub mod exports {
                             >::new_unchecked(self.r1)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r2<S: wasmtime::AsContextMut>(
@@ -855,7 +845,6 @@ pub mod exports {
                             >::new_unchecked(self.r2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r3<S: wasmtime::AsContextMut>(
@@ -869,7 +858,6 @@ pub mod exports {
                             >::new_unchecked(self.r3)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r4<S: wasmtime::AsContextMut>(
@@ -883,7 +871,6 @@ pub mod exports {
                             >::new_unchecked(self.r4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r5<S: wasmtime::AsContextMut>(
@@ -897,7 +884,6 @@ pub mod exports {
                             >::new_unchecked(self.r5)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r6<S: wasmtime::AsContextMut>(
@@ -911,7 +897,6 @@ pub mod exports {
                             >::new_unchecked(self.r6)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r7<S: wasmtime::AsContextMut>(
@@ -925,7 +910,6 @@ pub mod exports {
                             >::new_unchecked(self.r7)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_r8<S: wasmtime::AsContextMut>(
@@ -939,7 +923,6 @@ pub mod exports {
                             >::new_unchecked(self.r8)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_pair_ret<S: wasmtime::AsContextMut>(
@@ -953,7 +936,6 @@ pub mod exports {
                             >::new_unchecked(self.pair_ret)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

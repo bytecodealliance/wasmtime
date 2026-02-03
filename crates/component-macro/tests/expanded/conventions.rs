@@ -626,7 +626,6 @@ pub mod exports {
                             >::new_unchecked(self.kebab_case)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_foo<S: wasmtime::AsContextMut>(
@@ -641,7 +640,6 @@ pub mod exports {
                             >::new_unchecked(self.foo)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_function_with_dashes<S: wasmtime::AsContextMut>(
@@ -655,7 +653,6 @@ pub mod exports {
                             >::new_unchecked(self.function_with_dashes)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_function_with_no_weird_characters<
@@ -668,7 +665,6 @@ pub mod exports {
                             >::new_unchecked(self.function_with_no_weird_characters)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_apple<S: wasmtime::AsContextMut>(
@@ -682,7 +678,6 @@ pub mod exports {
                             >::new_unchecked(self.apple)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_apple_pear<S: wasmtime::AsContextMut>(
@@ -696,7 +691,6 @@ pub mod exports {
                             >::new_unchecked(self.apple_pear)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_apple_pear_grape<S: wasmtime::AsContextMut>(
@@ -710,7 +704,6 @@ pub mod exports {
                             >::new_unchecked(self.apple_pear_grape)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_a0<S: wasmtime::AsContextMut>(
@@ -724,7 +717,6 @@ pub mod exports {
                             >::new_unchecked(self.a0)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     /// Comment out identifiers that collide when mapped to snake_case, for now; see
@@ -743,7 +735,6 @@ pub mod exports {
                             >::new_unchecked(self.is_xml)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_explicit<S: wasmtime::AsContextMut>(
@@ -757,7 +748,6 @@ pub mod exports {
                             >::new_unchecked(self.explicit)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_explicit_kebab<S: wasmtime::AsContextMut>(
@@ -771,7 +761,6 @@ pub mod exports {
                             >::new_unchecked(self.explicit_kebab)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     /// Identifiers with the same name as keywords are quoted.
@@ -786,7 +775,6 @@ pub mod exports {
                             >::new_unchecked(self.bool)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }

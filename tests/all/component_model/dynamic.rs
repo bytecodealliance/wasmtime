@@ -6,7 +6,6 @@ use wasmtime::component::types::{self, Case, ComponentItem, Field};
 use wasmtime::component::{Component, Linker, ResourceType, Val};
 use wasmtime::{Module, Store};
 use wasmtime_component_util::REALLOC_AND_FREE;
-use wasmtime_test_util::component::FuncExt;
 
 #[test]
 fn primitives() -> Result<()> {
@@ -39,7 +38,7 @@ fn primitives() -> Result<()> {
         let component = Component::new(&engine, make_echo_component_with_params(ty, &[param]))?;
         let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
         let func = instance.get_func(&mut store, "echo").unwrap();
-        func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+        func.call(&mut store, &[input.clone()], &mut output)?;
 
         assert_eq!(input, output[0]);
     }
@@ -53,7 +52,7 @@ fn primitives() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let err = func
-        .call_and_post_return(&mut store, &[Val::U64(42)], &mut output)
+        .call(&mut store, &[Val::U64(42)], &mut output)
         .unwrap_err();
 
     assert!(err.to_string().contains("type mismatch"), "{err}");
@@ -61,7 +60,7 @@ fn primitives() -> Result<()> {
     // Sad path: arity mismatch (too many)
 
     let err = func
-        .call_and_post_return(
+        .call(
             &mut store,
             &[Val::Float64(3.14159265), Val::Float64(3.14159265)],
             &mut output,
@@ -75,17 +74,13 @@ fn primitives() -> Result<()> {
 
     // Sad path: arity mismatch (too few)
 
-    let err = func
-        .call_and_post_return(&mut store, &[], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[], &mut output).unwrap_err();
     assert!(
         err.to_string().contains("expected 1 argument(s), got 0"),
         "{err}"
     );
 
-    let err = func
-        .call_and_post_return(&mut store, &output, &mut [])
-        .unwrap_err();
+    let err = func.call(&mut store, &output, &mut []).unwrap_err();
     assert!(
         err.to_string().contains("expected 1 result(s), got 0"),
         "{err}"
@@ -104,7 +99,7 @@ fn strings() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let input = Val::String("hello, component!".into());
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     Ok(())
@@ -124,7 +119,7 @@ fn lists() -> Result<()> {
         Val::U32(2084037802),
     ]);
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
@@ -135,9 +130,7 @@ fn lists() -> Result<()> {
         Val::U32(79023439),
         Val::Float32(3.14159265),
     ]);
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     Ok(())
@@ -185,7 +178,7 @@ fn records() -> Result<()> {
         ),
     ]);
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
@@ -204,9 +197,7 @@ fn records() -> Result<()> {
     ]);
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     // Sad path: too many fields
@@ -225,9 +216,7 @@ fn records() -> Result<()> {
     ]);
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(
         err.to_string().contains("expected 3 fields, got 4"),
         "{err}"
@@ -241,9 +230,7 @@ fn records() -> Result<()> {
     ]);
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(
         err.to_string().contains("expected 3 fields, got 2"),
         "{err}"
@@ -282,7 +269,7 @@ fn variants() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let input = Val::Variant("B".into(), Some(Box::new(Val::Float64(3.14159265))));
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
@@ -308,7 +295,7 @@ fn variants() -> Result<()> {
             ("E".into(), Val::U32(314159265)),
         ]))),
     );
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
@@ -317,17 +304,13 @@ fn variants() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let err = Val::Variant("B".into(), Some(Box::new(Val::U64(314159265))));
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let err = Val::Variant("B".into(), None);
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(
         err.to_string().contains("expected a payload for case `B`"),
         "{err}"
@@ -338,17 +321,13 @@ fn variants() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let err = Val::Variant("D".into(), Some(Box::new(Val::U64(314159265))));
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("unknown variant case"), "{err}");
 
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let err = Val::Variant("D".into(), None);
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("unknown variant case"), "{err}");
 
     // Make sure we lift variants which have cases of different sizes with the correct alignment
@@ -387,7 +366,7 @@ fn variants() -> Result<()> {
         ),
         ("B".into(), Val::U32(628318530)),
     ]);
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
@@ -410,16 +389,14 @@ fn flags() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let input = Val::Flags(vec!["B".into(), "D".into()]);
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 
     // Sad path: unknown flags
 
     let err = Val::Flags(vec!["B".into(), "D".into(), "F".into()]);
-    let err = func
-        .call_and_post_return(&mut store, &[err], &mut output)
-        .unwrap_err();
+    let err = func.call(&mut store, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("unknown flag"), "{err}");
 
     Ok(())
@@ -539,7 +516,7 @@ fn everything() -> Result<()> {
         ),
     ]);
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     assert_eq!(input, output[0]);
 

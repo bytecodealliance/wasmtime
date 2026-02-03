@@ -58,12 +58,12 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
     wasmtime_component_val_t *results, size_t results_size);
 
 /**
- * \brief Invokes the `post-return` canonical ABI option, if specified, after a
- * #wasmtime_component_func_call has finished.
+ * \brief No longer needs to be called; this function has no effect.
  *
- * This function is a required method call after a #wasmtime_component_func_call
- * completes successfully. After the embedder has finished processing the return
- * value then this function must be invoked.
+ * \deprecated Previously, this invoked the `post-return` canonical ABI option,
+ * if specified, after a #wasmtime_component_func_call had finished.  Now that's
+ * taken care of automatically as part of #wasmtime_component_func_call, so this
+ * function is no longer needed, and any calls to it may be removed.
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_func_post_return(const wasmtime_component_func_t *func,

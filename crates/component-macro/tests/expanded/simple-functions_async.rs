@@ -452,7 +452,6 @@ pub mod exports {
                             >::new_unchecked(self.f1)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_f2<S: wasmtime::AsContextMut>(
@@ -472,7 +471,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_f3<S: wasmtime::AsContextMut>(
@@ -493,7 +491,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0, arg1))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_f4<S: wasmtime::AsContextMut>(
@@ -512,7 +509,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_f5<S: wasmtime::AsContextMut>(
@@ -531,7 +527,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_f6<S: wasmtime::AsContextMut>(
@@ -553,7 +548,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0, arg1, arg2))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                 }

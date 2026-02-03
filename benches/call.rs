@@ -642,11 +642,6 @@ mod component {
                     typed.call(&mut *store, typed_params).unwrap()
                 };
                 assert_eq!(results, typed_results);
-                if is_async.use_async() {
-                    run_await(typed.post_return_async(&mut *store)).unwrap()
-                } else {
-                    typed.post_return(&mut *store).unwrap()
-                }
             })
         });
 
@@ -666,11 +661,6 @@ mod component {
                     }
                     for (expected, actual) in expected_results.iter().zip(&results) {
                         assert_eq!(expected, actual);
-                    }
-                    if is_async.use_async() {
-                        run_await(untyped.post_return_async(&mut *store)).unwrap()
-                    } else {
-                        untyped.post_return(&mut *store).unwrap()
                     }
                 })
             },
@@ -864,10 +854,8 @@ mod component {
                     let start = Instant::now();
                     if is_async.use_async() {
                         run_await(run.call_async(&mut *store, (iters,))).unwrap();
-                        run_await(run.post_return_async(&mut *store)).unwrap();
                     } else {
                         run.call(&mut *store, (iters,)).unwrap();
-                        run.post_return(&mut *store).unwrap();
                     }
                     start.elapsed()
                 })
@@ -882,10 +870,8 @@ mod component {
                         let start = Instant::now();
                         if is_async.use_async() {
                             run_await(run.call_async(&mut *store, (iters,))).unwrap();
-                            run_await(run.post_return_async(&mut *store)).unwrap();
                         } else {
                             run.call(&mut *store, (iters,)).unwrap();
-                            run.post_return(&mut *store).unwrap();
                         }
                         start.elapsed()
                     })

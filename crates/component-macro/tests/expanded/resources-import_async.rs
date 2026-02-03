@@ -396,7 +396,6 @@ const _: () = {
                 >::new_unchecked(self.some_world_func2)
             };
             let (ret0,) = callee.call_async(store.as_context_mut(), ()).await?;
-            callee.post_return_async(store.as_context_mut()).await?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -1400,7 +1399,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                 }

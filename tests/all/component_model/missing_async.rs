@@ -45,34 +45,12 @@ async fn async_disallows_func_call() -> Result<()> {
 }
 
 #[tokio::test]
-async fn async_disallows_func_post_return() -> Result<()> {
-    let mut store = async_store();
-    let func = func_in_store(&mut store).await?;
-    func.call_async(&mut store, &[], &mut []).await?;
-
-    assert!(func.post_return(&mut store).is_err());
-    func.post_return_async(&mut store).await?;
-    Ok(())
-}
-
-#[tokio::test]
 async fn async_disallows_typed_func_call() -> Result<()> {
     let mut store = async_store();
     let func = func_in_store(&mut store).await?;
     let func = func.typed::<(), ()>(&store)?;
     assert!(func.call(&mut store, ()).is_err());
     func.call_async(&mut store, ()).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn async_disallows_typed_func_post_return() -> Result<()> {
-    let mut store = async_store();
-    let func = func_in_store(&mut store).await?;
-    let func = func.typed::<(), ()>(&store)?;
-    func.call_async(&mut store, ()).await?;
-    assert!(func.post_return(&mut store).is_err());
-    func.post_return_async(&mut store).await?;
     Ok(())
 }
 
@@ -200,7 +178,6 @@ async fn async_disallows_resource_any_drop() -> Result<()> {
         .await?;
     let func = instance.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "mk")?;
     let (resource,) = func.call_async(&mut store, (42,)).await?;
-    func.post_return_async(&mut store).await?;
 
     assert!(resource.resource_drop(&mut store).is_err());
     resource.resource_drop_async(&mut store).await?;

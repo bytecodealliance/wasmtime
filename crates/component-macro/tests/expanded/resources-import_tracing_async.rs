@@ -459,7 +459,6 @@ const _: () = {
                 .call_async(store.as_context_mut(), ())
                 .instrument(span.clone())
                 .await?;
-            callee.post_return_async(store.as_context_mut()).instrument(span).await?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -1822,10 +1821,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }

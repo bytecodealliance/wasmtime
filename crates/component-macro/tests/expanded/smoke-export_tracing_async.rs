@@ -249,7 +249,6 @@ pub mod exports {
                     .call_async(store.as_context_mut(), ())
                     .instrument(span.clone())
                     .await?;
-                callee.post_return_async(store.as_context_mut()).instrument(span).await?;
                 Ok(())
             }
         }

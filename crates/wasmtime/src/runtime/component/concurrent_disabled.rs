@@ -172,7 +172,7 @@ impl StoreOpaque {
         Ok(())
     }
 
-    pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
-        self.may_enter_at_all(instance)
+    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> bool {
+        !self.trapped()
     }
 }

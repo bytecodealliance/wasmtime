@@ -112,20 +112,8 @@ where
     /// memory leaks in wasm itself. The `post-return` canonical abi option is
     /// used to configured this.
     ///
-    /// To accommodate this feature of the component model after invoking a
-    /// function via [`TypedFunc::call`] you must next invoke
-    /// [`TypedFunc::post_return`]. Note that the return value of the function
-    /// should be processed between these two function calls. The return value
-    /// continues to be usable from an embedder's perspective after
-    /// `post_return` is called, but after `post_return` is invoked it may no
-    /// longer retain the same value that the wasm module originally returned.
-    ///
-    /// Also note that [`TypedFunc::post_return`] must be invoked irrespective
-    /// of whether the canonical ABI option `post-return` was configured or not.
-    /// This means that embedders must unconditionally call
-    /// [`TypedFunc::post_return`] when a function returns. If this function
-    /// call returns an error, however, then [`TypedFunc::post_return`] is not
-    /// required.
+    /// If a post-return function is present, it will be called automatically by
+    /// this function.
     ///
     /// # Errors
     ///
@@ -138,8 +126,6 @@ where
     /// * If the wasm returns a value which violates the canonical ABI.
     /// * If this function's instances cannot be entered, for example if the
     ///   instance is currently calling a host function.
-    /// * If a previous function call occurred and the corresponding
-    ///   `post_return` hasn't been invoked yet.
     /// * If `store` requires using [`Self::call_async`] instead, see
     ///   [crate documentation](crate#async) for more info.
     ///
@@ -158,9 +144,9 @@ where
     ///
     /// Panics if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
-        self.call_impl(store, params)
+        self.call_impl(store.as_context_mut(), params)
     }
 
     /// Exactly like [`Self::call`], except for invoking WebAssembly
@@ -188,7 +174,7 @@ where
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), true, false, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
                     // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -251,8 +237,7 @@ where
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
-    /// (if any) automatically when the guest task completes -- no need to
-    /// explicitly call `Func::post_return` afterward.
+    /// (if any) automatically when the guest task completes.
     ///
     /// Besides the task's return value, this returns a [`TaskExit`]
     /// representing the completion of the guest task and any transitive
@@ -326,7 +311,7 @@ where
             );
 
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
@@ -364,7 +349,6 @@ where
         self,
         store: StoreContextMut<'_, T>,
         host_future_present: bool,
-        call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -395,11 +379,8 @@ where
             self.func,
             param_count,
             host_future_present,
-            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
-                    lower(cx, ty, params_out)
-                })
+                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -435,7 +416,7 @@ where
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
 
         if self.func.abi_async(store.0) {
             bail!("must enable the `component-model-async` feature to call async-lifted exports")
@@ -458,7 +439,7 @@ where
         // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
         // combination with checking the various possible branches here and
         // dispatching to appropriately typed functions.
-        unsafe {
+        let (result, post_return_arg) = unsafe {
             // This type is used as `LowerParams` for `call_raw` which is either
             // `Params::Lower` or `ValRaw` representing it's either on the stack
             // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
@@ -473,7 +454,7 @@ where
 
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
-                    store,
+                    store.as_context_mut(),
                     |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
                         let dst = storage_as_slice_mut(dst);
                         Self::lower_args(cx, ty, dst, &params)
@@ -482,7 +463,7 @@ where
                 )
             } else {
                 self.func.call_raw(
-                    store,
+                    store.as_context_mut(),
                     |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
                         let dst = storage_as_slice_mut(dst);
                         Self::lower_args(cx, ty, dst, &params)
@@ -490,7 +471,11 @@ where
                     Self::lift_heap_result,
                 )
             }
-        }
+        }?;
+
+        self.func.post_return_impl(store, post_return_arg)?;
+
+        Ok(result)
     }
 
     /// Lower parameters directly onto the stack specified by the `dst`
@@ -581,18 +566,20 @@ where
         Return::linear_lift_from_memory(cx, ty, bytes)
     }
 
-    /// See [`Func::post_return`]
-    pub fn post_return(&self, store: impl AsContextMut) -> Result<()> {
-        self.func.post_return(store)
+    #[doc(hidden)]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
+    pub fn post_return(&self, _store: impl AsContextMut) -> Result<()> {
+        Ok(())
     }
 
-    /// See [`Func::post_return_async`]
+    #[doc(hidden)]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
     #[cfg(feature = "async")]
     pub async fn post_return_async<T: Send>(
         &self,
-        store: impl AsContextMut<Data = T>,
+        _store: impl AsContextMut<Data = T>,
     ) -> Result<()> {
-        self.func.post_return_async(store).await
+        Ok(())
     }
 }
 

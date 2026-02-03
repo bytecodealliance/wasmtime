@@ -679,7 +679,6 @@ pub mod exports {
                                     arg15,
                                 ),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_big_argument<S: wasmtime::AsContextMut>(
@@ -694,7 +693,6 @@ pub mod exports {
                             >::new_unchecked(self.big_argument)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }

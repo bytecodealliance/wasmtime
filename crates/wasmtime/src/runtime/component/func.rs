@@ -204,10 +204,7 @@ impl Func {
     /// size of `results` exactly matches the number of results that this
     /// function produces.
     ///
-    /// Note that after a function is invoked the embedder needs to invoke
-    /// [`Func::post_return`] to execute any final cleanup required by the
-    /// guest. This function call is required to either call the function again
-    /// or to call another function.
+    /// This will also call the corresponding `post-return` function, if any.
     ///
     /// For more detailed information see the documentation of
     /// [`TypedFunc::call`].
@@ -237,13 +234,11 @@ impl Func {
     ) -> Result<()> {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
-        self.call_impl(&mut store.as_context_mut(), params, results)
+        self.call_impl(store.as_context_mut(), params, results)?;
+        Ok(())
     }
 
     /// Exactly like [`Self::call`] except for use on async stores.
-    ///
-    /// Note that after this [`Func::post_return_async`] will be used instead of
-    /// the synchronous version at [`Func::post_return`].
     ///
     /// # Panics
     ///
@@ -261,7 +256,7 @@ impl Func {
         if store.0.concurrency_support() {
             return store
                 .run_concurrent_trap_on_idle(async |store| {
-                    self.call_concurrent_dynamic(store, params, results, false)
+                    self.call_concurrent_dynamic(store, params, results)
                         .await
                         .map(drop)
                 })
@@ -309,8 +304,7 @@ impl Func {
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
-    /// (if any) automatically when the guest task completes -- no need to
-    /// explicitly call `Func::post_return` afterward.
+    /// (if any) automatically when the guest task completes.
     ///
     /// This returns a [`TaskExit`] representing the completion of the guest
     /// task and any transitive subtasks it might create.
@@ -403,7 +397,7 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<TaskExit> {
-        self.call_concurrent_dynamic(accessor, params, results, true)
+        self.call_concurrent_dynamic(accessor, params, results)
             .await
     }
 
@@ -414,15 +408,10 @@ impl Func {
         accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
-        call_post_return_automatically: bool,
     ) -> Result<TaskExit> {
         let result = accessor.as_accessor().with(|mut store| {
             self.check_params_results(store.as_context_mut(), params, results)?;
-            let prepared = self.prepare_call_dynamic(
-                store.as_context_mut(),
-                params.to_vec(),
-                call_post_return_automatically,
-            )?;
+            let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
             concurrent::queue_call(store.as_context_mut(), prepared)
         })?;
 
@@ -441,7 +430,6 @@ impl Func {
         self,
         mut store: StoreContextMut<'a, T>,
         params: Vec<Val>,
-        call_post_return_automatically: bool,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
 
@@ -450,9 +438,8 @@ impl Func {
             self,
             MAX_FLAT_PARAMS,
             false,
-            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
+                func.with_lower_context(store, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -503,9 +490,9 @@ impl Func {
         //   safe in Rust, however, due to `ValRaw` being a `union`. The
         //   contents should dynamically not be read due to the type of the
         //   function used here matching the actual lift.
-        unsafe {
+        let (_, post_return_arg) = unsafe {
             self.call_raw(
-                store,
+                store.as_context_mut(),
                 |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
                     // SAFETY: it's safe to assume that
                     // `MaybeUninit<array-of-maybe-uninit>` is initialized because
@@ -522,8 +509,10 @@ impl Func {
                     }
                     Ok(())
                 },
-            )
-        }
+            )?
+        };
+
+        self.post_return_impl(store, post_return_arg)
     }
 
     pub(crate) fn lifted_core_func(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
@@ -598,7 +587,7 @@ impl Func {
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
         lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
-    ) -> Result<Return>
+    ) -> Result<(Return, ValRaw)>
     where
         LowerParams: Copy,
         LowerReturn: Copy,
@@ -642,7 +631,7 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        self.with_lower_context(store.as_context_mut(), false, |cx, ty| {
+        self.with_lower_context(store.as_context_mut(), |cx, ty| {
             cx.enter_call();
             lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
@@ -682,70 +671,36 @@ impl Func {
         // is currently required to be 0 or 1 values according to the
         // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
         // later get used in post-return.
-        // flags.set_needs_post_return(true);
         let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
 
         // SAFETY: it's a contract of this function that `LowerReturn` is an
         // appropriate representation of the result of this function.
         let ret_slice = unsafe { storage_as_slice(ret) };
 
-        self.instance.id().get_mut(store.0).post_return_arg_set(
-            self.index,
+        Ok((
+            val,
             match ret_slice.len() {
                 0 => ValRaw::i32(0),
                 1 => ret_slice[0],
                 _ => unreachable!(),
             },
-        );
-
-        return Ok(val);
+        ))
     }
 
-    /// Invokes the `post-return` canonical ABI option, if specified, after a
-    /// [`Func::call`] has finished.
-    ///
-    /// This function is a required method call after a [`Func::call`] completes
-    /// successfully. After the embedder has finished processing the return
-    /// value then this function must be invoked.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error in the case of a WebAssembly trap
-    /// happening during the execution of the `post-return` function, if
-    /// specified.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if it's not called under the correct
-    /// conditions. This can only be called after a previous invocation of
-    /// [`Func::call`] completes successfully, and this function can only
-    /// be called for the same [`Func`] that was `call`'d.
-    ///
-    /// If this function is called when [`Func::call`] was not previously
-    /// called, then it will panic. If a different [`Func`] for the same
-    /// component instance was invoked then this function will also panic
-    /// because the `post-return` needs to happen for the other function.
-    #[inline]
-    pub fn post_return(&self, mut store: impl AsContextMut) -> Result<()> {
-        let store = store.as_context_mut();
-        store.0.validate_sync_call()?;
-        self.post_return_impl(store, false)
+    #[doc(hidden)]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
+    pub fn post_return(&self, _store: impl AsContextMut) -> Result<()> {
+        Ok(())
     }
 
-    /// Exactly like [`Self::post_return`] except for invoke WebAssembly
-    /// [asynchronously](crate#async).
+    #[doc(hidden)]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
     #[cfg(feature = "async")]
-    pub async fn post_return_async(&self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
-        let mut store = store.as_context_mut();
-        // Future optimization opportunity: conditionally use a fiber here since
-        // some func's post_return will not need the async context (i.e. end up
-        // calling async host functionality)
-        store
-            .on_fiber(|store| self.post_return_impl(store, true))
-            .await?
+    pub async fn post_return_async(&self, _store: impl AsContextMut<Data: Send>) -> Result<()> {
+        Ok(())
     }
 
-    fn post_return_impl(&self, mut store: impl AsContextMut, async_: bool) -> Result<()> {
+    pub(crate) fn post_return_impl(&self, mut store: impl AsContextMut, arg: ValRaw) -> Result<()> {
         let mut store = store.as_context_mut();
 
         let index = self.index;
@@ -753,58 +708,10 @@ impl Func {
         let component = vminstance.component();
         let (_ty, _def, options) = component.export_lifted_function(index);
         let post_return = self.post_return_core_func(store.0);
-        let mut flags =
-            vminstance.instance_flags(component.env_component().options[options].instance);
-        let mut instance = self.instance.id().get_mut(store.0);
-        let post_return_arg = instance.as_mut().post_return_arg_take(index);
+        let flags = vminstance.instance_flags(component.env_component().options[options].instance);
 
         unsafe {
-            // First assert that the instance is in a "needs post return" state.
-            // This will ensure that the previous action on the instance was a
-            // function call above. This flag is only set after a component
-            // function returns so this also can't be called (as expected)
-            // during a host import for example.
-            //
-            // Note, though, that this assert is not sufficient because it just
-            // means some function on this instance needs its post-return
-            // called. We need a precise post-return for a particular function
-            // which is the second assert here (the `.expect`). That will assert
-            // that this function itself needs to have its post-return called.
-            //
-            // The theory at least is that these two asserts ensure component
-            // model semantics are upheld where the host properly calls
-            // `post_return` on the right function despite the call being a
-            // separate step in the API.
-            assert!(
-                flags.needs_post_return(),
-                "post_return can only be called after a function has previously been called",
-            );
-            let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
-
-            // Unset the "needs post return" flag now that post-return is being
-            // processed. This will cause future invocations of this method to
-            // panic, even if the function call below traps.
-            flags.set_needs_post_return(false);
-
-            // Post return functions are forbidden from calling imports or
-            // intrinsics.
-            flags.set_may_leave(false);
-
-            // If the function actually had a `post-return` configured in its
-            // canonical options that's executed here.
-            if let Some(func) = post_return {
-                crate::Func::call_unchecked_raw(
-                    &mut store,
-                    func,
-                    NonNull::new(core::ptr::slice_from_raw_parts(&post_return_arg, 1).cast_mut())
-                        .unwrap(),
-                )?;
-            }
-
-            // And finally if everything completed successfully then the "may
-            // leave" flags is set to `true` again here which enables further
-            // use of the component.
-            flags.set_may_leave(true);
+            call_post_return(&mut store, post_return, arg, flags)?;
 
             let (calls, host_table, _, instance) = store
                 .0
@@ -816,7 +723,7 @@ impl Func {
             }
             .exit_call()?;
 
-            if !async_ && store.0.concurrency_support() {
+            if store.0.concurrency_support() {
                 store.0.exit_sync_call(false)?;
             }
         }
@@ -932,11 +839,9 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
-        call_post_return_automatically: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
-        let async_ = options.async_;
+        let (options_idx, mut flags, ty, _) = self.abi_info(store.0);
 
         // Perform the actual lowering, where while this is running the
         // component is forbidden from calling imports.
@@ -948,17 +853,7 @@ impl Func {
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
         let result = lower(&mut cx, param_ty);
         unsafe { flags.set_may_leave(true) };
-        result?;
-
-        // If needed, flag a post-return call being required as we're about to
-        // enter wasm and afterwards need a post-return.
-        unsafe {
-            if !(call_post_return_automatically && async_) {
-                flags.set_needs_post_return(true);
-            }
-        }
-
-        Ok(())
+        result
     }
 
     /// Creates a `LiftContext` using the configuration values with this lifted
@@ -1008,4 +903,34 @@ impl TaskExit {
         // once the future resolves:
         _ = self.0.await;
     }
+}
+
+pub(crate) unsafe fn call_post_return(
+    mut store: impl AsContextMut,
+    func: Option<NonNull<VMFuncRef>>,
+    arg: ValRaw,
+    mut flags: InstanceFlags,
+) -> Result<()> {
+    unsafe {
+        // Post return functions are forbidden from calling imports or
+        // intrinsics.
+        flags.set_may_leave(false);
+
+        // If the function actually had a `post-return` configured in its
+        // canonical options that's executed here.
+        if let Some(func) = func {
+            crate::Func::call_unchecked_raw(
+                &mut store.as_context_mut(),
+                func,
+                core::slice::from_ref(&arg).into(),
+            )?;
+        }
+
+        // And finally if everything completed successfully then the "may
+        // leave" flags is set to `true` again here which enables further
+        // use of the component.
+        flags.set_may_leave(true);
+    }
+
+    Ok(())
 }

@@ -227,7 +227,6 @@ const _: () = {
                 wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
             };
             let (ret0,) = callee.call(store.as_context_mut(), ())?;
-            callee.post_return(store.as_context_mut())?;
             Ok(ret0)
         }
     }

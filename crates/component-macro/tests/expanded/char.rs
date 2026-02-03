@@ -334,7 +334,6 @@ pub mod exports {
                             >::new_unchecked(self.take_char)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     /// A function that returns a character
@@ -349,7 +348,6 @@ pub mod exports {
                             >::new_unchecked(self.return_char)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

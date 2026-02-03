@@ -2,7 +2,7 @@ use crate::async_functions::{PollOnce, execute_across_threads};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use wasmtime::Result;
-use wasmtime::{AsContextMut, Config, component::*};
+use wasmtime::{Config, component::*};
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
@@ -36,7 +36,6 @@ async fn smoke() -> Result<()> {
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    thunk.post_return_async(&mut store).await?;
 
     let err = instance
         .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
@@ -88,7 +87,6 @@ async fn smoke_func_wrap() -> Result<()> {
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    thunk.post_return_async(&mut store).await?;
 
     Ok(())
 }
@@ -305,7 +303,6 @@ async fn drop_resource_async() -> Result<()> {
     execute_across_threads(async move {
         let resource = Resource::new_own(100);
         f.call_async(&mut store, (resource,)).await?;
-        f.post_return_async(&mut store).await?;
         Ok::<_, wasmtime::Error>(())
     })
     .await?;
@@ -664,7 +661,6 @@ async fn task_deletion() -> Result<()> {
     for func in funcs {
         let func = instance.get_typed_func::<(), (u32,)>(&mut store, func)?;
         assert_eq!(func.call_async(&mut store, ()).await?, (42,));
-        func.post_return_async(store.as_context_mut()).await?;
     }
 
     Ok(())

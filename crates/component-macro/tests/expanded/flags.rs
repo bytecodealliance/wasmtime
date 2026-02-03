@@ -731,7 +731,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag1)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
@@ -746,7 +745,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
@@ -761,7 +759,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
@@ -776,7 +773,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag8)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
@@ -791,7 +787,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag16)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
@@ -806,7 +801,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag32)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
@@ -821,7 +815,6 @@ pub mod exports {
                             >::new_unchecked(self.roundtrip_flag64)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

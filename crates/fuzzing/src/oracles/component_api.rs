@@ -278,9 +278,7 @@ where
                     .await
                     .unwrap()
             } else {
-                let result = func.call_async(&mut store, params).await.unwrap();
-                func.post_return_async(&mut store).await.unwrap();
-                result
+                func.call_async(&mut store, params).await.unwrap()
             };
             log::trace!("got result {actual:?}");
             assert_eq!(actual, result);
@@ -382,7 +380,6 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
                 func.call_async(&mut store, &params, &mut actual)
                     .await
                     .unwrap();
-                func.post_return_async(&mut store).await.unwrap();
             }
             log::trace!("received results {actual:?}");
             assert_eq!(actual, results);

@@ -59,7 +59,6 @@ fn call_wrapped_func() -> Result<()> {
         .expect("looking up `export`");
 
     export.call(&mut store, ())?;
-    export.post_return(&mut store)?;
 
     let s = store.into_data();
     assert_eq!(s.calls_into_host, 1);
@@ -126,8 +125,6 @@ fn call_func_with_realloc() -> Result<()> {
     let result = res.to_str(&store)?;
     assert_eq!(&message, &result);
 
-    export.post_return(&mut store)?;
-
     // There are two wasm calls for the `list8-to-str` call and the guest realloc call for the list
     // argument.
     let s = store.into_data();
@@ -172,12 +169,6 @@ fn call_func_with_post_return() -> Result<()> {
         .expect("looking up `export`");
 
     export.call(&mut store, ())?;
-
-    // Before post-return, there will only have been one call into wasm.
-    assert_eq!(store.data().calls_into_wasm, 1);
-    assert_eq!(store.data().returns_from_wasm, 1);
-
-    export.post_return(&mut store)?;
 
     // There are no host calls in this example, but the post-return does increment the count of
     // wasm calls by 1, putting the total number of wasm calls at 2.
@@ -244,7 +235,6 @@ async fn call_wrapped_async_func() -> Result<()> {
         .expect("looking up `export`");
 
     export.call_async(&mut store, ()).await?;
-    export.post_return_async(&mut store).await?;
 
     let s = store.into_data();
     assert_eq!(s.calls_into_host, 1);
@@ -330,7 +320,6 @@ fn trapping() -> Result<()> {
 
         let mut r = export.call(&mut store, (action,));
         if r.is_ok() && again {
-            export.post_return(&mut store).unwrap();
             r = export.call(&mut store, (action,));
         }
         (store.into_data(), r.err())
