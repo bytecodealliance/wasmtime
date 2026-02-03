@@ -1,8 +1,11 @@
+use crate::alloc::try_realloc;
 use crate::error::OutOfMemory;
 use core::{
     fmt, mem,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
+use std_alloc::alloc::Layout;
+use std_alloc::boxed::Box;
 use std_alloc::vec::Vec as StdVec;
 
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
@@ -91,11 +94,21 @@ impl<T> Vec<T> {
     /// Same as [`std::vec::Vec::into_raw_parts`].
     pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
         // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
-        let ptr = self.as_mut_ptr();
-        let len = self.len();
-        let cap = self.capacity();
-        mem::forget(self);
-        (ptr, len, cap)
+        #[cfg(not(miri))]
+        {
+            let ptr = self.as_mut_ptr();
+            let len = self.len();
+            let cap = self.capacity();
+            mem::forget(self);
+            (ptr, len, cap)
+        }
+        // NB: Miri requires using `into_raw_parts`, but always run on nightly,
+        // so it's fine to use there.
+        #[cfg(miri)]
+        {
+            let _ = &mut self;
+            self.inner.into_raw_parts()
+        }
     }
 
     /// Same as [`std::vec::Vec::from_raw_parts`].
@@ -112,6 +125,69 @@ impl<T> Vec<T> {
         R: core::ops::RangeBounds<usize>,
     {
         self.inner.drain(range)
+    }
+
+    /// Same as [`std::vec::Vec::into_boxed_slice`].
+    pub fn into_boxed_slice(self) -> Result<Box<[T]>, OutOfMemory> {
+        // `realloc` requires a non-zero original layout as well as a non-zero
+        // destination layout, so this guard ensures that the sizes below are
+        // all nonzero. This handles a few case:
+        //
+        // * If `len == cap == 0` then no allocation has ever been made.
+        // * If `len == 0` and `cap != 0` then this function effectively frees
+        //   the memory.
+        // * If `T` is a zero-sized type then nothing's been allocated either.
+        //
+        // In all of these cases delegate to the standard library's
+        // `into_boxed_slice` which is guaranteed to not perform a `realloc`.
+        if self.is_empty() || mem::size_of::<T>() == 0 {
+            return Ok(self.inner.into_boxed_slice());
+        }
+
+        let (ptr, len, cap) = self.into_raw_parts();
+        let layout = Layout::array::<T>(cap).unwrap();
+        let new_len = Layout::array::<T>(len).unwrap().size();
+
+        // SAFETY: `ptr` was previously allocated in the global allocator,
+        // `layout` has a nonzero size and matches the current allocation of
+        // `ptr`, `new_size` is nonzero, and `new_size` is a valid array size
+        // for `len` elements given its constructor.
+        let result = unsafe { try_realloc(ptr.cast(), layout, new_len) };
+
+        match result {
+            Ok(ptr) => {
+                // SAFETY: `result` is allocated with the global allocator with
+                // an appropriate size/align to create this `Box` with.
+                unsafe {
+                    Ok(Box::from_raw(core::ptr::slice_from_raw_parts_mut(
+                        ptr.as_ptr().cast(),
+                        len,
+                    )))
+                }
+            }
+            Err(oom) => {
+                // SAFETY: If reallocation fails then it's guaranteed that the
+                // original allocation is not tampered with, so it's safe to
+                // reassemble it back into the original vector.
+                unsafe {
+                    let _ = Vec::from_raw_parts(ptr, len, cap);
+                }
+                Err(oom)
+            }
+        }
+    }
+
+    /// Same as [`std::vec::Vec::extend`].
+    pub fn extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let iter = iter.into_iter();
+        self.reserve(iter.size_hint().0)?;
+        for item in iter {
+            self.push(item)?;
+        }
+        Ok(())
     }
 }
 
@@ -169,5 +245,57 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         (**self).iter_mut()
+    }
+}
+
+impl<T> From<Box<[T]>> for Vec<T> {
+    fn from(boxed_slice: Box<[T]>) -> Self {
+        Vec {
+            inner: StdVec::from(boxed_slice),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Vec;
+    use crate::error::OutOfMemory;
+
+    #[test]
+    fn test_into_boxed_slice() -> Result<(), OutOfMemory> {
+        assert_eq!(*Vec::<i32>::new().into_boxed_slice()?, []);
+
+        let mut vec = Vec::new();
+        vec.push(1)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        let mut vec = Vec::with_capacity(2)?;
+        vec.push(1)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        let mut vec = Vec::with_capacity(2)?;
+        vec.push(1_u128)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        assert_eq!(*Vec::<()>::new().into_boxed_slice()?, []);
+
+        let mut vec = Vec::new();
+        vec.push(())?;
+        assert_eq!(*vec.into_boxed_slice()?, [()]);
+
+        let vec = Vec::<i32>::with_capacity(2)?;
+        assert_eq!(*vec.into_boxed_slice()?, []);
+        Ok(())
+    }
+
+    #[test]
+    fn test_extend() -> Result<(), OutOfMemory> {
+        let mut vec = Vec::new();
+        vec.extend([1, 2, 3].iter().cloned())?;
+        assert_eq!(&*vec, &[1, 2, 3]);
+
+        vec.extend([])?;
+        assert_eq!(&*vec, &[1, 2, 3]);
+        Ok(())
     }
 }

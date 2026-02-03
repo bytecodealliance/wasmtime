@@ -2,9 +2,11 @@ use cranelift_bitset::CompoundBitSet;
 use std::{
     alloc::{Layout, alloc},
     fmt::{self, Write},
+    iter,
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 use wasmtime::{error::OutOfMemory, *};
+use wasmtime_core::alloc::TryCollect;
 use wasmtime_environ::{PrimaryMap, SecondaryMap, collections::*};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
@@ -322,5 +324,27 @@ fn alternate_debug_fmt_error() -> Result<()> {
         let error = error.context("goodbye");
         write!(&mut Null, "{error:#?}").unwrap();
         ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn vec_try_collect() -> Result<()> {
+    OomTest::new().test(|| {
+        iter::repeat(1).take(0).try_collect::<Vec<_>, _>()?;
+        iter::repeat(1).take(1).try_collect::<Vec<_>, _>()?;
+        iter::repeat(1).take(100).try_collect::<Vec<_>, _>()?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_extend() -> Result<()> {
+    use wasmtime_core::alloc::Vec;
+    OomTest::new().test(|| {
+        let mut vec = Vec::new();
+        vec.extend([])?;
+        vec.extend([1])?;
+        vec.extend([1, 2, 3, 4])?;
+        Ok(())
     })
 }
