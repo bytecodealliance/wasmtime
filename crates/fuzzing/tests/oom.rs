@@ -143,6 +143,47 @@ fn entity_set_insert() -> Result<()> {
 }
 
 #[test]
+fn hash_set_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _s = HashSet::<usize>::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = HashSet::<usize>::new();
+        set.reserve(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = HashSet::<usize>::new();
+        set.insert(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_entry() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = HashSet::<usize>::new();
+        for i in (0..10).filter(|x| *x % 2 == 0) {
+            set.insert(i)?;
+        }
+        for i in 0..10 {
+            set.entry(i)?.or_insert();
+            assert!(set.contains(&i));
+        }
+        Ok(())
+    })
+}
+
+#[test]
 fn vec_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
         let _v = wasmtime_environ::collections::Vec::<usize>::with_capacity(100)?;
