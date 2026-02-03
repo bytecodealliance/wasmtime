@@ -439,7 +439,7 @@ impl Func {
             MAX_FLAT_PARAMS,
             false,
             move |func, store, params_out| {
-                func.with_lower_context(store, true, |cx, ty| {
+                func.with_lower_context(store, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -490,7 +490,7 @@ impl Func {
         //   safe in Rust, however, due to `ValRaw` being a `union`. The
         //   contents should dynamically not be read due to the type of the
         //   function used here matching the actual lift.
-        unsafe {
+        let (_, post_return_arg) = unsafe {
             self.call_raw(
                 store.as_context_mut(),
                 |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
@@ -510,9 +510,9 @@ impl Func {
                     Ok(())
                 },
             )?
-        }
+        };
 
-        self.post_return_impl(store)
+        self.post_return_impl(store, post_return_arg)
     }
 
     pub(crate) fn lifted_core_func(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
@@ -587,7 +587,7 @@ impl Func {
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
         lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
-    ) -> Result<Return>
+    ) -> Result<(Return, ValRaw)>
     where
         LowerParams: Copy,
         LowerReturn: Copy,
@@ -631,7 +631,7 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        self.with_lower_context(store.as_context_mut(), false, |cx, ty| {
+        self.with_lower_context(store.as_context_mut(), |cx, ty| {
             cx.enter_call();
             lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
@@ -671,23 +671,20 @@ impl Func {
         // is currently required to be 0 or 1 values according to the
         // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
         // later get used in post-return.
-        // flags.set_needs_post_return(true);
         let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
 
         // SAFETY: it's a contract of this function that `LowerReturn` is an
         // appropriate representation of the result of this function.
         let ret_slice = unsafe { storage_as_slice(ret) };
 
-        self.instance.id().get_mut(store.0).post_return_arg_set(
-            self.index,
+        Ok((
+            val,
             match ret_slice.len() {
                 0 => ValRaw::i32(0),
                 1 => ret_slice[0],
                 _ => unreachable!(),
             },
-        );
-
-        return Ok(val);
+        ))
     }
 
     #[doc(hidden)]
@@ -703,7 +700,7 @@ impl Func {
         Ok(())
     }
 
-    pub(crate) fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
+    pub(crate) fn post_return_impl(&self, mut store: impl AsContextMut, arg: ValRaw) -> Result<()> {
         let mut store = store.as_context_mut();
 
         let index = self.index;
@@ -712,33 +709,9 @@ impl Func {
         let (_ty, _def, options) = component.export_lifted_function(index);
         let post_return = self.post_return_core_func(store.0);
         let flags = vminstance.instance_flags(component.env_component().options[options].instance);
-        let mut instance = self.instance.id().get_mut(store.0);
-        let post_return_arg = instance.as_mut().post_return_arg_take(index);
 
         unsafe {
-            // First assert that the instance is in a "needs post return" state.
-            // This will ensure that the previous action on the instance was a
-            // function call above. This flag is only set after a component
-            // function returns so this also can't be called (as expected)
-            // during a host import for example.
-            //
-            // Note, though, that this assert is not sufficient because it just
-            // means some function on this instance needs its post-return
-            // called. We need a precise post-return for a particular function
-            // which is the second assert here (the `.expect`). That will assert
-            // that this function itself needs to have its post-return called.
-            //
-            // The theory at least is that these two asserts ensure component
-            // model semantics are upheld where the host properly calls
-            // `post_return` on the right function despite the call being a
-            // separate step in the API.
-            assert!(
-                flags.needs_post_return(),
-                "post_return can only be called after a function has previously been called",
-            );
-            let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
-
-            call_post_return(&mut store, post_return, post_return_arg, flags)?;
+            call_post_return(&mut store, post_return, arg, flags)?;
 
             let (calls, host_table, _, instance) = store
                 .0
@@ -866,11 +839,9 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
-        call_post_return_automatically: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let (options_idx, mut flags, ty, options) = self.abi_info(store.0);
-        let async_ = options.async_;
+        let (options_idx, mut flags, ty, _) = self.abi_info(store.0);
 
         // Perform the actual lowering, where while this is running the
         // component is forbidden from calling imports.
@@ -882,17 +853,7 @@ impl Func {
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
         let result = lower(&mut cx, param_ty);
         unsafe { flags.set_may_leave(true) };
-        result?;
-
-        // If needed, flag a post-return call being required as we're about to
-        // enter wasm and afterwards need a post-return.
-        unsafe {
-            if !(call_post_return_automatically && async_) {
-                flags.set_needs_post_return(true);
-            }
-        }
-
-        Ok(())
+        result
     }
 
     /// Creates a `LiftContext` using the configuration values with this lifted
@@ -951,11 +912,6 @@ pub(crate) unsafe fn call_post_return(
     mut flags: InstanceFlags,
 ) -> Result<()> {
     unsafe {
-        // Unset the "needs post return" flag now that post-return is being
-        // processed. This will cause future invocations of this method to
-        // panic, even if the function call below traps.
-        flags.set_needs_post_return(false);
-
         // Post return functions are forbidden from calling imports or
         // intrinsics.
         flags.set_may_leave(false);
@@ -966,7 +922,7 @@ pub(crate) unsafe fn call_post_return(
             crate::Func::call_unchecked_raw(
                 &mut store.as_context_mut(),
                 func,
-                std::slice::from_ref(&arg).into(),
+                core::slice::from_ref(&arg).into(),
             )?;
         }
 

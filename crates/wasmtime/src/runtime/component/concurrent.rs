@@ -1518,14 +1518,14 @@ impl StoreOpaque {
     /// - `self` has not been poisoned due to a trap.
     pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
         if !self.concurrency_support() {
-            return self.may_enter_at_all(instance);
+            return !self.trapped();
         }
         let state = self.concurrent_state_mut();
         if let Some(caller) = state.guest_thread {
             instance != state.get_mut(caller.task).unwrap().instance
                 && self.may_enter_from_caller(caller.task, instance)
         } else {
-            self.may_enter_at_all(instance)
+            !self.trapped()
         }
     }
 
@@ -1543,7 +1543,7 @@ impl StoreOpaque {
         mut guest_task: TableId<GuestTask>,
         instance: RuntimeInstance,
     ) -> bool {
-        self.may_enter_at_all(instance) && {
+        !self.trapped() && {
             let state = self.concurrent_state_mut();
             let guest_instance = instance.instance;
             loop {

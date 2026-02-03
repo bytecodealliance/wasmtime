@@ -380,7 +380,7 @@ where
             param_count,
             host_future_present,
             move |func, store, params_out| {
-                func.with_lower_context(store, true, |cx, ty| lower(cx, ty, params_out))
+                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -439,7 +439,7 @@ where
         // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
         // combination with checking the various possible branches here and
         // dispatching to appropriately typed functions.
-        let result = unsafe {
+        let (result, post_return_arg) = unsafe {
             // This type is used as `LowerParams` for `call_raw` which is either
             // `Params::Lower` or `ValRaw` representing it's either on the stack
             // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
@@ -473,7 +473,7 @@ where
             }
         }?;
 
-        self.func.post_return_impl(store)?;
+        self.func.post_return_impl(store, post_return_arg)?;
 
         Ok(result)
     }
