@@ -4,6 +4,9 @@
 // really possible to modify just one bit of this file without understanding
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
+//
+// This file is modelled after riscv64.rs. For reference be sure to review the
+// other file.
 
 use core::arch::naked_asm;
 
@@ -17,7 +20,9 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
     naked_asm!(
         "
       // See https://github.com/rust-lang/rust/issues/80608.
-      .attribute arch, \"rv64gc\"
+      .attribute arch, \"rv32i\" // This implementation should work for any
+      // architecture with the same registers as riscv32i, e.g. riscv32imac,
+      // but not riscv32gc.
 
       // We're switching to arbitrary code somewhere else, so pessimistically
       // assume that all callee-save register are clobbered. This means we need
@@ -25,65 +30,41 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
       //
       // Note that this order for saving is important since we use CFI directives
       // below to point to where all the saved registers are.
-      sd ra, -0x8(sp)
-      sd fp, -0x10(sp)
-      sd s1, -0x18(sp)
-      sd s2, -0x20(sp)
-      sd s3, -0x28(sp)
-      sd s4, -0x30(sp)
-      sd s5, -0x38(sp)
-      sd s6, -0x40(sp)
-      sd s7, -0x48(sp)
-      sd s8, -0x50(sp)
-      sd s9, -0x58(sp)
-      sd s10, -0x60(sp)
-      sd s11, -0x68(sp)
-      fsd fs0, -0x70(sp)
-      fsd fs1, -0x78(sp)
-      fsd fs2, -0x80(sp)
-      fsd fs3, -0x88(sp)
-      fsd fs4, -0x90(sp)
-      fsd fs5, -0x98(sp)
-      fsd fs6, -0xa0(sp)
-      fsd fs7, -0xa8(sp)
-      fsd fs8, -0xb0(sp)
-      fsd fs9, -0xb8(sp)
-      fsd fs10, -0xc0(sp)
-      fsd fs11, -0xc8(sp)
-      addi sp, sp, -0xd0
+      sw ra, -0x4(sp)
+      sw fp, -0x8(sp) // fp is s0
+      sw s1, -0xc(sp)
+      sw s2, -0x10(sp)
+      sw s3, -0x14(sp)
+      sw s4, -0x18(sp)
+      sw s5, -0x1c(sp)
+      sw s6, -0x20(sp)
+      sw s7, -0x24(sp)
+      sw s8, -0x28(sp)
+      sw s9, -0x2c(sp)
+      sw s10, -0x30(sp)
+      sw s11, -0x34(sp)
+      addi sp, sp, -0x40 // Choose 0x40 to be 16-byte aligned
 
-      ld t0, -0x10(a0)
-      sd sp, -0x10(a0)
+      lw t0, -0x8(a0)
+      sw sp, -0x8(a0)
 
       // Swap stacks and restore all our callee-saved registers
       mv sp, t0
 
-      fld fs11, 0x8(sp)
-      fld fs10, 0x10(sp)
-      fld fs9, 0x18(sp)
-      fld fs8, 0x20(sp)
-      fld fs7, 0x28(sp)
-      fld fs6, 0x30(sp)
-      fld fs5, 0x38(sp)
-      fld fs4, 0x40(sp)
-      fld fs3, 0x48(sp)
-      fld fs2, 0x50(sp)
-      fld fs1, 0x58(sp)
-      fld fs0, 0x60(sp)
-      ld s11, 0x68(sp)
-      ld s10, 0x70(sp)
-      ld s9, 0x78(sp)
-      ld s8, 0x80(sp)
-      ld s7, 0x88(sp)
-      ld s6, 0x90(sp)
-      ld s5, 0x98(sp)
-      ld s4, 0xa0(sp)
-      ld s3, 0xa8(sp)
-      ld s2, 0xb0(sp)
-      ld s1, 0xb8(sp)
-      ld fp, 0xc0(sp)
-      ld ra, 0xc8(sp)
-      addi sp, sp, 0xd0
+      lw s11, 0xc(sp)
+      lw s10, 0x10(sp)
+      lw s9, 0x14(sp)
+      lw s8, 0x18(sp)
+      lw s7, 0x1c(sp)
+      lw s6, 0x20(sp)
+      lw s5, 0x24(sp)
+      lw s4, 0x28(sp)
+      lw s3, 0x2c(sp)
+      lw s2, 0x30(sp)
+      lw s1, 0x34(sp)
+      lw fp, 0x38(sp)
+      lw ra, 0x3c(sp)
+      addi sp, sp, 0x40
       jr ra
         ",
     );
@@ -97,9 +78,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
     #[repr(C)]
     #[derive(Default)]
     struct InitialStack {
-        align_to_16_byte_size: u64,
-
-        fs: [f64; 12],
+        padding: [u8; 12], // 12 bytes of padding for 16-byte alignment
 
         s11: *mut u8,
         s10: *mut u8,
@@ -117,6 +96,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
         ra: *mut u8,
 
         // unix.rs reserved space
+        padding_2: [u8; 8], // 8 bytes of padding for 16-byte alignment
         last_sp: *mut u8,
         run_result: *mut u8,
     }
@@ -146,41 +126,29 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
       5,             /* the byte length of this expression */ \
       0x52,          /* DW_OP_reg2 (sp) */ \
       0x06,          /* DW_OP_deref */ \
-      0x08, 0xd0,    /* DW_OP_const1u 0xc8 */ \
+      0x08, 0x40,    /* DW_OP_const1u 0x40 */ \
       0x22           /* DW_OP_plus */
 
 
-      .cfi_rel_offset ra, -0x8
-      .cfi_rel_offset fp, -0x10
-      .cfi_rel_offset s1, -0x18
-      .cfi_rel_offset s2, -0x20
-      .cfi_rel_offset s3, -0x28
-      .cfi_rel_offset s4, -0x30
-      .cfi_rel_offset s5, -0x38
-      .cfi_rel_offset s6, -0x40
-      .cfi_rel_offset s7, -0x48
-      .cfi_rel_offset s8, -0x50
-      .cfi_rel_offset s9, -0x58
-      .cfi_rel_offset s10, -0x60
-      .cfi_rel_offset s11, -0x68
-      .cfi_rel_offset fs0, -0x70
-      .cfi_rel_offset fs1, -0x78
-      .cfi_rel_offset fs2, -0x80
-      .cfi_rel_offset fs3, -0x88
-      .cfi_rel_offset fs4, -0x90
-      .cfi_rel_offset fs5, -0x98
-      .cfi_rel_offset fs6, -0xa0
-      .cfi_rel_offset fs7, -0xa8
-      .cfi_rel_offset fs8, -0xb0
-      .cfi_rel_offset fs9, -0xb8
-      .cfi_rel_offset fs10, -0xc0
-      .cfi_rel_offset fs11, -0xc8
+      .cfi_rel_offset ra, -0x4
+      .cfi_rel_offset fp, -0x8
+      .cfi_rel_offset s1, -0xc
+      .cfi_rel_offset s2, -0x10
+      .cfi_rel_offset s3, -0x14
+      .cfi_rel_offset s4, -0x18
+      .cfi_rel_offset s5, -0x1c
+      .cfi_rel_offset s6, -0x20
+      .cfi_rel_offset s7, -0x24
+      .cfi_rel_offset s8, -0x28
+      .cfi_rel_offset s9, -0x2c
+      .cfi_rel_offset s10, -0x30
+      .cfi_rel_offset s11, -0x34
 
       mv a0, s2
       mv a1, fp
       jalr s1
       // .4byte 0 will cause panic.
-      // for safety just like x86_64.rs.
+      // for safety just like x86_64.rs and riscv64.rs.
       .4byte 0
       .cfi_endproc
   ",
