@@ -96,6 +96,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
         ra: *mut u8,
 
         // unix.rs reserved space
+        padding_2: [u8; 8], // 8 bytes of padding for 16-byte alignment
         last_sp: *mut u8,
         run_result: *mut u8,
     }
