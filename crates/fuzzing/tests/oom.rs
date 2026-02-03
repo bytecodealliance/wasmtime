@@ -374,17 +374,17 @@ fn vec_try_collect() -> Result<()> {
 
 #[test]
 fn vec_extend() -> Result<()> {
-    use wasmtime_core::alloc::Vec;
+    use wasmtime_core::alloc::{TryExtend, Vec};
     OomTest::new().test(|| {
         let mut vec = Vec::new();
-        vec.extend([])?;
-        vec.extend([1])?;
-        vec.extend([1, 2, 3, 4])?;
+        vec.try_extend([])?;
+        vec.try_extend([1])?;
+        vec.try_extend([1, 2, 3, 4])?;
 
         let mut vec = Vec::new();
-        vec.extend([])?;
-        vec.extend([()])?;
-        vec.extend([(), (), ()])?;
+        vec.try_extend([])?;
+        vec.try_extend([()])?;
+        vec.try_extend([(), (), ()])?;
         Ok(())
     })
 }
