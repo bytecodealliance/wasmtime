@@ -204,10 +204,7 @@ impl Func {
     /// size of `results` exactly matches the number of results that this
     /// function produces.
     ///
-    /// Note that after a function is invoked the embedder needs to invoke
-    /// [`Func::post_return`] to execute any final cleanup required by the
-    /// guest. This function call is required to either call the function again
-    /// or to call another function.
+    /// This will also call the corresponding `post-return` function, if any.
     ///
     /// For more detailed information see the documentation of
     /// [`TypedFunc::call`].
@@ -238,14 +235,10 @@ impl Func {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
         self.call_impl(store.as_context_mut(), params, results)?;
-        self.post_return_impl(store)?;
         Ok(())
     }
 
     /// Exactly like [`Self::call`] except for use on async stores.
-    ///
-    /// Note that after this [`Func::post_return_async`] will be used instead of
-    /// the synchronous version at [`Func::post_return`].
     ///
     /// # Panics
     ///
@@ -311,8 +304,7 @@ impl Func {
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
-    /// (if any) automatically when the guest task completes -- no need to
-    /// explicitly call `Func::post_return` afterward.
+    /// (if any) automatically when the guest task completes.
     ///
     /// This returns a [`TaskExit`] representing the completion of the guest
     /// task and any transitive subtasks it might create.
@@ -500,7 +492,7 @@ impl Func {
         //   function used here matching the actual lift.
         unsafe {
             self.call_raw(
-                store,
+                store.as_context_mut(),
                 |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
                     // SAFETY: it's safe to assume that
                     // `MaybeUninit<array-of-maybe-uninit>` is initialized because
@@ -517,8 +509,10 @@ impl Func {
                     }
                     Ok(())
                 },
-            )
+            )?
         }
+
+        self.post_return_impl(store)
     }
 
     pub(crate) fn lifted_core_func(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
@@ -697,13 +691,13 @@ impl Func {
     }
 
     #[doc(hidden)]
-    #[deprecated(note = "no longer has any effect")]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
     pub fn post_return(&self, _store: impl AsContextMut) -> Result<()> {
         Ok(())
     }
 
     #[doc(hidden)]
-    #[deprecated(note = "no longer has any effect")]
+    #[deprecated(note = "no longer needs to be called; this function has no effect")]
     #[cfg(feature = "async")]
     pub async fn post_return_async(&self, _store: impl AsContextMut<Data: Send>) -> Result<()> {
         Ok(())

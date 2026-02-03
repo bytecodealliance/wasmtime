@@ -32,7 +32,7 @@ pub unsafe extern "C" fn wasmtime_component_func_post_return(
     _func: &Func,
     _context: WasmtimeStoreContextMut<'_>,
 ) -> Option<Box<wasmtime_error_t>> {
-    crate::handle_result(Ok(()), |_| {})
+    None
 }
 
 #[unsafe(no_mangle)]
