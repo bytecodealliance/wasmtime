@@ -7,10 +7,10 @@ use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::WasmExnType;
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
-    WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
-    WasmSubType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes,
+    PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
+    WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
+    WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
 };
 
 pub(crate) mod matching;
@@ -2091,7 +2091,7 @@ impl StructType {
                     inner: WasmCompositeInnerType::Struct(ty),
                 },
             },
-        );
+        )?;
         Ok(Self {
             registered_type: ty,
         })
@@ -2332,7 +2332,8 @@ impl ArrayType {
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
-        );
+        )
+        .panic_on_oom();
         Self {
             registered_type: ty,
         }
@@ -2684,7 +2685,8 @@ impl FuncType {
                     inner: WasmCompositeInnerType::Func(ty),
                 },
             },
-        );
+        )
+        .panic_on_oom();
         Self {
             registered_type: ty,
         }
@@ -2860,7 +2862,8 @@ impl ExnType {
                     }),
                 },
             },
-        );
+        )
+        .panic_on_oom();
 
         Self {
             func_ty,
