@@ -4518,8 +4518,6 @@ dependencies = [
  "futures",
  "fxprof-processed-profile",
  "gimli 0.33.0",
- "hashbrown 0.15.2",
- "indexmap 2.11.4",
  "ittapi",
  "libc",
  "libtest-mimic",
