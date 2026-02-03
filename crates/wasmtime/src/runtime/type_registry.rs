@@ -23,9 +23,6 @@ use core::{
         Ordering::{AcqRel, Acquire, Release},
     },
 };
-use wasmtime_core::alloc::{
-    boxed_slice_write_iter, new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
-};
 use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
@@ -761,22 +758,19 @@ impl TypeRegistryInner {
         // potential engine canonicalization eventuality.
         let mut non_canon_types = Vec::with_capacity(types.len())?;
         let hash_consing_key = WasmRecGroup {
-            types: new_boxed_slice_from_iter_with_len(
-                types.len(),
-                types
-                    .zip(iter_entity_range(range.clone()))
-                    .map(|(mut ty, module_index)| {
-                        non_canon_types
-                            .push((module_index, ty.clone()))
-                            .expect("reserved capacity");
-                        ty.canonicalize_for_hash_consing(range.clone(), &mut |idx| {
-                            debug_assert!(idx < range.clone().start);
-                            map[idx]
-                        });
-                        ty
-                    }),
-            )
-            .map_err(|e| e.unwrap_oom())?,
+            types: types
+                .zip(iter_entity_range(range.clone()))
+                .map(|(mut ty, module_index)| {
+                    non_canon_types
+                        .push((module_index, ty.clone()))
+                        .expect("reserved capacity");
+                    ty.canonicalize_for_hash_consing(range.clone(), &mut |idx| {
+                        debug_assert!(idx < range.clone().start);
+                        map[idx]
+                    });
+                    ty
+                })
+                .try_collect()?,
         };
 
         // Any references in the hash-consing key to types outside of this rec
@@ -819,7 +813,8 @@ impl TypeRegistryInner {
             // much as possible.
             let num_types = non_canon_types.len();
             self.reserve_capacity_for_rec_group(num_types)?;
-            let shared_type_indices = new_uninit_boxed_slice(num_types)?;
+            let mut shared_type_indices = Vec::new();
+            shared_type_indices.reserve_exact(num_types)?;
             let entry_inner = RecGroupEntry::new_inner()?;
 
             // Assign a `VMSharedTypeIndex` to each type.
@@ -966,14 +961,11 @@ impl TypeRegistryInner {
 
                 let supertype = supertype.unwrap_engine_type_index();
                 let supers_supertypes = self.supertypes(supertype);
-                let supertypes = new_boxed_slice_from_iter_with_len(
-                    supers_supertypes.len() + 1,
-                    supers_supertypes
-                        .iter()
-                        .copied()
-                        .chain(iter::once(supertype)),
-                )
-                .map_err(|e| e.unwrap_oom())?;
+                let supertypes = supers_supertypes
+                    .iter()
+                    .copied()
+                    .chain(iter::once(supertype))
+                    .try_collect()?;
 
                 self.type_to_supertypes
                     .insert(ty, Some(supertypes))
@@ -1155,25 +1147,27 @@ impl TypeRegistryInner {
     fn assign_shared_type_indices(
         &mut self,
         non_canon_types: &[(ModuleInternedTypeIndex, WasmSubType)],
-        shared_type_indices: Box<[core::mem::MaybeUninit<VMSharedTypeIndex>]>,
+        mut shared_type_indices: Vec<VMSharedTypeIndex>,
     ) -> Box<[VMSharedTypeIndex]> {
-        debug_assert_eq!(non_canon_types.len(), shared_type_indices.len());
+        debug_assert_eq!(non_canon_types.len(), shared_type_indices.capacity());
+        debug_assert!(shared_type_indices.is_empty());
         debug_assert!(
             self.types.capacity() - self.types.len() >= non_canon_types.len(),
             "should have reserved capacity"
         );
-        boxed_slice_write_iter(
-            shared_type_indices,
-            non_canon_types.iter().map(|(module_index, ty)| {
-                let engine_index =
-                    slab_id_to_shared_type_index(self.types.alloc(None).expect("have capacity"));
-                log::trace!(
-                    "reserved {engine_index:?} for {module_index:?} = non-canonical {ty:?}"
-                );
-                engine_index
-            }),
-        )
-        .expect("iterator is same length as slice")
+        for (module_index, ty) in non_canon_types.iter() {
+            let engine_index =
+                slab_id_to_shared_type_index(self.types.alloc(None).expect("have capacity"));
+            log::trace!("reserved {engine_index:?} for {module_index:?} = non-canonical {ty:?}");
+            shared_type_indices
+                .push(engine_index)
+                .expect("reserved capacity");
+        }
+
+        debug_assert_eq!(shared_type_indices.len(), shared_type_indices.capacity());
+        shared_type_indices
+            .into_boxed_slice()
+            .expect("capacity should be exact")
     }
 
     /// For each cross-rec group type reference inside `entry`, increment the
