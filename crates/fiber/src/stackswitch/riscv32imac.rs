@@ -30,41 +30,41 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
       //
       // Note that this order for saving is important since we use CFI directives
       // below to point to where all the saved registers are.
-      sw ra,-0x4(sp)
-      sw fp,-0x8(sp) // fp is s0
-      sw s1,-0xc(sp)
-      sw s2,-0x10(sp)
-      sw s3,-0x14(sp)
-      sw s4,-0x18(sp)
-      sw s5,-0x1c(sp)
-      sw s6,-0x20(sp)
-      sw s7,-0x24(sp)
-      sw s8,-0x28(sp)
-      sw s9,-0x2c(sp)
-      sw s10,-0x30(sp)
-      sw s11,-0x34(sp)
-      addi sp , sp , -0x40 // Choose 0x40 to be 16-byte aligned
+      sw ra, -0x4(sp)
+      sw fp, -0x8(sp) // fp is s0
+      sw s1, -0xc(sp)
+      sw s2, -0x10(sp)
+      sw s3, -0x14(sp)
+      sw s4, -0x18(sp)
+      sw s5, -0x1c(sp)
+      sw s6, -0x20(sp)
+      sw s7, -0x24(sp)
+      sw s8, -0x28(sp)
+      sw s9, -0x2c(sp)
+      sw s10, -0x30(sp)
+      sw s11, -0x34(sp)
+      addi sp, sp, -0x40 // Choose 0x40 to be 16-byte aligned
 
-      lw t0 ,-0x8(a0)
-      sw sp ,-0x8(a0)
+      lw t0, -0x8(a0)
+      sw sp, -0x8(a0)
 
       // Swap stacks and restore all our callee-saved registers
-      mv sp,t0
+      mv sp, t0
 
-      lw s11,0xc(sp)
-      lw s10,0x10(sp)
-      lw s9,0x14(sp)
-      lw s8,0x18(sp)
-      lw s7,0x1c(sp)
-      lw s6,0x20(sp)
-      lw s5,0x24(sp)
-      lw s4,0x28(sp)
-      lw s3,0x2c(sp)
-      lw s2,0x30(sp)
-      lw s1,0x34(sp)
-      lw fp,0x38(sp)
-      lw ra,0x3c(sp)
-      addi sp , sp , 0x40
+      lw s11, 0xc(sp)
+      lw s10, 0x10(sp)
+      lw s9, 0x14(sp)
+      lw s8, 0x18(sp)
+      lw s7, 0x1c(sp)
+      lw s6, 0x20(sp)
+      lw s5, 0x24(sp)
+      lw s4, 0x28(sp)
+      lw s3, 0x2c(sp)
+      lw s2, 0x30(sp)
+      lw s1, 0x34(sp)
+      lw fp, 0x38(sp)
+      lw ra, 0x3c(sp)
+      addi sp, sp, 0x40
       jr ra
         ",
     );
@@ -125,26 +125,26 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
       5,             /* the byte length of this expression */ \
       0x52,          /* DW_OP_reg2 (sp) */ \
       0x06,          /* DW_OP_deref */ \
-      0x08, 0x40 ,   /* DW_OP_const1u 0x40 */ \
+      0x08, 0x40,    /* DW_OP_const1u 0x40 */ \
       0x22           /* DW_OP_plus */
 
 
-      .cfi_rel_offset ra,-0x4
-      .cfi_rel_offset fp,-0x8
-      .cfi_rel_offset s1,-0xc
-      .cfi_rel_offset s2,-0x10
-      .cfi_rel_offset s3,-0x14
-      .cfi_rel_offset s4,-0x18
-      .cfi_rel_offset s5,-0x1c
-      .cfi_rel_offset s6,-0x20
-      .cfi_rel_offset s7,-0x24
-      .cfi_rel_offset s8,-0x28
-      .cfi_rel_offset s9,-0x2c
-      .cfi_rel_offset s10,-0x30
-      .cfi_rel_offset s11,-0x34
+      .cfi_rel_offset ra, -0x4
+      .cfi_rel_offset fp, -0x8
+      .cfi_rel_offset s1, -0xc
+      .cfi_rel_offset s2, -0x10
+      .cfi_rel_offset s3, -0x14
+      .cfi_rel_offset s4, -0x18
+      .cfi_rel_offset s5, -0x1c
+      .cfi_rel_offset s6, -0x20
+      .cfi_rel_offset s7, -0x24
+      .cfi_rel_offset s8, -0x28
+      .cfi_rel_offset s9, -0x2c
+      .cfi_rel_offset s10, -0x30
+      .cfi_rel_offset s11, -0x34
 
-      mv a0,s2
-      mv a1,fp
+      mv a0, s2
+      mv a1, fp
       jalr s1
       // .4byte 0 will cause panic.
       // for safety just like x86_64.rs and riscv64.rs.
