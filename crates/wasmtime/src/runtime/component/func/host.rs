@@ -371,15 +371,6 @@ where
     ) -> Result<()> {
         let vminstance = instance.id().get(store.0);
         let opts = &vminstance.component().env_component().options[options];
-        let caller_instance = opts.instance;
-        let flags = vminstance.instance_flags(caller_instance);
-
-        // Perform a dynamic check that this instance can indeed be left.
-        // Exiting the component is disallowed, for example, when the `realloc`
-        // function calls a canonical import.
-        if unsafe { !flags.may_leave() } {
-            return Err(format_err!(crate::Trap::CannotLeaveComponent));
-        }
 
         if opts.async_ {
             #[cfg(feature = "component-model-async")]

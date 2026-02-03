@@ -379,11 +379,9 @@ impl Instance {
     pub(crate) fn resource_new32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         resource_tables(calls, instance).resource_new(TypedResource::Component { ty, rep })
     }
@@ -393,11 +391,9 @@ impl Instance {
     pub(crate) fn resource_rep32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         resource_tables(calls, instance).resource_rep(TypedResourceIndex::Component { ty, index })
     }
@@ -406,11 +402,9 @@ impl Instance {
     pub(crate) fn resource_drop(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<Option<u32>> {
-        self.id().get(store).check_may_leave(caller)?;
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         resource_tables(calls, instance).resource_drop(TypedResourceIndex::Component { ty, index })
     }

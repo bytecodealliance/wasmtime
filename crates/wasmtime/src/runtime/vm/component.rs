@@ -947,18 +947,6 @@ impl ComponentInstance {
         }
     }
 
-    pub(crate) fn check_may_leave(
-        &self,
-        instance: RuntimeComponentInstanceIndex,
-    ) -> crate::Result<()> {
-        let flags = self.instance_flags(instance);
-        if unsafe { flags.may_leave() } {
-            Ok(())
-        } else {
-            Err(crate::format_err!(crate::Trap::CannotLeaveComponent))
-        }
-    }
-
     pub(crate) fn task_may_block(&self) -> NonNull<VMGlobalDefinition> {
         unsafe { self.vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.task_may_block()) }
     }

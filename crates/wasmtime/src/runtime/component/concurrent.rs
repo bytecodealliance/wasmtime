@@ -720,8 +720,6 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     future: impl Future<Output = Result<R>> + Send + 'static,
     caller_instance: RuntimeInstance,
 ) -> Result<R> {
-    store.check_may_leave(caller_instance)?;
-
     let state = store.concurrent_state_mut();
 
     let caller = state.guest_thread.unwrap();
@@ -1388,21 +1386,6 @@ impl<T> StoreContextMut<'_, T> {
 }
 
 impl StoreOpaque {
-    fn check_may_leave(&mut self, instance: RuntimeInstance) -> Result<()> {
-        Instance::from_wasmtime(self, instance.instance)
-            .id()
-            .get(self)
-            .check_may_leave(instance.index)?;
-
-        // While we're here, verify that the caller instance matches the most
-        // recent task pushed onto the task stack:
-        let state = self.concurrent_state_mut();
-        let caller = state.guest_thread.unwrap();
-        assert_eq!(state.get_mut(caller.task)?.instance, instance);
-
-        Ok(())
-    }
-
     /// Push a `GuestTask` onto the task stack for either a sync-to-sync,
     /// guest-to-guest call or a sync host-to-guest call.
     ///
@@ -1863,17 +1846,6 @@ impl StoreOpaque {
 }
 
 impl Instance {
-    fn check_may_leave(
-        self,
-        store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
-    ) -> Result<()> {
-        store.check_may_leave(RuntimeInstance {
-            instance: self.id().instance(),
-            index: caller,
-        })
-    }
-
     /// Get the next pending event for the specified task and (optional)
     /// waitable set, along with the waitable handle if applicable.
     fn get_event(
@@ -2355,8 +2327,6 @@ impl Instance {
         string_encoding: u8,
         caller_info: CallerInfo,
     ) -> Result<()> {
-        self.check_may_leave(store.0, caller_instance)?;
-
         if let (CallerInfo::Sync { .. }, true) = (&caller_info, callee_async) {
             // A task may only call an async-typed function via a sync lower if
             // it was created by a call to an async export.  Otherwise, we'll
@@ -2896,13 +2866,10 @@ impl Instance {
     pub(crate) fn task_return(
         self,
         store: &mut dyn VMStore,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeTupleIndex,
         options: OptionsIndex,
         storage: &[ValRaw],
     ) -> Result<()> {
-        self.check_may_leave(store, caller)?;
-
         let state = store.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
         let lift = state
@@ -2948,13 +2915,7 @@ impl Instance {
     }
 
     /// Implements the `task.cancel` intrinsic.
-    pub(crate) fn task_cancel(
-        self,
-        store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
-    ) -> Result<()> {
-        self.check_may_leave(store, caller)?;
-
+    pub(crate) fn task_cancel(self, store: &mut StoreOpaque) -> Result<()> {
         let state = store.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
         let task = state.get_mut(guest_thread.task)?;
@@ -3018,8 +2979,6 @@ impl Instance {
         store: &mut StoreOpaque,
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
-        self.check_may_leave(store, caller_instance)?;
-
         let set = store.concurrent_state_mut().push(WaitableSet::default())?;
         let handle = store
             .handle_table(RuntimeInstance {
@@ -3038,8 +2997,6 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         set: u32,
     ) -> Result<()> {
-        self.check_may_leave(store, caller_instance)?;
-
         let rep = store
             .handle_table(RuntimeInstance {
                 instance: self.id().instance(),
@@ -3068,8 +3025,6 @@ impl Instance {
         waitable_handle: u32,
         set_handle: u32,
     ) -> Result<()> {
-        self.check_may_leave(store, caller_instance)?;
-
         let mut instance = self.id().get_mut(store);
         let waitable =
             Waitable::from_instance(instance.as_mut(), caller_instance, waitable_handle)?;
@@ -3098,8 +3053,6 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         task_id: u32,
     ) -> Result<()> {
-        self.check_may_leave(store, caller_instance)?;
-
         self.waitable_join(store, caller_instance, task_id, 0)?;
 
         let (rep, is_host) = store
@@ -3162,13 +3115,10 @@ impl Instance {
     pub(crate) fn waitable_set_wait(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         options: OptionsIndex,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
-        self.check_may_leave(store, caller)?;
-
         if !self.options(store, options).async_ {
             // The caller may only call `waitable-set.wait` from an async task
             // (i.e. a task created via a call to an async export).
@@ -3204,13 +3154,10 @@ impl Instance {
     pub(crate) fn waitable_set_poll(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         options: OptionsIndex,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
-        self.check_may_leave(store, caller)?;
-
         let &CanonicalOptions {
             cancellable,
             instance: caller_instance,
@@ -3256,8 +3203,6 @@ impl Instance {
         start_func_idx: u32,
         context: i32,
     ) -> Result<u32> {
-        self.check_may_leave(store.0, runtime_instance)?;
-
         log::trace!("creating new thread");
 
         let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
@@ -3392,8 +3337,6 @@ impl Instance {
         yielding: bool,
         to_thread: Option<u32>,
     ) -> Result<WaitResult> {
-        self.check_may_leave(store, caller)?;
-
         if to_thread.is_none() {
             let state = store.concurrent_state_mut();
             if yielding {
@@ -3543,8 +3486,6 @@ impl Instance {
         async_: bool,
         task_id: u32,
     ) -> Result<u32> {
-        self.check_may_leave(store, caller_instance)?;
-
         if !async_ {
             // The caller may only sync call `subtask.cancel` from an async task
             // (i.e. a task created via a call to an async export).  Otherwise,
@@ -3693,26 +3634,11 @@ impl Instance {
         }
     }
 
-    pub(crate) fn context_get(
-        self,
-        store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
-        slot: u32,
-    ) -> Result<u32> {
-        self.check_may_leave(store, caller)?;
-
+    pub(crate) fn context_get(self, store: &mut StoreOpaque, slot: u32) -> Result<u32> {
         store.concurrent_state_mut().context_get(slot)
     }
 
-    pub(crate) fn context_set(
-        self,
-        store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
-        slot: u32,
-        value: u32,
-    ) -> Result<()> {
-        self.check_may_leave(store, caller)?;
-
+    pub(crate) fn context_set(self, store: &mut StoreOpaque, slot: u32, value: u32) -> Result<()> {
         store.concurrent_state_mut().context_set(slot, value)
     }
 }
@@ -3797,7 +3723,6 @@ pub trait VMComponentAsyncStore {
     fn future_drop_writable(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         writer: u32,
     ) -> Result<()>;
@@ -3860,7 +3785,6 @@ pub trait VMComponentAsyncStore {
     fn stream_drop_writable(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         writer: u32,
     ) -> Result<()>;
@@ -3869,7 +3793,6 @@ pub trait VMComponentAsyncStore {
     fn error_context_debug_message(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsIndex,
         err_ctx_handle: u32,
@@ -4000,8 +3923,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_write(
                 StoreContextMut(self),
@@ -4025,8 +3946,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_read(
                 StoreContextMut(self),
@@ -4051,8 +3970,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_write(
                 StoreContextMut(self),
@@ -4077,8 +3994,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_read(
                 StoreContextMut(self),
@@ -4096,12 +4011,9 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
     fn future_drop_writable(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         writer: u32,
     ) -> Result<()> {
-        instance.check_may_leave(self, caller)?;
-
         instance.guest_drop_writable(self, TransmitIndex::Future(ty), writer)
     }
 
@@ -4117,8 +4029,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_write(
                 StoreContextMut(self),
@@ -4148,8 +4058,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        instance.check_may_leave(self, caller)?;
-
         instance
             .guest_read(
                 StoreContextMut(self),
@@ -4170,26 +4078,20 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
     fn stream_drop_writable(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         writer: u32,
     ) -> Result<()> {
-        instance.check_may_leave(self, caller)?;
-
         instance.guest_drop_writable(self, TransmitIndex::Stream(ty), writer)
     }
 
     fn error_context_debug_message(
         &mut self,
         instance: Instance,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsIndex,
         err_ctx_handle: u32,
         debug_msg_address: u32,
     ) -> Result<()> {
-        instance.check_may_leave(self, caller)?;
-
         instance.error_context_debug_message(
             StoreContextMut(self),
             ty,
