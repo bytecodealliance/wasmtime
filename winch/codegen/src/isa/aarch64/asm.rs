@@ -86,6 +86,18 @@ impl From<OperandSize> for ScalarSize {
     }
 }
 
+impl From<ShiftKind> for ALUOp {
+    fn from(kind: ShiftKind) -> Self {
+        match kind {
+            ShiftKind::Shl => ALUOp::Lsl,
+            ShiftKind::ShrS => ALUOp::Asr,
+            ShiftKind::ShrU => ALUOp::Lsr,
+            ShiftKind::Rotr => ALUOp::Extr,
+            ShiftKind::Rotl => ALUOp::Extr,
+        }
+    }
+}
+
 /// Low level assembler implementation for Aarch64.
 pub(crate) struct Assembler {
     /// The machine instruction buffer.
@@ -575,8 +587,15 @@ impl Assembler {
         kind: ShiftKind,
         size: OperandSize,
     ) {
-        let shift_op = self.shift_kind_to_alu_op(kind, rm, size);
-        self.alu_rrr(shift_op, rm, rn, rd, size);
+        let shift_op: ALUOp = kind.into();
+        // In the case of rotate left, we negate the register containing the
+        // shift value.
+        if kind == ShiftKind::Rotl {
+            self.alu_rrr(ALUOp::Sub, rm, regs::zero(), writable!(rm), size);
+            self.alu_rrr(shift_op, rm, rn, rd, size);
+        } else {
+            self.alu_rrr(shift_op, rm, rn, rd, size);
+        }
     }
 
     /// Shift immediate and register.
@@ -588,8 +607,19 @@ impl Assembler {
         kind: ShiftKind,
         size: OperandSize,
     ) {
-        let shift_op = self.shift_kind_to_alu_op(kind, rn, size);
-        self.alu_rri_shift(shift_op, imm, rn, rd, size);
+        let shift_op: ALUOp = kind.into();
+        // In the case of rotate left, we emit rotate right with type_size -
+        // value.
+        if kind == ShiftKind::Rotl {
+            let value_size = size.num_bits();
+            let mut imm_val = value_size.wrapping_sub(imm.value());
+            imm_val &= value_size - 1;
+            let negated_imm = ImmShift::maybe_from_u64(imm_val as u64).unwrap();
+
+            self.alu_rri_shift(shift_op, negated_imm, rn, rd, size);
+        } else {
+            self.alu_rri_shift(shift_op, imm, rn, rd, size);
+        }
     }
 
     /// Count Leading Zeros.
@@ -1047,23 +1077,6 @@ impl Assembler {
             rd: rd.map(Into::into),
             rn: rn.into(),
         });
-    }
-
-    // Convert ShiftKind to ALUOp. If kind == Rotl, then emulate it by emitting
-    // the negation of the given reg r, and returns ALUOp::Extr (an alias for
-    // `ror` the rotate-right instruction)
-    fn shift_kind_to_alu_op(&mut self, kind: ShiftKind, r: Reg, size: OperandSize) -> ALUOp {
-        match kind {
-            ShiftKind::Shl => ALUOp::Lsl,
-            ShiftKind::ShrS => ALUOp::Asr,
-            ShiftKind::ShrU => ALUOp::Lsr,
-            ShiftKind::Rotr => ALUOp::Extr,
-            ShiftKind::Rotl => {
-                // neg(r) is sub(zero, r).
-                self.alu_rrr(ALUOp::Sub, r, regs::zero(), writable!(r), size);
-                ALUOp::Extr
-            }
-        }
     }
 
     /// Get a label from the underlying machine code buffer.
