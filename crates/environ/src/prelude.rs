@@ -28,3 +28,4 @@ pub use alloc::string::{String, ToString};
 pub use alloc::vec;
 pub use alloc::vec::Vec;
 pub use wasmparser::collections::{IndexMap, IndexSet};
+pub use wasmtime_core::alloc::{TryCollect, TryExtend, TryFromIterator};
