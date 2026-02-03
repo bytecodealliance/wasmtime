@@ -50,6 +50,10 @@ macro_rules! forward_impls {
             fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
+
+            fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+                self.0.as_val(store)
+            }
         }
 
         unsafe impl Lower for $a {
