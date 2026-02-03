@@ -1,12 +1,12 @@
 //! Operations for the `gc` operations.
 
+use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     types::{CompositeType, RecGroupId, StructType, TypeId, Types},
 };
 use mutatis::{Context, Generate, mutators as m};
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
@@ -218,19 +218,6 @@ impl GcOps {
         module.finish()
     }
 
-    /// Computes the abstract stack depth after executing all operations
-    pub fn abstract_stack_depth(&self, index: usize) -> usize {
-        debug_assert!(index <= self.ops.len());
-        let mut stack: usize = 0;
-        for op in self.ops.iter().take(index) {
-            let pop = op.operands_len();
-            let push = op.results_len();
-            stack = stack.saturating_sub(pop);
-            stack += push;
-        }
-        stack
-    }
-
     /// Fixes this test case such that it becomes valid.
     ///
     /// This is necessary because a random mutation (e.g. removing an op in the
@@ -247,7 +234,11 @@ impl GcOps {
         self.types.fixup(&self.limits);
 
         let mut new_ops = Vec::with_capacity(self.ops.len());
-        let mut stack = 0;
+        let mut stack: Vec<StackType> = Vec::new();
+        let num_types = u32::try_from(self.types.type_defs.len())
+            .expect("types len should be within u32 range");
+
+        let mut operand_types = Vec::new();
 
         for mut op in self.ops.iter().copied() {
             if self.limits.max_types == 0
@@ -268,26 +259,29 @@ impl GcOps {
                 continue;
             }
 
-            op.fixup(&self.limits);
+            op.fixup(&self.limits, num_types);
 
-            let mut temp = SmallVec::<[_; 4]>::new();
+            let op = if let Some(op) = op.fixup(&self.limits, num_types) {
+                op
+            } else {
+                continue;
+            };
 
-            while stack < op.operands_len() {
-                temp.push(GcOp::Null());
-                stack += 1;
+            operand_types.clear();
+            op.operand_types(&mut operand_types);
+            for ty in &operand_types {
+                StackType::fixup(*ty, &mut stack, &mut new_ops, num_types);
             }
 
-            temp.push(op);
-            stack = stack - op.operands_len() + op.results_len();
-
-            new_ops.extend(temp);
+            // Finally, emit the op itself (updates stack abstractly)
+            let mut result_types = Vec::new();
+            StackType::emit(op, &mut stack, &mut new_ops, num_types, &mut result_types);
         }
 
-        // Insert drops to balance the final stack state
-        for _ in 0..stack {
+        // Balance any leftovers with drops (works for any type)
+        for _ in 0..stack.len() {
             new_ops.push(GcOp::Drop());
         }
-
         self.ops = new_ops;
     }
 
@@ -303,79 +297,58 @@ impl GcOps {
 macro_rules! define_gc_ops {
     (
         $(
-            $op:ident $( ( $($limit_var:ident : $limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
+            $op:ident
+            $( ( $($limit_var:ident : $limit:expr => $ty:ty),* ) )?
+            : [ $($operand:expr),* $(,)? ] => [ $($result:expr),* $(,)? ] ,
         )*
     ) => {
-        /// The operations for the `gc` operations.
+
+        /// The operations that can be performed by the `gc` function.
         #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-        pub(crate) enum GcOp {
+        pub enum GcOp {
             $(
+                #[allow(missing_docs, reason = "macro-generated code")]
                 $op ( $( $($ty),* )? ),
             )*
         }
 
-        /// Names of the operations for testing purposes.
         #[cfg(test)]
-        pub const OP_NAMES: &'static[&'static str] = &[
-            $(
-                stringify!($op),
-            )*
+        pub(crate) const OP_NAMES: &'static [&'static str] = &[
+            $( stringify!($op), )*
         ];
 
         impl GcOp {
             #[cfg(test)]
-            pub fn name(&self) -> &'static str  {
+            pub(crate) fn name(&self) -> &'static str {
+                match self { $( Self::$op(..) => stringify!($op), )* }
+            }
+
+            #[allow(unreachable_patterns, reason = "macro-generated code")]
+            pub(crate) fn operand_types(&self, out: &mut Vec<Option<StackType>>) {
+
                 match self {
+                    Self::TakeTypedStructCall(t) => {
+                        out.push(Some(StackType::Struct(Some(*t))));
+                    }
                     $(
-                        Self::$op (..) => stringify!($op),
-                    )*
+                        Self::$op(..) => {
+                            $( out.push($operand); )*
+                        }
+                    ),*
                 }
             }
 
-            pub fn operands_len(&self) -> usize {
+            #[allow(unreachable_patterns, reason = "macro-generated code")]
+            pub(crate) fn result_types(&self, out: &mut Vec<StackType>) {
                 match self {
-                    $(
-                        Self::$op (..) => $params,
-                    )*
+                    Self::StructNew(t)        => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
+                    $( Self::$op(..) => { $( out.push($result); )* }, )*
                 }
             }
 
-            pub fn results_len(&self) -> usize {
-                match self {
-                    $(
-                        Self::$op (..) => $results,
-                    )*
-                }
-            }
-        }
-
-        $(
-            #[allow(non_snake_case, reason = "macro-generated code")]
-            fn $op(
-                _ctx: &mut mutatis::Context,
-                _limits: &GcOpsLimits,
-                stack: usize,
-            ) -> mutatis::Result<(GcOp, usize)> {
-                #[allow(unused_comparisons, reason = "macro-generated code")]
-                {
-                    debug_assert!(stack >= $params);
-                }
-
-                let op = GcOp::$op(
-                    $($({
-                        let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
-                        let limit = (limit_fn)(_limits);
-                        debug_assert!(limit > 0);
-                        m::range(0..=limit - 1).generate(_ctx)?
-                    }),*)?
-                );
-                let new_stack = stack - $params + $results;
-                Ok((op, new_stack))
-            }
-        )*
-
-        impl GcOp {
-            fn fixup(&mut self, limits: &GcOpsLimits) {
+            pub(crate) fn fixup(&mut self, limits: &GcOpsLimits, num_types: u32) -> Option<Self> {
                 match self {
                     $(
                         Self::$op( $( $( $limit_var ),* )? ) => {
@@ -388,62 +361,102 @@ macro_rules! define_gc_ops {
                         }
                     )*
                 }
+                match self {
+                    Self::StructNew(t)
+                    | Self::TakeStructCall(t)
+                    | Self::TakeTypedStructCall(t) => {
+                        if num_types == 0 {
+                            return None;
+                        }
+                        *t %= num_types;
+                    }
+                    _ => {}
+                }
+
+                Some(*self)
             }
 
+            /// Generate an arbitrary op without stack-depth awareness.
+            /// The fixup pass will make the sequence valid.
             pub(crate) fn generate(
                 ctx: &mut mutatis::Context,
                 ops: &GcOps,
-                stack: usize,
-            ) -> mutatis::Result<(GcOp, usize)> {
+            ) -> mutatis::Result<GcOp> {
                 let mut valid_choices: Vec<
-                    fn(&mut Context, &GcOpsLimits, usize) -> mutatis::Result<(GcOp, usize)>
+                    fn(&mut Context, &GcOpsLimits) -> mutatis::Result<GcOp>
                 > = vec![];
+
                 $(
-                    #[allow(unused_comparisons, reason = "macro-generated code")]
-                    if stack >= $params $($(
-                        && {
-                            let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
-                            let limit = (limit_fn)(&ops.limits);
-                            limit > 0
-                        }
-                    )*)? {
-                        valid_choices.push($op);
-                    }
+                    valid_choices.push($op);
                 )*
 
                 let f = *ctx.rng()
                     .choose(&valid_choices)
                     .expect("should always have a valid op choice");
-
-                (f)(ctx, &ops.limits, stack)
+                (f)(ctx, &ops.limits)
             }
         }
+
+        $(
+            #[allow(non_snake_case, reason = "macro-generated code")]
+            fn $op(
+                _ctx: &mut mutatis::Context,
+                _limits: &GcOpsLimits,
+            ) -> mutatis::Result<GcOp> {
+                let op = GcOp::$op(
+                    $($({
+                        let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
+                        let limit = (limit_fn)(_limits);
+                        // Generate a value even if limit is 0; fixup will handle it
+                        if limit > 0 {
+                            m::range(0..=limit - 1).generate(_ctx)?
+                        } else {
+                            0
+                        }
+                    }),*)?
+                );
+                Ok(op)
+            }
+        )*
     };
 }
 
 define_gc_ops! {
-    Gc : 0 => 3,
+    Gc : [] => [StackType::ExternRef, StackType::ExternRef, StackType::ExternRef],
 
-    MakeRefs : 0 => 3,
-    TakeRefs : 3 => 0,
+    MakeRefs : [] => [StackType::ExternRef, StackType::ExternRef, StackType::ExternRef],
+    TakeRefs : [Some(StackType::ExternRef), Some(StackType::ExternRef), Some(StackType::ExternRef)] => [],
 
     // Add one to make sure that out of bounds table accesses are possible, but still rare.
-    TableGet(elem_index: |ops| ops.table_size + 1 => u32) : 0 => 1,
-    TableSet(elem_index: |ops| ops.table_size + 1 => u32) : 1 => 0,
+    TableGet(elem_index: |ops| ops.table_size + 1 => u32)
+        : [] => [StackType::ExternRef],
+    TableSet(elem_index: |ops| ops.table_size + 1 => u32)
+        : [Some(StackType::ExternRef)] => [],
 
-    GlobalGet(global_index: |ops| ops.num_globals => u32) : 0 => 1,
-    GlobalSet(global_index: |ops| ops.num_globals => u32) : 1 => 0,
+    GlobalGet(global_index: |ops| ops.num_globals => u32)
+        : [] => [StackType::ExternRef],
+    GlobalSet(global_index: |ops| ops.num_globals => u32)
+        : [Some(StackType::ExternRef)] => [],
 
-    LocalGet(local_index: |ops| ops.num_params => u32) : 0 => 1,
-    LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
+    LocalGet(local_index: |ops| ops.num_params => u32)
+        : [] => [StackType::ExternRef],
+    LocalSet(local_index: |ops| ops.num_params => u32)
+        : [Some(StackType::ExternRef)] => [],
 
-    StructNew(type_index: |ops| ops.max_types => u32) : 0 => 0,
-    TakeStructCall(type_index: |ops| ops.max_types => u32) : 1 => 0,
-    TakeTypedStructCall(type_index: |ops| ops.max_types => u32) : 1 => 0,
+    // `StructNew` result is special-cased to push `Struct(Some(t))`, so results list is empty.
+    StructNew(type_index: |ops| ops.max_types => u32)
+        : [] => [],
 
-    Drop : 1 => 0,
+    TakeStructCall(type_index: |ops| ops.max_types => u32)
+        : [Some(StackType::Struct(None))] => [],
 
-    Null : 0 => 1,
+    // `TakeTypedStructCall` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
+    TakeTypedStructCall(type_index: |ops| ops.max_types => u32)
+        : [] => [],
+
+    Drop : [None] => [],
+
+    Null : [] => [StackType ::ExternRef],
 }
 
 impl GcOp {
@@ -499,16 +512,12 @@ impl GcOp {
             }
             Self::StructNew(x) => {
                 func.instruction(&Instruction::StructNew(x + struct_type_base));
-                func.instruction(&Instruction::Call(take_structref_idx));
             }
-            Self::TakeStructCall(x) => {
-                func.instruction(&Instruction::StructNew(x + struct_type_base));
+            Self::TakeStructCall(_x) => {
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
             Self::TakeTypedStructCall(x) => {
-                let s = struct_type_base + x;
                 let f = typed_first_func_index + x;
-                func.instruction(&Instruction::StructNew(s));
                 func.instruction(&Instruction::Call(f));
             }
         }

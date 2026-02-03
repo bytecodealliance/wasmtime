@@ -250,7 +250,7 @@ fn test_wat_string() -> mutatis::Result<()> {
       global.set 0
       global.get 0
       struct.new 5
-      call 3
+      drop
       drop
       drop
       drop
@@ -294,6 +294,86 @@ fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
 
     assert_eq!(recs, 7, "expected 2 (rec) blocks, got {recs}");
     assert_eq!(structs, 10, "expected no struct types, got {structs}");
+
+    Ok(())
+}
+
+#[test]
+fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Create GcOps with 5 types so that 7 % 5 = 2
+    let mut ops = test_ops(5, 5, 5);
+    ops.limits.max_types = 5;
+
+    // We create max types 5 and out ouf bounds for the type index
+    ops.ops = vec![
+        GcOp::TakeTypedStructCall(27),
+        GcOp::GlobalSet(0),
+        GcOp::StructNew(24),
+        GcOp::LocalSet(0),
+    ];
+
+    // Call fixup to resolve dependencies
+    // this should fix the types by inserting missing types
+    // also put the indexes in the correct bounds
+    ops.fixup();
+
+    // Verify that fixup()
+    // The expected sequence should be:
+    // 1. StructNew(_) - inserted by fixup to satisfy TakeTypedStructCall(_)
+    // 2. TakeTypedStructCall(_) - now has Struct(_) on stack
+    // 3. Null() - inserted by fixup to satisfy GlobalSet(0)
+    // 4. GlobalSet(0) - now has ExternRef on stack
+    // 5. StructNew(_) - produces Struct(_)
+    // 6. Null() - inserted by fixup to satisfy LocalSet(0)
+    // 7. LocalSet(0) - now has ExternRef on stack
+    // 8. Drop() - inserted by fixup to consume ExternRef before Drop()
+
+    // This is the expected sequence in wat format:
+    //  loop ;; label = @1
+    //     struct.new 7
+    //     call 6
+    //     ref.null extern
+    //     global.set 0
+    //     struct.new 9
+    //     ref.null extern
+    //     local.set 0
+    //     drop
+    //     br 0 (;@1;)
+    // end
+
+    // Find the index of TakeTypedStructCall(_) after fixup
+    let take_call_idx = ops
+        .ops
+        .iter()
+        .position(|op| matches!(op, GcOp::TakeTypedStructCall(_)))
+        .expect("TakeTypedStructCall(_) should be present after fixup");
+
+    // Verify that StructNew(_) appears before TakeTypedStructCall(_)
+    let struct_new_2_before = ops
+        .ops
+        .iter()
+        .take(take_call_idx)
+        .any(|op| matches!(op, GcOp::StructNew(_)));
+
+    assert!(
+        struct_new_2_before,
+        "fixup should insert StructNew(_) before TakeTypedStructCall(_) to satisfy the dependency"
+    );
+
+    // Verify the sequence validates correctly
+    let wasm = ops.to_wasm_binary();
+    let wat = wasmprinter::print_bytes(&wasm).unwrap();
+    log::debug!("{wat}");
+    let feats = wasmparser::WasmFeatures::default();
+    feats.reference_types();
+    feats.gc();
+    let mut validator = wasmparser::Validator::new_with_features(feats);
+    assert!(
+        validator.validate_all(&wasm).is_ok(),
+        "GC validation should pass after fixup"
+    );
 
     Ok(())
 }
