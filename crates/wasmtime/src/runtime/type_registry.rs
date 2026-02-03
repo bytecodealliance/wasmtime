@@ -812,25 +812,28 @@ impl TypeRegistryInner {
         debug_assert!(hash_consing_key.is_canonicalized_for_hash_consing());
         debug_assert_eq!(self.hash_consing_map.contains(&hash_consing_key), false);
 
-        // XXX: We do not want to `?`-propagate an OOM error when we have
-        // already applied partial side effects. Keeping the types registry
-        // coherent is critical. As much as possible, we try to make all
-        // allocations up front before applying any side effects. However, when
-        // we cannot otherwise avoid it, we use `Undo` to rollback changes.
+        // XXX: Do not write new entries to `self` or its arenas in this block
+        // of code, as we will not rollback those changes on OOM.
+        let entry = {
+            // First, pre-allocate capacity in our arenas for this rec group, as
+            // much as possible.
+            let num_types = non_canon_types.len();
+            self.reserve_capacity_for_rec_group(num_types)?;
+            let shared_type_indices = new_uninit_boxed_slice(num_types)?;
+            let entry_inner = RecGroupEntry::new_inner()?;
 
-        // Allocations for this new rec group.
-        let num_types = non_canon_types.len();
-        self.reserve_capacity_for_rec_group(num_types)?;
-        let shared_type_indices = new_uninit_boxed_slice(num_types)?;
-        let entry_inner = RecGroupEntry::new_inner()?;
+            // Assign a `VMSharedTypeIndex` to each type.
+            let shared_type_indices =
+                self.assign_shared_type_indices(&non_canon_types, shared_type_indices);
 
-        // Assign a `VMSharedTypeIndex` to each type.
-        let shared_type_indices =
-            self.assign_shared_type_indices(&non_canon_types, shared_type_indices);
+            // Initialize the rec group entry, now that we have all its parts.
+            RecGroupEntry::init(entry_inner, hash_consing_key, shared_type_indices)
+        };
 
-        // Initialize the rec group entry, now that we have all its parts.
-        let entry = RecGroupEntry::init(entry_inner, hash_consing_key, shared_type_indices);
-
+        // XXX: From the creation of the `Undo` and afterwards, we can write to
+        // `self` and its arenas. We must, however, always ensure that the
+        // `Undo` fully rolls back the changes made below, so keep this in mind
+        // if adding/removing/changing the arenas in `self`.
         let did_incref = Cell::new(false);
         let entry2 = entry.clone();
         let mut registry = Undo::new(self, |registry| {
