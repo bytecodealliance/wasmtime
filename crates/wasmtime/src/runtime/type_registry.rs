@@ -813,7 +813,8 @@ impl TypeRegistryInner {
             // much as possible.
             let num_types = non_canon_types.len();
             self.reserve_capacity_for_rec_group(num_types)?;
-            let shared_type_indices = Vec::with_capacity(num_types)?;
+            let mut shared_type_indices = Vec::new();
+            shared_type_indices.reserve_exact(num_types)?;
             let entry_inner = RecGroupEntry::new_inner()?;
 
             // Assign a `VMSharedTypeIndex` to each type.
@@ -1163,6 +1164,7 @@ impl TypeRegistryInner {
                 .expect("reserved capacity");
         }
 
+        debug_assert_eq!(shared_type_indices.len(), shared_type_indices.capacity());
         shared_type_indices
             .into_boxed_slice()
             .expect("capacity should be exact")
