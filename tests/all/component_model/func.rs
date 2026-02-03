@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::REALLOC_AND_FREE;
+use super::{ApiStyle, REALLOC_AND_FREE};
 use std::sync::Arc;
 use wasmtime::Result;
 use wasmtime::component::*;
@@ -3403,62 +3403,6 @@ fn test_recurse(kind: RecurseKind) -> Result<()> {
     Ok(())
 }
 
-#[derive(Copy, Clone)]
-enum ApiStyle {
-    Sync,
-    Async,
-    Concurrent,
-}
-
-fn thread_config() -> Config {
-    let mut config = super::config();
-    config.wasm_component_model_threading(true);
-    config
-}
-
-async fn instantiate<T: Send>(
-    store: &mut Store<T>,
-    linker: &Linker<T>,
-    component: &Component,
-    style: ApiStyle,
-) -> Result<Instance> {
-    match style {
-        ApiStyle::Sync => linker.instantiate(store, &component),
-        ApiStyle::Async | ApiStyle::Concurrent => linker.instantiate_async(store, &component).await,
-    }
-}
-
-async fn call<
-    P: ComponentNamedList + Lower + 'static,
-    R: ComponentNamedList + Lift + 'static,
-    T: Send,
->(
-    store: &mut Store<T>,
-    func: TypedFunc<P, R>,
-    params: P,
-    style: ApiStyle,
-) -> Result<R> {
-    match style {
-        ApiStyle::Sync => func.call(&mut *store, params),
-        ApiStyle::Async => func.call_async(&mut *store, params).await,
-        ApiStyle::Concurrent => Ok(store
-            .run_concurrent(async |access| func.call_concurrent(access, params).await)
-            .await??
-            .0),
-    }
-}
-
-async fn resource_drop<T: Send>(
-    store: &mut Store<T>,
-    resource: ResourceAny,
-    style: ApiStyle,
-) -> Result<()> {
-    match style {
-        ApiStyle::Sync => resource.resource_drop(store),
-        ApiStyle::Async | ApiStyle::Concurrent => resource.resource_drop_async(store).await,
-    }
-}
-
 #[tokio::test]
 async fn thread_index_via_instantiation_sync() -> Result<()> {
     thread_index_via_instantiation(ApiStyle::Sync).await
@@ -3485,11 +3429,11 @@ async fn thread_index_via_instantiation(style: ApiStyle) -> Result<()> {
   ))))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    instantiate(&mut store, &linker, &component, style).await?;
+    style.instantiate(&mut store, &linker, &component).await?;
     Ok(())
 }
 
@@ -3524,13 +3468,13 @@ async fn thread_index_via_call(style: ApiStyle) -> Result<()> {
   (func (export "run") (canon lift (core func $m "run")))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    call(&mut store, run, (), style).await?;
+    style.call(&mut store, run, ()).await?;
     Ok(())
 }
 
@@ -3573,13 +3517,13 @@ async fn thread_index_via_post_return(style: ApiStyle) -> Result<()> {
   (func (export "run") (canon lift (core func $m "run") (post-return (func $m "run-post-return"))))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    call(&mut store, run, (), style).await?;
+    style.call(&mut store, run, ()).await?;
     Ok(())
 }
 
@@ -3628,13 +3572,13 @@ async fn thread_index_via_cabi_realloc(style: ApiStyle) -> Result<()> {
   ))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let run = instance.get_typed_func::<(String,), ()>(&mut store, "run")?;
-    call(&mut store, run, ("hola".to_string(),), style).await?;
+    style.call(&mut store, run, ("hola".to_string(),)).await?;
     Ok(())
 }
 
@@ -3691,18 +3635,18 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
     let func_index = instance
         .get_export_index(&mut store, Some(&instance_index), "new")
         .unwrap();
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
-    let (resource,) = call(&mut store, run, (), style).await?;
-    resource_drop(&mut store, resource, style).await?;
+    let (resource,) = style.call(&mut store, run, ()).await?;
+    style.resource_drop(&mut store, resource).await?;
     Ok(())
 }
 
@@ -3767,13 +3711,13 @@ async fn thread_index_via_guest_call(style: ApiStyle) -> Result<()> {
   (func (export "run") (alias export $d "run"))
 )
 "#;
-    let engine = Engine::new(&thread_config())?;
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = instantiate(&mut store, &linker, &component, style).await?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    call(&mut store, run, (), style).await?;
+    style.call(&mut store, run, ()).await?;
     Ok(())
 }
 

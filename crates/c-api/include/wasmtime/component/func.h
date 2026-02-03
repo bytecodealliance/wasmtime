@@ -65,8 +65,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
  * taken care of automatically as part of #wasmtime_component_func_call, so this
  * function is no longer needed.
  */
-__attribute__((__deprecated__))
-WASM_API_EXTERN wasmtime_error_t *
+__attribute__((__deprecated__)) WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_func_post_return(const wasmtime_component_func_t *func,
                                     wasmtime_context_t *context);
 

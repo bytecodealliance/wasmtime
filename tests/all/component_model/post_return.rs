@@ -1,11 +1,36 @@
 #![cfg(not(miri))]
 
-use wasmtime::Result;
+use super::ApiStyle;
 use wasmtime::component::*;
+use wasmtime::{Engine, Result};
 use wasmtime::{Store, StoreContextMut, Trap};
 
-#[test]
-fn invoke_post_return() -> Result<()> {
+#[tokio::test]
+async fn invoke_post_return_sync() -> Result<()> {
+    invoke_post_return(ApiStyle::Sync, true).await
+}
+
+#[tokio::test]
+async fn invoke_post_return_async() -> Result<()> {
+    invoke_post_return(ApiStyle::Async, true).await
+}
+
+#[tokio::test]
+async fn invoke_post_return_async_not_concurrent() -> Result<()> {
+    invoke_post_return(ApiStyle::AsyncNotConcurrent, true).await
+}
+
+#[tokio::test]
+async fn invoke_post_return_async_not_concurrent_dynamic() -> Result<()> {
+    invoke_post_return(ApiStyle::AsyncNotConcurrent, false).await
+}
+
+#[tokio::test]
+async fn invoke_post_return_concurrent() -> Result<()> {
+    invoke_post_return(ApiStyle::Concurrent, true).await
+}
+
+async fn invoke_post_return(style: ApiStyle, typed: bool) -> Result<()> {
     let component = r#"
         (component
             (import "f" (func $f))
@@ -36,7 +61,7 @@ fn invoke_post_return() -> Result<()> {
         )
     "#;
 
-    let engine = super::engine();
+    let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
@@ -46,10 +71,15 @@ fn invoke_post_return() -> Result<()> {
             unreachable!()
         })?;
 
-    let instance = linker.instantiate(&mut store, &component)?;
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
-    let result = thunk.call(&mut store, ());
+    let result = if typed {
+        style.call(&mut store, thunk, ()).await
+    } else {
+        assert!(matches!(style, ApiStyle::AsyncNotConcurrent));
+        thunk.func().call_async(&mut store, &[], &mut []).await
+    };
     assert!(matches!(
         result.unwrap_err().downcast::<Trap>(),
         Ok(Trap::CannotLeaveComponent)
