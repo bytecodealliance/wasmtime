@@ -846,7 +846,7 @@ impl WasmFuncType {
 }
 
 /// WebAssembly continuation type -- equivalent of `wasmparser`'s ContType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmContType(EngineOrModuleTypeIndex);
 
 impl fmt::Display for WasmContType {
@@ -924,6 +924,15 @@ pub struct WasmExnType {
     /// type descriptor without referencing other type descriptors; so
     /// we directly inline the information here.
     pub fields: Box<[WasmFieldType]>,
+}
+
+impl TryClone for WasmExnType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            func_ty: self.func_ty,
+            fields: self.fields.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmExnType {
@@ -1018,13 +1027,19 @@ impl WasmStorageType {
 }
 
 /// The type of a struct field or array element.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFieldType {
     /// The field's element type.
     pub element_type: WasmStorageType,
 
     /// Whether this field can be mutated or not.
     pub mutable: bool,
+}
+
+impl TryClone for WasmFieldType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 impl fmt::Display for WasmFieldType {
@@ -1054,7 +1069,7 @@ impl TypeTrace for WasmFieldType {
 }
 
 /// A concrete array type.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmArrayType(pub WasmFieldType);
 
 impl fmt::Display for WasmArrayType {
@@ -1084,6 +1099,14 @@ impl TypeTrace for WasmArrayType {
 pub struct WasmStructType {
     /// The fields that make up this struct type.
     pub fields: Box<[WasmFieldType]>,
+}
+
+impl TryClone for WasmStructType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            fields: self.fields.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmStructType {
@@ -1128,6 +1151,15 @@ pub struct WasmCompositeType {
     pub shared: bool,
 }
 
+impl TryClone for WasmCompositeType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            inner: self.inner.try_clone()?,
+            shared: self.shared,
+        })
+    }
+}
+
 impl fmt::Display for WasmCompositeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.shared {
@@ -1150,6 +1182,18 @@ pub enum WasmCompositeInnerType {
     Struct(WasmStructType),
     Cont(WasmContType),
     Exn(WasmExnType),
+}
+
+impl TryClone for WasmCompositeInnerType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            Self::Array(ty) => Self::Array(*ty),
+            Self::Func(ty) => Self::Func(ty.try_clone()?),
+            Self::Struct(ty) => Self::Struct(ty.try_clone()?),
+            Self::Cont(ty) => Self::Cont(*ty),
+            Self::Exn(ty) => Self::Exn(ty.try_clone()?),
+        })
+    }
 }
 
 impl fmt::Display for WasmCompositeInnerType {
@@ -1297,6 +1341,16 @@ pub struct WasmSubType {
 
     /// The array, function, or struct that is defined.
     pub composite_type: WasmCompositeType,
+}
+
+impl TryClone for WasmSubType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            is_final: self.is_final,
+            supertype: self.supertype,
+            composite_type: self.composite_type.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmSubType {
