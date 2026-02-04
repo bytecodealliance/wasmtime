@@ -1,4 +1,4 @@
-use crate::alloc::try_realloc;
+use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
 use core::{
     fmt, mem,
@@ -26,6 +26,19 @@ impl<T> Default for Vec<T> {
 impl<T: fmt::Debug> fmt::Debug for Vec<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.inner, f)
+    }
+}
+
+impl<T> TryClone for Vec<T>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut v = Vec::with_capacity(self.len())?;
+        for x in self {
+            v.push(x.try_clone()?).expect("reserved capacity");
+        }
+        Ok(v)
     }
 }
 
