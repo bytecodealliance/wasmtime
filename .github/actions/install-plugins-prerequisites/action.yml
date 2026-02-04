@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     - name: Install WASI SDK (Linux)
-      run: wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-x86_64-linux.tar.gz -P ${{ runner.temp }} && tar xf ${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux.tar.gz -C ${{ runner.temp }} && echo WASI_SDK_PATH=${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux >> $GITHUB_ENV
+      run: wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-30.0-x86_64-linux.tar.gz -P ${{ runner.temp }} && tar xf ${{ runner.temp }}/wasi-sdk-30.0-x86_64-linux.tar.gz -C ${{ runner.temp }} && echo WASI_SDK_PATH=${{ runner.temp }}/wasi-sdk-30.0-x86_64-linux >> $GITHUB_ENV
       if: runner.os == 'Linux'
       shell: bash
     - name: Install wit-bindgen (Linux)
