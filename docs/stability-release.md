@@ -169,7 +169,7 @@ there's an outage.
 
 Wasmtime as a project does not currently have the resources to dedicate to
 self-hosted runners, different CI providers, or maintaining escape hatches to
-perform releases locally instead of CI. If your maintain an embedding of
+perform releases locally instead of CI. If you maintain an embedding of
 Wasmtime and this caveat is unacceptable to you please feel free to reach out.
 We would be happy to talk about coordinating alternative CI architecture coupled
 with external investment in maintainership. For now, though, GitHub Actions is
