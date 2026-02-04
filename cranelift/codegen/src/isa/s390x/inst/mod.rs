@@ -2517,6 +2517,7 @@ impl Inst {
                     VecBinaryOp::Sub32x4 => "vsf",
                     VecBinaryOp::Sub64x2 => "vsg",
                     VecBinaryOp::Sub128 => "vsq",
+                    VecBinaryOp::Sub128Cout => "vscbiq",
                     VecBinaryOp::Mul8x16 => "vmlb",
                     VecBinaryOp::Mul16x8 => "vmlhw",
                     VecBinaryOp::Mul32x4 => "vmlf",

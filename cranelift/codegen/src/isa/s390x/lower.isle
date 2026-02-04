@@ -4349,6 +4349,27 @@
         (vec_add $I128 x y)
         (vec_extract_lane $I64X2 (vec_add_logical_cout $I128 x y) 1 (zero_reg))))
 
+;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Note: s390x stores and computes the borrow bit as a 0 when an overflow is present
+;; so all of the conditons and computed borrows are inverted
+
+(rule 1 (lower (has_type (fits_in_16 ty) (usub_overflow x y)))
+      (overflow_and_result_from_shifted ty (aluop_sub_logical $I32) x y
+        (invert_cond (mask_as_cond 3))))
+
+(rule 0 (lower (has_type (ty_32_or_64 ty) (usub_overflow x y)))
+      (overflow_and_result_from_producer
+        (sub_logical_reg_with_flags_paired ty x y)
+        (invert_cond (mask_as_cond 3))))
+
+(rule 2 (lower (has_type $I128 (usub_overflow x y)))
+      (output_pair
+        (vec_sub $I128 x y)
+        (xor_uimm32shifted $I8
+          (vec_extract_lane $I64X2 (vec_sub_logical_cout $I128 x y) 1 (zero_reg))
+          (uimm32shifted 1 0))))
+
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))

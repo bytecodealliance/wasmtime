@@ -1195,6 +1195,7 @@
     (Sub32x4)
     (Sub64x2)
     (Sub128)
+    (Sub128Cout)
     ;; Multiplication
     (Mul8x16)
     (Mul16x8)
@@ -3976,6 +3977,10 @@
 (decl sub_logical_reg (Type Reg Reg) Reg)
 (rule (sub_logical_reg ty x y) (alu_rrr ty (aluop_sub_logical ty) x y))
 
+(decl sub_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_logical_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub_logical ty) x y))
+
 (decl sub_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (sub_logical_reg_zext32 ty x y) (alu_rr ty (aluop_sub_logical_zext32 ty) x y))
 
@@ -3988,6 +3993,11 @@
 (decl sub_logical_mem_zext32 (Type Reg MemArg) Reg)
 (rule (sub_logical_mem_zext32 ty x y) (alu_rx ty (aluop_sub_logical ty) x y))
 
+(decl vecop_sub_logical_cout (Type) VecBinaryOp)
+(rule (vecop_sub_logical_cout $I128) (VecBinaryOp.Sub128Cout))
+
+(decl vec_sub_logical_cout (Type Reg Reg) Reg)
+(rule (vec_sub_logical_cout ty x y) (vec_rrr ty (vecop_sub_logical_cout ty) x y))
 
 ;; Helpers for generating `mul` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
