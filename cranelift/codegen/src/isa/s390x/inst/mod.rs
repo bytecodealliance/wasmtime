@@ -2511,6 +2511,7 @@ impl Inst {
                     VecBinaryOp::Add32x4 => "vaf",
                     VecBinaryOp::Add64x2 => "vag",
                     VecBinaryOp::Add128 => "vaq",
+                    VecBinaryOp::Add128Cout => "vaccq",
                     VecBinaryOp::Sub8x16 => "vsb",
                     VecBinaryOp::Sub16x8 => "vsh",
                     VecBinaryOp::Sub32x4 => "vsf",

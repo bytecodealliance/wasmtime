@@ -2719,6 +2719,7 @@ impl Inst {
                     VecBinaryOp::Add32x4 => (0xe7f3, 2),       // VAF
                     VecBinaryOp::Add64x2 => (0xe7f3, 3),       // VAG
                     VecBinaryOp::Add128 => (0xe7f3, 4),        // VAQ
+                    VecBinaryOp::Add128Cout => (0xe7f1, 4),    // VACCQ
                     VecBinaryOp::Sub8x16 => (0xe7f7, 0),       // VSB
                     VecBinaryOp::Sub16x8 => (0xe7f7, 1),       // VSH
                     VecBinaryOp::Sub32x4 => (0xe7f7, 2),       // VSF

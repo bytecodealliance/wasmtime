@@ -1189,6 +1189,7 @@
     (Add32x4)
     (Add64x2)
     (Add128)
+    (Add128Cout)
     (Sub8x16)
     (Sub16x8)
     (Sub32x4)
@@ -3915,6 +3916,11 @@
 (rule (add_logical_mem_zext32_with_flags_paired ty x y)
       (alu_rx_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
+(decl vecop_add_logical_cout (Type) VecBinaryOp)
+(rule (vecop_add_logical_cout $I128) (VecBinaryOp.Add128Cout))
+
+(decl vec_add_logical_cout (Type Reg Reg) Reg)
+(rule (vec_add_logical_cout ty x y) (vec_rrr ty (vecop_add_logical_cout ty) x y))
 
 ;; Helpers for generating `sub` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
