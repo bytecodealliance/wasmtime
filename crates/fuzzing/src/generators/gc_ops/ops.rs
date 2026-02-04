@@ -14,6 +14,20 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
+/// The base offsets and indices for various Wasm entities within
+/// their index spaces in the the encoded Wasm binary.
+#[derive(Clone, Copy)]
+struct WasmEncodingBases {
+    struct_type_base: u32,
+    typed_first_func_index: u32,
+    struct_local_idx: u32,
+    typed_local_base: u32,
+    struct_global_idx: u32,
+    typed_global_base: u32,
+    struct_table_idx: u32,
+    typed_table_base: u32,
+}
+
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -60,6 +74,8 @@ impl GcOps {
         for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
+        let params_len =
+            u32::try_from(params.len()).expect("params len should be within u32 range");
         let results = vec![];
         types.ty().function(params, results);
 
@@ -78,8 +94,11 @@ impl GcOps {
         // 4: `take_struct`
         types.ty().function(
             vec![ValType::Ref(RefType {
-                nullable: false,
-                heap_type: wasm_encoder::HeapType::ANY,
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Struct,
+                },
             })],
             vec![],
         );
@@ -130,7 +149,7 @@ impl GcOps {
             let concrete = struct_type_base + i;
             types.ty().function(
                 vec![ValType::Ref(RefType {
-                    nullable: false,
+                    nullable: true,
                     heap_type: wasm_encoder::HeapType::Concrete(concrete),
                 })],
                 vec![],
@@ -163,6 +182,37 @@ impl GcOps {
             table64: false,
             shared: false,
         });
+
+        let struct_table_idx = tables.len();
+        tables.table(TableType {
+            element_type: RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Struct,
+                },
+            },
+            minimum: u64::from(self.limits.table_size),
+            maximum: None,
+            table64: false,
+            shared: false,
+        });
+
+        let typed_table_base = tables.len();
+        for i in 0..struct_count {
+            let concrete = struct_type_base + i;
+            tables.table(TableType {
+                element_type: RefType {
+                    nullable: true,
+                    heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                },
+                minimum: u64::from(self.limits.table_size),
+                maximum: None,
+                table64: false,
+                shared: false,
+            });
+        }
+
         // Define our globals.
         let mut globals = GlobalSection::new();
         for _ in 0..self.limits.num_globals {
@@ -173,6 +223,43 @@ impl GcOps {
                     shared: false,
                 },
                 &ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN),
+            );
+        }
+
+        // Add exactly one (ref.null struct) global.
+        let struct_global_idx = globals.len();
+        globals.global(
+            wasm_encoder::GlobalType {
+                val_type: ValType::Ref(RefType {
+                    nullable: true,
+                    heap_type: wasm_encoder::HeapType::Abstract {
+                        shared: false,
+                        ty: wasm_encoder::AbstractHeapType::Struct,
+                    },
+                }),
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                shared: false,
+                ty: wasm_encoder::AbstractHeapType::Struct,
+            }),
+        );
+
+        // Add one typed (ref <type>) global per struct type.
+        let typed_global_base = globals.len();
+        for i in 0..struct_count {
+            let concrete = struct_type_base + i;
+            globals.global(
+                wasm_encoder::GlobalType {
+                    val_type: ValType::Ref(RefType {
+                        nullable: true,
+                        heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                    }),
+                    mutable: true,
+                    shared: false,
+                },
+                &ConstExpr::ref_null(wasm_encoder::HeapType::Concrete(concrete)),
             );
         }
 
@@ -187,17 +274,48 @@ impl GcOps {
 
         // Give ourselves one scratch local that we can use in various `GcOp`
         // implementations.
-        let local_decls: Vec<(u32, ValType)> = vec![(1, ValType::EXTERNREF)];
+        let mut local_decls: Vec<(u32, ValType)> = vec![(1, ValType::EXTERNREF)];
+
+        let scratch_local = params_len;
+        let struct_local_idx = scratch_local + 1;
+        local_decls.push((
+            1,
+            ValType::Ref(RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Struct,
+                },
+            }),
+        ));
+
+        let typed_local_base: u32 = struct_local_idx + 1;
+        for i in 0..struct_count {
+            let concrete = struct_type_base + i;
+            local_decls.push((
+                1,
+                ValType::Ref(RefType {
+                    nullable: true,
+                    heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                }),
+            ));
+        }
+
+        let storage_bases = WasmEncodingBases {
+            struct_type_base,
+            typed_first_func_index,
+            struct_local_idx,
+            typed_local_base,
+            struct_global_idx,
+            typed_global_base,
+            struct_table_idx,
+            typed_table_base,
+        };
 
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(
-                &mut func,
-                self.limits.num_params,
-                struct_type_base,
-                typed_first_func_index,
-            );
+            op.insert(&mut func, scratch_local, storage_bases);
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -244,7 +362,21 @@ impl GcOps {
             if self.limits.max_types == 0
                 && matches!(
                     op,
-                    GcOp::StructNew(..) | GcOp::TakeStructCall(..) | GcOp::TakeTypedStructCall(..)
+                    GcOp::StructNew(..)
+                        | GcOp::TakeStructCall(..)
+                        | GcOp::TakeTypedStructCall(..)
+                        | GcOp::TypedStructLocalSet(..)
+                        | GcOp::TypedStructLocalGet(..)
+                        | GcOp::TypedStructGlobalSet(..)
+                        | GcOp::TypedStructGlobalGet(..)
+                        | GcOp::TypedStructTableSet(..)
+                        | GcOp::TypedStructTableGet(..)
+                        | GcOp::StructTableSet(..)
+                        | GcOp::StructTableGet(..)
+                        | GcOp::StructLocalSet(..)
+                        | GcOp::StructLocalGet(..)
+                        | GcOp::StructGlobalSet(..)
+                        | GcOp::StructGlobalGet(..)
                 )
             {
                 continue;
@@ -330,6 +462,15 @@ macro_rules! define_gc_ops {
                     Self::TakeTypedStructCall(t) => {
                         out.push(Some(StackType::Struct(Some(*t))));
                     }
+                    Self::TypedStructLocalSet(t) => {
+                        out.push(Some(StackType::Struct(Some(*t))));
+                    }
+                    Self::TypedStructGlobalSet(t) => {
+                        out.push(Some(StackType::Struct(Some(*t))));
+                    }
+                    Self::TypedStructTableSet(_, t) => {
+                        out.push(Some(StackType::Struct(Some(*t))));
+                    }
                     $(
                         Self::$op(..) => {
                             $( out.push($operand); )*
@@ -344,6 +485,15 @@ macro_rules! define_gc_ops {
                     Self::StructNew(t)        => {
                         out.push(StackType::Struct(Some(*t)));
                     }
+                    Self::TypedStructLocalGet(t) => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
+                    Self::TypedStructGlobalGet(t) => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
+                    Self::TypedStructTableGet(_, t) => {
+                        out.push(StackType::Struct(Some(*t)));
+                    }
                     $( Self::$op(..) => { $( out.push($result); )* }, )*
                 }
             }
@@ -355,7 +505,9 @@ macro_rules! define_gc_ops {
                             $( $(
                                 let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
                                 let limit = (limit_fn)(limits);
-                                debug_assert!(limit > 0);
+                                if limit == 0 {
+                                    return None;
+                                }
                                 *$limit_var = *$limit_var % limit;
                             )* )?
                         }
@@ -364,7 +516,15 @@ macro_rules! define_gc_ops {
                 match self {
                     Self::StructNew(t)
                     | Self::TakeStructCall(t)
-                    | Self::TakeTypedStructCall(t) => {
+                    | Self::TakeTypedStructCall(t)
+                    | Self::TypedStructLocalSet(t)
+                    | Self::TypedStructLocalGet(t)
+                    | Self::TypedStructGlobalSet(t)
+                    | Self::TypedStructGlobalGet(t)
+                    | Self::TypedStructTableSet(_, t)
+                    | Self::TypedStructTableGet(_, t)
+
+                    => {
                         if num_types == 0 {
                             return None;
                         }
@@ -454,19 +614,34 @@ define_gc_ops! {
     TakeTypedStructCall(type_index: |ops| ops.max_types => u32)
         : [] => [],
 
+    StructLocalSet() : [Some(StackType::Struct(None))] => [],
+    StructLocalGet() : [] => [StackType::Struct(None)],
+    // `TypedStructLocalSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
+    TypedStructLocalSet(type_index: |ops| ops.max_types => u32) : [] => [],
+    // `TypedStructLocalGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
+    TypedStructLocalGet(type_index: |ops| ops.max_types => u32) : [] => [],
+
+    StructGlobalSet() : [Some(StackType::Struct(None))] => [],
+    StructGlobalGet() : [] => [StackType::Struct(None)],
+    // `TypedStructGlobalSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
+    TypedStructGlobalSet(type_index: |ops| ops.max_types => u32) : [] => [],
+    // `TypedStructGlobalGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
+    TypedStructGlobalGet(type_index: |ops| ops.max_types => u32) : [] => [],
+
+    StructTableSet(elem_index: |ops| ops.table_size => u32) : [Some(StackType::Struct(None))] => [],
+    StructTableGet(elem_index: |ops| ops.table_size => u32) : [] => [StackType::Struct(None)],
+    // `TypedStructTableSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
+    TypedStructTableSet(elem_index: |ops| ops.table_size => u32, type_index: |ops| ops.max_types => u32) : [] => [],
+    // `TypedStructTableGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
+    TypedStructTableGet(elem_index: |ops| ops.table_size => u32, type_index: |ops| ops.max_types => u32) : [] => [],
+
     Drop : [None] => [],
 
     Null : [] => [StackType ::ExternRef],
 }
 
 impl GcOp {
-    fn insert(
-        self,
-        func: &mut Function,
-        scratch_local: u32,
-        struct_type_base: u32,
-        typed_first_func_index: u32,
-    ) {
+    fn insert(self, func: &mut Function, scratch_local: u32, storage_bases: WasmEncodingBases) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -511,14 +686,59 @@ impl GcOp {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
             Self::StructNew(x) => {
-                func.instruction(&Instruction::StructNew(x + struct_type_base));
+                func.instruction(&Instruction::StructNew(x + storage_bases.struct_type_base));
             }
             Self::TakeStructCall(_x) => {
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
             Self::TakeTypedStructCall(x) => {
-                let f = typed_first_func_index + x;
+                let f = storage_bases.typed_first_func_index + x;
                 func.instruction(&Instruction::Call(f));
+            }
+            Self::StructLocalGet() => {
+                func.instruction(&Instruction::LocalGet(storage_bases.struct_local_idx));
+            }
+            Self::TypedStructLocalGet(x) => {
+                func.instruction(&Instruction::LocalGet(storage_bases.typed_local_base + x));
+            }
+            Self::StructLocalSet() => {
+                func.instruction(&Instruction::LocalSet(storage_bases.struct_local_idx));
+            }
+            Self::TypedStructLocalSet(x) => {
+                func.instruction(&Instruction::LocalSet(storage_bases.typed_local_base + x));
+            }
+            Self::StructGlobalGet() => {
+                func.instruction(&Instruction::GlobalGet(storage_bases.struct_global_idx));
+            }
+            Self::TypedStructGlobalGet(x) => {
+                func.instruction(&Instruction::GlobalGet(storage_bases.typed_global_base + x));
+            }
+            Self::StructGlobalSet() => {
+                func.instruction(&Instruction::GlobalSet(storage_bases.struct_global_idx));
+            }
+            Self::TypedStructGlobalSet(x) => {
+                func.instruction(&Instruction::GlobalSet(storage_bases.typed_global_base + x));
+            }
+            Self::StructTableGet(elem_index) => {
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::TableGet(storage_bases.struct_table_idx));
+            }
+            Self::TypedStructTableGet(elem_index, x) => {
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::TableGet(storage_bases.typed_table_base + x));
+            }
+            Self::StructTableSet(elem_index) => {
+                // Use struct_local_idx (anyref) to temporarily store the value before table.set
+                func.instruction(&Instruction::LocalSet(storage_bases.struct_local_idx));
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::LocalGet(storage_bases.struct_local_idx));
+                func.instruction(&Instruction::TableSet(storage_bases.struct_table_idx));
+            }
+            Self::TypedStructTableSet(elem_index, x) => {
+                func.instruction(&Instruction::LocalSet(storage_bases.typed_local_base + x));
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::LocalGet(storage_bases.typed_local_base + x));
+                func.instruction(&Instruction::TableSet(storage_bases.typed_table_base + x));
             }
         }
     }

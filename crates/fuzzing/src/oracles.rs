@@ -927,13 +927,13 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         let func_ty = FuncType::new(
             store.engine(),
-            vec![ValType::Ref(RefType::new(false, HeapType::Any))],
+            vec![ValType::Ref(RefType::new(true, HeapType::Struct))],
             vec![],
         );
 
         let func = Func::new(&mut store, func_ty, {
             move |_caller: Caller<'_, StoreLimits>, _params, _results| {
-                log::info!("gc_ops: take_struct(<ref any>)");
+                log::info!("gc_ops: take_struct(<ref null struct>)");
                 Ok(())
             }
         });
