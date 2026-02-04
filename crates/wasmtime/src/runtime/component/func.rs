@@ -5,7 +5,7 @@ use crate::component::storage::storage_as_slice;
 use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
-use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTables};
+use crate::runtime::vm::component::{ComponentInstance, InstanceFlags};
 use crate::runtime::vm::{Export, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
@@ -713,15 +713,10 @@ impl Func {
         unsafe {
             call_post_return(&mut store, post_return, arg, flags)?;
 
-            let (calls, host_table, _, instance) = store
+            store
                 .0
-                .component_resource_state_with_instance(self.instance);
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: Some(instance.instance_states()),
-            }
-            .exit_call()?;
+                .component_resource_tables(Some(self.instance))
+                .exit_call()?;
 
             if store.0.concurrency_support() {
                 store.0.exit_sync_call(false)?;

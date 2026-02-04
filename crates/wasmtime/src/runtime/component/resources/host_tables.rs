@@ -97,15 +97,8 @@ impl HostResourceIndex {
 
 impl<'a> HostResourceTables<'a> {
     pub fn new_host(store: &'a mut StoreOpaque) -> HostResourceTables<'a> {
-        let (calls, host_table, host_resource_data) = store.component_resource_state();
-        HostResourceTables::from_parts(
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: None,
-            },
-            host_resource_data,
-        )
+        let (tables, data) = store.component_resource_tables_and_host_resource_data(None);
+        HostResourceTables::from_parts(tables, data)
     }
 
     pub fn from_parts(
