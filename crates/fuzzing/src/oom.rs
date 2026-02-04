@@ -84,6 +84,7 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                     new_state = OomState::OutsideOomTest;
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
+
                 OomState::OomOnAlloc(0) => {
                     log::trace!(
                         "injecting OOM for allocation: {layout:?}\nAllocation backtrace:\n{:?}",
@@ -92,10 +93,26 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                     new_state = OomState::DidOom;
                     ptr = ptr::null_mut();
                 }
+
                 OomState::OomOnAlloc(c) => {
                     new_state = OomState::OomOnAlloc(c - 1);
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
+
+                // Don't panic on allocation-after-OOM attempts if we
+                // are already in the middle of panicking. That will
+                // cause an abort and we won't get as good of an error
+                // message for the original panic, which is most likely
+                // some kind of test failure.
+                OomState::DidOom if std::thread::panicking() => {
+                    log::trace!(
+                        "Ignoring attempt to allocate {layout:?} after OOM while panicking:\n{:?}",
+                        Backtrace::new(),
+                    );
+                    new_state = OomState::DidOom;
+                    ptr = unsafe { std::alloc::System.alloc(layout) };
+                }
+
                 OomState::DidOom => {
                     log::trace!(
                         "Attempt to allocate {layout:?} after OOM:\n{:?}",
