@@ -51,8 +51,8 @@ macro_rules! forward_impls {
                 <$b as ComponentType>::typecheck(ty, types)
             }
 
-            fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
-                self.0.as_val(store)
+            fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+                self.0.to_val(store)
             }
         }
 

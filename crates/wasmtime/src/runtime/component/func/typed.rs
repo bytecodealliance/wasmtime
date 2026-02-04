@@ -754,7 +754,7 @@ pub unsafe trait ComponentType: Send + Sync {
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()>;
 
     /// Convert to the tagged representation.
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val>;
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val>;
 }
 
 #[doc(hidden)]
@@ -973,8 +973,8 @@ macro_rules! forward_type_impls {
                 <$b as ComponentType>::typecheck(ty, types)
             }
 
-            fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
-                self.$via().as_val(store)
+            fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+                self.$via().to_val(store)
             }
         }
     )*)
@@ -1086,7 +1086,7 @@ macro_rules! integers {
                 }
             }
 
-            fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+            fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
                 Ok(Val::$ty(*self))
             }
         }
@@ -1217,7 +1217,7 @@ macro_rules! floats {
                 }
             }
 
-            fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+            fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
                 Ok(Val::$ty(*self))
             }
         }
@@ -1338,7 +1338,7 @@ unsafe impl ComponentType for bool {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::Bool(*self))
     }
 }
@@ -1408,7 +1408,7 @@ unsafe impl ComponentType for char {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::Char(*self))
     }
 }
@@ -1482,7 +1482,7 @@ unsafe impl ComponentType for str {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::String(self.to_string()))
     }
 }
@@ -1787,7 +1787,7 @@ unsafe impl ComponentType for WasmStr {
         }
     }
 
-    fn as_val(&self, mut store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, mut store: impl AsContextMut) -> Result<Val> {
         let store = store.as_context_mut().0;
         let memory = self.instance.options_memory(store, self.options);
         let encoding = self.instance.options(store, self.options).string_encoding;
@@ -1842,10 +1842,10 @@ where
         }
     }
 
-    fn as_val(&self, mut store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, mut store: impl AsContextMut) -> Result<Val> {
         Ok(Val::List(
             self.iter()
-                .map(|i| i.as_val(&mut store))
+                .map(|i| i.to_val(&mut store))
                 .collect::<Result<Vec<Val>>>()?,
         ))
     }
@@ -2097,7 +2097,7 @@ unsafe impl<T: ComponentType + Lift> ComponentType for WasmList<T> {
         <[T] as ComponentType>::typecheck(ty, types)
     }
 
-    fn as_val(&self, mut store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, mut store: impl AsContextMut) -> Result<Val> {
         let mut cx = LiftContext::new(store.as_context_mut().0, self.options, self.instance);
         let lifted = (0..self.len)
             .map(move |i| self.get_from_store(&mut cx, i).unwrap())
@@ -2105,7 +2105,7 @@ unsafe impl<T: ComponentType + Lift> ComponentType for WasmList<T> {
         Ok(Val::List(
             lifted
                 .into_iter()
-                .map(move |v| v.as_val(&mut store))
+                .map(move |v| v.to_val(&mut store))
                 .collect::<Result<Vec<Val>>>()?,
         ))
     }
@@ -2346,9 +2346,9 @@ where
         }
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Option(match self {
-            Some(v) => Some(Box::new(v.as_val(store)?)),
+            Some(v) => Some(Box::new(v.to_val(store)?)),
             None => None,
         }))
     }
@@ -2507,12 +2507,12 @@ where
         }
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Result(match self {
             Ok(_) if T::IS_RUST_UNIT_TYPE => Ok(None),
-            Ok(t) => Ok(Some(Box::new(t.as_val(store)?))),
+            Ok(t) => Ok(Some(Box::new(t.to_val(store)?))),
             Err(_) if E::IS_RUST_UNIT_TYPE => Err(None),
-            Err(e) => Err(Some(Box::new(e.as_val(store)?))),
+            Err(e) => Err(Some(Box::new(e.to_val(store)?))),
         }))
     }
 }
@@ -2869,13 +2869,13 @@ macro_rules! impl_component_ty_for_tuples {
                 typecheck_tuple(ty, types, &[$($t::typecheck),*])
             }
 
-            fn as_val(
+            fn to_val(
                 &self,
                 #[allow(unused, reason = "0-tuple doesnt use this arg")]
                 mut store: impl AsContextMut,
             ) -> Result<Val> {
                 let ($($t,)*) = self;
-                Ok(Val::Tuple(vec![$($t.as_val(&mut store)?,)*]))
+                Ok(Val::Tuple(vec![$($t.to_val(&mut store)?,)*]))
             }
         }
 

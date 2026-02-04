@@ -1391,7 +1391,7 @@ unsafe impl<T: ComponentType + 'static> ComponentType for FutureReader<T> {
         }
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Future(FutureAny::try_from_future_reader(
             store,
             FutureReader {
@@ -1748,7 +1748,7 @@ unsafe impl<T: ComponentType + 'static> ComponentType for StreamReader<T> {
         }
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Stream(StreamAny::try_from_stream_reader(
             store,
             StreamReader {
@@ -1939,7 +1939,7 @@ unsafe impl func::ComponentType for ErrorContext {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::ErrorContext(ErrorContextAny(self.rep)))
     }
 }

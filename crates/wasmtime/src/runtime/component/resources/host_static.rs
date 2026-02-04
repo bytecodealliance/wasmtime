@@ -223,7 +223,7 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
         HostResource::<Static<T>, ()>::typecheck(ty, types)
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Resource(self.0.try_as_resource_any(store)?))
     }
 }

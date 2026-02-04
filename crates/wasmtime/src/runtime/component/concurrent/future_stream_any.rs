@@ -147,7 +147,7 @@ unsafe impl ComponentType for FutureAny {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::Future(self.clone()))
     }
 }
@@ -318,7 +318,7 @@ unsafe impl ComponentType for StreamAny {
         }
     }
 
-    fn as_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
         Ok(Val::Stream(self.clone()))
     }
 }

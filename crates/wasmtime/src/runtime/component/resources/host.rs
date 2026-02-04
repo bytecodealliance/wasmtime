@@ -325,7 +325,7 @@ where
         Ok(())
     }
 
-    fn as_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
         Ok(Val::Resource(self.try_as_resource_any(store)?))
     }
 }
