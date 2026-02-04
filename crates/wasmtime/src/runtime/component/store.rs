@@ -55,6 +55,13 @@ impl ComponentStoreData {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
+        // Skip cleanup if concurrency support is not enabled.
+        // This prevents panics when the component-model-async feature is compiled in
+        // but the store was created without concurrency support (concurrent_state is None).
+        if !store.concurrency_support() {
+            return;
+        }
+
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
         store
