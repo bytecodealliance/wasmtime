@@ -761,15 +761,15 @@ impl TypeRegistryInner {
                 .zip(iter_entity_range(range.clone()))
                 .map(|(mut ty, module_index)| {
                     non_canon_types
-                        .push((module_index, ty.clone()))
+                        .push((module_index, ty.try_clone()?))
                         .expect("reserved capacity");
                     ty.canonicalize_for_hash_consing(range.clone(), &mut |idx| {
                         debug_assert!(idx < range.clone().start);
                         map[idx]
                     });
-                    ty
+                    Ok(ty)
                 })
-                .try_collect()?,
+                .try_collect::<Box<[_]>, OutOfMemory>()?,
         };
 
         // Any references in the hash-consing key to types outside of this rec
