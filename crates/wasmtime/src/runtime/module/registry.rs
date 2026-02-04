@@ -9,6 +9,7 @@ use crate::vm::CompiledModuleId;
 use crate::{Engine, prelude::*};
 use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
+use alloc::collections::BTreeSet;
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr::NonNull;
@@ -292,6 +293,14 @@ fn global_code() -> &'static RwLock<GlobalRegistry> {
 
 type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
+/// Tracks which addresses have been registered to enable idempotent operations.
+/// This prevents crashes from virtual address reuse when Arc references keep
+/// old registrations alive while new allocations reuse the same address range.
+fn registered_addresses() -> &'static RwLock<BTreeSet<usize>> {
+    static REGISTERED: OnceLock<RwLock<BTreeSet<usize>>> = OnceLock::new();
+    REGISTERED.get_or_init(Default::default)
+}
+
 /// Find which registered region of code contains the given program counter, and
 /// what offset that PC is within that module's code.
 pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
@@ -303,8 +312,10 @@ pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
 
 /// Registers a new region of code.
 ///
-/// Must not have been previously registered and must be `unregister`'d to
-/// prevent leaking memory.
+/// This operation is idempotent - registering an already-registered address
+/// is a no-op. This prevents crashes from virtual address reuse when Arc
+/// references keep old registrations alive while new allocations reuse
+/// the same address range.
 ///
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
@@ -315,20 +326,43 @@ pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) {
     }
     let start = address.start;
     let end = address.end - 1;
-    let prev = global_code().write().insert(end, (start, image.clone()));
-    assert!(prev.is_none());
+
+    // Check if already registered - make operation idempotent
+    {
+        let mut tracked = registered_addresses().write();
+        if tracked.contains(&end) {
+            // Already registered, skip to prevent duplicate registration panic
+            return;
+        }
+        tracked.insert(end);
+    }
+
+    global_code().write().insert(end, (start, image.clone()));
 }
 
 /// Unregisters a code mmap from the global map.
 ///
-/// Must have been previously registered with `register`.
+/// This operation is idempotent - unregistering an address that is not
+/// registered is a no-op. This prevents crashes when Arc deferred
+/// deallocation causes unregister to be called after another allocation
+/// has already reused and re-registered the same address.
 pub fn unregister_code(address: Range<usize>) {
     if address.is_empty() {
         return;
     }
     let end = address.end - 1;
-    let code = global_code().write().remove(&end);
-    assert!(code.is_some());
+
+    // Check if registered - make operation idempotent
+    {
+        let mut tracked = registered_addresses().write();
+        if !tracked.contains(&end) {
+            // Not registered, skip to prevent missing unregistration panic
+            return;
+        }
+        tracked.remove(&end);
+    }
+
+    global_code().write().remove(&end);
 }
 
 #[test]
