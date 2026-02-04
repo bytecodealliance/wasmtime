@@ -15,8 +15,6 @@ pub const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 pub const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 /// Maximum number of operations.
 pub const MAX_OPS: usize = 100;
-/// Range for the number of structref locals.
-pub const NUM_STRUCT_LOCALS_RANGE: RangeInclusive<u32> = 0..=10;
 
 /// Limits controlling the structure of a generated Wasm module.
 #[derive(Debug, Default, Serialize, Deserialize)]
