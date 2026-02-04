@@ -51,7 +51,7 @@ macro_rules! tuples {
             {
                 #[inline]
                 fn try_clone(&self) -> Result<Self, OutOfMemory> {
-                    #[allow(non_snake_case)]
+                    #[allow(non_snake_case, reason = "macro code")]
                     let ( $($t,)* ) = self;
                     Ok(( $( $t.try_clone()?, )* ))
                 }
