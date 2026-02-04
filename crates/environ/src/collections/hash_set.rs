@@ -17,6 +17,17 @@ pub struct HashSet<T, S = DefaultHashBuilder> {
     inner: inner::HashSet<T, S>,
 }
 
+impl<T, S> Default for HashSet<T, S>
+where
+    S: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: inner::HashSet::default(),
+        }
+    }
+}
+
 impl<T, S> PartialEq for HashSet<T, S>
 where
     T: Eq + Hash,
