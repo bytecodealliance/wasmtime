@@ -1515,8 +1515,8 @@ impl Inst {
                     ALUOp::Sub64 => (0xb9e9, true),        // SGRK
                     ALUOp::SubLogical32 => (0xb9fb, true), // SLRK
                     ALUOp::SubLogical64 => (0xb9eb, true), // SLGRK
-                    ALUOp::Mul32 => (0xb9fd, true),        // MSRKC
-                    ALUOp::Mul64 => (0xb9ed, true),        // MSGRKC
+                    ALUOp::Mul32 => (0xb9fd, false),       // MSRKC
+                    ALUOp::Mul64 => (0xb9ed, false),       // MSGRKC
                     ALUOp::And32 => (0xb9f4, true),        // NRK
                     ALUOp::And64 => (0xb9e4, true),        // NGRK
                     ALUOp::Orr32 => (0xb9f6, true),        // ORK

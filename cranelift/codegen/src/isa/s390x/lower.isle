@@ -4409,6 +4409,23 @@
                  (xor_reg $I64 x_hi y_hi))))
         (output_pair res (lshr_imm $I64 of_in_sign 63))))
 
+;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (has_type (fits_in_32 ty) (umul_overflow x y)))
+      (let ((result Reg (mul_reg $I64 (zext64_reg ty y) (zext64_reg ty x)))
+            (of Reg (lower_bool $I8 (invert_bool (bool
+              (icmps_simm16 $I32 (lshr_imm $I64 result (ty_bits ty)) 0)
+              (intcc_as_cond (IntCC.Equal)))))))
+        (output_pair result of)))
+
+(rule 0 (lower (has_type ty @ $I64 (umul_overflow x y)))
+      (let ((mul_out RegPair (umul_wide y x))
+            (result Reg (regpair_lo mul_out))
+            (of Reg (lower_bool $I8 (invert_bool (bool
+              (icmps_simm16 ty (regpair_hi mul_out) 0)
+              (intcc_as_cond (IntCC.Equal)))))))
+        (output_pair result of)))
+
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
