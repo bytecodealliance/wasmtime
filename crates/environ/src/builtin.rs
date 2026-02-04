@@ -439,15 +439,10 @@ impl BuiltinFunctionIndex {
             (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);
 
-            // Atomics-related functions return a negative value indicating trap
-            // indicate a trap.
+            // Atomics-related functions return a negative value to indicate a trap.
             (@get memory_atomic_notify u64) => (TrapSentinel::Negative);
             (@get memory_atomic_wait32 u64) => (TrapSentinel::Negative);
             (@get memory_atomic_wait64 u64) => (TrapSentinel::Negative);
-
-            // GC returns an optional GC ref, encoded as a `u64` with a negative
-            // value indicating a trap.
-            (@get gc u64) => (TrapSentinel::Negative);
 
             // GC allocation functions return a u32 which is zero to indicate a
             // trap.
