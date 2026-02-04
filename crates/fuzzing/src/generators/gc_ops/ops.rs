@@ -15,7 +15,7 @@ use wasm_encoder::{
 };
 
 /// The base offsets and indices for various Wasm entities within
-// their index spaces in the the encoded Wasm binary.
+/// their index spaces in the the encoded Wasm binary.
 #[derive(Clone, Copy)]
 struct WasmEncodingBases {
     struct_type_base: u32,
