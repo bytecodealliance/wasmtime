@@ -61,7 +61,7 @@ unsafe impl ComponentType for FutureAny {
         bail!("support for component-model-async disabled at compile time")
     }
 
-    fn to_val<S>(&self, _: impl crate::StoreContextMut<S>) -> Result<Val> {
+    fn to_val<S>(&self, _: crate::StoreContextMut<S>) -> Result<Val> {
         bail!("support for component-model-async disabled at compile time")
     }
 }
@@ -115,7 +115,7 @@ unsafe impl ComponentType for StreamAny {
         bail!("support for component-model-async disabled at compile time")
     }
 
-    fn to_val<S>(&self, _: impl crate::StoreContextMut<S>) -> Result<Val> {
+    fn to_val<S>(&self, _: crate::StoreContextMut<S>) -> Result<Val> {
         bail!("support for component-model-async disabled at compile time")
     }
 }
