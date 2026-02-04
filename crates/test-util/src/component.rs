@@ -3,7 +3,7 @@ use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
     CanonicalAbiInfo, InstanceType, InterfaceType, LiftContext, LowerContext,
 };
-use wasmtime::component::{ComponentType, Lift, Lower};
+use wasmtime::component::{ComponentType, Lift, Lower, Val};
 use wasmtime::{Config, Engine, StoreContextMut};
 use wasmtime_environ::prelude::*;
 

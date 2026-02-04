@@ -1,9 +1,9 @@
-use crate::{AsContextMut, StoreContextMut};
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType, Val};
 use crate::prelude::*;
+use crate::{AsContextMut, StoreContextMut};
 use core::fmt;
 use core::marker;
 use core::mem::MaybeUninit;

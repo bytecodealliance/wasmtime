@@ -9,7 +9,7 @@ use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader, Val,
 };
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, StoreContextMut, Result, bail, error::Context};
+use crate::{AsContextMut, Result, StoreContextMut, bail, error::Context};
 use std::any::TypeId;
 use std::mem::MaybeUninit;
 use wasmtime_environ::component::{

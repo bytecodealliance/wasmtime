@@ -8,12 +8,12 @@
 //!
 //! The actual `T` type parameter is just a guide, no `T` value is ever needed.
 
-use crate::{AsContextMut, StoreContextMut};
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::host::{HostResource, HostResourceType};
 use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType, Val};
 use crate::prelude::*;
+use crate::{AsContextMut, StoreContextMut};
 use core::fmt;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
