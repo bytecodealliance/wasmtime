@@ -4026,6 +4026,10 @@
 (decl mul_reg (Type Reg Reg) Reg)
 (rule (mul_reg ty x y) (alu_rrr ty (aluop_mul ty) x y))
 
+(decl mul_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_with_flags_paired ty x y)
+     (alu_rrr_with_flags_paired ty (aluop_mul ty) x y))
+
 (decl mul_reg_sext32 (Type Reg Reg) Reg)
 (rule (mul_reg_sext32 ty x y) (alu_rr ty (aluop_mul_sext32 ty) x y))
 
