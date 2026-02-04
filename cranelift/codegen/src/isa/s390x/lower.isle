@@ -4311,12 +4311,16 @@
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_32_or_64 ty) (uadd_overflow _ x y)))
-      (let ((sum Reg (add_reg ty x y))
-            (overflow Reg
-              (lower_bool $I8
-                          (bool (icmpu_reg ty sum x) (intcc_as_cond (IntCC.UnsignedLessThan))))))
-        (output_pair sum overflow)))
+(rule 1 (lower (uadd_overflow (fits_in_16 ty) x y))
+    (overflow_and_result_from_shifted ty (aluop_add_logical $I32) x y (mask_as_cond 3)))
+
+(rule 0 (lower (uadd_overflow (ty_32_or_64 ty) x y))
+      (overflow_and_result_from_producer (add_logical_reg_with_flags_paired ty x y) (mask_as_cond 3)))
+
+(rule 2 (lower (uadd_overflow $I128 x y))
+      (output_pair
+        (vec_add $I128 x y)
+        (vec_extract_lane $I64X2 (vec_add_logical_cout $I128 x y) 1 (zero_reg))))
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

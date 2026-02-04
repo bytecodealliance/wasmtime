@@ -1189,6 +1189,7 @@
     (Add32x4)
     (Add64x2)
     (Add128)
+    (Add128Cout)
     (Sub8x16)
     (Sub16x8)
     (Sub32x4)
@@ -3822,6 +3823,31 @@
                     (intcc_as_cond (IntCC.SignedLessThan)))))
         (select_bool_reg $I64 l_cond l_bound ub)))
 
+;; Helpers for generating integer arithmetic instructions with overflow outputs ;;;
+
+;; For fit-in-16 bit integers, we shift them into the most significant positions of their
+;; 32-bit registers, use the codition codes for the overflow, and shift back into the
+;; expected least-significant position to generate the result
+(decl type_shift_up (Type) u8)
+(rule (type_shift_up $I8) 24)
+(rule (type_shift_up $I16) 16)
+
+(decl overflow_and_result_from_shifted (Type ALUOp Reg Reg Cond) InstOutput)
+(rule (overflow_and_result_from_shifted (fits_in_16 ty) op x y cond)
+      (let ((x_shifted Reg (lshl_imm $I32 x (type_shift_up ty)))
+            (y_shifted Reg (lshl_imm $I32 y (type_shift_up ty)))
+            (producer ProducesFlags (alu_rrr_with_flags_paired ty op x_shifted y_shifted))
+            (overflow Reg (lower_bool $I8 (bool (produces_flags_ignore producer) cond)))
+            (out Reg (lshr_imm $I32 (produces_flags_get_reg producer) (type_shift_up ty))))
+        (output_pair out overflow)))
+
+;; Generate the paired overflow result from the generated condition codes
+(decl overflow_and_result_from_producer (ProducesFlags Cond) InstOutput)
+(rule (overflow_and_result_from_producer producer cond)
+      (output_pair
+        (produces_flags_get_reg producer)
+        (lower_bool $I8 (bool (produces_flags_ignore producer) cond))))
+
 
 ;; Helpers for generating `add` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3915,6 +3941,11 @@
 (rule (add_logical_mem_zext32_with_flags_paired ty x y)
       (alu_rx_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
+(decl vecop_add_logical_cout (Type) VecBinaryOp)
+(rule (vecop_add_logical_cout $I128) (VecBinaryOp.Add128Cout))
+
+(decl vec_add_logical_cout (Type Reg Reg) Reg)
+(rule (vec_add_logical_cout ty x y) (vec_rrr ty (vecop_add_logical_cout ty) x y))
 
 ;; Helpers for generating `sub` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
