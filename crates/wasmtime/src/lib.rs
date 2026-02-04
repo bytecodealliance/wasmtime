@@ -417,6 +417,10 @@ use wasmtime_environ::prelude;
 // for all internal usage instead of using abort-on-OOM versions. Once that's
 // done this can be removed and the collections should be directly imported from
 // `wasmtime_environ::collections::*`.
+#[allow(
+    unused_imports,
+    reason = "not all build configs use these; easier to allow than to precisely `cfg`"
+)]
 use wasmtime_environ::collections::oom_abort::{hash_map, hash_set};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
