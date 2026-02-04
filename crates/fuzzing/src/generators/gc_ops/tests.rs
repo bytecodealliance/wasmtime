@@ -71,7 +71,7 @@ fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
 
     let mut session = mutatis::Session::new();
 
-    for _ in 0..1024 {
+    for _ in 0..2048 {
         session.mutate(&mut res)?;
         let wasm = res.to_wasm_binary();
 
