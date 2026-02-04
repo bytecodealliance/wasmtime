@@ -9,7 +9,7 @@ use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader, Val,
 };
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, Result, bail, error::Context};
+use crate::{AsContextMut, StoreContextMut, Result, bail, error::Context};
 use std::any::TypeId;
 use std::mem::MaybeUninit;
 use wasmtime_environ::component::{
@@ -147,7 +147,7 @@ unsafe impl ComponentType for FutureAny {
         }
     }
 
-    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Future(self.clone()))
     }
 }
@@ -318,7 +318,7 @@ unsafe impl ComponentType for StreamAny {
         }
     }
 
-    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Stream(self.clone()))
     }
 }

@@ -8,7 +8,7 @@
 //!
 //! The actual `T` type parameter is just a guide, no `T` value is ever needed.
 
-use crate::AsContextMut;
+use crate::{AsContextMut, StoreContextMut};
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::host::{HostResource, HostResourceType};
@@ -223,7 +223,7 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
         HostResource::<Static<T>, ()>::typecheck(ty, types)
     }
 
-    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Resource(self.0.try_as_resource_any(store)?))
     }
 }

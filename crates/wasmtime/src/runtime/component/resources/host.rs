@@ -1,4 +1,4 @@
-use crate::AsContextMut;
+use crate::{AsContextMut, StoreContextMut};
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
@@ -325,7 +325,7 @@ where
         Ok(())
     }
 
-    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Resource(self.try_as_resource_any(store)?))
     }
 }

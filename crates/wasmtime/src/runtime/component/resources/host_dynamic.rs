@@ -1,4 +1,4 @@
-use crate::AsContextMut;
+use crate::{AsContextMut, StoreContextMut};
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::host::{HostResource, HostResourceType};
@@ -151,7 +151,7 @@ unsafe impl ComponentType for ResourceDynamic {
         HostResource::<Dynamic, u32>::typecheck(ty, types)
     }
 
-    fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Resource(self.0.try_as_resource_any(store)?))
     }
 }

@@ -4,7 +4,7 @@ use wasmtime::component::__internal::{
     CanonicalAbiInfo, InstanceType, InterfaceType, LiftContext, LowerContext,
 };
 use wasmtime::component::{ComponentType, Lift, Lower};
-use wasmtime::{Config, Engine};
+use wasmtime::{Config, Engine, StoreContextMut};
 use wasmtime_environ::prelude::*;
 
 pub fn config() -> Config {
@@ -51,7 +51,7 @@ macro_rules! forward_impls {
                 <$b as ComponentType>::typecheck(ty, types)
             }
 
-            fn to_val(&self, store: impl AsContextMut) -> Result<Val> {
+            fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
                 self.0.to_val(store)
             }
         }

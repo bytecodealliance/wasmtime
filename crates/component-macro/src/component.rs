@@ -387,7 +387,7 @@ fn expand_record_for_component_type(
         });
         field_to_vals.extend(quote!(
             (#internal::String::from(#name),
-                #wt::component::ComponentType::to_val(&self.#ident, &mut store)? ),
+                #wt::component::ComponentType::to_val(&self.#ident, #wt::AsContextMut::as_context_mut(&mut store))? ),
         ));
     }
 
@@ -433,10 +433,10 @@ fn expand_record_for_component_type(
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
             }
 
-            fn to_val(&self, mut store: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
-                Ok(#wt::component::Val::Record(::alloc::vec![
+            fn to_val<S>(&self, mut store: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
+                Ok(#wt::component::Val::Record([
                     #field_to_vals
-                ]))
+                ].into()))
             }
         }
     };
@@ -1062,7 +1062,7 @@ impl Expander for ComponentTypeExpander {
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
 
-                fn to_val(&self, mut store: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
+                fn to_val<S>(&self, store: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
                     let (variant_name, opt_payload) = match self {
                         #to_val_cases
                     };
@@ -1131,7 +1131,7 @@ impl Expander for ComponentTypeExpander {
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::enum_(#cases_len);
 
-                fn to_val(&self, _: impl #wt::AsContextMut) -> #wt::Result<#wt::component::Val> {
+                fn to_val<S>(&self, _: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
                     Ok(#wt::component::Val::Enum(match self { #to_val_cases }))
                 }
             }

@@ -281,7 +281,7 @@ unsafe impl ComponentType for ResourceAny {
         }
     }
 
-    fn to_val(&self, _: impl AsContextMut) -> Result<Val> {
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
         Ok(Val::Resource(*self))
     }
 }
