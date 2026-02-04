@@ -1,0 +1,12 @@
+test compile
+set opt_level=speed_and_size
+target aarch64
+
+function u0:1360(i8) -> i8 system_v {
+block0(v0: i8):
+    v1 = iconst.i64 0
+    v2 = iconst.i64 1
+    v3 = select v0, v1, v2
+    v4 = icmp_imm eq v3, 1
+    return v4
+}

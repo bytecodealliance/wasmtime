@@ -43,8 +43,8 @@ block0(v2: i64):
 ; nextln:     v14 = iconst.i64 -562949953421310
 ; nextln:     v3 = band v2, v14  ; v14 = -562949953421310
 ; nextln:     v16 = iconst.i64 0
-; nextln:     v18 = icmp ne v3, v16  ; v16 = 0
-; nextln:     return v18
+; nextln:     v19 = icmp ne v3, v16  ; v16 = 0
+; nextln:     return v19
 ; nextln: }
 
 function %ne_k1(i64) -> i8 {
@@ -65,8 +65,8 @@ block0(v2: i64):
 ; nextln:     v14 = iconst.i64 -562949953421310
 ; nextln:     v3 = band v2, v14  ; v14 = -562949953421310
 ; nextln:     v16 = iconst.i64 0
-; nextln:     v18 = icmp ne v3, v16  ; v16 = 0
-; nextln:     return v18
+; nextln:     v19 = icmp ne v3, v16  ; v16 = 0
+; nextln:     return v19
 ; nextln: }
 
 function %ne_k2(i64) -> i8 {

@@ -1,3 +1,15 @@
+## 41.0.3
+
+Released 2026-02-04.
+
+### Fixed
+
+* Fix an incorrect mid-end optimization rule that could cause a compiler panic
+  due to mismatched types.
+  [#12504](https://github.com/bytecodealliance/wasmtime/pull/12504)
+
+--------------------------------------------------------------------------------
+
 ## 41.0.2
 
 Released 2026-02-03.
