@@ -3999,6 +3999,16 @@
 (rule 0 (lower (has_type (ty_32_or_64 ty) (uadd_overflow x y)))
       (overflow_and_result_from_producer (add_logical_reg_with_flags_paired ty x y) (mask_as_cond 3)))
 
+;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (has_type (fits_in_16 ty) (usub_overflow x y)))
+      (overflow_and_result_from_shifted ty (aluop_sub_logical $I32) x y (intcc_as_cond (IntCC.UnsignedGreaterThan))))
+
+(rule 0 (lower (has_type (ty_32_or_64 ty) (usub_overflow x y)))
+      (overflow_and_result_from_producer
+        (sub_logical_reg_with_flags_paired ty x y)
+        (intcc_as_cond (IntCC.UnsignedGreaterThan))))
+
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
