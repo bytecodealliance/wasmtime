@@ -153,3 +153,24 @@ time warrant patch releases for Wasmtime.
 
 [rfc4]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/wasmtime-one-dot-oh.md
 [RFC process]: https://github.com/bytecodealliance/rfcs
+
+## Releases and "CI Weather"
+
+Wasmtime relies on GitHub Actions to perform a release. This is true for both
+normal releases and security releases. GitHub Actions has become much less
+reliable over time and is often subject to widespread outages which can prevent
+Wasmtime from making a release. At this time Wasmtime has no alternative for
+making a release and we're entirely subject to the whims of Azure and GitHub
+Actions and how they're doing that day. If there is an outage when a release is
+being made then Wasmtime will not be able to make a release. This can affect the
+timely publish of a security release, for example. We do our best to keep tabs
+on the status of GitHub Actions and will publish a release once it recovers if
+there's an outage.
+
+Wasmtime as a project does not currently have the resources to dedicate to
+self-hosted runners, different CI providers, or maintaining escape hatches to
+perform releases locally instead of CI. If your maintain an embedding of
+Wasmtime and this caveat is unacceptable to you please feel free to reach out.
+We would be happy to talk about coordinating alternative CI architecture coupled
+with external investment in maintainership. For now, though, GitHub Actions is
+the best option available to us even with its unreliability.
