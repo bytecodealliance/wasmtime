@@ -82,6 +82,7 @@ enum Slot {
     },
 
     /// Represents a guest thread handle.
+    #[cfg(feature = "component-model-async")]
     GuestThread {
         rep: u32,
     },
@@ -574,8 +575,10 @@ impl HandleTable {
 }
 
 #[derive(Default)]
+#[cfg(feature = "component-model-async")]
 pub struct ThreadHandleTable(HandleTable);
 
+#[cfg(feature = "component-model-async")]
 impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
