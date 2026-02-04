@@ -3946,6 +3946,10 @@
 (decl sub_reg (Type Reg Reg) Reg)
 (rule (sub_reg ty x y) (alu_rrr ty (aluop_sub ty) x y))
 
+(decl sub_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub ty) x y))
+
 (decl sub_reg_sext32 (Type Reg Reg) Reg)
 (rule (sub_reg_sext32 ty x y) (alu_rr ty (aluop_sub_sext32 ty) x y))
 
