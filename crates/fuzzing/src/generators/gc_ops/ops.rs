@@ -14,9 +14,10 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
-// This is used as ctx to pass to the function
+/// The base offsets and indices for various Wasm entities within
+// their index spaces in the the encoded Wasm binary.
 #[derive(Clone, Copy)]
-struct StorageBases {
+struct WasmEncodingBases {
     struct_type_base: u32,
     typed_first_func_index: u32,
     struct_local_idx: u32,
@@ -225,7 +226,7 @@ impl GcOps {
             );
         }
 
-        // Add exactly one (ref any) global.
+        // Add exactly one (ref.null struct) global.
         let struct_global_idx = globals.len();
         globals.global(
             wasm_encoder::GlobalType {
@@ -300,7 +301,7 @@ impl GcOps {
             ));
         }
 
-        let storage_bases = StorageBases {
+        let storage_bases = WasmEncodingBases {
             struct_type_base,
             typed_first_func_index,
             struct_local_idx,
@@ -640,7 +641,7 @@ define_gc_ops! {
 }
 
 impl GcOp {
-    fn insert(self, func: &mut Function, scratch_local: u32, storage_bases: StorageBases) {
+    fn insert(self, func: &mut Function, scratch_local: u32, storage_bases: WasmEncodingBases) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;

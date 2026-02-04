@@ -933,7 +933,7 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         let func = Func::new(&mut store, func_ty, {
             move |_caller: Caller<'_, StoreLimits>, _params, _results| {
-                log::info!("gc_ops: take_struct(<ref null any>)");
+                log::info!("gc_ops: take_struct(<ref null struct>)");
                 Ok(())
             }
         });
