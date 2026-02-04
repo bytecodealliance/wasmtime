@@ -318,8 +318,14 @@ where
     /// with the provided signature that a component is using.
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>;
 
+    /// FIXME TK
+    fn pre_run(&self, store: StoreContextMut<'_, T>, params: &P) -> Result<()>;
+
     /// Execute this host function.
     fn run(&self, store: StoreContextMut<'_, T>, params: P) -> HostResult<R>;
+
+    /// FIXME TK
+    fn post_run(&self, store: StoreContextMut<'_, T>, rets: &R) -> Result<()>;
 
     /// Performs the lifting operation to convert arguments from the canonical
     /// ABI in wasm memory/arguments into their Rust representation.
@@ -442,6 +448,7 @@ where
         #[cfg(feature = "component-model-async")]
         let caller_instance = lift.options().instance;
 
+        self.pre_run(store.as_context_mut(), &params)?;
         let ret = match self.run(store.as_context_mut(), params) {
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
@@ -454,6 +461,7 @@ where
                 },
             )?,
         };
+        self.post_run(store.as_context_mut(), &ret)?;
 
         let mut lower = LowerContext::new(store, options, instance);
         let fty = &lower.types[ty];
@@ -517,10 +525,14 @@ where
             0
         };
 
+        self.pre_run(store.as_context_mut(), &params)?;
         let host_result = self.run(store.as_context_mut(), params);
 
         let task = match host_result {
             HostResult::Done(result) => {
+                if let Ok(ret) = result {
+                    self.post_run(store.as_context_mut(), &ret)?;
+                }
                 Self::lower_result_and_exit_call(
                     &mut LowerContext::new(store, options, instance),
                     ty,
@@ -532,6 +544,7 @@ where
             #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
                 instance.first_poll(store, future, caller_instance, move |store, ret| {
+                    self.post_run(store.as_context_mut(), &ret)?;
                     Self::lower_result_and_exit_call(
                         &mut LowerContext::new(store, options, instance),
                         ty,
@@ -656,37 +669,24 @@ where
         Ok(())
     }
 
-    fn run(&self, mut store: StoreContextMut<'_, T>, params: P) -> HostResult<R> {
+    fn pre_run(&self, mut store: StoreContextMut<'_, T>, params: &P) -> Result<()> {
         if let Some(pre) = &self.pre {
-            let vals = params
-                .as_val(store.as_context_mut())
-                .expect("FIXME handle error properly");
-            (pre)(store.0, &[vals]).expect("FIXME handle error properly");
+            let vals = params.to_val(store.as_context_mut())?;
+            (pre)(store.0, &[vals])?;
         }
-        let r = (self.func)(store.as_context_mut(), params);
-        if let Some(post) = &self.post {
-            match r {
-                HostResult::Done(Ok(ref rets)) => {
-                    let vals = rets
-                        .as_val(store.as_context_mut())
-                        .expect("FIXME handle error properly");
-                    (post)(store.0, &[vals]).expect("FIXME handle error properly");
-                    r
-                }
-                HostResult::Done(_) => r,
-                HostResult::Future(fut) => HostResult::Future(Box::pin(async move {
-                    let rets = fut.await?;
-                    let store: StoreContextMut<'_, T> = todo!();
-                    let vals = rets
-                        .as_val(store.as_context_mut())
-                        .expect("FIXME handle error properly");
-                    (post)(store.0, &[vals]).expect("FIXME handle error properly");
-                    Ok(rets)
-                })),
-            }
-        } else {
-            r
+        Ok(())
+    }
+
+    fn run(&self, mut store: StoreContextMut<'_, T>, params: P) -> HostResult<R> {
+        (self.func)(store.as_context_mut(), params)
+    }
+
+    fn post_run(&self, mut store: StoreContextMut<'_, T>, rets: &R) -> Result<()> {
+        if let Some(post) = &self.post{
+            let vals = rets.to_val(store.as_context_mut())?;
+            (post)(store.0, &[vals])?;
         }
+        Ok(())
     }
 
     fn lift_params(cx: &mut LiftContext<'_>, ty: TypeFuncIndex, src: Source<'_>) -> Result<P> {
@@ -747,7 +747,11 @@ where
 ///
 /// This is intended for more-dynamic use cases than `StaticHostFn` above such
 /// as demos, gluing things together quickly, and `wast` testing.
-struct DynamicHostFn<F, const ASYNC: bool>(F);
+struct DynamicHostFn<F, const ASYNC: bool> {
+    func: F,
+    pre: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+    post: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+}
 
 impl<F, const ASYNC: bool> DynamicHostFn<F, ASYNC> {
     fn new<T>(func: F) -> Self
@@ -755,7 +759,7 @@ impl<F, const ASYNC: bool> DynamicHostFn<F, ASYNC> {
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
     {
-        Self(func)
+        Self { func, pre: None, post: None }
     }
 }
 
@@ -779,6 +783,13 @@ where
         Ok(())
     }
 
+    fn pre_run(&self, store: StoreContextMut<'_, T>, (_, params): &(ComponentFunc, Vec<Val>)) -> Result<()> {
+        if let Some(pre) = &self.pre {
+            (pre)(store.0, &*params)?;
+        }
+        Ok(())
+    }
+
     fn run(
         &self,
         store: StoreContextMut<'_, T>,
@@ -788,9 +799,14 @@ where
         for _ in 0..ty.results().len() {
             params.push(Val::Bool(false));
         }
-        // TODO: check refcell and call pre
-        (self.0)(store, ty, params, offset)
-        // TODO: check refcell and call ppst
+        (self.func)(store, ty, params, offset)
+    }
+
+    fn post_run(&self, store: StoreContextMut<'_, T>, rets: &Vec<Val>) -> Result<()> {
+        if let Some(post) = &self.post{
+            (post)(store.0, &*rets)?;
+        }
+        Ok(())
     }
 
     fn lift_params(
@@ -852,11 +868,15 @@ where
     // TODO PCH
     fn instrument(
         this: &mut (dyn Any + Send + Sync),
-        _pre: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
-        _post: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        pre: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        post: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
     ) -> Result<()> {
-        // TODO: add a refcell to Self hold these
-        todo!()
+        let this = this
+            .downcast_mut::<Self>()
+            .ok_or_else(|| format_err!("downcast failed"))?;
+        this.pre = Some(pre);
+        this.post = Some(post);
+        Ok(())
     }
 }
 
