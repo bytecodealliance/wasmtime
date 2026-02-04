@@ -26,7 +26,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone as _, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -1005,6 +1005,9 @@ impl TypeRegistryInner {
 
             let trampoline_ty = match func_ty.trampoline_type()? {
                 Cow::Owned(ty) => ty,
+                Cow::Borrowed(ty) if !sub_ty.is_final || sub_ty.supertype.is_some() => {
+                    ty.try_clone()?
+                }
                 Cow::Borrowed(_) => {
                     // The function type is its own trampoline type. Leave its entry
                     // in `type_to_trampoline` empty to signal this.
@@ -1494,6 +1497,9 @@ impl TypeRegistryInner {
     /// stack to avoid recursion and the potential stack overflows that
     /// recursion implies.
     fn drain_drop_stack(&mut self) {
+        if self.drop_stack.is_empty() {
+            return;
+        }
         log::trace!("Draining drop stack");
         while let Some(entry) = self.drop_stack.pop() {
             log::trace!("Begin unregistering {entry:?}");
