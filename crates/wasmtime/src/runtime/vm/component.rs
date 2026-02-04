@@ -41,7 +41,7 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleTable, RemovedResource};
+pub use self::handle_table::{HandleTable, RemovedResource, ThreadHandleTable};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{TransmitLocalState, Waitable};
 #[cfg(feature = "component-model-async")]
@@ -62,6 +62,11 @@ pub struct InstanceState {
     /// is used directly to translate guest handles to host representations and
     /// vice-versa.
     handle_table: HandleTable,
+
+    /// Dedicated table for threads that is separate from `handle_table`. Part
+    /// of the component-model-threading proposal.
+    #[cfg(feature = "component-model-async")]
+    thread_handle_table: ThreadHandleTable,
 }
 
 impl InstanceState {
@@ -74,6 +79,12 @@ impl InstanceState {
     /// State of handles (e.g. resources, waitables, etc.) for this instance.
     pub fn handle_table(&mut self) -> &mut HandleTable {
         &mut self.handle_table
+    }
+
+    /// State of thread handles.
+    #[cfg(feature = "component-model-async")]
+    pub fn thread_handle_table(&mut self) -> &mut ThreadHandleTable {
+        &mut self.thread_handle_table
     }
 }
 

@@ -571,16 +571,21 @@ impl HandleTable {
             _ => bail!("handle is not a waitable"),
         }
     }
+}
 
+#[derive(Default)]
+pub struct ThreadHandleTable(HandleTable);
+
+impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::GuestThread { rep })
+        self.0.insert(Slot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.
     pub fn guest_thread_rep(&mut self, idx: u32) -> Result<u32> {
-        match self.get_mut(idx)? {
+        match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => Ok(*rep),
             _ => bail!("handle is not a guest thread"),
         }
@@ -590,11 +595,11 @@ impl HandleTable {
     ///
     /// Returns the internal `rep`.
     pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
-        let rep = match self.get_mut(idx)? {
+        let rep = match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
-        self.remove(idx)?;
+        self.0.remove(idx)?;
         Ok(rep)
     }
 }
