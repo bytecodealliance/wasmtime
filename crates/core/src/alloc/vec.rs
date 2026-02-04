@@ -150,10 +150,12 @@ impl<T> Vec<T> {
         // * If `len == 0` and `cap != 0` then this function effectively frees
         //   the memory.
         // * If `T` is a zero-sized type then nothing's been allocated either.
+        // * If `len == cap` then the allocation doesn't need to be shrunken.
         //
         // In all of these cases delegate to the standard library's
         // `into_boxed_slice` which is guaranteed to not perform a `realloc`.
-        if self.is_empty() || mem::size_of::<T>() == 0 {
+        if self.is_empty() || mem::size_of::<T>() == 0 || self.inner.len() == self.inner.capacity()
+        {
             return Ok(self.inner.into_boxed_slice());
         }
 
