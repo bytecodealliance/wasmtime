@@ -1,4 +1,4 @@
-use super::{TryNew, Vec, try_alloc};
+use super::{TryClone, TryNew, Vec, try_alloc};
 use crate::error::OutOfMemory;
 use core::{
     alloc::Layout,
@@ -39,6 +39,31 @@ impl<T> TryNew for Box<T> {
     {
         let boxed = new_uninit_box::<T>()?;
         Ok(Box::write(boxed, value))
+    }
+}
+
+impl<T> TryClone for Box<T>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let b = new_uninit_box::<T>()?;
+        let v = (**self).try_clone()?;
+        Ok(Box::write(b, v))
+    }
+}
+
+impl<T> TryClone for Box<[T]>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut builder = BoxedSliceBuilder::new(self.len())?;
+        for v in &*self {
+            builder.push(v.try_clone()?).expect("reserved capacity");
+        }
+        debug_assert_eq!(builder.init_len(), builder.capacity());
+        Ok(builder.finish())
     }
 }
 

@@ -9,7 +9,7 @@ pub use entity_set::EntitySet;
 pub use hash_set::HashSet;
 pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;
-pub use wasmtime_core::alloc::{TryNew, Vec, try_new};
+pub use wasmtime_core::alloc::{TryClone, TryNew, Vec, try_new};
 
 /// Collections which abort on OOM.
 //
