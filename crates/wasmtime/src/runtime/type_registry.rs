@@ -26,7 +26,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone as _, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -1003,17 +1003,19 @@ impl TypeRegistryInner {
                 continue;
             };
 
-            let trampoline_ty = func_ty.trampoline_type();
-
-            if let Cow::Borrowed(_) = &trampoline_ty
-                && sub_ty.is_final
-                && sub_ty.supertype.is_none()
-            {
-                // The function type is its own trampoline type. Leave its entry
-                // in `type_to_trampoline` empty to signal this.
-                log::trace!("trampoline_type({ty_idx:?}) = {ty_idx:?}");
-                continue;
-            }
+            let trampoline_ty = match func_ty.trampoline_type()? {
+                Cow::Owned(ty) => ty,
+                Cow::Borrowed(ty) if !sub_ty.is_final || sub_ty.supertype.is_some() => {
+                    ty.try_clone()?
+                }
+                Cow::Borrowed(_) => {
+                    // The function type is its own trampoline type. Leave its entry
+                    // in `type_to_trampoline` empty to signal this.
+                    debug_assert!(func_ty.is_trampoline_type());
+                    log::trace!("trampoline_type({ty_idx:?}) = {ty_idx:?}");
+                    continue;
+                }
+            };
 
             debug_assert!(self.type_to_trampoline.capacity() <= self.types.capacity());
             if self.type_to_trampoline.capacity() < self.types.capacity() {
@@ -1021,23 +1023,21 @@ impl TypeRegistryInner {
                 self.type_to_trampoline.resize(self.types.capacity())?;
             }
 
-            // This will recursively call into rec group registration, but at
-            // most once since trampoline function types are their own
-            // trampoline type.
             let trampoline_sub_ty = WasmSubType {
                 is_final: true,
                 supertype: None,
                 composite_type: wasmtime_environ::WasmCompositeType {
                     shared: sub_ty.composite_type.shared,
-                    inner: wasmtime_environ::WasmCompositeInnerType::Func(
-                        // TODO(#12069): handle OOM here.
-                        trampoline_ty.into_owned(),
-                    ),
+                    inner: wasmtime_environ::WasmCompositeInnerType::Func(trampoline_ty),
                 },
             };
 
+            // This will recursively call into rec group registration, but at
+            // most once since trampoline function types are their own
+            // trampoline type.
             let trampoline_entry =
                 self.register_singleton_rec_group(gc_runtime, trampoline_sub_ty)?;
+
             assert_eq!(trampoline_entry.0.shared_type_indices.len(), 1);
             let trampoline_index = trampoline_entry.0.shared_type_indices[0];
             self.debug_assert_registered(trampoline_index);
@@ -1497,6 +1497,9 @@ impl TypeRegistryInner {
     /// stack to avoid recursion and the potential stack overflows that
     /// recursion implies.
     fn drain_drop_stack(&mut self) {
+        if self.drop_stack.is_empty() {
+            return;
+        }
         log::trace!("Draining drop stack");
         while let Some(entry) = self.drop_stack.pop() {
             log::trace!("Begin unregistering {entry:?}");

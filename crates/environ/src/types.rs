@@ -1,10 +1,11 @@
-use crate::{Tunables, WasmResult, wasm_unsupported};
+use crate::{Tunables, WasmResult, error::OutOfMemory, wasm_unsupported};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
 use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use wasmtime_core::alloc::{TryClone, TryCollect as _};
 
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
@@ -140,6 +141,12 @@ pub enum WasmValType {
     V128,
     /// Reference type
     Ref(WasmRefType),
+}
+
+impl TryClone for WasmValType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 impl fmt::Display for WasmValType {
@@ -685,6 +692,17 @@ pub struct WasmFuncType {
     non_i31_gc_ref_returns_count: usize,
 }
 
+impl TryClone for WasmFuncType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(WasmFuncType {
+            params: TryClone::try_clone(&self.params)?,
+            non_i31_gc_ref_params_count: self.non_i31_gc_ref_params_count,
+            returns: TryClone::try_clone(&self.returns)?,
+            non_i31_gc_ref_returns_count: self.non_i31_gc_ref_returns_count,
+        })
+    }
+}
+
 impl fmt::Display for WasmFuncType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(func")?;
@@ -809,15 +827,21 @@ impl WasmFuncType {
     /// references themselves (unless the trampolines start doing explicit,
     /// fallible downcasts, but if we ever need that, then we might want to
     /// redesign this stuff).
-    pub fn trampoline_type(&self) -> Cow<'_, Self> {
+    pub fn trampoline_type(&self) -> Result<Cow<'_, Self>, OutOfMemory> {
         if self.is_trampoline_type() {
-            return Cow::Borrowed(self);
+            return Ok(Cow::Borrowed(self));
         }
 
-        Cow::Owned(Self::new(
-            self.params().iter().map(|p| p.trampoline_type()).collect(),
-            self.returns().iter().map(|r| r.trampoline_type()).collect(),
-        ))
+        Ok(Cow::Owned(Self::new(
+            self.params()
+                .iter()
+                .map(|p| p.trampoline_type())
+                .try_collect()?,
+            self.returns()
+                .iter()
+                .map(|r| r.trampoline_type())
+                .try_collect()?,
+        )))
     }
 }
 
