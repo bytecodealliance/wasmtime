@@ -363,22 +363,34 @@ fn vec_and_boxed_slice() -> Result<()> {
     use wasmtime_core::alloc::Vec;
 
     OomTest::new().test(|| {
-        // nonzero-sized type
+        // Nonzero-sized type.
         let mut vec = Vec::new();
         vec.push(1)?;
         let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
+
         let mut vec = Vec::from(slice);
         vec.pop();
         let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
-        let vec = Vec::from(slice);
-        let slice = vec.into_boxed_slice()?; // len = 0, cap = 0
-        let mut vec = Vec::from(slice);
-        vec.push(2)?;
-        vec.push(2)?;
-        vec.push(2)?;
-        let _ = vec.into_boxed_slice()?;
 
-        // zero-sized type
+        let vec = Vec::from(slice);
+        let _slice = vec.into_boxed_slice()?; // len = 0, cap = 0
+
+        let mut vec = Vec::new();
+        vec.reserve_exact(3)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        let _slice = vec.into_boxed_slice()?; // len = cap, len > 0
+
+        for i in 0..12 {
+            let mut vec = Vec::new();
+            for j in 0..i {
+                vec.push(j)?;
+            }
+            let _slice = vec.into_boxed_slice()?; // len ?= cap
+        }
+
+        // Zero-sized type.
         let mut vec = Vec::new();
         vec.push(())?;
         let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
