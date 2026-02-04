@@ -4370,6 +4370,25 @@
           (vec_extract_lane $I64X2 (vec_sub_logical_cout $I128 x y) 1 (zero_reg))
           (uimm32shifted 1 0))))
 
+;;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (has_type (fits_in_16 ty) (sadd_overflow x y)))
+      (overflow_and_result_from_shifted ty (aluop_add $I32) x y (mask_as_cond 1)))
+
+(rule 0 (lower (has_type (ty_32_or_64 ty) (sadd_overflow x y)))
+      (overflow_and_result_from_producer (add_reg_with_flags_paired ty x y) (mask_as_cond 1)))
+
+(rule 2 (lower (has_type $I128 (sadd_overflow x y)))
+      (let ((res Reg (vec_add $I128 x y))
+            (res_hi Reg (vec_extract_lane $I64X2 res 0 (zero_reg)))
+            (x_hi Reg (vec_extract_lane $I64X2 x 0 (zero_reg)))
+            (y_hi Reg (vec_extract_lane $I64X2 y 0 (zero_reg)))
+            (of_in_sign Reg
+               (and_reg $I64
+                 (xor_reg $I64 x_hi res_hi)
+                 (xor_reg $I64 y_hi res_hi))))
+        (output_pair res (lshr_imm $I64 of_in_sign 63))))
+
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))

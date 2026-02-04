@@ -3844,6 +3844,10 @@
 (decl add_reg (Type Reg Reg) Reg)
 (rule (add_reg ty x y) (alu_rrr ty (aluop_add ty) x y))
 
+(decl add_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_add ty) x y))
+
 (decl add_reg_sext32 (Type Reg Reg) Reg)
 (rule (add_reg_sext32 ty x y) (alu_rr ty (aluop_add_sext32 ty) x y))
 
