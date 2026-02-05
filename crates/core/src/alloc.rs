@@ -2,6 +2,7 @@
 
 mod arc;
 mod boxed;
+mod string;
 mod try_clone;
 mod try_collect;
 mod try_new;
@@ -12,6 +13,7 @@ pub use boxed::{
     new_boxed_slice_from_fallible_iter, new_boxed_slice_from_iter,
     new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
 };
+pub use string::String;
 pub use try_clone::TryClone;
 pub use try_collect::{TryCollect, TryExtend, TryFromIterator};
 pub use try_new::{TryNew, try_new};
