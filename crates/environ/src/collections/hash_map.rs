@@ -188,7 +188,7 @@ where
         })
     }
 
-    /// Same as [`hashbrown::hash_map::HashMap::contains`].
+    /// Same as [`hashbrown::hash_map::HashMap::contains_key`].
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         Q: Hash + Eq + ?Sized,
