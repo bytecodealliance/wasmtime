@@ -7,7 +7,7 @@
 
 #![no_std]
 
-#[cfg(any(feature = "std", unix, windows))]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
 extern crate alloc;
