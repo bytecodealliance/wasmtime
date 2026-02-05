@@ -8,14 +8,30 @@ pub trait TryClone: Sized {
     fn try_clone(&self) -> Result<Self, OutOfMemory>;
 }
 
-impl<T> TryClone for *mut T {
+impl<T> TryClone for *mut T
+where
+    T: ?Sized,
+{
     #[inline]
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(*self)
     }
 }
 
-impl<T> TryClone for core::ptr::NonNull<T> {
+impl<T> TryClone for core::ptr::NonNull<T>
+where
+    T: ?Sized,
+{
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
+}
+
+impl<'a, T> TryClone for &'a T
+where
+    T: ?Sized,
+{
     #[inline]
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(*self)
