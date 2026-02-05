@@ -5,13 +5,13 @@ use crate::generators::gc_ops::types::{RecGroupId, TypeId};
 use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
 use smallvec::SmallVec;
 
-/// A mutator for the gc ops
+/// A mutator for the gc ops.
 #[derive(Debug)]
 pub struct GcOpsMutator;
 
 impl Mutate<GcOps> for GcOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
-        // Define a mutation that adds an operation to the ops list
+        // Define a mutation that adds an operation to the ops list.
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
@@ -41,18 +41,8 @@ impl Mutate<GcOps> for GcOpsMutator {
             c.mutation(|ctx| {
                 // Pick a random rec group.
                 if let Some(group_id) = ctx.rng().choose(&ops.types.rec_groups).copied() {
-                    // Get the next available type id.
-                    let new_raw_type_id = ops
-                        .types
-                        .type_defs
-                        .keys()
-                        .next_back()
-                        .map(|id| id.0)
-                        .unwrap_or(0)
-                        .saturating_add(1);
-
-                    // Insert new struct with new type id to the chosen rec group.
-                    let new_tid = TypeId(new_raw_type_id);
+                    // Insert new struct with next type id in the chosen rec group.
+                    let new_tid = ops.types.next_type_id();
                     ops.types.insert_empty_struct(new_tid, group_id);
                     log::debug!(
                         "Added empty struct type {:?} to rec group {:?}",
@@ -68,7 +58,7 @@ impl Mutate<GcOps> for GcOpsMutator {
         // It may result in empty rec groups. Empty rec groups are allowed.
         if !ops.types.type_defs.is_empty() {
             c.mutation(|ctx| {
-                // Pick a random struct type
+                // Pick a random struct type.
                 if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
                     // Remove the chosen struct type.
                     ops.types.type_defs.remove(&tid);
@@ -83,7 +73,7 @@ impl Mutate<GcOps> for GcOpsMutator {
         // to move it to the same rec group.
         if !ops.types.type_defs.is_empty() && ops.types.rec_groups.len() >= 2 {
             c.mutation(|ctx| {
-                // Pick a random type
+                // Pick a random type.
                 if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
                     // Pick a random recursive group.
                     if let Some(new_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() {
@@ -177,25 +167,10 @@ impl Mutate<GcOps> for GcOpsMutator {
                 };
 
                 // Create a new rec group.
-                let new_gid_raw = ops
-                    .types
-                    .rec_groups
-                    .iter()
-                    .next_back()
-                    .map(|id| id.0)
-                    .unwrap_or(0)
-                    .saturating_add(1);
-                let new_gid = RecGroupId(new_gid_raw);
+                let new_gid = ops.types.next_rec_group_id();
                 ops.types.insert_rec_group(new_gid);
 
-                let mut next_type_id_raw = ops
-                    .types
-                    .type_defs
-                    .keys()
-                    .next_back()
-                    .map(|id| id.0)
-                    .unwrap_or(0)
-                    .saturating_add(1);
+                let mut next_id = ops.types.next_type_id();
 
                 let count = ops
                     .types
@@ -212,9 +187,8 @@ impl Mutate<GcOps> for GcOpsMutator {
                 // Since our structs are empty, we can just insert them into the new rec group.
                 // We will update mutators while adding new features to the fuzzer.
                 for _ in 0..count {
-                    ops.types
-                        .insert_empty_struct(TypeId(next_type_id_raw), new_gid);
-                    next_type_id_raw = next_type_id_raw.saturating_add(1);
+                    ops.types.insert_empty_struct(next_id, new_gid);
+                    next_id = TypeId(next_id.0.saturating_add(1));
                 }
 
                 log::debug!(
@@ -324,15 +298,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                 };
 
                 // Create a new rec group.
-                let new_gid_raw = ops
-                    .types
-                    .rec_groups
-                    .iter()
-                    .next_back()
-                    .map(|g| g.0)
-                    .unwrap_or(0)
-                    .saturating_add(1);
-                let new_gid = RecGroupId(new_gid_raw);
+                let new_gid = ops.types.next_rec_group_id();
                 ops.types.insert_rec_group(new_gid);
 
                 // Choose k in [1, len-1] (so both groups remain non-empty).
