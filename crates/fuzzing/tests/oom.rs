@@ -211,6 +211,41 @@ fn vec_push() -> Result<()> {
 }
 
 #[test]
+fn string_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _s = String::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.reserve(10)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_reserve_exact() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.reserve_exact(3)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_push() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.push('c')?;
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
