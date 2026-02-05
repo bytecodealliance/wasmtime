@@ -246,6 +246,15 @@ fn string_push() -> Result<()> {
 }
 
 #[test]
+fn string_push_str() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.push_str("hello")?;
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
