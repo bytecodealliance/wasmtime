@@ -12,7 +12,7 @@ impl Mutate<GcOps> for GcOpsMutator {
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
-                    let op = GcOp::generate(ctx, &ops)?;
+                    let op = GcOp::generate(ctx)?;
                     ops.ops.insert(idx, op);
                 }
                 Ok(())

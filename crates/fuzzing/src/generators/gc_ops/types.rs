@@ -111,7 +111,7 @@ impl StackType {
         match req {
             None => {
                 if stack.is_empty() {
-                    Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
                 }
                 stack.pop(); // always consume exactly one value
             }
@@ -120,7 +120,7 @@ impl StackType {
                     stack.pop();
                 }
                 _ => {
-                    Self::emit(GcOp::Null(), stack, out, num_types, &mut result_types);
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
                     stack.pop(); // consume just-synthesized externref
                 }
             },
@@ -135,11 +135,17 @@ impl StackType {
                     stack.pop();
                 } else {
                     // Ensure there *is* a struct to consume.
-                    let t = match wanted {
+                    let type_index = match wanted {
                         Some(t) => Self::clamp(t, num_types),
                         None => Self::clamp(0, num_types),
                     };
-                    Self::emit(GcOp::StructNew(t), stack, out, num_types, &mut result_types);
+                    Self::emit(
+                        GcOp::StructNew { type_index },
+                        stack,
+                        out,
+                        num_types,
+                        &mut result_types,
+                    );
                     stack.pop(); // consume the synthesized struct
                 }
             }

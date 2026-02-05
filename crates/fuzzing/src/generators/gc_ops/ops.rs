@@ -5,7 +5,6 @@ use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     types::{CompositeType, RecGroupId, StructType, TypeId, Types},
 };
-use mutatis::{Context, Generate, mutators as m};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_encoder::{
@@ -315,7 +314,7 @@ impl GcOps {
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(&mut func, scratch_local, storage_bases);
+            op.encode(&mut func, scratch_local, storage_bases);
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -353,56 +352,18 @@ impl GcOps {
 
         let mut new_ops = Vec::with_capacity(self.ops.len());
         let mut stack: Vec<StackType> = Vec::new();
-        let num_types = u32::try_from(self.types.type_defs.len())
-            .expect("types len should be within u32 range");
+        let num_types = u32::try_from(self.types.type_defs.len()).unwrap();
 
         let mut operand_types = Vec::new();
-
-        for mut op in self.ops.iter().copied() {
-            if self.limits.max_types == 0
-                && matches!(
-                    op,
-                    GcOp::StructNew(..)
-                        | GcOp::TakeStructCall(..)
-                        | GcOp::TakeTypedStructCall(..)
-                        | GcOp::TypedStructLocalSet(..)
-                        | GcOp::TypedStructLocalGet(..)
-                        | GcOp::TypedStructGlobalSet(..)
-                        | GcOp::TypedStructGlobalGet(..)
-                        | GcOp::TypedStructTableSet(..)
-                        | GcOp::TypedStructTableGet(..)
-                        | GcOp::StructTableSet(..)
-                        | GcOp::StructTableGet(..)
-                        | GcOp::StructLocalSet(..)
-                        | GcOp::StructLocalGet(..)
-                        | GcOp::StructGlobalSet(..)
-                        | GcOp::StructGlobalGet(..)
-                )
-            {
-                continue;
-            }
-            if self.limits.num_params == 0 && matches!(op, GcOp::LocalGet(..) | GcOp::LocalSet(..))
-            {
-                continue;
-            }
-            if self.limits.num_globals == 0
-                && matches!(op, GcOp::GlobalGet(..) | GcOp::GlobalSet(..))
-            {
-                continue;
-            }
-
-            op.fixup(&self.limits, num_types);
-
-            let op = if let Some(op) = op.fixup(&self.limits, num_types) {
-                op
-            } else {
+        for op in &self.ops {
+            let Some(op) = op.fixup(&self.limits, num_types) else {
                 continue;
             };
 
-            operand_types.clear();
+            debug_assert!(operand_types.is_empty());
             op.operand_types(&mut operand_types);
-            for ty in &operand_types {
-                StackType::fixup(*ty, &mut stack, &mut new_ops, num_types);
+            for ty in operand_types.drain(..) {
+                StackType::fixup(ty, &mut stack, &mut new_ops, num_types);
             }
 
             // Finally, emit the op itself (updates stack abstractly)
@@ -412,7 +373,7 @@ impl GcOps {
 
         // Balance any leftovers with drops (works for any type)
         for _ in 0..stack.len() {
-            new_ops.push(GcOp::Drop());
+            new_ops.push(GcOp::Drop);
         }
         self.ops = new_ops;
     }
@@ -426,319 +387,490 @@ impl GcOps {
     }
 }
 
-macro_rules! define_gc_ops {
-    (
-        $(
-            $op:ident
-            $( ( $($limit_var:ident : $limit:expr => $ty:ty),* ) )?
-            : [ $($operand:expr),* $(,)? ] => [ $($result:expr),* $(,)? ] ,
-        )*
-    ) => {
+macro_rules! for_each_gc_op {
+    ( $mac:ident ) => {
+        $mac! {
+            #[operands([])]
+            #[results([ExternRef, ExternRef, ExternRef])]
+            Gc,
 
-        /// The operations that can be performed by the `gc` function.
-        #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-        pub enum GcOp {
-            $(
-                #[allow(missing_docs, reason = "macro-generated code")]
-                $op ( $( $($ty),* )? ),
-            )*
+            #[operands([])]
+            #[results([ExternRef, ExternRef, ExternRef])]
+            MakeRefs,
+
+            #[operands([Some(ExternRef), Some(ExternRef), Some(ExternRef)])]
+            #[results([])]
+            TakeRefs,
+
+            #[operands([])]
+            #[results([ExternRef])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            TableGet { elem_index: u32 },
+
+            #[operands([Some(ExternRef)])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            TableSet { elem_index: u32 },
+
+            #[operands([])]
+            #[results([ExternRef])]
+            #[fixup(|limits, _num_types| {
+                global_index = global_index.checked_rem(limits.num_globals)?;
+            })]
+            GlobalGet { global_index:  u32 },
+
+            #[operands([Some(ExternRef)])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                global_index = global_index.checked_rem(limits.num_globals)?;
+            })]
+            GlobalSet { global_index: u32 },
+
+            #[operands([])]
+            #[results([ExternRef])]
+            #[fixup(|limits, _num_types| {
+                local_index = local_index.checked_rem(limits.num_params)?;
+            })]
+            LocalGet { local_index: u32 },
+
+            #[operands([Some(ExternRef)])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                local_index = local_index.checked_rem(limits.num_params)?;
+            })]
+            LocalSet { local_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            StructNew { type_index: u32 },
+
+            #[operands([Some(Struct(None))])]
+            #[results([])]
+            TakeStructCall,
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TakeTypedStructCall { type_index: u32 },
+
+            #[operands([Some(Struct(None))])]
+            #[results([])]
+            StructLocalSet,
+
+            #[operands([])]
+            #[results([Struct(None)])]
+            StructLocalGet,
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructLocalSet { type_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructLocalGet { type_index: u32 },
+
+            #[operands([Some(Struct(None))])]
+            #[results([])]
+            StructGlobalSet,
+
+            #[operands([])]
+            #[results([Struct(None)])]
+            StructGlobalGet,
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructGlobalSet { type_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructGlobalGet { type_index: u32 },
+
+            #[operands([Some(Struct(None))])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            StructTableSet { elem_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(None)])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            StructTableGet { elem_index: u32 },
+
+            #[operands([Some(Struct(None))])]
+            #[results([])]
+            #[fixup(|limits, num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructTableSet { elem_index: u32, type_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(None)])]
+            #[fixup(|limits, num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructTableGet { elem_index: u32, type_index: u32 },
+
+            #[operands([None])]
+            #[results([])]
+            Drop,
+
+            #[operands([])]
+            #[results([ExternRef])]
+            NullExtern,
+
+            #[operands([])]
+            #[results([Struct(None)])]
+            NullStruct,
+
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            NullTypedStruct { type_index: u32 },
         }
-
-        #[cfg(test)]
-        pub(crate) const OP_NAMES: &'static [&'static str] = &[
-            $( stringify!($op), )*
-        ];
-
-        impl GcOp {
-            #[cfg(test)]
-            pub(crate) fn name(&self) -> &'static str {
-                match self { $( Self::$op(..) => stringify!($op), )* }
-            }
-
-            #[allow(unreachable_patterns, reason = "macro-generated code")]
-            pub(crate) fn operand_types(&self, out: &mut Vec<Option<StackType>>) {
-
-                match self {
-                    Self::TakeTypedStructCall(t) => {
-                        out.push(Some(StackType::Struct(Some(*t))));
-                    }
-                    Self::TypedStructLocalSet(t) => {
-                        out.push(Some(StackType::Struct(Some(*t))));
-                    }
-                    Self::TypedStructGlobalSet(t) => {
-                        out.push(Some(StackType::Struct(Some(*t))));
-                    }
-                    Self::TypedStructTableSet(_, t) => {
-                        out.push(Some(StackType::Struct(Some(*t))));
-                    }
-                    $(
-                        Self::$op(..) => {
-                            $( out.push($operand); )*
-                        }
-                    ),*
-                }
-            }
-
-            #[allow(unreachable_patterns, reason = "macro-generated code")]
-            pub(crate) fn result_types(&self, out: &mut Vec<StackType>) {
-                match self {
-                    Self::StructNew(t)        => {
-                        out.push(StackType::Struct(Some(*t)));
-                    }
-                    Self::TypedStructLocalGet(t) => {
-                        out.push(StackType::Struct(Some(*t)));
-                    }
-                    Self::TypedStructGlobalGet(t) => {
-                        out.push(StackType::Struct(Some(*t)));
-                    }
-                    Self::TypedStructTableGet(_, t) => {
-                        out.push(StackType::Struct(Some(*t)));
-                    }
-                    $( Self::$op(..) => { $( out.push($result); )* }, )*
-                }
-            }
-
-            pub(crate) fn fixup(&mut self, limits: &GcOpsLimits, num_types: u32) -> Option<Self> {
-                match self {
-                    $(
-                        Self::$op( $( $( $limit_var ),* )? ) => {
-                            $( $(
-                                let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
-                                let limit = (limit_fn)(limits);
-                                if limit == 0 {
-                                    return None;
-                                }
-                                *$limit_var = *$limit_var % limit;
-                            )* )?
-                        }
-                    )*
-                }
-                match self {
-                    Self::StructNew(t)
-                    | Self::TakeStructCall(t)
-                    | Self::TakeTypedStructCall(t)
-                    | Self::TypedStructLocalSet(t)
-                    | Self::TypedStructLocalGet(t)
-                    | Self::TypedStructGlobalSet(t)
-                    | Self::TypedStructGlobalGet(t)
-                    | Self::TypedStructTableSet(_, t)
-                    | Self::TypedStructTableGet(_, t)
-
-                    => {
-                        if num_types == 0 {
-                            return None;
-                        }
-                        *t %= num_types;
-                    }
-                    _ => {}
-                }
-
-                Some(*self)
-            }
-
-            /// Generate an arbitrary op without stack-depth awareness.
-            /// The fixup pass will make the sequence valid.
-            pub(crate) fn generate(
-                ctx: &mut mutatis::Context,
-                ops: &GcOps,
-            ) -> mutatis::Result<GcOp> {
-                let mut valid_choices: Vec<
-                    fn(&mut Context, &GcOpsLimits) -> mutatis::Result<GcOp>
-                > = vec![];
-
-                $(
-                    valid_choices.push($op);
-                )*
-
-                let f = *ctx.rng()
-                    .choose(&valid_choices)
-                    .expect("should always have a valid op choice");
-                (f)(ctx, &ops.limits)
-            }
-        }
-
-        $(
-            #[allow(non_snake_case, reason = "macro-generated code")]
-            fn $op(
-                _ctx: &mut mutatis::Context,
-                _limits: &GcOpsLimits,
-            ) -> mutatis::Result<GcOp> {
-                let op = GcOp::$op(
-                    $($({
-                        let limit_fn = $limit as fn(&GcOpsLimits) -> $ty;
-                        let limit = (limit_fn)(_limits);
-                        // Generate a value even if limit is 0; fixup will handle it
-                        if limit > 0 {
-                            m::range(0..=limit - 1).generate(_ctx)?
-                        } else {
-                            0
-                        }
-                    }),*)?
-                );
-                Ok(op)
-            }
-        )*
     };
 }
 
-define_gc_ops! {
-    Gc : [] => [StackType::ExternRef, StackType::ExternRef, StackType::ExternRef],
-
-    MakeRefs : [] => [StackType::ExternRef, StackType::ExternRef, StackType::ExternRef],
-    TakeRefs : [Some(StackType::ExternRef), Some(StackType::ExternRef), Some(StackType::ExternRef)] => [],
-
-    // Add one to make sure that out of bounds table accesses are possible, but still rare.
-    TableGet(elem_index: |ops| ops.table_size + 1 => u32)
-        : [] => [StackType::ExternRef],
-    TableSet(elem_index: |ops| ops.table_size + 1 => u32)
-        : [Some(StackType::ExternRef)] => [],
-
-    GlobalGet(global_index: |ops| ops.num_globals => u32)
-        : [] => [StackType::ExternRef],
-    GlobalSet(global_index: |ops| ops.num_globals => u32)
-        : [Some(StackType::ExternRef)] => [],
-
-    LocalGet(local_index: |ops| ops.num_params => u32)
-        : [] => [StackType::ExternRef],
-    LocalSet(local_index: |ops| ops.num_params => u32)
-        : [Some(StackType::ExternRef)] => [],
-
-    // `StructNew` result is special-cased to push `Struct(Some(t))`, so results list is empty.
-    StructNew(type_index: |ops| ops.max_types => u32)
-        : [] => [],
-
-    TakeStructCall(type_index: |ops| ops.max_types => u32)
-        : [Some(StackType::Struct(None))] => [],
-
-    // `TakeTypedStructCall` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
-    TakeTypedStructCall(type_index: |ops| ops.max_types => u32)
-        : [] => [],
-
-    StructLocalSet() : [Some(StackType::Struct(None))] => [],
-    StructLocalGet() : [] => [StackType::Struct(None)],
-    // `TypedStructLocalSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
-    TypedStructLocalSet(type_index: |ops| ops.max_types => u32) : [] => [],
-    // `TypedStructLocalGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
-    TypedStructLocalGet(type_index: |ops| ops.max_types => u32) : [] => [],
-
-    StructGlobalSet() : [Some(StackType::Struct(None))] => [],
-    StructGlobalGet() : [] => [StackType::Struct(None)],
-    // `TypedStructGlobalSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
-    TypedStructGlobalSet(type_index: |ops| ops.max_types => u32) : [] => [],
-    // `TypedStructGlobalGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
-    TypedStructGlobalGet(type_index: |ops| ops.max_types => u32) : [] => [],
-
-    StructTableSet(elem_index: |ops| ops.table_size => u32) : [Some(StackType::Struct(None))] => [],
-    StructTableGet(elem_index: |ops| ops.table_size => u32) : [] => [StackType::Struct(None)],
-    // `TypedStructTableSet` operand is special-cased to require `Struct(Some(t))`, so operands list is empty.
-    TypedStructTableSet(elem_index: |ops| ops.table_size => u32, type_index: |ops| ops.max_types => u32) : [] => [],
-    // `TypedStructTableGet` result is special-cased to push `Struct(Some(t))`, so results list is empty.
-    TypedStructTableGet(elem_index: |ops| ops.table_size => u32, type_index: |ops| ops.max_types => u32) : [] => [],
-
-    Drop : [None] => [],
-
-    Null : [] => [StackType ::ExternRef],
+macro_rules! define_gc_op_variants {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+        )*
+    ) => {
+        /// The operations that can be performed by the `gc` function.
+        #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+        #[allow(missing_docs, reason = "self-describing")]
+        pub enum GcOp {
+            $(
+                $op $( { $( $field : $field_ty ),* } )? ,
+            )*
+        }
+    };
 }
+for_each_gc_op!(define_gc_op_variants);
+
+macro_rules! define_op_names {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+        )*
+    ) => {
+        #[cfg(test)]
+        pub(crate) const OP_NAMES: &[&str] = &[
+            $(stringify!($op)),*
+        ];
+    }
+}
+for_each_gc_op!(define_op_names);
 
 impl GcOp {
-    fn insert(self, func: &mut Function, scratch_local: u32, storage_bases: WasmEncodingBases) {
+    #[cfg(test)]
+    pub(crate) fn name(&self) -> &'static str {
+        macro_rules! define_gc_op_name {
+            (
+                $(
+                    $( #[$attr:meta] )*
+                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+                )*
+            ) => {
+                match self {
+                    $(
+                        Self::$op $( { $($field: _),* } )? => stringify!($op),
+                    )*
+                }
+            };
+        }
+        for_each_gc_op!(define_gc_op_name)
+    }
+
+    pub(crate) fn operand_types(&self, out: &mut Vec<Option<StackType>>) {
+        macro_rules! define_gc_op_operand_types {
+            (
+                $(
+                    #[operands($operands:expr)]
+                    $( #[$attr:meta] )*
+                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+                )*
+            ) => {{
+                use StackType::*;
+                match self {
+                    $(
+                        Self::$op $( { $($field),* } )? => {
+                            $(
+                                $(
+                                    #[allow(unused, reason = "macro code")]
+                                    let $field = *$field;
+                                )*
+                            )?
+                            let operands: [Option<StackType>; _] = $operands;
+                            out.extend(operands);
+                        }
+                    )*
+                }
+            }};
+        }
+        for_each_gc_op!(define_gc_op_operand_types)
+    }
+
+    pub(crate) fn result_types(&self, out: &mut Vec<StackType>) {
+        macro_rules! define_gc_op_result_types {
+            (
+                $(
+                    #[operands($operands:expr)]
+                    #[results($results:expr)]
+                    $( #[$attr:meta] )*
+                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+                )*
+            ) => {{
+                use StackType::*;
+                match self {
+                    $(
+                        Self::$op $( { $($field),* } )? => {
+                            $(
+                                $(
+                                    #[allow(unused, reason = "macro code")]
+                                    let $field = *$field;
+                                )*
+                            )?
+                            let results: [StackType; _] = $results;
+                            out.extend(results);
+                        }
+                    )*
+                }
+            }};
+        }
+        for_each_gc_op!(define_gc_op_result_types)
+    }
+
+    pub(crate) fn fixup(&self, limits: &GcOpsLimits, num_types: u32) -> Option<Self> {
+        macro_rules! define_gc_op_fixup {
+            (
+                $(
+                    #[operands($operands:expr)]
+                    #[results($results:expr)]
+                    $( #[fixup(|$limits:ident, $num_types:ident| $fixup:expr)] )?
+                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+                )*
+            ) => {{
+                match self {
+                    $(
+                        Self::$op $( { $($field),* } )? => {
+                            $(
+                                $(
+                                    #[allow(unused_mut, reason = "macro code")]
+                                    let mut $field = *$field;
+                                )*
+                                let $limits = limits;
+                                let $num_types = num_types;
+                                $fixup;
+                            )?
+                            Some(Self::$op $( { $( $field ),* } )? )
+                        }
+                    )*
+                }
+            }};
+        }
+        for_each_gc_op!(define_gc_op_fixup)
+    }
+
+    pub(crate) fn generate(ctx: &mut mutatis::Context) -> mutatis::Result<GcOp> {
+        macro_rules! define_gc_op_generate {
+            (
+                $(
+                    $( #[$attr:meta] )*
+                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
+                )*
+            ) => {{
+                let choices: &[fn(&mut mutatis::Context) -> mutatis::Result<GcOp>] = &[
+                    $(
+                        |_ctx| Ok(GcOp::$op $( {
+                            $(
+                                $field: {
+                                    let mut mutator = <$field_ty as mutatis::DefaultMutate>::DefaultMutate::default();
+                                    mutatis::Generate::<$field_ty>::generate(&mut mutator, _ctx)?
+                                }
+                            ),*
+                        } )? ),
+                    )*
+                ];
+
+                let f = *ctx.rng()
+                    .choose(choices)
+                    .unwrap();
+                (f)(ctx)
+            }};
+        }
+        for_each_gc_op!(define_gc_op_generate)
+    }
+
+    fn encode(&self, func: &mut Function, scratch_local: u32, encoding_bases: WasmEncodingBases) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
         let take_structref_idx = 3;
 
-        match self {
-            Self::Gc() => {
+        match *self {
+            Self::Gc => {
                 func.instruction(&Instruction::Call(gc_func_idx));
             }
-            Self::MakeRefs() => {
+            Self::MakeRefs => {
                 func.instruction(&Instruction::Call(make_refs_func_idx));
             }
-            Self::TakeRefs() => {
+            Self::TakeRefs => {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
-            Self::TableGet(x) => {
+            Self::TableGet { elem_index: x } => {
                 func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::TableGet(0));
             }
-            Self::TableSet(x) => {
+            Self::TableSet { elem_index: x } => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
                 func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::LocalGet(scratch_local));
                 func.instruction(&Instruction::TableSet(0));
             }
-            Self::GlobalGet(x) => {
+            Self::GlobalGet { global_index: x } => {
                 func.instruction(&Instruction::GlobalGet(x));
             }
-            Self::GlobalSet(x) => {
+            Self::GlobalSet { global_index: x } => {
                 func.instruction(&Instruction::GlobalSet(x));
             }
-            Self::LocalGet(x) => {
+            Self::LocalGet { local_index: x } => {
                 func.instruction(&Instruction::LocalGet(x));
             }
-            Self::LocalSet(x) => {
+            Self::LocalSet { local_index: x } => {
                 func.instruction(&Instruction::LocalSet(x));
             }
-            Self::Drop() => {
+            Self::Drop => {
                 func.instruction(&Instruction::Drop);
             }
-            Self::Null() => {
+            Self::NullExtern => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
-            Self::StructNew(x) => {
-                func.instruction(&Instruction::StructNew(x + storage_bases.struct_type_base));
+            Self::NullStruct => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Struct,
+                }));
             }
-            Self::TakeStructCall(_x) => {
+            Self::NullTypedStruct { type_index } => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Concrete(
+                    encoding_bases.struct_type_base + type_index,
+                )));
+            }
+            Self::StructNew { type_index: x } => {
+                func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
+            }
+            Self::TakeStructCall => {
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
-            Self::TakeTypedStructCall(x) => {
-                let f = storage_bases.typed_first_func_index + x;
+            Self::TakeTypedStructCall { type_index: x } => {
+                let f = encoding_bases.typed_first_func_index + x;
                 func.instruction(&Instruction::Call(f));
             }
-            Self::StructLocalGet() => {
-                func.instruction(&Instruction::LocalGet(storage_bases.struct_local_idx));
+            Self::StructLocalGet => {
+                func.instruction(&Instruction::LocalGet(encoding_bases.struct_local_idx));
             }
-            Self::TypedStructLocalGet(x) => {
-                func.instruction(&Instruction::LocalGet(storage_bases.typed_local_base + x));
+            Self::TypedStructLocalGet { type_index: x } => {
+                func.instruction(&Instruction::LocalGet(encoding_bases.typed_local_base + x));
             }
-            Self::StructLocalSet() => {
-                func.instruction(&Instruction::LocalSet(storage_bases.struct_local_idx));
+            Self::StructLocalSet => {
+                func.instruction(&Instruction::LocalSet(encoding_bases.struct_local_idx));
             }
-            Self::TypedStructLocalSet(x) => {
-                func.instruction(&Instruction::LocalSet(storage_bases.typed_local_base + x));
+            Self::TypedStructLocalSet { type_index: x } => {
+                func.instruction(&Instruction::LocalSet(encoding_bases.typed_local_base + x));
             }
-            Self::StructGlobalGet() => {
-                func.instruction(&Instruction::GlobalGet(storage_bases.struct_global_idx));
+            Self::StructGlobalGet => {
+                func.instruction(&Instruction::GlobalGet(encoding_bases.struct_global_idx));
             }
-            Self::TypedStructGlobalGet(x) => {
-                func.instruction(&Instruction::GlobalGet(storage_bases.typed_global_base + x));
+            Self::TypedStructGlobalGet { type_index: x } => {
+                func.instruction(&Instruction::GlobalGet(
+                    encoding_bases.typed_global_base + x,
+                ));
             }
-            Self::StructGlobalSet() => {
-                func.instruction(&Instruction::GlobalSet(storage_bases.struct_global_idx));
+            Self::StructGlobalSet => {
+                func.instruction(&Instruction::GlobalSet(encoding_bases.struct_global_idx));
             }
-            Self::TypedStructGlobalSet(x) => {
-                func.instruction(&Instruction::GlobalSet(storage_bases.typed_global_base + x));
+            Self::TypedStructGlobalSet { type_index: x } => {
+                func.instruction(&Instruction::GlobalSet(
+                    encoding_bases.typed_global_base + x,
+                ));
             }
-            Self::StructTableGet(elem_index) => {
+            Self::StructTableGet { elem_index } => {
                 func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
-                func.instruction(&Instruction::TableGet(storage_bases.struct_table_idx));
+                func.instruction(&Instruction::TableGet(encoding_bases.struct_table_idx));
             }
-            Self::TypedStructTableGet(elem_index, x) => {
+            Self::TypedStructTableGet {
+                elem_index,
+                type_index,
+            } => {
                 func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
-                func.instruction(&Instruction::TableGet(storage_bases.typed_table_base + x));
+                func.instruction(&Instruction::TableGet(
+                    encoding_bases.typed_table_base + type_index,
+                ));
             }
-            Self::StructTableSet(elem_index) => {
+            Self::StructTableSet { elem_index } => {
                 // Use struct_local_idx (anyref) to temporarily store the value before table.set
-                func.instruction(&Instruction::LocalSet(storage_bases.struct_local_idx));
+                func.instruction(&Instruction::LocalSet(encoding_bases.struct_local_idx));
                 func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
-                func.instruction(&Instruction::LocalGet(storage_bases.struct_local_idx));
-                func.instruction(&Instruction::TableSet(storage_bases.struct_table_idx));
+                func.instruction(&Instruction::LocalGet(encoding_bases.struct_local_idx));
+                func.instruction(&Instruction::TableSet(encoding_bases.struct_table_idx));
             }
-            Self::TypedStructTableSet(elem_index, x) => {
-                func.instruction(&Instruction::LocalSet(storage_bases.typed_local_base + x));
+            Self::TypedStructTableSet {
+                elem_index,
+                type_index,
+            } => {
+                func.instruction(&Instruction::LocalSet(
+                    encoding_bases.typed_local_base + type_index,
+                ));
                 func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
-                func.instruction(&Instruction::LocalGet(storage_bases.typed_local_base + x));
-                func.instruction(&Instruction::TableSet(storage_bases.typed_table_base + x));
+                func.instruction(&Instruction::LocalGet(
+                    encoding_bases.typed_local_base + type_index,
+                ));
+                func.instruction(&Instruction::TableSet(
+                    encoding_bases.typed_table_base + type_index,
+                ));
             }
         }
     }
