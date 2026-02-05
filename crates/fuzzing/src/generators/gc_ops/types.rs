@@ -17,16 +17,16 @@ pub struct RecGroupId(pub(crate) u32);
 )]
 pub struct TypeId(pub(crate) u32);
 
-/// StructType definition
+/// StructType definition.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StructType {
     // Empty for now; fields will come in a future PR.
 }
 
-/// CompsiteType definition
+/// CompsiteType definition.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositeType {
-    /// Struct Type definition
+    /// Struct Type definition.
     Struct(StructType),
 }
 
@@ -57,7 +57,7 @@ impl Types {
         self.rec_groups.insert(id)
     }
 
-    ///  Insert a rec-group id.
+    /// Insert a rec-group id.
     pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
         self.type_defs.insert(
             id,
@@ -95,9 +95,9 @@ impl Types {
 /// This is used to track the requirements for the operands of an operation.
 #[derive(Copy, Clone, Debug)]
 pub enum StackType {
-    /// `externref`
+    /// `externref`.
     ExternRef,
-    /// `(ref $*)`;
+    /// `(ref $*)`.
     Struct(Option<u32>),
 }
 
