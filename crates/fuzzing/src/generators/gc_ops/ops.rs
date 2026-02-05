@@ -371,10 +371,12 @@ impl GcOps {
             StackType::emit(op, &mut stack, &mut new_ops, num_types, &mut result_types);
         }
 
-        // Balance any leftovers with drops (works for any type)
+        // Drop any remaining values on the operand stack.
         for _ in 0..stack.len() {
             new_ops.push(GcOp::Drop);
         }
+
+        log::trace!("ops after fixup: {new_ops:#?}");
         self.ops = new_ops;
     }
 
@@ -528,7 +530,7 @@ macro_rules! for_each_gc_op {
             })]
             StructTableGet { elem_index: u32 },
 
-            #[operands([Some(Struct(None))])]
+            #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
             #[fixup(|limits, num_types| {
                 // Add one to make sure that out-of-bounds table accesses are
@@ -539,7 +541,7 @@ macro_rules! for_each_gc_op {
             TypedStructTableSet { elem_index: u32, type_index: u32 },
 
             #[operands([])]
-            #[results([Struct(None)])]
+            #[results([Struct(Some(type_index))])]
             #[fixup(|limits, num_types| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
@@ -578,7 +580,7 @@ macro_rules! define_gc_op_variants {
         )*
     ) => {
         /// The operations that can be performed by the `gc` function.
-        #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
         #[allow(missing_docs, reason = "self-describing")]
         pub enum GcOp {
             $(
