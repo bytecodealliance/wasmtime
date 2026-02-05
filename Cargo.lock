@@ -4868,6 +4868,7 @@ name = "wasmtime-internal-core"
 version = "43.0.0"
 dependencies = [
  "anyhow",
+ "hashbrown 0.15.2",
  "libm",
 ]
 

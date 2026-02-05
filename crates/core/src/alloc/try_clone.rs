@@ -72,3 +72,13 @@ tuples! {
     A, B, C, D, E, F, G, H, I;
     A, B, C, D, E, F, G, H, I, J;
 }
+
+#[cfg(feature = "std")]
+impl_try_clone_via_clone! {
+    std::hash::RandomState
+}
+
+#[cfg(not(feature = "std"))]
+impl_try_clone_via_clone! {
+    hashbrown::DefaultHashBuilder
+}
