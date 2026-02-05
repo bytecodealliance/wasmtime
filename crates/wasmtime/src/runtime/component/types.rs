@@ -7,7 +7,6 @@ use crate::{Engine, ExternType, FuncType};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
-use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
     TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
@@ -15,6 +14,7 @@ use wasmtime_environ::component::{
     TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex, TypeStreamIndex,
     TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
+use wasmtime_environ::{PanicOnOom, PrimaryMap};
 
 pub use crate::component::resources::ResourceType;
 
@@ -1099,12 +1099,15 @@ impl ComponentItem {
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
             TypeDef::CoreFunc(idx) => {
                 let subty = &ty.types[*idx];
-                Self::CoreFunc(FuncType::from_wasm_func_type(
-                    engine,
-                    subty.is_final,
-                    subty.supertype,
-                    subty.unwrap_func().clone(),
-                ))
+                Self::CoreFunc(
+                    FuncType::from_wasm_func_type(
+                        engine,
+                        subty.is_final,
+                        subty.supertype,
+                        subty.unwrap_func().clone(),
+                    )
+                    .panic_on_oom(),
+                )
             }
             TypeDef::Resource(idx) => match ty.types[*idx] {
                 TypeResourceTable::Concrete {
