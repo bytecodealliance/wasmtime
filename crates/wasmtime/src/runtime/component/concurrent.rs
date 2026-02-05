@@ -1805,7 +1805,7 @@ impl StoreOpaque {
         if !task.returned_or_cancelled() {
             log::trace!("push call context for {guest_task:?}");
             let call_context = task.call_context.take().unwrap();
-            self.component_resource_state().0.push(call_context);
+            self.component_call_contexts_mut().push(call_context);
         }
         Ok(())
     }
@@ -1820,7 +1820,7 @@ impl StoreOpaque {
             .returned_or_cancelled()
         {
             log::trace!("pop call context for {guest_task:?}");
-            let call_context = Some(self.component_resource_state().0.pop().unwrap());
+            let call_context = Some(self.component_call_contexts_mut().pop().unwrap());
             self.concurrent_state_mut()
                 .get_mut(guest_task)?
                 .call_context = call_context;
@@ -2745,8 +2745,7 @@ impl Instance {
                         token
                             .as_context_mut(store)
                             .0
-                            .component_resource_state()
-                            .0
+                            .component_call_contexts_mut()
                             .push(call_context);
                     }
                 });
@@ -2761,8 +2760,7 @@ impl Instance {
                             token
                                 .as_context_mut(store)
                                 .0
-                                .component_resource_state()
-                                .0
+                                .component_call_contexts_mut()
                                 .pop()
                                 .unwrap(),
                         );
