@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
 use core::ptr::NonNull;
@@ -15,9 +16,9 @@ pub struct StoreBox<T: ?Sized>(SendSyncPtr<T>);
 impl<T> StoreBox<T> {
     /// Allocates space on the heap to store `val` and returns a pointer to it
     /// living on the heap.
-    pub fn new(val: T) -> StoreBox<T> {
-        let ptr = Box::into_raw(Box::new(val));
-        StoreBox(SendSyncPtr::from(NonNull::new(ptr).unwrap()))
+    pub fn new(val: T) -> Result<StoreBox<T>, OutOfMemory> {
+        let ptr = Box::into_raw(try_new(val)?);
+        Ok(StoreBox(SendSyncPtr::from(NonNull::new(ptr).unwrap())))
     }
 }
 

@@ -44,8 +44,10 @@ where
 
 impl<T> Vec<T> {
     /// Same as [`std::vec::Vec::new`].
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self {
+            inner: StdVec::new(),
+        }
     }
 
     /// Same as [`std::vec::Vec::with_capacity`] but returns an error on

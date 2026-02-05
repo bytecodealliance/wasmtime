@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
     StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
@@ -57,15 +58,15 @@ struct VmState {
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
-    pub fn new(engine: &Engine) -> Interpreter {
+    pub fn new(engine: &Engine) -> Result<Interpreter, OutOfMemory> {
         let ret = Interpreter {
             pulley: StoreBox::new(VmState {
                 vm: Vm::with_stack(engine.config().max_wasm_stack),
                 resume_at_pc: None,
-            }),
+            })?,
         };
         engine.profiler().register_interpreter(&ret);
-        ret
+        Ok(ret)
     }
 
     /// Returns the `InterpreterRef` structure which can be used to actually

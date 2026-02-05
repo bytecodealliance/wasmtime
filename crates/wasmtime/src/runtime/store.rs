@@ -601,7 +601,8 @@ impl Executor {
     pub(crate) fn new(engine: &Engine) -> Self {
         #[cfg(has_host_compiler_backend)]
         if cfg!(feature = "pulley") && engine.target().is_pulley() {
-            Executor::Interpreter(Interpreter::new(engine))
+            use wasmtime_environ::PanicOnOom as _;
+            Executor::Interpreter(Interpreter::new(engine).panic_on_oom())
         } else {
             Executor::Native
         }

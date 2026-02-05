@@ -1,7 +1,5 @@
 //! Simple string interning.
 
-#![allow(unused, reason = "used in follow up commits")]
-
 use crate::{error::OutOfMemory, prelude::*};
 use core::{fmt, mem, num::NonZeroU32};
 use wasmtime_core::alloc::TryClone;

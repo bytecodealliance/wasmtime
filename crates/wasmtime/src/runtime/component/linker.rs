@@ -741,7 +741,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
-        ));
+        )?);
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -759,7 +759,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let dtor = Arc::new(crate::func::HostFunc::wrap_async(
             &self.engine,
             move |cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.into(), param),
-        ));
+        )?);
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -798,7 +798,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
                     .await
                 })
             },
-        ));
+        )?);
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
