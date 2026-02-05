@@ -10,8 +10,9 @@ version.workspace = true
 [dependencies]
 # This crate should have *very* minimal dependencies! Don't add new ones
 # lightly.
-libm = { workspace = true }
 anyhow = { workspace = true, optional = true }
+libm = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 
 [lints]
 workspace = true
