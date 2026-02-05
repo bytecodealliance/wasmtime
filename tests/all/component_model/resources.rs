@@ -2,7 +2,7 @@
 
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, Trap};
+use wasmtime::{Config, Engine, Store, Trap};
 
 #[test]
 fn host_resource_types() -> Result<()> {
@@ -1624,5 +1624,103 @@ fn intrinsic_trampolines() -> Result<()> {
 
     let r = new.call(&mut store, (42,))?.0;
     assert!(rep.call(&mut store, (r,)).is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn drop_after_sync_lowered_async_host_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    let c = Component::new(
+        &engine,
+        r#"
+(component
+  (import "r" (type $r (sub resource)))
+  ;;(import "f" (func $f async (param "x" (borrow $r)) (param "y" (borrow $r))))
+  ;;(import "n" (func $n (result (own $r))))
+  (import "f" (func $f async))
+
+
+  (component $A
+    (import "f" (func $f async))
+    (core module $m
+      (import "" "f" (func $f))
+      (func (export "call") (result i32) call $f i32.const 0)
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    )
+    (core func $f (canon lower (func $f)))
+    (core instance $i (instantiate $m
+        (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "call") async
+      (canon lift (core func $i "call")
+        async
+        (callback (func $i "cb"))))
+  )
+
+  (component $B
+    (import "r" (type $r (sub resource)))
+    (import "f" (func $f async))
+    (core module $m
+      (import "" "f" (func $f (result i32)))
+      (import "" "r" (func $r))
+      (import "" "drop" (func $drop (param i32)))
+      (func (export "call") (param i32) (result i32)
+        ;; Call into component `$A` which is an async-lifted function. This
+        ;; function will call a sync-lowered async function from the host. In
+        ;; effect this means that the task started here by calling `$f` is
+        ;; blocked.
+        call $f
+        drop ;; ignore the `SUBTASK_STARTED` status code
+
+        ;; Now drop our borrow that this function was provided. This is
+        ;; entirely disconnected from `$A` and it should be using the borrow
+        ;; tracking of this task, no other task.
+        (call $drop (local.get 0))
+
+        ;; Now finish up this task without actually waiting on `$A`.
+        call $r
+        i32.const 0
+      )
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    )
+    (core func $f (canon lower (func $f) async))
+    (core func $r (canon task.return))
+    (core func $drop (canon resource.drop $r))
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "f" (func $f))
+        (export "r" (func $r))
+        (export "drop" (func $drop))
+      ))
+    ))
+    (func (export "call") async (param "x" (borrow $r))
+        (canon lift (core func $i "call")
+            async
+            (callback (func $i "cb"))))
+  )
+  (instance $a (instantiate $A (with "f" (func $f))))
+  (instance $b (instantiate $B
+    (with "f" (func $a "call"))
+    (with "r" (type $r))
+))
+  (export "call" (func $b "call"))
+)
+"#,
+    )?;
+
+    let mut root = linker.root();
+    root.resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+    root.func_wrap_concurrent("f", |_accessor, ()| {
+        Box::pin(async move { std::future::pending::<Result<()>>().await })
+    })?;
+
+    let i = linker.instantiate_async(&mut store, &c).await?;
+    let call = i.get_typed_func::<(Resource<u32>,), ()>(&mut store, "call")?;
+    let r = Resource::new_borrow(3);
+    call.call_async(&mut store, (r,)).await?;
     Ok(())
 }

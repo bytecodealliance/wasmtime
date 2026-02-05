@@ -446,14 +446,6 @@ impl Instance {
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
     }
 
-    pub(crate) fn resource_enter_call(self, store: &mut StoreOpaque) {
-        store.component_resource_tables(Some(self)).enter_call()
-    }
-
-    pub(crate) fn resource_exit_call(self, store: &mut StoreOpaque) -> Result<()> {
-        store.component_resource_tables(Some(self)).exit_call()
-    }
-
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
         lookup_vmdef(store, self.id.instance(), def)
     }
@@ -850,10 +842,8 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    let exit = if let Some(component_instance) = *component_instance
-                        && store.0.concurrency_support()
-                    {
-                        store.0.enter_sync_call(
+                    let exit = if let Some(component_instance) = *component_instance {
+                        store.0.enter_guest_sync_call(
                             None,
                             false,
                             RuntimeInstance {
@@ -881,7 +871,7 @@ impl<'a> Instantiator<'a> {
                     };
 
                     if exit {
-                        store.0.exit_sync_call(false)?;
+                        store.0.exit_guest_sync_call(false)?;
                     }
 
                     self.instance_mut(store.0).push_instance_id(i.id());

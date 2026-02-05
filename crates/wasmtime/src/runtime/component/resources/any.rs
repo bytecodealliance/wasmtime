@@ -197,14 +197,15 @@ impl ResourceAny {
         };
         let mut args = [ValRaw::u32(rep)];
 
-        let exit = if let Some(instance) = slot.instance
-            && store.0.concurrency_support()
-        {
-            store.0.enter_sync_call(None, false, instance)?;
-            true
-        } else {
-            false
-        };
+        // Setup async-level task infrastructure for this call. This, for
+        // example, prevents the destructor from blocking.
+        //
+        // Note that if `slot.instance` is `None` then this is skipped. That
+        // means that this is a host resource being destroyed by the host. In
+        // that case restrictions around blocking and such are exempt.
+        if let Some(instance) = slot.instance {
+            store.0.enter_guest_sync_call(None, false, instance)?;
+        }
 
         // This should be safe because `dtor` has been checked to belong to the
         // `store` provided which means it's valid and still alive. Additionally
@@ -215,8 +216,8 @@ impl ResourceAny {
             crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args))?;
         }
 
-        if exit {
-            store.0.exit_sync_call(false)?;
+        if slot.instance.is_some() {
+            store.0.exit_guest_sync_call(false)?;
         }
 
         Ok(())

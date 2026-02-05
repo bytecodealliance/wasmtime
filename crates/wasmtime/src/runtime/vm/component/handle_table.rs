@@ -36,7 +36,7 @@ pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
-    Borrow { scope: usize },
+    Borrow { scope: u32 },
 }
 
 /// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
@@ -68,7 +68,7 @@ enum Slot {
     /// count of the `scope`.
     ResourceBorrow {
         resource: TypedResource,
-        scope: usize,
+        scope: u32,
     },
 
     /// Represents a host task handle.
@@ -195,7 +195,7 @@ impl HandleTable {
     /// Inserts a new `borrow` resource into this table whose type/rep are
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: usize) -> Result<u32> {
+    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: u32) -> Result<u32> {
         self.insert(Slot::ResourceBorrow { resource, scope })
     }
 

@@ -1,11 +1,13 @@
 use crate::StoreContextMut;
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
+use crate::component::store::ComponentTaskState;
 use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
-use crate::runtime::vm::component::{CallContexts, ComponentInstance, HandleTable, ResourceTables};
+use crate::runtime::vm::component::{ComponentInstance, HandleTable, ResourceTables};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::pin::Pin;
@@ -283,16 +285,10 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         HostResourceTables::from_parts(tables, data)
     }
 
-    /// See [`HostResourceTables::enter_call`].
+    /// See [`HostResourceTables::validate_scope_exit`].
     #[inline]
-    pub fn enter_call(&mut self) {
-        self.resource_tables().enter_call()
-    }
-
-    /// See [`HostResourceTables::exit_call`].
-    #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.resource_tables().exit_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.resource_tables().validate_scope_exit()
     }
 }
 
@@ -318,13 +314,7 @@ pub struct LiftContext<'a> {
     host_table: &'a mut HandleTable,
     host_resource_data: &'a mut HostResourceData,
 
-    calls: &'a mut CallContexts,
-
-    #[cfg_attr(
-        not(feature = "component-model-async"),
-        allow(unused, reason = "easier to not #[cfg] away")
-    )]
-    concurrent_state: Option<&'a mut ConcurrentState>,
+    task_state: &'a mut ComponentTaskState,
 }
 
 #[doc(hidden)]
@@ -345,8 +335,8 @@ impl<'a> LiftContext<'a> {
         // at this time.
         let memory =
             instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
-        let (calls, host_table, host_resource_data, instance, concurrent_state) =
-            store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
+        let (task_state, host_table, host_resource_data, instance) =
+            store.lift_context_parts(instance_handle);
         let (component, instance) = instance.component_and_self();
 
         LiftContext {
@@ -356,10 +346,9 @@ impl<'a> LiftContext<'a> {
             types: component.types(),
             instance,
             instance_handle,
-            calls,
+            task_state,
             host_table,
             host_resource_data,
-            concurrent_state,
         }
     }
 
@@ -401,7 +390,7 @@ impl<'a> LiftContext<'a> {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
-        self.concurrent_state.as_deref_mut().unwrap()
+        self.task_state.concurrent_state_mut()
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its
@@ -460,23 +449,17 @@ impl<'a> LiftContext<'a> {
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
         HostResourceTables::from_parts(
             ResourceTables {
-                host_table: Some(self.host_table),
-                calls: self.calls,
+                host_table: self.host_table,
+                task_state: self.task_state,
                 guest: Some(self.instance.as_mut().instance_states()),
             },
             self.host_resource_data,
         )
     }
 
-    /// See [`HostResourceTables::enter_call`].
+    /// See [`HostResourceTables::validate_scope_exit`].
     #[inline]
-    pub fn enter_call(&mut self) {
-        self.resource_tables().enter_call()
-    }
-
-    /// See [`HostResourceTables::exit_call`].
-    #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.resource_tables().exit_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.resource_tables().validate_scope_exit()
     }
 }

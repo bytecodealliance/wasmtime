@@ -57,8 +57,7 @@ pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
     // panics, loops, etc).
     {
         let skip_list = &[
-            // FIXME(#12510)
-            "drop-cross-task-borrow.wast",
+            // .. empty currently ..
         ];
         tests.retain(|test| {
             test.path

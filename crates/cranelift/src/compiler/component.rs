@@ -47,9 +47,6 @@ impl From<GetLibcallFn> for HostCallee {
 
 /// How to interpret the results of a host function.
 enum HostResult {
-    /// The host function has no results.
-    None,
-
     /// The host function returns the sentinel specified which is interpreted
     /// and translated to the real return value.
     Sentinel(TrapSentinel),
@@ -622,22 +619,6 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ResourceEnterCall => {
-                self.translate_libcall(
-                    host::resource_enter_call,
-                    HostResult::None,
-                    WasmArgs::InRegisters,
-                    |_, _| {},
-                );
-            }
-            Trampoline::ResourceExitCall => {
-                self.translate_libcall(
-                    host::resource_exit_call,
-                    TrapSentinel::Falsy,
-                    WasmArgs::InRegisters,
-                    |_, _| {},
-                );
-            }
             Trampoline::PrepareCall { memory } => {
                 self.translate_libcall(
                     host::prepare_call,
@@ -1043,10 +1024,6 @@ impl<'a> TrampolineCompiler<'a> {
                 self.abi_store_results(&[]);
             }
             HostResult::Sentinel(_) => todo!("support additional return types if/when necessary"),
-            HostResult::None => {
-                assert!(result.is_none());
-                self.abi_store_results(&[]);
-            }
 
             HostResult::MultiValue { ptr, len } => {
                 let ptr = ptr.or(val_raw_ptr).unwrap();
@@ -1472,8 +1449,6 @@ impl<'a> TrampolineCompiler<'a> {
             // directly from guest wasm, so no check is needed.
             Trampoline::ResourceTransferOwn
             | Trampoline::ResourceTransferBorrow
-            | Trampoline::ResourceEnterCall
-            | Trampoline::ResourceExitCall
             | Trampoline::PrepareCall { .. }
             | Trampoline::SyncStartCall { .. }
             | Trampoline::AsyncStartCall { .. }
