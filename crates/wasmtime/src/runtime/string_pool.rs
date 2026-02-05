@@ -177,7 +177,7 @@ mod tests {
 
         let a = pool.insert("a")?;
         assert_eq!(&pool[a], "a");
-        assert_eq!(pool.get_atom("a"), a);
+        assert_eq!(pool.get_atom("a"), Some(a));
 
         let a2 = pool.insert("a")?;
         assert_eq!(a, a2);
@@ -186,7 +186,7 @@ mod tests {
         let b = pool.insert("b")?;
         assert_eq!(&pool[b], "b");
         assert_ne!(a, b);
-        assert_eq!(pool.get_atom("b"), b);
+        assert_eq!(pool.get_atom("b"), Some(b));
 
         assert!(pool.get_atom("zzz").is_none());
 
