@@ -39,56 +39,72 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
             max_types: 10,
         },
         ops: vec![
-            GcOp::Null(),
-            GcOp::Drop(),
-            GcOp::Gc(),
-            GcOp::LocalSet(0),
-            GcOp::LocalGet(0),
-            GcOp::GlobalSet(0),
-            GcOp::GlobalGet(0),
-            GcOp::StructNew(0),
+            GcOp::NullExtern,
+            GcOp::Drop,
+            GcOp::Gc,
+            GcOp::LocalSet { local_index: 0 },
+            GcOp::LocalGet { local_index: 0 },
+            GcOp::GlobalSet { global_index: 0 },
+            GcOp::GlobalGet { global_index: 0 },
+            GcOp::StructNew { type_index: 0 },
         ],
         types: Types::new(),
     };
+
     for i in 0..t.limits.max_rec_groups {
         t.types.insert_rec_group(RecGroupId(i));
     }
 
+    let mut rng = StdRng::seed_from_u64(0xC0FFEE);
     if t.limits.max_rec_groups > 0 {
-        let mut rng = StdRng::seed_from_u64(0xC0FFEE);
         for i in 0..t.limits.max_types {
             let gid = RecGroupId(rng.gen_range(0..t.limits.max_rec_groups));
             t.types.insert_empty_struct(TypeId(i), gid);
         }
     }
+
     t
 }
 
 #[test]
 fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
-    let mut res = test_ops(5, 5, 5);
+
+    let mut features = wasmparser::WasmFeatures::default();
+    features.insert(wasmparser::WasmFeatures::REFERENCE_TYPES);
+    features.insert(wasmparser::WasmFeatures::FUNCTION_REFERENCES);
+    features.insert(wasmparser::WasmFeatures::GC_TYPES);
+    features.insert(wasmparser::WasmFeatures::GC);
+
+    let mut ops = test_ops(5, 5, 5);
 
     let mut session = mutatis::Session::new();
-
     for _ in 0..2048 {
-        session.mutate(&mut res)?;
-        let wasm = res.to_wasm_binary();
+        session.mutate(&mut ops)?;
 
-        let feats = wasmparser::WasmFeatures::default();
-        feats.reference_types();
-        feats.gc();
-        let mut validator = wasmparser::Validator::new_with_features(feats);
+        let wasm = ops.to_wasm_binary();
+        crate::oracles::log_wasm(&wasm);
 
-        let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
-        let result = validator.validate_all(&wasm);
-        log::debug!("{wat}");
-        assert!(
-            result.is_ok(),
-            "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
-            result.err().expect("[-] Failed .err() in assert macro."),
-            wat
-        );
+        let mut validator = wasmparser::Validator::new_with_features(features);
+        if let Err(e) = validator.validate_all(&wasm) {
+            let mut config = wasmprinter::Config::new();
+            config.print_offsets(true);
+            config.print_operand_stack(true);
+            let mut wat = String::new();
+            let wat = match config.print(&wasm, &mut wasmprinter::PrintFmtWrite(&mut wat)) {
+                Ok(()) => wat,
+                Err(e) => format!("<failed to disassemble Wasm binary to WAT: {e}>"),
+            };
+            panic!(
+                "Emitted Wasm binary is not valid!\n\n\
+                 === Validation Error ===\n\n\
+                 {e}\n\n\
+                 === GcOps ===\n\n\
+                 {ops:#?}\n\n\
+                 === Wat ===\n\n\
+                 {wat}"
+            );
+        }
     }
     Ok(())
 }
@@ -99,12 +115,13 @@ fn struct_new_removed_when_no_types() -> mutatis::Result<()> {
 
     let mut ops = test_ops(0, 0, 0);
     ops.limits.max_types = 0;
-    ops.ops = vec![GcOp::StructNew(42)];
+    ops.ops = vec![GcOp::StructNew { type_index: 42 }];
 
-    let _ = ops.fixup();
-
+    ops.fixup();
     assert!(
-        ops.ops.iter().all(|op| !matches!(op, GcOp::StructNew(..))),
+        ops.ops
+            .iter()
+            .all(|op| !matches!(op, GcOp::StructNew { .. })),
         "StructNew should be removed when there are no types"
     );
     Ok(())
@@ -116,14 +133,16 @@ fn local_ops_removed_when_no_params() -> mutatis::Result<()> {
 
     let mut ops = test_ops(0, 0, 0);
     ops.limits.num_params = 0;
-    ops.ops = vec![GcOp::LocalGet(42), GcOp::LocalSet(99)];
+    ops.ops = vec![
+        GcOp::LocalGet { local_index: 42 },
+        GcOp::LocalSet { local_index: 99 },
+    ];
 
     ops.fixup();
-
     assert!(
         ops.ops
             .iter()
-            .all(|op| !matches!(op, GcOp::LocalGet(..) | GcOp::LocalSet(..))),
+            .all(|op| !matches!(op, GcOp::LocalGet { .. } | GcOp::LocalSet { .. })),
         "LocalGet/LocalSet should be removed when there are no params"
     );
     Ok(())
@@ -135,14 +154,16 @@ fn global_ops_removed_when_no_globals() -> mutatis::Result<()> {
 
     let mut ops = test_ops(0, 0, 0);
     ops.limits.num_globals = 0;
-    ops.ops = vec![GcOp::GlobalGet(42), GcOp::GlobalSet(99)];
+    ops.ops = vec![
+        GcOp::GlobalGet { global_index: 42 },
+        GcOp::GlobalSet { global_index: 99 },
+    ];
 
     ops.fixup();
-
     assert!(
         ops.ops
             .iter()
-            .all(|op| !matches!(op, GcOp::GlobalGet(..) | GcOp::GlobalSet(..))),
+            .all(|op| !matches!(op, GcOp::GlobalGet { .. } | GcOp::GlobalSet { .. })),
         "GlobalGet/GlobalSet should be removed when there are no globals"
     );
     Ok(())
@@ -167,129 +188,6 @@ fn every_op_generated() -> mutatis::Result<()> {
     }
 
     assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
-    Ok(())
-}
-
-#[test]
-fn test_wat_string() -> mutatis::Result<()> {
-    let _ = env_logger::try_init();
-
-    let mut gc_ops = test_ops(2, 2, 5);
-
-    let wasm = gc_ops.to_wasm_binary();
-
-    let actual_wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
-    let actual_wat = actual_wat.trim();
-
-    let expected_wat = r#"
-(module
-  (type (;0;) (func (result externref externref externref)))
-  (type (;1;) (func (param externref externref)))
-  (type (;2;) (func (param externref externref externref)))
-  (type (;3;) (func (result externref externref externref)))
-  (type (;4;) (func (param structref)))
-  (rec
-    (type (;5;) (struct))
-  )
-  (rec)
-  (rec
-    (type (;6;) (struct))
-  )
-  (rec
-    (type (;7;) (struct))
-    (type (;8;) (struct))
-    (type (;9;) (struct))
-  )
-  (rec
-    (type (;10;) (struct))
-    (type (;11;) (struct))
-  )
-  (rec
-    (type (;12;) (struct))
-    (type (;13;) (struct))
-  )
-  (rec
-    (type (;14;) (struct))
-  )
-  (type (;15;) (func (param (ref null 5))))
-  (type (;16;) (func (param (ref null 6))))
-  (type (;17;) (func (param (ref null 7))))
-  (type (;18;) (func (param (ref null 8))))
-  (type (;19;) (func (param (ref null 9))))
-  (type (;20;) (func (param (ref null 10))))
-  (type (;21;) (func (param (ref null 11))))
-  (type (;22;) (func (param (ref null 12))))
-  (type (;23;) (func (param (ref null 13))))
-  (type (;24;) (func (param (ref null 14))))
-  (import "" "gc" (func (;0;) (type 0)))
-  (import "" "take_refs" (func (;1;) (type 2)))
-  (import "" "make_refs" (func (;2;) (type 3)))
-  (import "" "take_struct" (func (;3;) (type 4)))
-  (import "" "take_struct_5" (func (;4;) (type 15)))
-  (import "" "take_struct_6" (func (;5;) (type 16)))
-  (import "" "take_struct_7" (func (;6;) (type 17)))
-  (import "" "take_struct_8" (func (;7;) (type 18)))
-  (import "" "take_struct_9" (func (;8;) (type 19)))
-  (import "" "take_struct_10" (func (;9;) (type 20)))
-  (import "" "take_struct_11" (func (;10;) (type 21)))
-  (import "" "take_struct_12" (func (;11;) (type 22)))
-  (import "" "take_struct_13" (func (;12;) (type 23)))
-  (import "" "take_struct_14" (func (;13;) (type 24)))
-  (table (;0;) 5 externref)
-  (table (;1;) 5 structref)
-  (table (;2;) 5 (ref null 5))
-  (table (;3;) 5 (ref null 6))
-  (table (;4;) 5 (ref null 7))
-  (table (;5;) 5 (ref null 8))
-  (table (;6;) 5 (ref null 9))
-  (table (;7;) 5 (ref null 10))
-  (table (;8;) 5 (ref null 11))
-  (table (;9;) 5 (ref null 12))
-  (table (;10;) 5 (ref null 13))
-  (table (;11;) 5 (ref null 14))
-  (global (;0;) (mut externref) ref.null extern)
-  (global (;1;) (mut externref) ref.null extern)
-  (global (;2;) (mut structref) ref.null struct)
-  (global (;3;) (mut (ref null 5)) ref.null 5)
-  (global (;4;) (mut (ref null 6)) ref.null 6)
-  (global (;5;) (mut (ref null 7)) ref.null 7)
-  (global (;6;) (mut (ref null 8)) ref.null 8)
-  (global (;7;) (mut (ref null 9)) ref.null 9)
-  (global (;8;) (mut (ref null 10)) ref.null 10)
-  (global (;9;) (mut (ref null 11)) ref.null 11)
-  (global (;10;) (mut (ref null 12)) ref.null 12)
-  (global (;11;) (mut (ref null 13)) ref.null 13)
-  (global (;12;) (mut (ref null 14)) ref.null 14)
-  (export "run" (func 14))
-  (func (;14;) (type 1) (param externref externref)
-    (local externref structref (ref null 5) (ref null 6) (ref null 7) (ref null 8) (ref null 9) (ref null 10) (ref null 11) (ref null 12) (ref null 13) (ref null 14))
-    loop ;; label = @1
-      ref.null extern
-      drop
-      call 0
-      local.set 0
-      local.get 0
-      global.set 0
-      global.get 0
-      struct.new 5
-      drop
-      drop
-      drop
-      drop
-      br 0 (;@1;)
-    end
-  )
-)
-    "#;
-    let expected_wat = expected_wat.trim();
-
-    eprintln!("=== actual ===\n{actual_wat}");
-    eprintln!("=== expected ===\n{expected_wat}");
-    assert_eq!(
-        actual_wat, expected_wat,
-        "actual WAT does not match expected"
-    );
-
     Ok(())
 }
 
@@ -324,67 +222,57 @@ fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
 fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 
-    // Create GcOps with 5 types so that 7 % 5 = 2
     let mut ops = test_ops(5, 5, 5);
-    ops.limits.max_types = 5;
 
-    // We create max types 5 and out ouf bounds for the type index
+    // These `GcOp`s do not have their operands satisfied, and their results are
+    // not the operands of the next op, so `fixup` will need to deal with
+    // that. Additionally, their immediates are out-of-bounds of their
+    // respective index spaces, which `fixup` will also need to address.
     ops.ops = vec![
-        GcOp::TakeTypedStructCall(27),
-        GcOp::GlobalSet(0),
-        GcOp::StructNew(24),
-        GcOp::LocalSet(0),
+        GcOp::TakeTypedStructCall {
+            type_index: ops.limits.max_types + 7,
+        },
+        GcOp::GlobalSet {
+            global_index: ops.limits.num_globals * 2,
+        },
+        GcOp::StructNew {
+            type_index: ops.limits.max_types + 9,
+        },
+        GcOp::LocalSet {
+            local_index: ops.limits.num_params * 5,
+        },
     ];
 
-    // Call fixup to resolve dependencies
-    // this should fix the types by inserting missing types
-    // also put the indexes in the correct bounds
+    // Call `fixup` to insert missing types, rewrite the immediates such that
+    // they are within their bounds, insert missing operands, and drop unused
+    // results.
     ops.fixup();
 
-    // Verify that fixup()
-    // The expected sequence should be:
-    // 1. StructNew(_) - inserted by fixup to satisfy TakeTypedStructCall(_)
-    // 2. TakeTypedStructCall(_) - now has Struct(_) on stack
-    // 3. Null() - inserted by fixup to satisfy GlobalSet(0)
-    // 4. GlobalSet(0) - now has ExternRef on stack
-    // 5. StructNew(_) - produces Struct(_)
-    // 6. Null() - inserted by fixup to satisfy LocalSet(0)
-    // 7. LocalSet(0) - now has ExternRef on stack
-    // 8. Drop() - inserted by fixup to consume ExternRef before Drop()
-
-    // This is the expected sequence in wat format:
-    //  loop ;; label = @1
-    //     struct.new 7
-    //     call 6
-    //     ref.null extern
-    //     global.set 0
-    //     struct.new 9
-    //     ref.null extern
-    //     local.set 0
-    //     drop
-    //     br 0 (;@1;)
-    // end
-
-    // Find the index of TakeTypedStructCall(_) after fixup
-    let take_call_idx = ops
-        .ops
-        .iter()
-        .position(|op| matches!(op, GcOp::TakeTypedStructCall(_)))
-        .expect("TakeTypedStructCall(_) should be present after fixup");
-
-    // Verify that StructNew(_) appears before TakeTypedStructCall(_)
-    let struct_new_2_before = ops
-        .ops
-        .iter()
-        .take(take_call_idx)
-        .any(|op| matches!(op, GcOp::StructNew(_)));
-
-    assert!(
-        struct_new_2_before,
-        "fixup should insert StructNew(_) before TakeTypedStructCall(_) to satisfy the dependency"
+    // Check that we got the expected `GcOp` sequence after `fixup`:
+    assert_eq!(
+        ops.ops,
+        [
+            // Inserted by `fixup` to satisfy `TakeTypedStructCall`'s operands.
+            GcOp::StructNew { type_index: 7 },
+            // The `type_index` is now valid.
+            GcOp::TakeTypedStructCall { type_index: 7 },
+            // Inserted by `fixup` to satisfy `GlobalSet`'s operands.
+            GcOp::NullExtern,
+            // The `global_index` is now valid.
+            GcOp::GlobalSet { global_index: 0 },
+            // The `type_index` is now valid.
+            GcOp::StructNew { type_index: 9 },
+            // Inserted by `fixup` to satisfy `LocalSet`'s operands.
+            GcOp::NullExtern,
+            // The `local_index` is now valid.
+            GcOp::LocalSet { local_index: 0 },
+            // Inserted by `fixup` to make sure the operand stack is empty at
+            // the end of the block.
+            GcOp::Drop,
+        ]
     );
 
-    // Verify the sequence validates correctly
+    // Verify that we generate a valid Wasm binary after calling `fixup`.
     let wasm = ops.to_wasm_binary();
     let wat = wasmprinter::print_bytes(&wasm).unwrap();
     log::debug!("{wat}");
