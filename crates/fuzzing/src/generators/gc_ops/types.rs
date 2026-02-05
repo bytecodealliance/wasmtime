@@ -12,7 +12,9 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct RecGroupId(pub(crate) u32);
 
 /// TypeID struct definition.
-#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct TypeId(pub(crate) u32);
 
 /// StructType definition
@@ -134,19 +136,37 @@ impl StackType {
                 if ok {
                     stack.pop();
                 } else {
-                    // Ensure there *is* a struct to consume.
-                    let type_index = match wanted {
-                        Some(t) => Self::clamp(t, num_types),
-                        None => Self::clamp(0, num_types),
-                    };
-                    Self::emit(
-                        GcOp::StructNew { type_index },
-                        stack,
-                        out,
-                        num_types,
-                        &mut result_types,
-                    );
-                    stack.pop(); // consume the synthesized struct
+                    match wanted {
+                        // When num_types == 0, GcOp::fixup() should have dropped the ops
+                        // that require a concrete type.
+                        // But it keeps the ops that work with abstract types.
+                        // Since our mutator can legally remove all the types,
+                        // StackType::fixup() should insert GcOp::NullStruct()
+                        // to satisfy the undropped ops that work with abstract types.
+                        None => {
+                            Self::emit(GcOp::NullStruct, stack, out, num_types, &mut result_types);
+                            stack.pop();
+                        }
+
+                        // Typed struct requirement: only satisfiable if we have concrete types.
+                        Some(t) => {
+                            if num_types == 0 {
+                                unreachable!(
+                                    "typed struct requirement with num_types == 0; op should have been removed"
+                                );
+                            } else {
+                                let t = Self::clamp(t, num_types);
+                                Self::emit(
+                                    GcOp::StructNew { type_index: t },
+                                    stack,
+                                    out,
+                                    num_types,
+                                    &mut result_types,
+                                );
+                                stack.pop();
+                            }
+                        }
+                    }
                 }
             }
         }
