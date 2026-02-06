@@ -12,7 +12,6 @@ pub fn config() -> Config {
 
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.wasm_features(wasmtime::WasmFeatures::CM_MAP, true);
 
     // When `WASMTIME_TEST_NO_HOG_MEMORY` is set it means we're in qemu. The
     // component model tests create a disproportionate number of instances so
@@ -26,6 +25,16 @@ pub fn config() -> Config {
 
 pub fn engine() -> Engine {
     Engine::new(&config()).unwrap()
+}
+
+pub fn map_config() -> Config {
+    let mut config = config();
+    config.wasm_component_model_map(true);
+    config
+}
+
+pub fn map_engine() -> Engine {
+    Engine::new(&map_config()).unwrap()
 }
 
 pub fn async_engine() -> Engine {
