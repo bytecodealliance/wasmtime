@@ -85,7 +85,7 @@ impl TryClone for StringPool {
 }
 
 impl TryClone for Atom {
-    fn try_clone(&self) -> core::result::Result<Self, OutOfMemory> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(*self)
     }
 }
