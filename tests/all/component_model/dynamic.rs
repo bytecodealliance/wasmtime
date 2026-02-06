@@ -138,7 +138,7 @@ fn lists() -> Result<()> {
 
 #[test]
 fn maps() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
@@ -217,7 +217,7 @@ fn maps() -> Result<()> {
 
 #[test]
 fn maps_complex_types() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     // Test map<string, list<u32>>
@@ -315,7 +315,7 @@ fn maps_equality() -> Result<()> {
 
 #[test]
 fn maps_duplicate_keys() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
@@ -347,7 +347,7 @@ fn maps_duplicate_keys() -> Result<()> {
 
 #[test]
 fn maps_all_primitive_types() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     // Test map<u32, u32>
@@ -381,7 +381,7 @@ fn maps_all_primitive_types() -> Result<()> {
 
 #[test]
 fn maps_alignment() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     // Test map<u8, u64> - key_size=1, value_align=8
@@ -445,7 +445,7 @@ fn maps_alignment() -> Result<()> {
 
 #[test]
 fn maps_large() -> Result<()> {
-    let engine = super::engine();
+    let engine = super::map_engine();
     let mut store = Store::new(&engine, ());
 
     let component = Component::new(&engine, make_echo_component("(map u32 string)", 8))?;
