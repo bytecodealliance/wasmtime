@@ -153,7 +153,7 @@ fn maps() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     // Maps should round-trip correctly
     match &output[0] {
@@ -187,7 +187,7 @@ fn maps() -> Result<()> {
     let err_map = vec![(Val::String("key".into()), Val::String("value".into()))];
     let err = Val::Map(err_map);
     let err = func2
-        .call_and_post_return(&mut store2, &[err], &mut output)
+        .call(&mut store2, &[err], &mut output)
         .unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
@@ -199,14 +199,14 @@ fn maps() -> Result<()> {
     let err_map2 = vec![(Val::U32(1), Val::U32(42))];
     let err = Val::Map(err_map2);
     let err = func3
-        .call_and_post_return(&mut store3, &[err], &mut output)
+        .call(&mut store3, &[err], &mut output)
         .unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     // Test empty map
     let empty_map = vec![];
     let input = Val::Map(empty_map);
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     match &output[0] {
         Val::Map(output_map) => assert_eq!(output_map.len(), 0),
         _ => panic!("expected map"),
@@ -238,7 +238,7 @@ fn maps_complex_types() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     // Verify round-trip
     match &output[0] {
@@ -331,7 +331,7 @@ fn maps_duplicate_keys() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     // Verify all entries are preserved (Vec doesn't deduplicate)
     match &output[0] {
@@ -359,7 +359,7 @@ fn maps_all_primitive_types() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     // Test map<string, u32>
@@ -373,7 +373,7 @@ fn maps_all_primitive_types() -> Result<()> {
     ];
     let input = Val::Map(input_map);
 
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     Ok(())
@@ -398,7 +398,7 @@ fn maps_alignment() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     // Test map<u32, u64> - key_size=4, value_align=8
@@ -410,7 +410,7 @@ fn maps_alignment() -> Result<()> {
     let input_map = vec![(Val::U32(1), Val::U64(1000)), (Val::U32(2), Val::U64(2000))];
     let input = Val::Map(input_map);
 
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     // Test map<u8, u32> - key_size=1, value_align=4
@@ -422,7 +422,7 @@ fn maps_alignment() -> Result<()> {
     let input_map = vec![(Val::U8(10), Val::U32(100)), (Val::U8(20), Val::U32(200))];
     let input = Val::Map(input_map);
 
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     // Test map<u16, u64> - key_size=2, value_align=8
@@ -437,7 +437,7 @@ fn maps_alignment() -> Result<()> {
     ];
     let input = Val::Map(input_map);
 
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
     assert_eq!(input, output[0]);
 
     Ok(())
@@ -459,7 +459,7 @@ fn maps_large() -> Result<()> {
     let input = Val::Map(input_map);
 
     let mut output = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
+    func.call(&mut store, &[input.clone()], &mut output)?;
 
     // Verify all entries are present
     match &output[0] {
