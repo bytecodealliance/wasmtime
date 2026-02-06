@@ -9,9 +9,9 @@ use smallvec::SmallVec;
 #[derive(Debug)]
 pub struct GcOpsMutator;
 
-impl Mutate<GcOps> for GcOpsMutator {
-    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
-        // Define a mutation that adds an operation to the ops list.
+impl GcOpsMutator {
+    // Define a mutation that adds an operation to the ops list.
+    fn add_operation(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
@@ -22,8 +22,11 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that removes an operation from the ops list.
+    // Define a mutation that removes an operation from the ops list.
+    fn remove_operation(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if !ops.ops.is_empty() {
             c.mutation(|ctx| {
                 let idx = ctx.rng().gen_index(ops.ops.len()).expect("ops not empty");
@@ -32,8 +35,15 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that adds an empty struct type to an existing (rec ...) group.
+    // Define a mutation that adds an empty struct type to an existing (rec ...) group.
+    fn add_new_struct_type_to_rec_group(
+        &mut self,
+        c: &mut Candidates<'_>,
+        ops: &mut GcOps,
+    ) -> mutatis::Result<()> {
         if !c.shrink()
             && !ops.types.rec_groups.is_empty()
             && ops.types.type_defs.len() < ops.limits.max_types as usize
@@ -49,9 +59,16 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that removes a struct type from an existing (rec ...).
-        // It may result in empty rec groups. Empty rec groups are allowed.
+    // Define a mutation that removes a struct type from an existing (rec ...).
+    // It may result in empty rec groups. Empty rec groups are allowed.
+    fn remove_struct_type_from_rec_group(
+        &mut self,
+        c: &mut Candidates<'_>,
+        ops: &mut GcOps,
+    ) -> mutatis::Result<()> {
         if !ops.types.type_defs.is_empty() {
             c.mutation(|ctx| {
                 // Pick a random struct type.
@@ -63,28 +80,15 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that moves a struct type from one (rec ...) group to another.
-        // It will be a different rec group with high probability but it may try
-        // to move it to the same rec group.
-        if !ops.types.type_defs.is_empty() && ops.types.rec_groups.len() >= 2 {
-            c.mutation(|ctx| {
-                // Pick a random type.
-                if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
-                    // Pick a random recursive group.
-                    if let Some(new_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() {
-                        // Get the old rec group for debug purposes.
-                        let old_gid = ops.types.type_defs.get(&tid).unwrap().rec_group;
-                        // Move the struct type to the new rec group.
-                        ops.types.type_defs.get_mut(&tid).unwrap().rec_group = new_gid;
-                        log::debug!("Moved type {tid:?} from rec group {old_gid:?} to {new_gid:?}");
-                    }
-                }
-                Ok(())
-            })?;
-        }
-
-        // Define a mutation that moves a struct type within an existing rec group.
+    // Define a mutation that moves a struct type within an existing rec group.
+    fn move_struct_type_within_rec_group(
+        &mut self,
+        c: &mut Candidates<'_>,
+        ops: &mut GcOps,
+    ) -> mutatis::Result<()> {
         if !ops.types.rec_groups.is_empty() && ops.types.type_defs.len() >= 2 {
             c.mutation(|ctx| {
                 let mut chosen: Option<(RecGroupId, TypeId, TypeId)> = None;
@@ -139,8 +143,42 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that duplicates a (rec ...) group.
+    // Define a mutation that moves a struct type from one (rec ...) group to another.
+    // It will be a different rec group with high probability but it may try
+    // to move it to the same rec group.
+    fn move_struct_type_between_rec_groups(
+        &mut self,
+        c: &mut Candidates<'_>,
+        ops: &mut GcOps,
+    ) -> mutatis::Result<()> {
+        if !ops.types.type_defs.is_empty() && ops.types.rec_groups.len() >= 2 {
+            c.mutation(|ctx| {
+                // Pick a random type.
+                if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
+                    // Pick a random recursive group.
+                    if let Some(new_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() {
+                        // Get the old rec group for debug purposes.
+                        let old_gid = ops.types.type_defs.get(&tid).unwrap().rec_group;
+                        // Move the struct type to the new rec group.
+                        ops.types.type_defs.get_mut(&tid).unwrap().rec_group = new_gid;
+                        log::debug!("Moved type {tid:?} from rec group {old_gid:?} to {new_gid:?}");
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    // Define a mutation that duplicates a (rec ...) group.
+    fn duplicate_rec_group(
+        &mut self,
+        c: &mut Candidates<'_>,
+        ops: &mut GcOps,
+    ) -> mutatis::Result<()> {
         if !c.shrink()
             && !ops.types.rec_groups.is_empty()
             && ops.types.rec_groups.len() < ops.limits.max_rec_groups as usize
@@ -183,8 +221,11 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that removes a whole (rec ...) group.
+    // Define a mutation that removes a whole (rec ...) group.
+    fn remove_rec_group(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if ops.types.rec_groups.len() > 2 {
             c.mutation(|ctx| {
                 // Pick a random rec group to remove.
@@ -199,8 +240,11 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that merges two (rec ...) groups.
+    // Define a mutation that merges two (rec ...) groups.
+    fn merge_rec_groups(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if !ops.types.rec_groups.is_empty() && ops.types.rec_groups.len() > 2 {
             c.mutation(|ctx| {
                 // Pick two distinct rec groups.
@@ -247,8 +291,11 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
 
-        // Define a mutation that splits a (rec ...) group in two, if possible.
+    // Define a mutation that splits a (rec ...) group in two, if possible.
+    fn split_rec_group(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if !c.shrink()
             && ops.types.rec_groups.len() < ops.limits.max_rec_groups as usize
             && ops.types.type_defs.len() >= 2
@@ -306,6 +353,22 @@ impl Mutate<GcOps> for GcOpsMutator {
                 Ok(())
             })?;
         }
+        Ok(())
+    }
+}
+
+impl Mutate<GcOps> for GcOpsMutator {
+    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
+        self.add_operation(c, ops)?;
+        self.remove_operation(c, ops)?;
+        self.add_new_struct_type_to_rec_group(c, ops)?;
+        self.remove_struct_type_from_rec_group(c, ops)?;
+        self.move_struct_type_within_rec_group(c, ops)?;
+        self.move_struct_type_between_rec_groups(c, ops)?;
+        self.duplicate_rec_group(c, ops)?;
+        self.remove_rec_group(c, ops)?;
+        self.merge_rec_groups(c, ops)?;
+        self.split_rec_group(c, ops)?;
 
         Ok(())
     }
