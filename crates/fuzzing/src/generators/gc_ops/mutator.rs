@@ -17,7 +17,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
                     let op = GcOp::generate(ctx)?;
                     ops.ops.insert(idx, op);
-                    log::debug!("Added operation {:?} to ops list", op);
+                    log::debug!("Added operation {op:?} to ops list");
                 }
                 Ok(())
             })?;
@@ -28,7 +28,7 @@ impl Mutate<GcOps> for GcOpsMutator {
             c.mutation(|ctx| {
                 let idx = ctx.rng().gen_index(ops.ops.len()).expect("ops not empty");
                 let removed = ops.ops.remove(idx);
-                log::debug!("Removed operation {:?} from ops list", removed);
+                log::debug!("Removed operation {removed:?} from ops list");
                 Ok(())
             })?;
         }
@@ -44,11 +44,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                     // Insert new struct with next type id in the chosen rec group.
                     let new_tid = ops.types.next_type_id();
                     ops.types.insert_empty_struct(new_tid, group_id);
-                    log::debug!(
-                        "Added empty struct type {:?} to rec group {:?}",
-                        new_tid,
-                        group_id
-                    );
+                    log::debug!("Added empty struct type {new_tid:?} to rec group {group_id:?}");
                 }
                 Ok(())
             })?;
@@ -62,7 +58,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                 if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
                     // Remove the chosen struct type.
                     ops.types.type_defs.remove(&tid);
-                    log::debug!("Removed struct type {:?}", tid);
+                    log::debug!("Removed struct type {tid:?}");
                 }
                 Ok(())
             })?;
@@ -81,12 +77,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                         let old_gid = ops.types.type_defs.get(&tid).unwrap().rec_group;
                         // Move the struct type to the new rec group.
                         ops.types.type_defs.get_mut(&tid).unwrap().rec_group = new_gid;
-                        log::debug!(
-                            "Moved type {:?} from rec group {:?} to {:?}",
-                            tid,
-                            old_gid,
-                            new_gid
-                        );
+                        log::debug!("Moved type {tid:?} from rec group {old_gid:?} to {new_gid:?}");
                     }
                 }
                 Ok(())
@@ -142,12 +133,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                     debug_assert!(b_def.rec_group == gid);
                     ops.types.type_defs.insert(tid_a, b_def);
                     ops.types.type_defs.insert(tid_b, a_def);
-                    log::debug!(
-                        "Reordered types {:?} and {:?} in rec group {:?}",
-                        tid_a,
-                        tid_b,
-                        gid
-                    );
+                    log::debug!("Reordered types {tid_a:?} and {tid_b:?} in rec group {gid:?}");
                 }
 
                 Ok(())
@@ -192,10 +178,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                 }
 
                 log::debug!(
-                    "Duplicated rec group {:?} as new group {:?} ({} types)",
-                    source_gid,
-                    new_gid,
-                    count
+                    "Duplicated rec group {source_gid:?} as new group {new_gid:?} ({count} types)"
                 );
                 Ok(())
             })?;
@@ -212,7 +195,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                 ops.types.type_defs.retain(|_, def| def.rec_group != gid);
                 ops.types.rec_groups.remove(&gid);
 
-                log::debug!("Removed rec group {:?} and its member types", gid);
+                log::debug!("Removed rec group {gid:?} and its member types");
                 Ok(())
             })?;
         }
@@ -259,7 +242,7 @@ impl Mutate<GcOps> for GcOpsMutator {
 
                 // Remove the now-merged-away group id.
                 ops.types.rec_groups.remove(&src_gid);
-                log::debug!("Merged rec group {:?} into {:?}", src_gid, dst_gid);
+                log::debug!("Merged rec group {src_gid:?} into {dst_gid:?}");
 
                 Ok(())
             })?;
@@ -319,13 +302,7 @@ impl Mutate<GcOps> for GcOpsMutator {
                     }
                 }
 
-                log::debug!(
-                    "Split rec group {:?}: moved {} of {} members into new group {:?}",
-                    old_gid,
-                    k,
-                    len,
-                    new_gid
-                );
+                log::debug!("Split rec group {old_gid:?}: moved {k} of {len} members into new group {new_gid:?}");
                 Ok(())
             })?;
         }

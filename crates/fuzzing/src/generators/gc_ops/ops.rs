@@ -113,7 +113,7 @@ impl GcOps {
             .collect();
 
         for (id, ty) in self.types.type_defs.iter() {
-            rec_groups.entry(ty.rec_group).or_default().push(id.clone());
+            rec_groups.entry(ty.rec_group).or_default().push(*id);
         }
 
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
