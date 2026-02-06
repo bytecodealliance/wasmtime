@@ -2274,7 +2274,7 @@ where
         bail!("map pointer is not aligned");
     }
 
-    let mut result = HashMap::with_capacity(len);
+    let mut result = HashMap::with_capacity(len)?;
     for i in 0..len {
         let entry_base = ptr + (i * tuple_size);
 
@@ -2287,7 +2287,7 @@ where
         let value_bytes = &cx.memory()[entry_base + value_field..][..V::SIZE32];
         let value = V::linear_lift_from_memory(cx, value_ty, value_bytes)?;
 
-        result.insert(key, value);
+        result.insert(key, value)?;
     }
 
     Ok(result)
