@@ -91,3 +91,24 @@ impl<T> PanicOnOom for Result<T, OutOfMemory> {
         }
     }
 }
+
+/// Create a `*mut str` from a pointer and length pair.
+///
+/// NB: This function is safe, but dereferencing it or otherwise using the
+/// resulting `str` pointer's contents is unsafe and requires that the pointer
+/// be valid for accessing and points to a valid utf8 sequence of `len` bytes.
+fn str_ptr_from_raw_parts(ptr: *mut u8, len: usize) -> *mut str {
+    let ptr: *mut [u8] = core::ptr::slice_from_raw_parts_mut(ptr, len);
+    str_ptr_from_slice_ptr(ptr)
+}
+
+/// Create a `*mut str` from a slice pointer.
+///
+/// NB: This function is safe, but dereferencing it or otherwise using the
+/// resulting `str` pointer's contents is unsafe and requires that the pointer
+/// be valid for accessing and points to a valid utf8 sequence of `len` bytes.
+fn str_ptr_from_slice_ptr(ptr: *mut [u8]) -> *mut str {
+    // SAFETY: `str` is a newtype of `[u8]`.
+    let ptr: *mut str = unsafe { core::mem::transmute(ptr) };
+    ptr
+}
