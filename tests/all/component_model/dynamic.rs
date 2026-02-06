@@ -186,9 +186,7 @@ fn maps() -> Result<()> {
 
     let err_map = vec![(Val::String("key".into()), Val::String("value".into()))];
     let err = Val::Map(err_map);
-    let err = func2
-        .call(&mut store2, &[err], &mut output)
-        .unwrap_err();
+    let err = func2.call(&mut store2, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     // Sad path: type mismatch (wrong value type)
@@ -198,9 +196,7 @@ fn maps() -> Result<()> {
 
     let err_map2 = vec![(Val::U32(1), Val::U32(42))];
     let err = Val::Map(err_map2);
-    let err = func3
-        .call(&mut store3, &[err], &mut output)
-        .unwrap_err();
+    let err = func3.call(&mut store3, &[err], &mut output).unwrap_err();
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     // Test empty map
