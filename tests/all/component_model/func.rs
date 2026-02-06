@@ -3976,7 +3976,7 @@ fn map_trampoline_alignment() -> Result<()> {
     let input = Val::Map(test_data.clone());
 
     let mut results = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input], &mut results)?;
+    func.call(&mut store, &[input], &mut results)?;
 
     match &results[0] {
         Val::Map(output) => {
@@ -4110,7 +4110,7 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
     let input = Val::Map(test_data.clone());
 
     let mut results = [Val::Bool(false)];
-    func.call_and_post_return(&mut store, &[input], &mut results)?;
+    func.call(&mut store, &[input], &mut results)?;
 
     match &results[0] {
         Val::Map(output) => {
