@@ -1,12 +1,12 @@
+use crate::error::OutOfMemory;
 use crate::func::HostFunc;
-use crate::hash_map::{Entry, HashMap};
 use crate::instance::InstancePre;
+use crate::runtime::string_pool::{Atom, StringPool};
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, Module, Result, StoreContextMut, Val, ValRaw,
+    Instance, IntoFunc, Module, Result, StoreContextMut, Val, ValRaw, prelude::*,
 };
-use crate::{IntoFunc, prelude::*};
 use alloc::sync::Arc;
 use core::fmt::{self, Debug};
 #[cfg(feature = "async")]
@@ -14,6 +14,10 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
+use wasmtime_environ::{
+    PanicOnOom as _,
+    collections::{HashMap, TryClone},
+};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -83,8 +87,7 @@ use log::warn;
 /// [`Global`]: crate::Global
 pub struct Linker<T> {
     engine: Engine,
-    string2idx: HashMap<Arc<str>, usize>,
-    strings: Vec<Arc<str>>,
+    pool: StringPool,
     map: HashMap<ImportKey, Definition>,
     allow_shadowing: bool,
     allow_unknown_exports: bool,
@@ -101,9 +104,8 @@ impl<T> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
-            string2idx: self.string2idx.clone(),
-            strings: self.strings.clone(),
-            map: self.map.clone(),
+            pool: self.pool.try_clone().panic_on_oom(),
+            map: self.map.try_clone().panic_on_oom(),
             allow_shadowing: self.allow_shadowing,
             allow_unknown_exports: self.allow_unknown_exports,
             _marker: self._marker,
@@ -113,8 +115,15 @@ impl<T> Clone for Linker<T> {
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 struct ImportKey {
-    name: usize,
-    module: usize,
+    module: Atom,
+    name: Option<Atom>,
+}
+
+impl TryClone for ImportKey {
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 #[derive(Clone)]
@@ -123,10 +132,16 @@ pub(crate) enum Definition {
     HostFunc(Arc<HostFunc>),
 }
 
+impl TryClone for Definition {
+    fn try_clone(&self) -> core::result::Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
+
 /// This is a sort of slimmed down `ExternType` which notably doesn't have a
 /// `FuncType`, which is an allocation, and additionally retains the current
 /// size of the table/memory.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum DefinitionType {
     Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),
@@ -150,8 +165,7 @@ impl<T> Linker<T> {
         Linker {
             engine: engine.clone(),
             map: HashMap::new(),
-            string2idx: HashMap::new(),
-            strings: Vec::new(),
+            pool: StringPool::new(),
             allow_shadowing: false,
             allow_unknown_exports: false,
             _marker: marker::PhantomData,
@@ -356,7 +370,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let store = store.as_context();
-        let key = self.import_key(module, Some(name));
+        let key = self.import_key(module, Some(name))?;
         self.insert(key, Definition::new(store.0, item.into()))?;
         Ok(self)
     }
@@ -377,7 +391,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let store = store.as_context();
-        let key = self.import_key(name, None);
+        let key = self.import_key(name, None)?;
         self.insert(key, Definition::new(store.0, item.into()))?;
         Ok(self)
     }
@@ -386,8 +400,8 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        let key = self.import_key(module, Some(name))?;
+        self.insert(key, Definition::HostFunc(try_new(func)?))?;
         Ok(self)
     }
 
@@ -409,7 +423,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        self.func_insert(module, name, HostFunc::new(&self.engine, ty, func))
+        self.func_insert(module, name, HostFunc::new(&self.engine, ty, func)?)
     }
 
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
@@ -435,7 +449,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         // SAFETY: the contract of this function is the same as `new_unchecked`.
-        let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func) };
+        let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func)? };
         self.func_insert(module, name, func)
     }
 
@@ -468,7 +482,7 @@ impl<T> Linker<T> {
             + 'static,
         T: Send + 'static,
     {
-        self.func_insert(module, name, HostFunc::new_async(&self.engine, ty, func))
+        self.func_insert(module, name, HostFunc::new_async(&self.engine, ty, func)?)
     }
 
     /// Define a host function within this linker.
@@ -536,7 +550,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        self.func_insert(module, name, func.into_func(&self.engine))
+        self.func_insert(module, name, func.into_func(&self.engine)?)
     }
 
     /// Asynchronous analog of [`Linker::func_wrap`].
@@ -554,7 +568,7 @@ impl<T> Linker<T> {
             + 'static,
         T: Send + 'static,
     {
-        self.func_insert(module, name, HostFunc::wrap_async(&self.engine, func))
+        self.func_insert(module, name, HostFunc::wrap_async(&self.engine, func)?)
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
@@ -626,12 +640,12 @@ impl<T> Linker<T> {
         let exports = instance
             .exports(&mut store)
             .map(|e| {
-                (
-                    self.import_key(module_name, Some(e.name())),
+                Ok((
+                    self.import_key(module_name, Some(e.name()))?,
                     e.into_extern(),
-                )
+                ))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         for (key, export) in exports {
             self.insert(key, Definition::new(store.0, export))?;
         }
@@ -903,7 +917,7 @@ impl<T> Linker<T> {
                 let instance_pre = self.instantiate_pre(module)?;
                 let export_name = export.name().to_owned();
                 let func = mk_func(&mut store, func_ty, export_name, instance_pre);
-                let key = self.import_key(module_name, Some(export.name()));
+                let key = self.import_key(module_name, Some(export.name()))?;
                 self.insert(key, Definition::new(store.0, func.into()))?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
@@ -957,8 +971,8 @@ impl<T> Linker<T> {
         as_module: &str,
         as_name: &str,
     ) -> Result<&mut Self> {
-        let src = self.import_key(module, Some(name));
-        let dst = self.import_key(as_module, Some(as_name));
+        let src = self.import_key(module, Some(name))?;
+        let dst = self.import_key(as_module, Some(as_name))?;
         match self.map.get(&src).cloned() {
             Some(item) => self.insert(dst, item)?,
             None => bail!("no item named `{module}::{name}` defined"),
@@ -976,8 +990,8 @@ impl<T> Linker<T> {
     /// Returns an error if any shadowing violations happen while defining new
     /// items.
     pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
-        let module = self.intern_str(module);
-        let as_module = self.intern_str(as_module);
+        let module = self.pool.insert(module)?;
+        let as_module = self.pool.insert(as_module)?;
         let items = self
             .map
             .iter()
@@ -997,43 +1011,23 @@ impl<T> Linker<T> {
     }
 
     fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
-        match self.map.entry(key) {
-            Entry::Occupied(_) if !self.allow_shadowing => {
-                let module = &self.strings[key.module];
-                let desc = match self.strings.get(key.name) {
-                    Some(name) => format!("{module}::{name}"),
-                    None => module.to_string(),
-                };
-                bail!("import of `{desc}` defined twice")
-            }
-            Entry::Occupied(mut o) => {
-                o.insert(item);
-            }
-            Entry::Vacant(v) => {
-                v.insert(item);
+        if !self.allow_shadowing && self.map.contains_key(&key) {
+            let module = &self.pool[key.module];
+            match key.name.and_then(|n| self.pool.get(n)) {
+                Some(name) => bail!("import of `{module}::{name}` defined twice"),
+                None => bail!("import of `{module}` defined twice"),
             }
         }
+
+        self.map.insert(key, item)?;
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: Option<&str>) -> ImportKey {
-        ImportKey {
-            module: self.intern_str(module),
-            name: name
-                .map(|name| self.intern_str(name))
-                .unwrap_or(usize::max_value()),
-        }
-    }
-
-    fn intern_str(&mut self, string: &str) -> usize {
-        if let Some(idx) = self.string2idx.get(string) {
-            return *idx;
-        }
-        let string: Arc<str> = string.into();
-        let idx = self.strings.len();
-        self.strings.push(string.clone());
-        self.string2idx.insert(string, idx);
-        idx
+    fn import_key(&mut self, module: &str, name: Option<&str>) -> Result<ImportKey, OutOfMemory> {
+        Ok(ImportKey {
+            module: self.pool.insert(module)?,
+            name: name.map(|name| self.pool.insert(name)).transpose()?,
+        })
     }
 
     /// Attempts to instantiate the `module` provided.
@@ -1223,8 +1217,8 @@ impl<T> Linker<T> {
         self.map.iter().map(move |(key, item)| {
             let store = store.as_context_mut();
             (
-                &*self.strings[key.module],
-                &*self.strings[key.name],
+                &self.pool[key.module],
+                &self.pool[key.name.unwrap()],
                 // Should be safe since `T` is connecting the linker and store
                 unsafe { item.to_extern(store.0) },
             )
@@ -1257,8 +1251,8 @@ impl<T> Linker<T> {
 
     fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
         let key = ImportKey {
-            module: *self.string2idx.get(module)?,
-            name: *self.string2idx.get(name)?,
+            module: self.pool.get_atom(module)?,
+            name: Some(self.pool.get_atom(name)?),
         };
         self.map.get(&key)
     }
@@ -1340,7 +1334,7 @@ impl Definition {
 
     pub(crate) fn ty(&self) -> DefinitionType {
         match self {
-            Definition::Extern(_, ty) => ty.clone(),
+            Definition::Extern(_, ty) => *ty,
             Definition::HostFunc(func) => DefinitionType::Func(func.sig_index()),
         }
     }

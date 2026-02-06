@@ -29,7 +29,7 @@ pub fn generate_global_export(
         ty: global,
         global: VMGlobalDefinition::new(),
         _registered_type: ty.into_registered_type(),
-    });
+    })?;
 
     let mut store = AutoAssertNoGc::new(store);
     // SAFETY: the global that this is pointing to is rooted in `ctx` above and

@@ -429,6 +429,19 @@ fn linker_new() -> Result<()> {
 
 #[test]
 #[cfg(arc_try_new)]
+fn linker_func_wrap() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let engine = Engine::new(&config)?;
+        let mut linker = Linker::<()>::new(&engine);
+        linker.func_wrap("module", "func", |x: i32| x * 2)?;
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
 fn store_try_new() -> Result<()> {
     let mut config = Config::new();
     config.enable_compiler(false);

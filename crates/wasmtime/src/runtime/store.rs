@@ -598,17 +598,17 @@ pub(crate) enum Executor {
 }
 
 impl Executor {
-    pub(crate) fn new(engine: &Engine) -> Self {
+    pub(crate) fn new(engine: &Engine) -> Result<Self, OutOfMemory> {
         #[cfg(has_host_compiler_backend)]
         if cfg!(feature = "pulley") && engine.target().is_pulley() {
-            Executor::Interpreter(Interpreter::new(engine))
+            Ok(Executor::Interpreter(Interpreter::new(engine)?))
         } else {
-            Executor::Native
+            Ok(Executor::Native)
         }
         #[cfg(not(has_host_compiler_backend))]
         {
             debug_assert!(engine.target().is_pulley());
-            Executor::Interpreter(Interpreter::new(engine))
+            Ok(Executor::Interpreter(Interpreter::new(engine)?))
         }
     }
 }
@@ -783,7 +783,7 @@ impl<T> Store<T> {
             component_calls: Default::default(),
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
-            executor: Executor::new(engine),
+            executor: Executor::new(engine)?,
             #[cfg(feature = "component-model")]
             concurrent_state: if engine.tunables().concurrency_support {
                 #[cfg(feature = "component-model-async")]
