@@ -140,56 +140,66 @@ impl<T> Vec<T> {
         self.inner.drain(range)
     }
 
-    /// Same as [`std::vec::Vec::into_boxed_slice`].
-    pub fn into_boxed_slice(self) -> Result<Box<[T]>, OutOfMemory> {
+    /// Same as [`std::vec::Vec::shrink_to_fit`] but returns an error on
+    /// allocation failure.
+    pub fn shrink_to_fit(&mut self) -> Result<(), OutOfMemory> {
+        // If our length is already equal to our capacity, then there is nothing
+        // to shrink.
+        if self.len() == self.capacity() {
+            return Ok(());
+        }
+
         // `realloc` requires a non-zero original layout as well as a non-zero
         // destination layout, so this guard ensures that the sizes below are
-        // all nonzero. This handles a few case:
+        // all nonzero. This handles a few cases:
         //
         // * If `len == cap == 0` then no allocation has ever been made.
         // * If `len == 0` and `cap != 0` then this function effectively frees
         //   the memory.
         // * If `T` is a zero-sized type then nothing's been allocated either.
-        // * If `len == cap` then the allocation doesn't need to be shrunken.
         //
         // In all of these cases delegate to the standard library's
-        // `into_boxed_slice` which is guaranteed to not perform a `realloc`.
-        if self.is_empty() || mem::size_of::<T>() == 0 || self.inner.len() == self.inner.capacity()
-        {
-            return Ok(self.inner.into_boxed_slice());
+        // `shrink_to_fit` which is guaranteed to not perform a `realloc`.
+        if self.is_empty() || mem::size_of::<T>() == 0 {
+            self.inner.shrink_to_fit();
+            return Ok(());
         }
 
-        let (ptr, len, cap) = self.into_raw_parts();
+        let (ptr, len, cap) = mem::take(self).into_raw_parts();
         let layout = Layout::array::<T>(cap).unwrap();
-        let new_len = Layout::array::<T>(len).unwrap().size();
+        let new_size = Layout::array::<T>(len).unwrap().size();
 
         // SAFETY: `ptr` was previously allocated in the global allocator,
         // `layout` has a nonzero size and matches the current allocation of
         // `ptr`, `new_size` is nonzero, and `new_size` is a valid array size
         // for `len` elements given its constructor.
-        let result = unsafe { try_realloc(ptr.cast(), layout, new_len) };
+        let result = unsafe { try_realloc(ptr.cast(), layout, new_size) };
 
         match result {
             Ok(ptr) => {
-                // SAFETY: `result` is allocated with the global allocator with
-                // an appropriate size/align to create this `Box` with.
-                unsafe {
-                    Ok(Box::from_raw(core::ptr::slice_from_raw_parts_mut(
-                        ptr.as_ptr().cast(),
-                        len,
-                    )))
-                }
+                // SAFETY: `result` is allocated with the global allocator and
+                // has room for exactly `[T; len]`.
+                *self = unsafe { Self::from_raw_parts(ptr.cast::<T>().as_ptr(), len, len) };
+                Ok(())
             }
             Err(oom) => {
                 // SAFETY: If reallocation fails then it's guaranteed that the
                 // original allocation is not tampered with, so it's safe to
-                // reassemble it back into the original vector.
-                unsafe {
-                    let _ = Vec::from_raw_parts(ptr, len, cap);
-                }
+                // reassemble the original vector.
+                *self = unsafe { Vec::from_raw_parts(ptr, len, cap) };
                 Err(oom)
             }
         }
+    }
+
+    /// Same as [`std::vec::Vec::into_boxed_slice`] but returns an error on
+    /// allocation failure.
+    pub fn into_boxed_slice(mut self) -> Result<Box<[T]>, OutOfMemory> {
+        self.shrink_to_fit()?;
+
+        // Once we've shrunken the allocation to just the actual length, we can
+        // use `std`'s `into_boxed_slice` without fear of `realloc`.
+        Ok(self.inner.into_boxed_slice())
     }
 }
 

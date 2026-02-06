@@ -299,6 +299,60 @@ fn string_push_str() -> Result<()> {
 }
 
 #[test]
+fn string_shrink_to_fit() -> Result<()> {
+    OomTest::new().test(|| {
+        // len == cap == 0
+        let mut s = String::new();
+        s.shrink_to_fit()?;
+
+        // len == 0 < cap
+        let mut s = String::with_capacity(4)?;
+        s.shrink_to_fit()?;
+
+        // 0 < len < cap
+        let mut s = String::with_capacity(4)?;
+        s.push('a')?;
+        s.shrink_to_fit()?;
+
+        // 0 < len == cap
+        let mut s = String::new();
+        s.reserve_exact(2)?;
+        s.push('a')?;
+        s.push('a')?;
+        s.shrink_to_fit()?;
+
+        Ok(())
+    })
+}
+
+#[test]
+fn string_into_boxed_str() -> Result<()> {
+    OomTest::new().test(|| {
+        // len == cap == 0
+        let s = String::new();
+        let _ = s.into_boxed_str()?;
+
+        // len == 0 < cap
+        let s = String::with_capacity(4)?;
+        let _ = s.into_boxed_str()?;
+
+        // 0 < len < cap
+        let mut s = String::with_capacity(4)?;
+        s.push('a')?;
+        let _ = s.into_boxed_str()?;
+
+        // 0 < len == cap
+        let mut s = String::new();
+        s.reserve_exact(2)?;
+        s.push('a')?;
+        s.push('a')?;
+        let _ = s.into_boxed_str()?;
+
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
@@ -533,6 +587,47 @@ fn vec_and_boxed_slice() -> Result<()> {
 
         Ok(())
     })
+}
+
+#[test]
+fn vec_shrink_to_fit() -> Result<()> {
+    use wasmtime_core::alloc::Vec;
+
+    #[derive(Default)]
+    struct ZeroSized;
+
+    #[derive(Default)]
+    struct NonZeroSized {
+        _unused: usize,
+    }
+
+    fn do_test<T: Default>() -> Result<()> {
+        // len == cap == 0
+        let mut v = Vec::<T>::new();
+        v.shrink_to_fit()?;
+
+        // len == 0 < cap
+        let mut v = Vec::<T>::with_capacity(4)?;
+        v.shrink_to_fit()?;
+
+        // 0 < len < cap
+        let mut v = Vec::with_capacity(4)?;
+        v.push(T::default())?;
+        v.shrink_to_fit()?;
+
+        // 0 < len == cap
+        let mut v = Vec::new();
+        v.reserve_exact(2)?;
+        v.push(T::default())?;
+        v.push(T::default())?;
+        v.shrink_to_fit()?;
+
+        Ok(())
+    }
+
+    OomTest::new().test(|| do_test::<ZeroSized>())?;
+    OomTest::new().test(|| do_test::<NonZeroSized>())?;
+    Ok(())
 }
 
 #[test]

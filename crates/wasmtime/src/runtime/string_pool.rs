@@ -23,11 +23,24 @@ use wasmtime_environ::collections::{HashMap, String, Vec};
 pub struct StringPool {
     /// A map from each string in this pool (as an unsafe borrow from
     /// `self.strings`) to its `Atom`.
-    map: HashMap<&'static str, Atom>,
+    map: mem::ManuallyDrop<HashMap<&'static str, Atom>>,
 
     /// Strings in this pool. These must never be mutated or reallocated once
     /// inserted.
-    strings: Vec<String>,
+    strings: mem::ManuallyDrop<Vec<Box<str>>>,
+}
+
+impl Drop for StringPool {
+    fn drop(&mut self) {
+        // Ensure that `self.map` is dropped before `self.strings`, since
+        // `self.map` borrows from `self.strings`.
+        //
+        // Safety: Neither field will be used again.
+        unsafe {
+            mem::ManuallyDrop::drop(&mut self.map);
+            mem::ManuallyDrop::drop(&mut self.strings);
+        }
+    }
 }
 
 /// An interned string associated with a particular string in a `StringPool`.
@@ -63,7 +76,7 @@ impl fmt::Debug for StringPool {
 }
 
 impl TryClone for StringPool {
-    fn try_clone(&self) -> core::result::Result<Self, OutOfMemory> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(StringPool {
             map: self.map.try_clone()?,
             strings: self.strings.try_clone()?,
@@ -105,15 +118,18 @@ impl StringPool {
         let mut owned = String::new();
         owned.reserve_exact(s.len())?;
         owned.push_str(s).expect("reserved capacity");
-
-        // SAFETY: We never expose this borrow and never mutate or reallocate
-        // strings once inserted into the pool.
-        let s = unsafe { mem::transmute::<&str, &'static str>(&owned) };
+        let owned = owned
+            .into_boxed_str()
+            .expect("reserved exact capacity, so shouldn't need to realloc");
 
         let index = self.strings.len();
         let atom = Atom::new(index);
-
         self.strings.push(owned).expect("reserved capacity");
+
+        // SAFETY: We never expose this borrow and never mutate or reallocate
+        // strings once inserted into the pool.
+        let s = unsafe { mem::transmute::<&str, &'static str>(&self.strings[index]) };
+
         let old = self.map.insert(s, atom).expect("reserved capacity");
         debug_assert!(old.is_none());
 

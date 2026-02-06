@@ -1,5 +1,5 @@
 use super::{TryClone, TryNew, Vec, try_alloc};
-use crate::error::OutOfMemory;
+use crate::{alloc::str_ptr_from_slice_ptr, error::OutOfMemory};
 use core::{
     alloc::Layout,
     mem::{self, MaybeUninit},
@@ -64,6 +64,23 @@ where
         }
         debug_assert_eq!(builder.init_len(), builder.capacity());
         Ok(builder.finish())
+    }
+}
+
+impl TryClone for Box<str> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut builder = BoxedSliceBuilder::new(self.len())?;
+        for b in self.as_bytes() {
+            builder.push(*b).expect("reserved capacity");
+        }
+        debug_assert_eq!(builder.init_len(), builder.capacity());
+        let boxed = builder.finish();
+        let ptr = Box::into_raw(boxed);
+        let ptr = str_ptr_from_slice_ptr(ptr);
+        // SAFETY: the pointer is allocated with the global allocator and points
+        // to a valid utf8 sequence.
+        let boxed = unsafe { Box::from_raw(ptr) };
+        Ok(boxed)
     }
 }
 

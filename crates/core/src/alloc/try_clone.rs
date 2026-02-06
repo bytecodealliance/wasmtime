@@ -1,4 +1,5 @@
 use crate::error::OutOfMemory;
+use core::mem;
 
 /// A trait for values that can be cloned, but contain owned, heap-allocated
 /// values whose allocations may fail during cloning.
@@ -87,6 +88,15 @@ tuples! {
     A, B, C, D, E, F, G, H;
     A, B, C, D, E, F, G, H, I;
     A, B, C, D, E, F, G, H, I, J;
+}
+
+impl<T> TryClone for mem::ManuallyDrop<T>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(mem::ManuallyDrop::new((**self).try_clone()?))
+    }
 }
 
 #[cfg(feature = "std")]
