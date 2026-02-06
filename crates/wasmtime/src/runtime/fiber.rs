@@ -783,7 +783,7 @@ where
 {
     let opaque = store.as_store_opaque();
     let engine = opaque.engine().clone();
-    let executor = Executor::new(&engine);
+    let executor = Executor::new(&engine)?;
     let id = opaque.id();
     let stack = opaque.allocate_fiber_stack()?;
     let track_pkey_context_switch = opaque.has_pkey();

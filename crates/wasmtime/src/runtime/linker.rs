@@ -1013,11 +1013,10 @@ impl<T> Linker<T> {
     fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
         if !self.allow_shadowing && self.map.contains_key(&key) {
             let module = &self.pool[key.module];
-            let desc = match key.name.and_then(|n| self.pool.get(n)) {
-                Some(name) => format!("{module}::{name}"),
-                None => module.to_string(),
-            };
-            bail!("import of `{desc}` defined twice")
+            match key.name.and_then(|n| self.pool.get(n)) {
+                Some(name) => bail!("import of `{module}::{name}` defined twice"),
+                None => bail!("import of `{module}` defined twice"),
+            }
         }
 
         self.map.insert(key, item)?;
