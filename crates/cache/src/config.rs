@@ -355,14 +355,12 @@ impl CacheConfig {
         match (entity_exists, user_custom_file) {
             (false, false) => Ok(Self::new()),
             _ => {
-                let contents = fs::read_to_string(&config_file).context(format!(
-                    "failed to read config file: {}",
-                    config_file.display()
-                ))?;
-                let config = toml::from_str::<Config>(&contents).context(format!(
-                    "failed to parse config file: {}",
-                    config_file.display()
-                ))?;
+                let contents = fs::read_to_string(&config_file).with_context(|| {
+                    format!("failed to read config file: {}", config_file.display())
+                })?;
+                let config = toml::from_str::<Config>(&contents).with_context(|| {
+                    format!("failed to parse config file: {}", config_file.display())
+                })?;
                 Ok(config.cache)
             }
         }
@@ -537,14 +535,15 @@ impl CacheConfig {
             );
         }
 
-        fs::create_dir_all(cache_dir).context(format!(
-            "failed to create cache directory: {}",
-            cache_dir.display()
-        ))?;
-        let canonical = fs::canonicalize(cache_dir).context(format!(
-            "failed to canonicalize cache directory: {}",
-            cache_dir.display()
-        ))?;
+        fs::create_dir_all(cache_dir).with_context(|| {
+            format!("failed to create cache directory: {}", cache_dir.display())
+        })?;
+        let canonical = fs::canonicalize(cache_dir).with_context(|| {
+            format!(
+                "failed to canonicalize cache directory: {}",
+                cache_dir.display()
+            )
+        })?;
         self.directory = Some(canonical);
         Ok(())
     }
