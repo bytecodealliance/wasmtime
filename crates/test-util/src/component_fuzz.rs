@@ -159,10 +159,7 @@ impl Type {
         fuel: &mut u32,
     ) -> arbitrary::Result<Type> {
         *fuel = fuel.saturating_sub(1);
-        // Note: Map types (case 21) are disabled because HashMap doesn't implement
-        // ComponentType, Lift, or Lower yet. When those implementations are added,
-        // change this to 21.
-        let max = if depth == 0 || *fuel == 0 { 12 } else { 20 };
+        let max = if depth == 0 || *fuel == 0 { 12 } else { 21 };
         Ok(match u.int_in_range(0..=max)? {
             0 => Type::Bool,
             1 => Type::S8,
