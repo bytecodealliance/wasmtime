@@ -11,7 +11,7 @@ use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
-use std::collections::HashMap;
+use wasmtime_environ::collections::HashMap;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
     StringEncoding, VariantInfo,
@@ -2193,10 +2193,10 @@ where
         // Lower key at the start of the tuple
         let mut field_offset = 0usize;
         let key_field = K::ABI.next_field32_size(&mut field_offset);
-        key.linear_lower_to_memory(cx, key_ty, entry_offset + key_field)?;
+        <K as Lower>::linear_lower_to_memory(key, cx, key_ty, entry_offset + key_field)?;
         // Lower value at its aligned offset within the tuple
         let value_field = V::ABI.next_field32_size(&mut field_offset);
-        value.linear_lower_to_memory(cx, value_ty, entry_offset + value_field)?;
+        <V as Lower>::linear_lower_to_memory(value, cx, value_ty, entry_offset + value_field)?;
         entry_offset += tuple_size;
     }
 
