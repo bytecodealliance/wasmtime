@@ -1334,7 +1334,7 @@ impl Definition {
 
     pub(crate) fn ty(&self) -> DefinitionType {
         match self {
-            Definition::Extern(_, ty) => ty.clone(),
+            Definition::Extern(_, ty) => *ty,
             Definition::HostFunc(func) => DefinitionType::Func(func.sig_index()),
         }
     }
