@@ -235,7 +235,7 @@ impl Wizer {
         let renames = FuncRenames::parse(&self.func_renames)?;
 
         let snapshot = snapshot::snapshot(&cx, instance).await;
-        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
+        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames, true);
 
         self.debug_assert_valid_wasm(&rewritten_wasm);
 

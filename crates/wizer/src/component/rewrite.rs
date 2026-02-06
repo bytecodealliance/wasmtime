@@ -38,7 +38,7 @@ impl Wizer {
                         // component.
                         Some(snapshot) => {
                             let rewritten_wasm =
-                                self.rewrite(module, snapshot, &FuncRenames::default());
+                                self.rewrite(module, snapshot, &FuncRenames::default(), false);
                             encoder.section(&wasm_encoder::RawSection {
                                 id: wasm_encoder::ComponentSectionId::CoreModule as u8,
                                 data: &rewritten_wasm,
