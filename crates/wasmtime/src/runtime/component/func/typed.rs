@@ -626,6 +626,8 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 /// | `string`                          | `String`, `&str`, or [`WasmStr`]     |
 /// | `list<T>`                         | `Vec<T>`, `&[T]`, or [`WasmList`]    |
 /// | `own<T>`, `borrow<T>`             | [`Resource<T>`] or [`ResourceAny`]   |
+/// | `future<T>`                       | [`FutureReader<T>`] or [`FutureAny`] |
+/// | `stream<T>`                       | [`StreamReader<T>`] or [`StreamAny`] |
 /// | `record`                          | [`#[derive(ComponentType)]`][d-cm]   |
 /// | `variant`                         | [`#[derive(ComponentType)]`][d-cm]   |
 /// | `enum`                            | [`#[derive(ComponentType)]`][d-cm]   |
@@ -633,6 +635,10 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 ///
 /// [`Resource<T>`]: crate::component::Resource
 /// [`ResourceAny`]: crate::component::ResourceAny
+/// [`FutureReader`]: crate::component::FutureReader
+/// [`FutureAny`]: crate::component::FutureAny
+/// [`StreamReader`]: crate::component::StreamReader
+/// [`StreamAny`]: crate::component::StreamAny
 /// [d-cm]: macro@crate::component::ComponentType
 /// [f-m]: crate::component::flags
 ///
@@ -2380,6 +2386,7 @@ where
                 // Note that this is unsafe as we're writing an arbitrary
                 // bit-pattern to an arbitrary type, but part of the unsafe
                 // contract of the `ComponentType` trait is that we can assign
+                //
                 // any bit-pattern. By writing all zeros here we're ensuring
                 // that the core wasm arguments this translates to will all be
                 // zeros (as the canonical ABI requires).
@@ -3010,4 +3017,205 @@ pub fn bad_type_info<T>() -> T {
     // becomes a performance bottleneck at some point, but that also comes with
     // a tradeoff of propagating a lot of unsafety, so it may not be worth it.
     panic!("bad type information detected");
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{Engine, Store};
+    #[test]
+    fn component_type_atoms_to_val() {
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+
+        // | Component Model Type              | Rust Type                            |
+        // |-----------------------------------|--------------------------------------|
+        // | `{s,u}{8,16,32,64}`               | `{i,u}{8,16,32,64}`                  |
+        assert_eq!(0u8.to_val(store.as_context_mut()).unwrap(), Val::U8(0));
+        assert_eq!(
+            123i64.to_val(store.as_context_mut()).unwrap(),
+            Val::S64(123)
+        );
+        // | `f{32,64}`                        | `f{32,64}`                           |
+        assert_eq!(
+            (-123.45f32).to_val(store.as_context_mut()).unwrap(),
+            Val::Float32(-123.45)
+        );
+        // | `bool`                            | `bool`                               |
+        assert_eq!(
+            true.to_val(store.as_context_mut()).unwrap(),
+            Val::Bool(true)
+        );
+        // | `char`                            | `char`                               |
+        assert_eq!(
+            '🤷'.to_val(store.as_context_mut()).unwrap(),
+            Val::Char('🤷')
+        );
+    }
+
+    #[test]
+    fn component_type_collections_to_val() {
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+        // | Component Model Type              | Rust Type                            |
+        // |-----------------------------------|--------------------------------------|
+        // | `tuple<A, B>`                     | `(A, B)`                             |
+        assert_eq!(
+            (8080u16, -45.678f64)
+                .to_val(store.as_context_mut())
+                .unwrap(),
+            Val::Tuple(vec![Val::U16(8080), Val::Float64(-45.678)])
+        );
+        // | `string`                          | `String`, `&str`, or [`WasmStr`]     |
+        assert_eq!(
+            "🙈🙉🙊".to_val(store.as_context_mut()).unwrap(),
+            Val::String("🙈🙉🙊".to_owned())
+        );
+        // | `list<T>`                         | `Vec<T>`, `&[T]`, or [`WasmList`]    |
+        assert_eq!(
+            vec!['a', 'b', 'c', 'd']
+                .to_val(store.as_context_mut())
+                .unwrap(),
+            Val::List(vec![
+                Val::Char('a'),
+                Val::Char('b'),
+                Val::Char('c'),
+                Val::Char('d')
+            ])
+        );
+
+        // | `option<T>`                       | `Option<T>`                          |
+        assert_eq!(
+            None::<bool>.to_val(store.as_context_mut()).unwrap(),
+            Val::Option(None::<Box<Val>>)
+        );
+        assert_eq!(
+            Some(true).to_val(store.as_context_mut()).unwrap(),
+            Val::Option(Some(Box::new(Val::Bool(true))))
+        );
+        // | `result`                          | `Result<(), ()>`                     |
+        assert_eq!(
+            Ok::<_, ()>(()).to_val(store.as_context_mut()).unwrap(),
+            Val::Result(Ok(None))
+        );
+        // | `result<T>`                       | `Result<T, ()>`                      |
+        assert_eq!(
+            Ok::<_, ()>('!').to_val(store.as_context_mut()).unwrap(),
+            Val::Result(Ok(Some(Box::new(Val::Char('!')))))
+        );
+        // | `result<_, E>`                    | `Result<(), E>`                      |
+        assert_eq!(
+            Err::<(), _>(420u32).to_val(store.as_context_mut()).unwrap(),
+            Val::Result(Err(Some(Box::new(Val::U32(420)))))
+        );
+        // | `result<T, E>`                    | `Result<T, E>`                       |
+        assert_eq!(
+            Ok::<_, bool>('!').to_val(store.as_context_mut()).unwrap(),
+            Val::Result(Ok(Some(Box::new(Val::Char('!')))))
+        );
+    }
+
+    #[test]
+    fn component_type_derives_to_val() {
+        use crate::component::{ComponentType, flags};
+        // ComponentType and flags are proc macro and use the name `wasmtime` to refer
+        // to rest of crate.
+        use crate as wasmtime;
+
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+        // | Component Model Type              | Rust Type                            |
+        // |-----------------------------------|--------------------------------------|
+        // | `record`                          | [`#[derive(ComponentType)]`][d-cm]   |
+        #[derive(ComponentType)]
+        #[component(record)]
+        struct R {
+            f1: u32,
+            f2: String,
+            f3: Option<f32>,
+        }
+        assert_eq!(
+            R {
+                f1: 123,
+                f2: "something".to_owned(),
+                f3: Some(420.0)
+            }
+            .to_val(store.as_context_mut())
+            .unwrap(),
+            Val::Record(vec![
+                ("f1".to_owned(), Val::U32(123)),
+                ("f2".to_owned(), Val::String("something".to_owned())),
+                (
+                    "f3".to_owned(),
+                    Val::Option(Some(Box::new(Val::Float32(420.0))))
+                )
+            ])
+        );
+
+        // | `variant`                         | [`#[derive(ComponentType)]`][d-cm]   |
+        #[derive(ComponentType)]
+        #[component(variant)]
+        enum V {
+            #[component(name = "v1")]
+            V1,
+            #[component(name = "v2")]
+            V2(String),
+        }
+        assert_eq!(
+            V::V1.to_val(store.as_context_mut()).unwrap(),
+            Val::Variant("v1".to_owned(), None)
+        );
+        assert_eq!(
+            V::V2("payload".to_owned())
+                .to_val(store.as_context_mut())
+                .unwrap(),
+            Val::Variant(
+                "v2".to_owned(),
+                Some(Box::new(Val::String("payload".to_owned())))
+            )
+        );
+        // | `enum`                            | [`#[derive(ComponentType)]`][d-cm]   |
+        #[derive(ComponentType)]
+        #[component(enum)]
+        #[repr(u8)]
+        enum E {
+            #[component(name = "e1")]
+            E1,
+            #[component(name = "e2")]
+            E2
+        }
+        assert_eq!(
+            E::E1.to_val(store.as_context_mut()).unwrap(),
+            Val::Enum("e1".to_owned())
+        );
+        assert_eq!(
+            E::E2.to_val(store.as_context_mut()).unwrap(),
+            Val::Enum("e2".to_owned())
+        );
+        // | `flags`                           | [`flags!`][f-m]                      |
+        flags! {
+            Permissions {
+                #[component(name = "read")]
+                const READ;
+                #[component(name = "write")]
+                const WRITE;
+            }
+        }
+        assert_eq!(
+            Permissions::empty().to_val(store.as_context_mut()).unwrap(),
+            Val::Flags(vec![])
+        );
+        assert_eq!(
+            Permissions::all().to_val(store.as_context_mut()).unwrap(),
+            Val::Flags(vec!["read".to_owned(), "write".to_owned()])
+        );
+        assert_eq!(
+            Permissions::READ.to_val(store.as_context_mut()).unwrap(),
+            Val::Flags(vec!["read".to_owned()])
+        );
+        assert_eq!(
+            Permissions::all().to_val(store.as_context_mut()).unwrap(),
+            Val::Flags(vec!["read".to_owned(), "write".to_owned()])
+        );
+    }
 }
