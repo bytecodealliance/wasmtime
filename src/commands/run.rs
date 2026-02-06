@@ -255,11 +255,13 @@ impl RunCommand {
                         linker
                             .module_async(&mut *store, name, &preload_module)
                             .await
-                            .context(format!(
-                                "failed to process preload `{}` at `{}`",
-                                name,
-                                path.display()
-                            ))?;
+                            .with_context(|| {
+                                format!(
+                                    "failed to process preload `{}` at `{}`",
+                                    name,
+                                    path.display()
+                                )
+                            })?;
                     }
                     #[cfg(not(feature = "cranelift"))]
                     CliLinker::Core(_) => {
@@ -512,10 +514,9 @@ impl RunCommand {
                 let instance = linker
                     .instantiate_async(&mut *store, &module)
                     .await
-                    .context(format!(
-                        "failed to instantiate {:?}",
-                        self.module_and_args[0]
-                    ))?;
+                    .with_context(|| {
+                        format!("failed to instantiate {:?}", self.module_and_args[0])
+                    })?;
 
                 // If `_initialize` is present, meaning a reactor, then invoke
                 // the function.
@@ -1336,7 +1337,7 @@ fn write_core_dump(
     let core_dump = core_dump.serialize(store, name);
 
     let mut core_dump_file =
-        File::create(path).context(format!("failed to create file at `{path}`"))?;
+        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
     core_dump_file
         .write_all(&core_dump)
         .with_context(|| format!("failed to write core dump file at `{path}`"))?;
