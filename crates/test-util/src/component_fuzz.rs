@@ -1282,7 +1282,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             };
 
             declarations.extend(quote! {
-                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Copy, Clone, Arbitrary)]
+                #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Hash, Debug, Copy, Clone, Arbitrary)]
                 #[component(enum)]
                 #[repr(#repr)]
                 enum #name {
