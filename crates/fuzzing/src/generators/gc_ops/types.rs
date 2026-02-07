@@ -52,28 +52,26 @@ impl Types {
         }
     }
 
-    /// Returns a fresh rec-group id one past the current maximum.
-    pub fn next_rec_group_id(&self) -> RecGroupId {
-        RecGroupId(
-            self.rec_groups
-                .iter()
-                .next_back()
-                .map(|g| g.0)
-                .unwrap_or(0)
-                .saturating_add(1),
-        )
+    /// Returns a fresh rec-group id that is not already in use.
+    pub fn fresh_rec_group_id(&self, rng: &mut mutatis::Rng) -> RecGroupId {
+        for _ in 0..1000 {
+            let id = RecGroupId(rng.gen_u32());
+            if !self.rec_groups.contains(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new RecGroupId in 1000 iterations; bad RNG?");
     }
 
-    /// Returns a fresh type id one past the current maximum.
-    pub fn next_type_id(&self) -> TypeId {
-        TypeId(
-            self.type_defs
-                .keys()
-                .next_back()
-                .map(|id| id.0)
-                .unwrap_or(0)
-                .saturating_add(1),
-        )
+    /// Returns a fresh type id that is not already in use.
+    pub fn fresh_type_id(&self, rng: &mut mutatis::Rng) -> TypeId {
+        for _ in 0..1000 {
+            let id = TypeId(rng.gen_u32());
+            if !self.type_defs.contains_key(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new TypeId in 1000 iterations; bad RNG?");
     }
 
     /// Insert a rec-group id. Returns true if newly inserted, false if it already existed.

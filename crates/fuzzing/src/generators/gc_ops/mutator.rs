@@ -54,7 +54,7 @@ impl GcOpsMutator {
                     .choose(&ops.types.rec_groups)
                     .copied()
                     .expect("rec_groups not empty");
-                let new_tid = ops.types.next_type_id();
+                let new_tid = ops.types.fresh_type_id(ctx.rng());
                 ops.types.insert_empty_struct(new_tid, group_id);
                 log::debug!("Added empty struct type {new_tid:?} to rec group {group_id:?}");
                 Ok(())
@@ -197,10 +197,8 @@ impl GcOpsMutator {
                     .expect("rec_groups not empty");
 
                 // Create a new rec group.
-                let new_gid = ops.types.next_rec_group_id();
+                let new_gid = ops.types.fresh_rec_group_id(ctx.rng());
                 ops.types.insert_rec_group(new_gid);
-
-                let mut next_id = ops.types.next_type_id();
 
                 let count = ops
                     .types
@@ -217,8 +215,8 @@ impl GcOpsMutator {
                 // Since our structs are empty, we can just insert them into the new rec group.
                 // We will update mutators while adding new features to the fuzzer.
                 for _ in 0..count {
-                    ops.types.insert_empty_struct(next_id, new_gid);
-                    next_id = TypeId(next_id.0.saturating_add(1));
+                    ops.types
+                        .insert_empty_struct(ops.types.fresh_type_id(ctx.rng()), new_gid);
                 }
 
                 log::debug!(
@@ -340,7 +338,7 @@ impl GcOpsMutator {
                 };
 
                 // Create a new rec group.
-                let new_gid = ops.types.next_rec_group_id();
+                let new_gid = ops.types.fresh_rec_group_id(ctx.rng());
                 ops.types.insert_rec_group(new_gid);
 
                 // Choose k in [1, len-1] (so both groups remain non-empty).
