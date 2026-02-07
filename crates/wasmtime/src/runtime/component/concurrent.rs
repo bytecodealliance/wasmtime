@@ -2798,70 +2798,69 @@ impl Instance {
                 .poll(&mut Context::from_waker(&Waker::noop()))
         });
 
-        Ok(match poll {
-            Poll::Ready(None) => unreachable!(),
+        match poll {
             Poll::Ready(Some(result)) => {
                 // It finished immediately; lower the result and delete the
                 // task.
                 lower(store.as_context_mut(), result?)?;
                 log::trace!("delete host task {task:?} (already ready)");
                 store.0.concurrent_state_mut().delete(task)?;
-                None
+                return Ok(None);
             }
-            Poll::Pending => {
-                // It hasn't finished yet; add the future to
-                // `ConcurrentState::futures` so it will be polled by the event
-                // loop and allocate a waitable handle to return to the guest.
+            Poll::Ready(None) => unreachable!(),
+            Poll::Pending => {}
+        }
+        // It hasn't finished yet; add the future to
+        // `ConcurrentState::futures` so it will be polled by the event
+        // loop and allocate a waitable handle to return to the guest.
 
-                // Wrap the future in a closure responsible for lowering the result into
-                // the guest's stack and memory, as well as notifying any waiters that
-                // the task returned.
-                let future =
-                    Box::pin(async move {
-                        let result = match future.await {
-                            Some(result) => result?,
-                            // Task was cancelled; nothing left to do.
-                            None => return Ok(()),
-                        };
-                        tls::get(move |store| {
-                            // Here we schedule a task to run on a worker fiber to do
-                            // the lowering since it may involve a call to the guest's
-                            // realloc function.  This is necessary because calling the
-                            // guest while there are host embedder frames on the stack
-                            // is unsound.
-                            store.concurrent_state_mut().push_high_priority(
-                                WorkItem::WorkerFunction(AlwaysMut::new(Box::new(move |store| {
-                                    lower(token.as_context_mut(store), result)?;
-                                    let state = store.concurrent_state_mut();
-                                    state.get_mut(task)?.join_handle.take();
-                                    Waitable::Host(task).set_event(
-                                        state,
-                                        Some(Event::Subtask {
-                                            status: Status::Returned,
-                                        }),
-                                    )
-                                }))),
-                            );
-                            Ok(())
-                        })
-                    });
+        // Wrap the future in a closure responsible for lowering the result into
+        // the guest's stack and memory, as well as notifying any waiters that
+        // the task returned.
+        let future = Box::pin(async move {
+            let result = match future.await {
+                Some(result) => result?,
+                // Task was cancelled; nothing left to do.
+                None => return Ok(()),
+            };
+            let on_complete = move |store: &mut dyn VMStore| {
+                lower(token.as_context_mut(store), result)?;
+                let state = store.concurrent_state_mut();
+                state.get_mut(task)?.join_handle.take();
+                Waitable::Host(task).set_event(
+                    state,
+                    Some(Event::Subtask {
+                        status: Status::Returned,
+                    }),
+                )
+            };
+            tls::get(move |store| {
+                // Here we schedule a task to run on a worker fiber to do
+                // the lowering since it may involve a call to the guest's
+                // realloc function.  This is necessary because calling the
+                // guest while there are host embedder frames on the stack
+                // is unsound.
+                store
+                    .concurrent_state_mut()
+                    .push_high_priority(WorkItem::WorkerFunction(AlwaysMut::new(Box::new(
+                        on_complete,
+                    ))));
+                Ok(())
+            })
+        });
 
-                store.0.concurrent_state_mut().push_future(future);
-                let handle = store
-                    .0
-                    .instance_state(RuntimeInstance {
-                        instance: self.id().instance(),
-                        index: caller_instance,
-                    })
-                    .handle_table()
-                    .subtask_insert_host(task.rep())?;
-                store.0.concurrent_state_mut().get_mut(task)?.common.handle = Some(handle);
-                log::trace!(
-                    "assign {task:?} handle {handle} for {caller:?} instance {caller_instance:?}"
-                );
-                Some(handle)
-            }
-        })
+        store.0.concurrent_state_mut().push_future(future);
+        let handle = store
+            .0
+            .instance_state(RuntimeInstance {
+                instance: self.id().instance(),
+                index: caller_instance,
+            })
+            .handle_table()
+            .subtask_insert_host(task.rep())?;
+        store.0.concurrent_state_mut().get_mut(task)?.common.handle = Some(handle);
+        log::trace!("assign {task:?} handle {handle} for {caller:?} instance {caller_instance:?}");
+        Ok(Some(handle))
     }
 
     /// Implements the `task.return` intrinsic, lifting the result for the
