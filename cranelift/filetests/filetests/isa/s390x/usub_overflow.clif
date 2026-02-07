@@ -3,7 +3,7 @@ target s390x
 
 function %f2(i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8):
-    v2, v3 = uadd_overflow v0, v1
+    v2, v3 = usub_overflow v0, v1
     return v2, v3
 }
 
@@ -11,9 +11,9 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   sllk %r5, %r2, 24
 ;   sllk %r3, %r3, 24
-;   alr %r5, %r3
+;   slr %r5, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   srlk %r2, %r5, 24
 ;   br %r14
 ;
@@ -21,15 +21,15 @@ block0(v0: i8, v1: i8):
 ; block0: ; offset 0x0
 ;   sllk %r5, %r2, 0x18
 ;   sllk %r3, %r3, 0x18
-;   alr %r5, %r3
+;   slr %r5, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   srlk %r2, %r5, 0x18
 ;   br %r14
 
 function %f2(i16, i16) -> i16, i8 {
 block0(v0: i16, v1: i16):
-    v2, v3 = uadd_overflow v0, v1
+    v2, v3 = usub_overflow v0, v1
     return v2, v3
 }
 
@@ -37,9 +37,9 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   sllk %r5, %r2, 16
 ;   sllk %r3, %r3, 16
-;   alr %r5, %r3
+;   slr %r5, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   srlk %r2, %r5, 16
 ;   br %r14
 ;
@@ -47,49 +47,49 @@ block0(v0: i16, v1: i16):
 ; block0: ; offset 0x0
 ;   sllk %r5, %r2, 0x10
 ;   sllk %r3, %r3, 0x10
-;   alr %r5, %r3
+;   slr %r5, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   srlk %r2, %r5, 0x10
 ;   br %r14
 
 function %f2(i32, i32) -> i32, i8 {
 block0(v0: i32, v1: i32):
-    v2, v3 = uadd_overflow v0, v1
+    v2, v3 = usub_overflow v0, v1
     return v2, v3
 }
 
 ; VCode:
 ; block0:
-;   alr %r2, %r3
+;   slr %r2, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   alr %r2, %r3
+;   slr %r2, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   br %r14
 
 function %f4(i64, i64) -> i64, i8 {
 block0(v0: i64, v1: i64):
-    v2, v3 = uadd_overflow v0, v1
+    v2, v3 = usub_overflow v0, v1
     return v2, v3
 }
 
 ; VCode:
 ; block0:
-;   algr %r2, %r3
+;   slgr %r2, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   algr %r2, %r3
+;   slgr %r2, %r3
 ;   lhi %r3, 0
-;   lochinle %r3, 1
+;   lochih %r3, 1
 ;   br %r14
 

@@ -3838,6 +3838,10 @@
 (decl add_reg (Type Reg Reg) Reg)
 (rule (add_reg ty x y) (alu_rrr ty (aluop_add ty) x y))
 
+(decl add_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_add ty) x y))
+
 (decl add_reg_sext32 (Type Reg Reg) Reg)
 (rule (add_reg_sext32 ty x y) (alu_rr ty (aluop_add_sext32 ty) x y))
 
@@ -3931,6 +3935,10 @@
 (decl sub_reg (Type Reg Reg) Reg)
 (rule (sub_reg ty x y) (alu_rrr ty (aluop_sub ty) x y))
 
+(decl sub_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub ty) x y))
+
 (decl sub_reg_sext32 (Type Reg Reg) Reg)
 (rule (sub_reg_sext32 ty x y) (alu_rr ty (aluop_sub_sext32 ty) x y))
 
@@ -3966,6 +3974,10 @@
 (decl sub_logical_reg (Type Reg Reg) Reg)
 (rule (sub_logical_reg ty x y) (alu_rrr ty (aluop_sub_logical ty) x y))
 
+(decl sub_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_logical_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub_logical ty) x y))
+
 (decl sub_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (sub_logical_reg_zext32 ty x y) (alu_rr ty (aluop_sub_logical_zext32 ty) x y))
 
@@ -3997,6 +4009,10 @@
 
 (decl mul_reg (Type Reg Reg) Reg)
 (rule (mul_reg ty x y) (alu_rrr ty (aluop_mul ty) x y))
+
+(decl mul_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_with_flags_paired ty x y)
+     (alu_rrr_with_flags_paired ty (aluop_mul ty) x y))
 
 (decl mul_reg_sext32 (Type Reg Reg) Reg)
 (rule (mul_reg_sext32 ty x y) (alu_rr ty (aluop_mul_sext32 ty) x y))
