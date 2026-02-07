@@ -1,9 +1,9 @@
-use crate::AsContextMut;
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
-use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType};
+use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType, Val};
 use crate::prelude::*;
+use crate::{AsContextMut, StoreContextMut};
 use core::fmt;
 use core::marker;
 use core::mem::MaybeUninit;
@@ -283,26 +283,24 @@ where
         })
     }
 
-    pub fn try_into_resource_any(self, mut store: impl AsContextMut) -> Result<ResourceAny> {
-        let HostResource {
-            rep,
-            state,
-            ty,
-            _marker: _,
-        } = self;
+    pub(crate) fn try_as_resource_any(&self, mut store: impl AsContextMut) -> Result<ResourceAny> {
         let store = store.as_context_mut();
 
         let mut tables = HostResourceTables::new_host(store.0);
-        let (idx, owned) = match state.get() {
-            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, false),
+        let (idx, owned) = match self.state.get() {
+            ResourceState::Borrow => (tables.host_resource_lower_borrow(self.rep)?, false),
             ResourceState::NotInTable => {
-                let idx = tables.host_resource_lower_own(rep, None, None)?;
+                let idx = tables.host_resource_lower_own(self.rep, None, None)?;
                 (idx, true)
             }
             ResourceState::Taken => bail!("host resource already consumed"),
             ResourceState::Index(idx) => (idx, true),
         };
-        Ok(ResourceAny::new(idx, T::resource_type(ty), owned))
+        Ok(ResourceAny::new(idx, T::resource_type(self.ty), owned))
+    }
+
+    pub fn try_into_resource_any(self, store: impl AsContextMut) -> Result<ResourceAny> {
+        self.try_as_resource_any(store)
     }
 }
 
@@ -325,6 +323,10 @@ where
         }
 
         Ok(())
+    }
+
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Resource(self.try_as_resource_any(store)?))
     }
 }
 

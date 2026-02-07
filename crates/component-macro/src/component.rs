@@ -351,6 +351,7 @@ fn expand_record_for_component_type(
     typecheck: TokenStream,
     typecheck_argument: TokenStream,
     wt: &syn::Path,
+    to_val: TokenStream,
 ) -> Result<TokenStream> {
     let internal = quote!(#wt::component::__internal);
 
@@ -359,7 +360,6 @@ fn expand_record_for_component_type(
     let mut lower_field_declarations = TokenStream::new();
     let mut abi_list = TokenStream::new();
     let mut unique_types = HashSet::new();
-
     for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
         let generic = format_ident!("T{}", index);
 
@@ -416,6 +416,8 @@ fn expand_record_for_component_type(
             ) -> #wt::Result<()> {
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
             }
+
+            #to_val
         }
     };
 
@@ -920,6 +922,18 @@ impl Expander for ComponentTypeExpander {
         fields: &[&syn::Field],
         wt: &syn::Path,
     ) -> Result<TokenStream> {
+        let mut field_to_vals = TokenStream::new();
+        for syn::Field { ident, attrs, .. } in fields.iter() {
+            let name = find_rename(attrs)?.unwrap_or_else(|| {
+                let ident = ident.as_ref().unwrap();
+                syn::LitStr::new(&ident.to_string(), ident.span())
+            });
+            field_to_vals.extend(quote!(
+            (#wt::component::__internal::String::from(#name),
+                #wt::component::ComponentType::to_val(&self.#ident, #wt::AsContextMut::as_context_mut(&mut store))? ),
+        ));
+        }
+
         expand_record_for_component_type(
             name,
             generics,
@@ -941,6 +955,13 @@ impl Expander for ComponentTypeExpander {
                 )
                 .collect::<Result<_>>()?,
             wt,
+            quote!(
+                fn to_val<S>(&self, mut store: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
+                    Ok(#wt::component::Val::Record([
+                        #field_to_vals
+                    ].into()))
+                }
+            ),
         )
     }
 
@@ -961,10 +982,10 @@ impl Expander for ComponentTypeExpander {
         let mut lower_generic_args = TokenStream::new();
         let mut abi_list = TokenStream::new();
         let mut unique_types = HashSet::new();
+        let mut to_val_cases = TokenStream::new();
 
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
             let rename = find_rename(attrs)?;
-
             let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if let Some(ty) = ty {
@@ -982,10 +1003,17 @@ impl Expander for ComponentTypeExpander {
                 lower_generic_args.extend(quote!(<#ty as #wt::component::ComponentType>::Lower,));
 
                 unique_types.insert(ty);
+
+                to_val_cases.extend(quote!(
+                    Self::#ident(inner) => (#internal::String::from(#name), Some(#internal::Box::new(inner.to_val(store)?))),
+                ));
             } else {
                 abi_list.extend(quote!(None,));
                 case_names_and_checks.extend(quote!((#name, None),));
                 lower_payload_case_declarations.extend(quote!(#ident: [#wt::ValRaw; 0],));
+                to_val_cases.extend(quote!(
+                    Self::#ident => (#internal::String::from(#name), None),
+                ));
             }
         }
 
@@ -1032,6 +1060,13 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
+
+                fn to_val<S>(&self, store: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
+                    let (variant_name, opt_payload) = match self {
+                        #to_val_cases
+                    };
+                    Ok(#wt::component::Val::Variant(variant_name, opt_payload))
+                }
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
@@ -1053,10 +1088,10 @@ impl Expander for ComponentTypeExpander {
 
         let mut case_names = TokenStream::new();
         let mut abi_list = TokenStream::new();
+        let mut to_val_cases = TokenStream::new();
 
         for VariantCase { attrs, ident, ty } in cases.iter() {
             let rename = find_rename(attrs)?;
-
             let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if ty.is_some() {
@@ -1067,6 +1102,7 @@ impl Expander for ComponentTypeExpander {
             }
             abi_list.extend(quote!(None,));
             case_names.extend(quote!(#name,));
+            to_val_cases.extend(quote!(Self::#ident => #internal::String::from(#name),));
         }
 
         let lower = format_ident!("Lower{}", name);
@@ -1093,6 +1129,10 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::enum_(#cases_len);
+
+                fn to_val<S>(&self, _: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
+                    Ok(#wt::component::Val::Enum(match self { #to_val_cases }))
+                }
             }
 
             unsafe impl #internal::ComponentVariant for #name {
@@ -1282,6 +1322,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let mut constants = TokenStream::new();
     let mut rust_names = TokenStream::new();
     let mut component_names = TokenStream::new();
+    let mut flag_to_vals = TokenStream::new();
 
     for (index, Flag { name, rename }) in flags.flags.iter().enumerate() {
         rust_names.extend(quote!(#name,));
@@ -1317,6 +1358,14 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         let name = format_ident!("{}", name);
 
         constants.extend(quote!(pub const #name: Self = Self { #fields };));
+
+        flag_to_vals.extend(quote!(
+            if self.contains(Self::#name) {
+                flags.push(
+                    #wt::component::__internal::String::from(#component_name)
+                );
+            }
+        ));
     }
 
     let generics = syn::Generics {
@@ -1350,6 +1399,13 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         quote!(typecheck_flags),
         component_names,
         &wt,
+        quote!(
+            fn to_val<S>(&self, mut store: #wt::StoreContextMut<S>) -> #wt::Result<#wt::component::Val> {
+                let mut flags = Vec::new();
+                #flag_to_vals
+                Ok(#wt::component::Val::Flags(flags))
+            }
+        ),
     )?;
 
     let internal = quote!(#wt::component::__internal);
