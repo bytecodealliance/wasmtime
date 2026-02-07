@@ -32,7 +32,13 @@ else()
   endif()
 endif()
 
-set(WASMTIME_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
+# Respect CARGO_TARGET_DIR if set, allowing users to customize where Cargo
+# outputs build artifacts
+if(DEFINED ENV{CARGO_TARGET_DIR})
+  set(WASMTIME_TARGET_DIR $ENV{CARGO_TARGET_DIR}/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
+else()
+  set(WASMTIME_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
+endif()
 
 if(WASMTIME_TARGET MATCHES "apple")
   set(WASMTIME_SHARED_FILES libwasmtime.dylib)

@@ -393,6 +393,8 @@ wasmtime_option_group! {
         /// GC support in the component model: this corresponds to the 🛸 emoji
         /// in the component model specification.
         pub component_model_gc: Option<bool>,
+        /// Map support in the component model.
+        pub component_model_map: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the stack-switching proposal.
@@ -1125,6 +1127,7 @@ impl CommonOptions {
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
+            ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)

@@ -10,6 +10,14 @@ pub extern "C" fn wasmtime_config_wasm_component_model_set(c: &mut wasm_config_t
     c.config.wasm_component_model(enable);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_component_model_map_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_map(enable);
+}
+
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct wasmtime_component_t {
