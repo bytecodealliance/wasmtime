@@ -1501,63 +1501,34 @@ impl StoreOpaque {
     /// - The instance is not in need of a post-return function call.
     /// - `self` has not been poisoned due to a trap.
     pub(crate) fn may_enter(&mut self, instance: RuntimeInstance) -> bool {
+        if self.trapped() {
+            return false;
+        }
         if !self.concurrency_support() {
-            return !self.trapped();
+            return true;
         }
         let state = self.concurrent_state_mut();
-        if let Some(caller) = state.guest_thread {
-            instance != state.get_mut(caller.task).unwrap().instance
-                && self.may_enter_from_caller(caller.task, instance)
-        } else {
-            !self.trapped()
-        }
-    }
+        let mut cur = state.guest_thread;
+        loop {
+            match cur {
+                None => break true,
+                Some(thread) => {
+                    let task = state.get_mut(thread.task).unwrap();
 
-    /// Variation of `may_enter` which takes a `TableId<GuestTask>` representing
-    /// the callee.
-    fn may_enter_task(&mut self, task: TableId<GuestTask>) -> bool {
-        let instance = self.concurrent_state_mut().get_mut(task).unwrap().instance;
-        self.may_enter_from_caller(task, instance)
-    }
-
-    /// Variation of `may_enter` which takes a `TableId<GuestTask>` representing
-    /// the caller, plus a `RuntimeInstance` representing the callee.
-    fn may_enter_from_caller(
-        &mut self,
-        mut guest_task: TableId<GuestTask>,
-        instance: RuntimeInstance,
-    ) -> bool {
-        !self.trapped() && {
-            let state = self.concurrent_state_mut();
-            let guest_instance = instance.instance;
-            loop {
-                // Note that we only compare top-level instance IDs here.  The
-                // idea is that the host is not allowed to recursively enter a
-                // top-level instance even if the specific leaf instance is not
-                // on the stack.  This the behavior defined in the spec, and it
-                // allows us to elide runtime checks in guest-to-guest adapters.
-                let next_thread = match &state.get_mut(guest_task).unwrap().caller {
-                    Caller::Host { caller: None, .. } => break true,
-                    &Caller::Host {
-                        caller: Some(caller),
-                        ..
-                    } => {
-                        let instance = state.get_mut(caller.task).unwrap().instance;
-                        if instance.instance == guest_instance {
-                            break false;
-                        } else {
-                            caller
-                        }
+                    // Note that we only compare top-level instance IDs here.
+                    // The idea is that the host is not allowed to recursively
+                    // enter a top-level instance even if the specific leaf
+                    // instance is not on the stack. This the behavior defined
+                    // in the spec, and it allows us to elide runtime checks in
+                    // guest-to-guest adapters.
+                    if task.instance.instance == instance.instance {
+                        break false;
                     }
-                    &Caller::Guest { thread } => {
-                        if state.get_mut(thread.task).unwrap().instance.instance == guest_instance {
-                            break false;
-                        } else {
-                            thread
-                        }
-                    }
-                };
-                guest_task = next_thread.task;
+                    cur = match task.caller {
+                        Caller::Host { caller, .. } => caller,
+                        Caller::Guest { thread } => thread.into(),
+                    };
+                }
             }
         }
     }
@@ -5168,6 +5139,10 @@ pub(crate) fn prepare_call<T, R>(
     let (tx, rx) = oneshot::channel();
     let (exit_tx, exit_rx) = oneshot::channel();
 
+    let instance = RuntimeInstance {
+        instance: handle.instance().id().instance(),
+        index: component_instance,
+    };
     let caller = state.guest_thread;
     let mut task = GuestTask::new(
         state,
@@ -5198,10 +5173,7 @@ pub(crate) fn prepare_call<T, R>(
                 unsafe { instance.call_callback(store, callback, event, handle) }
             }) as CallbackFn
         }),
-        RuntimeInstance {
-            instance: handle.instance().id().instance(),
-            index: component_instance,
-        },
+        instance,
         async_function,
     )?;
     task.function_index = Some(handle.index());
@@ -5210,7 +5182,7 @@ pub(crate) fn prepare_call<T, R>(
     let thread = state.push(GuestThread::new_implicit(task))?;
     state.get_mut(task)?.threads.insert(thread);
 
-    if !store.0.may_enter_task(task) {
+    if !store.0.may_enter(instance) {
         bail!(crate::Trap::CannotEnterComponent);
     }
 
