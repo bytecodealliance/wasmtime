@@ -1532,6 +1532,53 @@ impl ExternType {
             ExternType::Tag(tag_ty) => tag_ty.default_value(store).map(Extern::Tag),
         }
     }
+
+    /// Does this extern type match the other extern type?
+    ///
+    /// That is, is this extern type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &ExternType) -> bool {
+        match (self, other) {
+            (ExternType::Func(a), ExternType::Func(b)) => a.matches(b),
+            (ExternType::Func(_), _) => false,
+            (ExternType::Global(a), ExternType::Global(b)) => a.matches(b),
+            (ExternType::Global(_), _) => false,
+            (ExternType::Memory(a), ExternType::Memory(b)) => a.matches(b),
+            (ExternType::Memory(_), _) => false,
+            (ExternType::Tag(a), ExternType::Tag(b)) => a.matches(b),
+            (ExternType::Tag(_), _) => false,
+            (ExternType::Table(a), ExternType::Table(b)) => a.matches(b),
+            (ExternType::Table(_), _) => false,
+        }
+    }
+
+    /// Is extern type `a` precisely equal to extern type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same extern type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &ExternType, b: &ExternType) -> bool {
+        match (a, b) {
+            (ExternType::Func(a), ExternType::Func(b)) => FuncType::eq(a, b),
+            (ExternType::Func(_), _) => false,
+            (ExternType::Global(a), ExternType::Global(b)) => GlobalType::eq(a, b),
+            (ExternType::Global(_), _) => false,
+            (ExternType::Memory(a), ExternType::Memory(b)) => MemoryType::eq(a, b),
+            (ExternType::Memory(_), _) => false,
+            (ExternType::Tag(a), ExternType::Tag(b)) => TagType::eq(a, b),
+            (ExternType::Tag(_), _) => false,
+            (ExternType::Table(a), ExternType::Table(b)) => TableType::eq(a, b),
+            (ExternType::Table(_), _) => false,
+        }
+    }
 }
 
 impl From<FuncType> for ExternType {
@@ -3027,6 +3074,53 @@ impl GlobalType {
     pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
         self.content.into_registered_type()
     }
+
+    /// Does this global type match the other?
+    ///
+    /// That is, is this global type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &GlobalType) -> bool {
+        match (self, other) {
+            (
+                GlobalType {
+                    content: a,
+                    mutability: Mutability::Const,
+                },
+                GlobalType {
+                    content: b,
+                    mutability: Mutability::Const,
+                },
+            ) => a.matches(b),
+            (
+                GlobalType {
+                    content: a,
+                    mutability: Mutability::Var,
+                },
+                GlobalType {
+                    content: b,
+                    mutability: Mutability::Var,
+                },
+            ) => a.matches(b) && b.matches(a),
+            _ => false,
+        }
+    }
+
+    /// Is global type `a` precisely equal to global type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same global type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &GlobalType, b: &GlobalType) -> bool {
+        ValType::eq(&a.content, &b.content) && a.mutability == b.mutability
+    }
 }
 
 // Tag Types
@@ -3066,6 +3160,31 @@ impl TagType {
     /// is identical to ordinary host tag allocation.
     pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTag> {
         RuntimeTag::new(store, self)
+    }
+
+    /// Does this tag type match the other?
+    ///
+    /// That is, is this tag type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &TagType) -> bool {
+        self.ty.matches(&other.ty) && other.ty.matches(&self.ty)
+    }
+
+    /// Is tag type `a` precisely equal to tag type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same tag type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &TagType, b: &TagType) -> bool {
+        FuncType::eq(&a.ty, &b.ty)
     }
 }
 
@@ -3181,6 +3300,54 @@ impl TableType {
             .ref_()
             .unwrap();
         RuntimeTable::new(store, self.clone(), init_val)
+    }
+
+    /// Does this table type match the other?
+    ///
+    /// That is, is this table type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &TableType) -> bool {
+        return limit_matches(
+            (self.minimum(), self.maximum()),
+            (other.minimum(), other.maximum()),
+        ) && self.element.matches(other.element())
+            && other.element().matches(self.element());
+    }
+
+    /// Is table type `a` precisely equal to table type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same table type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &TableType, b: &TableType) -> bool {
+        a.minimum() == b.minimum()
+            && a.maximum() == b.maximum()
+            && RefType::eq(&a.element, &b.element)
+    }
+}
+
+/// Does this limit match the other?
+///
+/// That is, is this limit contained in the other?
+fn limit_matches(this: (u64, Option<u64>), other: (u64, Option<u64>)) -> bool {
+    if this.0 < other.0 {
+        false
+    } else if let Some(b) = other.1 {
+        if let Some(a) = this.1 {
+            if a > b { false } else { true }
+        } else {
+            false
+        }
+    } else {
+        true
     }
 }
 
@@ -3533,6 +3700,34 @@ impl MemoryType {
         } else {
             Extern::Memory(crate::Memory::new(store, self.clone())?)
         })
+    }
+
+    /// Does this memory type match the other?
+    ///
+    /// That is, is this memory type a subtype of the other?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &MemoryType) -> bool {
+        return limit_matches(
+            (self.minimum(), self.maximum()),
+            (other.minimum(), other.maximum()),
+        );
+    }
+
+    /// Is memory type `a` precisely equal to memory type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same memory type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &MemoryType, b: &MemoryType) -> bool {
+        a.maximum() == b.maximum() && a.minimum() == b.minimum()
     }
 }
 
