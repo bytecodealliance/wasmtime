@@ -39,7 +39,7 @@ fn parse_into<'a>(
             // Module sections get parsed with wizer's core wasm support.
             Payload::ModuleSection { .. } => match &mut cx {
                 Some(component) => {
-                    let info = crate::parse::parse_with(&full_wasm, &mut iter)?;
+                    let info = crate::parse::parse_with(&full_wasm, &mut iter, false)?;
                     component.push_module_section(info);
                 }
                 None => {
