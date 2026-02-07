@@ -55,6 +55,12 @@ pub struct HostFunc {
     /// Whether or not this host function was defined in such a way that async
     /// stack switching is required when calling it.
     asyncness: Asyncness,
+
+    instrument: fn(
+        &mut (dyn Any + Send + Sync),
+        Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+    ) -> Result<()>,
 }
 
 impl core::fmt::Debug for HostFunc {
@@ -89,6 +95,7 @@ impl HostFunc {
             typecheck: F::typecheck,
             func: Box::new(func),
             asyncness,
+            instrument: F::instrument,
         })
     }
 
@@ -257,6 +264,22 @@ impl HostFunc {
     pub fn asyncness(&self) -> Asyncness {
         self.asyncness
     }
+
+    /// # Safety
+    /// Caller must ensure that T is the same as passed to constructor of
+    /// Self.
+    pub(crate) unsafe fn instrument<T, PRE, POST>(&mut self, pre: PRE, post: POST) -> Result<()>
+    where
+        T: 'static,
+        PRE: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<()> + Send + Sync + 'static,
+        POST: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<()> + Send + Sync + 'static,
+    {
+        (self.instrument)(
+            &mut self.func,
+            Box::new(move |vmstore, vals| pre(unsafe { vmstore.unchecked_context_mut() }, vals)),
+            Box::new(move |vmstore, vals| post(unsafe { vmstore.unchecked_context_mut() }, vals)),
+        )
+    }
 }
 
 /// Argument to [`HostFn::lift_params`]
@@ -295,8 +318,14 @@ where
     /// with the provided signature that a component is using.
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>;
 
+    /// FIXME TK
+    fn pre_run(&self, store: StoreContextMut<'_, T>, params: &P) -> Result<()>;
+
     /// Execute this host function.
     fn run(&self, store: StoreContextMut<'_, T>, params: P) -> HostResult<R>;
+
+    /// FIXME TK
+    fn post_run(&self, store: StoreContextMut<'_, T>, rets: &R) -> Result<()>;
 
     /// Performs the lifting operation to convert arguments from the canonical
     /// ABI in wasm memory/arguments into their Rust representation.
@@ -309,6 +338,13 @@ where
         ty: TypeFuncIndex,
         result: R,
         dst: Destination<'_>,
+    ) -> Result<()>;
+
+    /// FIXME PCH DOCS TK TK
+    fn instrument(
+        this: &mut (dyn Any + Send + Sync),
+        pre: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        post: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
     ) -> Result<()>;
 
     /// Raw entrypoint invoked by Cranelift.
@@ -412,6 +448,7 @@ where
         #[cfg(feature = "component-model-async")]
         let caller_instance = lift.options().instance;
 
+        self.pre_run(store.as_context_mut(), &params)?;
         let ret = match self.run(store.as_context_mut(), params) {
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
@@ -424,6 +461,7 @@ where
                 },
             )?,
         };
+        self.post_run(store.as_context_mut(), &ret)?;
 
         let mut lower = LowerContext::new(store, options, instance);
         let fty = &lower.types[ty];
@@ -487,10 +525,14 @@ where
             0
         };
 
+        self.pre_run(store.as_context_mut(), &params)?;
         let host_result = self.run(store.as_context_mut(), params);
 
         let task = match host_result {
             HostResult::Done(result) => {
+                if let Ok(ret) = result {
+                    self.post_run(store.as_context_mut(), &ret)?;
+                }
                 Self::lower_result_and_exit_call(
                     &mut LowerContext::new(store, options, instance),
                     ty,
@@ -502,6 +544,7 @@ where
             #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
                 instance.first_poll(store, future, caller_instance, move |store, ret| {
+                    self.post_run(store.as_context_mut(), &ret)?;
                     Self::lower_result_and_exit_call(
                         &mut LowerContext::new(store, options, instance),
                         ty,
@@ -583,8 +626,11 @@ where
 
 /// Implementation of a "static" host function where the parameters and results
 /// of a function are known at compile time.
-#[repr(transparent)]
-struct StaticHostFn<F, const ASYNC: bool>(F);
+struct StaticHostFn<F, const ASYNC: bool> {
+    func: F,
+    pre: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+    post: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+}
 
 impl<F, const ASYNC: bool> StaticHostFn<F, ASYNC> {
     fn new<T, P, R>(func: F) -> Self
@@ -594,14 +640,18 @@ impl<F, const ASYNC: bool> StaticHostFn<F, ASYNC> {
         R: ComponentNamedList + Lower + 'static,
         F: Fn(StoreContextMut<'_, T>, P) -> HostResult<R>,
     {
-        Self(func)
+        Self {
+            func,
+            pre: None,
+            post: None,
+        }
     }
 }
 
 impl<T, F, P, R, const ASYNC: bool> HostFn<T, P, R> for StaticHostFn<F, ASYNC>
 where
     T: 'static,
-    F: Fn(StoreContextMut<'_, T>, P) -> HostResult<R>,
+    F: Fn(StoreContextMut<'_, T>, P) -> HostResult<R> + 'static,
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
@@ -619,8 +669,24 @@ where
         Ok(())
     }
 
-    fn run(&self, store: StoreContextMut<'_, T>, params: P) -> HostResult<R> {
-        (self.0)(store, params)
+    fn pre_run(&self, mut store: StoreContextMut<'_, T>, params: &P) -> Result<()> {
+        if let Some(pre) = &self.pre {
+            let vals = params.to_val(store.as_context_mut())?;
+            (pre)(store.0, &[vals])?;
+        }
+        Ok(())
+    }
+
+    fn run(&self, mut store: StoreContextMut<'_, T>, params: P) -> HostResult<R> {
+        (self.func)(store.as_context_mut(), params)
+    }
+
+    fn post_run(&self, mut store: StoreContextMut<'_, T>, rets: &R) -> Result<()> {
+        if let Some(post) = &self.post{
+            let vals = rets.to_val(store.as_context_mut())?;
+            (post)(store.0, &[vals])?;
+        }
+        Ok(())
     }
 
     fn lift_params(cx: &mut LiftContext<'_>, ty: TypeFuncIndex, src: Source<'_>) -> Result<P> {
@@ -659,6 +725,20 @@ where
             Destination::Memory(ptr) => ret.linear_lower_to_memory(cx, ty, ptr),
         }
     }
+
+    // TODO PCH
+    fn instrument(
+        this: &mut (dyn Any + Send + Sync),
+        pre: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        post: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+    ) -> Result<()> {
+        let this = this
+            .downcast_mut::<Self>()
+            .ok_or_else(|| format_err!("downcast failed"))?;
+        this.pre = Some(pre);
+        this.post = Some(post);
+        Ok(())
+    }
 }
 
 /// Implementation of a "dynamic" host function where the number of parameters,
@@ -667,7 +747,11 @@ where
 ///
 /// This is intended for more-dynamic use cases than `StaticHostFn` above such
 /// as demos, gluing things together quickly, and `wast` testing.
-struct DynamicHostFn<F, const ASYNC: bool>(F);
+struct DynamicHostFn<F, const ASYNC: bool> {
+    func: F,
+    pre: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+    post: Option<Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>>,
+}
 
 impl<F, const ASYNC: bool> DynamicHostFn<F, ASYNC> {
     fn new<T>(func: F) -> Self
@@ -675,7 +759,7 @@ impl<F, const ASYNC: bool> DynamicHostFn<F, ASYNC> {
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
     {
-        Self(func)
+        Self { func, pre: None, post: None }
     }
 }
 
@@ -683,7 +767,7 @@ impl<T, F, const ASYNC: bool> HostFn<T, (ComponentFunc, Vec<Val>), Vec<Val>>
     for DynamicHostFn<F, ASYNC>
 where
     T: 'static,
-    F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
+    F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>> + 'static,
 {
     const ASYNC: bool = ASYNC;
 
@@ -699,6 +783,13 @@ where
         Ok(())
     }
 
+    fn pre_run(&self, store: StoreContextMut<'_, T>, (_, params): &(ComponentFunc, Vec<Val>)) -> Result<()> {
+        if let Some(pre) = &self.pre {
+            (pre)(store.0, &*params)?;
+        }
+        Ok(())
+    }
+
     fn run(
         &self,
         store: StoreContextMut<'_, T>,
@@ -708,7 +799,14 @@ where
         for _ in 0..ty.results().len() {
             params.push(Val::Bool(false));
         }
-        (self.0)(store, ty, params, offset)
+        (self.func)(store, ty, params, offset)
+    }
+
+    fn post_run(&self, store: StoreContextMut<'_, T>, rets: &Vec<Val>) -> Result<()> {
+        if let Some(post) = &self.post{
+            (post)(store.0, &*rets)?;
+        }
+        Ok(())
     }
 
     fn lift_params(
@@ -764,6 +862,20 @@ where
                 }
             }
         }
+        Ok(())
+    }
+
+    // TODO PCH
+    fn instrument(
+        this: &mut (dyn Any + Send + Sync),
+        pre: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+        post: Box<dyn Fn(&mut dyn VMStore, &[Val]) -> Result<()> + Send + Sync>,
+    ) -> Result<()> {
+        let this = this
+            .downcast_mut::<Self>()
+            .ok_or_else(|| format_err!("downcast failed"))?;
+        this.pre = Some(pre);
+        this.post = Some(post);
         Ok(())
     }
 }

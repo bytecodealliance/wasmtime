@@ -1,7 +1,7 @@
-use crate::component::Instance;
 use crate::component::func::{Func, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
+use crate::component::{Instance, Val};
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
@@ -9,6 +9,7 @@ use core::fmt;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
+use core::ops::Deref;
 use core::str;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
@@ -751,6 +752,9 @@ pub unsafe trait ComponentType: Send + Sync {
     /// the interface type `ty` provided.
     #[doc(hidden)]
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()>;
+
+    /// Convert to the tagged representation.
+    fn to_val<T>(&self, store: StoreContextMut<T>) -> Result<Val>;
 }
 
 #[doc(hidden)]
@@ -958,7 +962,7 @@ pub unsafe trait Lift: Sized + ComponentType {
 // these wrappers only implement lowering because lifting native Rust types
 // cannot be done.
 macro_rules! forward_type_impls {
-    ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
+    ($(($($generics:tt)*) $via:ident : $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
@@ -968,16 +972,20 @@ macro_rules! forward_type_impls {
             fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
+
+            fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
+                self.$via().to_val(store)
+            }
         }
     )*)
 }
 
 forward_type_impls! {
-    (T: ComponentType + ?Sized) &'_ T => T,
-    (T: ComponentType + ?Sized) Box<T> => T,
-    (T: ComponentType + ?Sized) alloc::sync::Arc<T> => T,
-    () String => str,
-    (T: ComponentType) Vec<T> => [T],
+    (T: ComponentType + ?Sized) deref: &'_ T => T,
+    (T: ComponentType + ?Sized) deref: Box<T> => T,
+    (T: ComponentType + ?Sized) deref: alloc::sync::Arc<T> => T,
+    () as_str: String => str,
+    (T: ComponentType) as_slice: Vec<T> => [T],
 }
 
 macro_rules! forward_lowers {
@@ -1076,6 +1084,10 @@ macro_rules! integers {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
                 }
+            }
+
+            fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+                Ok(Val::$ty(*self))
             }
         }
 
@@ -1204,6 +1216,10 @@ macro_rules! floats {
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
                 }
             }
+
+            fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+                Ok(Val::$ty(*self))
+            }
         }
 
         unsafe impl Lower for $float {
@@ -1321,6 +1337,10 @@ unsafe impl ComponentType for bool {
             other => bail!("expected `bool` found `{}`", desc(other)),
         }
     }
+
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Bool(*self))
+    }
 }
 
 unsafe impl Lower for bool {
@@ -1386,6 +1406,10 @@ unsafe impl ComponentType for char {
             InterfaceType::Char => Ok(()),
             other => bail!("expected `char` found `{}`", desc(other)),
         }
+    }
+
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Char(*self))
     }
 }
 
@@ -1456,6 +1480,10 @@ unsafe impl ComponentType for str {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
         }
+    }
+
+    fn to_val<S>(&self, _: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::String(self.to_string()))
     }
 }
 
@@ -1758,6 +1786,13 @@ unsafe impl ComponentType for WasmStr {
             other => bail!("expected `string` found `{}`", desc(other)),
         }
     }
+
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
+        let memory = self.instance.options_memory(store.0, self.options);
+        let encoding = self.instance.options(store.0, self.options).string_encoding;
+        let cow_str = self.to_str_from_memory(encoding, memory)?;
+        Ok(Val::String(cow_str.to_string()))
+    }
 }
 
 unsafe impl Lift for WasmStr {
@@ -1804,6 +1839,14 @@ where
             InterfaceType::List(t) => T::typecheck(&types.types[*t].element, types),
             other => bail!("expected `list` found `{}`", desc(other)),
         }
+    }
+
+    fn to_val<S>(&self, mut store: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::List(
+            self.iter()
+                .map(|i| i.to_val(store.as_context_mut()))
+                .collect::<Result<Vec<Val>>>()?,
+        ))
     }
 }
 
@@ -2044,13 +2087,26 @@ raw_wasm_list_accessors! {
 
 // Note that this is similar to `ComponentType for str` except it can only be
 // used for lifting, not lowering.
-unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
+unsafe impl<T: ComponentType + Lift> ComponentType for WasmList<T> {
     type Lower = <[T] as ComponentType>::Lower;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         <[T] as ComponentType>::typecheck(ty, types)
+    }
+
+    fn to_val<S>(&self, mut store: StoreContextMut<S>) -> Result<Val> {
+        let mut cx = LiftContext::new(store.0, self.options, self.instance);
+        let lifted = (0..self.len)
+            .map(move |i| self.get_from_store(&mut cx, i).unwrap())
+            .collect::<Result<Vec<T>>>()?;
+        Ok(Val::List(
+            lifted
+                .into_iter()
+                .map(move |v| v.to_val(store.as_context_mut()))
+                .collect::<Result<Vec<Val>>>()?,
+        ))
     }
 }
 
@@ -2288,6 +2344,13 @@ where
             other => bail!("expected `option` found `{}`", desc(other)),
         }
     }
+
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Option(match self {
+            Some(v) => Some(Box::new(v.to_val(store)?)),
+            None => None,
+        }))
+    }
 }
 
 unsafe impl<T> ComponentVariant for Option<T>
@@ -2441,6 +2504,15 @@ where
             }
             other => bail!("expected `result` found `{}`", desc(other)),
         }
+    }
+
+    fn to_val<S>(&self, store: StoreContextMut<S>) -> Result<Val> {
+        Ok(Val::Result(match self {
+            Ok(_) if T::IS_RUST_UNIT_TYPE => Ok(None),
+            Ok(t) => Ok(Some(Box::new(t.to_val(store)?))),
+            Err(_) if E::IS_RUST_UNIT_TYPE => Err(None),
+            Err(e) => Err(Some(Box::new(e.to_val(store)?))),
+        }))
     }
 }
 
@@ -2794,6 +2866,17 @@ macro_rules! impl_component_ty_for_tuples {
                 types: &InstanceType<'_>,
             ) -> Result<()> {
                 typecheck_tuple(ty, types, &[$($t::typecheck),*])
+            }
+
+            fn to_val<S>(
+                &self,
+                #[allow(unused, reason = "0-tuple doesnt use this arg")]
+                mut store: StoreContextMut<S>,
+            ) -> Result<Val> {
+                let ($($t,)*) = self;
+                Ok(Val::Tuple(
+                    [$($t.to_val(store.as_context_mut())?,)*].into()
+                ))
             }
         }
 
