@@ -172,21 +172,19 @@ impl StackType {
 
                         // Typed struct requirement: only satisfiable if we have concrete types.
                         Some(t) => {
-                            if num_types == 0 {
-                                unreachable!(
-                                    "typed struct requirement with num_types == 0; op should have been removed"
-                                );
-                            } else {
-                                let t = Self::clamp(t, num_types);
-                                Self::emit(
-                                    GcOp::StructNew { type_index: t },
-                                    stack,
-                                    out,
-                                    num_types,
-                                    &mut result_types,
-                                );
-                                stack.pop();
-                            }
+                            debug_assert_ne!(
+                                num_types, 0,
+                                "typed struct requirement with num_types == 0; op should have been removed"
+                            );
+                            let t = Self::clamp(t, num_types);
+                            Self::emit(
+                                GcOp::StructNew { type_index: t },
+                                stack,
+                                out,
+                                num_types,
+                                &mut result_types,
+                            );
+                            stack.pop();
                         }
                     }
                 }
