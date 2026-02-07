@@ -5,7 +5,7 @@ use wasmtime::{
     error::Context as _,
 };
 use wasmtime_wasi::{WasiCtxBuilder, p1};
-use wasmtime_wizer::Wizer;
+use wasmtime_wizer::{WasmtimeWizer, Wizer};
 use wat::parse_str as wat_to_wasm;
 
 async fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
@@ -1017,4 +1017,80 @@ async fn memory64() -> Result<()> {
     )?;
     let wizer = get_wizer();
     wizen_and_run_wasm(&[], 10, &wasm, wizer).await
+}
+
+#[tokio::test]
+async fn keep_instrumentation_incremental_snapshot() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let wat = r#"
+(module
+  (global $g (mut i32) i32.const 99)
+  (func (export "wizer-initialize")
+    i32.const 0
+    global.set $g)
+  (func (export "get") (result i32)
+    global.get $g)
+  (func (export "set") (param i32)
+    local.get 0
+    global.set $g))
+    "#;
+
+    let wasm = wat_to_wasm(wat)?;
+
+    let mut wizer = Wizer::new();
+    wizer.keep_instrumentation(true);
+
+    let (cx, instrumented_wasm) = wizer.instrument(&wasm)?;
+
+    let mut s = store()?;
+    let module = Module::new(s.engine(), &instrumented_wasm)?;
+    let instance = instantiate(&mut s, &module).await?;
+
+    let init = instance
+        .get_typed_func::<(), ()>(&mut s, "wizer-initialize")
+        .unwrap();
+    init.call_async(&mut s, ()).await?;
+
+    let snapshot1 = wizer
+        .snapshot(
+            cx,
+            &mut WasmtimeWizer {
+                store: &mut s,
+                instance,
+            },
+        )
+        .await?;
+
+    let mut s = store()?;
+    let module = Module::new(s.engine(), &snapshot1)?;
+    let instance = instantiate(&mut s, &module).await?;
+
+    let get = instance.get_typed_func::<(), i32>(&mut s, "get")?;
+    let val = get.call_async(&mut s, ()).await?;
+    assert_eq!(val, 0, "after first snapshot, global should be 0");
+
+    let set = instance.get_typed_func::<(i32,), ()>(&mut s, "set")?;
+    set.call_async(&mut s, (42,)).await?;
+
+    let cx2 = wizer.parse_instrumented(&snapshot1)?;
+    let snapshot2 = wizer
+        .snapshot(
+            cx2,
+            &mut WasmtimeWizer {
+                store: &mut s,
+                instance,
+            },
+        )
+        .await?;
+
+    let mut s = store()?;
+    let module = Module::new(s.engine(), &snapshot2)?;
+    let instance = instantiate(&mut s, &module).await?;
+
+    let get = instance.get_typed_func::<(), i32>(&mut s, "get")?;
+    let val = get.call_async(&mut s, ()).await?;
+    assert_eq!(val, 42, "after second snapshot, global should be 42");
+
+    Ok(())
 }
