@@ -49,13 +49,14 @@ impl GcOpsMutator {
             && ops.types.type_defs.len() < ops.limits.max_types as usize
         {
             c.mutation(|ctx| {
-                // Pick a random rec group.
-                if let Some(group_id) = ctx.rng().choose(&ops.types.rec_groups).copied() {
-                    // Insert new struct with next type id in the chosen rec group.
-                    let new_tid = ops.types.next_type_id();
-                    ops.types.insert_empty_struct(new_tid, group_id);
-                    log::debug!("Added empty struct type {new_tid:?} to rec group {group_id:?}");
-                }
+                let group_id = ctx
+                    .rng()
+                    .choose(&ops.types.rec_groups)
+                    .copied()
+                    .expect("rec_groups not empty");
+                let new_tid = ops.types.next_type_id();
+                ops.types.insert_empty_struct(new_tid, group_id);
+                log::debug!("Added empty struct type {new_tid:?} to rec group {group_id:?}");
                 Ok(())
             })?;
         }
@@ -71,12 +72,13 @@ impl GcOpsMutator {
     ) -> mutatis::Result<()> {
         if !ops.types.type_defs.is_empty() {
             c.mutation(|ctx| {
-                // Pick a random struct type.
-                if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
-                    // Remove the chosen struct type.
-                    ops.types.type_defs.remove(&tid);
-                    log::debug!("Removed struct type {tid:?}");
-                }
+                let tid = ctx
+                    .rng()
+                    .choose(ops.types.type_defs.keys())
+                    .copied()
+                    .expect("type_defs not empty");
+                ops.types.type_defs.remove(&tid);
+                log::debug!("Removed struct type {tid:?}");
                 Ok(())
             })?;
         }
@@ -95,10 +97,11 @@ impl GcOpsMutator {
 
                 // Randomly choose a rec group.
                 for _ in 0..ops.limits.max_rec_groups {
-                    let gid = match ctx.rng().choose(&ops.types.rec_groups).copied() {
-                        Some(g) => g,
-                        None => return Ok(()),
-                    };
+                    let gid = ctx
+                        .rng()
+                        .choose(&ops.types.rec_groups)
+                        .copied()
+                        .expect("rec_groups not empty");
 
                     // Collect member TypeIds of that rec group.
                     let mut members: SmallVec<[TypeId; 32]> = SmallVec::new();
@@ -156,17 +159,19 @@ impl GcOpsMutator {
     ) -> mutatis::Result<()> {
         if !ops.types.type_defs.is_empty() && ops.types.rec_groups.len() >= 2 {
             c.mutation(|ctx| {
-                // Pick a random type.
-                if let Some(tid) = ctx.rng().choose(ops.types.type_defs.keys()).copied() {
-                    // Pick a random recursive group.
-                    if let Some(new_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() {
-                        // Get the old rec group for debug purposes.
-                        let old_gid = ops.types.type_defs.get(&tid).unwrap().rec_group;
-                        // Move the struct type to the new rec group.
-                        ops.types.type_defs.get_mut(&tid).unwrap().rec_group = new_gid;
-                        log::debug!("Moved type {tid:?} from rec group {old_gid:?} to {new_gid:?}");
-                    }
-                }
+                let tid = ctx
+                    .rng()
+                    .choose(ops.types.type_defs.keys())
+                    .copied()
+                    .expect("type_defs not empty");
+                let new_gid = ctx
+                    .rng()
+                    .choose(&ops.types.rec_groups)
+                    .copied()
+                    .expect("rec_groups not empty");
+                let old_gid = ops.types.type_defs.get(&tid).unwrap().rec_group;
+                ops.types.type_defs.get_mut(&tid).unwrap().rec_group = new_gid;
+                log::debug!("Moved type {tid:?} from rec group {old_gid:?} to {new_gid:?}");
                 Ok(())
             })?;
         }
@@ -185,10 +190,11 @@ impl GcOpsMutator {
             && ops.types.type_defs.len() < ops.limits.max_types as usize
         {
             c.mutation(|ctx| {
-                // Pick a random rec group to duplicate.
-                let Some(source_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() else {
-                    return Ok(());
-                };
+                let source_gid = ctx
+                    .rng()
+                    .choose(&ops.types.rec_groups)
+                    .copied()
+                    .expect("rec_groups not empty");
 
                 // Create a new rec group.
                 let new_gid = ops.types.next_rec_group_id();
@@ -228,10 +234,11 @@ impl GcOpsMutator {
     fn remove_rec_group(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if ops.types.rec_groups.len() > 2 {
             c.mutation(|ctx| {
-                // Pick a random rec group to remove.
-                let Some(gid) = ctx.rng().choose(&ops.types.rec_groups).copied() else {
-                    return Ok(());
-                };
+                let gid = ctx
+                    .rng()
+                    .choose(&ops.types.rec_groups)
+                    .copied()
+                    .expect("rec_groups not empty");
 
                 ops.types.type_defs.retain(|_, def| def.rec_group != gid);
                 ops.types.rec_groups.remove(&gid);
@@ -247,17 +254,20 @@ impl GcOpsMutator {
     fn merge_rec_groups(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if !ops.types.rec_groups.is_empty() && ops.types.rec_groups.len() > 2 {
             c.mutation(|ctx| {
-                // Pick two distinct rec groups.
-                let Some(dst_gid) = ctx.rng().choose(&ops.types.rec_groups).copied() else {
-                    return Ok(());
-                };
+                let dst_gid = ctx
+                    .rng()
+                    .choose(&ops.types.rec_groups)
+                    .copied()
+                    .expect("rec_groups not empty");
 
-                // Try a few times to pick a different source group.
                 let mut src_gid = None;
                 for _ in 0..16 {
-                    let Some(g) = ctx.rng().choose(&ops.types.rec_groups).copied() else {
-                        return Ok(());
-                    };
+                    let g = ctx
+                        .rng()
+                        .choose(&ops.types.rec_groups)
+                        .copied()
+                        .expect("rec_groups not empty");
+
                     if g != dst_gid {
                         src_gid = Some(g);
                         break;
@@ -306,9 +316,11 @@ impl GcOpsMutator {
                 let mut members: SmallVec<[TypeId; 32]> = SmallVec::new();
 
                 for _ in 0..16 {
-                    let Some(gid) = ctx.rng().choose(&ops.types.rec_groups).copied() else {
-                        return Ok(());
-                    };
+                    let gid = ctx
+                        .rng()
+                        .choose(&ops.types.rec_groups)
+                        .copied()
+                        .expect("rec_groups not empty");
 
                     members.clear();
                     for (tid, def) in ops.types.type_defs.iter() {
