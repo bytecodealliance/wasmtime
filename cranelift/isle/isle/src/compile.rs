@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::ast::Def;
 use crate::error::Errors;
 use crate::files::Files;
-use crate::{ast, codegen, overlap, sema};
+use crate::{ast, codegen, overlap, recursion, sema};
 
 /// Compile the given AST definitions into Rust source code.
 pub fn compile(
@@ -26,6 +26,7 @@ pub fn compile(
         Ok(terms) => terms,
         Err(errs) => return Err(Errors::new(errs, files)),
     };
+    recursion::check(&terms, &term_env).map_err(|errs| Errors::new(errs, files.clone()))?;
 
     Ok(codegen::codegen(
         files, &type_env, &term_env, &terms, options,

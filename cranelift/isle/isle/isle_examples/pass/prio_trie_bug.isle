@@ -62,7 +62,7 @@
 
 ;; One step in amode processing: take an existing amode and add
 ;; another value to it.
-(decl amode_add (Amode Value) Amode)
+(decl rec amode_add (Amode Value) Amode)
 
 ;; -- Top-level driver: pull apart the addends.
 ;;
