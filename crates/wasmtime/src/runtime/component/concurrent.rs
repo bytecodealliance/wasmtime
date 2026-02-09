@@ -87,7 +87,7 @@ use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS,
+    CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
@@ -4362,8 +4362,6 @@ pub(crate) struct GuestTask {
     /// If present, a pending `Event::None` or `Event::Cancelled` to be
     /// delivered to this task.
     event: Option<Event>,
-    /// The `ExportIndex` of the guest function being called, if known.
-    function_index: Option<ExportIndex>,
     /// Whether or not the task has exited.
     exited: bool,
     /// Threads belonging to this task
@@ -4448,7 +4446,6 @@ impl GuestTask {
             sync_call_set,
             instance,
             event: None,
-            function_index: None,
             exited: false,
             threads: HashSet::new(),
             host_future_state,
@@ -5162,7 +5159,7 @@ pub(crate) fn prepare_call<T, R>(
     let (exit_tx, exit_rx) = oneshot::channel();
 
     let caller = state.guest_thread;
-    let mut task = GuestTask::new(
+    let task = GuestTask::new(
         state,
         Box::new(for_any_lower(move |store, params| {
             lower_params(handle, token.as_context_mut(store), params)
@@ -5197,7 +5194,6 @@ pub(crate) fn prepare_call<T, R>(
         },
         async_function,
     )?;
-    task.function_index = Some(handle.index());
 
     let task = state.push(task)?;
     let thread = state.push(GuestThread::new_implicit(task))?;
