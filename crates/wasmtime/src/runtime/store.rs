@@ -2549,7 +2549,7 @@ at https://bytecodealliance.org/security.
     }
 
     #[inline]
-    #[cfg(feature = "component-model")]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
