@@ -764,7 +764,7 @@ dependencies = [
  "criterion",
  "env_logger 0.11.5",
  "gimli 0.33.0",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "libm",
  "log",
  "postcard",
@@ -852,7 +852,7 @@ version = "0.130.0"
 dependencies = [
  "cranelift-codegen",
  "env_logger 0.11.5",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "log",
  "similar",
  "smallvec 1.15.1",
@@ -923,7 +923,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "serde",
  "serde_derive",
 ]
@@ -948,7 +948,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "target-lexicon",
 ]
 
@@ -1437,6 +1437,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f81ec6369c545a7d40e4589b5597581fa1c441fe1cce96dd1de43159910a36a2"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1702,7 +1708,7 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
- "foldhash",
+ "foldhash 0.1.3",
  "serde",
 ]
 
@@ -1711,6 +1717,9 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "heck"
@@ -2371,7 +2380,7 @@ name = "min-platform-host"
 version = "43.0.0"
 dependencies = [
  "libloading",
- "object 0.37.3",
+ "object 0.38.1",
  "wasmtime",
 ]
 
@@ -2514,12 +2523,12 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.37.3"
+version = "0.38.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+checksum = "271638cd5fa9cca89c4c304675ca658efc4e64a66c716b7cfe1afb4b9611dbbc"
 dependencies = [
  "crc32fast",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "indexmap 2.11.4",
  "memchr",
 ]
@@ -4260,7 +4269,7 @@ version = "43.0.0"
 dependencies = [
  "bitflags 2.9.4",
  "byte-array-literals",
- "object 0.37.3",
+ "object 0.38.1",
  "wasip1",
  "wasm-encoder",
  "wit-bindgen-rust-macro",
@@ -4524,7 +4533,7 @@ dependencies = [
  "log",
  "mach2",
  "memfd",
- "object 0.37.3",
+ "object 0.38.1",
  "once_cell",
  "postcard",
  "proptest",
@@ -4634,7 +4643,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object 0.37.3",
+ "object 0.38.1",
  "pulley-interpreter",
  "rayon",
  "rustix 1.0.8",
@@ -4706,10 +4715,10 @@ dependencies = [
  "cranelift-entity",
  "env_logger 0.11.5",
  "gimli 0.33.0",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "indexmap 2.11.4",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "postcard",
  "rustc-demangle",
  "semver",
@@ -4868,7 +4877,7 @@ name = "wasmtime-internal-core"
 version = "43.0.0"
 dependencies = [
  "anyhow",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "libm",
 ]
 
@@ -4885,7 +4894,7 @@ dependencies = [
  "gimli 0.33.0",
  "itertools 0.14.0",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "pulley-interpreter",
  "smallvec 1.15.1",
  "target-lexicon",
@@ -4940,7 +4949,7 @@ name = "wasmtime-internal-jit-debug"
 version = "43.0.0"
 dependencies = [
  "cc",
- "object 0.37.3",
+ "object 0.38.1",
  "rustix 1.0.8",
  "wasmtime-internal-versioned-export-macros",
 ]
@@ -4962,7 +4971,7 @@ dependencies = [
  "cfg-if",
  "cranelift-codegen",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "wasmtime-environ",
 ]
 
@@ -4982,7 +4991,7 @@ dependencies = [
  "cranelift-codegen",
  "gimli 0.33.0",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "target-lexicon",
  "wasmparser 0.244.0",
  "wasmtime-environ",
@@ -5216,7 +5225,7 @@ version = "43.0.0"
 dependencies = [
  "json-from-wast",
  "log",
- "object 0.37.3",
+ "object 0.38.1",
  "serde_json",
  "tokio",
  "wasmparser 0.244.0",

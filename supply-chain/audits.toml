@@ -3946,6 +3946,11 @@ criteria = "safe-to-deploy"
 delta = "0.37.1 -> 0.37.3"
 notes = "Lots of new support for new object features, no new unsafe or anything suspicious."
 
+[[audits.object]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.37.3 -> 0.38.1"
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
