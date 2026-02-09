@@ -5,9 +5,11 @@ use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
-use object::SectionFlags;
-use object::endian::Endianness;
-use object::read::{Object, ObjectSection, elf::ElfFile64};
+use object::{
+    elf::FileHeader64,
+    endian::Endianness,
+    read::elf::{FileHeader as _, SectionHeader as _},
+};
 use wasmtime_environ::{Trap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
@@ -116,9 +118,23 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(engine: &Engine, mmap: MmapVec) -> Result<Self> {
-        let obj = ElfFile64::<Endianness>::parse(&mmap[..])
+        let mmap_data = &*mmap;
+        let header = FileHeader64::<Endianness>::parse(mmap_data)
             .map_err(obj::ObjectCrateErrorWrapper)
-            .with_context(|| "failed to parse internal compilation artifact")?;
+            .context("failed to parse precompiled artifact as an ELF")?;
+        let endian = header
+            .endian()
+            .context("failed to parse header endianness")?;
+
+        let section_headers = header
+            .section_headers(endian, mmap_data)
+            .context("failed to parse section headers")?;
+        let strings = header
+            .section_strings(endian, mmap_data, section_headers)
+            .context("failed to parse strings table")?;
+        let sections = header
+            .sections(endian, mmap_data)
+            .context("failed to parse sections table")?;
 
         let mut text = 0..0;
         let mut unwind = 0..0;
@@ -135,21 +151,38 @@ impl CodeMemory {
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
-        for section in obj.sections() {
-            let data = section.data().map_err(obj::ObjectCrateErrorWrapper)?;
-            let name = section.name().map_err(obj::ObjectCrateErrorWrapper)?;
+        for section_header in sections.iter() {
+            let data = section_header
+                .data(endian, mmap_data)
+                .map_err(obj::ObjectCrateErrorWrapper)?;
+            let name = section_header
+                .name(endian, strings)
+                .map_err(obj::ObjectCrateErrorWrapper)?;
+            let Ok(name) = str::from_utf8(name) else {
+                log::debug!("ignoring section with invalid UTF-8 name");
+                continue;
+            };
             let range = subslice_range(data, &mmap);
 
             // Double-check that sections are all aligned properly.
-            if section.align() != 0 && data.len() != 0 {
-                if (data.as_ptr() as u64 - mmap.as_ptr() as u64) % section.align() != 0 {
-                    bail!(
-                        "section `{}` isn't aligned to {:#x}",
-                        section.name().unwrap_or("ERROR"),
-                        section.align()
-                    );
-                }
+            let section_align = usize::try_from(section_header.sh_addralign(endian))?;
+            if section_align != 0 && data.len() != 0 {
+                ensure!(
+                    data.as_ptr().addr() % section_align == 0,
+                    "section `{name}` isn't aligned to {section_align:#x}",
+                );
             }
+
+            // Assert that Cranelift hasn't inserted any calls that need to be
+            // relocated. We avoid using things like Cranelift's floor/ceil/etc.
+            // operators in the Wasm-to-Cranelift translator specifically to
+            // avoid having to do any relocations here. This also ensures that
+            // all builtins use the same trampoline mechanism.
+            let sh_type = section_header.sh_type(endian);
+            assert!(!matches!(
+                sh_type,
+                object::elf::SHT_REL | object::elf::SHT_RELA | object::elf::SHT_CREL
+            ));
 
             match name {
                 obj::ELF_WASM_BTI => match data.len() {
@@ -159,18 +192,9 @@ impl CodeMemory {
                 ".text" => {
                     text = range;
 
-                    if let SectionFlags::Elf { sh_flags } = section.flags() {
-                        if sh_flags & obj::SH_WASMTIME_NOT_EXECUTED != 0 {
-                            needs_executable = false;
-                        }
+                    if section_header.sh_flags(endian) & obj::SH_WASMTIME_NOT_EXECUTED != 0 {
+                        needs_executable = false;
                     }
-
-                    // Assert that Cranelift hasn't inserted any calls that need to be
-                    // relocated. We avoid using things like Cranelift's floor/ceil/etc.
-                    // operators in the Wasm-to-Cranelift translator specifically to
-                    // avoid having to do any relocations here. This also ensures that
-                    // all builtins use the same trampoline mechanism.
-                    assert!(section.relocations().next().is_none());
                 }
                 #[cfg(has_host_compiler_backend)]
                 crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
@@ -201,9 +225,8 @@ impl CodeMemory {
         // compiled artifact is as-produced-by this version of
         // Wasmtime, and we should always produce a correct exception
         // table (i.e., we are not expecting untrusted data here).
-        if cfg!(debug_assertions) {
-            let _ = ExceptionTable::parse(&mmap[exception_data.clone()])?;
-        }
+        #[cfg(debug_assertions)]
+        let _ = ExceptionTable::parse(&mmap[exception_data.clone()])?;
 
         Ok(Self {
             mmap,
