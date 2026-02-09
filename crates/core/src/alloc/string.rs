@@ -55,6 +55,48 @@ impl From<inner::String> for String {
     }
 }
 
+impl serde::ser::Serialize for String {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for String {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = String;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a `wasmtime_core::alloc::String` str")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let mut s = String::new();
+                s.reserve_exact(v.len()).map_err(|oom| E::custom(oom))?;
+                s.push_str(v).expect("reserved capacity");
+                Ok(s)
+            }
+        }
+
+        // NB: do not use `deserialize_string` as that eagerly allocates the
+        // `String` and does not give us a chance to handle OOM. Instead, use
+        // `deserialize_str` which passes the visitor the borrowed `str`, giving
+        // us a chance to fallibly allocate space.
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
 impl String {
     /// Same as [`std::string::String::new`].
     #[inline]
