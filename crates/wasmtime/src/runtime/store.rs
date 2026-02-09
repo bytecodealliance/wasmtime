@@ -2549,7 +2549,7 @@ at https://bytecodealliance.org/security.
     }
 
     #[inline]
-    #[cfg(feature = "component-model")]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
@@ -2574,25 +2574,6 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
-    #[inline]
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state_with_instance(
-        &mut self,
-        instance: crate::component::Instance,
-    ) -> (
-        &mut vm::component::CallContexts,
-        &mut vm::component::HandleTable,
-        &mut crate::component::HostResourceData,
-        Pin<&mut vm::component::ComponentInstance>,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
-        )
-    }
-
     #[cfg(feature = "component-model")]
     pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
         &mut self,
@@ -2610,6 +2591,39 @@ at https://bytecodealliance.org/security.
             &mut self.host_resource_data,
             instance.id().from_data_get_mut(&mut self.store_data),
             self.concurrent_state.as_mut(),
+        )
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_tables(
+        &mut self,
+        instance: Option<crate::component::Instance>,
+    ) -> vm::component::ResourceTables<'_> {
+        self.component_resource_tables_and_host_resource_data(instance)
+            .0
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_tables_and_host_resource_data(
+        &mut self,
+        instance: Option<crate::component::Instance>,
+    ) -> (
+        vm::component::ResourceTables<'_>,
+        &mut crate::component::HostResourceData,
+    ) {
+        let guest = instance.map(|i| {
+            i.id()
+                .from_data_get_mut(&mut self.store_data)
+                .instance_states()
+        });
+
+        (
+            vm::component::ResourceTables {
+                host_table: Some(&mut self.component_host_table),
+                calls: &mut self.component_calls,
+                guest,
+            },
+            &mut self.host_resource_data,
         )
     }
 

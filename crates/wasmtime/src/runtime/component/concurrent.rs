@@ -57,7 +57,7 @@ use crate::component::{
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
-use crate::vm::component::{CallContext, ComponentInstance, InstanceState, ResourceTables};
+use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType,
@@ -2952,13 +2952,7 @@ impl Instance {
         result: Box<dyn Any + Send + Sync>,
         status: Status,
     ) -> Result<()> {
-        let (calls, host_table, _, instance) = store.component_resource_state_with_instance(self);
-        ResourceTables {
-            calls,
-            host_table: Some(host_table),
-            guest: Some(instance.instance_states()),
-        }
-        .exit_call()?;
+        store.component_resource_tables(Some(self)).exit_call()?;
 
         let state = store.concurrent_state_mut();
         let task = state.get_mut(guest_task)?;

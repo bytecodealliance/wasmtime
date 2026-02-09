@@ -276,18 +276,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     }
 
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
-        let (calls, host_table, host_resource_data, instance) = self
+        let (tables, data) = self
             .store
             .0
-            .component_resource_state_with_instance(self.instance);
-        HostResourceTables::from_parts(
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: Some(instance.instance_states()),
-            },
-            host_resource_data,
-        )
+            .component_resource_tables_and_host_resource_data(Some(self.instance));
+        HostResourceTables::from_parts(tables, data)
     }
 
     /// See [`HostResourceTables::enter_call`].
@@ -469,8 +462,6 @@ impl<'a> LiftContext<'a> {
             ResourceTables {
                 host_table: Some(self.host_table),
                 calls: self.calls,
-                // Note that the unsafety here should be valid given the contract of
-                // `LiftContext::new`.
                 guest: Some(self.instance.as_mut().instance_states()),
             },
             self.host_resource_data,
