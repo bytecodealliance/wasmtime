@@ -7,7 +7,7 @@ use std_alloc::{alloc::Layout, boxed::Box, string as inner};
 
 /// A newtype wrapper around [`std::string::String`] that only exposes
 /// fallible-allocation methods.
-#[derive(Default)]
+#[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct String {
     inner: inner::String,
 }
@@ -119,6 +119,12 @@ impl String {
     #[inline]
     pub fn capacity(&self) -> usize {
         self.inner.capacity()
+    }
+
+    /// Same as [`std::string::String::as_str`].
+    #[inline]
+    pub const fn as_str(&self) -> &str {
+        self.inner.as_str()
     }
 
     /// Same as [`std::string::String::reserve`] but returns an error on
