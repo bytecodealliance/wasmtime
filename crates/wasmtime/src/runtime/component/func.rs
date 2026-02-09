@@ -825,11 +825,6 @@ impl Func {
         self.instance
     }
 
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn index(self) -> ExportIndex {
-        self.index
-    }
-
     /// Creates a `LowerContext` using the configuration values of this lifted
     /// function.
     ///
