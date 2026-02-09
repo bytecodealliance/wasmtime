@@ -15,6 +15,7 @@ impl Wizer {
         module: &mut ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
+        remove_wasi_initialize: bool,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
@@ -130,7 +131,9 @@ impl Wizer {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports() {
                         if (export.name == self.get_init_func() && !self.get_keep_init_func())
-                            || (has_wasi_initialize && export.name == "_initialize")
+                            || (remove_wasi_initialize
+                                && has_wasi_initialize
+                                && export.name == "_initialize")
                         {
                             continue;
                         }
