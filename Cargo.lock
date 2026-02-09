@@ -4879,6 +4879,7 @@ dependencies = [
  "anyhow",
  "hashbrown 0.16.1",
  "libm",
+ "serde",
 ]
 
 [[package]]
