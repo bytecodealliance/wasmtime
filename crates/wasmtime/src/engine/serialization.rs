@@ -34,8 +34,7 @@ use object::{
     read::elf::{ElfFile64, FileHeader, SectionHeader},
 };
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind, Tunables, collections};
+use wasmtime_environ::{FlagValue, ObjectKind, OperatorCostStrategy, Tunables, collections, obj};
 
 const VERSION: u8 = 0;
 
@@ -276,6 +275,22 @@ impl Metadata<'_> {
         );
     }
 
+    fn check_cost(
+        consume_fuel: bool,
+        found: &OperatorCostStrategy,
+        expected: &OperatorCostStrategy,
+    ) -> Result<()> {
+        if !consume_fuel {
+            return Ok(());
+        }
+
+        if found != expected {
+            bail!("Module costs are incompatible");
+        }
+
+        Ok(())
+    }
+
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             collector,
@@ -285,6 +300,7 @@ impl Metadata<'_> {
             debug_guest,
             parse_wasm_debuginfo,
             consume_fuel,
+            ref operator_cost,
             epoch_interruption,
             memory_may_move,
             guard_before_linear_memory,
@@ -336,6 +352,7 @@ impl Metadata<'_> {
             "WebAssembly backtrace support",
         )?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
+        Self::check_cost(consume_fuel, operator_cost, &other.operator_cost)?;
         Self::check_bool(
             epoch_interruption,
             other.epoch_interruption,

@@ -515,6 +515,7 @@ mod sync_nostd;
 #[cfg(not(feature = "std"))]
 use sync_nostd as sync;
 
+pub use wasmtime_environ::OperatorCost;
 #[doc(inline)]
 pub use wasmtime_environ::error;
 
