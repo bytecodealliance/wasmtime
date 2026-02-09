@@ -382,3 +382,49 @@ fn ensure_stack_alignment(config: &mut Config) -> Result<()> {
     );
     Ok(())
 }
+
+#[wasmtime_test]
+fn custom_operator_cost(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let op_cost = OperatorCost {
+        I32Const: 12,
+        I32Add: 23,
+        I64Const: 64,
+        I64Add: 128,
+        Drop: 5,
+        ..Default::default()
+    };
+    config.operator_cost(op_cost.clone());
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (func (export "main")
+                ;; i32: 1 + 2
+                (drop (i32.add (i32.const 1) (i32.const 2)))
+
+                ;; i64: 3 + 4
+                (drop (i64.add (i64.const 3) (i64.const 4)))
+              )
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    let initial_fuel = store.get_fuel()?;
+    main.call(&mut store, ())?;
+    let cost_of_execution = op_cost.I32Add
+        + op_cost.I64Add
+        + op_cost.I32Const * 2
+        + op_cost.I64Const * 2
+        + op_cost.Drop * 2
+        + 1;
+    assert_eq!(store.get_fuel()?, initial_fuel - cost_of_execution as u64);
+
+    Ok(())
+}
