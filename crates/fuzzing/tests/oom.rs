@@ -35,6 +35,38 @@ fn smoke_test_missed_oom() -> Result<()> {
 }
 
 #[test]
+fn smoke_test_disallow_alloc_after_oom() -> Result<()> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = OomTest::new().test(|| {
+            let layout = Layout::new::<u64>();
+            let p = unsafe { alloc(layout) };
+            let _q = unsafe { alloc(layout) };
+            if p.is_null() {
+                Err(OutOfMemory::new(layout.size()).into())
+            } else {
+                Ok(())
+            }
+        });
+    }));
+    assert!(result.is_err());
+    Ok(())
+}
+
+#[test]
+fn smoke_test_allow_alloc_after_oom() -> Result<()> {
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let layout = Layout::new::<u64>();
+        let p = unsafe { alloc(layout) };
+        let q = unsafe { alloc(layout) };
+        if p.is_null() || q.is_null() {
+            Err(OutOfMemory::new(layout.size()).into())
+        } else {
+            Ok(())
+        }
+    })
+}
+
+#[test]
 #[cfg(arc_try_new)]
 fn try_new_arc() -> Result<()> {
     use std::sync::Arc;
