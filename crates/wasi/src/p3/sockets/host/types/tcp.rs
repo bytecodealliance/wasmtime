@@ -282,30 +282,30 @@ impl HostTcpSocketWithStore for WasiSockets {
         ))
     }
 
-    async fn send<T: 'static>(
-        store: &Accessor<T, Self>,
+    fn send<T: 'static>(
+        mut store: Access<'_, T, Self>,
         socket: Resource<TcpSocket>,
-        data: StreamReader<u8>,
-    ) -> SocketResult<()> {
+        mut data: StreamReader<u8>,
+    ) -> FutureReader<Result<(), ErrorCode>> {
         let (result_tx, result_rx) = oneshot::channel();
-        store.with(|mut store| {
-            let sock = get_socket(store.get().table, &socket)?;
-            let stream = sock.tcp_stream_arc()?;
-            let stream = Arc::clone(stream);
-            data.pipe(
-                store,
-                SendStreamConsumer {
-                    stream,
-                    result: Some(result_tx),
-                },
-            );
-            SocketResult::Ok(())
-        })?;
-        result_rx
-            .await
-            .context("oneshot sender dropped")
-            .map_err(SocketError::trap)??;
-        Ok(())
+        match get_socket(store.get().table, &socket)
+            .and_then(|sock| sock.tcp_stream_arc().map(Arc::clone).map_err(Into::into))
+        {
+            Ok(stream) => {
+                data.pipe(
+                    &mut store,
+                    SendStreamConsumer {
+                        stream,
+                        result: Some(result_tx),
+                    },
+                );
+            }
+            Err(err) => {
+                data.close(&mut store);
+                let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Unknown)));
+            }
+        }
+        FutureReader::new(&mut store, result_rx)
     }
 
     fn receive<T: 'static>(
