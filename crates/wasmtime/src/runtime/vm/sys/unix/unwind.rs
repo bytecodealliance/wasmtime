@@ -3,6 +3,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
 use core::ptr::NonNull;
+use wasmtime_environ::collections::Vec;
 
 /// Represents a registration of function unwind information for System V ABI.
 pub struct UnwindRegistration {
@@ -97,7 +98,7 @@ impl UnwindRegistration {
                     if current != start {
                         __register_frame(current);
                         let cur = NonNull::new(current.cast_mut()).unwrap();
-                        registrations.push(SendSyncPtr::new(cur));
+                        registrations.push(SendSyncPtr::new(cur))?;
                     }
 
                     // Move to the next table entry (+4 because the length itself is
@@ -109,7 +110,7 @@ impl UnwindRegistration {
                 // entry of length 0
                 __register_frame(unwind_info);
                 let info = NonNull::new(unwind_info.cast_mut()).unwrap();
-                registrations.push(SendSyncPtr::new(info));
+                registrations.push(SendSyncPtr::new(info))?;
             }
         }
 
