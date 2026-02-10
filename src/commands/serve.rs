@@ -5,6 +5,7 @@ use futures::future::FutureExt;
 use http::{Response, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
+use hyper::body::{Body, Frame, SizeHint};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -906,13 +907,35 @@ async fn handle_request(
                             let body = body.map_err(ErrorCode::from_hyper_request_error);
                             let req = http::Request::from_parts(req, body);
                             let (request, request_io_result) = Request::from_http(req);
-                            let (res, task) = proxy.handle(store, request).await??;
+                            let res = proxy.handle(store, request).await??;
                             let res = store
                                 .with(|mut store| res.into_http(&mut store, request_io_result))?;
-                            _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed_unsync()));
 
-                            // Wait for the task to finish.
-                            task.block(store).await;
+                            // With the guest response now transformed into a
+                            // host-compatible response layer one more wrapper
+                            // around the body. This layer is solely responsible
+                            // for dropping a channel half on destruction, and
+                            // this enables waiting here until the body is
+                            // consumed by waiting for this destruction to
+                            // happen.
+                            let (resp_body_tx, resp_body_rx) = oneshot::channel();
+                            let res = res.map(|body| {
+                                let body = body.map_err(|e| e.into());
+                                P3BodyWrapper {
+                                    _tx: resp_body_tx,
+                                    body,
+                                }
+                                .boxed_unsync()
+                            });
+
+                            // If `wasmtime serve` is waiting on this response
+                            // and actually got it then wait for the body to
+                            // finish, otherwise it's thrown away so skip that
+                            // step.
+                            if tx.send(res).is_ok() {
+                                _ = resp_body_rx.await;
+                            }
+
                             Ok(())
                         }
                     }
@@ -926,14 +949,41 @@ async fn handle_request(
         }),
     );
 
-    Ok(match rx {
+    return Ok(match rx {
         Receiver::P2(rx) => rx
             .await
             .context("guest never invoked `response-outparam::set` method")?
             .map_err(|e| wasmtime::Error::from(e))?
             .map(|body| body.map_err(|e| e.into()).boxed_unsync()),
         Receiver::P3(rx) => rx.await?,
-    })
+    });
+
+    // Forwarding implementation of `Body` to an inner `B` with the sole purpose
+    // of carrying `_tx` to its destruction.
+    struct P3BodyWrapper<B> {
+        body: B,
+        _tx: oneshot::Sender<()>,
+    }
+
+    impl<B: Body + Unpin> Body for P3BodyWrapper<B> {
+        type Data = B::Data;
+        type Error = B::Error;
+
+        fn poll_frame(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+            Pin::new(&mut self.body).poll_frame(cx)
+        }
+
+        fn is_end_stream(&self) -> bool {
+            self.body.is_end_stream()
+        }
+
+        fn size_hint(&self) -> SizeHint {
+            self.body.size_hint()
+        }
+    }
 }
 
 #[derive(Clone)]

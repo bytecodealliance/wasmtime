@@ -77,8 +77,7 @@ impl ApiStyle {
             }
             ApiStyle::Concurrent => Ok(store
                 .run_concurrent(async |access| func.call_concurrent(access, params).await)
-                .await??
-                .0),
+                .await??),
         }
     }
 

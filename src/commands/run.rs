@@ -637,8 +637,8 @@ impl RunCommand {
         if self.run.common.wasm.concurrency_support.unwrap_or(true) {
             store
                 .run_concurrent(async |store| {
-                    let task = func.call_concurrent(store, params, results).await?;
-                    task.block(store).await;
+                    func.call_concurrent(store, params, results).await?;
+                    // TODO: wait on task
                     wasmtime::error::Ok(())
                 })
                 .await??;
@@ -671,8 +671,8 @@ impl RunCommand {
                 result = Some(
                     store
                         .run_concurrent(async |store| {
-                            let (result, task) = command.wasi_cli_run().call_run(store).await?;
-                            task.block(store).await;
+                            let result = command.wasi_cli_run().call_run(store).await?;
+                            // TODO: wait on store
                             Ok(result)
                         })
                         .await?,

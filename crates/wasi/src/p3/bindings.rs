@@ -89,7 +89,7 @@ mod generated {
             "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
             default: tracing | trappable,
         },
-        exports: { default: async | store | task_exit },
+        exports: { default: async | store },
         with: {
             "wasi:cli/terminal-input.terminal-input": crate::p3::cli::TerminalInput,
             "wasi:cli/terminal-output.terminal-output": crate::p3::cli::TerminalOutput,

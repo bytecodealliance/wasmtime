@@ -17,8 +17,6 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
-#[cfg(feature = "component-model-async")]
-use crate::component::func::TaskExit;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -219,7 +217,7 @@ where
             return wrapper
                 .store
                 .as_context_mut()
-                .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
+                .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
                 .await?;
         }
 
@@ -238,10 +236,6 @@ where
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
     /// (if any) automatically when the guest task completes.
-    ///
-    /// Besides the task's return value, this returns a [`TaskExit`]
-    /// representing the completion of the guest task and any transitive
-    /// subtasks it might create.
     ///
     /// This function will return an error if [`Config::concurrency_support`] is
     /// disabled.
@@ -298,7 +292,7 @@ where
         self,
         accessor: impl AsAccessor<Data: Send>,
         params: Params,
-    ) -> Result<(Return, TaskExit)>
+    ) -> Result<Return>
     where
         Params: 'static,
         Return: 'static,
@@ -316,8 +310,7 @@ where
                 })?;
             concurrent::queue_call(store, prepared)
         });
-        let (result, rx) = result?.await?;
-        Ok((result, TaskExit(rx)))
+        Ok(result?.await?)
     }
 
     fn lower_args<T>(

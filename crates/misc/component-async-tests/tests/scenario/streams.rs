@@ -377,7 +377,7 @@ mod short_reads {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "short-reads-guest",
-        exports: { default: async | task_exit },
+        exports: { default: async },
     });
 }
 
@@ -431,7 +431,7 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             let stream =
                 store.with(|store| StreamReader::new(store, VecProducer::new(things, delay)));
 
-            let (stream, task) = guest
+            let stream = guest
                 .local_local_short_reads()
                 .call_short_reads(store, stream)
                 .await?;
@@ -441,14 +441,18 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             // re-take ownership of any unwritten items.
             store.with(|store| stream.pipe(store, OneAtATime::new(received_things.clone(), delay)));
 
-            task.block(store).await;
-
-            assert_eq!(count, received_things.lock().unwrap().len());
+            for i in 0.. {
+                assert!(i < 1000);
+                if count == received_things.lock().unwrap().len() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
 
             let mut received_strings = Vec::with_capacity(strings.len());
             let received_things = mem::take(received_things.lock().unwrap().deref_mut());
             for it in received_things {
-                received_strings.push(thing.call_get(store, it).await?.0);
+                received_strings.push(thing.call_get(store, it).await?);
             }
 
             assert_eq!(

@@ -439,28 +439,28 @@ async fn pulley_provenance_test_async_components() -> Result<()> {
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless")?;
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful")?;
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless-stackless")?;
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful-stackful")?;
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
     }

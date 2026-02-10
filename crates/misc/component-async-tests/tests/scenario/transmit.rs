@@ -327,7 +327,6 @@ mod readiness {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "readiness-guest",
-        exports: { default: task_exit },
     });
 }
 
@@ -366,7 +365,7 @@ pub async fn async_readiness() -> Result<()> {
     );
     store
         .run_concurrent(async move |accessor| {
-            let ((rx, expected), task_exit) = readiness_guest
+            let (rx, expected) = readiness_guest
                 .local_local_readiness()
                 .call_start(accessor, rx, expected)
                 .await?;
@@ -380,8 +379,6 @@ pub async fn async_readiness() -> Result<()> {
                     },
                 )
             });
-
-            task_exit.block(accessor).await;
 
             Ok(())
         })
@@ -402,7 +399,7 @@ mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
-        exports: { default: async | store | task_exit },
+        exports: { default: async | store },
     });
 }
 
@@ -488,11 +485,10 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         cancel::CancelHost::instantiate_async(&mut store, &component, &linker).await?;
     store
         .run_concurrent(async move |accessor| {
-            let ((), task) = cancel_host
+            cancel_host
                 .local_local_cancel()
                 .call_run(accessor, mode, 100)
                 .await?;
-            task.block(accessor).await;
             Ok::<_, wasmtime::Error>(())
         })
         .await??;
@@ -890,7 +886,6 @@ mod synchronous_transmit {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "synchronous-transmit-guest",
-        exports: { default: task_exit },
     });
 }
 
@@ -958,7 +953,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
     };
     store
         .run_concurrent(async move |accessor| {
-            let ((stream, stream_expected, future, future_expected), task_exit) = guest
+            let (stream, stream_expected, future, future_expected) = guest
                 .local_local_synchronous_transmit()
                 .call_start(accessor, stream, stream_expected, future, future_expected)
                 .await?;
@@ -987,8 +982,6 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                     future.pipe(access, consumer);
                 }
             });
-
-            task_exit.block(accessor).await;
 
             Ok(())
         })
