@@ -201,11 +201,8 @@ impl CodeMemory {
                         needs_executable = false;
                     }
                 }
-                crate::runtime::vm::UnwindRegistration::SECTION_NAME => {
-                    if cfg!(has_host_compiler_backend) {
-                        unwind = range;
-                    }
-                }
+                #[cfg(has_host_compiler_backend)]
+                crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
