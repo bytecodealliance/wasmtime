@@ -5,8 +5,10 @@ use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
+use object::SectionIndex;
+use object::read::elf::SectionTable;
 use object::{
-    elf::FileHeader64,
+    elf::{FileHeader64, SectionHeader64},
     endian::Endianness,
     read::elf::{FileHeader as _, SectionHeader as _},
 };
@@ -155,39 +157,42 @@ impl CodeMemory {
             let data = section_header
                 .data(endian, mmap_data)
                 .map_err(obj::ObjectCrateErrorWrapper)?;
-            let name = section_header
-                .name(endian, strings)
-                .map_err(obj::ObjectCrateErrorWrapper)?;
-            let Ok(name) = str::from_utf8(name) else {
-                log::debug!("ignoring section with invalid UTF-8 name");
-                continue;
-            };
+            let name = section_name(endian, strings, section_header)?;
             let range = subslice_range(data, &mmap);
 
             // Double-check that sections are all aligned properly.
             let section_align = usize::try_from(section_header.sh_addralign(endian))?;
             if section_align != 0 && data.len() != 0 {
+                let section_offset = data.as_ptr().addr() - mmap.as_ptr().addr();
                 ensure!(
-                    data.as_ptr().addr() % section_align == 0,
-                    "section `{name}` isn't aligned to {section_align:#x}",
+                    section_offset % section_align == 0,
+                    "section {name:?} isn't aligned to {section_align:#x}",
                 );
             }
 
-            // Assert that Cranelift hasn't inserted any calls that need to be
-            // relocated. We avoid using things like Cranelift's floor/ceil/etc.
-            // operators in the Wasm-to-Cranelift translator specifically to
+            // Check that we don't have any relocations, which would make
+            // loading precompiled Wasm modules slower and also force them to
+            // get paged into memory from disk.
+            //
+            // We avoid using things like Cranelift's `floor`, `ceil`,
+            // etc... operators in the Wasm-to-CLIF translator specifically to
             // avoid having to do any relocations here. This also ensures that
             // all builtins use the same trampoline mechanism.
-            let sh_type = section_header.sh_type(endian);
-            assert!(!matches!(
-                sh_type,
-                object::elf::SHT_REL | object::elf::SHT_RELA | object::elf::SHT_CREL
-            ));
+            //
+            // We do, however, allow relocations in `.debug_*` DWARF sections.
+            if let Some(target_section) = reloc_section_target(&sections, section_header, endian)? {
+                let target_name = section_name(endian, strings, target_section)?;
+                ensure!(
+                    target_name.starts_with(".debug_"),
+                    "section {target_name:?} has unexpected relocations \
+                     (defined in section {name:?})",
+                );
+            }
 
             match name {
                 obj::ELF_WASM_BTI => match data.len() {
                     1 => enable_branch_protection = Some(data[0] != 0),
-                    _ => bail!("invalid `{name}` section"),
+                    _ => bail!("invalid {name:?} section"),
                 },
                 ".text" => {
                     text = range;
@@ -196,8 +201,11 @@ impl CodeMemory {
                         needs_executable = false;
                     }
                 }
-                #[cfg(has_host_compiler_backend)]
-                crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
+                crate::runtime::vm::UnwindRegistration::SECTION_NAME => {
+                    if cfg!(has_host_compiler_backend) {
+                        unwind = range;
+                    }
+                }
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
@@ -207,16 +215,28 @@ impl CodeMemory {
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+
                 #[cfg(feature = "debug-builtins")]
                 ".debug_info" => has_native_debug_info = true,
 
-                _ => log::debug!("ignoring section {name}"),
+                // These sections are expected, but we do not need to retain any
+                // info about them.
+                ""
+                | ".symtab"
+                | ".strtab"
+                | ".shstrtab"
+                | ".pdata"
+                | ".xdata"
+                | obj::ELF_WASM_ENGINE => {
+                    log::debug!("ignoring section {name:?}")
+                }
+                _ if name.starts_with(".debug_") || name.starts_with(".rela.debug_") => {
+                    log::debug!("ignoring debug section {name:?}")
+                }
+
+                _ => bail!("unexpected section {name:?} in Wasm compilation artifact"),
             }
         }
-
-        // require mutability even when this is turned off
-        #[cfg(not(has_host_compiler_backend))]
-        let _ = &mut unwind;
 
         // Ensure that the exception table is well-formed. This parser
         // construction is cheap: it reads the header and validates
@@ -225,8 +245,9 @@ impl CodeMemory {
         // compiled artifact is as-produced-by this version of
         // Wasmtime, and we should always produce a correct exception
         // table (i.e., we are not expecting untrusted data here).
-        #[cfg(debug_assertions)]
-        let _ = ExceptionTable::parse(&mmap[exception_data.clone()])?;
+        if cfg!(debug_assertions) {
+            let _ = ExceptionTable::parse(&mmap[exception_data.clone()])?;
+        }
 
         Ok(Self {
             mmap,
@@ -567,6 +588,49 @@ impl CodeMemory {
         let mmap = self.mmap.deep_clone()?;
         Self::new(engine, mmap)
     }
+}
+
+fn section_name<'a>(
+    endian: Endianness,
+    strings: object::StringTable<'a>,
+    section_header: &SectionHeader64<Endianness>,
+) -> Result<&'a str> {
+    let name = section_header
+        .name(endian, strings)
+        .map_err(obj::ObjectCrateErrorWrapper)?;
+    Ok(str::from_utf8(name).context("invalid section name in Wasm compilation artifact")?)
+}
+
+fn is_reloc_section(section_header: &SectionHeader64<Endianness>, endian: Endianness) -> bool {
+    let sh_type = section_header.sh_type(endian);
+    matches!(
+        sh_type,
+        object::elf::SHT_REL | object::elf::SHT_RELA | object::elf::SHT_CREL
+    )
+}
+
+fn reloc_section_target<'a>(
+    sections: &'a SectionTable<'a, FileHeader64<Endianness>, &'a [u8]>,
+    section: &'a SectionHeader64<Endianness>,
+    endian: Endianness,
+) -> Result<Option<&'a SectionHeader64<Endianness>>> {
+    if !is_reloc_section(&section, endian) {
+        return Ok(None);
+    }
+
+    let sh_info = section.info_link(endian);
+
+    // Dynamic relocation.
+    if sh_info == SectionIndex(0) {
+        return Ok(None);
+    }
+
+    ensure!(
+        sh_info.0 < sections.len(),
+        "invalid ELF `sh_info` for relocation section",
+    );
+
+    Ok(Some(sections.section(sh_info)?))
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the
