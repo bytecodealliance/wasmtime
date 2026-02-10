@@ -12,19 +12,21 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct RecGroupId(pub(crate) u32);
 
 /// TypeID struct definition.
-#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct TypeId(pub(crate) u32);
 
-/// StructType definition
+/// StructType definition.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StructType {
     // Empty for now; fields will come in a future PR.
 }
 
-/// CompsiteType definition
+/// CompsiteType definition.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositeType {
-    /// Struct Type definition
+    /// Struct Type definition.
     Struct(StructType),
 }
 
@@ -50,12 +52,34 @@ impl Types {
         }
     }
 
+    /// Returns a fresh rec-group id that is not already in use.
+    pub fn fresh_rec_group_id(&self, rng: &mut mutatis::Rng) -> RecGroupId {
+        for _ in 0..1000 {
+            let id = RecGroupId(rng.gen_u32());
+            if !self.rec_groups.contains(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new RecGroupId in 1000 iterations; bad RNG?");
+    }
+
+    /// Returns a fresh type id that is not already in use.
+    pub fn fresh_type_id(&self, rng: &mut mutatis::Rng) -> TypeId {
+        for _ in 0..1000 {
+            let id = TypeId(rng.gen_u32());
+            if !self.type_defs.contains_key(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new TypeId in 1000 iterations; bad RNG?");
+    }
+
     /// Insert a rec-group id. Returns true if newly inserted, false if it already existed.
     pub fn insert_rec_group(&mut self, id: RecGroupId) -> bool {
         self.rec_groups.insert(id)
     }
 
-    ///  Insert a rec-group id.
+    /// Insert a rec-group id.
     pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
         self.type_defs.insert(
             id,
@@ -93,9 +117,9 @@ impl Types {
 /// This is used to track the requirements for the operands of an operation.
 #[derive(Copy, Clone, Debug)]
 pub enum StackType {
-    /// `externref`
+    /// `externref`.
     ExternRef,
-    /// `(ref $*)`;
+    /// `(ref $*)`.
     Struct(Option<u32>),
 }
 
@@ -134,19 +158,35 @@ impl StackType {
                 if ok {
                     stack.pop();
                 } else {
-                    // Ensure there *is* a struct to consume.
-                    let type_index = match wanted {
-                        Some(t) => Self::clamp(t, num_types),
-                        None => Self::clamp(0, num_types),
-                    };
-                    Self::emit(
-                        GcOp::StructNew { type_index },
-                        stack,
-                        out,
-                        num_types,
-                        &mut result_types,
-                    );
-                    stack.pop(); // consume the synthesized struct
+                    match wanted {
+                        // When num_types == 0, GcOp::fixup() should have dropped the ops
+                        // that require a concrete type.
+                        // But it keeps the ops that work with abstract types.
+                        // Since our mutator can legally remove all the types,
+                        // StackType::fixup() should insert GcOp::NullStruct()
+                        // to satisfy the undropped ops that work with abstract types.
+                        None => {
+                            Self::emit(GcOp::NullStruct, stack, out, num_types, &mut result_types);
+                            stack.pop();
+                        }
+
+                        // Typed struct requirement: only satisfiable if we have concrete types.
+                        Some(t) => {
+                            debug_assert_ne!(
+                                num_types, 0,
+                                "typed struct requirement with num_types == 0; op should have been removed"
+                            );
+                            let t = Self::clamp(t, num_types);
+                            Self::emit(
+                                GcOp::StructNew { type_index: t },
+                                stack,
+                                out,
+                                num_types,
+                                &mut result_types,
+                            );
+                            stack.pop();
+                        }
+                    }
                 }
             }
         }
