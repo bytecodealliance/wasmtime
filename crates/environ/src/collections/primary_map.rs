@@ -3,11 +3,12 @@ use core::{
     ops::{Index, IndexMut},
 };
 use cranelift_entity::EntityRef;
+use serde::{Serialize, ser::SerializeSeq};
 use wasmtime_core::error::OutOfMemory;
 
 /// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
 /// all methods that allocate.
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct PrimaryMap<K, V>
 where
     K: EntityRef,
@@ -33,6 +34,48 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.inner, f)
+    }
+}
+
+impl<K, V> From<crate::collections::Vec<V>> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn from(values: crate::collections::Vec<V>) -> Self {
+        let values: ::alloc::vec::Vec<V> = values.into();
+        let inner = cranelift_entity::PrimaryMap::from(values);
+        Self { inner }
+    }
+}
+
+impl<K, V> serde::ser::Serialize for PrimaryMap<K, V>
+where
+    K: EntityRef,
+    V: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+        for val in self.values() {
+            seq.serialize_element(val)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de, K, V> serde::de::Deserialize<'de> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+    V: serde::de::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let v: crate::collections::Vec<V> = serde::de::Deserialize::deserialize(deserializer)?;
+        Ok(Self::from(v))
     }
 }
 
