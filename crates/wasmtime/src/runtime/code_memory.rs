@@ -235,6 +235,10 @@ impl CodeMemory {
             }
         }
 
+        // Silence unused `mut` warning.
+        #[cfg(not(has_host_compiler_backend))]
+        let _ = &mut unwind;
+
         // Ensure that the exception table is well-formed. This parser
         // construction is cheap: it reads the header and validates
         // ranges but nothing else. We do this only in debug-assertion
