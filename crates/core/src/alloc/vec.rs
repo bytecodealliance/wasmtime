@@ -1,9 +1,11 @@
 use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
+use core::marker::PhantomData;
 use core::{
     fmt, mem,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
+use serde::ser::SerializeSeq;
 use std_alloc::alloc::Layout;
 use std_alloc::boxed::Box;
 use std_alloc::vec::Vec as StdVec;
@@ -262,11 +264,75 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
     }
 }
 
+impl<T> From<StdVec<T>> for Vec<T> {
+    fn from(inner: StdVec<T>) -> Self {
+        Self { inner }
+    }
+}
+
 impl<T> From<Box<[T]>> for Vec<T> {
     fn from(boxed_slice: Box<[T]>) -> Self {
-        Vec {
-            inner: StdVec::from(boxed_slice),
+        Self::from(StdVec::from(boxed_slice))
+    }
+}
+
+impl<T> serde::ser::Serialize for Vec<T>
+where
+    T: serde::ser::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+        for elem in self {
+            seq.serialize_element(elem)?;
         }
+        seq.end()
+    }
+}
+
+impl<'de, T> serde::de::Deserialize<'de> for Vec<T>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor<T>(PhantomData<fn() -> Vec<T>>);
+
+        impl<'de, T> serde::de::Visitor<'de> for Visitor<T>
+        where
+            T: serde::de::Deserialize<'de>,
+        {
+            type Value = Vec<T>;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a `wasmtime_core::alloc::Vec` sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                use serde::de::Error as _;
+
+                let mut v = Vec::new();
+
+                if let Some(len) = seq.size_hint() {
+                    v.reserve_exact(len).map_err(|oom| A::Error::custom(oom))?;
+                }
+
+                while let Some(elem) = seq.next_element()? {
+                    v.push(elem).map_err(|oom| A::Error::custom(oom))?;
+                }
+
+                Ok(v)
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor(PhantomData))
     }
 }
 
