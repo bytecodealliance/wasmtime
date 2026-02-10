@@ -1,9 +1,12 @@
 //! Simple string interning.
 
-use crate::{error::OutOfMemory, prelude::*};
+use crate::{
+    collections::{HashMap, String, Vec},
+    error::OutOfMemory,
+    prelude::*,
+};
 use core::{fmt, mem, num::NonZeroU32};
 use wasmtime_core::alloc::TryClone;
-use wasmtime_environ::collections::{HashMap, String, Vec};
 
 /// A pool of interned strings.
 ///
