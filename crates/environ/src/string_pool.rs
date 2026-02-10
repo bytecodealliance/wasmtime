@@ -8,6 +8,15 @@ use crate::{
 use core::{fmt, mem, num::NonZeroU32};
 use wasmtime_core::alloc::TryClone;
 
+/// An interned string associated with a particular string in a `StringPool`.
+///
+/// Allows for $O(1)$ equality tests, $O(1)$ hashing, and $O(1)$
+/// arbitrary-but-stable ordering.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Atom {
+    index: NonZeroU32,
+}
+
 /// A pool of interned strings.
 ///
 /// Insert new strings with [`StringPool::insert`] to get an `Atom` that is
@@ -42,15 +51,6 @@ impl Drop for StringPool {
             mem::ManuallyDrop::drop(&mut self.strings);
         }
     }
-}
-
-/// An interned string associated with a particular string in a `StringPool`.
-///
-/// Allows for $O(1)$ equality tests, $O(1)$ hashing, and $O(1)$
-/// arbitrary-but-stable ordering.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Atom {
-    index: NonZeroU32,
 }
 
 impl fmt::Debug for StringPool {
@@ -101,6 +101,59 @@ impl core::ops::Index<Atom> for StringPool {
     }
 }
 
+impl serde::ser::Serialize for StringPool {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde::ser::Serialize::serialize(&*self.strings, serializer)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for StringPool {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = StringPool;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
+                f.write_str("a `StringPool` sequence of strings")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                use serde::de::Error as _;
+
+                let mut pool = StringPool::new();
+
+                if let Some(len) = seq.size_hint() {
+                    pool.map.reserve(len).map_err(|oom| A::Error::custom(oom))?;
+                    pool.strings
+                        .reserve(len)
+                        .map_err(|oom| A::Error::custom(oom))?;
+                }
+
+                while let Some(s) = seq.next_element::<String>()? {
+                    debug_assert_eq!(s.len(), s.capacity());
+                    let s = s.into_boxed_str().expect("len == cap");
+                    if !pool.map.contains_key(&*s) {
+                        pool.insert_new_boxed_str(s)
+                            .map_err(|oom| A::Error::custom(oom))?;
+                    }
+                }
+
+                Ok(pool)
+            }
+        }
+        deserializer.deserialize_seq(Visitor)
+    }
+}
+
 impl StringPool {
     /// Create a new, empty pool.
     pub fn new() -> Self {
@@ -123,15 +176,21 @@ impl StringPool {
             .into_boxed_str()
             .expect("reserved exact capacity, so shouldn't need to realloc");
 
+        self.insert_new_boxed_str(owned)
+    }
+
+    fn insert_new_boxed_str(&mut self, owned: Box<str>) -> Result<Atom, OutOfMemory> {
+        debug_assert!(!self.map.contains_key(&*owned));
+
         let index = self.strings.len();
         let atom = Atom::new(index);
-        self.strings.push(owned).expect("reserved capacity");
+        self.strings.push(owned)?;
 
         // SAFETY: We never expose this borrow and never mutate or reallocate
         // strings once inserted into the pool.
         let s = unsafe { mem::transmute::<&str, &'static str>(&self.strings[index]) };
 
-        let old = self.map.insert(s, atom).expect("reserved capacity");
+        let old = self.map.insert(s, atom)?;
         debug_assert!(old.is_none());
 
         Ok(atom)
@@ -166,6 +225,25 @@ impl fmt::Debug for Atom {
         f.debug_struct("Atom")
             .field("index", &self.index())
             .finish()
+    }
+}
+
+impl serde::ser::Serialize for Atom {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde::ser::Serialize::serialize(&self.index, serializer)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for Atom {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let index = serde::de::Deserialize::deserialize(deserializer)?;
+        Ok(Self { index })
     }
 }
 
@@ -232,6 +310,27 @@ mod tests {
                 assert_eq!(&pool[atom], atom.index().to_string());
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn roundtrip_serialize_deserialize() -> Result<()> {
+        let mut pool = StringPool::new();
+        let a = pool.insert("a")?;
+        let b = pool.insert("b")?;
+        let c = pool.insert("c")?;
+
+        let bytes = postcard::to_allocvec(&(pool, a, b, c))?;
+        let (pool, a2, b2, c2) = postcard::from_bytes::<(StringPool, Atom, Atom, Atom)>(&bytes)?;
+
+        assert_eq!(&pool[a], "a");
+        assert_eq!(&pool[b], "b");
+        assert_eq!(&pool[c], "c");
+
+        assert_eq!(&pool[a2], "a");
+        assert_eq!(&pool[b2], "b");
+        assert_eq!(&pool[c2], "c");
 
         Ok(())
     }
