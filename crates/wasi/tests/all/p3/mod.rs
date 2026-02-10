@@ -39,7 +39,6 @@ async fn run_allow_blocking_current_thread(
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
-        .0
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 

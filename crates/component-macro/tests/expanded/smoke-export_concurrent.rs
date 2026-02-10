@@ -241,7 +241,7 @@ pub mod exports {
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
                 };
-                let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                let () = callee.call_concurrent(accessor, ()).await?;
                 Ok(())
             }
         }

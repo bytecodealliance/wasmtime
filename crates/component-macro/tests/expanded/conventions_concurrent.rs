@@ -635,7 +635,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.kebab_case)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_foo<_T, _D>(
@@ -653,7 +653,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.foo)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_function_with_dashes<_T, _D>(
@@ -670,7 +670,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.function_with_dashes)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_function_with_no_weird_characters<_T, _D>(
@@ -687,7 +687,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.function_with_no_weird_characters)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_apple<_T, _D>(
@@ -704,7 +704,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.apple)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_apple_pear<_T, _D>(
@@ -721,7 +721,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.apple_pear)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_apple_pear_grape<_T, _D>(
@@ -738,7 +738,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.apple_pear_grape)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_a0<_T, _D>(
@@ -755,7 +755,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.a0)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     /// Comment out identifiers that collide when mapped to snake_case, for now; see
@@ -777,7 +777,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.is_xml)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_explicit<_T, _D>(
@@ -794,7 +794,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.explicit)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_explicit_kebab<_T, _D>(
@@ -811,7 +811,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.explicit_kebab)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     /// Identifiers with the same name as keywords are quoted.
@@ -829,7 +829,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.bool)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
+                        let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                 }

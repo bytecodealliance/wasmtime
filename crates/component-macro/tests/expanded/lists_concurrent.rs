@@ -1525,7 +1525,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_u8_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_u16_param<_T, _D>(
@@ -1543,7 +1543,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_u16_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_u32_param<_T, _D>(
@@ -1561,7 +1561,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_u32_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_u64_param<_T, _D>(
@@ -1579,7 +1579,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_u64_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_s8_param<_T, _D>(
@@ -1597,7 +1597,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_s8_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_s16_param<_T, _D>(
@@ -1615,7 +1615,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_s16_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_s32_param<_T, _D>(
@@ -1633,7 +1633,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_s32_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_s64_param<_T, _D>(
@@ -1651,7 +1651,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_s64_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_f32_param<_T, _D>(
@@ -1669,7 +1669,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_f32_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_f64_param<_T, _D>(
@@ -1687,7 +1687,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.list_f64_param)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_list_u8_ret<_T, _D>(
@@ -1704,7 +1704,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<u8>,),
                             >::new_unchecked(self.list_u8_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_u16_ret<_T, _D>(
@@ -1721,7 +1721,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<u16>,),
                             >::new_unchecked(self.list_u16_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_u32_ret<_T, _D>(
@@ -1738,7 +1738,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<u32>,),
                             >::new_unchecked(self.list_u32_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_u64_ret<_T, _D>(
@@ -1755,7 +1755,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<u64>,),
                             >::new_unchecked(self.list_u64_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s8_ret<_T, _D>(
@@ -1772,7 +1772,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<i8>,),
                             >::new_unchecked(self.list_s8_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s16_ret<_T, _D>(
@@ -1789,7 +1789,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<i16>,),
                             >::new_unchecked(self.list_s16_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s32_ret<_T, _D>(
@@ -1806,7 +1806,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<i32>,),
                             >::new_unchecked(self.list_s32_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_s64_ret<_T, _D>(
@@ -1823,7 +1823,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<i64>,),
                             >::new_unchecked(self.list_s64_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_f32_ret<_T, _D>(
@@ -1840,7 +1840,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<f32>,),
                             >::new_unchecked(self.list_f32_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_list_f64_ret<_T, _D>(
@@ -1857,7 +1857,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<f64>,),
                             >::new_unchecked(self.list_f64_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_tuple_list<_T, _D>(
@@ -1877,9 +1877,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<(i64, u32)>,),
                             >::new_unchecked(self.tuple_list)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_string_list_arg<_T, _D>(
@@ -1903,7 +1901,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.string_list_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_string_list_ret<_T, _D>(
@@ -1928,7 +1926,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.string_list_ret)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_tuple_string_list<_T, _D>(
@@ -1960,9 +1958,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.tuple_string_list)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_string_list<_T, _D>(
@@ -1994,9 +1990,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.string_list)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_record_list<_T, _D>(
@@ -2016,9 +2010,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<OtherRecord>,),
                             >::new_unchecked(self.record_list)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_record_list_reverse<_T, _D>(
@@ -2038,9 +2030,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<SomeRecord>,),
                             >::new_unchecked(self.record_list_reverse)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_variant_list<_T, _D>(
@@ -2060,9 +2050,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<OtherVariant>,),
                             >::new_unchecked(self.variant_list)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_load_store_everything<_T, _D>(
@@ -2080,9 +2068,7 @@ pub mod exports {
                                 (LoadStoreAllSizes,),
                             >::new_unchecked(self.load_store_everything)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                 }

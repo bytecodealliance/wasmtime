@@ -636,11 +636,7 @@ impl RunCommand {
         #[cfg(feature = "component-model-async")]
         if self.run.common.wasm.concurrency_support.unwrap_or(true) {
             store
-                .run_concurrent(async |store| {
-                    let task = func.call_concurrent(store, params, results).await?;
-                    task.block(store).await;
-                    wasmtime::error::Ok(())
-                })
+                .run_concurrent(async |store| func.call_concurrent(store, params, results).await)
                 .await??;
             return Ok(());
         }
@@ -670,11 +666,7 @@ impl RunCommand {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
                     store
-                        .run_concurrent(async |store| {
-                            let (result, task) = command.wasi_cli_run().call_run(store).await?;
-                            task.block(store).await;
-                            Ok(result)
-                        })
+                        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
                         .await?,
                 );
             }

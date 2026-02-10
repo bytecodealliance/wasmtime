@@ -12,7 +12,6 @@ bitflags::bitflags! {
         const VERBOSE_TRACING = 1 << 4;
         const IGNORE_WIT = 1 << 5;
         const EXACT = 1 << 6;
-        const TASK_EXIT = 1 << 7;
     }
 }
 

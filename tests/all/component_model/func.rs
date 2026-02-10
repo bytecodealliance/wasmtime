@@ -1126,7 +1126,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     match store
         .run_concurrent(async move |accessor| {
-            wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
+            wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?)
         })
         .await
     {
@@ -1369,7 +1369,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?)
                 })
                 .await??
                 .0
@@ -1847,7 +1847,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?)
                 })
                 .await??
                 .0

@@ -367,7 +367,7 @@ const _: () = {
                     (wasmtime::component::Resource<WorldResource>,),
                 >::new_unchecked(self.some_world_func2)
             };
-            let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+            let (ret0,) = callee.call_concurrent(accessor, ()).await?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -1181,7 +1181,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.handle)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                 }
