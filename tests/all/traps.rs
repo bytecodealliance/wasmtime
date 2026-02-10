@@ -264,21 +264,25 @@ fn test_trap_trace_cb() -> Result<()> {
 
 #[test]
 fn test_trap_stack_overflow() -> Result<()> {
-    let mut store = Store::<()>::default();
+    let max_frames = NonZeroUsize::new(32).unwrap();
     let wat = r#"
         (module $rec_mod
             (func $run (export "run") (call $run))
         )
     "#;
 
-    let module = Module::new(store.engine(), wat)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
+    let mut config = Config::new();
+    config.wasm_backtrace_max_frames(Some(max_frames));
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
     let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
     let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
-    assert!(trace.len() >= 32);
+    assert_eq!(trace.len(), max_frames.get());
     for i in 0..trace.len() {
         assert_eq!(trace[i].module().name().unwrap(), "rec_mod");
         assert_eq!(trace[i].func_index(), 0);
