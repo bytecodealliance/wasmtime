@@ -579,7 +579,7 @@ mod call_thread_state {
                 unwinder: store.unwinder(),
                 #[cfg(all(has_native_signals))]
                 signal_handler: store.signal_handler(),
-                capture_backtrace: store.engine().config().wasm_backtrace_max_frames > 0,
+                capture_backtrace: store.engine().config().wasm_backtrace_max_frames.is_some(),
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
                 vm_store_context: store.vm_store_context_ptr(),

@@ -2,6 +2,7 @@ use crate::prelude::*;
 use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
+use core::num::NonZeroUsize;
 use core::str::FromStr;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
@@ -31,7 +32,7 @@ pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
-pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: usize = 20;
+pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: NonZeroUsize = NonZeroUsize::new(20).unwrap();
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -147,7 +148,7 @@ pub struct Config {
     /// Same as `enabled_features`, but for those that are explicitly disabled.
     pub(crate) disabled_features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
-    pub(crate) wasm_backtrace_max_frames: usize,
+    pub(crate) wasm_backtrace_max_frames: Option<NonZeroUsize>,
     pub(crate) native_unwind_info: Option<bool>,
     #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub(crate) async_stack_size: usize,
@@ -251,7 +252,7 @@ impl Config {
             // committed.
             max_wasm_stack: 512 * 1024,
             wasm_backtrace_details_env_used: false,
-            wasm_backtrace_max_frames: DEFAULT_WASM_BACKTRACE_MAX_FRAMES,
+            wasm_backtrace_max_frames: Some(DEFAULT_WASM_BACKTRACE_MAX_FRAMES),
             native_unwind_info: None,
             enabled_features: WasmFeatures::empty(),
             disabled_features: WasmFeatures::empty(),
@@ -443,20 +444,24 @@ impl Config {
     ///
     /// This method is deprecated in favor of
     /// [`Config::wasm_backtrace_max_frames`]. Calling `wasm_backtrace(false)`
-    /// is equivalent to `wasm_backtrace_max_frames(0)`, and
+    /// is equivalent to `wasm_backtrace_max_frames(None)`, and
     /// `wasm_backtrace(true)` will leave `wasm_backtrace_max_frames` unchanged
-    /// if the value is nonzero and will otherwise restore the default nonzero
+    /// if the value is `Some` and will otherwise restore the default `Some`
     /// value.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     #[deprecated = "use `wasm_backtrace_max_frames` instead"]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
-        if enable {
-            if self.wasm_backtrace_max_frames == 0 {
-                self.wasm_backtrace_max_frames = DEFAULT_WASM_BACKTRACE_MAX_FRAMES;
+        match (enable, self.wasm_backtrace_max_frames) {
+            (false, _) => self.wasm_backtrace_max_frames = None,
+            // Wasm backtraces were disabled; enable them with the
+            // default maximum number of frames to capture.
+            (true, None) => {
+                self.wasm_backtrace_max_frames = Some(DEFAULT_WASM_BACKTRACE_MAX_FRAMES)
             }
-        } else {
-            self.wasm_backtrace_max_frames = 0;
+            // Wasm backtraces are already enabled; keep the existing
+            // max-frames configuration.
+            (true, Some(_)) => {}
         }
         self
     }
@@ -515,11 +520,11 @@ impl Config {
     /// [`Error::context`](crate::Error::context) to errors returned from host
     /// functions. The [`WasmBacktrace`] type can be acquired via
     /// [`Error::downcast_ref`](crate::Error::downcast_ref) to inspect the
-    /// backtrace. When this option is set to 0 then this context is never
+    /// backtrace. When this option is set to `None` then this context is never
     /// applied to errors coming out of wasm.
     ///
     /// The default value is 20.
-    pub fn wasm_backtrace_max_frames(&mut self, limit: usize) -> &mut Self {
+    pub fn wasm_backtrace_max_frames(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.wasm_backtrace_max_frames = limit;
         self
     }
