@@ -318,22 +318,14 @@ where
             {
                 use serde::de::Error as _;
 
-                let len = seq
-                    .size_hint()
-                    .ok_or_else(|| A::Error::custom("missing length prefix"))?;
-
                 let mut v = Vec::new();
-                v.reserve_exact(len).map_err(|oom| A::Error::custom(oom))?;
 
-                while let Some(elem) = seq.next_element()? {
-                    if v.len() == v.capacity() {
-                        return Err(A::Error::custom("too many elements in sequence"));
-                    }
-                    v.push(elem).expect("reserved capacity");
+                if let Some(len) = seq.size_hint() {
+                    v.reserve_exact(len).map_err(|oom| A::Error::custom(oom))?;
                 }
 
-                if v.len() != v.capacity() {
-                    return Err(A::Error::custom("too few elements in sequence"));
+                while let Some(elem) = seq.next_element()? {
+                    v.push(elem).map_err(|oom| A::Error::custom(oom))?;
                 }
 
                 Ok(v)
