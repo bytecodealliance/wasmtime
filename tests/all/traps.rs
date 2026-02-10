@@ -1,9 +1,9 @@
 #![cfg(not(miri))]
 
 use crate::ErrorExt;
+use std::num::NonZeroUsize;
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
-use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use wasmtime::bail;
 use wasmtime::*;
