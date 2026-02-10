@@ -2740,8 +2740,8 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut vm::component::CallContexts {
-        self.component_call_contexts_mut()
+    fn component_task_state_mut(&mut self) -> &mut crate::component::store::ComponentTaskState {
+        StoreOpaque::component_task_state_mut(self)
     }
 
     fn store_opaque(&self) -> &StoreOpaque {

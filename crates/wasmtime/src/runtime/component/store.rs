@@ -1,14 +1,14 @@
+use crate::prelude::*;
 use crate::runtime::component::concurrent::ConcurrentState;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
-use crate::runtime::vm::component::{CallContexts, HandleTable};
-use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
+use crate::runtime::vm::component::{
+    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
+};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{Engine, StoreContextMut};
-#[cfg(feature = "component-model-async")]
-use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
@@ -31,12 +31,22 @@ pub struct ComponentStoreData {
     /// and calls. These also interact with the `ResourceAny` type and its
     /// internal representation.
     component_host_table: HandleTable,
-    component_calls: CallContexts,
     host_resource_data: HostResourceData,
 
     /// Metadata/tasks/etc related to component-model-async and concurrency
     /// support.
-    concurrent_state: Option<ConcurrentState>,
+    task_state: ComponentTaskState,
+}
+
+/// State tracking for tasks within components.
+pub enum ComponentTaskState {
+    /// Used when `Config::concurrency_support` is disabled. Here there are no
+    /// async tasks but there's still state for borrows that needs managing.
+    NotConcurrent(ComponentTasksNotConcurrent),
+
+    /// Used when `Config::concurrency_support` is enabled and has
+    /// full state for all async tasks.
+    Concurrent(ConcurrentState),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -56,19 +66,21 @@ impl ComponentStoreData {
             trapped: false,
             num_component_instances: 0,
             component_host_table: Default::default(),
-            component_calls: Default::default(),
             host_resource_data: Default::default(),
-            concurrent_state: if engine.tunables().concurrency_support {
+            task_state: if engine.tunables().concurrency_support {
                 #[cfg(feature = "component-model-async")]
                 {
-                    Some(Default::default())
+                    ComponentTaskState::Concurrent(Default::default())
                 }
                 #[cfg(not(feature = "component-model-async"))]
                 {
+                    // This should be validated in `Config` where if
+                    // `concurrency_support` is enabled but compile time support
+                    // isn't available then an `Engine` isn't creatable.
                     unreachable!()
                 }
             } else {
-                None
+                ComponentTaskState::NotConcurrent(Default::default())
             },
         }
     }
@@ -87,7 +99,7 @@ impl ComponentStoreData {
         // in their `Drop::drop` implementations, in which case they'll need to
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
-        if store.0.component_data().concurrent_state.is_some() {
+        if store.0.component_data().task_state.is_concurrent() {
             ComponentStoreData::drop_fibers_and_futures(store.0);
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -256,6 +268,7 @@ impl StoreOpaque {
         self.store_data_mut().components.trapped = true;
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn component_data(&self) -> &ComponentStoreData {
         &self.store_data().components
     }
@@ -264,8 +277,8 @@ impl StoreOpaque {
         &mut self.store_data_mut().components
     }
 
-    pub(crate) fn component_call_contexts_mut(&mut self) -> &mut CallContexts {
-        &mut self.component_data_mut().component_calls
+    pub(crate) fn component_task_state_mut(&mut self) -> &mut ComponentTaskState {
+        &mut self.component_data_mut().task_state
     }
 
     pub(crate) fn push_component_instance(&mut self, instance: Instance) {
@@ -292,38 +305,37 @@ impl StoreOpaque {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
         debug_assert!(self.concurrency_support());
-        self.component_data_mut().concurrent_state.as_mut().unwrap()
+        self.component_data_mut().task_state.concurrent_state_mut()
     }
 
     #[inline]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrency_support(&self) -> bool {
-        let support = self.component_data().concurrent_state.is_some();
+        let support = self.component_data().task_state.is_concurrent();
         debug_assert_eq!(support, self.engine().tunables().concurrency_support);
         support
     }
 
-    pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
+    pub(crate) fn lift_context_parts(
         &mut self,
         instance: Instance,
     ) -> (
-        &mut CallContexts,
+        &mut ComponentTaskState,
         &mut HandleTable,
         &mut HostResourceData,
         Pin<&mut ComponentInstance>,
-        Option<&mut ConcurrentState>,
     ) {
         let instance = instance.id();
         instance.assert_belongs_to(self.id());
         let data = self.component_data_mut();
         (
-            &mut data.component_calls,
+            &mut data.task_state,
             &mut data.component_host_table,
             &mut data.host_resource_data,
             data.instances[instance.instance]
                 .as_mut()
                 .unwrap()
                 .get_mut(),
-            data.concurrent_state.as_mut(),
         )
     }
 
@@ -356,11 +368,67 @@ impl StoreOpaque {
 
         (
             vm::component::ResourceTables {
-                host_table: Some(&mut data.component_host_table),
-                calls: &mut data.component_calls,
+                host_table: &mut data.component_host_table,
+                task_state: &mut data.task_state,
                 guest,
             },
             &mut data.host_resource_data,
         )
+    }
+
+    pub(crate) fn enter_call_not_concurrent(&mut self) {
+        let state = match &mut self.component_data_mut().task_state {
+            ComponentTaskState::NotConcurrent(state) => state,
+            ComponentTaskState::Concurrent(_) => unreachable!(),
+        };
+        state.scopes.push(CallContext::default());
+    }
+
+    pub(crate) fn exit_call_not_concurrent(&mut self) {
+        let state = match &mut self.component_data_mut().task_state {
+            ComponentTaskState::NotConcurrent(state) => state,
+            ComponentTaskState::Concurrent(_) => unreachable!(),
+        };
+        state.scopes.pop();
+    }
+}
+
+#[derive(Default)]
+pub struct ComponentTasksNotConcurrent {
+    scopes: Vec<CallContext>,
+}
+
+impl ComponentTaskState {
+    pub fn call_context(&mut self, id: u32) -> &mut CallContext {
+        match self {
+            ComponentTaskState::NotConcurrent(state) => &mut state.scopes[id as usize],
+            ComponentTaskState::Concurrent(state) => state.call_context(id),
+        }
+    }
+
+    pub fn current_call_context_scope_id(&self) -> u32 {
+        match self {
+            ComponentTaskState::NotConcurrent(state) => {
+                u32::try_from(state.scopes.len() - 1).unwrap()
+            }
+            ComponentTaskState::Concurrent(state) => state.current_call_context_scope_id(),
+        }
+    }
+
+    pub fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
+        match self {
+            ComponentTaskState::Concurrent(state) => state,
+            ComponentTaskState::NotConcurrent(_) => {
+                panic!("expected concurrent state to be present")
+            }
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn is_concurrent(&self) -> bool {
+        match self {
+            ComponentTaskState::Concurrent(_) => true,
+            ComponentTaskState::NotConcurrent(_) => false,
+        }
     }
 }

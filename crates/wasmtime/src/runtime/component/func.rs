@@ -603,10 +603,8 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        if store.0.concurrency_support() {
-            let async_type = self.abi_async(store.0);
-            store.0.enter_sync_call(None, async_type, instance)?;
-        }
+        let async_type = self.abi_async(store.0);
+        store.0.enter_guest_sync_call(None, async_type, instance)?;
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
@@ -632,7 +630,6 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
         self.with_lower_context(store.as_context_mut(), |cx, ty| {
-            cx.enter_call();
             lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
 
@@ -716,11 +713,8 @@ impl Func {
             store
                 .0
                 .component_resource_tables(Some(self.instance))
-                .exit_call()?;
-
-            if store.0.concurrency_support() {
-                store.0.exit_sync_call(false)?;
-            }
+                .validate_scope_exit()?;
+            store.0.exit_guest_sync_call(false)?;
         }
         Ok(())
     }
