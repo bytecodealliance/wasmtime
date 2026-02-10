@@ -264,6 +264,12 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
     }
 }
 
+impl<T> From<Vec<T>> for StdVec<T> {
+    fn from(v: Vec<T>) -> Self {
+        v.inner
+    }
+}
+
 impl<T> From<StdVec<T>> for Vec<T> {
     fn from(inner: StdVec<T>) -> Self {
         Self { inner }
