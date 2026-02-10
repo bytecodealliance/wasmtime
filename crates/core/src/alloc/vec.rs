@@ -270,6 +270,12 @@ impl<T> From<StdVec<T>> for Vec<T> {
     }
 }
 
+impl<T> From<Vec<T>> for StdVec<T> {
+    fn from(v: Vec<T>) -> Self {
+        v.inner
+    }
+}
+
 impl<T> From<Box<[T]>> for Vec<T> {
     fn from(boxed_slice: Box<[T]>) -> Self {
         Self::from(StdVec::from(boxed_slice))
