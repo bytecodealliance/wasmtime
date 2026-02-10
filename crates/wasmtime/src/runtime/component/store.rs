@@ -408,7 +408,9 @@ impl ComponentTaskState {
 
     pub fn current_call_context_scope_id(&self) -> u32 {
         match self {
-            ComponentTaskState::NotConcurrent(state) => (state.scopes.len() - 1) as u32,
+            ComponentTaskState::NotConcurrent(state) => {
+                u32::try_from(state.scopes.len() - 1).unwrap()
+            }
             ComponentTaskState::Concurrent(state) => state.current_call_context_scope_id(),
         }
     }

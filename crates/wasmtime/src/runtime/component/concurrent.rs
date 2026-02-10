@@ -3011,7 +3011,7 @@ impl Instance {
             .subtask_remove(task_id)?;
 
         let concurrent_state = store.concurrent_state_mut();
-        let (waitable, expected_caller_instance, delete) = if is_host {
+        let (waitable, expected_caller, delete) = if is_host {
             let id = TableId::<HostTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             if task.join_handle.is_some() {
@@ -3049,7 +3049,7 @@ impl Instance {
         // this should never fail unless there's a bug in Wasmtime, but we check
         // here to be sure:
         assert_eq!(
-            expected_caller_instance,
+            expected_caller,
             concurrent_state.unwrap_current_guest_thread(),
         );
         log::trace!("subtask_drop {waitable:?} (handle {task_id})");
@@ -3447,7 +3447,7 @@ impl Instance {
             })
             .handle_table()
             .subtask_rep(task_id)?;
-        let (waitable, expected_caller_instance) = if is_host {
+        let (waitable, expected_caller) = if is_host {
             let id = TableId::<HostTask>::new(rep);
             (
                 Waitable::Host(id),
@@ -3466,7 +3466,7 @@ impl Instance {
         // here to be sure:
         let concurrent_state = store.concurrent_state_mut();
         assert_eq!(
-            expected_caller_instance,
+            expected_caller,
             concurrent_state.unwrap_current_guest_thread(),
         );
 
