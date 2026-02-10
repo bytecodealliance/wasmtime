@@ -53,16 +53,12 @@ pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
     )
     .with_context(|| format!("failed to add tests from `{}`", cm_tests.display()))?;
 
-    // Temporarily work around upstream tests that loop forever.
-    //
-    // Now that `thread.yield` and `CALLBACK_CODE_YIELD` are both no-ops in
-    // non-blocking contexts, these tests need to be updated; meanwhile, we skip
-    // them.
-    //
-    // TODO: remove this once
-    // https://github.com/WebAssembly/component-model/pull/578 has been merged:
+    // Temporarily work around upstream tests that fail in unexpected ways (e.g.
+    // panics, loops, etc).
     {
-        let skip_list = &["drop-subtask.wast", "async-calls-sync.wast"];
+        let skip_list = &[
+            // .. empty currently ..
+        ];
         tests.retain(|test| {
             test.path
                 .file_name()

@@ -47,7 +47,6 @@ The emoji legend is:
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | ❌     | ✅  | ❌     |
 | [`exception-handling`]   | ✅      | ✅    | ✅       | 🚧[^9] | ✅  | 🚧[^10]|
 | [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
 | [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ❌     |

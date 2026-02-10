@@ -20,7 +20,7 @@
            (i32.ne (i32.const 10) (local.get $i))
            br_if $loop
          )
-         
+
          i32.const 1 ;; CALLBACK_CODE_YIELD
       )
 
@@ -56,7 +56,7 @@
     (import "a" (instance $a
       (export "f" (func async))
     ))
-             
+
     (core module $m
       (import "" "f" (func $f (result i32)))
       (import "" "subtask.cancel" (func $subtask-cancel (param i32) (result i32)))
@@ -64,9 +64,9 @@
       (func (export "f")
          (local $status i32)
          (local $subtask i32)
-            
+
          (local.set $status (call $f))
-         (local.set $subtask (i32.shr_u (i32.const 4) (local.get $status)))
+         (local.set $subtask (i32.shr_u (local.get $status) (i32.const 4)))
          (local.set $status (i32.and (i32.const 0xF) (local.get $status)))
          (i32.ne (i32.const 1 (; STATUS_STARTED ;)) (local.get $status))
          if unreachable end

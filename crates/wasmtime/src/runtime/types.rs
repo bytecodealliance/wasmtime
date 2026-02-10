@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
@@ -7,10 +8,11 @@ use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::WasmExnType;
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
-    WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
-    WasmSubType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes,
+    PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
+    WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
+    WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
+    collections::Vec as FallibleVec,
 };
 
 pub(crate) mod matching;
@@ -1509,6 +1511,7 @@ impl ExternType {
                         subty.supertype,
                         subty.unwrap_func().clone(),
                     )
+                    .panic_on_oom()
                     .into()
                 }
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
@@ -2091,7 +2094,7 @@ impl StructType {
                     inner: WasmCompositeInnerType::Struct(ty),
                 },
             },
-        );
+        )?;
         Ok(Self {
             registered_type: ty,
         })
@@ -2332,7 +2335,8 @@ impl ArrayType {
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
-        );
+        )
+        .panic_on_oom();
         Self {
             registered_type: ty,
         }
@@ -2409,6 +2413,21 @@ impl FuncType {
             .expect("cannot fail without a supertype")
     }
 
+    /// Like [`FuncType::new`] but returns an
+    /// [`OutOfMemory`][crate::error::OutOfMemory] error on allocation failure.
+    pub fn try_new(
+        engine: &Engine,
+        params: impl IntoIterator<Item = ValType>,
+        results: impl IntoIterator<Item = ValType>,
+    ) -> Result<FuncType, OutOfMemory> {
+        Self::with_finality_and_supertype(engine, Finality::Final, None, params, results).map_err(
+            |e| {
+                e.downcast::<OutOfMemory>()
+                    .expect("cannot fail without a supertype, other than OOM")
+            },
+        )
+    }
+
     /// Create a new function type with the given finality, supertype, parameter
     /// types, and result types.
     ///
@@ -2429,52 +2448,52 @@ impl FuncType {
         let params = params.into_iter();
         let results = results.into_iter();
 
-        let mut wasmtime_params = Vec::with_capacity({
+        let mut wasmtime_params = FallibleVec::with_capacity({
             let size_hint = params.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Only reserve space if we have a supertype, as that is the only time
             // that this vec is used.
             supertype.is_some() as usize * cap
-        });
+        })?;
 
-        let mut wasmtime_results = Vec::with_capacity({
+        let mut wasmtime_results = FallibleVec::with_capacity({
             let size_hint = results.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Same as above.
             supertype.is_some() as usize * cap
-        });
+        })?;
 
         // Keep any of our parameters' and results' `RegisteredType`s alive
         // across `Self::from_wasm_func_type`. If one of our given `ValType`s is
         // the only thing keeping a type in the registry, we don't want to
         // unregister it when we convert the `ValType` into a `WasmValType` just
         // before we register our new `WasmFuncType` that will reference it.
-        let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
+        let mut registrations = FallibleVec::new();
 
-        let mut to_wasm_type = |ty: ValType, vec: &mut Vec<_>| {
-            assert!(ty.comes_from_same_engine(engine));
+        let mut to_wasm_type =
+            |ty: ValType, vec: &mut FallibleVec<_>| -> Result<WasmValType, OutOfMemory> {
+                assert!(ty.comes_from_same_engine(engine));
 
-            if supertype.is_some() {
-                vec.push(ty.clone());
-            }
-
-            if let Some(r) = ty.as_ref() {
-                if let Some(r) = r.heap_type().as_registered_type() {
-                    registrations.push(r.clone());
+                if supertype.is_some() {
+                    vec.push(ty.clone())?;
                 }
-            }
 
-            ty.to_wasm_type()
-        };
+                if let Some(r) = ty.as_ref() {
+                    if let Some(r) = r.heap_type().as_registered_type() {
+                        registrations.push(r.clone())?;
+                    }
+                }
 
-        let wasm_func_ty = WasmFuncType::new(
-            params
-                .map(|p| to_wasm_type(p, &mut wasmtime_params))
-                .collect(),
-            results
-                .map(|r| to_wasm_type(r, &mut wasmtime_results))
-                .collect(),
-        );
+                Ok(ty.to_wasm_type())
+            };
+
+        let params: Box<[_]> = params
+            .map(|p| to_wasm_type(p, &mut wasmtime_params))
+            .try_collect()?;
+        let results: Box<[_]> = results
+            .map(|p| to_wasm_type(p, &mut wasmtime_results))
+            .try_collect()?;
+        let wasm_func_ty = WasmFuncType::new(params, results);
 
         if let Some(supertype) = supertype {
             assert!(supertype.comes_from_same_engine(engine));
@@ -2519,7 +2538,7 @@ impl FuncType {
             finality.is_final(),
             supertype.map(|ty| ty.type_index().into()),
             wasm_func_ty,
-        ))
+        )?)
     }
 
     /// Get the engine that this function type is associated with.
@@ -2673,7 +2692,7 @@ impl FuncType {
         is_final: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmFuncType,
-    ) -> FuncType {
+    ) -> Result<FuncType, OutOfMemory> {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
@@ -2684,10 +2703,10 @@ impl FuncType {
                     inner: WasmCompositeInnerType::Func(ty),
                 },
             },
-        );
-        Self {
+        )?;
+        Ok(Self {
             registered_type: ty,
-        }
+        })
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
@@ -2860,7 +2879,8 @@ impl ExnType {
                     }),
                 },
             },
-        );
+        )
+        .panic_on_oom();
 
         Self {
             func_ty,

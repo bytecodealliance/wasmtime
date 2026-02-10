@@ -515,8 +515,8 @@ impl Module {
         // Note that the unsafety here should be ok since the `trampolines`
         // field should only point to valid trampoline function pointers
         // within the text section.
-        let signatures =
-            engine.register_and_canonicalize_types(&mut types, core::iter::once(&mut info.module));
+        let signatures = engine
+            .register_and_canonicalize_types(&mut types, core::iter::once(&mut info.module))?;
 
         // Package up all our data into an `EngineCode` and delegate to the final
         // step of module compilation.

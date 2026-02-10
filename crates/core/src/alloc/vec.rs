@@ -1,8 +1,11 @@
+use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
 use core::{
     fmt, mem,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
+use std_alloc::alloc::Layout;
+use std_alloc::boxed::Box;
 use std_alloc::vec::Vec as StdVec;
 
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
@@ -26,10 +29,25 @@ impl<T: fmt::Debug> fmt::Debug for Vec<T> {
     }
 }
 
+impl<T> TryClone for Vec<T>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut v = Vec::with_capacity(self.len())?;
+        for x in self {
+            v.push(x.try_clone()?).expect("reserved capacity");
+        }
+        Ok(v)
+    }
+}
+
 impl<T> Vec<T> {
     /// Same as [`std::vec::Vec::new`].
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self {
+            inner: StdVec::new(),
+        }
     }
 
     /// Same as [`std::vec::Vec::with_capacity`] but returns an error on
@@ -83,14 +101,29 @@ impl<T> Vec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::pop`].
+    pub fn pop(&mut self) -> Option<T> {
+        self.inner.pop()
+    }
+
     /// Same as [`std::vec::Vec::into_raw_parts`].
     pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
         // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
-        let ptr = self.as_mut_ptr();
-        let len = self.len();
-        let cap = self.capacity();
-        mem::forget(self);
-        (ptr, len, cap)
+        #[cfg(not(miri))]
+        {
+            let ptr = self.as_mut_ptr();
+            let len = self.len();
+            let cap = self.capacity();
+            mem::forget(self);
+            (ptr, len, cap)
+        }
+        // NB: Miri requires using `into_raw_parts`, but always run on nightly,
+        // so it's fine to use there.
+        #[cfg(miri)]
+        {
+            let _ = &mut self;
+            self.inner.into_raw_parts()
+        }
     }
 
     /// Same as [`std::vec::Vec::from_raw_parts`].
@@ -107,6 +140,68 @@ impl<T> Vec<T> {
         R: core::ops::RangeBounds<usize>,
     {
         self.inner.drain(range)
+    }
+
+    /// Same as [`std::vec::Vec::shrink_to_fit`] but returns an error on
+    /// allocation failure.
+    pub fn shrink_to_fit(&mut self) -> Result<(), OutOfMemory> {
+        // If our length is already equal to our capacity, then there is nothing
+        // to shrink.
+        if self.len() == self.capacity() {
+            return Ok(());
+        }
+
+        // `realloc` requires a non-zero original layout as well as a non-zero
+        // destination layout, so this guard ensures that the sizes below are
+        // all nonzero. This handles a few cases:
+        //
+        // * If `len == cap == 0` then no allocation has ever been made.
+        // * If `len == 0` and `cap != 0` then this function effectively frees
+        //   the memory.
+        // * If `T` is a zero-sized type then nothing's been allocated either.
+        //
+        // In all of these cases delegate to the standard library's
+        // `shrink_to_fit` which is guaranteed to not perform a `realloc`.
+        if self.is_empty() || mem::size_of::<T>() == 0 {
+            self.inner.shrink_to_fit();
+            return Ok(());
+        }
+
+        let (ptr, len, cap) = mem::take(self).into_raw_parts();
+        let layout = Layout::array::<T>(cap).unwrap();
+        let new_size = Layout::array::<T>(len).unwrap().size();
+
+        // SAFETY: `ptr` was previously allocated in the global allocator,
+        // `layout` has a nonzero size and matches the current allocation of
+        // `ptr`, `new_size` is nonzero, and `new_size` is a valid array size
+        // for `len` elements given its constructor.
+        let result = unsafe { try_realloc(ptr.cast(), layout, new_size) };
+
+        match result {
+            Ok(ptr) => {
+                // SAFETY: `result` is allocated with the global allocator and
+                // has room for exactly `[T; len]`.
+                *self = unsafe { Self::from_raw_parts(ptr.cast::<T>().as_ptr(), len, len) };
+                Ok(())
+            }
+            Err(oom) => {
+                // SAFETY: If reallocation fails then it's guaranteed that the
+                // original allocation is not tampered with, so it's safe to
+                // reassemble the original vector.
+                *self = unsafe { Vec::from_raw_parts(ptr, len, cap) };
+                Err(oom)
+            }
+        }
+    }
+
+    /// Same as [`std::vec::Vec::into_boxed_slice`] but returns an error on
+    /// allocation failure.
+    pub fn into_boxed_slice(mut self) -> Result<Box<[T]>, OutOfMemory> {
+        self.shrink_to_fit()?;
+
+        // Once we've shrunken the allocation to just the actual length, we can
+        // use `std`'s `into_boxed_slice` without fear of `realloc`.
+        Ok(self.inner.into_boxed_slice())
     }
 }
 
@@ -138,6 +233,15 @@ impl<T> IndexMut<usize> for Vec<T> {
     }
 }
 
+impl<T> IntoIterator for Vec<T> {
+    type Item = T;
+    type IntoIter = std_alloc::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a Vec<T> {
     type Item = &'a T;
 
@@ -155,5 +259,46 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         (**self).iter_mut()
+    }
+}
+
+impl<T> From<Box<[T]>> for Vec<T> {
+    fn from(boxed_slice: Box<[T]>) -> Self {
+        Vec {
+            inner: StdVec::from(boxed_slice),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Vec;
+    use crate::error::OutOfMemory;
+
+    #[test]
+    fn test_into_boxed_slice() -> Result<(), OutOfMemory> {
+        assert_eq!(*Vec::<i32>::new().into_boxed_slice()?, []);
+
+        let mut vec = Vec::new();
+        vec.push(1)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        let mut vec = Vec::with_capacity(2)?;
+        vec.push(1)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        let mut vec = Vec::with_capacity(2)?;
+        vec.push(1_u128)?;
+        assert_eq!(*vec.into_boxed_slice()?, [1]);
+
+        assert_eq!(*Vec::<()>::new().into_boxed_slice()?, []);
+
+        let mut vec = Vec::new();
+        vec.push(())?;
+        assert_eq!(*vec.into_boxed_slice()?, [()]);
+
+        let vec = Vec::<i32>::with_capacity(2)?;
+        assert_eq!(*vec.into_boxed_slice()?, []);
+        Ok(())
     }
 }

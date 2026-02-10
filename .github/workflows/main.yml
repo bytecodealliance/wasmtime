@@ -364,6 +364,7 @@ jobs:
               -p wasmtime --no-default-features --features runtime,stack-switching
               -p wasmtime --no-default-features --features debug
               -p wasmtime --no-default-features --features debug,gc
+              -p wasmtime --no-default-features --features runtime,cache
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
@@ -509,7 +510,7 @@ jobs:
     - name: Install wkg
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-        cargo binstall --no-confirm wkg
+        cargo binstall --no-confirm wkg@0.13.0
     - name: Re-vendor WIT
       run: ./ci/vendor-wit.sh
     - run: git diff --exit-code
@@ -1009,9 +1010,9 @@ jobs:
     - run: |
         rustup target add wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
-        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-28/wasi-sdk-28.0-x86_64-linux.tar.gz
-        tar -xzf wasi-sdk-28.0-x86_64-linux.tar.gz
-        mv wasi-sdk-28.0-x86_64-linux wasi-sdk
+        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-30.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-30.0-x86_64-linux.tar.gz
+        mv wasi-sdk-30.0-x86_64-linux wasi-sdk
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855

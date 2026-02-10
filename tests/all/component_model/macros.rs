@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{TypedFuncExt, make_echo_component};
+use super::make_echo_component;
 use wasmtime::Result;
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::{Engine, Store};
@@ -30,7 +30,7 @@ fn record_derive() -> Result<()> {
     let input = Foo { a: -42, b: 73 };
     let output = instance
         .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")?
-        .call_and_post_return(&mut store, (input,))?;
+        .call(&mut store, (input,))?;
 
     assert_eq!((input,), output);
 
@@ -116,7 +116,7 @@ fn record_derive() -> Result<()> {
 
     let output = instance
         .get_typed_func::<(Generic<i32, u32>,), (Generic<i32, u32>,)>(&mut store, "echo")?
-        .call_and_post_return(&mut store, (input,))?;
+        .call(&mut store, (input,))?;
 
     assert_eq!((input,), output);
 
@@ -150,7 +150,7 @@ fn variant_derive() -> Result<()> {
     let func = instance.get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")?;
 
     for &input in &[Foo::A(-42), Foo::B(73), Foo::C] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -240,7 +240,7 @@ fn variant_derive() -> Result<()> {
         .get_typed_func::<(Generic<i32, u32>,), (Generic<i32, u32>,)>(&mut store, "echo")?;
 
     for &input in &[Generic::<i32, u32>::A(-42), Generic::B(73), Generic::C] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -273,7 +273,7 @@ fn enum_derive() -> Result<()> {
     let func = instance.get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")?;
 
     for &input in &[Foo::A, Foo::B, Foo::C] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -342,7 +342,7 @@ fn enum_derive() -> Result<()> {
     let func = instance.get_typed_func::<(Many,), (Many,)>(&mut store, "echo")?;
 
     for &input in &[Many::V0, Many::V1, Many::V254, Many::V255, Many::V256] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -404,7 +404,7 @@ fn flags() -> Result<()> {
             input |= Foo::C;
         }
 
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -500,7 +500,7 @@ fn flags() -> Result<()> {
         Foo8Exact::F6,
         Foo8Exact::F7,
     ] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -543,7 +543,7 @@ fn flags() -> Result<()> {
     let func = instance.get_typed_func::<(Foo16,), (Foo16,)>(&mut store, "echo")?;
 
     for &input in &[Foo16::F0, Foo16::F1, Foo16::F6, Foo16::F7, Foo16::F8] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -597,7 +597,7 @@ fn flags() -> Result<()> {
         Foo16Exact::F14,
         Foo16Exact::F15,
     ] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -630,7 +630,7 @@ fn flags() -> Result<()> {
     let func = instance.get_typed_func::<(Foo32,), (Foo32,)>(&mut store, "echo")?;
 
     for &input in &[Foo32::F0, Foo32::F1, Foo32::F14, Foo32::F15, Foo32::F16] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }
@@ -684,7 +684,7 @@ fn flags() -> Result<()> {
         Foo32Exact::F30,
         Foo32Exact::F31,
     ] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
+        let output = func.call(&mut store, (input,))?;
 
         assert_eq!((input,), output);
     }

@@ -352,7 +352,6 @@ pub mod exports {
                             >::new_unchecked(self.x)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }
@@ -432,7 +431,6 @@ pub mod exports {
                             >::new_unchecked(self.x)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }

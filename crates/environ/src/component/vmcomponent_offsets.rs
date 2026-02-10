@@ -29,10 +29,6 @@ pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
 /// canonical ABI flag `may_leave`
 pub const FLAG_MAY_LEAVE: i32 = 1 << 0;
 
-/// Flag for the `VMComponentContext::flags` field which is set whenever a
-/// function is called to indicate that `post_return` must be called next.
-pub const FLAG_NEEDS_POST_RETURN: i32 = 1 << 2;
-
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
 pub struct VMComponentOffsets<P> {

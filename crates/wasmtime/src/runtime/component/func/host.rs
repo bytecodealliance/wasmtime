@@ -1,8 +1,6 @@
 //! Implementation of calling Rust-defined functions from components.
 
 #[cfg(feature = "component-model-async")]
-use crate::component::RuntimeInstance;
-#[cfg(feature = "component-model-async")]
 use crate::component::concurrent;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{Accessor, Status};
@@ -363,35 +361,50 @@ where
     /// arguments are translated to Rust types.
     fn entrypoint(
         &self,
-        store: StoreContextMut<'_, T>,
+        mut store: StoreContextMut<'_, T>,
         instance: Instance,
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
         let vminstance = instance.id().get(store.0);
-        let opts = &vminstance.component().env_component().options[options];
-        let caller_instance = opts.instance;
-        let flags = vminstance.instance_flags(caller_instance);
+        let async_ = vminstance.component().env_component().options[options].async_;
 
-        // Perform a dynamic check that this instance can indeed be left.
-        // Exiting the component is disallowed, for example, when the `realloc`
-        // function calls a canonical import.
-        if unsafe { !flags.may_leave() } {
-            return Err(format_err!(crate::Trap::CannotLeaveComponent));
+        // If this is a synchronous-lower of a host-async function, then the
+        // guest is blocking. Test, in the context of the guest task, if that's
+        // allowed.
+        if !async_ && Self::ASYNC {
+            store.0.check_blocking()?;
         }
 
-        if opts.async_ {
+        // Enter the host by pushing a `HostTask` into the concurrent state.
+        store.0.enter_host_call()?;
+
+        let task_exited = if async_ {
             #[cfg(feature = "component-model-async")]
-            return self.call_async_lower(store, instance, ty, options, storage);
+            {
+                self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)?
+            }
             #[cfg(not(feature = "component-model-async"))]
             unreachable!(
                 "async-lowered imports should have failed validation \
                  when `component-model-async` feature disabled"
             );
         } else {
-            self.call_sync_lower(store, instance, ty, options, storage)
+            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage)?;
+            true
+        };
+
+        // If the host task exited, then it's popped and deallocated.
+        //
+        // Note that if the host task did not exit then the `call_async_lower`
+        // function transitively would have updated the current guest thread to
+        // the caller of this host function.
+        if task_exited {
+            store.0.exit_host_call()?;
         }
+
+        Ok(())
     }
 
     /// Implementation of the "sync" ABI.
@@ -409,29 +422,13 @@ where
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
-        if Self::ASYNC {
-            // The caller has synchronously lowered an async function, meaning
-            // the caller can only call it from an async task (i.e. a task
-            // created via a call to an async export).  Otherwise, we'll trap.
-            store.0.check_blocking()?;
-        }
-
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
-        #[cfg(feature = "component-model-async")]
-        let caller_instance = lift.options().instance;
 
         let ret = match self.run(store.as_context_mut(), params) {
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
-            HostResult::Future(future) => concurrent::poll_and_block(
-                store.0,
-                future,
-                RuntimeInstance {
-                    instance: instance.id().instance(),
-                    index: caller_instance,
-                },
-            )?,
+            HostResult::Future(future) => concurrent::poll_and_block(store.0, future)?,
         };
 
         let mut lower = LowerContext::new(store, options, instance);
@@ -466,7 +463,7 @@ where
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         use wasmtime_environ::component::MAX_FLAT_ASYNC_PARAMS;
 
         let (component, store) = instance.component_and_store_mut(store.0);
@@ -477,7 +474,6 @@ where
         // Lift the parameters, either from flat storage or from linear
         // memory.
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);
-        let caller_instance = lift.options().instance;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_ASYNC_PARAMS, storage)?;
 
         // Load/validate the return pointer, if present.
@@ -510,7 +506,7 @@ where
             }
             #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
-                instance.first_poll(store, future, caller_instance, move |store, ret| {
+                instance.first_poll(store, future, move |store, ret| {
                     Self::lower_result_and_exit_call(
                         &mut LowerContext::new(store, options, instance),
                         ty,
@@ -527,7 +523,7 @@ where
             Status::Returned.pack(None)
         }));
 
-        Ok(())
+        Ok(task.is_none())
     }
 
     /// Loads parameters the wasm arguments `storage`.
@@ -544,7 +540,6 @@ where
         let fty = &lift.types[ty];
         let param_tys = &lift.types[fty.params];
         let param_flat_count = param_tys.abi.flat_count(max_flat_params);
-        lift.enter_call();
         let src = match param_flat_count {
             Some(cnt) => {
                 let params = &storage[..cnt];
@@ -585,7 +580,7 @@ where
         unsafe {
             flags.set_may_leave(true);
         }
-        lower.exit_call()?;
+        lower.validate_scope_exit()?;
         Ok(())
     }
 }

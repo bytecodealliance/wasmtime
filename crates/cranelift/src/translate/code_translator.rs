@@ -2481,13 +2481,13 @@ pub fn translate_operator(
             // op.
             environ.stacks.push1(
                 if environ.relaxed_simd_deterministic()
-                    || !environ.use_x86_blendv_for_relaxed_laneselect(ty)
+                    || !environ.use_blendv_for_relaxed_laneselect(ty)
                 {
                     // Deterministic semantics are a `bitselect` along the lines
                     // of the wasm `v128.bitselect` instruction.
                     builder.ins().bitselect(c, a, b)
                 } else {
-                    builder.ins().x86_blendv(c, a, b)
+                    builder.ins().blendv(c, a, b)
                 },
             );
         }

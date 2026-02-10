@@ -91,13 +91,13 @@ impl Mmap<AlignedLength> {
         } else if accessible_size == mapping_size {
             Ok(Mmap {
                 sys: mmap::Mmap::new(mapping_size)
-                    .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
+                    .with_context(|| format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             })
         } else {
             let result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
-                    .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
+                    .with_context(|| format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             };
             if !accessible_size.is_zero() {
@@ -105,9 +105,9 @@ impl Mmap<AlignedLength> {
                 unsafe {
                     result
                         .make_accessible(HostAlignedByteCount::ZERO, accessible_size)
-                        .context(format!(
-                            "mmap failed to allocate {accessible_size:#x} bytes"
-                        ))?;
+                        .with_context(|| {
+                            format!("mmap failed to allocate {accessible_size:#x} bytes")
+                        })?;
                 }
             }
             Ok(result)

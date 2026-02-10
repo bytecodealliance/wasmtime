@@ -73,6 +73,11 @@ where
         self.inner.try_insert(k, v)
     }
 
+    /// Same as [`cranelift_entity::SecondaryMap::remove`].
+    pub fn remove(&mut self, k: K) -> Option<V> {
+        self.inner.remove(k)
+    }
+
     /// Same as [`cranelift_entity::SecondaryMap::is_empty`].
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()

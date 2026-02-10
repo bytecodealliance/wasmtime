@@ -409,7 +409,6 @@ pub mod exports {
                             >::new_unchecked(self.f1)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f2<S: wasmtime::AsContextMut>(
@@ -424,7 +423,6 @@ pub mod exports {
                             >::new_unchecked(self.f2)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f3<S: wasmtime::AsContextMut>(
@@ -440,7 +438,6 @@ pub mod exports {
                             >::new_unchecked(self.f3)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f4<S: wasmtime::AsContextMut>(
@@ -454,7 +451,6 @@ pub mod exports {
                             >::new_unchecked(self.f4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f5<S: wasmtime::AsContextMut>(
@@ -468,7 +464,6 @@ pub mod exports {
                             >::new_unchecked(self.f5)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f6<S: wasmtime::AsContextMut>(
@@ -486,7 +481,6 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call(store.as_context_mut(), (arg0, arg1, arg2))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

@@ -3962,22 +3962,16 @@ impl FuncEnvironment<'_> {
 
     pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
         let idx = self.module.types[index].unwrap_module_type_index();
-        self.types[self.types[idx]
-            .unwrap_cont()
-            .clone()
-            .unwrap_module_type_index()]
-        .unwrap_func()
-        .params()
+        self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
+            .unwrap_func()
+            .params()
     }
 
     pub fn continuation_returns(&self, index: TypeIndex) -> &[WasmValType] {
         let idx = self.module.types[index].unwrap_module_type_index();
-        self.types[self.types[idx]
-            .unwrap_cont()
-            .clone()
-            .unwrap_module_type_index()]
-        .unwrap_func()
-        .returns()
+        self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
+            .unwrap_func()
+            .returns()
     }
 
     pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
@@ -3994,8 +3988,8 @@ impl FuncEnvironment<'_> {
             .returns()
     }
 
-    pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
-        self.isa.has_x86_blendv_lowering(ty)
+    pub fn use_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        self.isa.has_blendv_lowering(ty)
     }
 
     pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {

@@ -76,8 +76,6 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
-    imported_resource_enter_call: Option<FuncIndex>,
-    imported_resource_exit_call: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
     imported_async_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
@@ -261,8 +259,6 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
-            imported_resource_enter_call: None,
-            imported_resource_exit_call: None,
             imported_async_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
@@ -720,28 +716,6 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_resource_enter_call(&mut self) -> FuncIndex {
-        self.import_simple(
-            "resource",
-            "enter-call",
-            &[],
-            &[],
-            Import::ResourceEnterCall,
-            |me| &mut me.imported_resource_enter_call,
-        )
-    }
-
-    fn import_resource_exit_call(&mut self) -> FuncIndex {
-        self.import_simple(
-            "resource",
-            "exit-call",
-            &[],
-            &[],
-            Import::ResourceExitCall,
-            |me| &mut me.imported_resource_exit_call,
-        )
-    }
-
     fn import_enter_sync_call(&mut self) -> FuncIndex {
         self.import_simple(
             "async",
@@ -881,11 +855,6 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
-    /// Sets up entry metadata for a borrow resources when a call starts.
-    ResourceEnterCall,
-    /// Tears down a previous entry and handles checking borrow-related
-    /// metadata.
-    ResourceExitCall,
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {

@@ -492,6 +492,12 @@ where
                 Poll::Ready(Some(Ok(frame))) => {
                     match frame.into_data().map_err(http_body::Frame::into_trailers) {
                         Ok(mut frame) => {
+                            // Libraries like `Reqwest` generate a 0-length frame after sensing end-of-stream,
+                            // so we have to check for the body's end-of-stream indicator here too
+                            if frame.len() == 0 && self.body.is_end_stream() {
+                                break 'result Ok(None);
+                            }
+
                             if let Some(cap) = cap {
                                 let n = frame.len();
                                 let cap = cap.into();

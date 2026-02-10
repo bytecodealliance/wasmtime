@@ -359,7 +359,6 @@ pub mod exports {
                             >::new_unchecked(self.x)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                 }
@@ -442,7 +441,6 @@ pub mod exports {
                             >::new_unchecked(self.x)
                         };
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                 }

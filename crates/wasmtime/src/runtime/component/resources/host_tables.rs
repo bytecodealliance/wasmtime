@@ -97,15 +97,8 @@ impl HostResourceIndex {
 
 impl<'a> HostResourceTables<'a> {
     pub fn new_host(store: &'a mut StoreOpaque) -> HostResourceTables<'a> {
-        let (calls, host_table, host_resource_data) = store.component_resource_state();
-        HostResourceTables::from_parts(
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: None,
-            },
-            host_resource_data,
-        )
+        let (tables, data) = store.component_resource_tables_and_host_resource_data(None);
+        HostResourceTables::from_parts(tables, data)
     }
 
     pub fn from_parts(
@@ -316,17 +309,10 @@ impl<'a> HostResourceTables<'a> {
             .resource_lift_borrow(TypedResourceIndex::Component { ty, index })
     }
 
-    /// Begins a call into the component instance, starting recording of
-    /// metadata related to resource borrowing.
-    #[inline]
-    pub fn enter_call(&mut self) {
-        self.tables.enter_call()
-    }
-
     /// Completes a call into the component instance, validating that it's ok to
     /// complete by ensuring the are no remaining active borrows.
     #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.tables.exit_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.tables.validate_scope_exit()
     }
 }

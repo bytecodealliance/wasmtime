@@ -1,10 +1,11 @@
-use crate::{Tunables, WasmResult, wasm_unsupported};
+use crate::{Tunables, WasmResult, error::OutOfMemory, wasm_unsupported};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
 use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use wasmtime_core::alloc::{TryClone, TryCollect as _};
 
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
@@ -140,6 +141,12 @@ pub enum WasmValType {
     V128,
     /// Reference type
     Ref(WasmRefType),
+}
+
+impl TryClone for WasmValType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 impl fmt::Display for WasmValType {
@@ -685,6 +692,17 @@ pub struct WasmFuncType {
     non_i31_gc_ref_returns_count: usize,
 }
 
+impl TryClone for WasmFuncType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(WasmFuncType {
+            params: TryClone::try_clone(&self.params)?,
+            non_i31_gc_ref_params_count: self.non_i31_gc_ref_params_count,
+            returns: TryClone::try_clone(&self.returns)?,
+            non_i31_gc_ref_returns_count: self.non_i31_gc_ref_returns_count,
+        })
+    }
+}
+
 impl fmt::Display for WasmFuncType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(func")?;
@@ -809,20 +827,26 @@ impl WasmFuncType {
     /// references themselves (unless the trampolines start doing explicit,
     /// fallible downcasts, but if we ever need that, then we might want to
     /// redesign this stuff).
-    pub fn trampoline_type(&self) -> Cow<'_, Self> {
+    pub fn trampoline_type(&self) -> Result<Cow<'_, Self>, OutOfMemory> {
         if self.is_trampoline_type() {
-            return Cow::Borrowed(self);
+            return Ok(Cow::Borrowed(self));
         }
 
-        Cow::Owned(Self::new(
-            self.params().iter().map(|p| p.trampoline_type()).collect(),
-            self.returns().iter().map(|r| r.trampoline_type()).collect(),
-        ))
+        Ok(Cow::Owned(Self::new(
+            self.params()
+                .iter()
+                .map(|p| p.trampoline_type())
+                .try_collect()?,
+            self.returns()
+                .iter()
+                .map(|r| r.trampoline_type())
+                .try_collect()?,
+        )))
     }
 }
 
 /// WebAssembly continuation type -- equivalent of `wasmparser`'s ContType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmContType(EngineOrModuleTypeIndex);
 
 impl fmt::Display for WasmContType {
@@ -900,6 +924,15 @@ pub struct WasmExnType {
     /// type descriptor without referencing other type descriptors; so
     /// we directly inline the information here.
     pub fields: Box<[WasmFieldType]>,
+}
+
+impl TryClone for WasmExnType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            func_ty: self.func_ty,
+            fields: self.fields.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmExnType {
@@ -994,13 +1027,19 @@ impl WasmStorageType {
 }
 
 /// The type of a struct field or array element.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFieldType {
     /// The field's element type.
     pub element_type: WasmStorageType,
 
     /// Whether this field can be mutated or not.
     pub mutable: bool,
+}
+
+impl TryClone for WasmFieldType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 impl fmt::Display for WasmFieldType {
@@ -1030,7 +1069,7 @@ impl TypeTrace for WasmFieldType {
 }
 
 /// A concrete array type.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmArrayType(pub WasmFieldType);
 
 impl fmt::Display for WasmArrayType {
@@ -1060,6 +1099,14 @@ impl TypeTrace for WasmArrayType {
 pub struct WasmStructType {
     /// The fields that make up this struct type.
     pub fields: Box<[WasmFieldType]>,
+}
+
+impl TryClone for WasmStructType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            fields: self.fields.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmStructType {
@@ -1104,6 +1151,15 @@ pub struct WasmCompositeType {
     pub shared: bool,
 }
 
+impl TryClone for WasmCompositeType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            inner: self.inner.try_clone()?,
+            shared: self.shared,
+        })
+    }
+}
+
 impl fmt::Display for WasmCompositeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.shared {
@@ -1126,6 +1182,18 @@ pub enum WasmCompositeInnerType {
     Struct(WasmStructType),
     Cont(WasmContType),
     Exn(WasmExnType),
+}
+
+impl TryClone for WasmCompositeInnerType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            Self::Array(ty) => Self::Array(*ty),
+            Self::Func(ty) => Self::Func(ty.try_clone()?),
+            Self::Struct(ty) => Self::Struct(ty.try_clone()?),
+            Self::Cont(ty) => Self::Cont(*ty),
+            Self::Exn(ty) => Self::Exn(ty.try_clone()?),
+        })
+    }
 }
 
 impl fmt::Display for WasmCompositeInnerType {
@@ -1273,6 +1341,16 @@ pub struct WasmSubType {
 
     /// The array, function, or struct that is defined.
     pub composite_type: WasmCompositeType,
+}
+
+impl TryClone for WasmSubType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            is_final: self.is_final,
+            supertype: self.supertype,
+            composite_type: self.composite_type.try_clone()?,
+        })
+    }
 }
 
 impl fmt::Display for WasmSubType {
@@ -1430,7 +1508,7 @@ impl TypeTrace for WasmSubType {
 /// (rec (type (func $f (result (ref null $g))))
 ///      (type (func $g (result (ref null $f)))))
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmRecGroup {
     /// The types inside of this recgroup.
     pub types: Box<[WasmSubType]>,

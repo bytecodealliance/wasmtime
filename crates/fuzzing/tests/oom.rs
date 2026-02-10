@@ -2,9 +2,11 @@ use cranelift_bitset::CompoundBitSet;
 use std::{
     alloc::{Layout, alloc},
     fmt::{self, Write},
+    iter,
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 use wasmtime::{error::OutOfMemory, *};
+use wasmtime_core::alloc::TryCollect;
 use wasmtime_environ::{PrimaryMap, SecondaryMap, collections::*};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
@@ -125,6 +127,99 @@ fn secondary_map_try_insert() -> Result<()> {
 }
 
 #[test]
+fn entity_set_ensure_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = EntitySet::<Key>::new();
+        set.ensure_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn entity_set_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = EntitySet::<Key>::new();
+        set.insert(Key::from_u32(256))?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _s = HashSet::<usize>::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = HashSet::<usize>::new();
+        set.reserve(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_set_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut set = HashSet::<usize>::new();
+        for i in 0..1024 {
+            set.insert(i)?;
+        }
+        for i in 0..1024 {
+            set.insert(i)?;
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_map_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _s = HashMap::<usize, usize>::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_map_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = HashMap::<usize, usize>::new();
+        map.reserve(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_map_insert() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = HashMap::<usize, usize>::new();
+        for i in 0..1024 {
+            map.insert(i, i * 2)?;
+        }
+        for i in 0..1024 {
+            map.insert(i, i * 2)?;
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn hash_map_try_clone() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut map = HashMap::new();
+        for i in 0..10 {
+            map.insert(i, i * 2)?;
+        }
+        let map2 = map.try_clone()?;
+        assert_eq!(map, map2);
+        Ok(())
+    })
+}
+
+#[test]
 fn vec_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
         let _v = wasmtime_environ::collections::Vec::<usize>::with_capacity(100)?;
@@ -160,6 +255,104 @@ fn vec_push() -> Result<()> {
 }
 
 #[test]
+fn string_with_capacity() -> Result<()> {
+    OomTest::new().test(|| {
+        let _s = String::with_capacity(100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_reserve() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.reserve(10)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_reserve_exact() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.reserve_exact(3)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_push() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.push('c')?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_push_str() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut s = String::new();
+        s.push_str("hello")?;
+        Ok(())
+    })
+}
+
+#[test]
+fn string_shrink_to_fit() -> Result<()> {
+    OomTest::new().test(|| {
+        // len == cap == 0
+        let mut s = String::new();
+        s.shrink_to_fit()?;
+
+        // len == 0 < cap
+        let mut s = String::with_capacity(4)?;
+        s.shrink_to_fit()?;
+
+        // 0 < len < cap
+        let mut s = String::with_capacity(4)?;
+        s.push('a')?;
+        s.shrink_to_fit()?;
+
+        // 0 < len == cap
+        let mut s = String::new();
+        s.reserve_exact(2)?;
+        s.push('a')?;
+        s.push('a')?;
+        s.shrink_to_fit()?;
+
+        Ok(())
+    })
+}
+
+#[test]
+fn string_into_boxed_str() -> Result<()> {
+    OomTest::new().test(|| {
+        // len == cap == 0
+        let s = String::new();
+        let _ = s.into_boxed_str()?;
+
+        // len == 0 < cap
+        let s = String::with_capacity(4)?;
+        let _ = s.into_boxed_str()?;
+
+        // 0 < len < cap
+        let mut s = String::with_capacity(4)?;
+        s.push('a')?;
+        let _ = s.into_boxed_str()?;
+
+        // 0 < len == cap
+        let mut s = String::new();
+        s.reserve_exact(2)?;
+        s.push('a')?;
+        s.push('a')?;
+        let _ = s.into_boxed_str()?;
+
+        Ok(())
+    })
+}
+
+#[test]
 fn config_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
@@ -181,12 +374,68 @@ fn engine_new() -> Result<()> {
 
 #[test]
 #[cfg(arc_try_new)]
+fn func_type_try_new() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    let engine = Engine::new(&config)?;
+
+    // Run this OOM test a few times to make sure that we leave the engine's
+    // type registry in a good state when failing to register new types.
+    for i in 1..6 {
+        OomTest::new().test(|| {
+            let ty1 = FuncType::try_new(
+                &engine,
+                std::iter::repeat(ValType::ANYREF).take(i),
+                std::iter::repeat(ValType::ANYREF).take(i),
+            )?;
+            assert_eq!(ty1.params().len(), i);
+            assert_eq!(ty1.results().len(), i);
+
+            let ty2 = FuncType::try_new(
+                &engine,
+                std::iter::repeat(ValType::ANYREF).take(i),
+                std::iter::repeat(ValType::ANYREF).take(i),
+            )?;
+            assert_eq!(ty2.params().len(), i);
+            assert_eq!(ty2.results().len(), i);
+
+            let ty3 = FuncType::try_new(&engine, [], [])?;
+            assert_eq!(ty3.params().len(), 0);
+            assert_eq!(ty3.results().len(), 0);
+
+            assert!(
+                !FuncType::eq(&ty2, &ty3),
+                "{ty2:?} should not be equal to {ty3:?}"
+            );
+
+            Ok(())
+        })?;
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(arc_try_new)]
 fn linker_new() -> Result<()> {
     OomTest::new().test(|| {
         let mut config = Config::new();
         config.enable_compiler(false);
         let engine = Engine::new(&config)?;
         let _linker = Linker::<()>::new(&engine);
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(arc_try_new)]
+fn linker_func_wrap() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        let engine = Engine::new(&config)?;
+        let mut linker = Linker::<()>::new(&engine);
+        linker.func_wrap("module", "func", |x: i32| x * 2)?;
         Ok(())
     })
 }
@@ -304,5 +553,120 @@ fn alternate_debug_fmt_error() -> Result<()> {
         let error = error.context("goodbye");
         write!(&mut Null, "{error:#?}").unwrap();
         ok_if_not_oom(error)
+    })
+}
+
+#[test]
+fn vec_and_boxed_slice() -> Result<()> {
+    use wasmtime_core::alloc::Vec;
+
+    OomTest::new().test(|| {
+        // Nonzero-sized type.
+        let mut vec = Vec::new();
+        vec.push(1)?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
+
+        let mut vec = Vec::from(slice);
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
+
+        let vec = Vec::from(slice);
+        let _slice = vec.into_boxed_slice()?; // len = 0, cap = 0
+
+        let mut vec = Vec::new();
+        vec.reserve_exact(3)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        let _slice = vec.into_boxed_slice()?; // len = cap, len > 0
+
+        for i in 0..12 {
+            let mut vec = Vec::new();
+            for j in 0..i {
+                vec.push(j)?;
+            }
+            let _slice = vec.into_boxed_slice()?; // len ?= cap
+        }
+
+        // Zero-sized type.
+        let mut vec = Vec::new();
+        vec.push(())?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
+        let mut vec = Vec::from(slice);
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
+        let vec = Vec::from(slice);
+        let _ = vec.into_boxed_slice()?; // len = 0, cap = 0
+
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_shrink_to_fit() -> Result<()> {
+    use wasmtime_core::alloc::Vec;
+
+    #[derive(Default)]
+    struct ZeroSized;
+
+    #[derive(Default)]
+    struct NonZeroSized {
+        _unused: usize,
+    }
+
+    fn do_test<T: Default>() -> Result<()> {
+        // len == cap == 0
+        let mut v = Vec::<T>::new();
+        v.shrink_to_fit()?;
+
+        // len == 0 < cap
+        let mut v = Vec::<T>::with_capacity(4)?;
+        v.shrink_to_fit()?;
+
+        // 0 < len < cap
+        let mut v = Vec::with_capacity(4)?;
+        v.push(T::default())?;
+        v.shrink_to_fit()?;
+
+        // 0 < len == cap
+        let mut v = Vec::new();
+        v.reserve_exact(2)?;
+        v.push(T::default())?;
+        v.push(T::default())?;
+        v.shrink_to_fit()?;
+
+        Ok(())
+    }
+
+    OomTest::new().test(|| do_test::<ZeroSized>())?;
+    OomTest::new().test(|| do_test::<NonZeroSized>())?;
+    Ok(())
+}
+
+#[test]
+fn vec_try_collect() -> Result<()> {
+    OomTest::new().test(|| {
+        iter::repeat(1).take(0).try_collect::<Vec<_>, _>()?;
+        iter::repeat(1).take(1).try_collect::<Vec<_>, _>()?;
+        iter::repeat(1).take(100).try_collect::<Vec<_>, _>()?;
+        iter::repeat(()).take(100).try_collect::<Vec<_>, _>()?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_extend() -> Result<()> {
+    use wasmtime_core::alloc::{TryExtend, Vec};
+    OomTest::new().test(|| {
+        let mut vec = Vec::new();
+        vec.try_extend([])?;
+        vec.try_extend([1])?;
+        vec.try_extend([1, 2, 3, 4])?;
+
+        let mut vec = Vec::new();
+        vec.try_extend([])?;
+        vec.try_extend([()])?;
+        vec.try_extend([(), (), ()])?;
+        Ok(())
     })
 }

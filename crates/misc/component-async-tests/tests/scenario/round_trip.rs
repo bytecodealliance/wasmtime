@@ -569,7 +569,6 @@ pub async fn test_round_trip(
                     unreachable!()
                 };
                 assert_eq!(*expected, actual);
-                foo_function.post_return_async(&mut store).await?;
             }
 
             store.assert_concurrent_state_empty();

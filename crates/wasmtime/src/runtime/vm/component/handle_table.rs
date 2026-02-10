@@ -36,7 +36,7 @@ pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
-    Borrow { scope: usize },
+    Borrow { scope: u32 },
 }
 
 /// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
@@ -68,7 +68,7 @@ enum Slot {
     /// count of the `scope`.
     ResourceBorrow {
         resource: TypedResource,
-        scope: usize,
+        scope: u32,
     },
 
     /// Represents a host task handle.
@@ -82,6 +82,7 @@ enum Slot {
     },
 
     /// Represents a guest thread handle.
+    #[cfg(feature = "component-model-async")]
     GuestThread {
         rep: u32,
     },
@@ -194,7 +195,7 @@ impl HandleTable {
     /// Inserts a new `borrow` resource into this table whose type/rep are
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: usize) -> Result<u32> {
+    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: u32) -> Result<u32> {
         self.insert(Slot::ResourceBorrow { resource, scope })
     }
 
@@ -571,16 +572,23 @@ impl HandleTable {
             _ => bail!("handle is not a waitable"),
         }
     }
+}
 
+#[derive(Default)]
+#[cfg(feature = "component-model-async")]
+pub struct ThreadHandleTable(HandleTable);
+
+#[cfg(feature = "component-model-async")]
+impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::GuestThread { rep })
+        self.0.insert(Slot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.
     pub fn guest_thread_rep(&mut self, idx: u32) -> Result<u32> {
-        match self.get_mut(idx)? {
+        match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => Ok(*rep),
             _ => bail!("handle is not a guest thread"),
         }
@@ -590,11 +598,11 @@ impl HandleTable {
     ///
     /// Returns the internal `rep`.
     pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
-        let rep = match self.get_mut(idx)? {
+        let rep = match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
-        self.remove(idx)?;
+        self.0.remove(idx)?;
         Ok(rep)
     }
 }

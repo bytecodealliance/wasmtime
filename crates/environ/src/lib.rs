@@ -88,6 +88,8 @@ pub use wasmtime_core::error;
 #[cfg(feature = "anyhow")]
 pub use self::error::ToWasmtimeResult;
 
+pub use wasmtime_core::{alloc::PanicOnOom, undo::Undo};
+
 // Only for use with `bindgen!`-generated code.
 #[doc(hidden)]
 #[cfg(feature = "anyhow")]

@@ -2,8 +2,7 @@ use crate::async_functions::{PollOnce, execute_across_threads};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use wasmtime::Result;
-use wasmtime::{AsContextMut, Config, component::*};
-use wasmtime::{Engine, Store, StoreContextMut, Trap};
+use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
 /// This is super::func::thunks, except with an async store.
@@ -36,7 +35,6 @@ async fn smoke() -> Result<()> {
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    thunk.post_return_async(&mut store).await?;
 
     let err = instance
         .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
@@ -88,7 +86,6 @@ async fn smoke_func_wrap() -> Result<()> {
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    thunk.post_return_async(&mut store).await?;
 
     Ok(())
 }
@@ -305,7 +302,6 @@ async fn drop_resource_async() -> Result<()> {
     execute_across_threads(async move {
         let resource = Resource::new_own(100);
         f.call_async(&mut store, (resource,)).await?;
-        f.post_return_async(&mut store).await?;
         Ok::<_, wasmtime::Error>(())
     })
     .await?;
@@ -664,7 +660,6 @@ async fn task_deletion() -> Result<()> {
     for func in funcs {
         let func = instance.get_typed_func::<(), (u32,)>(&mut store, func)?;
         assert_eq!(func.call_async(&mut store, ()).await?, (42,));
-        func.post_return_async(store.as_context_mut()).await?;
     }
 
     Ok(())
@@ -873,6 +868,180 @@ async fn require_concurrency_support() -> Result<()> {
     assert!(
         root.resource_concurrent("f3", ResourceType::host::<u32>(), |_, _| { todo!() })
             .is_err()
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_host_task_does_not_leak() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "f" (func $f async))
+
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (import "" "cancel" (func $cancel (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (func (export "run")
+                    (local i32)
+
+                    ;; start the subtask, asserting it's `STARTED`
+                    call $f
+                    local.tee 0
+                    i32.const 0xf
+                    i32.and
+                    i32.const 1 ;; STARTED
+                    i32.ne
+                    if unreachable end
+
+                    ;; extract the task id
+                    local.get 0
+                    i32.const 4
+                    i32.shr_u
+                    local.set 0
+
+                    ;; cancel the subtask asserting it's `RETURN_CANCELLED`
+                    local.get 0
+                    call $cancel
+                    i32.const 4 ;; RETURN_CANCELLED
+                    i32.ne
+                    if unreachable end
+
+                    ;; drop the subtask
+                    local.get 0
+                    call $drop
+                )
+            )
+            (core func $f (canon lower (func $f) async))
+            (core func $cancel (canon subtask.cancel))
+            (core func $drop (canon subtask.drop))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "f" (func $f))
+                    (export "cancel" (func $cancel))
+                    (export "drop" (func $drop))
+                ))
+            ))
+
+            (func (export "f") async
+                (canon lift (core func $i "run")))
+
+
+        )"#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_concurrent("f", |_, ()| {
+        Box::pin(async move {
+            std::future::pending::<()>().await;
+            Ok(())
+        })
+    })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    store
+        .run_concurrent(async |store| -> wasmtime::Result<()> {
+            func.call_concurrent(store, ()).await?;
+
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+            Ok(())
+        })
+        .await??;
+
+    // The host task was cancelled, nothing should remain.
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn sync_lower_async_host_does_not_leak() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, 0);
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "f" (func $f async))
+
+            (core module $m
+                (import "" "f" (func $f))
+                (func (export "run")
+                    (local $c i32)
+
+                    ;; call the host 100 times
+                    loop
+                      call $f
+                      (local.tee $c (i32.add (local.get $c) (i32.const 1)))
+                      i32.const 100
+                      i32.ne
+                      if br 1 end
+                    end
+                )
+            )
+            (core func $f (canon lower (func $f) ))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "f" (func $f))
+                ))
+            ))
+
+            (func (export "f") async
+                (canon lift (core func $i "run")))
+
+
+        )"#,
+    )?;
+
+    let mut linker = Linker::<usize>::new(&engine);
+    linker
+        .root()
+        .func_wrap_concurrent("f", |accessor, (): ()| {
+            Box::pin(async move {
+                // Ensure that this doesn't hit the fast path of "ready on
+                // first poll"
+                for _ in 0..5 {
+                    tokio::task::yield_now().await;
+                }
+
+                // Keep track of the maximum size of the table in
+                // concurrent_state.
+                accessor.with(|mut s| {
+                    let cur = s.as_context_mut().concurrent_state_table_size();
+                    let max = s.data_mut();
+                    *max = (*max).max(cur);
+                });
+                Ok(())
+            })
+        })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    func.call_async(&mut store, ()).await?;
+
+    // First-level assertion: nothing should remain after the guest has exited.
+    store.assert_concurrent_state_empty();
+
+    // Second-level assertion: state should be incrementally cleaned up along
+    // the way as the guest calls the host. Things shouldn't leak until the
+    // guest exits at the end, for example.
+    assert!(
+        *store.data() < 100,
+        "the store peaked at over 100 items in the concurrent table which \
+         indicates that something isn't getting cleaned up between executions \
+         of the host"
     );
 
     Ok(())

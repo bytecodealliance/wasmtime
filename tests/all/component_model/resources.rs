@@ -2,7 +2,7 @@
 
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, Trap};
+use wasmtime::{Config, Engine, Store, Trap};
 
 #[test]
 fn host_resource_types() -> Result<()> {
@@ -152,13 +152,9 @@ fn resource_any() -> Result<()> {
         let u_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-u")?;
 
         let (t1,) = t_ctor.call(&mut store, (100,))?;
-        t_ctor.post_return(&mut store)?;
         let (t2,) = t_ctor.call(&mut store, (200,))?;
-        t_ctor.post_return(&mut store)?;
         let (u1,) = u_ctor.call(&mut store, (300,))?;
-        u_ctor.post_return(&mut store)?;
         let (u2,) = u_ctor.call(&mut store, (400,))?;
-        u_ctor.post_return(&mut store)?;
 
         assert_eq!(t1.ty(), t);
         assert_eq!(t2.ty(), t);
@@ -166,16 +162,12 @@ fn resource_any() -> Result<()> {
         assert_eq!(u2.ty(), u);
 
         u_dtor.call(&mut store, (u2,))?;
-        u_dtor.post_return(&mut store)?;
 
         u_dtor.call(&mut store, (u1,))?;
-        u_dtor.post_return(&mut store)?;
 
         t_dtor.call(&mut store, (t1,))?;
-        t_dtor.post_return(&mut store)?;
 
         t_dtor.call(&mut store, (t2,))?;
-        t_dtor.post_return(&mut store)?;
     }
 
     {
@@ -187,13 +179,10 @@ fn resource_any() -> Result<()> {
 
         // `t` is placed at host index 0
         let (t,) = t_ctor.call(&mut store, (100,))?;
-        t_ctor.post_return(&mut store)?;
         t_dtor.call(&mut store, (t,))?;
-        t_dtor.post_return(&mut store)?;
 
         // `u` is also placed at host index 0 since `t` was deallocated
         let (_u,) = u_ctor.call(&mut store, (100,))?;
-        u_ctor.post_return(&mut store)?;
 
         // reuse of `t` should fail, despite it pointing to a valid resource
         assert_eq!(
@@ -233,7 +222,7 @@ fn mismatch_intrinsics() -> Result<()> {
     let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
     assert_eq!(
         ctor.call(&mut store, (100,)).unwrap_err().to_string(),
-        "handle index 2 used with the wrong type, expected guest-defined \
+        "handle index 1 used with the wrong type, expected guest-defined \
          resource but found a different guest-defined resource",
     );
 
@@ -270,7 +259,6 @@ fn mismatch_resource_types() -> Result<()> {
     let dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "dtor")?;
 
     let (t,) = ctor.call(&mut store, (100,))?;
-    ctor.post_return(&mut store)?;
     assert_eq!(
         dtor.call(&mut store, (t,)).unwrap_err().to_string(),
         "mismatched resource types"
@@ -321,19 +309,13 @@ fn drop_in_different_places() -> Result<()> {
     let dtor3 = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "dtor3")?;
 
     let (t,) = ctor.call(&mut store, (100,))?;
-    ctor.post_return(&mut store)?;
     dtor1.call(&mut store, (t,))?;
-    dtor1.post_return(&mut store)?;
 
     let (t,) = ctor.call(&mut store, (200,))?;
-    ctor.post_return(&mut store)?;
     dtor2.call(&mut store, (t,))?;
-    dtor2.post_return(&mut store)?;
 
     let (t,) = ctor.call(&mut store, (300,))?;
-    ctor.post_return(&mut store)?;
     dtor3.call(&mut store, (t,))?;
-    dtor3.post_return(&mut store)?;
 
     Ok(())
 }
@@ -366,9 +348,7 @@ fn drop_guest_twice() -> Result<()> {
     let dtor = i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "dtor")?;
 
     let (t,) = ctor.call(&mut store, (100,))?;
-    ctor.post_return(&mut store)?;
     dtor.call(&mut store, (&t,))?;
-    dtor.post_return(&mut store)?;
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
@@ -406,7 +386,6 @@ fn drop_host_twice() -> Result<()> {
 
     let t = Resource::new_own(100);
     dtor.call(&mut store, (&t,))?;
-    dtor.post_return(&mut store)?;
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
@@ -481,7 +460,6 @@ fn manually_destroy() -> Result<()> {
     // Host resources can be destroyed through `resource_drop`
     let t1 = Resource::new_own(100);
     let (t1,) = t1_pass.call(&mut store, (t1,))?;
-    t1_pass.post_return(&mut store)?;
     assert_eq!(store.data().drops, 0);
     assert_eq!(store.data().last_drop, None);
     t1.resource_drop(&mut store)?;
@@ -490,16 +468,11 @@ fn manually_destroy() -> Result<()> {
 
     // Guest resources can be destroyed through `resource_drop`
     let (t2,) = t2_ctor.call(&mut store, (200,))?;
-    t2_ctor.post_return(&mut store)?;
     assert_eq!(t2_drops.call(&mut store, ())?, (0,));
-    t2_drops.post_return(&mut store)?;
     assert_eq!(t2_last_drop.call(&mut store, ())?, (0,));
-    t2_last_drop.post_return(&mut store)?;
     t2.resource_drop(&mut store)?;
     assert_eq!(t2_drops.call(&mut store, ())?, (1,));
-    t2_drops.post_return(&mut store)?;
     assert_eq!(t2_last_drop.call(&mut store, ())?, (200,));
-    t2_last_drop.post_return(&mut store)?;
 
     // Wires weren't crossed to drop more resources
     assert_eq!(store.data().drops, 1);
@@ -604,12 +577,10 @@ fn dynamic_val() -> Result<()> {
 
     let t1 = Resource::new_own(100);
     let (t1,) = a_typed.call(&mut store, (t1,))?;
-    a_typed.post_return(&mut store)?;
     assert_eq!(t1.ty(), ResourceType::host::<MyType>());
 
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1)], &mut results)?;
-    a.post_return(&mut store)?;
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
@@ -629,7 +600,6 @@ fn dynamic_val() -> Result<()> {
     let t1_any = Resource::<MyType>::new_own(100).try_into_resource_any(&mut store)?;
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1_any)], &mut results)?;
-    a.post_return(&mut store)?;
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
@@ -650,7 +620,6 @@ fn dynamic_val() -> Result<()> {
         .try_into_resource_any(&mut store)?
         .try_into_resource(&mut store)?;
     let (t1,) = a_typed_result.call(&mut store, (t1,))?;
-    a_typed_result.post_return(&mut store)?;
     assert_eq!(t1.rep(), 100);
     assert!(t1.owned());
 
@@ -660,7 +629,6 @@ fn dynamic_val() -> Result<()> {
         .try_into_resource_any(&mut store)?;
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1_any)], &mut results)?;
-    a.post_return(&mut store)?;
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
@@ -740,7 +708,6 @@ fn cannot_reenter_during_import() -> Result<()> {
     let call = i.get_typed_func::<(), ()>(&mut store, "call")?;
 
     let (resource,) = ctor.call(&mut store, (100,))?;
-    ctor.post_return(&mut store)?;
     *store.data_mut() = Some(resource);
     call.call(&mut store, ())?;
 
@@ -779,8 +746,7 @@ fn active_borrows_at_end_of_call() -> Result<()> {
     let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
 
     let resource = Resource::new_own(1);
-    f.call(&mut store, (&resource,))?;
-    let err = f.post_return(&mut store).unwrap_err();
+    let err = f.call(&mut store, (&resource,)).unwrap_err();
     assert_eq!(
         err.to_string(),
         "borrow handles still remain at the end of the call",
@@ -844,7 +810,6 @@ fn thread_through_borrow() -> Result<()> {
 
     let resource = Resource::new_own(100);
     f.call(&mut store, (&resource,))?;
-    f.post_return(&mut store)?;
     Ok(())
 }
 
@@ -931,22 +896,18 @@ fn can_use_own_for_borrow() -> Result<()> {
 
     let resource = Resource::new_own(100);
     f_typed.call(&mut store, (&resource,))?;
-    f_typed.post_return(&mut store)?;
 
     let resource = Resource::new_borrow(200);
     f_typed.call(&mut store, (&resource,))?;
-    f_typed.post_return(&mut store)?;
 
     let resource = Resource::<MyType>::new_own(300).try_into_resource_any(&mut store)?;
     f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
-    f.post_return(&mut store)?;
     resource.resource_drop(&mut store)?;
 
     // TODO: Enable once https://github.com/bytecodealliance/wasmtime/issues/7793 is fixed
     //let resource =
     //    Resource::<MyType>::new_borrow(400).try_into_resource_any(&mut store, &i_pre, ty_idx)?;
     //f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
-    //f.post_return(&mut store)?;
     //resource.resource_drop(&mut store)?;
 
     Ok(())
@@ -1124,7 +1085,6 @@ fn drop_no_dtor() -> Result<()> {
     let i = Linker::new(&engine).instantiate(&mut store, &c)?;
     let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
     let (resource,) = ctor.call(&mut store, (100,))?;
-    ctor.post_return(&mut store)?;
     resource.resource_drop(&mut store)?;
 
     Ok(())
@@ -1141,16 +1101,20 @@ fn host_borrow_as_resource_any() -> Result<()> {
                 (import "f" (func $f (param "f" (borrow $t))))
 
                 (core func $f (canon lower (func $f)))
+                (core func $drop (canon resource.drop $t))
 
                 (core module $m
                     (import "" "f" (func $f (param i32)))
+                    (import "" "drop" (func $drop (param i32)))
                     (func (export "f2") (param i32)
                         (call $f (local.get 0))
+                        (call $drop (local.get 0))
                     )
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance
                         (export "f" (func $f))
+                        (export "drop" (func $drop))
                     ))
                 ))
 
@@ -1252,9 +1216,7 @@ fn pass_guest_back_as_borrow() -> Result<()> {
     let take = i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "take")?;
 
     let (resource,) = mk.call(&mut store, ())?;
-    mk.post_return(&mut store)?;
     take.call(&mut store, (&resource,))?;
-    take.post_return(&mut store)?;
 
     resource.resource_drop(&mut store)?;
 
@@ -1306,7 +1268,6 @@ fn pass_host_borrow_to_guest() -> Result<()> {
 
     let resource = Resource::new_borrow(100);
     take.call(&mut store, (&resource,))?;
-    take.post_return(&mut store)?;
 
     Ok(())
 }
@@ -1411,8 +1372,8 @@ fn guest_different_host_same() -> Result<()> {
                     (func (export "f") (param i32 i32)
                         ;; different types, but everything goes into the same
                         ;; handle index namespace
-                        (if (i32.ne (local.get 0) (i32.const 2)) (then (unreachable)))
-                        (if (i32.ne (local.get 1) (i32.const 3)) (then (unreachable)))
+                        (if (i32.ne (local.get 0) (i32.const 1)) (then (unreachable)))
+                        (if (i32.ne (local.get 1) (i32.const 2)) (then (unreachable)))
 
                         ;; host should end up getting the same resource
                         (call $f (local.get 0) (local.get 1))
@@ -1466,7 +1427,6 @@ fn guest_different_host_same() -> Result<()> {
 
     let resource = Resource::new_own(100);
     f.call(&mut store, (&resource, &resource))?;
-    f.post_return(&mut store)?;
 
     Ok(())
 }
@@ -1523,7 +1483,6 @@ fn resource_any_to_typed_handles_borrow() -> Result<()> {
 
     let resource = Resource::new_own(100);
     f.call(&mut store, (&resource,))?;
-    f.post_return(&mut store)?;
 
     Ok(())
 }
@@ -1576,10 +1535,8 @@ fn resource_dynamic() -> Result<()> {
     let drop_u = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-u")?;
 
     drop_t.call(&mut store, (ResourceDynamic::new_own(1, 2),))?;
-    drop_t.post_return(&mut store)?;
 
     drop_u.call(&mut store, (ResourceDynamic::new_own(2, 3),))?;
-    drop_u.post_return(&mut store)?;
 
     assert!(
         drop_t
@@ -1666,7 +1623,104 @@ fn intrinsic_trampolines() -> Result<()> {
     let rep = i.get_typed_func::<(ResourceAny,), (u32,)>(&mut store, "rep")?;
 
     let r = new.call(&mut store, (42,))?.0;
-    new.post_return(&mut store)?;
     assert!(rep.call(&mut store, (r,)).is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn drop_after_sync_lowered_async_host_function() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    let c = Component::new(
+        &engine,
+        r#"
+(component
+  (import "r" (type $r (sub resource)))
+  ;;(import "f" (func $f async (param "x" (borrow $r)) (param "y" (borrow $r))))
+  ;;(import "n" (func $n (result (own $r))))
+  (import "f" (func $f async))
+
+
+  (component $A
+    (import "f" (func $f async))
+    (core module $m
+      (import "" "f" (func $f))
+      (func (export "call") (result i32) call $f i32.const 0)
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    )
+    (core func $f (canon lower (func $f)))
+    (core instance $i (instantiate $m
+        (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "call") async
+      (canon lift (core func $i "call")
+        async
+        (callback (func $i "cb"))))
+  )
+
+  (component $B
+    (import "r" (type $r (sub resource)))
+    (import "f" (func $f async))
+    (core module $m
+      (import "" "f" (func $f (result i32)))
+      (import "" "r" (func $r))
+      (import "" "drop" (func $drop (param i32)))
+      (func (export "call") (param i32) (result i32)
+        ;; Call into component `$A` which is an async-lifted function. This
+        ;; function will call a sync-lowered async function from the host. In
+        ;; effect this means that the task started here by calling `$f` is
+        ;; blocked.
+        call $f
+        drop ;; ignore the `SUBTASK_STARTED` status code
+
+        ;; Now drop our borrow that this function was provided. This is
+        ;; entirely disconnected from `$A` and it should be using the borrow
+        ;; tracking of this task, no other task.
+        (call $drop (local.get 0))
+
+        ;; Now finish up this task without actually waiting on `$A`.
+        call $r
+        i32.const 0
+      )
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    )
+    (core func $f (canon lower (func $f) async))
+    (core func $r (canon task.return))
+    (core func $drop (canon resource.drop $r))
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "f" (func $f))
+        (export "r" (func $r))
+        (export "drop" (func $drop))
+      ))
+    ))
+    (func (export "call") async (param "x" (borrow $r))
+        (canon lift (core func $i "call")
+            async
+            (callback (func $i "cb"))))
+  )
+  (instance $a (instantiate $A (with "f" (func $f))))
+  (instance $b (instantiate $B
+    (with "f" (func $a "call"))
+    (with "r" (type $r))
+))
+  (export "call" (func $b "call"))
+)
+"#,
+    )?;
+
+    let mut root = linker.root();
+    root.resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+    root.func_wrap_concurrent("f", |_accessor, ()| {
+        Box::pin(async move { std::future::pending::<Result<()>>().await })
+    })?;
+
+    let i = linker.instantiate_async(&mut store, &c).await?;
+    let call = i.get_typed_func::<(Resource<u32>,), ()>(&mut store, "call")?;
+    let r = Resource::new_borrow(3);
+    call.call_async(&mut store, (r,)).await?;
     Ok(())
 }

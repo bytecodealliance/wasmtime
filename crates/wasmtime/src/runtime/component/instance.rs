@@ -9,9 +9,7 @@ use crate::component::{
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
-use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
-};
+use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
 use crate::runtime::vm::{self, VMFuncRef};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
@@ -379,13 +377,12 @@ impl Instance {
     pub(crate) fn resource_new32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_new(TypedResource::Component { ty, rep })
+        store
+            .component_resource_tables(Some(self))
+            .resource_new(TypedResource::Component { ty, rep })
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -393,26 +390,24 @@ impl Instance {
     pub(crate) fn resource_rep32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_rep(TypedResourceIndex::Component { ty, index })
+        store
+            .component_resource_tables(Some(self))
+            .resource_rep(TypedResourceIndex::Component { ty, index })
     }
 
     /// Implementation of the `resource.drop` intrinsic.
     pub(crate) fn resource_drop(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<Option<u32>> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_drop(TypedResourceIndex::Component { ty, index })
+        store
+            .component_resource_tables(Some(self))
+            .resource_drop(TypedResourceIndex::Component { ty, index })
     }
 
     pub(crate) fn resource_transfer_own(
@@ -422,8 +417,7 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let mut tables = store.component_resource_tables(Some(self));
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
     }
@@ -436,8 +430,7 @@ impl Instance {
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let mut tables = store.component_resource_tables(Some(self));
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         // Implement `lower_borrow`'s special case here where if a borrow's
         // resource type is owned by `dst` then the destination receives the
@@ -451,16 +444,6 @@ impl Instance {
             return Ok(rep);
         }
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
-    }
-
-    pub(crate) fn resource_enter_call(self, store: &mut StoreOpaque) {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).enter_call()
-    }
-
-    pub(crate) fn resource_exit_call(self, store: &mut StoreOpaque) -> Result<()> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).exit_call()
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
@@ -656,17 +639,6 @@ where
     unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
 }
 
-fn resource_tables<'a>(
-    calls: &'a mut CallContexts,
-    instance: Pin<&'a mut ComponentInstance>,
-) -> ResourceTables<'a> {
-    ResourceTables {
-        host_table: None,
-        calls,
-        guest: Some(instance.instance_states()),
-    }
-}
-
 /// Trait used to lookup the export of a component instance.
 ///
 /// This trait is used as an implementation detail of [`Instance::get_func`]
@@ -748,7 +720,8 @@ impl<'a> Instantiator<'a> {
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        store.register_component(component)?;
+        let (modules, engine) = store.modules_and_engine_mut();
+        modules.register_component(component, engine)?;
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
@@ -869,10 +842,8 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    let exit = if let Some(component_instance) = *component_instance
-                        && store.0.concurrency_support()
-                    {
-                        store.0.enter_sync_call(
+                    let exit = if let Some(component_instance) = *component_instance {
+                        store.0.enter_guest_sync_call(
                             None,
                             false,
                             RuntimeInstance {
@@ -900,7 +871,7 @@ impl<'a> Instantiator<'a> {
                     };
 
                     if exit {
-                        store.0.exit_sync_call(false)?;
+                        store.0.exit_guest_sync_call(false)?;
                     }
 
                     self.instance_mut(store.0).push_instance_id(i.id());

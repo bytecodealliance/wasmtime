@@ -28,7 +28,11 @@ use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{FileFlags, Object as _, ObjectSection, read::elf::ElfFile64};
+use object::{
+    FileFlags, Object as _,
+    elf::FileHeader64,
+    read::elf::{ElfFile64, FileHeader, SectionHeader},
+};
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -57,26 +61,44 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = ElfFile64::<Endianness>::parse(mmap)
+    let header = FileHeader64::<Endianness>::parse(mmap)
         .map_err(obj::ObjectCrateErrorWrapper)
         .context("failed to parse precompiled artifact as an ELF")?;
+    let endian = header
+        .endian()
+        .context("failed to parse header endianness")?;
+
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
     };
-    match obj.flags() {
-        FileFlags::Elf {
-            os_abi: obj::ELFOSABI_WASMTIME,
-            abi_version: 0,
-            e_flags,
-        } if e_flags & expected_e_flags == expected_e_flags => {}
-        _ => bail!("incompatible object file format"),
-    }
+    ensure!(
+        (header.e_flags(endian) & expected_e_flags) == expected_e_flags,
+        "incompatible object file format"
+    );
 
-    let data = obj
-        .section_by_name(obj::ELF_WASM_ENGINE)
-        .ok_or_else(|| format_err!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
-        .data()
+    let section_headers = header
+        .section_headers(endian, mmap)
+        .context("failed to parse section headers")?;
+    let strings = header
+        .section_strings(endian, mmap, section_headers)
+        .context("failed to parse strings table")?;
+    let sections = header
+        .sections(endian, mmap)
+        .context("failed to parse sections table")?;
+
+    let mut section_header = None;
+    for s in sections.iter() {
+        let name = s.name(endian, strings)?;
+        if name == obj::ELF_WASM_ENGINE.as_bytes() {
+            section_header = Some(s);
+        }
+    }
+    let Some(section_header) = section_header else {
+        bail!("failed to find section `{}`", obj::ELF_WASM_ENGINE)
+    };
+    let data = section_header
+        .data(endian, mmap)
         .map_err(obj::ObjectCrateErrorWrapper)?;
     let (first, data) = data
         .split_first()
@@ -95,19 +117,13 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     };
 
     match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => {
-            let version = core::str::from_utf8(version)?;
-            if version != env!("CARGO_PKG_VERSION_MAJOR") {
-                bail!("Module was compiled with incompatible Wasmtime version '{version}'");
-            }
-        }
-        ModuleVersionStrategy::Custom(v) => {
+        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
+        _ => {
             let version = core::str::from_utf8(&version)?;
-            if version != v {
+            if version != engine.config().module_version.as_str() {
                 bail!("Module was compiled with incompatible version '{version}'");
             }
         }
-        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
     postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
 }
@@ -121,11 +137,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     let mut data = Vec::new();
     data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
+    let version = engine.config().module_version.as_str();
     // This precondition is checked in Config::module_version:
     assert!(
         version.len() < 256,

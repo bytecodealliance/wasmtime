@@ -81,10 +81,6 @@ use crate::OwnedRooted;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
-#[cfg(feature = "component-model-async")]
-use crate::component::ComponentStoreData;
-#[cfg(feature = "component-model")]
-use crate::component::concurrent;
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
@@ -479,8 +475,6 @@ pub struct StoreOpaque {
 
     instances: wasmtime_environ::collections::PrimaryMap<InstanceId, StoreInstance>,
 
-    #[cfg(feature = "component-model")]
-    num_component_instances: usize,
     signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
@@ -540,18 +534,6 @@ pub struct StoreOpaque {
     /// guest code.
     pkey: Option<ProtectionKey>,
 
-    /// Runtime state for components used in the handling of resources, borrow,
-    /// and calls. These also interact with the `ResourceAny` type and its
-    /// internal representation.
-    #[cfg(feature = "component-model")]
-    component_host_table: vm::component::HandleTable,
-    #[cfg(feature = "component-model")]
-    component_calls: vm::component::CallContexts,
-    #[cfg(feature = "component-model")]
-    host_resource_data: crate::component::HostResourceData,
-    #[cfg(feature = "component-model")]
-    concurrent_state: Option<concurrent::ConcurrentState>,
-
     /// State related to the executor of wasm code.
     ///
     /// For example if Pulley is enabled and configured then this will store a
@@ -598,17 +580,17 @@ pub(crate) enum Executor {
 }
 
 impl Executor {
-    pub(crate) fn new(engine: &Engine) -> Self {
+    pub(crate) fn new(engine: &Engine) -> Result<Self, OutOfMemory> {
         #[cfg(has_host_compiler_backend)]
         if cfg!(feature = "pulley") && engine.target().is_pulley() {
-            Executor::Interpreter(Interpreter::new(engine))
+            Ok(Executor::Interpreter(Interpreter::new(engine)?))
         } else {
-            Executor::Native
+            Ok(Executor::Native)
         }
         #[cfg(not(has_host_compiler_backend))]
         {
             debug_assert!(engine.target().is_pulley());
-            Executor::Interpreter(Interpreter::new(engine))
+            Ok(Executor::Interpreter(Interpreter::new(engine)?))
         }
     }
 }
@@ -735,7 +717,7 @@ impl<T> Store<T> {
 
     /// Like `Store::new` but returns an error on allocation failure.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
-        let store_data = StoreData::new();
+        let store_data = StoreData::new(engine);
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
@@ -747,8 +729,6 @@ impl<T> Store<T> {
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: wasmtime_environ::collections::PrimaryMap::new(),
-            #[cfg(feature = "component-model")]
-            num_component_instances: 0,
             signal_handler: None,
             gc_store: None,
             gc_roots: RootSet::default(),
@@ -777,26 +757,7 @@ impl<T> Store<T> {
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
             pkey,
-            #[cfg(feature = "component-model")]
-            component_host_table: Default::default(),
-            #[cfg(feature = "component-model")]
-            component_calls: Default::default(),
-            #[cfg(feature = "component-model")]
-            host_resource_data: Default::default(),
-            executor: Executor::new(engine),
-            #[cfg(feature = "component-model")]
-            concurrent_state: if engine.tunables().concurrency_support {
-                #[cfg(feature = "component-model-async")]
-                {
-                    Some(Default::default())
-                }
-                #[cfg(not(feature = "component-model-async"))]
-                {
-                    unreachable!()
-                }
-            } else {
-                None
-            },
+            executor: Executor::new(engine)?,
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
         };
@@ -874,18 +835,7 @@ impl<T> Store<T> {
     }
 
     fn run_manual_drop_routines(&mut self) {
-        // We need to drop the fibers of each component instance before
-        // attempting to drop the instances themselves since the fibers may need
-        // to be resumed and allowed to exit cleanly before we yank the state
-        // out from under them.
-        //
-        // This will also drop any futures which might use a `&Accessor` fields
-        // in their `Drop::drop` implementations, in which case they'll need to
-        // be called from with in the context of a `tls::set` closure.
-        #[cfg(feature = "component-model-async")]
-        if self.inner.concurrent_state.is_some() {
-            ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
-        }
+        StoreData::run_manual_drop_routines(StoreContextMut(&mut self.inner));
 
         // Ensure all fiber stacks, even cached ones, are all flushed out to the
         // instance allocator.
@@ -1711,16 +1661,9 @@ impl StoreOpaque {
         &self.modules
     }
 
-    pub(crate) fn register_module(&mut self, module: &Module) -> Result<RegisteredModuleId> {
-        self.modules.register_module(module, &self.engine)
-    }
-
-    #[cfg(feature = "component-model")]
-    pub(crate) fn register_component(
-        &mut self,
-        component: &crate::component::Component,
-    ) -> Result<()> {
-        self.modules.register_component(component, &self.engine)
+    #[inline]
+    pub(crate) fn modules_and_engine_mut(&mut self) -> (&mut ModuleRegistry, &Engine) {
+        (&mut self.modules, &self.engine)
     }
 
     pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
@@ -2548,88 +2491,9 @@ at https://bytecodealliance.org/security.
         self.pkey
     }
 
-    #[inline]
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state(
-        &mut self,
-    ) -> (
-        &mut vm::component::CallContexts,
-        &mut vm::component::HandleTable,
-        &mut crate::component::HostResourceData,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-        )
-    }
-
-    #[cfg(feature = "component-model")]
-    pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
-        // We don't actually need the instance itself right now, but it seems
-        // like something we will almost certainly eventually want to keep
-        // around, so force callers to provide it.
-        let _ = instance;
-
-        self.num_component_instances += 1;
-    }
-
-    #[inline]
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state_with_instance(
-        &mut self,
-        instance: crate::component::Instance,
-    ) -> (
-        &mut vm::component::CallContexts,
-        &mut vm::component::HandleTable,
-        &mut crate::component::HostResourceData,
-        Pin<&mut vm::component::ComponentInstance>,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
-        )
-    }
-
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
-        &mut self,
-        instance: crate::component::Instance,
-    ) -> (
-        &mut vm::component::CallContexts,
-        &mut vm::component::HandleTable,
-        &mut crate::component::HostResourceData,
-        Pin<&mut vm::component::ComponentInstance>,
-        Option<&mut concurrent::ConcurrentState>,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
-            self.concurrent_state.as_mut(),
-        )
-    }
-
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
-        debug_assert!(self.concurrency_support());
-        self.concurrent_state.as_mut().unwrap()
-    }
-
-    #[inline]
-    #[cfg(feature = "component-model")]
-    pub(crate) fn concurrency_support(&self) -> bool {
-        let support = self.concurrent_state.is_some();
-        debug_assert_eq!(support, self.engine().tunables().concurrency_support);
-        support
     }
 
     #[cfg(feature = "async")]
@@ -2875,6 +2739,11 @@ unsafe impl<T> VMStore for StoreInner<T> {
         self
     }
 
+    #[cfg(feature = "component-model")]
+    fn component_task_state_mut(&mut self) -> &mut crate::component::store::ComponentTaskState {
+        StoreOpaque::component_task_state_mut(self)
+    }
+
     fn store_opaque(&self) -> &StoreOpaque {
         &self.inner
     }
@@ -2910,11 +2779,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
         update
-    }
-
-    #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut vm::component::CallContexts {
-        &mut self.component_calls
     }
 
     #[cfg(feature = "debug")]
@@ -3005,12 +2869,7 @@ impl Drop for StoreOpaque {
                 allocator.deallocate_module(&mut instance.handle);
             }
 
-            #[cfg(feature = "component-model")]
-            {
-                for _ in 0..self.num_component_instances {
-                    allocator.decrement_component_instance_count();
-                }
-            }
+            self.store_data.decrement_allocator_resources(allocator);
         }
     }
 }

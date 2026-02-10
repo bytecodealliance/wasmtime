@@ -43,10 +43,8 @@ mod resources;
 
 pub use self::handle_table::{HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
-pub use self::handle_table::{TransmitLocalState, Waitable};
-#[cfg(feature = "component-model-async")]
-pub use self::resources::CallContext;
-pub use self::resources::{CallContexts, ResourceTables, TypedResource, TypedResourceIndex};
+pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
+pub use self::resources::{CallContext, ResourceTables, TypedResource, TypedResourceIndex};
 
 /// Represents the state of a (sub-)component instance.
 #[derive(Default)]
@@ -62,6 +60,11 @@ pub struct InstanceState {
     /// is used directly to translate guest handles to host representations and
     /// vice-versa.
     handle_table: HandleTable,
+
+    /// Dedicated table for threads that is separate from `handle_table`. Part
+    /// of the component-model-threading proposal.
+    #[cfg(feature = "component-model-async")]
+    thread_handle_table: ThreadHandleTable,
 }
 
 impl InstanceState {
@@ -74,6 +77,12 @@ impl InstanceState {
     /// State of handles (e.g. resources, waitables, etc.) for this instance.
     pub fn handle_table(&mut self) -> &mut HandleTable {
         &mut self.handle_table
+    }
+
+    /// State of thread handles.
+    #[cfg(feature = "component-model-async")]
+    pub fn thread_handle_table(&mut self) -> &mut ThreadHandleTable {
+        &mut self.thread_handle_table
     }
 }
 
@@ -147,12 +156,6 @@ pub struct ComponentInstance {
 
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
-
-    /// Cached ABI return value from the last-invoked function call along with
-    /// the function index that was invoked.
-    ///
-    /// Used in `post_return_arg_set` and `post_return_arg_take` below.
-    post_return_arg: Option<(ExportIndex, ValRaw)>,
 
     /// Required by `InstanceLayout`, also required to be the last field (with
     /// repr(C))
@@ -341,7 +344,6 @@ impl ComponentInstance {
             resource_types,
             imports: imports.clone(),
             store: VMStoreRawPtr(store),
-            post_return_arg: None,
             vmctx: OwnedVMContext::new(),
         })?;
         unsafe {
@@ -954,62 +956,6 @@ impl ComponentInstance {
         }
     }
 
-    /// Sets the cached argument for the canonical ABI option `post-return` to
-    /// the `arg` specified.
-    ///
-    /// This function is used in conjunction with function calls to record,
-    /// after a function call completes, the optional ABI return value. This
-    /// return value is cached within this instance for future use when the
-    /// `post_return` Rust-API-level function is invoked.
-    ///
-    /// Note that `index` here is the index of the export that was just
-    /// invoked, and this is used to ensure that `post_return` is called on the
-    /// same function afterwards. This restriction technically isn't necessary
-    /// though and may be one we want to lift in the future.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if `post_return_arg` is already set to `Some`.
-    pub fn post_return_arg_set(self: Pin<&mut Self>, index: ExportIndex, arg: ValRaw) {
-        assert!(self.post_return_arg.is_none());
-        *self.post_return_arg_mut() = Some((index, arg));
-    }
-
-    /// Re-acquires the value originally saved via `post_return_arg_set`.
-    ///
-    /// This function will take a function `index` that's having its
-    /// `post_return` function called. If an argument was previously stored and
-    /// `index` matches the index that was stored then `Some(arg)` is returned.
-    /// Otherwise `None` is returned.
-    pub fn post_return_arg_take(self: Pin<&mut Self>, index: ExportIndex) -> Option<ValRaw> {
-        let post_return_arg = self.post_return_arg_mut();
-        let (expected_index, arg) = post_return_arg.take()?;
-        if index != expected_index {
-            *post_return_arg = Some((expected_index, arg));
-            None
-        } else {
-            Some(arg)
-        }
-    }
-
-    fn post_return_arg_mut(self: Pin<&mut Self>) -> &mut Option<(ExportIndex, ValRaw)> {
-        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
-        // the map returned.
-        unsafe { &mut self.get_unchecked_mut().post_return_arg }
-    }
-
-    pub(crate) fn check_may_leave(
-        &self,
-        instance: RuntimeComponentInstanceIndex,
-    ) -> crate::Result<()> {
-        let flags = self.instance_flags(instance);
-        if unsafe { flags.may_leave() } {
-            Ok(())
-        } else {
-            Err(crate::format_err!(crate::Trap::CannotLeaveComponent))
-        }
-    }
-
     pub(crate) fn task_may_block(&self) -> NonNull<VMGlobalDefinition> {
         unsafe { self.vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.task_may_block()) }
     }
@@ -1120,22 +1066,6 @@ impl InstanceFlags {
                 *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
             } else {
                 *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
-            }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn needs_post_return(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_NEEDS_POST_RETURN != 0 }
-    }
-
-    #[inline]
-    pub unsafe fn set_needs_post_return(&mut self, val: bool) {
-        unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
             }
         }
     }

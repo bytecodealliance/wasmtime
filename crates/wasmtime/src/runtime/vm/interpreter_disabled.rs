@@ -5,7 +5,7 @@
 //! having these structures plumbed around.
 
 use crate::runtime::vm::{VMContext, VMOpaqueContext};
-use crate::{Engine, ValRaw};
+use crate::{Engine, ValRaw, error::OutOfMemory};
 use core::convert::Infallible;
 use core::marker;
 use core::mem;
@@ -20,7 +20,7 @@ const _: () = assert!(mem::size_of::<Interpreter>() == 0);
 const _: () = assert!(mem::size_of::<Option<Interpreter>>() == 0);
 
 impl Interpreter {
-    pub fn new(_engine: &Engine) -> Interpreter {
+    pub fn new(_engine: &Engine) -> Result<Interpreter, OutOfMemory> {
         unreachable!()
     }
 

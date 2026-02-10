@@ -460,8 +460,6 @@ pub enum Trampoline {
     },
     ResourceTransferOwn,
     ResourceTransferBorrow,
-    ResourceEnterCall,
-    ResourceExitCall,
     PrepareCall {
         memory: Option<MemoryId>,
     },
@@ -1146,8 +1144,6 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
-            Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
-            Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),
             },

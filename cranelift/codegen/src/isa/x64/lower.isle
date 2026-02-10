@@ -1562,20 +1562,20 @@
             (b Xmm (sse_and ty c_neg f)))
         (sse_or ty a b)))
 
-;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16
-                       (x86_blendv condition if_true if_false)))
+                       (blendv condition if_true if_false)))
       (if-let true (has_sse41))
       (x64_pblendvb if_false if_true condition))
 
 (rule (lower (has_type $I32X4
-                       (x86_blendv condition if_true if_false)))
+                       (blendv condition if_true if_false)))
       (if-let true (has_sse41))
       (x64_blendvps if_false if_true condition))
 
 (rule (lower (has_type $I64X2
-                       (x86_blendv condition if_true if_false)))
+                       (blendv condition if_true if_false)))
       (if-let true (has_sse41))
       (x64_blendvpd if_false if_true condition))
 

@@ -75,3 +75,47 @@
   (core func $subtask-cancel (canon subtask.cancel))
   (core instance $i (instantiate $m (with "" (instance (export "subtask.cancel" (func $subtask-cancel))))))
 )
+
+;; Test that some intrinsics are exempt from may-leave checks
+(component
+  (core func $backpressure.inc (canon backpressure.inc))
+  (core func $backpressure.dec (canon backpressure.dec))
+  (core func $context.get (canon context.get i32 0))
+  (core func $context.set (canon context.set i32 0))
+
+  (core module $DM
+    (import "" "backpressure.inc" (func $backpressure.inc))
+    (import "" "backpressure.dec" (func $backpressure.dec))
+    (import "" "context.get" (func $context.get (result i32)))
+    (import "" "context.set" (func $context.set (param i32)))
+
+    (global $g (mut i32) (i32.const 0))
+
+    (func (export "run")
+      (call $context.set (i32.const 100))
+    )
+    (func (export "post-return")
+      call $backpressure.inc
+      call $backpressure.dec
+
+      ;; context.get should be what was set in `run`
+      call $context.get
+      i32.const 100
+      i32.ne
+      if unreachable end
+
+      i32.const 32
+      call $context.set
+    )
+  )
+  (core instance $dm (instantiate $DM (with "" (instance
+    (export "backpressure.inc" (func $backpressure.inc))
+    (export "backpressure.dec" (func $backpressure.dec))
+    (export "context.get" (func $context.get))
+    (export "context.set" (func $context.set))
+  ))))
+  (func (export "run")
+    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+)
+
+(assert_return (invoke "run"))

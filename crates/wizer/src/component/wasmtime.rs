@@ -70,10 +70,6 @@ impl Wizer {
             .call_async(&mut *store, ())
             .await
             .with_context(|| format!("the initialization function trapped"))?;
-        init_func
-            .post_return_async(&mut *store)
-            .await
-            .context("failed to call post-return")?;
 
         Ok(())
     }
@@ -111,9 +107,7 @@ impl<T: Send> WasmtimeWizerComponent<'_, T> {
             .get_typed_func::<(), (R,)>(&mut *self.store, func_export)
             .unwrap();
         let ret = func.call_async(&mut *self.store, ()).await.unwrap().0;
-        let ret = use_ret(&mut *self.store, ret);
-        func.post_return_async(&mut *self.store).await.unwrap();
-        ret
+        use_ret(&mut *self.store, ret)
     }
 }
 

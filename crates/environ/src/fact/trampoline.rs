@@ -797,14 +797,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(enter_sync_call.as_u32()));
 
             old_task_may_block
+        } else if self.emit_resource_call {
+            let enter_sync_call = self.module.import_enter_sync_call();
+            self.instruction(Call(enter_sync_call.as_u32()));
+            None
         } else {
             None
         };
-
-        if self.emit_resource_call {
-            let enter = self.module.import_resource_enter_call();
-            self.instruction(Call(enter.as_u32()));
-        }
 
         // Perform the translation of arguments. Note that `FLAG_MAY_LEAVE` is
         // cleared around this invocation for the callee as per the
@@ -866,18 +865,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.free_temp_local(tmp);
         }
 
-        if self.emit_resource_call {
-            let exit = self.module.import_resource_exit_call();
-            self.instruction(Call(exit.as_u32()));
-        }
-
-        if self.module.tunables.concurrency_support {
+        if self.emit_resource_call || self.module.tunables.concurrency_support {
             // Pop the task we pushed earlier off of the current task stack.
             //
             // FIXME: Apply the optimizations described in #12311.
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));
+        }
 
+        if self.module.tunables.concurrency_support {
             // Restore old `may_block_field`
             if let Some(old_task_may_block) = old_task_may_block {
                 let task_may_block = self.module.import_task_may_block();

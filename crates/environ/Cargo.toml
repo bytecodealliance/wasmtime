@@ -23,6 +23,7 @@ postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 wasmparser = { workspace = true, features = ['validate', 'serde', 'features'] }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }

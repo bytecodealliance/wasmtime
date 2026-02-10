@@ -1,5 +1,5 @@
-use super::{TryNew, Vec, try_alloc};
-use crate::error::OutOfMemory;
+use super::{TryClone, TryNew, Vec, try_alloc};
+use crate::{alloc::str_ptr_from_slice_ptr, error::OutOfMemory};
 use core::{
     alloc::Layout,
     mem::{self, MaybeUninit},
@@ -39,6 +39,48 @@ impl<T> TryNew for Box<T> {
     {
         let boxed = new_uninit_box::<T>()?;
         Ok(Box::write(boxed, value))
+    }
+}
+
+impl<T> TryClone for Box<T>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let b = new_uninit_box::<T>()?;
+        let v = (**self).try_clone()?;
+        Ok(Box::write(b, v))
+    }
+}
+
+impl<T> TryClone for Box<[T]>
+where
+    T: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut builder = BoxedSliceBuilder::new(self.len())?;
+        for v in &*self {
+            builder.push(v.try_clone()?).expect("reserved capacity");
+        }
+        debug_assert_eq!(builder.init_len(), builder.capacity());
+        Ok(builder.finish())
+    }
+}
+
+impl TryClone for Box<str> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut builder = BoxedSliceBuilder::new(self.len())?;
+        for b in self.as_bytes() {
+            builder.push(*b).expect("reserved capacity");
+        }
+        debug_assert_eq!(builder.init_len(), builder.capacity());
+        let boxed = builder.finish();
+        let ptr = Box::into_raw(boxed);
+        let ptr = str_ptr_from_slice_ptr(ptr);
+        // SAFETY: the pointer is allocated with the global allocator and points
+        // to a valid utf8 sequence.
+        let boxed = unsafe { Box::from_raw(ptr) };
+        Ok(boxed)
     }
 }
 

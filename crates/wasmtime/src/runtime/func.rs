@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{
     self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
@@ -17,7 +18,7 @@ use core::ffi::c_void;
 use core::future::Future;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
-use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::{PanicOnOom as _, VMSharedTypeIndex};
 
 /// A reference to the abstract `nofunc` heap value.
 ///
@@ -376,7 +377,7 @@ impl Func {
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         let store = store.as_context_mut().0;
-        let host = HostFunc::new(store.engine(), ty, func);
+        let host = HostFunc::new(store.engine(), ty, func).panic_on_oom();
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
@@ -420,7 +421,7 @@ impl Func {
 
         // SAFETY: the contract required by `new_unchecked` is the same as the
         // contract required by this function itself.
-        let host = unsafe { HostFunc::new_unchecked(store.engine(), ty, func) };
+        let host = unsafe { HostFunc::new_unchecked(store.engine(), ty, func).panic_on_oom() };
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
@@ -511,7 +512,7 @@ impl Func {
     {
         let store = store.as_context_mut().0;
 
-        let host = HostFunc::new_async(store.engine(), ty, func);
+        let host = HostFunc::new_async(store.engine(), ty, func).panic_on_oom();
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
@@ -790,7 +791,7 @@ impl Func {
     {
         let store = store.as_context_mut().0;
         let engine = store.engine();
-        let host = func.into_func(engine);
+        let host = func.into_func(engine).panic_on_oom();
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
@@ -812,7 +813,7 @@ impl Func {
         T: Send + 'static,
     {
         let store = store.as_context_mut().0;
-        let host = HostFunc::wrap_async(store.engine(), func);
+        let host = HostFunc::wrap_async(store.engine(), func).panic_on_oom();
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
@@ -1610,7 +1611,10 @@ pub unsafe trait WasmRet {
     ) -> Result<()>;
 
     #[doc(hidden)]
-    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
+    fn func_type(
+        engine: &Engine,
+        params: impl Iterator<Item = ValType>,
+    ) -> Result<FuncType, OutOfMemory>;
     #[doc(hidden)]
     fn may_gc() -> bool;
 
@@ -1650,8 +1654,11 @@ where
         T::may_gc()
     }
 
-    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
-        FuncType::new(engine, params, Some(<Self as WasmTy>::valtype()))
+    fn func_type(
+        engine: &Engine,
+        params: impl Iterator<Item = ValType>,
+    ) -> Result<FuncType, OutOfMemory> {
+        FuncType::try_new(engine, params, Some(<Self as WasmTy>::valtype()))
     }
 
     fn into_fallible(self) -> Result<T> {
@@ -1690,7 +1697,10 @@ where
         T::may_gc()
     }
 
-    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
+    fn func_type(
+        engine: &Engine,
+        params: impl Iterator<Item = ValType>,
+    ) -> Result<FuncType, OutOfMemory> {
         T::func_type(engine, params)
     }
 
@@ -1745,8 +1755,11 @@ macro_rules! impl_wasm_host_results {
                 $( $t::may_gc() || )* false
             }
 
-            fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
-                FuncType::new(
+            fn func_type(
+                engine: &Engine,
+                params: impl Iterator<Item = ValType>,
+            ) -> Result<FuncType, OutOfMemory> {
+                FuncType::try_new(
                     engine,
                     params,
                     IntoIterator::into_iter([$($t::valtype(),)*]),
@@ -1777,7 +1790,7 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
     /// Convert this function into a `VM{Array,Native}CallHostFuncContext` and
     /// internal `VMFuncRef`.
     #[doc(hidden)]
-    fn into_func(self, engine: &Engine) -> HostFunc;
+    fn into_func(self, engine: &Engine) -> Result<HostFunc, OutOfMemory>;
 }
 
 macro_rules! impl_into_func {
@@ -1793,7 +1806,7 @@ macro_rules! impl_into_func {
             R: WasmRet,
             T: 'static,
         {
-            fn into_func(self, engine: &Engine) -> HostFunc {
+            fn into_func(self, engine: &Engine) -> Result<HostFunc, OutOfMemory> {
                 let f = move |_: Caller<'_, T>, $arg: $arg| {
                     self($arg)
                 };
@@ -1810,7 +1823,7 @@ macro_rules! impl_into_func {
             R: WasmRet,
             T: 'static,
         {
-            fn into_func(self, engine: &Engine) -> HostFunc {
+            fn into_func(self, engine: &Engine) -> Result<HostFunc, OutOfMemory> {
                 HostFunc::wrap(engine, move |caller: Caller<'_, T>, ($arg,)| {
                     self(caller, $arg)
                 })
@@ -1829,7 +1842,7 @@ macro_rules! impl_into_func {
             R: WasmRet,
             T: 'static,
         {
-            fn into_func(self, engine: &Engine) -> HostFunc {
+            fn into_func(self, engine: &Engine) -> Result<HostFunc, OutOfMemory> {
                 let f = move |_: Caller<'_, T>, $($args:$args),*| {
                     self($($args),*)
                 };
@@ -1846,7 +1859,7 @@ macro_rules! impl_into_func {
             R: WasmRet,
             T: 'static,
         {
-            fn into_func(self, engine: &Engine) -> HostFunc {
+            fn into_func(self, engine: &Engine) -> Result<HostFunc, OutOfMemory> {
                 HostFunc::wrap(engine, move |caller: Caller<'_, T>, ( $( $args ),* )| {
                     self(caller, $( $args ),* )
                 })
@@ -2212,7 +2225,7 @@ impl HostFunc {
         engine: &Engine,
         ty: FuncType,
         func: F,
-    ) -> StoreBox<VMArrayCallHostFuncContext>
+    ) -> Result<StoreBox<VMArrayCallHostFuncContext>, OutOfMemory>
     where
         F: Fn(Caller<'_, T>, &mut [MaybeUninit<ValRaw>]) -> Result<()> + Send + Sync + 'static,
         T: 'static,
@@ -2223,10 +2236,10 @@ impl HostFunc {
             VMArrayCallHostFuncContext::new(
                 Self::array_call_trampoline::<T, F>,
                 ty.type_index(),
-                Box::new(HostFuncState {
+                try_new::<Box<_>>(HostFuncState {
                     func,
                     _ty: ty.into_registered_type(),
-                }),
+                })?,
             )
         }
     }
@@ -2247,7 +2260,7 @@ impl HostFunc {
         ty: FuncType,
         ctx: U,
         func: F,
-    ) -> StoreBox<VMArrayCallHostFuncContext>
+    ) -> Result<StoreBox<VMArrayCallHostFuncContext>, OutOfMemory>
     where
         F: for<'a> Fn(
                 Caller<'a, T>,
@@ -2377,11 +2390,15 @@ impl HostFunc {
         engine: &Engine,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [MaybeUninit<ValRaw>]) -> Result<()> + Send + Sync + 'static,
-    ) -> Self
+    ) -> Result<Self, OutOfMemory>
     where
         T: 'static,
     {
-        HostFunc::new_raw(engine, Self::vmctx_sync(engine, ty, func), Asyncness::No)
+        Ok(HostFunc::new_raw(
+            engine,
+            Self::vmctx_sync(engine, ty, func)?,
+            Asyncness::No,
+        ))
     }
 
     /// Analog of [`Func::new`]
@@ -2394,13 +2411,13 @@ impl HostFunc {
         engine: &Engine,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
-    ) -> Self
+    ) -> Result<Self, OutOfMemory>
     where
         T: 'static,
     {
         // NB: this is "duplicated" below in `new_async`, so try to keep the
         // two in sync.
-        HostFunc::new_raw(
+        Ok(HostFunc::new_raw(
             engine,
             Self::vmctx_sync(engine, ty.clone(), move |mut caller, values| {
                 // SAFETY: Wasmtime in general provides the guarantee that
@@ -2409,9 +2426,9 @@ impl HostFunc {
                 let (params, results) = vec.split_at_mut(ty.params().len());
                 func(caller.sub_caller(), params, results)?;
                 Self::store_untyped_results(caller.store, &ty, vec, values)
-            }),
+            })?,
             Asyncness::No,
-        )
+        ))
     }
 
     /// Analog of [`Func::new_async`]
@@ -2421,7 +2438,7 @@ impl HostFunc {
     /// Panics if the given function type is not associated with the given
     /// engine.
     #[cfg(feature = "async")]
-    pub fn new_async<T, F>(engine: &Engine, ty: FuncType, func: F) -> Self
+    pub fn new_async<T, F>(engine: &Engine, ty: FuncType, func: F) -> Result<Self, OutOfMemory>
     where
         F: for<'a> Fn(
                 Caller<'a, T>,
@@ -2435,7 +2452,7 @@ impl HostFunc {
     {
         // NB: this is "duplicated" above in `new`, so try to keep the two in
         // sync.
-        HostFunc::new_raw(
+        Ok(HostFunc::new_raw(
             engine,
             Self::vmctx_async(
                 engine,
@@ -2452,9 +2469,9 @@ impl HostFunc {
                         Self::store_untyped_results(caller.store, &ty, vec, values)
                     })
                 },
-            ),
+            )?,
             Asyncness::Yes,
-        )
+        ))
     }
 
     /// Loads the the parameters of `ty` from `params` into a vector.
@@ -2510,7 +2527,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::wrap`]
-    pub fn wrap<T, F, P, R>(engine: &Engine, func: F) -> Self
+    pub fn wrap<T, F, P, R>(engine: &Engine, func: F) -> Result<Self, OutOfMemory>
     where
         F: Fn(Caller<'_, T>, P) -> R + Send + Sync + 'static,
         P: WasmTyList,
@@ -2519,7 +2536,7 @@ impl HostFunc {
     {
         // NB: this entire function is "duplicated" below in `wrap_async`, so
         // try to keep the two in sync.
-        let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()));
+        let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()))?;
 
         let ctx = Self::vmctx_sync(engine, ty, move |mut caller, args| {
             // SAFETY: `args` matching `ty` is provided by `HostFunc` and
@@ -2529,13 +2546,13 @@ impl HostFunc {
             // SAFETY: `args` matching `ty` is provided by `HostFunc` and
             // wasmtime's ambient correctness.
             unsafe { Self::store_typed_results(caller.store.0, ret, args) }
-        });
-        HostFunc::new_raw(engine, ctx, Asyncness::No)
+        })?;
+        Ok(HostFunc::new_raw(engine, ctx, Asyncness::No))
     }
 
     /// Analog of [`Func::wrap_async`]
     #[cfg(feature = "async")]
-    pub fn wrap_async<T, F, P, R>(engine: &Engine, func: F) -> Self
+    pub fn wrap_async<T, F, P, R>(engine: &Engine, func: F) -> Result<Self, OutOfMemory>
     where
         F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
             + Send
@@ -2547,7 +2564,7 @@ impl HostFunc {
     {
         // NB: this entire function is "duplicated" above in `wrap`, so try to
         // keep the two in sync.
-        let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()));
+        let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()))?;
 
         let ctx = Self::vmctx_async(engine, ty, func, move |mut caller, args, func| {
             Box::new(async move {
@@ -2559,8 +2576,8 @@ impl HostFunc {
                 // wasmtime's ambient correctness.
                 unsafe { Self::store_typed_results(caller.store.0, ret.into_fallible(), args) }
             })
-        });
-        HostFunc::new_raw(engine, ctx, Asyncness::Yes)
+        })?;
+        Ok(HostFunc::new_raw(engine, ctx, Asyncness::Yes))
     }
 
     /// Loads the typed parameters from `params`

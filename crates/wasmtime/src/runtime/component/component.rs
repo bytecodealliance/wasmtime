@@ -427,7 +427,7 @@ impl Component {
         let signatures = engine.register_and_canonicalize_types(
             types.module_types_mut(),
             static_modules.iter_mut().map(|(_, m)| &mut m.module),
-        );
+        )?;
         types.canonicalize_for_runtime_usage(&mut |idx| signatures.shared_type(idx).unwrap());
 
         // Assemble the `EngineCode` artifact which is shared by all core wasm

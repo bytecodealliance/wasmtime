@@ -609,3 +609,42 @@ async fn export_is_removed() -> Result<()> {
             .collect()
     }
 }
+
+// For the time being, Wizer should _not_ remove the `_initialize` export if
+// present, even though it will become unreachable by virtual of `start`
+// functions being removed.  That's because `wit-component` creates an alias to
+// the `_initialize` function, which would require additional surgery to remove.
+// Ideally, we'd have a general purpose, component-level dead-code-elimination
+// tool to remove all unreachable code, but for now we accept a bit of
+// redundancy.
+#[tokio::test]
+async fn leave_wasip1_initialize() -> Result<()> {
+    wizen_and_run_wasm(
+        42,
+        r#"(component
+            (core module $m
+                (func (export "init"))
+
+                (func (export "run") (result i32)
+                    i32.const 42
+                )
+
+                (func (export "_initialize"))
+            )
+            (core instance $i (instantiate $m))
+            (alias core export $i "_initialize" (core func $initialize))
+            (core module $shim
+                (import "" "_initialize" (func $initialize))
+                (start $initialize)
+            )
+            (core instance $shim (instantiate $shim (with "" (instance
+                (export "_initialize" (func $initialize))
+            ))))
+            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
+        )"#,
+    )
+    .await?;
+
+    Ok(())
+}

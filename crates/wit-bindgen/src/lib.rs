@@ -2854,19 +2854,6 @@ impl<'a> InterfaceGenerator<'a> {
         };
         uwriteln!(self.src, ")){instrument}{await_}?;");
 
-        let instrument = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::TRACING) {
-            ".instrument(span)"
-        } else {
-            ""
-        };
-
-        if !flags.contains(FunctionFlags::STORE) {
-            uwriteln!(
-                self.src,
-                "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
-            );
-        }
-
         self.src.push_str("Ok(");
         if task_exit {
             self.src.push_str("(");

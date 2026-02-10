@@ -554,3 +554,42 @@ check: exited with status = 0
     }
     Ok(())
 }
+
+#[test]
+#[ignore]
+pub fn dwarf_cold_block() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Oopt-level=0",
+            "-Ddebug-info",
+            DWARF_COLD_BLOCK,
+        ],
+        r#"b foo
+r
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: frame #0
+sameln: foo(f1=(__ptr =
+check: data = 42
+check: data = 42
+check: data = 42
+check: data = 42
+check: resuming
+"#,
+    )?;
+    Ok(())
+}

@@ -74,33 +74,54 @@ unsafe impl GlobalAlloc for OomTestAllocator {
 
         let new_state;
         let ptr;
-        {
+
+        'outside_oom_test: {
             // NB: It's okay to log/backtrace/etc... in this block because the
             // current state is `OutsideOomTest`, so any re-entrant allocations
             // will be passed through to the system allocator.
 
+            // Don't panic on allocation-after-OOM attempts if we
+            // are already in the middle of panicking. That will
+            // cause an abort and we won't get as good of an error
+            // message for the original panic, which is most likely
+            // some kind of test failure.
+            if old_state == OomState::OutsideOomTest || std::thread::panicking() {
+                new_state = old_state;
+                ptr = unsafe { std::alloc::System.alloc(layout) };
+                break 'outside_oom_test;
+            }
+
+            let bt = Backtrace::new();
+            let bt = format!("{bt:?}");
+
+            // XXX: `env_logger` internally buffers writes in a `Vec` which
+            // means our OOM tests might sporadically fail when you enable
+            // logging to debug stuff, so simply let the allocation through if
+            // `env_logger` is on the stack.
+            if bt.contains("env_logger") {
+                new_state = old_state;
+                ptr = unsafe { std::alloc::System.alloc(layout) };
+                break 'outside_oom_test;
+            }
+
             match old_state {
-                OomState::OutsideOomTest => {
-                    new_state = OomState::OutsideOomTest;
-                    ptr = unsafe { std::alloc::System.alloc(layout) };
-                }
+                OomState::OutsideOomTest => unreachable!("handled above"),
+
                 OomState::OomOnAlloc(0) => {
                     log::trace!(
-                        "injecting OOM for allocation: {layout:?}\nAllocation backtrace:\n{:?}",
-                        Backtrace::new(),
+                        "injecting OOM for allocation: {layout:?}\nAllocation backtrace:\n{bt}"
                     );
                     new_state = OomState::DidOom;
                     ptr = ptr::null_mut();
                 }
+
                 OomState::OomOnAlloc(c) => {
                     new_state = OomState::OomOnAlloc(c - 1);
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
+
                 OomState::DidOom => {
-                    log::trace!(
-                        "Attempt to allocate {layout:?} after OOM:\n{:?}",
-                        Backtrace::new(),
-                    );
+                    log::trace!("Attempt to allocate {layout:?} after OOM:\n{bt}");
                     panic!("OOM test attempted to allocate after OOM: {layout:?}")
                 }
             }

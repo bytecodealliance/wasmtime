@@ -191,7 +191,6 @@ const _: () = {
                 wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
             };
             let () = callee.call_async(store.as_context_mut(), ()).await?;
-            callee.post_return_async(store.as_context_mut()).await?;
             Ok(())
         }
     }

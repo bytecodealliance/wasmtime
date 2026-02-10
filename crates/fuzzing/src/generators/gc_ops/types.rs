@@ -1,6 +1,7 @@
 //! Types for the `gc` operations.
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
+use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -86,5 +87,91 @@ impl Types {
                 .all(|ty| self.rec_groups.contains(&ty.rec_group)),
             "type_defs must only reference existing rec_groups"
         );
+    }
+}
+
+/// This is used to track the requirements for the operands of an operation.
+#[derive(Copy, Clone, Debug)]
+pub enum StackType {
+    /// `externref`
+    ExternRef,
+    /// `(ref $*)`;
+    Struct(Option<u32>),
+}
+
+impl StackType {
+    /// Fixes the stack type to match the given requirement.
+    pub fn fixup(
+        req: Option<StackType>,
+        stack: &mut Vec<StackType>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+    ) {
+        let mut result_types = Vec::new();
+        match req {
+            None => {
+                if stack.is_empty() {
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
+                }
+                stack.pop(); // always consume exactly one value
+            }
+            Some(Self::ExternRef) => match stack.last() {
+                Some(Self::ExternRef) => {
+                    stack.pop();
+                }
+                _ => {
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
+                    stack.pop(); // consume just-synthesized externref
+                }
+            },
+            Some(Self::Struct(wanted)) => {
+                let ok = match (wanted, stack.last()) {
+                    (Some(wanted), Some(Self::Struct(Some(s)))) => *s == wanted,
+                    (None, Some(Self::Struct(_))) => true,
+                    _ => false,
+                };
+
+                if ok {
+                    stack.pop();
+                } else {
+                    // Ensure there *is* a struct to consume.
+                    let type_index = match wanted {
+                        Some(t) => Self::clamp(t, num_types),
+                        None => Self::clamp(0, num_types),
+                    };
+                    Self::emit(
+                        GcOp::StructNew { type_index },
+                        stack,
+                        out,
+                        num_types,
+                        &mut result_types,
+                    );
+                    stack.pop(); // consume the synthesized struct
+                }
+            }
+        }
+    }
+
+    pub(crate) fn emit(
+        op: GcOp,
+        stack: &mut Vec<Self>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+        result_types: &mut Vec<Self>,
+    ) {
+        out.push(op);
+        result_types.clear();
+        op.result_types(result_types);
+        for ty in result_types {
+            let clamped_ty = match ty {
+                Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
+                other => *other,
+            };
+            stack.push(clamped_ty);
+        }
+    }
+
+    fn clamp(t: u32, n: u32) -> u32 {
+        if n == 0 { 0 } else { t % n }
     }
 }

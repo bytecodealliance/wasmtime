@@ -58,13 +58,16 @@ pub fn log_wasm(wasm: &[u8]) {
     log::debug!("wrote wasm file to `{name}`");
     let wat = format!("testcase{i}.wat");
     match wasmprinter::print_bytes(wasm) {
-        Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
+        Ok(s) => {
+            std::fs::write(&wat, s).expect("failed to write wat file");
+            log::debug!("wrote wat file to `{wat}`");
+        }
         // If wasmprinter failed remove a `*.wat` file, if any, to avoid
         // confusing a preexisting one with this wasm which failed to get
         // printed.
         Err(e) => {
             log::debug!("failed to print to wat: {e}");
-            drop(std::fs::remove_file(&wat))
+            drop(std::fs::remove_file(&wat));
         }
     }
 }
@@ -927,13 +930,13 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         let func_ty = FuncType::new(
             store.engine(),
-            vec![ValType::Ref(RefType::new(false, HeapType::Any))],
+            vec![ValType::Ref(RefType::new(true, HeapType::Struct))],
             vec![],
         );
 
         let func = Func::new(&mut store, func_ty, {
             move |_caller: Caller<'_, StoreLimits>, _params, _results| {
-                log::info!("gc_ops: take_struct(<ref any>)");
+                log::info!("gc_ops: take_struct(<ref null struct>)");
                 Ok(())
             }
         });

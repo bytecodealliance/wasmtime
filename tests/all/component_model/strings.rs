@@ -188,7 +188,6 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         *store.data_mut() = string.to_string();
         let (ret,) = func.call(&mut store, (string.to_string(),))?;
         assert_eq!(ret, *string);
-        func.post_return(&mut store)?;
     }
     Ok(())
 }
