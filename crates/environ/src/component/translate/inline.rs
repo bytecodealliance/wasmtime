@@ -1310,7 +1310,14 @@ impl<'a> Inliner<'a> {
                     ModuleInstanceDef::Instantiated(instance, module) => {
                         let (ty, item) = match &frame.modules[*module] {
                             ModuleDef::Static(idx, _ty) => {
-                                let entity = self.nested_modules[*idx].module.exports[*name];
+                                let name = self.nested_modules[*idx]
+                                    .module
+                                    .strings
+                                    .get_atom(name)
+                                    .unwrap();
+                                let export =
+                                    self.nested_modules[*idx].module.exports_by_name[name].unwrap();
+                                let entity = self.nested_modules[*idx].module.exports[export];
                                 let ty = match entity {
                                     EntityIndex::Function(f) => {
                                         self.nested_modules[*idx].module.functions[f]
@@ -1481,7 +1488,13 @@ impl<'a> Inliner<'a> {
             ModuleInstanceDef::Instantiated(instance, module) => {
                 let item = match frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
-                        let entity = self.nested_modules[idx].module.exports[name];
+                        let name = self.nested_modules[idx]
+                            .module
+                            .strings
+                            .get_atom(name)
+                            .unwrap();
+                        let export = self.nested_modules[idx].module.exports_by_name[name].unwrap();
+                        let entity = self.nested_modules[idx].module.exports[export];
                         ExportItem::Index(entity)
                     }
                     ModuleDef::Import(..) => ExportItem::Name(name.to_string()),

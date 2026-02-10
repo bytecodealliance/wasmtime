@@ -294,14 +294,26 @@ pub struct Module {
     /// This module's index.
     pub module_index: StaticModuleIndex,
 
+    /// A pool of strings used in this module.
+    pub strings: StringPool,
+
     /// The name of this wasm module, often found in the wasm file.
-    pub name: Option<String>,
+    pub name: Option<Atom>,
 
     /// All import records, in the order they are declared in the module.
     pub initializers: Vec<Initializer>,
 
     /// Exported entities.
-    pub exports: IndexMap<String, EntityIndex>,
+    pub exports: PrimaryMap<ExportIndex, EntityIndex>,
+
+    /// Each export's name.
+    pub export_names: collections::SecondaryMap<ExportIndex, Atom>,
+
+    /// A map from export string name to its `ExportIndex`.
+    ///
+    /// Atoms in the string pool which are not exports will not have an
+    /// associated `ExportIndex` value.
+    pub exports_by_name: collections::SecondaryMap<Atom, Option<ExportIndex>>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
@@ -375,9 +387,9 @@ pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
         /// Name of this import
-        name: String,
+        name: Atom,
         /// The field name projection of this import
-        field: String,
+        field: Atom,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
@@ -389,9 +401,12 @@ impl Module {
     pub fn new(module_index: StaticModuleIndex) -> Self {
         Self {
             module_index,
+            strings: Default::default(),
             name: Default::default(),
             initializers: Default::default(),
             exports: Default::default(),
+            export_names: Default::default(),
+            exports_by_name: Default::default(),
             start_func: Default::default(),
             table_initialization: Default::default(),
             memory_initialization: Default::default(),
@@ -563,9 +578,10 @@ impl Module {
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
+        let pool = &self.strings;
         self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
-                (name.as_str(), field.as_str(), self.type_of(*index))
+                (&pool[name], &pool[field], self.type_of(*index))
             }
         })
     }
@@ -573,7 +589,11 @@ impl Module {
     /// Get this module's `i`th import.
     pub fn import(&self, i: usize) -> Option<(&str, &str, EntityType)> {
         match self.initializers.get(i)? {
-            Initializer::Import { name, field, index } => Some((name, field, self.type_of(*index))),
+            Initializer::Import { name, field, index } => Some((
+                &self.strings[name],
+                &self.strings[field],
+                self.type_of(*index),
+            )),
         }
     }
 
@@ -670,9 +690,12 @@ impl TypeTrace for Module {
         // when adding new fields that might need re-canonicalization.
         let Self {
             module_index: _,
+            strings: _,
             name: _,
             initializers: _,
             exports: _,
+            export_names: _,
+            exports_by_name: _,
             start_func: _,
             table_initialization: _,
             memory_initialization: _,
@@ -721,9 +744,12 @@ impl TypeTrace for Module {
         // when adding new fields that might need re-canonicalization.
         let Self {
             module_index: _,
+            strings: _,
             name: _,
             initializers: _,
             exports: _,
+            export_names: _,
+            exports_by_name: _,
             start_func: _,
             table_initialization: _,
             memory_initialization: _,

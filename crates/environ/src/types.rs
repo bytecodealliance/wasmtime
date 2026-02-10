@@ -1536,6 +1536,14 @@ impl TypeTrace for WasmRecGroup {
     }
 }
 
+/// The `i`th exported entity in a WebAssembly module.
+///
+/// This does not correspond to an index space in the spec, but is useful in
+/// certain cases where we are storing exports in a dense array.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct ExportIndex(u32);
+entity_impl!(ExportIndex);
+
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncIndex(u32);
