@@ -1,11 +1,13 @@
 //! Tests for instrumentation-based debugging.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, Func, Global,
-    GlobalType, Instance, Module, Mutability, Store, StoreContextMut, Val, ValType,
+    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
+    Global, GlobalType, Instance, Module, Mutability, Store, StoreContextMut, Val, ValType,
 };
+
+use crate::async_functions::PollOnce;
 
 #[test]
 fn debugging_does_not_work_with_signal_based_traps() {
@@ -949,6 +951,106 @@ async fn epoch_events() -> wasmtime::Result<()> {
         .await?;
     assert_eq!(counter.load(Ordering::Relaxed), 1);
     assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles() -> wasmtime::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (import "" "" (func))
+      (func (export "main")
+        (local i32 i32)
+        i32.const 1
+        local.set 0
+        i32.const 2
+        local.set 1
+        call 2
+        call 0)
+      (func
+        (local i32 i32)
+        i32.const 3
+        local.set 0
+        i32.const 4
+        local.set 1
+        call 0))
+        "#,
+    )?;
+
+    let handle: Arc<Mutex<Option<FrameHandle>>> = Arc::new(Mutex::new(None));
+
+    let hostfunc = Func::wrap_async(&mut store, move |mut caller, _args: ()| {
+        let handle = handle.clone();
+        Box::new(async move {
+            let frame = handle.lock().unwrap().take();
+            if let Some(frame) = frame {
+                // Ensure that the handle has been invalidated.
+                assert!(!frame.is_valid(&mut caller));
+                // Ensure that we can get a new frame handle and use it.
+                let frame = caller.debug_exit_frames().next().unwrap();
+                assert_eq!(frame.num_locals(&mut caller), 2);
+                assert_eq!(frame.local(&mut caller, 0).unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut caller, 1).unwrap_i32(), 2);
+            } else {
+                let frame = caller.debug_exit_frames().next().unwrap();
+                assert_eq!(frame.num_locals(&mut caller), 2);
+                assert_eq!(frame.local(&mut caller, 0).unwrap_i32(), 3);
+                assert_eq!(frame.local(&mut caller, 1).unwrap_i32(), 4);
+                *handle.lock().unwrap() = Some(frame);
+            }
+        })
+    });
+
+    let instance = Instance::new_async(&mut store, &module, &[Extern::Func(hostfunc)]).await?;
+    let main = instance.get_func(&mut store, "main").unwrap();
+    main.call_async(&mut store, &[], &mut []).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_in_dropped_future() -> wasmtime::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (import "" "" (func))
+      (func (export "main")
+        call 0))
+        "#,
+    )?;
+
+    let handle: Arc<Mutex<Option<FrameHandle>>> = Arc::new(Mutex::new(None));
+    let handle_clone = handle.clone();
+
+    let hostfunc = Func::wrap_async(&mut store, move |mut caller, _args: ()| {
+        let handle_clone = handle_clone.clone();
+        Box::new(async move {
+            let frame = caller.debug_exit_frames().next().unwrap();
+            *handle_clone.lock().unwrap() = Some(frame);
+            tokio::task::yield_now().await;
+        })
+    });
+
+    let instance = Instance::new_async(&mut store, &module, &[Extern::Func(hostfunc)]).await?;
+    let main = instance.get_func(&mut store, "main").unwrap();
+    let future = Box::pin(main.call_async(&mut store, &[], &mut []));
+
+    // Poll once, then drop.
+    let poll_once = PollOnce::new(future);
+    let future = poll_once.await;
+
+    drop(future);
+
+    // The frame handle should now be invalid.
+    let mut handle = handle.lock().unwrap();
+    let frame = handle.take().unwrap();
+    assert!(!frame.is_valid(&mut store));
 
     Ok(())
 }
