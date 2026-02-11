@@ -17,9 +17,9 @@
 ;; block0(v0: i64, v1: i64, v2: i32):
 ;;     v3 = load.i64 notrap aligned v0+16
 ;;     v4 = get_frame_pointer.i64 
-;;     store notrap aligned v4, v3+40
+;;     store notrap aligned v4, v3+48
 ;;     v5 = get_return_address.i64 
-;;     store notrap aligned v5, v3+48
+;;     store notrap aligned v5, v3+56
 ;;     v6 = load.i32 notrap aligned v0+32
 ;;     v17 = iconst.i32 1
 ;;     v7 = band v6, v17  ; v17 = 1

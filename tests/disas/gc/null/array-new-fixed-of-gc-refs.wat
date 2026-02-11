@@ -15,11 +15,11 @@
 ;;     ss2 = explicit_slot 4, align = 4
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
-;;     gv5 = load.i64 notrap aligned gv4+32
-;;     gv6 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv5 = load.i64 notrap aligned gv4+40
+;;     gv6 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     fn0 = colocated u805306368:26 sig0
 ;;     stack_limit = gv2
@@ -40,14 +40,14 @@
 ;;                                     v74 = iconst.i32 24
 ;; @0025                               v24 = uadd_overflow_trap v23, v74, user17  ; v74 = 24
 ;; @0025                               v56 = load.i64 notrap aligned readonly can_move v0+8
-;; @0025                               v26 = load.i64 notrap aligned v56+32
+;; @0025                               v26 = load.i64 notrap aligned v56+40
 ;; @0025                               v25 = uextend.i64 v24
 ;; @0025                               v27 = icmp ule v25, v26
 ;; @0025                               brif v27, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v90 = iconst.i32 -1476394984
-;; @0025                               v31 = load.i64 notrap aligned readonly can_move v56+24
+;; @0025                               v31 = load.i64 notrap aligned readonly can_move v56+32
 ;;                                     v175 = band.i32 v21, v89  ; v89 = -8
 ;;                                     v176 = uextend.i64 v175
 ;; @0025                               v33 = iadd v31, v176

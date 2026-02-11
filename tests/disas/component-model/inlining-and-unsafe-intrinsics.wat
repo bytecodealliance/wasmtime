@@ -45,7 +45,7 @@
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64) -> i32 tail
@@ -67,7 +67,7 @@
 ;;                                 block4:
 ;; @0153                               v4 = load.i64 notrap aligned readonly can_move v0+64
 ;;                                     v17 = load.i64 notrap aligned readonly can_move vmctx v4+16
-;;                                     v18 = load.i64 notrap aligned readonly can_move vmctx v17+96
+;;                                     v18 = load.i64 notrap aligned readonly can_move vmctx v17+104
 ;;                                     v20 = load.i8 notrap aligned v18
 ;;                                     jump block5
 ;;

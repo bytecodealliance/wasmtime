@@ -30,9 +30,9 @@ use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
 use wasmtime_unwinder::Handler;
 
-pub use self::backtrace::Backtrace;
 #[cfg(feature = "debug")]
-pub(crate) use self::backtrace::{FrameOrHostCode, StoreBacktrace};
+pub(crate) use self::backtrace::Activation;
+pub use self::backtrace::Backtrace;
 #[cfg(feature = "gc")]
 pub use wasmtime_unwinder::Frame;
 

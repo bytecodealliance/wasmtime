@@ -20,7 +20,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x10(%r10), %r10
+;;       movq    0x18(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0xa2
@@ -42,7 +42,7 @@
 ;;       movq    %r12, %rdi
 ;;       callq   0x34f
 ;;       movq    8(%r12), %r8
-;;       movq    0x18(%r8), %r8
+;;       movq    0x20(%r8), %r8
 ;;       movl    %eax, %r9d
 ;;       movq    %r15, %rdx
 ;;       movl    %edx, 0x20(%r8, %r9)
@@ -62,7 +62,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x10(%r10), %r10
+;;       movq    0x18(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0x14f
@@ -83,7 +83,7 @@
 ;;       jmp     0x12d
 ;;  116: movq    (%rsp), %rdi
 ;;       movq    8(%rdi), %rcx
-;;       movq    0x18(%rcx), %rcx
+;;       movq    0x20(%rcx), %rcx
 ;;       movl    %eax, %edx
 ;;       movl    0x20(%rcx, %rdx), %eax
 ;;       movq    0x28(%rcx, %rdx), %rcx

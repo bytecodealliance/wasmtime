@@ -16,27 +16,27 @@
 ;;       movl    %edx, 8(%rsp)
 ;;       movl    %ecx, 0xc(%rsp)
 ;;       movq    8(%rdi), %rax
-;;       movq    0x10(%rax), %rax
+;;       movq    0x18(%rax), %rax
 ;;       movq    %rsp, %r8
 ;;       cmpq    %rax, %r8
 ;;       jb      0x62
 ;;   29: movq    %rdi, (%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 36, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
-;;       ╰─╼ breakpoint patch: wasm PC 36, patch bytes [232, 176, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 36, patch bytes [232, 190, 1, 0, 0]
 ;;       movl    %edx, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 38, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 38, patch bytes [232, 167, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 38, patch bytes [232, 181, 1, 0, 0]
 ;;       movl    %ecx, 0x14(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 40, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10, I32 @ slot+0x14
-;;       ╰─╼ breakpoint patch: wasm PC 40, patch bytes [232, 158, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 40, patch bytes [232, 172, 1, 0, 0]
 ;;       leal    (%rdx, %rcx), %eax
 ;;       movl    %eax, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 41, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 41, patch bytes [232, 146, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 41, patch bytes [232, 160, 1, 0, 0]
 ;;       movl    %eax, 0x10(%rsp)
 ;;       movq    0x20(%rsp), %rbx
 ;;       addq    $0x30, %rsp
@@ -45,9 +45,9 @@
 ;;       retq
 ;;   62: movq    %rdi, %rbx
 ;;   65: xorl    %esi, %esi
-;;   67: callq   0x186
+;;   67: callq   0x194
 ;;   6c: movq    %rbx, %rdi
-;;   6f: callq   0x1b6
+;;   6f: callq   0x1c4
 ;;   74: ud2
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[0]:
@@ -64,11 +64,11 @@
 ;;       movq    %rdx, (%rsp)
 ;;       movq    8(%rdi), %r11
 ;;       movq    %rbp, %rax
-;;       movq    %rax, 0x40(%r11)
-;;       movq    %rsp, %rax
-;;       movq    %rax, 0x38(%r11)
-;;       leaq    0x39(%rip), %rax
 ;;       movq    %rax, 0x48(%r11)
+;;       movq    %rsp, %rax
+;;       movq    %rax, 0x40(%r11)
+;;       leaq    0x39(%rip), %rax
+;;       movq    %rax, 0x50(%r11)
 ;;       movq    %r10, %rdx
 ;;       callq   0
 ;;       ├─╼ exception frame offset: SP = FP - 0x40
@@ -100,45 +100,49 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x30, %rsp
-;;       movq    %r14, 0x20(%rsp)
+;;       movq    %r15, 0x20(%rsp)
 ;;       movq    %rdx, %rax
-;;       movq    8(%rsi), %r9
-;;       movq    %rbp, %r10
-;;       movq    %r10, 0x28(%r9)
-;;       movq    %rbp, %r10
-;;       movq    8(%r10), %r11
-;;       movq    %r11, 0x30(%r9)
+;;       movq    8(%rsi), %r10
+;;       movq    %rsi, %r8
+;;       movq    %rbp, %r11
+;;       movq    %r11, 0x30(%r10)
+;;       movq    %rbp, %r11
+;;       movq    8(%r11), %rsi
+;;       movq    %rsi, 0x38(%r10)
 ;;       leaq    (%rsp), %rdx
-;;       movq    %rax, %r11
-;;       movl    %r11d, (%rsp)
+;;       movq    %rax, %rsi
+;;       movl    %esi, (%rsp)
 ;;       movl    %ecx, 0x10(%rsp)
-;;       movq    8(%rdi), %r8
+;;       movq    8(%rdi), %rax
 ;;       movl    $2, %ecx
-;;       movq    %rsi, %r14
-;;       callq   *%r8
+;;       movq    %r8, %r15
+;;       movq    %r15, %rsi
+;;       callq   *%rax
+;;       movq    8(%r15), %rcx
+;;       addq    $1, 0x10(%rcx)
 ;;       testb   %al, %al
-;;       je      0x174
-;;  163: movl    (%rsp), %eax
-;;       movq    0x20(%rsp), %r14
+;;       je      0x181
+;;  170: movl    (%rsp), %eax
+;;       movq    0x20(%rsp), %r15
 ;;       addq    $0x30, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  174: movq    0x10(%r14), %rcx
-;;  178: movq    0x198(%rcx), %rcx
-;;  17f: movq    %r14, %rdi
-;;  182: callq   *%rcx
-;;  184: ud2
+;;  181: movq    0x10(%r15), %r8
+;;  185: movq    0x198(%r8), %r8
+;;  18c: movq    %r15, %rdi
+;;  18f: callq   *%r8
+;;  192: ud2
 ;;
 ;; wasmtime_builtin_trap:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %rax
 ;;       movq    %rbp, %rcx
-;;       movq    %rcx, 0x28(%rax)
+;;       movq    %rcx, 0x30(%rax)
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx
-;;       movq    %rcx, 0x30(%rax)
+;;       movq    %rcx, 0x38(%rax)
 ;;       movq    0x10(%rdi), %rax
 ;;       movq    0x190(%rax), %rax
 ;;       movzbq  %sil, %rsi
@@ -152,10 +156,10 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
 ;;       movq    %rbp, %r11
-;;       movq    %r11, 0x28(%r10)
+;;       movq    %r11, 0x30(%r10)
 ;;       movq    %rbp, %r11
 ;;       movq    8(%r11), %rsi
-;;       movq    %rsi, 0x30(%r10)
+;;       movq    %rsi, 0x38(%r10)
 ;;       movq    0x10(%rdi), %rsi
 ;;       movq    0x198(%rsi), %rsi
 ;;       callq   *%rsi
@@ -195,17 +199,17 @@
 ;;       movdqu  %xmm15, 0x140(%rsp)
 ;;       movq    8(%rdi), %rax
 ;;       movq    %rbp, %rcx
-;;       movq    %rcx, 0x28(%rax)
+;;       movq    %rcx, 0x30(%rax)
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx
-;;       movq    %rcx, 0x30(%rax)
+;;       movq    %rcx, 0x38(%rax)
 ;;       movq    0x10(%rdi), %rcx
 ;;       movq    0x1c8(%rcx), %rcx
 ;;       movq    %rdi, %rbx
 ;;       callq   *%rcx
 ;;       testb   %al, %al
-;;       je      0x3a7
-;;  2db: movq    (%rsp), %rax
+;;       je      0x3b5
+;;  2e9: movq    (%rsp), %rax
 ;;       movq    8(%rsp), %rcx
 ;;       movq    0x10(%rsp), %rdx
 ;;       movq    0x18(%rsp), %rbx
@@ -235,8 +239,8 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  3a7: movq    0x10(%rbx), %r8
-;;  3ab: movq    0x198(%r8), %r8
-;;  3b2: movq    %rbx, %rdi
-;;  3b5: callq   *%r8
-;;  3b8: ud2
+;;  3b5: movq    0x10(%rbx), %r8
+;;  3b9: movq    0x198(%r8), %r8
+;;  3c0: movq    %rbx, %rdi
+;;  3c3: callq   *%r8
+;;  3c6: ud2

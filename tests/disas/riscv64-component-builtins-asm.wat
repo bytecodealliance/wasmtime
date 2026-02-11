@@ -22,9 +22,9 @@
 ;;       mv      a7, a2
 ;;       ld      a1, 0x10(a0)
 ;;       mv      a2, s0
-;;       sd      a2, 0x28(a1)
-;;       ld      a2, 8(s0)
 ;;       sd      a2, 0x30(a1)
+;;       ld      a2, 8(s0)
+;;       sd      a2, 0x38(a1)
 ;;       lw      a2, 0x20(a0)
 ;;       andi    a2, a2, 1
 ;;       bnez    a2, 8

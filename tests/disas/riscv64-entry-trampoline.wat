@@ -35,12 +35,12 @@
 ;;       fsd     fs11, 8(sp)
 ;;       ld      a5, 8(a0)
 ;;       mv      a2, s0
-;;       sd      a2, 0x40(a5)
+;;       sd      a2, 0x48(a5)
 ;;       mv      a2, sp
-;;       sd      a2, 0x38(a5)
+;;       sd      a2, 0x40(a5)
 ;;       auipc   a2, 0
 ;;       addi    a2, a2, 0x88
-;;       sd      a2, 0x48(a5)
+;;       sd      a2, 0x50(a5)
 ;;       auipc   ra, 0
 ;;       jalr    ra, ra, -0xb0
 ;;       ├─╼ exception frame offset: SP = FP - 0xc0
