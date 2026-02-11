@@ -373,8 +373,8 @@ impl FrameHandle {
 
     /// Determine whether this handle can still be used to refer to a
     /// frame.
-    pub fn is_valid<'a, T: 'static>(&self, store: impl Into<StoreContextMut<'a, T>>) -> bool {
-        let store = store.into();
+    pub fn is_valid(&self, mut store: impl AsContextMut) -> bool {
+        let store = store.as_context_mut();
         self.is_valid_impl(store.0.as_store_opaque())
     }
 
@@ -386,11 +386,8 @@ impl FrameHandle {
 
     /// Get a handle to the next frame up the activation (the one that
     /// called this frame), if any.
-    pub fn parent<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<Option<FrameHandle>> {
-        let mut store = store.into();
+    pub fn parent(&self, mut store: impl AsContextMut) -> Result<Option<FrameHandle>> {
+        let mut store = store.as_context_mut();
         if !self.is_valid(&mut store) {
             crate::error::bail!("Frame handle is no longer valid.");
         }
@@ -452,11 +449,8 @@ impl FrameHandle {
     }
 
     /// Get the instance associated with the current frame.
-    pub fn instance<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<Instance> {
-        let store = store.into();
+    pub fn instance(&self, mut store: impl AsContextMut) -> Result<Instance> {
+        let store = store.as_context_mut();
         let instance = self.raw_instance(store.0.as_store_opaque())?;
         let id = instance.id();
         Ok(Instance::from_wasmtime(id, store.0.as_store_opaque()))
@@ -477,11 +471,11 @@ impl FrameHandle {
     /// PC as an offset within its code section, if it is a Wasm
     /// function directly from the given `Module` (rather than a
     /// trampoline).
-    pub fn wasm_function_index_and_pc<'a, T: 'static>(
+    pub fn wasm_function_index_and_pc(
         &self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        mut store: impl AsContextMut,
     ) -> Result<Option<(DefinedFuncIndex, u32)>> {
-        let mut store = store.into();
+        let mut store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let FuncKey::DefinedWasmFunction(module, func) = frame_data.func_key else {
             return Ok(None);
@@ -498,21 +492,15 @@ impl FrameHandle {
     }
 
     /// Get the number of locals in this frame.
-    pub fn num_locals<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<u32> {
-        let store = store.into();
+    pub fn num_locals(&self, mut store: impl AsContextMut) -> Result<u32> {
+        let store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         Ok(u32::try_from(frame_data.locals.len()).unwrap())
     }
 
     /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<u32> {
-        let store = store.into();
+    pub fn num_stacks(&self, mut store: impl AsContextMut) -> Result<u32> {
+        let store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         Ok(u32::try_from(frame_data.stack.len()).unwrap())
     }
@@ -523,12 +511,8 @@ impl FrameHandle {
     ///
     /// Panics if the index is out-of-range (greater than
     /// `num_locals()`).
-    pub fn local<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-        index: u32,
-    ) -> Result<Val> {
-        let store = store.into();
+    pub fn local(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
+        let store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let (offset, ty) = frame_data.locals[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
@@ -546,12 +530,8 @@ impl FrameHandle {
     /// from there are more recently pushed values.  In other words,
     /// index order reads the Wasm virtual machine's abstract stack
     /// state left-to-right.
-    pub fn stack<'a, T: 'static>(
-        &self,
-        store: impl Into<StoreContextMut<'a, T>>,
-        index: u32,
-    ) -> Result<Val> {
-        let store = store.into();
+    pub fn stack(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
+        let store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let (offset, ty) = frame_data.stack[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
@@ -594,7 +574,7 @@ impl FrameDataCache {
                 // module that actually contains the physical PC
                 // (i.e., the outermost function that inlined the
                 // others).
-                let (module, frames) = VirtualFrame::decode(registry, frame);
+                let (module, frames) = VirtualFrame::decode(registry, frame.pc());
                 let frames = frames
                     .into_iter()
                     .map(|frame| FrameData::compute(frame, &module))
@@ -621,9 +601,9 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(registry: &ModuleRegistry, frame: Frame) -> (Module, Vec<VirtualFrame>) {
+    fn decode(registry: &ModuleRegistry, pc: usize) -> (Module, Vec<VirtualFrame>) {
         let (module_with_code, pc) = registry
-            .module_and_code_by_pc(frame.pc())
+            .module_and_code_by_pc(pc)
             .expect("Wasm frame PC does not correspond to a module");
         let module = module_with_code.module();
         let table = module.frame_table().unwrap();
