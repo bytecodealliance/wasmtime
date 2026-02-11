@@ -119,7 +119,7 @@ impl<'de> serde::de::Deserialize<'de> for StringPool {
         impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = StringPool;
 
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("a `StringPool` sequence of strings")
             }
 
