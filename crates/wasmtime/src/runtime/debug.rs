@@ -59,6 +59,8 @@ impl StoreOpaque {
 
         activations
             .into_iter()
+            // SAFETY: each activation is currently active and will
+            // remain so (we have a mutable borrow of the store).
             .filter_map(|act| unsafe { FrameHandle::exit_frame(self, act) })
     }
 
@@ -304,7 +306,7 @@ impl<'a, T> StoreContext<'a, T> {
 /// At the API level, any usage of this frame handle requires a
 /// mutable borrow of the `Store`, because the `Store` logically owns
 /// the stack(s) for any execution within it. However, the existence
-/// of hte handle itself does not hold a borrow on the `Store`; hence,
+/// of the handle itself does not hold a borrow on the `Store`; hence,
 /// the `Store` can continue to be used and queried, and some state
 /// (e.g. memories, tables, GC objects) can even be mutated, as long
 /// as execution is not resumed. The intent of this API is to allow a
@@ -337,6 +339,7 @@ impl FrameHandle {
     ///
     /// The provided activation must be valid currently.
     unsafe fn exit_frame(store: &mut StoreOpaque, activation: Activation) -> Option<FrameHandle> {
+        // SAFETY: activation is valid as per our safety condition.
         let mut cursor = unsafe {
             frame_cursor(
                 activation.exit_pc,
@@ -358,6 +361,8 @@ impl FrameHandle {
                     store_version: store.vm_store_context().execution_version,
                 });
             }
+            // SAFETY: activation is still valid (we have not returned
+            // control since above).
             unsafe {
                 cursor.advance(store.unwinder());
             }
@@ -384,9 +389,12 @@ impl FrameHandle {
     pub fn parent<'a, T: 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Option<FrameHandle> {
+    ) -> Result<Option<FrameHandle>> {
         let mut store = store.into();
-        assert!(self.is_valid(&mut store));
+        if !self.is_valid(&mut store) {
+            crate::error::bail!("Frame handle is no longer valid.");
+        }
+
         let mut parent = self.clone();
         parent.virtual_frame_idx += 1;
 
@@ -397,34 +405,41 @@ impl FrameHandle {
                 .frame_data_cache_mut_and_registry();
             let frames = cache.lookup_or_compute(registry, parent.cursor.frame());
             if parent.virtual_frame_idx < frames.len() {
-                return Some(parent);
+                return Ok(Some(parent));
             }
             parent.virtual_frame_idx = 0;
+            // SAFETY: activation is valid because we checked validity
+            // wrt execution version at the top of this function, and
+            // we have not returned since.
             unsafe {
                 parent.cursor.advance(store.0.as_store_opaque().unwinder());
             }
         }
 
-        None
+        Ok(None)
     }
 
-    fn frame_data<'a>(&self, store: &'a mut StoreOpaque) -> &'a FrameData {
-        assert!(self.is_valid_impl(store));
+    fn frame_data<'a>(&self, store: &'a mut StoreOpaque) -> Result<&'a FrameData> {
+        if !self.is_valid_impl(store) {
+            crate::error::bail!("Frame handle is no longer valid.");
+        }
         let (cache, registry) = store.frame_data_cache_mut_and_registry();
         let frames = cache.lookup_or_compute(registry, self.cursor.frame());
         // `virtual_frame_idx` counts up for ease of iteration
         // behavior, while the frames are stored in outer-to-inner
         // (i.e., caller to callee) order, so we need to reverse here.
-        &frames[frames.len() - 1 - self.virtual_frame_idx]
+        Ok(&frames[frames.len() - 1 - self.virtual_frame_idx])
     }
 
-    fn raw_instance<'a>(&self, store: &mut StoreOpaque) -> &'a crate::vm::Instance {
-        let frame_data = self.frame_data(store);
+    fn raw_instance<'a>(&self, store: &mut StoreOpaque) -> Result<&'a crate::vm::Instance> {
+        let frame_data = self.frame_data(store)?;
 
         // Read out the vmctx slot.
 
-        // SAFETY: vmctx is always at offset 0 in the slot.
-        // (See crates/cranelift/src/func_environ.rs in `update_stack_slot_vmctx()`.)
+        // SAFETY: vmctx is always at offset 0 in the slot.  (See
+        // crates/cranelift/src/func_environ.rs in
+        // `update_stack_slot_vmctx()`.)  The frame/activation is
+        // still valid because we verified this in `frame_data` above.
         let vmctx: *mut VMContext =
             unsafe { *(frame_data.slot_addr(self.cursor.frame().fp()) as *mut _) };
         let vmctx = NonNull::new(vmctx).expect("null vmctx in debug state slot");
@@ -433,15 +448,18 @@ impl FrameHandle {
         // backtrace.
         let instance = unsafe { crate::vm::Instance::from_vmctx(vmctx) };
         // SAFETY: the instance pointer read above is valid.
-        unsafe { instance.as_ref() }
+        Ok(unsafe { instance.as_ref() })
     }
 
     /// Get the instance associated with the current frame.
-    pub fn instance<'a, T: 'static>(&self, store: impl Into<StoreContextMut<'a, T>>) -> Instance {
+    pub fn instance<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> Result<Instance> {
         let store = store.into();
-        let instance = self.raw_instance(store.0.as_store_opaque());
+        let instance = self.raw_instance(store.0.as_store_opaque())?;
         let id = instance.id();
-        Instance::from_wasmtime(id, store.0.as_store_opaque())
+        Ok(Instance::from_wasmtime(id, store.0.as_store_opaque()))
     }
 
     /// Get the module associated with the current frame, if any
@@ -449,10 +467,10 @@ impl FrameHandle {
     pub fn module<'a, T: 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Option<&'a Module> {
+    ) -> Result<Option<&'a Module>> {
         let store = store.into();
-        let instance = self.raw_instance(store.0.as_store_opaque());
-        instance.runtime_module()
+        let instance = self.raw_instance(store.0.as_store_opaque())?;
+        Ok(instance.runtime_module())
     }
 
     /// Get the raw function index associated with the current frame, and the
@@ -462,35 +480,41 @@ impl FrameHandle {
     pub fn wasm_function_index_and_pc<'a, T: 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Option<(DefinedFuncIndex, u32)> {
+    ) -> Result<Option<(DefinedFuncIndex, u32)>> {
         let mut store = store.into();
-        let frame_data = self.frame_data(store.0.as_store_opaque());
+        let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let FuncKey::DefinedWasmFunction(module, func) = frame_data.func_key else {
-            return None;
+            return Ok(None);
         };
         let wasm_pc = frame_data.wasm_pc;
         debug_assert_eq!(
             module,
-            self.module(&mut store)
+            self.module(&mut store)?
                 .expect("module should be defined if this is a defined function")
                 .env_module()
                 .module_index
         );
-        Some((func, wasm_pc))
+        Ok(Some((func, wasm_pc)))
     }
 
     /// Get the number of locals in this frame.
-    pub fn num_locals<'a, T: 'static>(&self, store: impl Into<StoreContextMut<'a, T>>) -> u32 {
+    pub fn num_locals<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> Result<u32> {
         let store = store.into();
-        let frame_data = self.frame_data(store.0.as_store_opaque());
-        u32::try_from(frame_data.locals.len()).unwrap()
+        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+        Ok(u32::try_from(frame_data.locals.len()).unwrap())
     }
 
     /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks<'a, T: 'static>(&self, store: impl Into<StoreContextMut<'a, T>>) -> u32 {
+    pub fn num_stacks<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> Result<u32> {
         let store = store.into();
-        let frame_data = self.frame_data(store.0.as_store_opaque());
-        u32::try_from(frame_data.stack.len()).unwrap()
+        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+        Ok(u32::try_from(frame_data.stack.len()).unwrap())
     }
 
     /// Get the type and value of the given local in this frame.
@@ -503,14 +527,16 @@ impl FrameHandle {
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
         index: u32,
-    ) -> Val {
+    ) -> Result<Val> {
         let store = store.into();
-        let frame_data = self.frame_data(store.0.as_store_opaque());
+        let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let (offset, ty) = frame_data.locals[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this local
-        // slot and stored a value of the correct type into it.
-        unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) }
+        // slot and stored a value of the correct type into it. Slot
+        // address is valid because we checked liveness of the
+        // activation/frame via `frame_data` above.
+        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -524,15 +550,16 @@ impl FrameHandle {
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
         index: u32,
-    ) -> Val {
+    ) -> Result<Val> {
         let store = store.into();
-        let frame_data = self.frame_data(store.0.as_store_opaque());
+        let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let (offset, ty) = frame_data.stack[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
-        // into it.
-        unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) }
+        // into it. Slot address is valid because we checked liveness
+        // of the activation/frame via `frame_data` above.
+        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
     }
 }
 

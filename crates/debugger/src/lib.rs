@@ -504,16 +504,24 @@ mod test {
                     frame
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
+                        .unwrap()
                         .0
                         .as_u32(),
                     0
                 );
-                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 36);
-                assert_eq!(frame.num_locals(&mut store), 2);
-                assert_eq!(frame.num_stacks(&mut store), 0);
-                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
-                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
-                let frame = frame.parent(&mut store);
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .unwrap()
+                        .1,
+                    36
+                );
+                assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
+                assert_eq!(frame.num_stacks(&mut store).unwrap(), 0);
+                assert_eq!(frame.local(&mut store, 0).unwrap().unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap().unwrap_i32(), 2);
+                let frame = frame.parent(&mut store).unwrap();
                 assert!(frame.is_none());
             })
             .await?;
@@ -528,17 +536,25 @@ mod test {
                     frame
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
+                        .unwrap()
                         .0
                         .as_u32(),
                     0
                 );
-                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 38);
-                assert_eq!(frame.num_locals(&mut store), 2);
-                assert_eq!(frame.num_stacks(&mut store), 1);
-                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
-                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 1);
-                let frame = frame.parent(&mut store);
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .unwrap()
+                        .1,
+                    38
+                );
+                assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
+                assert_eq!(frame.num_stacks(&mut store).unwrap(), 1);
+                assert_eq!(frame.local(&mut store, 0).unwrap().unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap().unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap().unwrap_i32(), 1);
+                let frame = frame.parent(&mut store).unwrap();
                 assert!(frame.is_none());
             })
             .await?;
@@ -553,18 +569,26 @@ mod test {
                     frame
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
+                        .unwrap()
                         .0
                         .as_u32(),
                     0
                 );
-                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 40);
-                assert_eq!(frame.num_locals(&mut store), 2);
-                assert_eq!(frame.num_stacks(&mut store), 2);
-                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
-                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 1);
-                assert_eq!(frame.stack(&mut store, 1).unwrap_i32(), 2);
-                let frame = frame.parent(&mut store);
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .unwrap()
+                        .1,
+                    40
+                );
+                assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
+                assert_eq!(frame.num_stacks(&mut store).unwrap(), 2);
+                assert_eq!(frame.local(&mut store, 0).unwrap().unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap().unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap().unwrap_i32(), 1);
+                assert_eq!(frame.stack(&mut store, 1).unwrap().unwrap_i32(), 2);
+                let frame = frame.parent(&mut store).unwrap();
                 assert!(frame.is_none());
             })
             .await?;
@@ -579,17 +603,25 @@ mod test {
                     frame
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
+                        .unwrap()
                         .0
                         .as_u32(),
                     0
                 );
-                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 41);
-                assert_eq!(frame.num_locals(&mut store), 2);
-                assert_eq!(frame.num_stacks(&mut store), 1);
-                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
-                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 3);
-                let frame = frame.parent(&mut store);
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .unwrap()
+                        .1,
+                    41
+                );
+                assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
+                assert_eq!(frame.num_stacks(&mut store).unwrap(), 1);
+                assert_eq!(frame.local(&mut store, 0).unwrap().unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap().unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap().unwrap_i32(), 3);
+                let frame = frame.parent(&mut store).unwrap();
                 assert!(frame.is_none());
             })
             .await?;

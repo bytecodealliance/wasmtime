@@ -45,14 +45,18 @@ fn get_module_and_store<C: Fn(&mut Config)>(
     Ok((module, Store::new(&engine, ())))
 }
 
-fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
+fn test_stack_values<
+    C: Fn(&mut Config),
+    F: Fn(Caller<'_, ()>) -> wasmtime::Result<()> + Send + Sync + 'static,
+>(
     wat: &str,
     c: C,
     f: F,
 ) -> wasmtime::Result<()> {
     let (module, mut store) = get_module_and_store(c, wat)?;
     let func = Func::wrap(&mut store, move |caller: Caller<'_, ()>| {
-        f(caller);
+        f(caller)?;
+        Ok(())
     });
     let instance = Instance::new(&mut store, &module, &[Extern::Func(func)])?;
     let mut results = [];
@@ -97,34 +101,41 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                 let stack = caller.debug_exit_frames().next().unwrap();
                 assert_eq!(
                     stack
-                        .wasm_function_index_and_pc(&mut caller)
+                        .wasm_function_index_and_pc(&mut caller)?
                         .unwrap()
                         .0
                         .as_u32(),
                     1
                 );
-                assert_eq!(stack.wasm_function_index_and_pc(&mut caller).unwrap().1, 65);
+                assert_eq!(
+                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+                    65
+                );
 
-                assert_eq!(stack.num_locals(&mut caller), 2);
-                assert_eq!(stack.num_stacks(&mut caller), 2);
-                assert_eq!(stack.local(&mut caller, 0).unwrap_i32(), 1);
-                assert_eq!(stack.local(&mut caller, 1).unwrap_i32(), 2);
-                assert_eq!(stack.stack(&mut caller, 0).unwrap_i32(), 1);
-                assert_eq!(stack.stack(&mut caller, 1).unwrap_i32(), 2);
+                assert_eq!(stack.num_locals(&mut caller)?, 2);
+                assert_eq!(stack.num_stacks(&mut caller)?, 2);
+                assert_eq!(stack.local(&mut caller, 0)?.unwrap_i32(), 1);
+                assert_eq!(stack.local(&mut caller, 1)?.unwrap_i32(), 2);
+                assert_eq!(stack.stack(&mut caller, 0)?.unwrap_i32(), 1);
+                assert_eq!(stack.stack(&mut caller, 1)?.unwrap_i32(), 2);
 
-                let stack = stack.parent(&mut caller).unwrap();
+                let stack = stack.parent(&mut caller)?.unwrap();
                 assert_eq!(
                     stack
-                        .wasm_function_index_and_pc(&mut caller)
+                        .wasm_function_index_and_pc(&mut caller)?
                         .unwrap()
                         .0
                         .as_u32(),
                     0
                 );
-                assert_eq!(stack.wasm_function_index_and_pc(&mut caller).unwrap().1, 55);
+                assert_eq!(
+                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+                    55
+                );
 
-                let stack = stack.parent(&mut caller);
+                let stack = stack.parent(&mut caller)?;
                 assert!(stack.is_none());
+                Ok(())
             },
         )?;
     }
@@ -150,10 +161,11 @@ fn stack_values_exceptions() -> wasmtime::Result<()> {
         |_config| {},
         |mut caller: Caller<'_, ()>| {
             let stack = caller.debug_exit_frames().next().unwrap();
-            assert_eq!(stack.num_stacks(&mut caller), 1);
-            assert_eq!(stack.stack(&mut caller, 0).unwrap_i32(), 42);
-            let stack = stack.parent(&mut caller);
+            assert_eq!(stack.num_stacks(&mut caller)?, 1);
+            assert_eq!(stack.stack(&mut caller, 0)?.unwrap_i32(), 42);
+            let stack = stack.parent(&mut caller)?;
             assert!(stack.is_none());
+            Ok(())
         },
     )
 }
@@ -176,10 +188,11 @@ fn stack_values_dead_gc_ref() -> wasmtime::Result<()> {
         },
         |mut caller: Caller<'_, ()>| {
             let stack = caller.debug_exit_frames().next().unwrap();
-            assert_eq!(stack.num_stacks(&mut caller), 1);
-            assert!(stack.stack(&mut caller, 0).unwrap_anyref().is_some());
-            let stack = stack.parent(&mut caller);
+            assert_eq!(stack.num_stacks(&mut caller)?, 1);
+            assert!(stack.stack(&mut caller, 0)?.unwrap_anyref().is_some());
+            let stack = stack.parent(&mut caller)?;
             assert!(stack.is_none());
+            Ok(())
         },
     )
 }
@@ -206,22 +219,23 @@ fn gc_access_during_call() -> wasmtime::Result<()> {
             // Do a GC while we hold the stack cursor.
             caller.as_context_mut().gc(None).unwrap();
 
-            assert_eq!(stack.num_stacks(&mut caller), 0);
-            assert_eq!(stack.num_locals(&mut caller), 1);
+            assert_eq!(stack.num_stacks(&mut caller)?, 0);
+            assert_eq!(stack.num_locals(&mut caller)?, 1);
             // Note that this struct is dead during the call, and the
             // ref could otherwise be optimized away (no longer in the
             // stackmap at this point); but we verify it is still
             // alive here because it is rooted in the
             // debug-instrumentation slot.
             let s = stack
-                .local(&mut caller, 0)
+                .local(&mut caller, 0)?
                 .unwrap_any_ref()
                 .unwrap()
                 .unwrap_struct(&caller)
                 .unwrap();
             assert_eq!(s.field(&mut caller, 0).unwrap().unwrap_i32(), 42);
-            let stack = stack.parent(&mut caller);
+            let stack = stack.parent(&mut caller)?;
             assert!(stack.is_none());
+            Ok(())
         },
     )
 }
@@ -268,51 +282,59 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
         let stack = exits[0].clone();
         assert_eq!(
             stack
-                .wasm_function_index_and_pc(&mut caller)
+                .wasm_function_index_and_pc(&mut caller)?
                 .unwrap()
                 .0
                 .as_u32(),
             0
         );
-        assert_eq!(stack.wasm_function_index_and_pc(&mut caller).unwrap().1, 56);
+        assert_eq!(
+            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+            56
+        );
         assert!(Module::same(
-            stack.module(&mut caller).unwrap(),
+            stack.module(&mut caller)?.unwrap(),
             &module2_clone
         ));
-        assert_eq!(stack.num_locals(&mut caller), 2);
-        assert_eq!(stack.num_stacks(&mut caller), 2);
-        assert_eq!(stack.local(&mut caller, 0).unwrap_i32(), 1);
-        assert_eq!(stack.local(&mut caller, 1).unwrap_i32(), 2);
-        assert_eq!(stack.stack(&mut caller, 0).unwrap_i32(), 1);
-        assert_eq!(stack.stack(&mut caller, 1).unwrap_i32(), 2);
-        let inner_instance = stack.instance(&mut caller);
+        assert_eq!(stack.num_locals(&mut caller)?, 2);
+        assert_eq!(stack.num_stacks(&mut caller)?, 2);
+        assert_eq!(stack.local(&mut caller, 0)?.unwrap_i32(), 1);
+        assert_eq!(stack.local(&mut caller, 1)?.unwrap_i32(), 2);
+        assert_eq!(stack.stack(&mut caller, 0)?.unwrap_i32(), 1);
+        assert_eq!(stack.stack(&mut caller, 1)?.unwrap_i32(), 2);
+        let inner_instance = stack.instance(&mut caller)?;
 
-        let stack = stack.parent(&mut caller);
+        let stack = stack.parent(&mut caller)?;
         assert!(stack.is_none());
 
         let stack = exits[1].clone();
         assert_eq!(
             stack
-                .wasm_function_index_and_pc(&mut caller)
+                .wasm_function_index_and_pc(&mut caller)?
                 .unwrap()
                 .0
                 .as_u32(),
             0
         );
-        assert_eq!(stack.wasm_function_index_and_pc(&mut caller).unwrap().1, 56);
+        assert_eq!(
+            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+            56
+        );
         assert!(Module::same(
-            stack.module(&mut caller).unwrap(),
+            stack.module(&mut caller)?.unwrap(),
             &module1_clone
         ));
-        assert_eq!(stack.num_locals(&mut caller), 0);
-        assert_eq!(stack.num_stacks(&mut caller), 2);
-        assert_eq!(stack.stack(&mut caller, 0).unwrap_i32(), 1);
-        assert_eq!(stack.stack(&mut caller, 1).unwrap_i32(), 2);
-        let outer_instance = stack.instance(&mut caller);
+        assert_eq!(stack.num_locals(&mut caller)?, 0);
+        assert_eq!(stack.num_stacks(&mut caller)?, 2);
+        assert_eq!(stack.stack(&mut caller, 0)?.unwrap_i32(), 1);
+        assert_eq!(stack.stack(&mut caller, 1)?.unwrap_i32(), 2);
+        let outer_instance = stack.instance(&mut caller)?;
         assert_ne!(inner_instance, outer_instance);
 
-        let stack = stack.parent(&mut caller);
+        let stack = stack.parent(&mut caller)?;
         assert!(stack.is_none());
+
+        Ok(())
     });
 
     let instance2 = Instance::new(&mut store, &module2, &[Extern::Func(host2)])?;
@@ -552,10 +574,10 @@ async fn uncaught_exception_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::UncaughtExceptionThrown(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
-              assert_eq!(stack.num_locals(&mut store), 1);
-              assert_eq!(stack.local(&mut store, 0).unwrap_i32(), 100);
+              assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
+              assert_eq!(stack.local(&mut store, 0).unwrap().unwrap_i32(), 100);
+              let stack = stack.parent(&mut store).unwrap().unwrap();
               let stack = stack.parent(&mut store).unwrap();
-              let stack = stack.parent(&mut store);
               assert!(stack.is_none());
           }
         }
@@ -605,10 +627,10 @@ async fn caught_exception_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::CaughtExceptionThrown(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
-              assert_eq!(stack.num_locals(&mut store), 1);
-              assert_eq!(stack.local(&mut store, 0).unwrap_i32(), 100);
+              assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
+              assert_eq!(stack.local(&mut store, 0).unwrap().unwrap_i32(), 100);
+              let stack = stack.parent(&mut store).unwrap().unwrap();
               let stack = stack.parent(&mut store).unwrap();
-              let stack = stack.parent(&mut store);
               assert!(stack.is_none());
           }
         }
@@ -732,13 +754,13 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
         { 0 ;
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
-              assert_eq!(stack.num_locals(&mut store), 2);
-              assert_eq!(stack.local(&mut store, 0).unwrap_i32(), 1);
-              assert_eq!(stack.local(&mut store, 1).unwrap_i32(), 2);
-              let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap();
+              assert_eq!(stack.num_locals(&mut store).unwrap(), 2);
+              assert_eq!(stack.local(&mut store, 0).unwrap().unwrap_i32(), 1);
+              assert_eq!(stack.local(&mut store, 1).unwrap().unwrap_i32(), 2);
+              let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(func.as_u32(), 0);
               assert_eq!(pc, 0x28);
-              let stack = stack.parent(&mut store);
+              let stack = stack.parent(&mut store).unwrap();
               assert!(stack.is_none());
           }
         }
@@ -783,7 +805,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
         { 0 ;
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
-              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap();
+              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(pc, 0x24);
           }
         },
@@ -791,7 +813,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           1 ;
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
-              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap();
+              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(pc, 0x26);
           }
         },
@@ -799,7 +821,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           2 ;
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
-              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap();
+              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(pc, 0x28);
           }
         },
@@ -807,7 +829,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           3 ;
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
-              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap();
+              let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(pc, 0x29);
           }
         }
@@ -990,18 +1012,23 @@ async fn invalidated_frame_handles() -> wasmtime::Result<()> {
             if let Some(frame) = frame {
                 // Ensure that the handle has been invalidated.
                 assert!(!frame.is_valid(&mut caller));
+                // Ensure that attempts to fetch data from the frame
+                // fail with a clean `Err`, not a panic or crash.
+                let result = frame.wasm_function_index_and_pc(&mut caller);
+                assert!(result.is_err());
                 // Ensure that we can get a new frame handle and use it.
                 let frame = caller.debug_exit_frames().next().unwrap();
-                assert_eq!(frame.num_locals(&mut caller), 2);
-                assert_eq!(frame.local(&mut caller, 0).unwrap_i32(), 1);
-                assert_eq!(frame.local(&mut caller, 1).unwrap_i32(), 2);
+                assert_eq!(frame.num_locals(&mut caller)?, 2);
+                assert_eq!(frame.local(&mut caller, 0)?.unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut caller, 1)?.unwrap_i32(), 2);
             } else {
                 let frame = caller.debug_exit_frames().next().unwrap();
-                assert_eq!(frame.num_locals(&mut caller), 2);
-                assert_eq!(frame.local(&mut caller, 0).unwrap_i32(), 3);
-                assert_eq!(frame.local(&mut caller, 1).unwrap_i32(), 4);
+                assert_eq!(frame.num_locals(&mut caller)?, 2);
+                assert_eq!(frame.local(&mut caller, 0)?.unwrap_i32(), 3);
+                assert_eq!(frame.local(&mut caller, 1)?.unwrap_i32(), 4);
                 *handle.lock().unwrap() = Some(frame);
             }
+            Ok(())
         })
     });
 
