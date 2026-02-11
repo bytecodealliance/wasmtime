@@ -97,8 +97,7 @@ impl Frame {
     }
 }
 
-/// A cursor over `Frame`s in a single activation of Wasm, as returned
-/// by [`frame_cursor`].
+/// A cursor over `Frame`s in a single activation of Wasm.
 #[derive(Clone)]
 pub struct FrameCursor {
     pc: usize,
