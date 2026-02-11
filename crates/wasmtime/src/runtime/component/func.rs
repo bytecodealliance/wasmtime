@@ -20,11 +20,13 @@ use wasmtime_environ::component::{
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
 
 mod host;
+mod witness;
 mod options;
 mod typed;
 pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
+pub use self::witness::*;
 
 /// A WebAssembly component function which can be called.
 ///
