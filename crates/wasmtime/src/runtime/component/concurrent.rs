@@ -3304,7 +3304,8 @@ impl Instance {
                     .concurrent_state_mut()
                     .promote_thread_work_item(guest_thread);
             }
-            _ => {
+            other => {
+                thread.state = other;
                 bail!("cannot resume thread which is not suspended");
             }
         }
@@ -4898,7 +4899,7 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) =
+                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready(fiber) =
                     mem::replace(&mut thread.state, GuestThreadState::Completed)
                 {
                     fibers.push(fiber);
