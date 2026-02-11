@@ -1,6 +1,7 @@
-use crate::error::OutOfMemory;
+use crate::{collections::Vec, error::OutOfMemory};
 use core::{fmt, ops::Index};
 use cranelift_entity::{EntityRef, SecondaryMap as Inner};
+use serde::ser::SerializeSeq;
 
 /// Like [`cranelift_entity::SecondaryMap`] but all allocation is fallible.
 pub struct SecondaryMap<K, V>
@@ -140,5 +141,48 @@ where
 
     fn index(&self, k: K) -> &V {
         &self.inner[k]
+    }
+}
+
+impl<K, V> From<Vec<V>> for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default,
+{
+    fn from(values: Vec<V>) -> Self {
+        let values: alloc::vec::Vec<V> = values.into();
+        let inner = Inner::from(values);
+        Self { inner }
+    }
+}
+
+impl<K, V> serde::ser::Serialize for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + serde::ser::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.capacity()))?;
+        for elem in self.values() {
+            seq.serialize_element(elem)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de, K, V> serde::de::Deserialize<'de> for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default + serde::de::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let values: Vec<V> = serde::de::Deserialize::deserialize(deserializer)?;
+        Ok(Self::from(values))
     }
 }

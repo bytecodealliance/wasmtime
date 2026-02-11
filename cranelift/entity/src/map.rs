@@ -212,6 +212,21 @@ where
     }
 }
 
+impl<K, V> From<Vec<V>> for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default,
+{
+    fn from(elems: Vec<V>) -> Self {
+        let default = Default::default();
+        Self {
+            elems,
+            default,
+            unused: PhantomData,
+        }
+    }
+}
+
 impl<K, V> FromIterator<(K, V)> for SecondaryMap<K, V>
 where
     K: EntityRef,
