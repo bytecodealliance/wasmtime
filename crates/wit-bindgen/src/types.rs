@@ -67,7 +67,7 @@ impl Types {
                         self.type_info_func(resolve, f, import);
                     }
                 }
-                WorldItem::Type(id) => {
+                WorldItem::Type { id, .. } => {
                     self.type_id_info(resolve, *id);
                 }
             }
@@ -76,9 +76,9 @@ impl Types {
 
     fn type_info_func(&mut self, resolve: &Resolve, func: &Function, import: bool) {
         let mut live = LiveTypes::default();
-        for (_, ty) in func.params.iter() {
-            self.type_info(resolve, ty);
-            live.add_type(resolve, ty);
+        for param in func.params.iter() {
+            self.type_info(resolve, &param.ty);
+            live.add_type(resolve, &param.ty);
         }
         for id in live.iter() {
             if resolve.types[id].name.is_some() {
@@ -157,7 +157,7 @@ impl Types {
             TypeDefKind::Handle(_) => info.has_handle = true,
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         }
         self.type_info.insert(ty, info);
