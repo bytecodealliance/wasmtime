@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock, Once};
 use std::time::Duration;
 
-use component_async_tests::{Ctx, sleep};
+use component_async_tests::{Ctx, yield_};
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use tokio::fs;
 use tokio::sync::Mutex;
@@ -183,11 +183,11 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
     let mut linker = Linker::new(&engine);
 
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    component_async_tests::yield_host::bindings::local::local::continue_::add_to_linker::<_, Ctx>(
+    component_async_tests::yield_runner::bindings::local::local::continue_::add_to_linker::<_, Ctx>(
         &mut linker,
         |ctx| ctx,
     )?;
-    component_async_tests::yield_host::bindings::local::local::ready::add_to_linker::<_, Ctx>(
+    component_async_tests::yield_runner::bindings::local::local::ready::add_to_linker::<_, Ctx>(
         &mut linker,
         |ctx| ctx,
     )?;
@@ -195,7 +195,7 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
         _,
         Ctx,
     >(&mut linker, |ctx| ctx)?;
-    sleep::local::local::sleep::add_to_linker::<_, Ctx>(&mut linker, |ctx| ctx)?;
+    yield_::local::local::yield_::add_to_linker::<_, Ctx>(&mut linker, |ctx| ctx)?;
 
     let mut store = Store::new(
         &engine,
@@ -215,17 +215,18 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
         });
     }
 
-    let yield_host = component_async_tests::yield_host::bindings::YieldHost::instantiate_async(
-        &mut store, &component, &linker,
-    )
-    .await?;
+    let yield_runner =
+        component_async_tests::yield_runner::bindings::YieldRunner::instantiate_async(
+            &mut store, &component, &linker,
+        )
+        .await?;
 
     // Start `count` concurrent calls and then join them all:
     store
         .run_concurrent(async |store| {
             let mut futures = FuturesUnordered::new();
             for _ in 0..count {
-                futures.push(yield_host.local_local_run().call_run(store));
+                futures.push(yield_runner.local_local_run().call_run(store));
             }
 
             while let Some(()) = futures.try_next().await? {

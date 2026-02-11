@@ -1,15 +1,13 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-use std::time::Duration;
-
 use super::util::{config, make_component};
 use component_async_tests::Ctx;
-use component_async_tests::util::sleep;
+use component_async_tests::util::yield_times;
 use futures::{
     FutureExt,
     channel::oneshot,
     stream::{FuturesUnordered, TryStreamExt},
 };
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime::component::{
     Accessor, AccessorTask, HasData, HasSelf, Instance, Linker, ResourceTable, Val,
 };
@@ -499,7 +497,7 @@ pub async fn test_round_trip(
             .instance("local:local/baz")?
             .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
-                    sleep(Duration::from_millis(10)).await;
+                    yield_times(5).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
                         unreachable!()
                     };

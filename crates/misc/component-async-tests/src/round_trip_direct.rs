@@ -1,5 +1,5 @@
 use super::Ctx;
-use std::time::Duration;
+use crate::util::yield_times;
 use wasmtime::component::Accessor;
 
 pub mod bindings {
@@ -11,7 +11,7 @@ pub mod bindings {
 
 impl bindings::RoundTripDirectImportsWithStore for Ctx {
     async fn foo<T>(_: &Accessor<T, Self>, s: String) -> String {
-        crate::util::sleep(Duration::from_millis(10)).await;
+        yield_times(5).await;
         format!("{s} - entered host - exited host")
     }
 }

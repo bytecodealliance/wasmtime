@@ -40,28 +40,28 @@ unsafe fn dec_backpressure() {
     unreachable!()
 }
 
-mod sleep {
+mod yield_ {
     #[cfg(target_arch = "wasm32")]
-    #[link(wasm_import_module = "local:local/sleep")]
+    #[link(wasm_import_module = "local:local/yield")]
     unsafe extern "C" {
-        #[link_name = "[async-lower]sleep-millis"]
-        pub fn sleep_millis(_: u64) -> u32;
+        #[link_name = "[async-lower]yield-times"]
+        pub fn yield_times(_: u64) -> u32;
     }
     #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn sleep_millis(_: u64) -> u32 {
+    pub unsafe fn yield_times(_: u64) -> u32 {
         unreachable!()
     }
 }
 
-mod sleep_with_options {
+mod yield_with_options {
     #[cfg(target_arch = "wasm32")]
-    #[link(wasm_import_module = "local:local/sleep-with-options")]
+    #[link(wasm_import_module = "local:local/yield-with-options")]
     unsafe extern "C" {
-        #[link_name = "[async-lower]sleep-millis"]
-        pub fn sleep_millis(_: *mut u8) -> u32;
+        #[link_name = "[async-lower]yield-times"]
+        pub fn yield_times(_: *mut u8) -> u32;
     }
     #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn sleep_millis(_: *mut u8) -> u32 {
+    pub unsafe fn yield_times(_: *mut u8) -> u32 {
         unreachable!()
     }
 }
@@ -77,10 +77,10 @@ const _MODE_TRAP_CANCEL_HOST_AFTER_RETURN_CANCELLED: u8 = 4;
 const _MODE_TRAP_CANCEL_HOST_AFTER_RETURN: u8 = 5;
 
 #[repr(C)]
-struct SleepParams {
-    time_in_millis: u64,
+struct YieldParams {
+    times: u64,
     on_cancel: u8,
-    on_cancel_delay_millis: u64,
+    on_cancel_delay_times: u64,
     synchronous_delay: bool,
     mode: u8,
 }
@@ -88,39 +88,39 @@ struct SleepParams {
 enum State {
     S0 {
         mode: u8,
-        cancel_delay_millis: u64,
+        cancel_delay_times: u64,
     },
     S1 {
         mode: u8,
         set: u32,
         waitable: u32,
-        params: *mut SleepParams,
+        params: *mut YieldParams,
     },
     S2 {
         mode: u8,
         set: u32,
         waitable: u32,
-        params: *mut SleepParams,
+        params: *mut YieldParams,
     },
     S3 {
         set: u32,
         waitable: u32,
-        params: *mut SleepParams,
+        params: *mut YieldParams,
     },
     S4 {
         set: u32,
         waitable: u32,
-        params: *mut SleepParams,
+        params: *mut YieldParams,
     },
 }
 
 #[unsafe(export_name = "[async-lift]local:local/cancel#run")]
-unsafe extern "C" fn export_run(mode: u8, cancel_delay_millis: u64) -> u32 {
+unsafe extern "C" fn export_run(mode: u8, cancel_delay_times: u64) -> u32 {
     unsafe {
         context_set(
             u32::try_from(Box::into_raw(Box::new(State::S0 {
                 mode,
-                cancel_delay_millis,
+                cancel_delay_times,
             })) as usize)
             .unwrap(),
         );
@@ -135,25 +135,25 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
         match state {
             State::S0 {
                 mode,
-                cancel_delay_millis,
+                cancel_delay_times,
             } => {
                 assert_eq!(event0, EVENT_NONE);
 
-                // First, call and cancel `sleep_with_options::sleep_millis`
+                // First, call and cancel `yield_with_options::yield_tiems`
                 // with backpressure enabled.  Cancelling should not block since
                 // the call will not even have started.
 
                 inc_backpressure();
 
-                let params = Box::into_raw(Box::new(SleepParams {
-                    time_in_millis: 60 * 60 * 1000,
+                let params = Box::into_raw(Box::new(YieldParams {
+                    times: 60 * 60 * 1000,
                     on_cancel: ON_CANCEL_TASK_CANCEL,
-                    on_cancel_delay_millis: 0,
+                    on_cancel_delay_times: 0,
                     synchronous_delay: false,
                     mode: *mode,
                 }));
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -173,13 +173,13 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
                 subtask_drop(waitable);
 
-                // Next, call and cancel `sleep_with_options::sleep_millis` with
+                // Next, call and cancel `yield_with_options::yield_times` with
                 // backpressure disabled.  Cancelling should not block since we
                 // specified zero cancel delay to the callee.
 
                 dec_backpressure();
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -199,13 +199,13 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
                 subtask_drop(waitable);
 
-                // Next, call and cancel `sleep_with_options::sleep_millis` with
+                // Next, call and cancel `yield_with_options::yieldtimes` with
                 // a non-zero cancel delay.  Cancelling _should_ block this
                 // time.
 
-                (*params).on_cancel_delay_millis = *cancel_delay_millis;
+                (*params).on_cancel_delay_times = *cancel_delay_times;
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -242,14 +242,14 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 waitable_join(*waitable, 0);
                 subtask_drop(*waitable);
 
-                // Next, call and cancel `sleep_with_options::sleep_millis` with
+                // Next, call and cancel `yield_with_options::yield_times` with
                 // a non-zero cancel delay, but this time specifying that the
                 // callee should call `task.return` instead of `task.cancel`.
                 // Cancelling _should_ block this time.
 
                 (**params).on_cancel = ON_CANCEL_TASK_RETURN;
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -293,14 +293,14 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 waitable_join(*waitable, 0);
                 subtask_drop(*waitable);
 
-                // Next, call and cancel `sleep_with_options::sleep_millis` with
+                // Next, call and cancel `yield_with_options::yield_times` with
                 // a non-zero cancel delay, and specify that the callee should
                 // delay the cancel by making a synchronous call.
 
                 (**params).on_cancel = ON_CANCEL_TASK_CANCEL;
                 (**params).synchronous_delay = true;
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -343,13 +343,13 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 waitable_join(*waitable, 0);
                 subtask_drop(*waitable);
 
-                // Next, call and cancel `sleep::sleep_millis`, which the callee
+                // Next, call and cancel `yield_::yield_times`, which the callee
                 // implements using both an synchronous lift and asynchronous
                 // lower.  This should block asynchronously and yield a
                 // `STATUS_RETURNED` when complete since the callee cannot
                 // actually be cancelled.
 
-                let status = sleep::sleep_millis(10);
+                let status = yield_::yield_times(10);
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -386,7 +386,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 subtask_drop(*waitable);
                 waitable_set_drop(*set);
 
-                // Next, call and cancel `sleep_with_options::sleep_millis` with
+                // Next, call and cancel `yield_with_options::yield_times` with
                 // a non-zero cancel delay, and specify that the callee should
                 // delay the cancel by making a synchronous call.  Here we make
                 // synchronous call to `subtask.cancel`, which should block
@@ -394,7 +394,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
                 (**params).synchronous_delay = true;
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -413,7 +413,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
 
                 (**params).synchronous_delay = false;
 
-                let status = sleep_with_options::sleep_millis(params.cast());
+                let status = yield_with_options::yield_times(params.cast());
 
                 let waitable = status >> 4;
                 let status = status & 0xF;

@@ -9,10 +9,10 @@ pub mod resource_stream;
 pub mod round_trip;
 pub mod round_trip_direct;
 pub mod round_trip_many;
-pub mod sleep;
 pub mod transmit;
 pub mod util;
-pub mod yield_host;
+pub mod yield_;
+pub mod yield_runner;
 
 /// Host implementation, usable primarily by tests
 pub struct Ctx {
