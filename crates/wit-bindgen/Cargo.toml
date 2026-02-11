@@ -16,7 +16,7 @@ workspace = true
 anyhow = { workspace = true }
 heck = { workspace = true }
 wit-parser = { workspace = true }
-indexmap = { workspace = true }
+indexmap = { workspace = true, features = ['std'] }
 bitflags = { workspace = true }
 
 [features]
