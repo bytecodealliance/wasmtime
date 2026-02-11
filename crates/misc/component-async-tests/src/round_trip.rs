@@ -1,5 +1,5 @@
 use super::Ctx;
-use std::time::Duration;
+use crate::util::yield_times;
 use wasmtime::component::Accessor;
 
 pub mod bindings {
@@ -20,7 +20,7 @@ pub mod non_concurrent_export_bindings {
 
 impl bindings::local::local::baz::HostWithStore for Ctx {
     async fn foo<T>(_: &Accessor<T, Self>, s: String) -> wasmtime::Result<String> {
-        crate::util::sleep(Duration::from_millis(10)).await;
+        yield_times(10).await;
         Ok(format!("{s} - entered host - exited host"))
     }
 }

@@ -1,7 +1,7 @@
 mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",
-        world: "sleep-post-return-caller",
+        world: "yield-post-return-caller",
     });
 
     use super::Component;
@@ -10,8 +10,8 @@ mod bindings {
 
 use {
     bindings::{
-        exports::local::local::sleep_post_return::Guest,
-        local::local::{sleep, sleep_post_return},
+        exports::local::local::yield_post_return::Guest,
+        local::local::{yield_, yield_post_return},
     },
     wit_bindgen::rt::async_support,
 };
@@ -19,16 +19,16 @@ use {
 struct Component;
 
 impl Guest for Component {
-    async fn run(sleep_time_millis: u64) {
+    async fn run(times: u64) {
         // Spawn a task to run post-return and otherwise return immediately.
         async_support::spawn(async move {
             // Create a couple of subtasks which will also return immediately
-            // and sleep post-return.  These will not have completed once we
+            // and yield post-return.  These will not have completed once we
             // exit and thus will be reparented to the caller.
-            sleep_post_return::run(sleep_time_millis * 2).await;
-            sleep_post_return::run(sleep_time_millis * 2).await;
-            // Sleep for as long as requested:
-            sleep::sleep_millis(sleep_time_millis).await;
+            yield_post_return::run(times * 2).await;
+            yield_post_return::run(times * 2).await;
+            // Yield for as long as requested:
+            yield_::yield_times(times).await;
         });
     }
 }

@@ -8,7 +8,7 @@ use wasmtime::component::{Accessor, Resource};
 pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
-        world: "yield-host",
+        world: "yield-runner",
         imports: { default: trappable },
         with: {
             "local:local/ready.thing": super::Thing,

@@ -1,8 +1,6 @@
-use std::time::Duration;
-
 use super::util::{config, make_component};
 use component_async_tests::Ctx;
-use component_async_tests::util::sleep;
+use component_async_tests::util::yield_times;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable, Val};
 use wasmtime::{Engine, Result, Store, format_err};
@@ -93,7 +91,7 @@ async fn test_round_trip_direct(
             .root()
             .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
-                    sleep(Duration::from_millis(10)).await;
+                    yield_times(10).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
                         unreachable!()
                     };

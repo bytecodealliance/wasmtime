@@ -12,35 +12,35 @@ use test_programs::async_::{
 };
 
 #[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "[export]local:local/sleep-with-options")]
+#[link(wasm_import_module = "[export]local:local/yield-with-options")]
 unsafe extern "C" {
-    #[link_name = "[task-return]sleep-millis"]
-    fn task_return_sleep_millis();
+    #[link_name = "[task-return]yield-times"]
+    fn task_return_yield_times();
 }
 #[cfg(not(target_arch = "wasm32"))]
-unsafe extern "C" fn task_return_sleep_millis() {
+unsafe extern "C" fn task_return_yield_times() {
     unreachable!()
 }
 
 #[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "local:local/sleep")]
+#[link(wasm_import_module = "local:local/yield")]
 unsafe extern "C" {
-    #[link_name = "sleep-millis"]
-    fn sleep_millis(_: u64);
+    #[link_name = "yield-times"]
+    fn yield_times(_: u64);
 }
 #[cfg(not(target_arch = "wasm32"))]
-unsafe fn sleep_millis(_: u64) {
+unsafe fn yield_times(_: u64) {
     unreachable!()
 }
 
 #[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "local:local/sleep")]
+#[link(wasm_import_module = "local:local/yield")]
 unsafe extern "C" {
-    #[link_name = "[async-lower]sleep-millis"]
-    fn sleep_millis_async(ms: u64) -> u32;
+    #[link_name = "[async-lower]yield-times"]
+    fn yield_times_async(ms: u64) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
-unsafe fn sleep_millis_async(_ms: u64) -> u32 {
+unsafe fn yield_times_async(_ms: u64) -> u32 {
     unreachable!()
 }
 
@@ -56,25 +56,25 @@ const MODE_TRAP_CANCEL_HOST_AFTER_RETURN: u8 = 5;
 const MODE_LEAK_TASK_AFTER_CANCEL: u8 = 6;
 
 #[derive(Clone, Copy)]
-struct SleepParams {
-    time_in_millis: u64,
+struct YieldParams {
+    times: u64,
     on_cancel: u8,
-    on_cancel_delay_millis: u64,
+    on_cancel_delay_times: u64,
     synchronous_delay: bool,
     mode: u8,
 }
 
 enum State {
-    S0(SleepParams),
+    S0(YieldParams),
     S1 {
         set: u32,
         waitable: u32,
-        params: SleepParams,
+        params: YieldParams,
     },
     S2 {
         set: u32,
         waitable: u32,
-        params: SleepParams,
+        params: YieldParams,
     },
 }
 
@@ -97,38 +97,38 @@ unsafe extern "C" fn export_dec_backpressure() {
     wit_bindgen::backpressure_dec();
 }
 
-#[unsafe(export_name = "local:local/sleep#sleep-millis")]
-unsafe extern "C" fn export_sleep_sleep_millis(time_in_millis: u64) {
+#[unsafe(export_name = "local:local/yield#yield-times")]
+unsafe extern "C" fn export_yield_yield_times(times: u64) {
     unsafe {
-        sleep_millis(time_in_millis);
+        yield_times(times);
     }
 }
 
-#[unsafe(export_name = "[async-lift]local:local/sleep-with-options#sleep-millis")]
-unsafe extern "C" fn export_sleep_with_options_sleep_millis(
-    time_in_millis: u64,
+#[unsafe(export_name = "[async-lift]local:local/yield-with-options#yield-times")]
+unsafe extern "C" fn export_yield_with_options_yield_times(
+    times: u64,
     on_cancel: u8,
-    on_cancel_delay_millis: u64,
+    on_cancel_delay_times: u64,
     synchronous_delay: bool,
     mode: u8,
 ) -> u32 {
     unsafe {
         context_set(
-            u32::try_from(Box::into_raw(Box::new(State::S0(SleepParams {
-                time_in_millis,
+            u32::try_from(Box::into_raw(Box::new(State::S0(YieldParams {
+                times,
                 on_cancel,
-                on_cancel_delay_millis,
+                on_cancel_delay_times,
                 synchronous_delay,
                 mode,
             }))) as usize)
             .unwrap(),
         );
-        callback_sleep_with_options_sleep_millis(EVENT_NONE, 0, 0)
+        callback_yield_with_options_yield_times(EVENT_NONE, 0, 0)
     }
 }
 
-#[unsafe(export_name = "[callback][async-lift]local:local/sleep-with-options#sleep-millis")]
-unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
+#[unsafe(export_name = "[callback][async-lift]local:local/yield-with-options#yield-times")]
+unsafe extern "C" fn callback_yield_with_options_yield_times(
     event0: u32,
     event1: u32,
     event2: u32,
@@ -139,7 +139,7 @@ unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
             State::S0(params) => {
                 assert_eq!(event0, EVENT_NONE);
 
-                let status = sleep_millis_async(params.time_in_millis);
+                let status = yield_times_async(params.times);
 
                 let waitable = status >> 4;
                 let status = status & 0xF;
@@ -182,26 +182,26 @@ unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
                     subtask_drop(*waitable);
                 }
 
-                if params.on_cancel_delay_millis == 0 {
+                if params.on_cancel_delay_times == 0 {
                     match params.on_cancel {
-                        ON_CANCEL_TASK_RETURN => task_return_sleep_millis(),
+                        ON_CANCEL_TASK_RETURN => task_return_yield_times(),
                         ON_CANCEL_TASK_CANCEL => task_cancel(),
                         _ => unreachable!(),
                     }
 
                     CALLBACK_CODE_EXIT
                 } else if params.synchronous_delay {
-                    sleep_millis(params.on_cancel_delay_millis);
+                    yield_times(params.on_cancel_delay_times);
 
                     match params.on_cancel {
-                        ON_CANCEL_TASK_RETURN => task_return_sleep_millis(),
+                        ON_CANCEL_TASK_RETURN => task_return_yield_times(),
                         ON_CANCEL_TASK_CANCEL => task_cancel(),
                         _ => unreachable!(),
                     }
 
                     CALLBACK_CODE_EXIT
                 } else {
-                    let status = sleep_millis_async(params.on_cancel_delay_millis);
+                    let status = yield_times_async(params.on_cancel_delay_times);
 
                     let waitable = status >> 4;
                     let status = status & 0xF;
@@ -242,7 +242,7 @@ unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
                 waitable_set_drop(*set);
 
                 match params.on_cancel {
-                    ON_CANCEL_TASK_RETURN => task_return_sleep_millis(),
+                    ON_CANCEL_TASK_RETURN => task_return_yield_times(),
                     ON_CANCEL_TASK_CANCEL => task_cancel(),
                     _ => unreachable!(),
                 }
