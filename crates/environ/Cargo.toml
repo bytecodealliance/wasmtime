@@ -39,6 +39,7 @@ wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-core = { workspace = true }
 semver = { workspace = true, optional = true, features = ['serde'] }
 smallvec = { workspace = true, features = ['serde'] }
+sha2 = { version = "0.10.2", default-features = false }
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }

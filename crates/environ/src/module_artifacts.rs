@@ -8,6 +8,7 @@ use core::{fmt, u32};
 use core::{iter, str};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use serde_derive::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Description of where a function is located in the text section of a
 /// compiled image.
@@ -25,6 +26,28 @@ impl FunctionLoc {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.length == 0
+    }
+}
+
+/// The checksum of a Wasm binary.
+///
+/// Allows for features requiring the exact same Wasm Module (e.g. deterministic replay)
+/// to verify that the binary used matches the one originally compiled.
+#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct WasmChecksum([u8; 32]);
+
+impl WasmChecksum {
+    /// Construct a [`WasmChecksum`] from the given wasm binary.
+    pub fn from_binary(bin: &[u8]) -> WasmChecksum {
+        WasmChecksum(Sha256::digest(bin).into())
+    }
+}
+
+impl core::ops::Deref for WasmChecksum {
+    type Target = [u8; 32];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -548,6 +571,9 @@ pub struct CompiledModuleInfo {
 
     /// Sorted list, by function index, of names we have for this module.
     pub func_names: Vec<FunctionName>,
+
+    /// Checksum of the source Wasm binary from which this module was compiled.
+    pub checksum: WasmChecksum,
 }
 
 /// The name of a function stored in the
