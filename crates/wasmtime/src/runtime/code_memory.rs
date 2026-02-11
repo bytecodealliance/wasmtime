@@ -222,7 +222,6 @@ impl CodeMemory {
                 | ".symtab"
                 | ".strtab"
                 | ".shstrtab"
-                | ".pdata"
                 | ".xdata"
                 | obj::ELF_WASM_ENGINE => {
                     log::debug!("ignoring section {name:?}")
