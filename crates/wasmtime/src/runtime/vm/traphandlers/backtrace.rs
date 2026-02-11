@@ -31,7 +31,7 @@ use crate::runtime::vm::{
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
-use wasmtime_unwinder::Frame;
+use wasmtime_unwinder::{Frame, FrameCursor};
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
@@ -40,9 +40,24 @@ pub struct Backtrace(Vec<Frame>);
 /// One activation: information sufficient to trace an activation on a
 /// frame as long as that frame remains alive.
 pub(crate) struct Activation {
-    pub(crate) exit_pc: usize,
-    pub(crate) exit_fp: usize,
-    pub(crate) entry_trampoline_fp: usize,
+    exit_pc: usize,
+    exit_fp: usize,
+    entry_trampoline_fp: usize,
+}
+
+impl Activation {
+    /// Create a frame cursor starting at the exit frame of this activation.
+    ///
+    /// # Safety
+    ///
+    /// This activation must currently be valid (i.e., execution must
+    /// not have returned into the activation to unwind any frames,
+    /// and the stack must not have been freed).
+    pub(crate) unsafe fn cursor(&self) -> FrameCursor {
+        // SAFETY: validity of this activation is ensured by our
+        // safety condition.
+        unsafe { FrameCursor::new(self.exit_pc, self.exit_fp, self.entry_trampoline_fp) }
+    }
 }
 
 impl Backtrace {

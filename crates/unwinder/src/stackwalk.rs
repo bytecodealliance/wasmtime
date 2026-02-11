@@ -97,53 +97,6 @@ impl Frame {
     }
 }
 
-/// Provide a cursor that walks through a contiguous sequence of Wasm
-/// frames starting with the frame at the given PC and FP and ending
-/// at `trampoline_fp`. This FP should correspond to that of a
-/// trampoline that was used to enter the Wasm code.
-///
-/// We require that the initial PC, FP, and `trampoline_fp` values are
-/// non-null (non-zero).
-///
-/// The returned type is a cursor, not a literal `Iterator`
-/// implementation, because we do not want to capture the `&dyn
-/// Unwind` (rather the cursor's `next` method requires the `&dyn
-/// Unwind` separately, which permits more flexible usage).
-///
-/// # Safety
-///
-/// This function is not safe as `unwind`, `pc`, `fp`, and `trampoline_fp` must
-/// all be "correct" in that if they're wrong or mistakenly have the wrong value
-/// then this method may segfault. These values must point to valid Wasmtime
-/// compiled code which respects the frame pointers that Wasmtime currently
-/// requires.
-///
-/// The iterator that this function returns *must* be consumed while
-/// the frames are still active. That is, it cannot be stashed and
-/// consumed after returning back into the Wasm activation that is
-/// being iterated over.
-///
-/// Ordinarily this can be ensured by holding the unsafe iterator
-/// together with a borrow of the `Store` that owns the stack;
-/// higher-level layers wrap the two together.
-pub unsafe fn frame_cursor(pc: usize, fp: usize, trampoline_fp: usize) -> FrameCursor {
-    log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
-    log::trace!("trampoline_fp = 0x{trampoline_fp:016x}");
-    log::trace!("   initial pc = 0x{pc:016x}");
-    log::trace!("   initial fp = 0x{fp:016x}");
-
-    // Safety requirements documented above.
-    assert_ne!(pc, 0);
-    assert_ne!(fp, 0);
-    assert_ne!(trampoline_fp, 0);
-
-    FrameCursor {
-        pc,
-        fp,
-        trampoline_fp,
-    }
-}
-
 /// A cursor over `Frame`s in a single activation of Wasm, as returned
 /// by [`frame_cursor`].
 #[derive(Clone)]
@@ -154,6 +107,53 @@ pub struct FrameCursor {
 }
 
 impl FrameCursor {
+    /// Provide a cursor that walks through a contiguous sequence of Wasm
+    /// frames starting with the frame at the given PC and FP and ending
+    /// at `trampoline_fp`. This FP should correspond to that of a
+    /// trampoline that was used to enter the Wasm code.
+    ///
+    /// We require that the initial PC, FP, and `trampoline_fp` values are
+    /// non-null (non-zero).
+    ///
+    /// The returned type is a cursor, not a literal `Iterator`
+    /// implementation, because we do not want to capture the `&dyn
+    /// Unwind` (rather the cursor's `next` method requires the `&dyn
+    /// Unwind` separately, which permits more flexible usage).
+    ///
+    /// # Safety
+    ///
+    /// This function is not safe as `unwind`, `pc`, `fp`, and `trampoline_fp` must
+    /// all be "correct" in that if they're wrong or mistakenly have the wrong value
+    /// then this method may segfault. These values must point to valid Wasmtime
+    /// compiled code which respects the frame pointers that Wasmtime currently
+    /// requires.
+    ///
+    /// The iterator that this function returns *must* be consumed while
+    /// the frames are still active. That is, it cannot be stashed and
+    /// consumed after returning back into the Wasm activation that is
+    /// being iterated over.
+    ///
+    /// Ordinarily this can be ensured by holding the unsafe iterator
+    /// together with a borrow of the `Store` that owns the stack;
+    /// higher-level layers wrap the two together.
+    pub unsafe fn new(pc: usize, fp: usize, trampoline_fp: usize) -> FrameCursor {
+        log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
+        log::trace!("trampoline_fp = 0x{trampoline_fp:016x}");
+        log::trace!("   initial pc = 0x{pc:016x}");
+        log::trace!("   initial fp = 0x{fp:016x}");
+
+        // Safety requirements documented above.
+        assert_ne!(pc, 0);
+        assert_ne!(fp, 0);
+        assert_ne!(trampoline_fp, 0);
+
+        FrameCursor {
+            pc,
+            fp,
+            trampoline_fp,
+        }
+    }
+
     /// Get the frame that this cursor currently points at.
     pub fn frame(&self) -> Frame {
         assert!(!self.done());
@@ -281,16 +281,17 @@ impl FrameCursor {
 /// # Safety
 ///
 /// Safety conditions for this function are the same as for the
-/// [`frame_cursor`] function, plus the condition on `unwind` from the
-/// [`FrameCursor::advance`] method.
+/// [`FrameCursor::new`] function, plus the condition on `unwind` from
+/// the [`FrameCursor::advance`] method.
 pub unsafe fn frame_iterator(
     unwind: &dyn Unwind,
     pc: usize,
     fp: usize,
     trampoline_fp: usize,
 ) -> impl Iterator<Item = Frame> {
-    // SAFETY: our safety conditions include those of `frame_cursor`.
-    let mut cursor = unsafe { frame_cursor(pc, fp, trampoline_fp) };
+    // SAFETY: our safety conditions include those of
+    // `FrameCursor::new`.
+    let mut cursor = unsafe { FrameCursor::new(pc, fp, trampoline_fp) };
     core::iter::from_fn(move || {
         if cursor.done() {
             None

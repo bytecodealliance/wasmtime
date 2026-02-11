@@ -23,7 +23,7 @@ use wasmtime_environ::{
     FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
     FuncIndex, FuncKey, GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap,
 };
-use wasmtime_unwinder::{Frame, FrameCursor, frame_cursor};
+use wasmtime_unwinder::{Frame, FrameCursor};
 
 impl<T> Store<T> {
     /// Provide a frame handle for all activations, in order from
@@ -340,13 +340,7 @@ impl FrameHandle {
     /// The provided activation must be valid currently.
     unsafe fn exit_frame(store: &mut StoreOpaque, activation: Activation) -> Option<FrameHandle> {
         // SAFETY: activation is valid as per our safety condition.
-        let mut cursor = unsafe {
-            frame_cursor(
-                activation.exit_pc,
-                activation.exit_fp,
-                activation.entry_trampoline_fp,
-            )
-        };
+        let mut cursor = unsafe { activation.cursor() };
 
         // Find the first virtual frame. Each physical frame may have
         // zero or more virtual frames.
@@ -361,8 +355,9 @@ impl FrameHandle {
                     store_version: store.vm_store_context().execution_version,
                 });
             }
-            // SAFETY: activation is still valid (we have not returned
-            // control since above).
+            // SAFETY: activation is still valid (valid on entry per
+            // our safety condition, and we have not returned control
+            // since above).
             unsafe {
                 cursor.advance(store.unwinder());
             }
