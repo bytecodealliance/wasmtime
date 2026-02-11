@@ -218,12 +218,7 @@ impl CodeMemory {
 
                 // These sections are expected, but we do not need to retain any
                 // info about them.
-                ""
-                | ".symtab"
-                | ".strtab"
-                | ".shstrtab"
-                | ".xdata"
-                | obj::ELF_WASM_ENGINE => {
+                "" | ".symtab" | ".strtab" | ".shstrtab" | ".xdata" | obj::ELF_WASM_ENGINE => {
                     log::debug!("ignoring section {name:?}")
                 }
                 _ if name.starts_with(".debug_") || name.starts_with(".rela.debug_") => {
