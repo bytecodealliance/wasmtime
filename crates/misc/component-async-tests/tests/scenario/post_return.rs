@@ -103,7 +103,7 @@ async fn test_yield_post_return(components: &[&str]) -> Result<()> {
                 // outstanding guest or host tasks to poll for a while, trusting
                 // that we'll resolve the future independently, with or without
                 // giving it more work to do.
-                util::yield_times(100).await;
+                util::yield_times(10).await;
 
                 run_with(accessor, guest).await?;
 
