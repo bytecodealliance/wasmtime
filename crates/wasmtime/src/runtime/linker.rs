@@ -1,7 +1,6 @@
 use crate::error::OutOfMemory;
 use crate::func::HostFunc;
 use crate::instance::InstancePre;
-use crate::runtime::string_pool::{Atom, StringPool};
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
@@ -15,7 +14,7 @@ use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
 use wasmtime_environ::{
-    PanicOnOom as _,
+    Atom, PanicOnOom as _, StringPool,
     collections::{HashMap, TryClone},
 };
 

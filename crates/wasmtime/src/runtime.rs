@@ -49,7 +49,6 @@ pub(crate) mod module;
 pub(crate) mod native_debug;
 pub(crate) mod resources;
 pub(crate) mod store;
-pub(crate) mod string_pool;
 pub(crate) mod trampoline;
 pub(crate) mod trap;
 pub(crate) mod type_registry;
