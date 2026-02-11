@@ -451,9 +451,9 @@ impl Config {
     /// Breakpoints, watchpoints, and stepping are not yet supported,
     /// but will be added in a future version of Wasmtime.
     ///
-    /// This enables use of the [`crate::DebugFrameCursor`] API which is
-    /// provided by [`crate::Caller::debug_frames`] from within a
-    /// hostcall context.
+    /// This enables use of the [`crate::FrameHandle`] API which is
+    /// provided by [`crate::Caller::debug_exit_frames`] or
+    /// [`crate::Store::debug_exit_frames`].
     ///
     /// ***Note*** Enabling this option is not compatible with the
     /// Winch compiler.
