@@ -2814,15 +2814,12 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("};\n");
 
         self.src.push_str("let (");
-        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            self.src.push_str("(");
-        }
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
 
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            uwrite!(self.src, ")) = callee.call_concurrent(accessor, (");
+            uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
         } else {
             uwrite!(
                 self.src,

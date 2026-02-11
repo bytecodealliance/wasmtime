@@ -909,7 +909,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.tuple_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_tuple_result<_T, _D>(
@@ -926,7 +926,7 @@ pub mod exports {
                                 ((char, u32),),
                             >::new_unchecked(self.tuple_result)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_empty_arg<_T, _D>(
@@ -944,7 +944,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.empty_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_empty_result<_T, _D>(
@@ -961,7 +961,7 @@ pub mod exports {
                                 (Empty,),
                             >::new_unchecked(self.empty_result)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_scalar_arg<_T, _D>(
@@ -979,7 +979,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.scalar_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_scalar_result<_T, _D>(
@@ -996,7 +996,7 @@ pub mod exports {
                                 (Scalars,),
                             >::new_unchecked(self.scalar_result)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_flags_arg<_T, _D>(
@@ -1014,7 +1014,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.flags_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_flags_result<_T, _D>(
@@ -1031,7 +1031,7 @@ pub mod exports {
                                 (ReallyFlags,),
                             >::new_unchecked(self.flags_result)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_aggregate_arg<_T, _D>(
@@ -1049,7 +1049,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.aggregate_arg)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_aggregate_result<_T, _D>(
@@ -1066,7 +1066,7 @@ pub mod exports {
                                 (Aggregates,),
                             >::new_unchecked(self.aggregate_result)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_typedef_inout<_T, _D>(
@@ -1084,9 +1084,7 @@ pub mod exports {
                                 (i32,),
                             >::new_unchecked(self.typedef_inout)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                 }

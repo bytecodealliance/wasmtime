@@ -386,7 +386,7 @@ pub mod exports {
                         (Response,),
                     >::new_unchecked(self.handle_request)
                 };
-                let ((ret0,), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                 Ok(ret0)
             }
         }
