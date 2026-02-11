@@ -15,11 +15,11 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
-;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
-;;     gv6 = load.i64 notrap aligned gv4+32
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
+;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:27 sig0
 ;;     stack_limit = gv2
@@ -33,7 +33,7 @@
 ;; @002a                               v10 = iconst.i32 8
 ;; @002a                               v11 = call fn0(v0, v8, v9, v6, v10), stack_map=[i32 @ ss0+0]  ; v8 = -1342177280, v9 = 0, v6 = 40, v10 = 8
 ;; @002a                               v54 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v12 = load.i64 notrap aligned readonly can_move v54+24
+;; @002a                               v12 = load.i64 notrap aligned readonly can_move v54+32
 ;; @002a                               v13 = uextend.i64 v11
 ;; @002a                               v14 = iadd v12, v13
 ;;                                     v53 = iconst.i64 24

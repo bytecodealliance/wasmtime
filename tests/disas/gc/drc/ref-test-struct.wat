@@ -10,11 +10,11 @@
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
-;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
-;;     gv6 = load.i64 notrap aligned gv4+32
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
+;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -31,7 +31,7 @@
 ;;
 ;;                                 block3:
 ;; @001b                               v21 = load.i64 notrap aligned readonly can_move v0+8
-;; @001b                               v11 = load.i64 notrap aligned readonly can_move v21+24
+;; @001b                               v11 = load.i64 notrap aligned readonly can_move v21+32
 ;; @001b                               v10 = uextend.i64 v2
 ;; @001b                               v12 = iadd v11, v10
 ;; @001b                               v15 = load.i32 notrap aligned readonly v12

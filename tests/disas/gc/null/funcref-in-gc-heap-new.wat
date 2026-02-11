@@ -12,11 +12,11 @@
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
-;;     gv5 = load.i64 notrap aligned gv4+32
-;;     gv6 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv5 = load.i64 notrap aligned gv4+40
+;;     gv6 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     sig1 = (i64 vmctx, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:26 sig0
@@ -33,14 +33,14 @@
 ;; @0020                               v4 = iconst.i32 16
 ;; @0020                               v16 = uadd_overflow_trap v15, v4, user17  ; v4 = 16
 ;; @0020                               v38 = load.i64 notrap aligned readonly can_move v0+8
-;; @0020                               v18 = load.i64 notrap aligned v38+32
+;; @0020                               v18 = load.i64 notrap aligned v38+40
 ;; @0020                               v17 = uextend.i64 v16
 ;; @0020                               v19 = icmp ule v17, v18
 ;; @0020                               brif v19, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v55 = iconst.i32 -1342177264
-;; @0020                               v23 = load.i64 notrap aligned readonly can_move v38+24
+;; @0020                               v23 = load.i64 notrap aligned readonly can_move v38+32
 ;;                                     v62 = band.i32 v13, v54  ; v54 = -8
 ;;                                     v63 = uextend.i64 v62
 ;; @0020                               v25 = iadd v23, v63

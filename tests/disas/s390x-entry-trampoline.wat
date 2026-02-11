@@ -19,11 +19,11 @@
 ;;       std     %f15, 0xd8(%r15)
 ;;       lg      %r5, 8(%r2)
 ;;       lg      %r4, 0(%r15)
-;;       stg     %r4, 0x40(%r5)
-;;       lgr     %r4, %r15
-;;       stg     %r4, 0x38(%r5)
-;;       larl    %r4, 0xbe
 ;;       stg     %r4, 0x48(%r5)
+;;       lgr     %r4, %r15
+;;       stg     %r4, 0x40(%r5)
+;;       larl    %r4, 0xbe
+;;       stg     %r4, 0x50(%r5)
 ;;       brasl   %r14, 0
 ;;       ├─╼ exception frame offset: SP = FP - 0xe0
 ;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0xbe
