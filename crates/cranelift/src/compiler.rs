@@ -434,8 +434,36 @@ impl wasmtime_environ::Compiler for Compiler {
             callee,
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
+
+        // Increment the "execution version" on the VMStoreContext if
+        // guest debugging is enabled.
+        if self.tunables.debug_guest {
+            let vmstore_ctx_ptr = builder.ins().load(
+                pointer_type,
+                MemFlags::trusted().with_readonly(),
+                caller_vmctx,
+                i32::from(ptr_size.vmctx_store_context()),
+            );
+            let old_version = builder.ins().load(
+                ir::types::I64,
+                MemFlags::trusted(),
+                vmstore_ctx_ptr,
+                i32::from(ptr_size.vmstore_context_execution_version()),
+            );
+            let new_version = builder.ins().iadd_imm(old_version, 1);
+            builder.ins().store(
+                MemFlags::trusted(),
+                new_version,
+                vmstore_ctx_ptr,
+                i32::from(ptr_size.vmstore_context_execution_version()),
+            );
+        }
+
+        // Invoke `raise` if the callee (host) returned an error.
         let succeeded = builder.func.dfg.inst_results(call)[0];
         self.raise_if_host_trapped(&mut builder, caller_vmctx, succeeded);
+
+        // Return results from the array as native return values.
         let results =
             self.load_values_from_array(wasm_func_ty.returns(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);

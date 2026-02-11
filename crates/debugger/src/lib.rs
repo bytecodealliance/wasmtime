@@ -498,17 +498,23 @@ mod test {
         assert!(matches!(event, DebugRunResult::Breakpoint));
         // At (before executing) first `local.get`.
         debugger
-            .with_store(|store| {
-                let mut frame = store.debug_frames().unwrap();
-                assert!(!frame.done());
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 36);
-                assert_eq!(frame.num_locals(), 2);
-                assert_eq!(frame.num_stacks(), 0);
-                assert_eq!(frame.local(0).unwrap_i32(), 1);
-                assert_eq!(frame.local(1).unwrap_i32(), 2);
-                assert_eq!(frame.move_to_parent(), FrameParentResult::SameActivation);
-                assert!(frame.done());
+            .with_store(|mut store| {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    0
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 36);
+                assert_eq!(frame.num_locals(&mut store), 2);
+                assert_eq!(frame.num_stacks(&mut store), 0);
+                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
+                let frame = frame.parent(&mut store);
+                assert!(frame.is_none());
             })
             .await?;
 
@@ -516,18 +522,24 @@ mod test {
         // At second `local.get`.
         assert!(matches!(event, DebugRunResult::Breakpoint));
         debugger
-            .with_store(|store| {
-                let mut frame = store.debug_frames().unwrap();
-                assert!(!frame.done());
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 38);
-                assert_eq!(frame.num_locals(), 2);
-                assert_eq!(frame.num_stacks(), 1);
-                assert_eq!(frame.local(0).unwrap_i32(), 1);
-                assert_eq!(frame.local(1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(0).unwrap_i32(), 1);
-                assert_eq!(frame.move_to_parent(), FrameParentResult::SameActivation);
-                assert!(frame.done());
+            .with_store(|mut store| {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    0
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 38);
+                assert_eq!(frame.num_locals(&mut store), 2);
+                assert_eq!(frame.num_stacks(&mut store), 1);
+                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 1);
+                let frame = frame.parent(&mut store);
+                assert!(frame.is_none());
             })
             .await?;
 
@@ -535,19 +547,25 @@ mod test {
         // At `i32.add`.
         assert!(matches!(event, DebugRunResult::Breakpoint));
         debugger
-            .with_store(|store| {
-                let mut frame = store.debug_frames().unwrap();
-                assert!(!frame.done());
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 40);
-                assert_eq!(frame.num_locals(), 2);
-                assert_eq!(frame.num_stacks(), 2);
-                assert_eq!(frame.local(0).unwrap_i32(), 1);
-                assert_eq!(frame.local(1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(0).unwrap_i32(), 1);
-                assert_eq!(frame.stack(1).unwrap_i32(), 2);
-                assert_eq!(frame.move_to_parent(), FrameParentResult::SameActivation);
-                assert!(frame.done());
+            .with_store(|mut store| {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    0
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 40);
+                assert_eq!(frame.num_locals(&mut store), 2);
+                assert_eq!(frame.num_stacks(&mut store), 2);
+                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 1);
+                assert_eq!(frame.stack(&mut store, 1).unwrap_i32(), 2);
+                let frame = frame.parent(&mut store);
+                assert!(frame.is_none());
             })
             .await?;
 
@@ -555,18 +573,24 @@ mod test {
         // At return point.
         assert!(matches!(event, DebugRunResult::Breakpoint));
         debugger
-            .with_store(|store| {
-                let mut frame = store.debug_frames().unwrap();
-                assert!(!frame.done());
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 41);
-                assert_eq!(frame.num_locals(), 2);
-                assert_eq!(frame.num_stacks(), 1);
-                assert_eq!(frame.local(0).unwrap_i32(), 1);
-                assert_eq!(frame.local(1).unwrap_i32(), 2);
-                assert_eq!(frame.stack(0).unwrap_i32(), 3);
-                assert_eq!(frame.move_to_parent(), FrameParentResult::SameActivation);
-                assert!(frame.done());
+            .with_store(|mut store| {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut store)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    0
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut store).unwrap().1, 41);
+                assert_eq!(frame.num_locals(&mut store), 2);
+                assert_eq!(frame.num_stacks(&mut store), 1);
+                assert_eq!(frame.local(&mut store, 0).unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut store, 1).unwrap_i32(), 2);
+                assert_eq!(frame.stack(&mut store, 0).unwrap_i32(), 3);
+                let frame = frame.parent(&mut store);
+                assert!(frame.is_none());
             })
             .await?;
 

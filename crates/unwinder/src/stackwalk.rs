@@ -97,13 +97,18 @@ impl Frame {
     }
 }
 
-/// Provide an iterator that walks through a contiguous sequence of
-/// Wasm frames starting with the frame at the given PC and FP and
-/// ending at `trampoline_fp`. This FP should correspond to that of a
+/// Provide a cursor that walks through a contiguous sequence of Wasm
+/// frames starting with the frame at the given PC and FP and ending
+/// at `trampoline_fp`. This FP should correspond to that of a
 /// trampoline that was used to enter the Wasm code.
 ///
 /// We require that the initial PC, FP, and `trampoline_fp` values are
 /// non-null (non-zero).
+///
+/// The returned type is a cursor, not a literal `Iterator`
+/// implementation, because we do not want to capture the `&dyn
+/// Unwind` (rather the cursor's `next` method requires the `&dyn
+/// Unwind` separately, which permits more flexible usage).
 ///
 /// # Safety
 ///
@@ -121,12 +126,7 @@ impl Frame {
 /// Ordinarily this can be ensured by holding the unsafe iterator
 /// together with a borrow of the `Store` that owns the stack;
 /// higher-level layers wrap the two together.
-pub unsafe fn frame_iterator(
-    unwind: &dyn Unwind,
-    mut pc: usize,
-    mut fp: usize,
-    trampoline_fp: usize,
-) -> impl Iterator<Item = Frame> {
+pub unsafe fn frame_cursor(pc: usize, fp: usize, trampoline_fp: usize) -> FrameCursor {
     log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
     log::trace!("trampoline_fp = 0x{trampoline_fp:016x}");
     log::trace!("   initial pc = 0x{pc:016x}");
@@ -137,51 +137,89 @@ pub unsafe fn frame_iterator(
     assert_ne!(fp, 0);
     assert_ne!(trampoline_fp, 0);
 
-    // This loop will walk the linked list of frame pointers starting
-    // at `fp` and going up until `trampoline_fp`. We know that both
-    // `fp` and `trampoline_fp` are "trusted values" aka generated and
-    // maintained by Wasmtime. This means that it should be safe to
-    // walk the linked list of pointers and inspect Wasm frames.
-    //
-    // Note, though, that any frames outside of this range are not
-    // guaranteed to have valid frame pointers. For example native code
-    // might be using the frame pointer as a general purpose register. Thus
-    // we need to be careful to only walk frame pointers in this one
-    // contiguous linked list.
-    //
-    // To know when to stop iteration all architectures' stacks currently
-    // look something like this:
-    //
-    //     | ...               |
-    //     | Native Frames     |
-    //     | ...               |
-    //     |-------------------|
-    //     | ...               | <-- Trampoline FP            |
-    //     | Trampoline Frame  |                              |
-    //     | ...               | <-- Trampoline SP            |
-    //     |-------------------|                            Stack
-    //     | Return Address    |                            Grows
-    //     | Previous FP       | <-- Wasm FP                Down
-    //     | ...               |                              |
-    //     | Cranelift Frames  |                              |
-    //     | ...               |                              V
-    //
-    // The trampoline records its own frame pointer (`trampoline_fp`),
-    // which is guaranteed to be above all Wasm code. To check when
+    FrameCursor {
+        pc,
+        fp,
+        trampoline_fp,
+    }
+}
 
-    // to check when the next frame pointer is equal to
-    // `trampoline_fp`. Once that's hit then we know that the entire
-    // linked list has been traversed.
-    //
-    // Note that it might be possible that this loop doesn't execute
-    // at all.  For example if the entry trampoline called Wasm code
-    // which `return_call`'d an exit trampoline, then `fp ==
-    // trampoline_fp` on the entry of this function, meaning the loop
-    // won't actually execute anything.
-    core::iter::from_fn(move || {
-        if fp == trampoline_fp {
+/// A cursor over `Frame`s in a single activation of Wasm, as returned
+/// by [`frame_cursor`].
+#[derive(Clone)]
+pub struct FrameCursor {
+    pc: usize,
+    fp: usize,
+    trampoline_fp: usize,
+}
+
+impl FrameCursor {
+    /// Get the frame that this cursor currently points at.
+    pub fn frame(&self) -> Frame {
+        assert!(!self.done());
+        Frame {
+            pc: self.pc,
+            fp: self.fp,
+        }
+    }
+
+    /// Returns whether the cursor is "done", i.e., no other frame is
+    /// available in this activation.
+    pub fn done(&self) -> bool {
+        self.fp == self.trampoline_fp
+    }
+
+    /// Move to the next frame in this activation, if any.
+    ///
+    /// # Safety
+    ///
+    /// The `unwind` passed in must correspond to the host
+    /// implementation from which this stack came.
+    pub unsafe fn advance(&mut self, unwind: &dyn Unwind) {
+        // This logic will walk the linked list of frame pointers starting
+        // at `fp` and going up until `trampoline_fp`. We know that both
+        // `fp` and `trampoline_fp` are "trusted values" aka generated and
+        // maintained by Wasmtime. This means that it should be safe to
+        // walk the linked list of pointers and inspect Wasm frames.
+        //
+        // Note, though, that any frames outside of this range are not
+        // guaranteed to have valid frame pointers. For example native code
+        // might be using the frame pointer as a general purpose register. Thus
+        // we need to be careful to only walk frame pointers in this one
+        // contiguous linked list.
+        //
+        // To know when to stop iteration all architectures' stacks currently
+        // look something like this:
+        //
+        //     | ...               |
+        //     | Native Frames     |
+        //     | ...               |
+        //     |-------------------|
+        //     | ...               | <-- Trampoline FP            |
+        //     | Trampoline Frame  |                              |
+        //     | ...               | <-- Trampoline SP            |
+        //     |-------------------|                            Stack
+        //     | Return Address    |                            Grows
+        //     | Previous FP       | <-- Wasm FP                Down
+        //     | ...               |                              |
+        //     | Cranelift Frames  |                              |
+        //     | ...               |                              V
+        //
+        // The trampoline records its own frame pointer (`trampoline_fp`),
+        // which is guaranteed to be above all Wasm code. To check when
+
+        // to check when the next frame pointer is equal to
+        // `trampoline_fp`. Once that's hit then we know that the entire
+        // linked list has been traversed.
+        //
+        // Note that it might be possible that this loop doesn't execute
+        // at all.  For example if the entry trampoline called Wasm code
+        // which `return_call`'d an exit trampoline, then `fp ==
+        // trampoline_fp` on the entry of this function, meaning the loop
+        // won't actually execute anything.
+        if self.fp == self.trampoline_fp {
             log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
-            return None;
+            return;
         }
 
         // At the start of each iteration of the loop, we know that
@@ -194,20 +232,23 @@ pub unsafe fn frame_iterator(
         // we are dealing with should be less than the frame pointer
         // on entry to Wasm code. Finally also assert that it's
         // aligned correctly as an additional sanity check.
-        assert!(trampoline_fp > fp, "{trampoline_fp:#x} > {fp:#x}");
-        unwind.assert_fp_is_aligned(fp);
+        assert!(
+            self.trampoline_fp > self.fp,
+            "{:#x} > {:#x}",
+            self.trampoline_fp,
+            self.fp
+        );
+        unwind.assert_fp_is_aligned(self.fp);
 
         log::trace!("--- Tracing through one Wasm frame ---");
-        log::trace!("pc = {:p}", pc as *const ());
-        log::trace!("fp = {:p}", fp as *const ());
-
-        let frame = Frame { pc, fp };
+        log::trace!("pc = {:p}", self.pc as *const ());
+        log::trace!("fp = {:p}", self.fp as *const ());
 
         // SAFETY: this unsafe traversal of the linked list on the stack is
         // reflected in the contract of this function where `pc`, `fp`,
         // `trampoline_fp`, and `unwind` must all be trusted/correct values.
         unsafe {
-            pc = unwind.get_next_older_pc_from_fp(fp);
+            self.pc = unwind.get_next_older_pc_from_fp(self.fp);
 
             // We rely on this offset being zero for all supported
             // architectures in
@@ -218,15 +259,50 @@ pub unsafe fn frame_iterator(
 
             // Get the next older frame pointer from the current Wasm
             // frame pointer.
-            let next_older_fp = *(fp as *mut usize).add(unwind.next_older_fp_from_fp_offset());
+            let next_older_fp = *(self.fp as *mut usize).add(unwind.next_older_fp_from_fp_offset());
 
             // Because the stack always grows down, the older FP must be greater
             // than the current FP.
-            assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
-            fp = next_older_fp;
+            assert!(
+                next_older_fp > self.fp,
+                "{next_older_fp:#x} > {fp:#x}",
+                fp = self.fp
+            );
+            self.fp = next_older_fp;
         }
+    }
+}
 
-        Some(frame)
+/// Wrap `FrameCursor` in a true iterator.
+///
+/// This captures the `unwind` borrow for the duration of the
+/// iterator's lifetime.
+///
+/// # Safety
+///
+/// Safety conditions for this function are the same as for the
+/// [`frame_cursor`] function, plus the condition on `unwind` from the
+/// [`FrameCursor::advance`] method.
+pub unsafe fn frame_iterator(
+    unwind: &dyn Unwind,
+    pc: usize,
+    fp: usize,
+    trampoline_fp: usize,
+) -> impl Iterator<Item = Frame> {
+    // SAFETY: our safety conditions include those of `frame_cursor`.
+    let mut cursor = unsafe { frame_cursor(pc, fp, trampoline_fp) };
+    core::iter::from_fn(move || {
+        if cursor.done() {
+            None
+        } else {
+            let frame = cursor.frame();
+            // SAFETY: `unwind` is associated with the stack as per
+            // our safety conditions.
+            unsafe {
+                cursor.advance(unwind);
+            }
+            Some(frame)
+        }
     })
 }
 

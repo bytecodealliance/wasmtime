@@ -30,8 +30,6 @@ use crate::runtime::vm::{
 };
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
-#[cfg(feature = "debug")]
-use crate::{StoreContext, StoreContextMut};
 use core::ops::ControlFlow;
 use wasmtime_unwinder::Frame;
 
@@ -42,9 +40,9 @@ pub struct Backtrace(Vec<Frame>);
 /// One activation: information sufficient to trace an activation on a
 /// frame as long as that frame remains alive.
 pub(crate) struct Activation {
-    exit_pc: usize,
-    exit_fp: usize,
-    entry_trampoline_fp: usize,
+    pub(crate) exit_pc: usize,
+    pub(crate) exit_fp: usize,
+    pub(crate) entry_trampoline_fp: usize,
 }
 
 impl Backtrace {
@@ -364,7 +362,7 @@ impl Backtrace {
     /// Capture all Activations reachable from the current point
     /// within a hostcall.
     #[cfg(feature = "debug")]
-    fn activations(store: &StoreOpaque) -> Vec<Activation> {
+    pub(crate) fn activations(store: &StoreOpaque) -> Vec<Activation> {
         let mut activations = vec![];
         let vm_store_context = store.vm_store_context();
         tls::with(|state| match state {
@@ -384,194 +382,5 @@ impl Backtrace {
         &'a self,
     ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
-    }
-}
-
-/// An iterator over one Wasm activation.
-#[cfg(feature = "debug")]
-struct ActivationBacktrace<'a, T: 'static> {
-    pub(crate) store: StoreContextMut<'a, T>,
-    inner: Box<dyn Iterator<Item = Frame>>,
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> ActivationBacktrace<'a, T> {
-    /// Return an iterator over a Wasm activation.
-    ///
-    /// The iterator captures the store with a mutable borrow, and
-    /// then yields it back at each frame. This ensures that the stack
-    /// remains live while still providing a mutable store that may be
-    /// needed to access items in the frame (e.g., to create new roots
-    /// when reading out GC refs).
-    ///
-    /// This serves as an alternative to `Backtrace::trace()` and
-    /// friends: it allows external iteration (and e.g. lazily walking
-    /// through frames in a stack) rather than visiting via a closure.
-    pub(crate) fn new(
-        store: StoreContextMut<'a, T>,
-        activation: Activation,
-    ) -> ActivationBacktrace<'a, T> {
-        let inner: Box<dyn Iterator<Item = Frame>> = if activation.exit_fp == 0 {
-            // No activations on this Store; return an empty iterator.
-            Box::new(core::iter::empty())
-        } else {
-            let unwind = store.0.unwinder();
-            // Establish the iterator.
-            Box::new(unsafe {
-                wasmtime_unwinder::frame_iterator(
-                    unwind,
-                    activation.exit_pc,
-                    activation.exit_fp,
-                    activation.entry_trampoline_fp,
-                )
-            })
-        };
-
-        ActivationBacktrace { store, inner }
-    }
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> Iterator for ActivationBacktrace<'a, T> {
-    type Item = Frame;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-/// An iterator over all Wasm activations in a Store.
-#[cfg(feature = "debug")]
-pub(crate) struct StoreBacktrace<'a, T: 'static> {
-    /// The current activation iterator or the Store itself if no more
-    /// activations.
-    ///
-    /// This is `Option` so that we can move to the next while
-    /// transferring ownership of the Store without deconstructing
-    /// this whole iterator.
-    current: Option<StoreOrActivationBacktrace<'a, T>>,
-    activations: Vec<Activation>,
-}
-
-/// Either an iterator over a Wasm activation, or a `StoreContextMut`
-/// if no activations are left.
-#[cfg(feature = "debug")]
-enum StoreOrActivationBacktrace<'a, T: 'static> {
-    Store(StoreContextMut<'a, T>),
-    Activation(ActivationBacktrace<'a, T>),
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> StoreOrActivationBacktrace<'a, T> {
-    fn is_activation(&self) -> bool {
-        match self {
-            Self::Activation(_) => true,
-            _ => false,
-        }
-    }
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T> StoreBacktrace<'a, T> {
-    /// Return an iterator over all Wasm activations in a Store, in
-    /// invocation order.
-    ///
-    /// The iterator captures the store with a mutable borrow, and
-    /// then yields it back at each frame. This ensures that the stack
-    /// remains live while still providing a mutable store that may be
-    /// needed to access items in the frame (e.g., to create new roots
-    /// when reading out GC refs).
-    ///
-    /// This serves as an alternative to `Backtrace::trace()` and
-    /// friends: it allows external iteration (and e.g. lazily walking
-    /// through frames in a stack) rather than visiting via a closure.
-    pub(crate) fn new(store: StoreContextMut<'a, T>) -> StoreBacktrace<'a, T> {
-        // Get all activations, in innermost-to-outermost order.
-        use crate::store::AsStoreOpaque;
-        let mut activations = Backtrace::activations(store.0.as_store_opaque());
-        // Reverse to outermost-to-innermost so we can pop off the end.
-        activations.reverse();
-        // Create our inner state: either an activation iterator on
-        // the innermost activation that owns the store, or a sentinel
-        // if there are no activations.
-        let current = match activations.pop() {
-            Some(innermost) => {
-                StoreOrActivationBacktrace::Activation(ActivationBacktrace::new(store, innermost))
-            }
-            None => StoreOrActivationBacktrace::Store(store),
-        };
-        StoreBacktrace {
-            current: Some(current),
-            activations,
-        }
-    }
-
-    /// Get the Store underlying this iteration.
-    pub fn store(&self) -> StoreContext<'_, T> {
-        match self.current.as_ref().unwrap() {
-            StoreOrActivationBacktrace::Activation(activation) => StoreContext(activation.store.0),
-            StoreOrActivationBacktrace::Store(store) => StoreContext(store.0),
-        }
-    }
-
-    /// Get the Store underlying this iteration.
-    pub fn store_mut(&mut self) -> StoreContextMut<'_, T> {
-        match self.current.as_mut().unwrap() {
-            StoreOrActivationBacktrace::Activation(activation) => {
-                StoreContextMut(activation.store.0)
-            }
-            StoreOrActivationBacktrace::Store(store) => StoreContextMut(store.0),
-        }
-    }
-
-    fn take_store(&mut self) -> StoreContextMut<'a, T> {
-        match self.current.take().unwrap() {
-            StoreOrActivationBacktrace::Activation(activation) => activation.store,
-            StoreOrActivationBacktrace::Store(store) => store,
-        }
-    }
-
-    /// Move to the next activation.
-    fn next_activation(&mut self) {
-        let activation = self.activations.pop();
-        let store = self.take_store();
-        self.current = Some(match activation {
-            Some(activation) => {
-                StoreOrActivationBacktrace::Activation(ActivationBacktrace::new(store, activation))
-            }
-            None => StoreOrActivationBacktrace::Store(store),
-        });
-    }
-}
-
-/// A single item in an iteration over a store's frames: either a Wasm
-/// frame, or a sentinel representing host code between activations.
-#[cfg(feature = "debug")]
-pub enum FrameOrHostCode {
-    /// A WebAsembly frame.
-    Frame(Frame),
-    /// Some number of host frames between Wasm activations.
-    HostCode,
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> Iterator for StoreBacktrace<'a, T> {
-    type Item = FrameOrHostCode;
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.current.as_mut().unwrap() {
-            StoreOrActivationBacktrace::Store(_) => None,
-            StoreOrActivationBacktrace::Activation(act) => match act.next() {
-                Some(frame) => Some(FrameOrHostCode::Frame(frame)),
-                None => {
-                    self.next_activation();
-                    // If there's another activation waiting, return
-                    // HostCode between the two; otherwise, don't.
-                    if self.current.as_ref().unwrap().is_activation() {
-                        Some(FrameOrHostCode::HostCode)
-                    } else {
-                        None
-                    }
-                }
-            },
-        }
     }
 }

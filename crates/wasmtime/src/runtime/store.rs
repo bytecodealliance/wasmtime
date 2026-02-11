@@ -103,7 +103,7 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
-use crate::{BreakpointState, DebugHandler};
+use crate::{BreakpointState, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
@@ -571,6 +571,22 @@ pub struct StoreOpaque {
     /// logic before returning to allow execution to resume.
     #[cfg(feature = "debug")]
     breakpoints: BreakpointState,
+
+    /// The debug PC-to-FrameData cache for this store.
+    ///
+    /// When guest debugging is enabled, we parse compiler metadata
+    /// and pass out `FrameHandle`s that represent Wasm guest
+    /// frames. These handles represent a specific frame within a
+    /// frozen stack and are invalidated upon further execution. In
+    /// order to keep these handles lightweight, and to avoid
+    /// redundant work when passing out *new* handles after further
+    /// execution, we cache the mapping from store-specific PCs to
+    /// parsed frame data. (This cache needs to be store-specific
+    /// rather than e.g. engine-specific because each store has its
+    /// own privately mapped copy of guest code when debugging is
+    /// enabled, so the key-space is unique for each store.)
+    #[cfg(feature = "debug")]
+    frame_data_cache: FrameDataCache,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -799,6 +815,8 @@ impl<T> Store<T> {
             },
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
+            #[cfg(feature = "debug")]
+            frame_data_cache: FrameDataCache::new(),
         };
         let mut inner = try_new::<Box<_>>(StoreInner {
             inner,
@@ -1286,23 +1304,6 @@ impl<T> Store<T> {
         self.inner.pending_exception.is_some()
     }
 
-    /// Provide an object that views Wasm stack state, including Wasm
-    /// VM-level values (locals and operand stack), when debugging is
-    /// enabled.
-    ///
-    /// Returns `None` if debug instrumentation is not enabled for
-    /// the engine containing this store.
-    #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
-        self.as_context_mut().debug_frames()
-    }
-
-    /// Start an edit session to update breakpoints.
-    #[cfg(feature = "debug")]
-    pub fn edit_breakpoints(&mut self) -> Option<crate::BreakpointEdit<'_>> {
-        self.as_context_mut().edit_breakpoints()
-    }
-
     /// Return all breakpoints.
     #[cfg(feature = "debug")]
     pub fn breakpoints(&self) -> Option<impl Iterator<Item = crate::Breakpoint> + '_> {
@@ -1704,6 +1705,13 @@ impl StoreOpaque {
     #[cfg(feature = "debug")]
     pub(crate) fn breakpoints_and_registry(&self) -> (&BreakpointState, &ModuleRegistry) {
         (&self.breakpoints, &self.modules)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_data_cache_mut_and_registry(
+        &mut self,
+    ) -> (&mut FrameDataCache, &ModuleRegistry) {
+        (&mut self.frame_data_cache, &self.modules)
     }
 
     #[inline]
