@@ -31,7 +31,9 @@ use crate::runtime::vm::{
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
-use wasmtime_unwinder::{Frame, FrameCursor};
+use wasmtime_unwinder::Frame;
+#[cfg(feature = "debug")]
+use wasmtime_unwinder::FrameCursor;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
