@@ -53,6 +53,7 @@ impl Activation {
     /// This activation must currently be valid (i.e., execution must
     /// not have returned into the activation to unwind any frames,
     /// and the stack must not have been freed).
+    #[cfg(feature = "debug")]
     pub(crate) unsafe fn cursor(&self) -> FrameCursor {
         // SAFETY: validity of this activation is ensured by our
         // safety condition.
