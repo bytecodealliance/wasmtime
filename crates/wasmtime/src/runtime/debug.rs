@@ -432,8 +432,9 @@ impl FrameHandle {
         // crates/cranelift/src/func_environ.rs in
         // `update_stack_slot_vmctx()`.)  The frame/activation is
         // still valid because we verified this in `frame_data` above.
-        let vmctx: *mut VMContext =
-            unsafe { *(frame_data.slot_addr(self.cursor.frame().fp()) as *mut _) };
+        let vmctx: usize =
+            unsafe { *(frame_data.slot_addr(self.cursor.frame().fp()) as *mut usize) };
+        let vmctx: *mut VMContext = core::ptr::with_exposed_provenance_mut(vmctx);
         let vmctx = NonNull::new(vmctx).expect("null vmctx in debug state slot");
         // SAFETY: the stored vmctx value is a valid instance in this
         // store; we only visit frames from this store in the

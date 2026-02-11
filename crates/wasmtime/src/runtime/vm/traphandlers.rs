@@ -751,6 +751,10 @@ impl CallThreadState {
             let prev = self.unwind.replace(UnwindState::None);
             assert!(prev.is_none());
         }
+
+        // Avoid unused-variable warning in non-exceptions/GC build.
+        let _ = store;
+
         let state = match reason {
             #[cfg(all(feature = "std", panic = "unwind"))]
             UnwindReason::Panic(err) => {
@@ -799,16 +803,17 @@ impl CallThreadState {
             }
             UnwindReason::Trap(trap) => {
                 log::trace!("Capturing backtrace and coredump for {trap:?}");
+                // N.B.: we derive the `*const VMStoreContext` from our
+                // own pointer rather than the `store` so that provenance
+                // of that pointer is preserved for the subsequent `raise()`.
+                let vm_store_context = self.vm_store_context.as_ptr();
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(trap),
-                    backtrace: self.capture_backtrace(store.vm_store_context_mut(), None),
-                    coredump_stack: self.capture_coredump(store.vm_store_context_mut(), None),
+                    backtrace: self.capture_backtrace(vm_store_context, None),
+                    coredump_stack: self.capture_coredump(vm_store_context, None),
                 }
             }
         };
-
-        // Avoid unused-variable warning in non-exceptions/GC build.
-        let _ = store;
 
         self.unwind.set(state);
     }
