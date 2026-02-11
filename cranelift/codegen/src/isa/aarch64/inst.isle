@@ -2474,6 +2474,8 @@
 
 ;; Helper for emitting `MInst.FpuCSel16` / `MInst.FpuCSel32` / `MInst.FpuCSel64`
 ;; instructions.
+;;
+;; Recursion: may recurse once to downgrade from F16 to F32 when FP16 is not enabled.
 (decl rec fpu_csel (Type Cond Reg Reg) ConsumesFlags)
 (rule (fpu_csel $F16 cond if_true if_false)
         (fpu_csel $F32 cond if_true if_false))
@@ -2524,6 +2526,8 @@
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
+;;
+;; Recursion: may recurse once to downgrade from F16 to F32 when FP16 is not enabled.
 (spec (mov_to_fpu x s)
   (provide (= result (zero_ext 64 (conv_to s x)))))
 (decl rec mov_to_fpu (Reg ScalarSize) Reg)
@@ -4017,6 +4021,8 @@
 ;; Note that we must make sure that all bits outside the lowest 16 are set to 0
 ;; because this function is also used to load wider constants (that have zeros
 ;; in their most significant bits).
+;;
+;; Recursion: forms cycle with `constant_f32`. Invokes 32-bit case when FP16 is not supported.
 (decl rec constant_f16 (u16) Reg)
 (rule 3 (constant_f16 n)
         (if-let false (use_fp16))
@@ -4036,6 +4042,8 @@
 ;; Note that we must make sure that all bits outside the lowest 32 are set to 0
 ;; because this function is also used to load wider constants (that have zeros
 ;; in their most significant bits).
+;;
+;; Recursion: forms cycle with `constant_f16`. Invokes 16-bit case when FP16 is supported.
 (decl rec constant_f32 (u32) Reg)
 (rule 3 (constant_f32 0)
         (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
@@ -4099,6 +4107,8 @@
 ;;
 ;; The 64-bit input here only uses the low bits for the lane size in
 ;; `VectorSize` and all other bits are ignored.
+;;
+;; Recursion: bounded since the recursive call always reduces lane size.
 (decl rec splat_const (u64 VectorSize) Reg)
 
 ;; If the splat'd constant can itself be reduced in size then attempt to do so
@@ -4956,6 +4966,7 @@
         (MInst.CSel dst (Cond.Eq) tmp1 tmp2)
         (value_reg dst))))
 
+; Recursion: bounded since recursive calls reduce type width (128-bit to 64-bit).
 (decl rec lower_bmask (Type Type ValueRegs) ValueRegs)
 
 
