@@ -620,6 +620,14 @@ start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2026-02-10"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasm-mutate]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -6809,6 +6817,12 @@ criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-03-01"
 end = "2026-10-10"
+
+[[trusted.id-arena]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2026-01-14"
+end = "2027-02-11"
 
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
