@@ -10,36 +10,19 @@ use crate::{
 
 /// Check for recursive terms.
 pub fn check(terms: &[(TermId, RuleSet)], termenv: &TermEnv) -> Result<(), Vec<Error>> {
-    let term_rule_sets: HashMap<TermId, &RuleSet> = terms
-        .iter()
-        .map(|(term_id, rule_set)| (*term_id, rule_set))
-        .collect();
+    // Search for cycles in the term dependency graph.
+    let cyclic_terms = terms_in_cycles(terms);
 
+    // Cyclic terms should be explicitly permitted with the `rec` attribute.
     let mut errors = Vec::new();
-    for (term_id, _) in terms {
-        // Check if this term is involved in a reference cycle.
-        let reachable = terms_reachable_from(*term_id, &term_rule_sets);
-        let is_cyclic = reachable.contains(term_id);
-
-        // Lookup if this term is explicitly marked recursive.
+    for term_id in cyclic_terms {
+        // Error if term is not explicitly marked recursive.
         let term = &termenv.terms[term_id.index()];
-        let is_marked_recursive = term.is_recursive();
-
-        // Require the two to agree.
-        match (is_cyclic, is_marked_recursive) {
-            (true, true) | (false, false) => {}
-            (true, false) => {
-                errors.push(Error::RecursionError {
-                    msg: "Term is recursive but does not have the `rec` attribute".to_string(),
-                    span: Span::new_single(term.decl_pos),
-                });
-            }
-            (false, true) => {
-                errors.push(Error::RecursionError {
-                    msg: "Term has the `rec` attribute but is not recursive".to_string(),
-                    span: Span::new_single(term.decl_pos),
-                });
-            }
+        if !term.is_recursive() {
+            errors.push(Error::RecursionError {
+                msg: "Term is recursive but does not have the `rec` attribute".to_string(),
+                span: Span::new_single(term.decl_pos),
+            });
         }
     }
 
@@ -50,30 +33,69 @@ pub fn check(terms: &[(TermId, RuleSet)], termenv: &TermEnv) -> Result<(), Vec<E
     }
 }
 
-/// Search for all terms reachable from the source.
-fn terms_reachable_from(
-    source: TermId,
-    term_rule_sets: &HashMap<TermId, &RuleSet>,
-) -> HashSet<TermId> {
-    let mut reachable = HashSet::new();
-    let mut stack = vec![source];
+// Find terms that are in cycles in the term dependency graph.
+fn terms_in_cycles(terms: &[(TermId, RuleSet)]) -> HashSet<TermId> {
+    // Construct term dependency graph.
+    let edges: HashMap<TermId, HashSet<TermId>> = terms
+        .iter()
+        .map(|(term_id, rule_set)| (*term_id, terms_in_rule_set(rule_set)))
+        .collect();
 
-    while let Some(term_id) = stack.pop() {
-        if !term_rule_sets.contains_key(&term_id) {
-            continue;
-        }
+    // Depth-first search with a stack.
+    enum Event {
+        Enter(TermId),
+        Exit(TermId),
+    }
+    let mut stack = Vec::from_iter(edges.keys().copied().map(Event::Enter));
 
-        let used = terms_in_rule_set(&term_rule_sets[&term_id]);
-        for used_term_id in used {
-            if reachable.contains(&used_term_id) {
-                continue;
+    // State of each term.
+    enum State {
+        Visiting,
+        Visited,
+    }
+    let mut states = HashMap::new();
+
+    // Maintain current path.
+    let mut path = Vec::new();
+
+    // Collect terms that are in cycles.
+    let mut in_cycle = HashSet::new();
+
+    // Process DFS stack.
+    while let Some(event) = stack.pop() {
+        match event {
+            Event::Enter(term_id) => match states.get(&term_id) {
+                None => {
+                    states.insert(term_id, State::Visiting);
+                    path.push(term_id);
+                    stack.push(Event::Exit(term_id));
+                    if let Some(deps) = edges.get(&term_id) {
+                        for dep in deps {
+                            stack.push(Event::Enter(*dep));
+                        }
+                    }
+                }
+                Some(State::Visiting) => {
+                    // Cycle detected. Reconstruct the cycle from path.
+                    let begin = path
+                        .iter()
+                        .rposition(|&t| t == term_id)
+                        .expect("cycle origin should be in path");
+                    in_cycle.extend(&path[begin..]);
+                }
+                Some(State::Visited) => {}
+            },
+            Event::Exit(term_id) => {
+                states.insert(term_id, State::Visited);
+                let last = path.pop().expect("exit with empty path");
+                debug_assert_eq!(last, term_id, "exit term does not match last path term");
             }
-            reachable.insert(used_term_id);
-            stack.push(used_term_id);
         }
     }
 
-    reachable
+    debug_assert!(path.is_empty(), "search finished with non-empty path");
+
+    in_cycle
 }
 
 fn terms_in_rule_set(rule_set: &RuleSet) -> HashSet<TermId> {

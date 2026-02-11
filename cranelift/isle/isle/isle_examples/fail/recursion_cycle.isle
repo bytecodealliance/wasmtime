@@ -1,0 +1,11 @@
+; Expected error: terms that are part of a recursion cycle (A -> B -> C -> A ->
+; ...), but are not all permitted to do so with the `rec` attribute. All terms in
+; the cycle must be marked `rec` to be valid.
+
+(decl rec A (bool) bool)
+(decl rec B (bool) bool)
+(decl C (bool) bool) ; missing `rec` attribute
+
+(rule (A x) (B x))
+(rule (B x) (C x))
+(rule (C x) (A x))
