@@ -140,7 +140,7 @@ impl<'de> serde::de::Deserialize<'de> for StringPool {
 
                 while let Some(s) = seq.next_element::<String>()? {
                     debug_assert_eq!(s.len(), s.capacity());
-                    let s = s.into_boxed_str().expect("len == cap");
+                    let s = s.into_boxed_str().map_err(|oom| A::Error::custom(oom))?;
                     if !pool.map.contains_key(&*s) {
                         pool.insert_new_boxed_str(s)
                             .map_err(|oom| A::Error::custom(oom))?;
