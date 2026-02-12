@@ -1,11 +1,13 @@
 use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
-use core::cmp::Ordering;
-use core::marker::PhantomData;
-use core::num::NonZeroUsize;
 use core::{
-    fmt, mem,
+    cmp::Ordering,
+    fmt,
+    marker::PhantomData,
+    mem,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut, Index, IndexMut},
+    slice::SliceIndex,
 };
 use serde::ser::SerializeSeq;
 use std_alloc::alloc::Layout;
@@ -302,16 +304,22 @@ impl<T> DerefMut for Vec<T> {
     }
 }
 
-impl<T> Index<usize> for Vec<T> {
-    type Output = T;
+impl<T, I> Index<I> for Vec<T>
+where
+    I: SliceIndex<[T]>,
+{
+    type Output = <I as SliceIndex<[T]>>::Output;
 
-    fn index(&self, index: usize) -> &Self::Output {
+    fn index(&self, index: I) -> &Self::Output {
         &self.inner[index]
     }
 }
 
-impl<T> IndexMut<usize> for Vec<T> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+impl<T, I> IndexMut<I> for Vec<T>
+where
+    I: SliceIndex<[T]>,
+{
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.inner[index]
     }
 }
