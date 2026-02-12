@@ -69,7 +69,8 @@ impl GcOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(self.limits.num_params as usize);
+        let mut params: Vec<ValType> =
+            Vec::with_capacity(usize::try_from(self.limits.num_params).unwrap());
         for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
@@ -104,24 +105,46 @@ impl GcOps {
 
         let struct_type_base: u32 = types.len();
 
+        let type_order: Vec<TypeId> = self.types.sort_types_by_supertype();
+
+        // Build per-group member lists in `type_order` order (each group's list is a subsequence
+        // of `type_order`, so within-group supertypes come before subtypes when possible).
         let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = self
             .types
             .rec_groups
             .iter()
             .copied()
-            .map(|id| (id, Vec::new()))
+            .map(|g| (g, Vec::new()))
             .collect();
 
-        for (id, ty) in self.types.type_defs.iter() {
-            rec_groups.entry(ty.rec_group).or_default().push(*id);
+        for &id in &type_order {
+            let g = self.types.type_defs[&id].rec_group;
+            rec_groups.get_mut(&g).unwrap().push(id);
         }
+
+        // Topological sort of rec-groups based on cross-group supertype edges.
+        let group_order: Vec<RecGroupId> = self.types.sort_rec_groups_topo(&rec_groups);
+
+        // Build the actual emission order and index map from it.
+        let encoding_order: Vec<TypeId> = group_order
+            .iter()
+            .flat_map(|g| rec_groups[g].iter().copied())
+            .collect();
+
+        // Build the index map from the encoding order.
+        let type_ids_to_index: BTreeMap<TypeId, u32> = encoding_order
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, id)| (id, struct_type_base + u32::try_from(i).unwrap()))
+            .collect();
 
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
                 CompositeType::Struct(StructType {}) => wasm_encoder::SubType {
-                    is_final: true,
-                    supertype_idx: None,
+                    is_final: def.is_final,
+                    supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
                     composite_type: wasm_encoder::CompositeType {
                         inner: wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType {
                             fields: Box::new([]),
@@ -136,10 +159,12 @@ impl GcOps {
 
         let mut struct_count = 0;
 
-        for type_ids in rec_groups.values() {
+        // Emit in topological order of rec-groups.
+        for g in &group_order {
+            let type_ids = &rec_groups[g];
             let members: Vec<wasm_encoder::SubType> = type_ids.iter().map(encode_ty_id).collect();
             types.ty().rec(members);
-            struct_count += type_ids.len() as u32;
+            struct_count += u32::try_from(type_ids.len()).unwrap();
         }
 
         let typed_fn_type_base: u32 = struct_type_base + struct_count;
