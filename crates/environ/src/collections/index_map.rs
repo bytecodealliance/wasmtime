@@ -4,6 +4,7 @@ use core::{
     cmp::Ordering,
     fmt,
     hash::{BuildHasher, Hash},
+    marker::PhantomData,
     mem,
     ops::{Index, IndexMut, RangeBounds},
 };
@@ -56,6 +57,70 @@ impl<K, V, S> From<IndexMap<K, V, S>> for indexmap::IndexMap<K, V, S> {
 impl<K, V, S> From<indexmap::IndexMap<K, V, S>> for IndexMap<K, V, S> {
     fn from(inner: indexmap::IndexMap<K, V, S>) -> Self {
         Self { inner }
+    }
+}
+
+impl<K, V, H> serde::ser::Serialize for IndexMap<K, V, H>
+where
+    K: serde::ser::Serialize,
+    V: serde::ser::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap as _;
+        let mut map = serializer.serialize_map(Some(self.len()))?;
+        for (k, v) in self {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de, K, V> serde::de::Deserialize<'de> for IndexMap<K, V>
+where
+    K: serde::de::Deserialize<'de> + Hash + Eq,
+    V: serde::de::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor<K, V>(PhantomData<fn() -> IndexMap<K, V>>);
+
+        impl<'de, K, V> serde::de::Visitor<'de> for Visitor<K, V>
+        where
+            K: serde::de::Deserialize<'de> + Hash + Eq,
+            V: serde::de::Deserialize<'de>,
+        {
+            type Value = IndexMap<K, V>;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("an `IndexMap`")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                use serde::de::Error as _;
+
+                let mut result = IndexMap::<K, V>::new();
+
+                if let Some(len) = map.size_hint() {
+                    result.reserve(len).map_err(|oom| A::Error::custom(oom))?;
+                }
+
+                while let Some((k, v)) = map.next_entry::<K, V>()? {
+                    result.insert(k, v).map_err(|oom| A::Error::custom(oom))?;
+                }
+
+                Ok(result)
+            }
+        }
+
+        deserializer.deserialize_map(Visitor(PhantomData))
     }
 }
 
