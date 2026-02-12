@@ -5,10 +5,14 @@
 # host to compile the wasm module in question to avoid needing to run Cranelift
 # under MIRI. That enables much faster iteration on the test here.
 
+# Note that this requires a nightly toolchain for the use of miri. If your
+# default toolchain is not a nightly toolchain, you can run this script via
+# `rustup run nightly ./ci/miri-provenance-test.sh`.
+
 set -ex
 
 compile() {
-  cargo $MIRI_RUST_VERSION run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async,debug \
+  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async,debug \
     compile --target pulley64 $1 \
     -o ${1%.wat}.cwasm \
     -O memory-reservation=$((1 << 20)) \
@@ -23,5 +27,5 @@ compile ./tests/all/pulley_provenance_test_component.wat
 compile ./tests/all/pulley_provenance_test_async_component.wat
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
-  cargo $MIRI_RUST_VERSION miri test --test all -- \
+  cargo miri test --test all -- \
     --ignored pulley_provenance_test "$@"
