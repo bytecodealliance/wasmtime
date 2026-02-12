@@ -10,7 +10,7 @@ use crate::{
     ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, SizeOverflow,
     StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex,
     Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
-    WasmValType, WasmparserTypeConverter,
+    WasmValType, WasmparserTypeConverter, collections,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -332,7 +332,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.import_section(&imports)?;
 
                 let cnt = usize::try_from(imports.count()).unwrap();
-                self.result.module.initializers.reserve(cnt);
+                self.result.module.initializers.reserve(cnt)?;
 
                 for entry in imports.into_imports() {
                     let import = entry?;
@@ -403,7 +403,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.module.tables.push(table);
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {
-                            precomputed: Vec::new(),
+                            precomputed: collections::Vec::new(),
                         },
                         wasmparser::TableInit::Expr(expr) => {
                             let (init, escaped) = ConstExpr::from_wasmparser(self, expr)?;
@@ -547,21 +547,19 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            self.result
-                                .module
-                                .table_initialization
-                                .segments
-                                .push(TableSegment {
+                            self.result.module.table_initialization.segments.push(
+                                TableSegment {
                                     table_index,
                                     offset,
                                     elements,
-                                });
+                                },
+                            )?;
                         }
 
                         ElementKind::Passive => {
                             let elem_index = ElemIndex::from_u32(index as u32);
                             let index = self.result.module.passive_elements.len();
-                            self.result.module.passive_elements.push(elements);
+                            self.result.module.passive_elements.push(elements)?;
                             self.result
                                 .module
                                 .passive_elements_map
@@ -627,7 +625,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 };
 
                 let cnt = usize::try_from(data.count()).unwrap();
-                initializers.reserve_exact(cnt);
+                initializers.reserve_exact(cnt)?;
                 self.result.data.reserve_exact(cnt);
 
                 for (index, entry) in data.into_iter().enumerate() {
@@ -670,7 +668,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 memory_index,
                                 offset,
                                 data: range,
-                            });
+                            })?;
                             self.result.data.push(data.into());
                         }
                         DataKind::Passive => {
@@ -821,7 +819,7 @@ and for re-adding support for interface types you can see this issue:
             name: self.result.module.strings.insert(module)?,
             field: self.result.module.strings.insert(field)?,
             index,
-        });
+        })?;
         Ok(())
     }
 
@@ -1224,7 +1222,7 @@ impl ModuleTranslation<'_> {
             if let TableInitialValue::Expr(expr) = init {
                 if let [ConstOp::RefFunc(f)] = expr.ops() {
                     *init = TableInitialValue::Null {
-                        precomputed: vec![*f; table_size as usize],
+                        precomputed: collections::vec![*f; table_size as usize].panic_on_oom(),
                     };
                 }
             }
@@ -1318,7 +1316,9 @@ impl ModuleTranslation<'_> {
             // it's large enough to hold the segment and then copying the
             // segment into the precomputed list.
             if precomputed.len() < top as usize {
-                precomputed.resize(top as usize, FuncIndex::reserved_value());
+                precomputed
+                    .resize(top as usize, FuncIndex::reserved_value())
+                    .panic_on_oom();
             }
             let dst = &mut precomputed[offset as usize..top as usize];
             dst.copy_from_slice(&function_elements);
@@ -1326,6 +1326,6 @@ impl ModuleTranslation<'_> {
             // advance the iterator to see the next segment
             let _ = segments.next();
         }
-        self.module.table_initialization.segments = segments.collect();
+        self.module.table_initialization.segments = segments.try_collect().panic_on_oom();
     }
 }
