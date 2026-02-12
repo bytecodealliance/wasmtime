@@ -1252,6 +1252,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
         flags
     }
+
     fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlags {
         let mut flags = MemFlags::trusted();
         if ty.is_vector() {
