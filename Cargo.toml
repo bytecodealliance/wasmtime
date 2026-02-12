@@ -339,8 +339,8 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.4"
 rustix = "1.0.8"
 # wit-bindgen:
-wit-bindgen = { version = "0.51.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.51.0", default-features = false }
+wit-bindgen = { version = "0.53.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.53.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.245.0", default-features = false, features = ['simd'] }
