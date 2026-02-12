@@ -319,7 +319,7 @@ enum LocalInitializer<'data> {
         start_func_ty: ComponentTypeIndex,
         start_func_table_index: TableIndex,
     },
-    ThreadSwitchTo {
+    ThreadSuspendToSuspended {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
@@ -327,10 +327,14 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
-    ThreadResumeLater {
+    ThreadSuspendTo {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadUnsuspend {
         func: ModuleInternedTypeIndex,
     },
-    ThreadYieldTo {
+    ThreadYieldToSuspended {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
@@ -1150,25 +1154,30 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 start_func_table_index: TableIndex::from_u32(table_index),
                             }
                         }
-                        wasmparser::CanonicalFunction::ThreadSwitchTo { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadSuspendToSuspended { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSwitchTo { func, cancellable }
+                            LocalInitializer::ThreadSuspendToSuspended { func, cancellable }
                         }
                         wasmparser::CanonicalFunction::ThreadSuspend { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadSuspend { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadResumeLater => {
+                        wasmparser::CanonicalFunction::ThreadSuspendTo { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadResumeLater { func }
+                            LocalInitializer::ThreadSuspendTo { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldTo { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadUnsuspend => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYieldTo { func, cancellable }
+                            LocalInitializer::ThreadUnsuspend { func }
+                        }
+                        wasmparser::CanonicalFunction::ThreadYieldToSuspended { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadYieldToSuspended { func, cancellable }
                         }
                     };
                     self.result.initializers.push(init);

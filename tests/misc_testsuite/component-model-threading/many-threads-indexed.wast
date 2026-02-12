@@ -32,11 +32,11 @@
         ;; Import the threading builtins and the table from libc
         (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
         (import "" "thread.suspend" (func $thread-suspend (result i32)))
-        (import "" "thread.yield-to" (func $thread-yield-to (param i32) (result i32)))
-        (import "" "thread.switch-to" (func $thread-switch-to (param i32) (result i32)))
+        (import "" "thread.yield-to-suspended" (func $thread-yield-to-suspended (param i32) (result i32)))
+        (import "" "thread.suspend-to-suspended" (func $thread-suspend-to-suspended (param i32) (result i32)))
         (import "" "thread.yield" (func $thread-yield (result i32)))
         (import "" "thread.index" (func $thread-index (result i32)))
-        (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
+        (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
         (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
 
         ;; A memory block that threads will write their thread indexes and assigned values into
@@ -63,7 +63,7 @@
 
         (func $new-thread (param i32)
             (drop
-                (call $thread-yield-to
+                (call $thread-yield-to-suspended
                     (call $thread-new-indirect (i32.const 0) (local.get 0)))))
 
         ;; The main entry point
@@ -76,11 +76,11 @@
             (call $new-thread (i32.const 8))
 
             ;; Yield to all threads in ascending order of assigned number
-            (drop (call $thread-yield-to (i32.load (i32.const 0))))
-            (drop (call $thread-yield-to (i32.load (i32.const 4))))
-            (drop (call $thread-yield-to (i32.load (i32.const 8))))
-            (drop (call $thread-yield-to (i32.load (i32.const 12))))
-            (drop (call $thread-yield-to (i32.load (i32.const 16))))
+            (drop (call $thread-yield-to-suspended (i32.load (i32.const 0))))
+            (drop (call $thread-yield-to-suspended (i32.load (i32.const 4))))
+            (drop (call $thread-yield-to-suspended (i32.load (i32.const 8))))
+            (drop (call $thread-yield-to-suspended (i32.load (i32.const 12))))
+            (drop (call $thread-yield-to-suspended (i32.load (i32.const 16))))
 
             ;; Ensure all assigned numbers have been written to the buffer in order
             (if (i32.ne (i32.load (i32.const 20)) (i32.const 0)) (then unreachable))
@@ -102,9 +102,9 @@
         (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
-    (core func $thread-yield-to (canon thread.yield-to))
-    (core func $thread-resume-later (canon thread.resume-later))
-    (core func $thread-switch-to (canon thread.switch-to))
+    (core func $thread-yield-to-suspended (canon thread.yield-to-suspended))
+    (core func $thread-unsuspend (canon thread.unsuspend))
+    (core func $thread-suspend-to-suspended (canon thread.suspend-to-suspended))
     (core func $thread-suspend (canon thread.suspend))
 
     ;; Instantiate the main module
@@ -113,11 +113,11 @@
             (with "" (instance
                 (export "thread.new-indirect" (func $thread-new-indirect))
                 (export "thread.index" (func $thread-index))
-                (export "thread.yield-to" (func $thread-yield-to))
+                (export "thread.yield-to-suspended" (func $thread-yield-to-suspended))
                 (export "thread.yield" (func $thread-yield))
-                (export "thread.switch-to" (func $thread-switch-to))
+                (export "thread.suspend-to-suspended" (func $thread-suspend-to-suspended))
                 (export "thread.suspend" (func $thread-suspend))
-                (export "thread.resume-later" (func $thread-resume-later))))
+                (export "thread.unsuspend" (func $thread-unsuspend))))
             (with "libc" (instance $libc))))
 
     ;; Export the main entry point

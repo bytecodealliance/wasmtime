@@ -490,7 +490,7 @@ pub enum Trampoline {
         start_func_ty_idx: ComponentTypeIndex,
         start_func_table_id: TableId,
     },
-    ThreadSwitchTo {
+    ThreadSuspendToSuspended {
         instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
@@ -498,10 +498,14 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
-    ThreadResumeLater {
+    ThreadSuspendTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadUnsuspend {
         instance: RuntimeComponentInstanceIndex,
     },
-    ThreadYieldTo {
+    ThreadYieldToSuspended {
         instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
@@ -1181,10 +1185,17 @@ impl LinearizeDfg<'_> {
                 start_func_ty_idx: *start_func_ty_idx,
                 start_func_table_idx: self.runtime_table(*start_func_table_id),
             },
-            Trampoline::ThreadSwitchTo {
+            Trampoline::ThreadSuspendToSuspended {
                 instance,
                 cancellable,
-            } => info::Trampoline::ThreadSwitchTo {
+            } => info::Trampoline::ThreadSuspendToSuspended {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadSuspendTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSuspendTo {
                 instance: *instance,
                 cancellable: *cancellable,
             },
@@ -1195,13 +1206,13 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
                 cancellable: *cancellable,
             },
-            Trampoline::ThreadResumeLater { instance } => info::Trampoline::ThreadResumeLater {
+            Trampoline::ThreadUnsuspend { instance } => info::Trampoline::ThreadUnsuspend {
                 instance: *instance,
             },
-            Trampoline::ThreadYieldTo {
+            Trampoline::ThreadYieldToSuspended {
                 instance,
                 cancellable,
-            } => info::Trampoline::ThreadYieldTo {
+            } => info::Trampoline::ThreadYieldToSuspended {
                 instance: *instance,
                 cancellable: *cancellable,
             },

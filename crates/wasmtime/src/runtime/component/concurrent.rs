@@ -632,6 +632,23 @@ impl fmt::Debug for GuestCallKind {
     }
 }
 
+/// The target of a suspension intrinsic.
+#[derive(Copy, Clone, Debug)]
+pub enum SuspensionTarget {
+    SomeSuspended(u32),
+    Some(u32),
+    None,
+}
+
+impl SuspensionTarget {
+    fn is_none(&self) -> bool {
+        matches!(self, SuspensionTarget::None)
+    }
+    fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+}
+
 /// Represents a pending call into guest code for a given guest thread.
 #[derive(Debug)]
 struct GuestCall {
@@ -683,8 +700,10 @@ enum WorkItem {
     PushFuture(AlwaysMut<HostTaskFuture>),
     /// A fiber to resume.
     ResumeFiber(StoreFiber<'static>),
+    /// A thread to resume.
+    ResumeThread(RuntimeComponentInstanceIndex, QualifiedThreadId),
     /// A pending call into guest code for a given guest task.
-    GuestCall(GuestCall),
+    GuestCall(RuntimeComponentInstanceIndex, GuestCall),
     /// A job to run on a worker fiber.
     WorkerFunction(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send>>),
 }
@@ -694,7 +713,16 @@ impl fmt::Debug for WorkItem {
         match self {
             Self::PushFuture(_) => f.debug_tuple("PushFuture").finish(),
             Self::ResumeFiber(_) => f.debug_tuple("ResumeFiber").finish(),
-            Self::GuestCall(call) => f.debug_tuple("GuestCall").field(call).finish(),
+            Self::ResumeThread(instance, thread) => f
+                .debug_tuple("ResumeThread")
+                .field(instance)
+                .field(thread)
+                .finish(),
+            Self::GuestCall(instance, call) => f
+                .debug_tuple("GuestCall")
+                .field(instance)
+                .field(call)
+                .finish(),
             Self::WorkerFunction(_) => f.debug_tuple("WorkerFunction").finish(),
         }
     }
@@ -1307,7 +1335,17 @@ impl<T> StoreContextMut<'_, T> {
             WorkItem::ResumeFiber(fiber) => {
                 self.0.resume_fiber(fiber).await?;
             }
-            WorkItem::GuestCall(call) => {
+            WorkItem::ResumeThread(_, thread) => {
+                if let GuestThreadState::Ready(fiber) = mem::replace(
+                    &mut self.0.concurrent_state_mut().get_mut(thread.thread)?.state,
+                    GuestThreadState::Running,
+                ) {
+                    self.0.resume_fiber(fiber).await?;
+                } else {
+                    bail!("cannot resume non-pending thread {thread:?}");
+                }
+            }
+            WorkItem::GuestCall(_, call) => {
                 if call.is_ready(self.0)? {
                     self.run_on_worker(WorkerItem::GuestCall(call)).await?;
                 } else {
@@ -1663,7 +1701,7 @@ impl StoreOpaque {
             let call = GuestCall { thread, kind };
             if call.is_ready(self)? {
                 self.concurrent_state_mut()
-                    .push_high_priority(WorkItem::GuestCall(call));
+                    .push_high_priority(WorkItem::GuestCall(instance.index, call));
             } else {
                 self.instance_state(instance)
                     .concurrent_state()
@@ -1724,8 +1762,9 @@ impl StoreOpaque {
                     }
                 }
                 SuspendReason::Yielding { thread, .. } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Pending;
-                    state.push_low_priority(WorkItem::ResumeFiber(fiber));
+                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready(fiber);
+                    let instance = state.get_mut(thread.task)?.instance.index;
+                    state.push_low_priority(WorkItem::ResumeThread(instance, thread));
                 }
                 SuspendReason::ExplicitlySuspending { thread, .. } => {
                     state.get_mut(thread.thread)?.state = GuestThreadState::Suspended(fiber);
@@ -1948,7 +1987,7 @@ impl Instance {
                 if state.may_block(guest_thread.task) {
                     // Push this thread onto the "low priority" queue so it runs
                     // after any other threads have had a chance to run.
-                    state.push_low_priority(WorkItem::GuestCall(call));
+                    state.push_low_priority(WorkItem::GuestCall(runtime_instance, call));
                     None
                 } else {
                     // Yielding in a non-blocking context is defined as a no-op
@@ -1969,13 +2008,16 @@ impl Instance {
                     || !state.get_mut(set)?.ready.is_empty()
                 {
                     // An event is immediately available; deliver it ASAP.
-                    state.push_high_priority(WorkItem::GuestCall(GuestCall {
-                        thread: guest_thread,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance: self,
-                            set: Some(set),
+                    state.push_high_priority(WorkItem::GuestCall(
+                        runtime_instance,
+                        GuestCall {
+                            thread: guest_thread,
+                            kind: GuestCallKind::DeliverEvent {
+                                instance: self,
+                                set: Some(set),
+                            },
                         },
-                    }));
+                    ));
                 } else {
                     // No event is immediately available.
                     //
@@ -2266,10 +2308,13 @@ impl Instance {
         store
             .0
             .concurrent_state_mut()
-            .push_high_priority(WorkItem::GuestCall(GuestCall {
-                thread: guest_thread,
-                kind: GuestCallKind::StartImplicit(fun),
-            }));
+            .push_high_priority(WorkItem::GuestCall(
+                callee_instance.index,
+                GuestCall {
+                    thread: guest_thread,
+                    kind: GuestCallKind::StartImplicit(fun),
+                },
+            ));
 
         Ok(())
     }
@@ -3216,12 +3261,13 @@ impl Instance {
         self.add_guest_thread_to_instance_table(thread_id, store.0, runtime_instance)
     }
 
-    pub(crate) fn resume_suspended_thread(
+    pub(crate) fn resume_thread(
         self,
         store: &mut StoreOpaque,
         runtime_instance: RuntimeComponentInstanceIndex,
         thread_idx: u32,
         high_priority: bool,
+        allow_ready: bool,
     ) -> Result<()> {
         let thread_id =
             GuestThread::from_instance(self.id().get_mut(store), runtime_instance, thread_idx)?;
@@ -3232,12 +3278,15 @@ impl Instance {
         match mem::replace(&mut thread.state, GuestThreadState::Running) {
             GuestThreadState::NotStartedExplicit(start_func) => {
                 log::trace!("starting thread {guest_thread:?}");
-                let guest_call = WorkItem::GuestCall(GuestCall {
-                    thread: guest_thread,
-                    kind: GuestCallKind::StartExplicit(Box::new(move |store| {
-                        start_func(store, guest_thread)
-                    })),
-                });
+                let guest_call = WorkItem::GuestCall(
+                    runtime_instance,
+                    GuestCall {
+                        thread: guest_thread,
+                        kind: GuestCallKind::StartExplicit(Box::new(move |store| {
+                            start_func(store, guest_thread)
+                        })),
+                    },
+                );
                 store
                     .concurrent_state_mut()
                     .push_work_item(guest_call, high_priority);
@@ -3248,7 +3297,15 @@ impl Instance {
                     .concurrent_state_mut()
                     .push_work_item(WorkItem::ResumeFiber(fiber), high_priority);
             }
-            _ => {
+            GuestThreadState::Ready(fiber) if allow_ready => {
+                log::trace!("resuming thread {thread_id:?} that was ready");
+                thread.state = GuestThreadState::Ready(fiber);
+                store
+                    .concurrent_state_mut()
+                    .promote_thread_work_item(guest_thread);
+            }
+            other => {
+                thread.state = other;
                 bail!("cannot resume thread which is not suspended");
             }
         }
@@ -3275,15 +3332,15 @@ impl Instance {
         Ok(guest_id)
     }
 
-    /// Helper function for the `thread.yield`, `thread.yield-to`, `thread.suspend`,
-    /// and `thread.switch-to` intrinsics.
+    /// Helper function for the `thread.yield`, `thread.yield-to-suspended`, `thread.suspend`,
+    /// `thread.suspend-to`, and `thread.suspend-to-suspended` intrinsics.
     pub(crate) fn suspension_intrinsic(
         self,
         store: &mut StoreOpaque,
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         yielding: bool,
-        to_thread: Option<u32>,
+        to_thread: SuspensionTarget,
     ) -> Result<WaitResult> {
         let guest_thread = store.concurrent_state_mut().unwrap_current_guest_thread();
         if to_thread.is_none() {
@@ -3291,10 +3348,12 @@ impl Instance {
             if yielding {
                 // This is a `thread.yield` call
                 if !state.may_block(guest_thread.task) {
-                    // The spec defines `thread.yield` to be a no-op in a
-                    // non-blocking context, so we return immediately without giving
-                    // any other thread a chance to run.
-                    return Ok(WaitResult::Completed);
+                    // In a non-blocking context, a `thread.yield` may trigger
+                    // other threads in the same component instance to run.
+                    if !state.promote_instance_local_thread_work_item(caller) {
+                        // No other threads are runnable, so just return
+                        return Ok(WaitResult::Completed);
+                    }
                 }
             } else {
                 // The caller may only call `thread.suspend` from an async task
@@ -3309,15 +3368,21 @@ impl Instance {
             return Ok(WaitResult::Cancelled);
         }
 
-        if let Some(thread) = to_thread {
-            self.resume_suspended_thread(store, caller, thread, true)?;
+        match to_thread {
+            SuspensionTarget::SomeSuspended(thread) => {
+                self.resume_thread(store, caller, thread, true, false)?
+            }
+            SuspensionTarget::Some(thread) => {
+                self.resume_thread(store, caller, thread, true, true)?
+            }
+            SuspensionTarget::None => { /* nothing to do */ }
         }
 
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
                 // Tell `StoreOpaque::suspend` it's okay to suspend here since
-                // we're handling a `thread.yield-to` call; otherwise it would
+                // we're handling a `thread.yield-to-suspended` call; otherwise it would
                 // panic if we called it in a non-blocking context.
                 skip_may_block_check: to_thread.is_some(),
             }
@@ -3325,7 +3390,7 @@ impl Instance {
             SuspendReason::ExplicitlySuspending {
                 thread: guest_thread,
                 // Tell `StoreOpaque::suspend` it's okay to suspend here since
-                // we're handling a `thread.switch-to` call; otherwise it would
+                // we're handling a `thread.suspend-to(-suspended)` call; otherwise it would
                 // panic if we called it in a non-blocking context.
                 skip_may_block_check: to_thread.is_some(),
             }
@@ -3515,6 +3580,7 @@ impl Instance {
                 // `Event::Cancelled` if it was already cancelled), but that's
                 // okay -- this should supersede the previous state.
                 task.event = Some(Event::Cancelled);
+                let runtime_instance = task.instance.index;
                 for thread in task.threads.clone() {
                     let thread = QualifiedThreadId {
                         task: guest_task,
@@ -3533,13 +3599,16 @@ impl Instance {
                             .unwrap()
                         {
                             WaitMode::Fiber(fiber) => WorkItem::ResumeFiber(fiber),
-                            WaitMode::Callback(instance) => WorkItem::GuestCall(GuestCall {
-                                thread,
-                                kind: GuestCallKind::DeliverEvent {
-                                    instance,
-                                    set: None,
+                            WaitMode::Callback(instance) => WorkItem::GuestCall(
+                                runtime_instance,
+                                GuestCall {
+                                    thread,
+                                    kind: GuestCallKind::DeliverEvent {
+                                        instance,
+                                        set: None,
+                                    },
                                 },
-                            }),
+                            ),
                         };
                         concurrent_state.push_high_priority(item);
 
@@ -4183,7 +4252,7 @@ enum GuestThreadState {
     ),
     Running,
     Suspended(StoreFiber<'static>),
-    Pending,
+    Ready(StoreFiber<'static>),
     Completed,
 }
 pub struct GuestThread {
@@ -4604,13 +4673,16 @@ impl Waitable {
 
                 let item = match mode {
                     WaitMode::Fiber(fiber) => WorkItem::ResumeFiber(fiber),
-                    WaitMode::Callback(instance) => WorkItem::GuestCall(GuestCall {
-                        thread,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance,
-                            set: Some(set),
+                    WaitMode::Callback(instance) => WorkItem::GuestCall(
+                        state.get_mut(thread.task)?.instance.index,
+                        GuestCall {
+                            thread,
+                            kind: GuestCallKind::DeliverEvent {
+                                instance,
+                                set: Some(set),
+                            },
                         },
-                    }),
+                    ),
                 };
                 state.push_high_priority(item);
             }
@@ -4827,7 +4899,7 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) =
+                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready(fiber) =
                     mem::replace(&mut thread.state, GuestThreadState::Completed)
                 {
                     fibers.push(fiber);
@@ -4938,6 +5010,48 @@ impl ConcurrentState {
             self.push_high_priority(item);
         } else {
             self.push_low_priority(item);
+        }
+    }
+
+    fn promote_instance_local_thread_work_item(
+        &mut self,
+        current_instance: RuntimeComponentInstanceIndex,
+    ) -> bool {
+        self.promote_work_items_matching(|item: &WorkItem| match item {
+            WorkItem::ResumeThread(instance, _) | WorkItem::GuestCall(instance, _) => {
+                *instance == current_instance
+            }
+            _ => false,
+        })
+    }
+
+    fn promote_thread_work_item(&mut self, thread: QualifiedThreadId) -> bool {
+        self.promote_work_items_matching(|item: &WorkItem| match item {
+            WorkItem::ResumeThread(_, t) | WorkItem::GuestCall(_, GuestCall { thread: t, .. }) => {
+                *t == thread
+            }
+            _ => false,
+        })
+    }
+
+    fn promote_work_items_matching<F>(&mut self, mut predicate: F) -> bool
+    where
+        F: FnMut(&WorkItem) -> bool,
+    {
+        // If there's a high-priority work item to resume the current guest thread,
+        // we don't need to promote anything, but we return true to indicate that
+        // work is pending for the current instance.
+        if self.high_priority.iter().any(&mut predicate) {
+            true
+        }
+        // Otherwise, look for a low-priority work item that matches the current
+        // instance and promote it to high-priority.
+        else if let Some(idx) = self.low_priority.iter().position(&mut predicate) {
+            let item = self.low_priority.remove(idx).unwrap();
+            self.push_high_priority(item);
+            true
+        } else {
+            false
         }
     }
 

@@ -235,7 +235,7 @@ impl Wasmtime {
                     o.add_interface(resolve, id);
                     self.interface_link_options.insert(*id, o);
                 }
-                WorldItem::Function(_) | WorldItem::Type(_) => {}
+                WorldItem::Function(_) | WorldItem::Type { .. } => {}
             }
         }
     }
@@ -478,12 +478,12 @@ impl Wasmtime {
                 self.interface_link_options[id]
                     .write_impl_from_world(&mut self.src, &interface_path);
             }
-            WorldItem::Type(ty) => {
+            WorldItem::Type { id, .. } => {
                 let name = match name {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => unreachable!(),
                 };
-                generator.define_type(name, *ty);
+                generator.define_type(name, *id);
                 let body = mem::take(&mut generator.src);
                 self.src.push_str(&body);
             }
@@ -530,7 +530,7 @@ impl Wasmtime {
                     func.name
                 );
             }
-            WorldItem::Type(_) => unreachable!(),
+            WorldItem::Type { .. } => unreachable!(),
             WorldItem::Interface { id, .. } => {
                 generator
                     .generator
@@ -1488,7 +1488,7 @@ impl Wasmtime {
                 .imports
                 .iter()
                 .filter_map(|(_, i)| match i {
-                    WorldItem::Interface { id, stability } if *id == interface_id => {
+                    WorldItem::Interface { id, stability, .. } if *id == interface_id => {
                         Some(stability.clone())
                     }
                     _ => None,
@@ -1628,7 +1628,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         }
     }
@@ -2434,10 +2434,10 @@ impl<'a> InterfaceGenerator<'a> {
         }
         self.src.push_str(") : (");
 
-        for (_, ty) in func.params.iter() {
+        for param in func.params.iter() {
             // Lift is required to be implied for this type, so we can't use
             // a borrowed type:
-            self.print_ty(ty, TypeMode::Owned);
+            self.print_ty(&param.ty, TypeMode::Owned);
             self.src.push_str(", ");
         }
         self.src.push_str(")| {\n");
@@ -2493,9 +2493,9 @@ impl<'a> InterfaceGenerator<'a> {
                 .params
                 .iter()
                 .enumerate()
-                .map(|(i, (name, ty))| {
-                    let name = to_rust_ident(&name);
-                    formatting_for_arg(&name, i, *ty, &self.resolve, flags)
+                .map(|(i, param)| {
+                    let name = to_rust_ident(&param.name);
+                    formatting_for_arg(&name, i, param.ty, &self.resolve, flags)
                 })
                 .collect::<Vec<String>>();
             event_fields.push(format!("\"call\""));
@@ -2660,11 +2660,11 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn generate_function_params(&mut self, func: &Function) {
-        for (name, param) in func.params.iter() {
-            let name = to_rust_ident(name);
+        for param in func.params.iter() {
+            let name = to_rust_ident(&param.name);
             self.push_str(&name);
             self.push_str(": ");
-            self.print_ty(param, TypeMode::Owned);
+            self.print_ty(&param.ty, TypeMode::Owned);
             self.push_str(",");
         }
     }
@@ -2753,7 +2753,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         for (i, param) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}: ", i);
-            self.print_ty(&param.1, param_mode);
+            self.print_ty(&param.ty, param_mode);
             self.push_str(",");
         }
 
@@ -3094,8 +3094,8 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                 "{trait_name}::{}(*self,",
                 rust_function_name(func)
             );
-            for (name, _) in func.params.iter() {
-                uwrite!(self.src, "{},", to_rust_ident(name));
+            for param in func.params.iter() {
+                uwrite!(self.src, "{},", to_rust_ident(&param.name));
             }
             uwrite!(self.src, ")");
             if flags.contains(FunctionFlags::ASYNC) {
@@ -3234,15 +3234,15 @@ impl LinkOptionsBuilder {
 
         for (_, import) in world.imports.iter() {
             match import {
-                WorldItem::Interface { id, stability } => {
+                WorldItem::Interface { id, stability, .. } => {
                     self.add_stability(stability);
                     self.add_interface(resolve, id);
                 }
                 WorldItem::Function(f) => {
                     self.add_stability(&f.stability);
                 }
-                WorldItem::Type(t) => {
-                    self.add_type(resolve, t);
+                WorldItem::Type { id, .. } => {
+                    self.add_type(resolve, id);
                 }
             }
         }
@@ -3436,7 +3436,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(..) => todo!(),
             TypeDefKind::Map(..) => todo!(),
         },
 
@@ -3545,7 +3545,7 @@ fn get_world_resources<'a>(
         .imports
         .iter()
         .filter_map(move |(name, item)| match item {
-            WorldItem::Type(id) => match resolve.types[*id].kind {
+            WorldItem::Type { id, .. } => match resolve.types[*id].kind {
                 TypeDefKind::Resource => Some(match name {
                     WorldKey::Name(s) => (*id, s.as_str()),
                     WorldKey::Interface(_) => unreachable!(),

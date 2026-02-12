@@ -340,14 +340,14 @@ async fn task_deletion() -> Result<()> {
             (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
             (import "" "thread.suspend" (func $thread-suspend (result i32)))
             (import "" "thread.suspend-cancellable" (func $thread-suspend-cancellable (result i32)))
-            (import "" "thread.yield-to" (func $thread-yield-to (param i32) (result i32)))
-            (import "" "thread.yield-to-cancellable" (func $thread-yield-to-cancellable (param i32) (result i32)))
-            (import "" "thread.switch-to" (func $thread-switch-to (param i32) (result i32)))
-            (import "" "thread.switch-to-cancellable" (func $thread-switch-to-cancellable (param i32) (result i32)))
+            (import "" "thread.yield-to-suspended" (func $thread-yield-to-suspended (param i32) (result i32)))
+            (import "" "thread.yield-to-suspended-cancellable" (func $thread-yield-to-suspended-cancellable (param i32) (result i32)))
+            (import "" "thread.suspend-to" (func $thread-suspend-to (param i32) (result i32)))
+            (import "" "thread.suspend-to-cancellable" (func $thread-suspend-to-cancellable (param i32) (result i32)))
             (import "" "thread.yield" (func $thread-yield (result i32)))
             (import "" "thread.yield-cancellable" (func $thread-yield-cancellable (result i32)))
             (import "" "thread.index" (func $thread-index (result i32)))
-            (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
+            (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
             (import "" "waitable.join" (func $waitable.join (param i32 i32)))
             (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
             (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
@@ -370,11 +370,11 @@ async fn task_deletion() -> Result<()> {
                     (br $top)))
 
             (func (export "explicit-thread-calls-return-stackful")
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $call-return-ftbl-idx) (i32.const 42))))
 
             (func (export "explicit-thread-calls-return-stackless") (result i32)
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $call-return-ftbl-idx) (i32.const 42)))
                 (i32.const 0 (; EXIT ;)))
 
@@ -382,33 +382,33 @@ async fn task_deletion() -> Result<()> {
                 (unreachable))
 
             (func (export "explicit-thread-suspends-sync") (result i32)
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
                 (i32.const 42))
 
             (func (export "explicit-thread-suspends-stackful")
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
                 (call $task-return (i32.const 42)))
 
             (func (export "explicit-thread-suspends-stackless") (result i32)
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
                 (call $task-return (i32.const 42))
                 (i32.const 0))
 
             (func (export "explicit-thread-yield-loops-sync") (result i32)
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $yield-loop-ftbl-idx) (i32.const 42)))
                 (i32.const 42))
 
             (func (export "explicit-thread-yield-loops-stackful")
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $yield-loop-ftbl-idx) (i32.const 42)))
                 (call $task-return (i32.const 42)))
 
             (func (export "explicit-thread-yield-loops-stackless") (result i32)
-                (call $thread-resume-later
+                (call $thread-unsuspend
                     (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
                 (call $task-return (i32.const 42))
                 (i32.const 0 (; EXIT ;)))
@@ -432,11 +432,11 @@ async fn task_deletion() -> Result<()> {
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
         (core func $thread-index (canon thread.index))
-        (core func $thread-yield-to (canon thread.yield-to))
-        (core func $thread-yield-to-cancellable (canon thread.yield-to cancellable))
-        (core func $thread-resume-later (canon thread.resume-later))
-        (core func $thread-switch-to (canon thread.switch-to))
-        (core func $thread-switch-to-cancellable (canon thread.switch-to cancellable))
+        (core func $thread-yield-to-suspended (canon thread.yield-to-suspended))
+        (core func $thread-yield-to-suspended-cancellable (canon thread.yield-to-suspended cancellable))
+        (core func $thread-unsuspend (canon thread.unsuspend))
+        (core func $thread-suspend-to (canon thread.suspend-to))
+        (core func $thread-suspend-to-cancellable (canon thread.suspend-to cancellable))
         (core func $thread-suspend (canon thread.suspend))
         (core func $thread-suspend-cancellable (canon thread.suspend cancellable))
         (core func $waitable-set.new (canon waitable-set.new))
@@ -452,15 +452,15 @@ async fn task_deletion() -> Result<()> {
                     (export "task.cancel" (func $task-cancel))
                     (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.index" (func $thread-index))
-                    (export "thread.yield-to" (func $thread-yield-to))
-                    (export "thread.yield-to-cancellable" (func $thread-yield-to-cancellable))
+                    (export "thread.yield-to-suspended" (func $thread-yield-to-suspended))
+                    (export "thread.yield-to-suspended-cancellable" (func $thread-yield-to-suspended-cancellable))
                     (export "thread.yield" (func $thread-yield))
                     (export "thread.yield-cancellable" (func $thread-yield-cancellable))
-                    (export "thread.switch-to" (func $thread-switch-to))
-                    (export "thread.switch-to-cancellable" (func $thread-switch-to-cancellable))
+                    (export "thread.suspend-to" (func $thread-suspend-to))
+                    (export "thread.suspend-to-cancellable" (func $thread-suspend-to-cancellable))
                     (export "thread.suspend" (func $thread-suspend))
                     (export "thread.suspend-cancellable" (func $thread-suspend-cancellable))
-                    (export "thread.resume-later" (func $thread-resume-later))
+                    (export "thread.unsuspend" (func $thread-unsuspend))
                     (export "waitable.join" (func $waitable.join))
                     (export "waitable-set.wait" (func $waitable-set.wait))
                     (export "waitable-set.new" (func $waitable-set.new))))
