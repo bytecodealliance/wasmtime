@@ -142,6 +142,15 @@ fn pulley_provenance_test() -> Result<()> {
             let caller_frame = caller.debug_exit_frames().next().unwrap();
             let caller_module = caller_frame.module(&mut caller).unwrap().unwrap();
             assert!(Module::same(caller_module, &module_clone));
+            let (caller_func, pc) = caller_frame
+                .wasm_function_index_and_pc(&mut caller)
+                .unwrap()
+                .unwrap();
+            assert_eq!(caller_func.as_u32(), 3);
+            assert_eq!(pc, 416);
+            let parent_frame = caller_frame.parent(&mut caller).unwrap();
+            assert!(parent_frame.is_none());
+
             results[0] = Val::I32(1);
             results[1] = Val::I32(2);
             results[2] = Val::I32(3);
