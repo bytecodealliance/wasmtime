@@ -715,15 +715,6 @@ impl Instance {
         crate::Tag::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
-    /// Return an iterator over the exports of this instance.
-    ///
-    /// Specifically, it provides access to the key-value pairs, where the keys
-    /// are export names, and the values are export declarations which can be
-    /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> wasmparser::collections::index_map::Iter<'_, String, EntityIndex> {
-        self.env_module().exports.iter()
-    }
-
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
