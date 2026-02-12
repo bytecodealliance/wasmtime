@@ -3730,3 +3730,288 @@ fn with_new_instance<T>(
     let instance = Linker::new(engine).instantiate(&mut store, component)?;
     fun(&mut store, instance)
 }
+
+/// Tests map types with misaligned key/value combinations through the adapter
+/// trampoline (component-to-component translation).
+///
+/// This specifically tests the alignment bug where the value offset was
+/// calculated as `key_size` instead of `align(key_size, value_align)`.
+/// For map<u8, u64>, the value should be at offset 8 (not 1).
+///
+/// NOTE: This test currently demonstrates that the adapter trampoline
+/// compilation fails for map types with certain key/value combinations.
+/// This is a known issue that needs to be fixed in trampoline.rs.
+#[test]
+#[ignore] // TODO: Fix trampoline alignment bug first
+fn map_trampoline_alignment() -> Result<()> {
+    // Test map<u8, u64> - key_size=1, value_align=8
+    // With the alignment bug, value would be read/written at offset 1 instead of 8
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u8 u64)) (result (map u8 u64))))
+
+    ;; Component A: the "destination" that receives and echoes back
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u8 u64)) (result (map u8 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    ;; Component B: the "source" that calls dst
+    (component $src
+        (import "echo" (func $echo (param "m" (map u8 u64)) (result (map u8 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    ;; Wire: host -> dst -> src creates adapter trampolines between components
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    // Use dynamic API since typed API doesn't support map types yet
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        // Echo the map back
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    // Test with distinctive values that would be corrupted by misaligned reads
+    let test_data = vec![
+        (Val::U8(1), Val::U64(0x0102030405060708)),
+        (Val::U8(2), Val::U64(0x1112131415161718)),
+        (Val::U8(255), Val::U64(0xFFFFFFFFFFFFFFFF)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    // Verify the data round-tripped correctly
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 3);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u32, u64> alignment through trampoline
+#[test]
+#[ignore] // TODO: Fix trampoline alignment bug first
+fn map_trampoline_alignment_u32_u64() -> Result<()> {
+    // Test map<u32, u64> - key_size=4, value_align=8
+    // With the alignment bug, value would be read/written at offset 4 instead of 8
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u32 u64)) (result (map u32 u64))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u32 u64)) (result (map u32 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u32 u64)) (result (map u32 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U32(1), Val::U64(0x0102030405060708)),
+        (Val::U32(2), Val::U64(0x1112131415161718)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
