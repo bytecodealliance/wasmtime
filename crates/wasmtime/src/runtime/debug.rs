@@ -717,7 +717,8 @@ unsafe fn read_value(
             Val::F64(value)
         }
         FrameValType::V128 => {
-            let value = unsafe { *(address as *const u128) };
+            // Vectors are always stored as little-endian.
+            let value = unsafe { u128::from_le_bytes(*(address as *const [u8; 16])) };
             Val::V128(value.into())
         }
         FrameValType::AnyRef => {
