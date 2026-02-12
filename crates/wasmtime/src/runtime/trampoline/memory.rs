@@ -38,9 +38,10 @@ pub async fn create_memory(
     // Since we have only associated a single memory with the "frankenstein"
     // instance, it will be exported at index 0.
     debug_assert_eq!(memory_id.as_u32(), 0);
+    let name = module.strings.insert("")?;
     module
         .exports
-        .insert(String::new(), EntityIndex::Memory(memory_id));
+        .insert(name, EntityIndex::Memory(memory_id))?;
     let info = ModuleRuntimeInfo::bare(Arc::new(module))?;
 
     // We create an instance in the on-demand allocator when creating handles

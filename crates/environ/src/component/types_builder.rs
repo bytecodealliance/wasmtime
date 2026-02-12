@@ -458,7 +458,7 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Stream(ty) => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::FixedSizeList(ty, size) => {
+            ComponentDefinedType::FixedLengthList(ty, size) => {
                 InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
             }
             ComponentDefinedType::Map(..) => {
@@ -536,11 +536,6 @@ impl ComponentTypesBuilder {
             .cases
             .iter()
             .map(|(name, case)| {
-                // FIXME: need to implement `refines`, not sure what that
-                // is at this time.
-                if case.refines.is_some() {
-                    bail!("refines is not supported at this time");
-                }
                 Ok((
                     name.to_string(),
                     match &case.ty.as_ref() {

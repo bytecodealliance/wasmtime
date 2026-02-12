@@ -1123,10 +1123,20 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSwitchTo { func, cancellable } => {
+            ThreadSuspendToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadSwitchTo {
+                    dfg::Trampoline::ThreadSuspendToSuspended {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSuspendTo { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSuspendTo {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
@@ -1143,19 +1153,19 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadResumeLater { func } => {
+            ThreadUnsuspend { func } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadResumeLater {
+                    dfg::Trampoline::ThreadUnsuspend {
                         instance: frame.instance,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldTo { func, cancellable } => {
+            ThreadYieldToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadYieldTo {
+                    dfg::Trampoline::ThreadYieldToSuspended {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
@@ -1300,7 +1310,12 @@ impl<'a> Inliner<'a> {
                     ModuleInstanceDef::Instantiated(instance, module) => {
                         let (ty, item) = match &frame.modules[*module] {
                             ModuleDef::Static(idx, _ty) => {
-                                let entity = self.nested_modules[*idx].module.exports[*name];
+                                let name = self.nested_modules[*idx]
+                                    .module
+                                    .strings
+                                    .get_atom(name)
+                                    .unwrap();
+                                let entity = self.nested_modules[*idx].module.exports[&name];
                                 let ty = match entity {
                                     EntityIndex::Function(f) => {
                                         self.nested_modules[*idx].module.functions[f]
@@ -1471,7 +1486,12 @@ impl<'a> Inliner<'a> {
             ModuleInstanceDef::Instantiated(instance, module) => {
                 let item = match frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
-                        let entity = self.nested_modules[idx].module.exports[name];
+                        let name = self.nested_modules[idx]
+                            .module
+                            .strings
+                            .get_atom(name)
+                            .unwrap();
+                        let entity = self.nested_modules[idx].module.exports[&name];
                         ExportItem::Index(entity)
                     }
                     ModuleDef::Import(..) => ExportItem::Name(name.to_string()),

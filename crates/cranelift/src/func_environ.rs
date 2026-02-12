@@ -11,7 +11,9 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
-use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
+use cranelift_codegen::ir::{
+    self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
+};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::ir::{Block, types::*};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
@@ -1239,6 +1241,26 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    fn memflags_for_debug_slot_value_wasm_ty(&self, ty: WasmValType) -> MemFlags {
+        // Store vectors in little-endian format: this is
+        // universally supported, while native or
+        // big-endian formats may not be in all cases
+        // (e.g. Pulley on s390x).
+        let mut flags = MemFlags::trusted();
+        if ty == WasmValType::V128 {
+            flags.set_endianness(Endianness::Little);
+        }
+        flags
+    }
+
+    fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlags {
+        let mut flags = MemFlags::trusted();
+        if ty.is_vector() {
+            flags.set_endianness(Endianness::Little);
+        }
+        flags
+    }
+
     /// Update the state slot layout with a new layout given a local.
     pub(crate) fn add_state_slot_local(
         &mut self,
@@ -1249,7 +1271,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         if let Some((slot, b)) = &mut self.state_slot {
             let offset = b.add_local(FrameValType::from(ty));
             if let Some(init) = init {
-                builder.ins().stack_store(init, *slot, offset.offset());
+                let slot = *slot;
+                let address = builder
+                    .ins()
+                    .stack_addr(self.pointer_type(), slot, offset.offset());
+                builder.ins().store(
+                    self.memflags_for_debug_slot_value_wasm_ty(ty),
+                    init,
+                    address,
+                    0,
+                );
             }
         }
     }
@@ -1293,7 +1324,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     self.stacks.stack_shape.push(this_shape);
 
                     let value = self.stacks.stack[i];
-                    builder.ins().stack_store(value, slot, offset.offset());
+                    let address =
+                        builder
+                            .ins()
+                            .stack_addr(self.pointer_type(), slot, offset.offset());
+                    builder.ins().store(
+                        self.memflags_for_debug_slot_value_wasm_ty(wasm_ty),
+                        value,
+                        address,
+                        0,
+                    );
                 } else {
                     // Unreachable code with unknown type -- no
                     // flushes for this or later-pushed values.
@@ -1342,7 +1382,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) {
         if let Some((slot, b)) = &self.state_slot {
             let offset = b.local_offset(local);
-            builder.ins().stack_store(value, *slot, offset.offset());
+            let address = builder
+                .ins()
+                .stack_addr(self.pointer_type(), *slot, offset.offset());
+            let ty = builder.func.dfg.value_type(value);
+            builder.ins().store(
+                self.memflags_for_debug_slot_value_clif_ty(ty),
+                value,
+                address,
+                0,
+            );
         }
     }
 
@@ -1353,6 +1402,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // slot. This is relied upon in
             // crates/wasmtime/src/runtime/debug.rs in
             // `raw_instance()`. See also the slot layout computation in crates/environ/src/
+            //
+            // This is a native-endian store (the only mode for
+            // `stack_store`) because it is read by host code directly
+            // as a pointer.
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }

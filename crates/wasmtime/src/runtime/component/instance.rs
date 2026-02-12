@@ -632,7 +632,11 @@ where
         // during that phase so the actual instantiation of an `InstancePre`
         // skips all string lookups. This should probably only be
         // investigated if this becomes a performance issue though.
-        ExportItem::Name(name) => instance.env_module().exports[name],
+        ExportItem::Name(name) => {
+            let module = instance.env_module();
+            let name = module.strings.get_atom(name).unwrap();
+            module.exports[&name]
+        }
     };
     // SAFETY: the `store_id` owns this instance and all exports contained
     // within.

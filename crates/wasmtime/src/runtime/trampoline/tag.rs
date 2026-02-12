@@ -28,9 +28,8 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
         exception: EngineOrModuleTypeIndex::Engine(exn_ty.index()),
     });
 
-    module
-        .exports
-        .insert(String::new(), EntityIndex::Tag(tag_id));
+    let name = module.strings.insert("")?;
+    module.exports.insert(name, EntityIndex::Tag(tag_id))?;
 
     let imports = Imports::default();
 

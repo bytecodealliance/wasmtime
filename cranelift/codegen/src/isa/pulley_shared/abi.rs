@@ -345,9 +345,11 @@ where
         }
 
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
-            insts.push(
-                Inst::gen_store(Amode::SpOffset { offset }, reg, ty, MemFlags::trusted()).into(),
-            );
+            let mut flags = MemFlags::trusted();
+            if ty.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
+            insts.push(Inst::gen_store(Amode::SpOffset { offset }, reg, ty, flags).into());
         }
 
         insts
@@ -366,12 +368,16 @@ where
 
         // Restore clobbered registers that are manually managed in Cranelift.
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
+            let mut flags = MemFlags::trusted();
+            if ty.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
             insts.push(
                 Inst::gen_load(
                     Writable::from_reg(reg),
                     Amode::SpOffset { offset },
                     ty,
-                    MemFlags::trusted(),
+                    flags,
                 )
                 .into(),
             );

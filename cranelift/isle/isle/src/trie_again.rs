@@ -649,6 +649,7 @@ impl sema::ExprVisitor for RuleSetBuilder {
         pure: bool,
         infallible: bool,
         multi: bool,
+        _rec: bool,
     ) -> BindingId {
         let instance = if pure {
             0

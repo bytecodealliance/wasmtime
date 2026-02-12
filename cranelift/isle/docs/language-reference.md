@@ -1073,6 +1073,24 @@ following shorthand notation using `if` instead:
       (isa_special_inst ...))
 ```
 
+#### Recursion
+
+ISLE terms may be recursive: a rewrite rule's RHS can reference the term it
+matches on, either directly or via a reference cycle.  However, recursive terms
+present a risk of potentially unbounded term rewriting. In the compilation
+context, it is possible that certain recursive rules could be exploited to
+induce a stack overflow with a malicious input program.  Therefore, ISLE
+disallows recursion by default.
+
+Recursion can still be justified when it can be shown to be bounded, therefore
+ISLE allows certain terms to opt-in to recursive definitions.  To permit
+recursive references in a term's rules, declare the term with the `rec`
+attribute: `(decl rec A ...)`. In the case of a reference cycle, all terms in
+the cycle must have the `rec` attribute. When using the `rec` attribute,
+developers should provide a `; Recursion: ...` comment explaining why this use
+is bounded.
+
+
 ## ISLE to Rust
 
 Now that we have described the core ISLE language, we will document
@@ -1481,7 +1499,7 @@ The grammar accepted by the parser is as follows:
 
 <ty> ::= <ident>
 
-<decl> ::= [ "pure" ] [ "multi" ] [ "partial" ] <ident> "(" <ty>* ")" <ty>
+<decl> ::= [ "pure" ] [ "multi" ] [ "partial" ] [ "rec" ] <ident> "(" <ty>* ")" <ty>
 
 <rule> ::= [ <ident> ] [ <prio> ] <pattern> <stmt>* <expr>
 

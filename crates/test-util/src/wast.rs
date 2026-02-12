@@ -441,6 +441,17 @@ impl WastTest {
             return true;
         }
 
+        // These tests in the `component-model` submodule have not yet been
+        // updated to account for the recent threading-related intrinsic
+        // changes
+        let unsupported = [
+            "test/async/same-component-stream-future.wast",
+            "test/async/trap-if-block-and-sync.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
+            return true;
+        }
+
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
             let unsupported = [

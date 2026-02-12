@@ -87,38 +87,38 @@ block0(v0: i64):
 ;   fstore64 sp+528, f29 // flags =  notrap aligned
 ;   fstore64 sp+520, f30 // flags =  notrap aligned
 ;   fstore64 sp+512, f31 // flags =  notrap aligned
-;   vstore128 sp+504, v0 // flags =  notrap aligned
-;   vstore128 sp+496, v1 // flags =  notrap aligned
-;   vstore128 sp+488, v2 // flags =  notrap aligned
-;   vstore128 sp+480, v3 // flags =  notrap aligned
-;   vstore128 sp+472, v4 // flags =  notrap aligned
-;   vstore128 sp+464, v5 // flags =  notrap aligned
-;   vstore128 sp+456, v6 // flags =  notrap aligned
-;   vstore128 sp+448, v7 // flags =  notrap aligned
-;   vstore128 sp+440, v8 // flags =  notrap aligned
-;   vstore128 sp+432, v9 // flags =  notrap aligned
-;   vstore128 sp+424, v10 // flags =  notrap aligned
-;   vstore128 sp+416, v11 // flags =  notrap aligned
-;   vstore128 sp+408, v12 // flags =  notrap aligned
-;   vstore128 sp+400, v13 // flags =  notrap aligned
-;   vstore128 sp+392, v14 // flags =  notrap aligned
-;   vstore128 sp+384, v15 // flags =  notrap aligned
-;   vstore128 sp+376, v16 // flags =  notrap aligned
-;   vstore128 sp+368, v17 // flags =  notrap aligned
-;   vstore128 sp+360, v18 // flags =  notrap aligned
-;   vstore128 sp+352, v19 // flags =  notrap aligned
-;   vstore128 sp+344, v20 // flags =  notrap aligned
-;   vstore128 sp+336, v21 // flags =  notrap aligned
-;   vstore128 sp+328, v22 // flags =  notrap aligned
-;   vstore128 sp+320, v23 // flags =  notrap aligned
-;   vstore128 sp+312, v24 // flags =  notrap aligned
-;   vstore128 sp+304, v25 // flags =  notrap aligned
-;   vstore128 sp+296, v26 // flags =  notrap aligned
-;   vstore128 sp+288, v27 // flags =  notrap aligned
-;   vstore128 sp+280, v28 // flags =  notrap aligned
-;   vstore128 sp+272, v29 // flags =  notrap aligned
-;   vstore128 sp+264, v30 // flags =  notrap aligned
-;   vstore128 sp+256, v31 // flags =  notrap aligned
+;   vstore128 sp+504, v0 // flags =  notrap aligned little
+;   vstore128 sp+496, v1 // flags =  notrap aligned little
+;   vstore128 sp+488, v2 // flags =  notrap aligned little
+;   vstore128 sp+480, v3 // flags =  notrap aligned little
+;   vstore128 sp+472, v4 // flags =  notrap aligned little
+;   vstore128 sp+464, v5 // flags =  notrap aligned little
+;   vstore128 sp+456, v6 // flags =  notrap aligned little
+;   vstore128 sp+448, v7 // flags =  notrap aligned little
+;   vstore128 sp+440, v8 // flags =  notrap aligned little
+;   vstore128 sp+432, v9 // flags =  notrap aligned little
+;   vstore128 sp+424, v10 // flags =  notrap aligned little
+;   vstore128 sp+416, v11 // flags =  notrap aligned little
+;   vstore128 sp+408, v12 // flags =  notrap aligned little
+;   vstore128 sp+400, v13 // flags =  notrap aligned little
+;   vstore128 sp+392, v14 // flags =  notrap aligned little
+;   vstore128 sp+384, v15 // flags =  notrap aligned little
+;   vstore128 sp+376, v16 // flags =  notrap aligned little
+;   vstore128 sp+368, v17 // flags =  notrap aligned little
+;   vstore128 sp+360, v18 // flags =  notrap aligned little
+;   vstore128 sp+352, v19 // flags =  notrap aligned little
+;   vstore128 sp+344, v20 // flags =  notrap aligned little
+;   vstore128 sp+336, v21 // flags =  notrap aligned little
+;   vstore128 sp+328, v22 // flags =  notrap aligned little
+;   vstore128 sp+320, v23 // flags =  notrap aligned little
+;   vstore128 sp+312, v24 // flags =  notrap aligned little
+;   vstore128 sp+304, v25 // flags =  notrap aligned little
+;   vstore128 sp+296, v26 // flags =  notrap aligned little
+;   vstore128 sp+288, v27 // flags =  notrap aligned little
+;   vstore128 sp+280, v28 // flags =  notrap aligned little
+;   vstore128 sp+272, v29 // flags =  notrap aligned little
+;   vstore128 sp+264, v30 // flags =  notrap aligned little
+;   vstore128 sp+256, v31 // flags =  notrap aligned little
 ; block0:
 ;   indirect_call_host CallInfo { dest: TestCase(%libcall), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: SystemV, caller_conv: PreserveAll, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   x0 = xload64 sp+888 // flags = notrap aligned
@@ -169,38 +169,38 @@ block0(v0: i64):
 ;   f29 = fload64 sp+528 // flags = notrap aligned
 ;   f30 = fload64 sp+520 // flags = notrap aligned
 ;   f31 = fload64 sp+512 // flags = notrap aligned
-;   v0 = vload128 sp+504 // flags = notrap aligned
-;   v1 = vload128 sp+496 // flags = notrap aligned
-;   v2 = vload128 sp+488 // flags = notrap aligned
-;   v3 = vload128 sp+480 // flags = notrap aligned
-;   v4 = vload128 sp+472 // flags = notrap aligned
-;   v5 = vload128 sp+464 // flags = notrap aligned
-;   v6 = vload128 sp+456 // flags = notrap aligned
-;   v7 = vload128 sp+448 // flags = notrap aligned
-;   v8 = vload128 sp+440 // flags = notrap aligned
-;   v9 = vload128 sp+432 // flags = notrap aligned
-;   v10 = vload128 sp+424 // flags = notrap aligned
-;   v11 = vload128 sp+416 // flags = notrap aligned
-;   v12 = vload128 sp+408 // flags = notrap aligned
-;   v13 = vload128 sp+400 // flags = notrap aligned
-;   v14 = vload128 sp+392 // flags = notrap aligned
-;   v15 = vload128 sp+384 // flags = notrap aligned
-;   v16 = vload128 sp+376 // flags = notrap aligned
-;   v17 = vload128 sp+368 // flags = notrap aligned
-;   v18 = vload128 sp+360 // flags = notrap aligned
-;   v19 = vload128 sp+352 // flags = notrap aligned
-;   v20 = vload128 sp+344 // flags = notrap aligned
-;   v21 = vload128 sp+336 // flags = notrap aligned
-;   v22 = vload128 sp+328 // flags = notrap aligned
-;   v23 = vload128 sp+320 // flags = notrap aligned
-;   v24 = vload128 sp+312 // flags = notrap aligned
-;   v25 = vload128 sp+304 // flags = notrap aligned
-;   v26 = vload128 sp+296 // flags = notrap aligned
-;   v27 = vload128 sp+288 // flags = notrap aligned
-;   v28 = vload128 sp+280 // flags = notrap aligned
-;   v29 = vload128 sp+272 // flags = notrap aligned
-;   v30 = vload128 sp+264 // flags = notrap aligned
-;   v31 = vload128 sp+256 // flags = notrap aligned
+;   v0 = vload128 sp+504 // flags = notrap aligned little
+;   v1 = vload128 sp+496 // flags = notrap aligned little
+;   v2 = vload128 sp+488 // flags = notrap aligned little
+;   v3 = vload128 sp+480 // flags = notrap aligned little
+;   v4 = vload128 sp+472 // flags = notrap aligned little
+;   v5 = vload128 sp+464 // flags = notrap aligned little
+;   v6 = vload128 sp+456 // flags = notrap aligned little
+;   v7 = vload128 sp+448 // flags = notrap aligned little
+;   v8 = vload128 sp+440 // flags = notrap aligned little
+;   v9 = vload128 sp+432 // flags = notrap aligned little
+;   v10 = vload128 sp+424 // flags = notrap aligned little
+;   v11 = vload128 sp+416 // flags = notrap aligned little
+;   v12 = vload128 sp+408 // flags = notrap aligned little
+;   v13 = vload128 sp+400 // flags = notrap aligned little
+;   v14 = vload128 sp+392 // flags = notrap aligned little
+;   v15 = vload128 sp+384 // flags = notrap aligned little
+;   v16 = vload128 sp+376 // flags = notrap aligned little
+;   v17 = vload128 sp+368 // flags = notrap aligned little
+;   v18 = vload128 sp+360 // flags = notrap aligned little
+;   v19 = vload128 sp+352 // flags = notrap aligned little
+;   v20 = vload128 sp+344 // flags = notrap aligned little
+;   v21 = vload128 sp+336 // flags = notrap aligned little
+;   v22 = vload128 sp+328 // flags = notrap aligned little
+;   v23 = vload128 sp+320 // flags = notrap aligned little
+;   v24 = vload128 sp+312 // flags = notrap aligned little
+;   v25 = vload128 sp+304 // flags = notrap aligned little
+;   v26 = vload128 sp+296 // flags = notrap aligned little
+;   v27 = vload128 sp+288 // flags = notrap aligned little
+;   v28 = vload128 sp+280 // flags = notrap aligned little
+;   v29 = vload128 sp+272 // flags = notrap aligned little
+;   v30 = vload128 sp+264 // flags = notrap aligned little
+;   v31 = vload128 sp+256 // flags = notrap aligned little
 ;   pop_frame_restore 896, {}
 ;   ret
 ;

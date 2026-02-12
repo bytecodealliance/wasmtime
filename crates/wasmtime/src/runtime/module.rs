@@ -678,7 +678,9 @@ impl Module {
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.compiled_module().module().name.as_deref()
+        let module = self.compiled_module().module();
+        let name = module.name?;
+        Some(&module.strings[name])
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -807,7 +809,12 @@ impl Module {
         let types = self.types();
         let engine = self.engine();
         module.exports.iter().map(move |(name, entity_index)| {
-            ExportType::new(name, module.type_of(*entity_index), types, engine)
+            ExportType::new(
+                &module.strings[name],
+                module.type_of(*entity_index),
+                types,
+                engine,
+            )
         })
     }
 
@@ -856,7 +863,8 @@ impl Module {
     /// ```
     pub fn get_export(&self, name: &str) -> Option<ExternType> {
         let module = self.compiled_module().module();
-        let entity_index = module.exports.get(name)?;
+        let name = module.strings.get_atom(name)?;
+        let entity_index = module.exports.get(&name)?;
         Some(ExternType::from_wasmtime(
             self.engine(),
             self.types(),
@@ -873,7 +881,8 @@ impl Module {
     pub fn get_export_index(&self, name: &str) -> Option<ModuleExport> {
         let compiled_module = self.compiled_module();
         let module = compiled_module.module();
-        let entity = *module.exports.get(name)?;
+        let name = module.strings.get_atom(name)?;
+        let entity = *module.exports.get(&name)?;
         Some(ModuleExport {
             module: self.id(),
             entity,

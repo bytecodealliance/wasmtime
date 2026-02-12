@@ -3,15 +3,20 @@
 mod entity_set;
 mod hash_map;
 mod hash_set;
+mod index_map;
 mod primary_map;
 mod secondary_map;
 
 pub use entity_set::EntitySet;
 pub use hash_map::HashMap;
 pub use hash_set::HashSet;
+pub use index_map::IndexMap;
 pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;
-pub use wasmtime_core::alloc::{String, TryClone, TryNew, Vec, try_new};
+pub use wasmtime_core::{
+    alloc::{String, TryClone, TryNew, Vec, try_new},
+    vec,
+};
 
 /// Collections which abort on OOM.
 //

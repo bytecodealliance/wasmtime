@@ -958,9 +958,16 @@ user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
+[[publisher.id-arena]]
+version = "2.3.0"
+when = "2026-01-14"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.indexmap]]
-version = "2.11.4"
-when = "2025-09-18"
+version = "2.13.0"
+when = "2026-01-07"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -1015,10 +1022,9 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.json-from-wast]]
-version = "0.236.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.libc]]
 version = "0.2.177"
@@ -1475,10 +1481,9 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-compose]]
-version = "0.236.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-encoder]]
 version = "0.236.0"
@@ -1486,17 +1491,26 @@ when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-encoder]]
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wasm-metadata]]
 version = "0.236.0"
 when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-metadata]]
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wasm-wave]]
-version = "0.236.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmparser]]
 version = "0.236.0"
@@ -1504,11 +1518,15 @@ when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmparser]]
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wasmprinter]]
-version = "0.236.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmtime]]
 version = "41.0.3"
@@ -1661,16 +1679,14 @@ when = "2026-02-04"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wast]]
-version = "236.0.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "245.0.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wat]]
-version = "1.236.0"
-when = "2025-07-28"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "1.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wiggle]]
 version = "41.0.3"
@@ -1902,13 +1918,13 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen]]
-version = "0.51.0"
-when = "2026-01-12"
+version = "0.53.0"
+when = "2026-02-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.51.0"
-when = "2026-01-12"
+version = "0.53.0"
+when = "2026-02-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -1918,13 +1934,13 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.51.0"
-when = "2026-01-12"
+version = "0.53.0"
+when = "2026-02-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.51.0"
-when = "2026-01-12"
+version = "0.53.0"
+when = "2026-02-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
@@ -1933,11 +1949,21 @@ when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-component]]
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wit-parser]]
 version = "0.236.0"
 when = "2025-07-28"
 user-id = 73222
 user-login = "wasmtime-publish"
+
+[[publisher.wit-parser]]
+version = "0.245.0"
+when = "2026-02-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.witx]]
 version = "0.9.1"

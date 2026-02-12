@@ -767,12 +767,30 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadSwitchTo {
+            Trampoline::ThreadSuspendToSuspended {
                 instance,
                 cancellable,
             } => {
                 self.translate_libcall(
-                    host::thread_switch_to,
+                    host::thread_suspend_to_suspended,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
+            Trampoline::ThreadSuspendTo {
+                instance,
+                cancellable,
+            } => {
+                self.translate_libcall(
+                    host::thread_suspend_to,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
@@ -803,9 +821,9 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadResumeLater { instance } => {
+            Trampoline::ThreadUnsuspend { instance } => {
                 self.translate_libcall(
-                    host::thread_resume_later,
+                    host::thread_unsuspend,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
@@ -813,12 +831,12 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadYieldTo {
+            Trampoline::ThreadYieldToSuspended {
                 instance,
                 cancellable,
             } => {
                 self.translate_libcall(
-                    host::thread_yield_to,
+                    host::thread_yield_to_suspended,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
@@ -1472,11 +1490,12 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::WaitableSetDrop { instance }
             | Trampoline::WaitableJoin { instance }
             | Trampoline::ThreadYield { instance, .. }
-            | Trampoline::ThreadSwitchTo { instance, .. }
             | Trampoline::ThreadNewIndirect { instance, .. }
             | Trampoline::ThreadSuspend { instance, .. }
-            | Trampoline::ThreadResumeLater { instance }
-            | Trampoline::ThreadYieldTo { instance, .. }
+            | Trampoline::ThreadSuspendToSuspended { instance, .. }
+            | Trampoline::ThreadSuspendTo { instance, .. }
+            | Trampoline::ThreadUnsuspend { instance, .. }
+            | Trampoline::ThreadYieldToSuspended { instance, .. }
             | Trampoline::SubtaskDrop { instance }
             | Trampoline::SubtaskCancel { instance, .. }
             | Trampoline::ErrorContextNew { instance, .. }

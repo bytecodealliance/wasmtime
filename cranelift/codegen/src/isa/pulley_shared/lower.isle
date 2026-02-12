@@ -11,7 +11,10 @@
 ;; needs to handle situations such as when the `Value` is 64-bits an explicit
 ;; comparison must be made. Additionally if `Value` is smaller than 32-bits
 ;; then it must be sign-extended up to at least 32 bits.
-(decl lower_cond (Value) Cond)
+;;
+;; Recursion: peeling away `uextend` operations must be bounded since each
+;; extend must be on a strictly smaller type.
+(decl rec lower_cond (Value) Cond)
 (rule 0 (lower_cond val @ (value_type (fits_in_32 _))) (Cond.If32 (zext32 val)))
 (rule 1 (lower_cond val @ (value_type $I64))
   (Cond.IfXneq64I32 val 0))
@@ -737,7 +740,9 @@
 (rule (lower (icmp cc a b @ (value_type (ty_int ty))))
       (lower_icmp ty cc a b))
 
-(decl lower_icmp (Type IntCC Value Value) XReg)
+; Recursion: bounded since only recursive rules swap condition code order from
+; greater into less, which can only apply once.
+(decl rec lower_icmp (Type IntCC Value Value) XReg)
 
 (rule (lower_icmp $I64 (IntCC.Equal) a b)
       (pulley_xeq64 a b))
@@ -846,7 +851,9 @@
 (rule 1 (lower (icmp cc a @ (value_type (ty_vec128 ty)) b))
   (lower_vcmp ty cc a b))
 
-(decl lower_vcmp (Type IntCC Value Value) VReg)
+; Recursion: bounded since only recursive rules swap condition code order from
+; greater into less, which can only apply once.
+(decl rec lower_vcmp (Type IntCC Value Value) VReg)
 (rule (lower_vcmp $I8X16 (IntCC.Equal) a b) (pulley_veq8x16 a b))
 (rule (lower_vcmp $I8X16 (IntCC.NotEqual) a b) (pulley_vneq8x16 a b))
 (rule (lower_vcmp $I8X16 (IntCC.SignedLessThan) a b) (pulley_vslt8x16 a b))
@@ -890,7 +897,9 @@
 (rule 1 (lower (fcmp cc a b @ (value_type (ty_vec128 ty))))
   (lower_vfcmp ty cc a b))
 
-(decl lower_fcmp (Type FloatCC Value Value) XReg)
+; Recursion: bounded since recursive rules only implement certain condition
+; codes in terms of a smaller canonical set, to which recursive rules don't apply.
+(decl rec lower_fcmp (Type FloatCC Value Value) XReg)
 
 (rule (lower_fcmp $F32 (FloatCC.Equal) a b) (pulley_feq32 a b))
 (rule (lower_fcmp $F64 (FloatCC.Equal) a b) (pulley_feq64 a b))
@@ -921,7 +930,9 @@
   (if-let true (floatcc_unordered cc))
   (pulley_xbxor32_s8 (lower_fcmp ty (floatcc_complement cc) a b) 1))
 
-(decl lower_vfcmp (Type FloatCC Value Value) VReg)
+; Recursion: bounded since recursive rules only implement certain condition
+; codes in terms of a smaller canonical set, to which recursive rules don't apply.
+(decl rec lower_vfcmp (Type FloatCC Value Value) VReg)
 
 (rule (lower_vfcmp $F32X4 (FloatCC.Equal) a b) (pulley_veqf32x4 a b))
 (rule (lower_vfcmp $F64X2 (FloatCC.Equal) a b) (pulley_veqf64x2 a b))

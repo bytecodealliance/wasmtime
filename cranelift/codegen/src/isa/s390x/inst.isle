@@ -2982,7 +2982,7 @@
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Allocate a temporary register, initialized with an immediate.
-(decl imm (Type u64) Reg)
+(decl rec imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
 (rule 7 (imm (fits_in_16 (ty_int ty)) n)
@@ -3084,7 +3084,9 @@
       (vec_load ty (memarg_const (emit_u128_be_const n))))
 
 ;; Variant with replicated immediate.
-(decl vec_imm_splat (Type u64) Reg)
+;;
+;; Recursion: bounded since recursive rules reduce number of lanes.
+(decl rec vec_imm_splat (Type u64) Reg)
 (rule 1 (vec_imm_splat (ty_vec128 ty) 0)
       (vec_imm_byte_mask ty 0))
 (rule 2 (vec_imm_splat ty @ (multi_lane 8 _) n)
@@ -3387,7 +3389,9 @@
 (rule (lower_bool $I8 cond) (select_bool_imm $I8 cond 1 0))
 
 ;; Lower a boolean condition to the values -1/0.
-(decl lower_bool_to_mask (Type ProducesBool) Reg)
+;;
+;; Recursion: at most once to reduce 128-bit to 64-bit case.
+(decl rec lower_bool_to_mask (Type ProducesBool) Reg)
 (rule 0 (lower_bool_to_mask (fits_in_64 ty) producer)
       (select_bool_imm ty producer -1 0))
 
