@@ -425,12 +425,12 @@ impl Instance {
         for (_name, entity) in module.exports.iter() {
             items.push(self._get_export(store, *entity));
         }
-        store[self.id]
-            .env_module()
+        let module = store[self.id].env_module();
+        module
             .exports
             .iter()
             .zip(items)
-            .map(|((name, _), item)| Export::new(name, item))
+            .map(|((name, _), item)| Export::new(&module.strings[name], item))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -452,7 +452,9 @@ impl Instance {
     /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
         let store = store.as_context_mut().0;
-        let entity = *store[self.id].env_module().exports.get(name)?;
+        let module = store[self.id].env_module();
+        let name = module.strings.get_atom(name)?;
+        let entity = *module.exports.get(&name)?;
         Some(self._get_export(store, entity))
     }
 

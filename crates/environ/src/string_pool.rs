@@ -101,6 +101,17 @@ impl core::ops::Index<Atom> for StringPool {
     }
 }
 
+// For convenience, to avoid `*atom` noise at call sites.
+impl core::ops::Index<&'_ Atom> for StringPool {
+    type Output = str;
+
+    #[inline]
+    #[track_caller]
+    fn index(&self, atom: &Atom) -> &Self::Output {
+        self.get(*atom).unwrap()
+    }
+}
+
 impl serde::ser::Serialize for StringPool {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -218,6 +229,20 @@ impl StringPool {
             None
         }
     }
+
+    /// Get the number of strings in this pool.
+    pub fn len(&self) -> usize {
+        self.strings.len()
+    }
+}
+
+impl Default for Atom {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            index: NonZeroU32::MAX,
+        }
+    }
 }
 
 impl fmt::Debug for Atom {
@@ -225,6 +250,17 @@ impl fmt::Debug for Atom {
         f.debug_struct("Atom")
             .field("index", &self.index())
             .finish()
+    }
+}
+
+// Allow using `Atom` in `SecondaryMap`s.
+impl crate::EntityRef for Atom {
+    fn new(index: usize) -> Self {
+        Atom::new(index)
+    }
+
+    fn index(self) -> usize {
+        Atom::index(&self)
     }
 }
 

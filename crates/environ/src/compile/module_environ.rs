@@ -1,4 +1,4 @@
-use crate::error::{Result, bail};
+use crate::error::{OutOfMemory, Result, bail};
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
@@ -7,10 +7,10 @@ use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert,
-    TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
-    WasmparserTypeConverter,
+    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, SizeOverflow,
+    StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex,
+    Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
+    WasmValType, WasmparserTypeConverter,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -373,7 +373,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             bail!("custom-descriptors proposal not implemented yet");
                         }
                     };
-                    self.declare_import(import.module, import.name, ty);
+                    self.declare_import(import.module, import.name, ty)?;
                 }
             }
 
@@ -469,7 +469,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.export_section(&exports)?;
 
                 let cnt = usize::try_from(exports.count()).unwrap();
-                self.result.module.exports.reserve(cnt);
+                self.result.module.exports.reserve(cnt)?;
 
                 for entry in exports {
                     let wasmparser::Export { name, kind, index } = entry?;
@@ -484,10 +484,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
                         ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
-                    self.result
-                        .module
-                        .exports
-                        .insert(String::from(name), entity);
+                    let name = self.result.module.strings.insert(name)?;
+                    self.result.module.exports.insert(name, entity)?;
                 }
             }
 
@@ -812,13 +810,19 @@ and for re-adding support for interface types you can see this issue:
     /// When the module linking proposal is disabled, however, disregard this
     /// logic and instead work directly with two-level imports since no
     /// instances are defined.
-    fn declare_import(&mut self, module: &'data str, field: &'data str, ty: EntityType) {
+    fn declare_import(
+        &mut self,
+        module: &'data str,
+        field: &'data str,
+        ty: EntityType,
+    ) -> Result<(), OutOfMemory> {
         let index = self.push_type(ty);
         self.result.module.initializers.push(Initializer::Import {
-            name: module.to_owned(),
-            field: field.to_owned(),
+            name: self.result.module.strings.insert(module)?,
+            field: self.result.module.strings.insert(field)?,
             index,
         });
+        Ok(())
     }
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
@@ -877,7 +881,8 @@ and for re-adding support for interface types you can see this issue:
                     }
                 }
                 wasmparser::Name::Module { name, .. } => {
-                    self.result.module.name = Some(name.to_string());
+                    self.result.module.name =
+                        Some(self.result.module.strings.insert(name).panic_on_oom());
                     if self.tunables.debug_native {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
