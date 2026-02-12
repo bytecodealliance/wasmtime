@@ -8,7 +8,10 @@ use std::{
 };
 use wasmtime::{error::OutOfMemory, *};
 use wasmtime_core::alloc::TryCollect;
-use wasmtime_environ::{PrimaryMap, SecondaryMap, collections::*};
+use wasmtime_environ::{
+    PrimaryMap, SecondaryMap,
+    collections::{self, *},
+};
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 
 #[global_allocator]
@@ -745,6 +748,24 @@ fn vec_extend() -> Result<()> {
         vec.try_extend([])?;
         vec.try_extend([()])?;
         vec.try_extend([(), (), ()])?;
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_macro_elems() -> Result<()> {
+    OomTest::new().test(|| {
+        let v = collections::vec![100, 200, 300, 400]?;
+        assert_eq!(&*v, &[100, 200, 300, 400]);
+        Ok(())
+    })
+}
+
+#[test]
+fn vec_macro_elem_len() -> Result<()> {
+    OomTest::new().test(|| {
+        let v = collections::vec![100; 3]?;
+        assert_eq!(&*v, &[100, 100, 100]);
         Ok(())
     })
 }

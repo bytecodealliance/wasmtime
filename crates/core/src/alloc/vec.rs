@@ -2,6 +2,7 @@ use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
 use core::cmp::Ordering;
 use core::marker::PhantomData;
+use core::num::NonZeroUsize;
 use core::{
     fmt, mem,
     ops::{Deref, DerefMut, Index, IndexMut},
@@ -10,6 +11,38 @@ use serde::ser::SerializeSeq;
 use std_alloc::alloc::Layout;
 use std_alloc::boxed::Box;
 use std_alloc::vec::Vec as StdVec;
+
+/// Same as the [`std::vec!`] macro but returns an error on allocation failure.
+#[macro_export]
+macro_rules! vec {
+    ( $( $elem:expr ),* ) => {{
+        let len = $crate::private_len!( $( $elem ),* );
+        $crate::alloc::Vec::with_capacity(len).and_then(|mut v| {
+            $( v.push($elem)?; )*
+            let _ = &mut v;
+            Ok(v)
+        })
+    }};
+
+    ( $elem:expr; $len:expr ) => {{
+        let len: usize = $len;
+        if let Some(len) = ::core::num::NonZeroUsize::new(len) {
+            let elem = $elem;
+            $crate::alloc::Vec::from_elem(elem, len)
+        } else {
+            Ok($crate::alloc::Vec::new())
+        }
+    }};
+
+}
+
+// Only for use by the `vec!` macro.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! private_len {
+    ( ) => { 0 };
+    ( $e:expr $( , $es:expr )* ) => { 1 + $crate::private_len!( $( $es ),* ) };
+}
 
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
 /// failure.
@@ -58,6 +91,25 @@ impl<T> Vec<T> {
     pub fn with_capacity(capacity: usize) -> Result<Self, OutOfMemory> {
         let mut v = Self::new();
         v.reserve(capacity)?;
+        Ok(v)
+    }
+
+    // For use with the `vec!` macro.
+    #[doc(hidden)]
+    #[inline]
+    pub fn from_elem(elem: T, len: NonZeroUsize) -> Result<Self, OutOfMemory>
+    where
+        T: TryClone,
+    {
+        let mut v = Self::with_capacity(len.get())?;
+
+        // Minimize calls to `TryClone` by always pushing `elem` itself as the
+        // last element.
+        for _ in 0..len.get() - 1 {
+            v.push(elem.try_clone()?)?;
+        }
+        v.push(elem)?;
+
         Ok(v)
     }
 

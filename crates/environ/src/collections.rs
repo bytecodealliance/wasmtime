@@ -13,7 +13,10 @@ pub use hash_set::HashSet;
 pub use index_map::IndexMap;
 pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;
-pub use wasmtime_core::alloc::{String, TryClone, TryNew, Vec, try_new};
+pub use wasmtime_core::{
+    alloc::{String, TryClone, TryNew, Vec, try_new},
+    vec,
+};
 
 /// Collections which abort on OOM.
 //
