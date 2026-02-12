@@ -129,7 +129,7 @@ pub enum Error {
         rules: Vec<Span>,
     },
 
-    /// Recurive rules error. Term is recursive without explicit opt-in, or vice versa.
+    /// Recursive rules error. Term is recursive without explicit opt-in.
     RecursionError {
         /// The error message.
         msg: String,
