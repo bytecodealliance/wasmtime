@@ -332,6 +332,7 @@ impl GcOpsMutator {
     // Define a mutation that splits a (rec ...) group in two, if possible.
     fn split_rec_group(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
         if c.shrink()
+            || ops.types.rec_groups.is_empty()
             || ops.types.rec_groups.len() >= usize::try_from(ops.limits.max_rec_groups).unwrap()
             || ops.types.type_defs.len() < 2
         {
