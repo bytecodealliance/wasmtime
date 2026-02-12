@@ -709,6 +709,19 @@ fn vec_shrink_to_fit() -> Result<()> {
 }
 
 #[test]
+fn vec_resize() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut v = Vec::new();
+        v.resize(10, 'a')?; // Grow.
+        v.resize(1, 'b')?; // Truncate.
+        v.resize(1, 'c')?; // Same length.
+        v.resize(3, 'd')?; // Grow again.
+        assert_eq!(&*v, &['a', 'd', 'd']);
+        Ok(())
+    })
+}
+
+#[test]
 fn vec_try_collect() -> Result<()> {
     OomTest::new().test(|| {
         iter::repeat(1).take(0).try_collect::<Vec<_>, _>()?;
