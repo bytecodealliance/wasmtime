@@ -119,8 +119,9 @@ impl TypeChecker<'_> {
         // Every export that is expected should be in the actual module we have
         for (name, expected) in expected.exports.iter() {
             let idx = actual
-                .exports
-                .get(name)
+                .strings
+                .get_atom(name)
+                .and_then(|atom| actual.exports.get(&atom))
                 .ok_or_else(|| format_err!("module export `{name}` not defined"))?;
             let actual = actual.type_of(*idx);
             matching::entity_ty(self.engine, expected, &actual)

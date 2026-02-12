@@ -469,15 +469,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.export_section(&exports)?;
 
                 let cnt = usize::try_from(exports.count()).unwrap();
-                self.result.module.exports.reserve(cnt);
-                self.result
-                    .module
-                    .export_names
-                    .resize(self.result.module.exports.len() + cnt)?;
-                self.result
-                    .module
-                    .exports_by_name
-                    .resize(self.result.module.strings.len() + cnt)?;
+                self.result.module.exports.reserve(cnt)?;
 
                 for entry in exports {
                     let wasmparser::Export { name, kind, index } = entry?;
@@ -493,12 +485,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
                     let name = self.result.module.strings.insert(name)?;
-                    let export = self.result.module.exports.push(entity);
-                    self.result.module.export_names.insert(export, name)?;
-                    self.result
-                        .module
-                        .exports_by_name
-                        .insert(name, Some(export))?;
+                    self.result.module.exports.insert(name, entity)?;
                 }
             }
 

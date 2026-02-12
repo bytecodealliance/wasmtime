@@ -1315,9 +1315,7 @@ impl<'a> Inliner<'a> {
                                     .strings
                                     .get_atom(name)
                                     .unwrap();
-                                let export =
-                                    self.nested_modules[*idx].module.exports_by_name[name].unwrap();
-                                let entity = self.nested_modules[*idx].module.exports[export];
+                                let entity = self.nested_modules[*idx].module.exports[&name];
                                 let ty = match entity {
                                     EntityIndex::Function(f) => {
                                         self.nested_modules[*idx].module.functions[f]
@@ -1493,8 +1491,7 @@ impl<'a> Inliner<'a> {
                             .strings
                             .get_atom(name)
                             .unwrap();
-                        let export = self.nested_modules[idx].module.exports_by_name[name].unwrap();
-                        let entity = self.nested_modules[idx].module.exports[export];
+                        let entity = self.nested_modules[idx].module.exports[&name];
                         ExportItem::Index(entity)
                     }
                     ModuleDef::Import(..) => ExportItem::Name(name.to_string()),

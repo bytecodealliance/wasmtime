@@ -253,9 +253,8 @@ impl<'data> Translator<'_, 'data> {
             // in-order here as well. (with an assert to double-check)
             for (adapter, name) in adapter_module.adapters.iter().zip(&names) {
                 let name = translation.module.strings.get_atom(name).unwrap();
-                let export = translation.module.exports_by_name[name].unwrap();
-                let index = translation.module.exports[export];
-                let i = component.adapter_partitionings.push((module_id, index));
+                let export = translation.module.exports[&name];
+                let i = component.adapter_partitionings.push((module_id, export));
                 assert_eq!(i, *adapter);
             }
 

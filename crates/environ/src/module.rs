@@ -304,16 +304,7 @@ pub struct Module {
     pub initializers: Vec<Initializer>,
 
     /// Exported entities.
-    pub exports: PrimaryMap<ExportIndex, EntityIndex>,
-
-    /// Each export's name.
-    pub export_names: collections::SecondaryMap<ExportIndex, Atom>,
-
-    /// A map from export string name to its `ExportIndex`.
-    ///
-    /// Atoms in the string pool which are not exports will not have an
-    /// associated `ExportIndex` value.
-    pub exports_by_name: collections::SecondaryMap<Atom, Option<ExportIndex>>,
+    pub exports: collections::IndexMap<Atom, EntityIndex>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
@@ -405,8 +396,6 @@ impl Module {
             name: Default::default(),
             initializers: Default::default(),
             exports: Default::default(),
-            export_names: Default::default(),
-            exports_by_name: Default::default(),
             start_func: Default::default(),
             table_initialization: Default::default(),
             memory_initialization: Default::default(),
@@ -694,8 +683,6 @@ impl TypeTrace for Module {
             name: _,
             initializers: _,
             exports: _,
-            export_names: _,
-            exports_by_name: _,
             start_func: _,
             table_initialization: _,
             memory_initialization: _,
@@ -748,8 +735,6 @@ impl TypeTrace for Module {
             name: _,
             initializers: _,
             exports: _,
-            export_names: _,
-            exports_by_name: _,
             start_func: _,
             table_initialization: _,
             memory_initialization: _,
