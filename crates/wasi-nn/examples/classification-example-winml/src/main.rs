@@ -121,13 +121,13 @@ fn postprocess(output_tensor: Vec<f32>) -> Vec<f32> {
 }
 
 pub fn bytes_to_f32_vec(data: Vec<u8>) -> Vec<f32> {
-    let chunks: Vec<&[u8]> = data.chunks(4).collect();
-    let v: Vec<f32> = chunks
-        .into_iter()
-        .map(|c| f32::from_ne_bytes(c.try_into().unwrap()))
-        .collect();
-
-    v.into_iter().collect()
+    assert_eq!(data.len() % 4, 0);
+    data.chunks(4)
+        .map(|c| {
+            let arr: [u8; 4] = c.try_into().unwrap();
+            f32::from_ne_bytes(arr)
+        })
+        .collect()
 }
 
 // A wrapper for class ID and match probabilities.
