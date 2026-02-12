@@ -1,5 +1,6 @@
 use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
+use core::cmp::Ordering;
 use core::marker::PhantomData;
 use core::{
     fmt, mem,
@@ -106,6 +107,34 @@ impl<T> Vec<T> {
     /// Same as [`std::vec::Vec::pop`].
     pub fn pop(&mut self) -> Option<T> {
         self.inner.pop()
+    }
+
+    /// Same as [`std::vec::Vec::truncate`].
+    pub fn truncate(&mut self, len: usize) {
+        self.inner.truncate(len);
+    }
+
+    /// Same as [`std::vec::Vec::resize`] but returns an error on allocation
+    /// failure.
+    pub fn resize(&mut self, new_len: usize, value: T) -> Result<(), OutOfMemory>
+    where
+        T: TryClone,
+    {
+        match new_len.cmp(&self.len()) {
+            Ordering::Less => self.truncate(new_len),
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                let delta = new_len - self.len();
+                self.reserve(delta)?;
+                // Minimize `try_clone` calls by always pushing `value` directly
+                // as the last element.
+                for _ in 0..delta - 1 {
+                    self.push(value.try_clone()?)?;
+                }
+                self.push(value)?;
+            }
+        }
+        Ok(())
     }
 
     /// Same as [`std::vec::Vec::into_raw_parts`].
