@@ -89,6 +89,7 @@ fn provenance_test_config() -> Config {
     config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
+    config.guest_debug(true);
     config
 }
 
@@ -133,12 +134,29 @@ fn pulley_provenance_test() -> Result<()> {
         vec![],
         vec![ValType::I32, ValType::I32, ValType::I32],
     );
-    let host_new = Func::new(&mut store, host_new_ty, |_, _params, results| {
-        results[0] = Val::I32(1);
-        results[1] = Val::I32(2);
-        results[2] = Val::I32(3);
-        Ok(())
-    });
+    let module_clone = module.clone();
+    let host_new = Func::new(
+        &mut store,
+        host_new_ty,
+        move |mut caller, _params, results| {
+            let caller_frame = caller.debug_exit_frames().next().unwrap();
+            let caller_module = caller_frame.module(&mut caller).unwrap().unwrap();
+            assert!(Module::same(caller_module, &module_clone));
+            let (caller_func, pc) = caller_frame
+                .wasm_function_index_and_pc(&mut caller)
+                .unwrap()
+                .unwrap();
+            assert_eq!(caller_func.as_u32(), 3);
+            assert_eq!(pc, 416);
+            let parent_frame = caller_frame.parent(&mut caller).unwrap();
+            assert!(parent_frame.is_none());
+
+            results[0] = Val::I32(1);
+            results[1] = Val::I32(2);
+            results[2] = Val::I32(3);
+            Ok(())
+        },
+    );
     let instance = Instance::new(&mut store, &module, &[host_wrap.into(), host_new.into()])?;
 
     for func in [

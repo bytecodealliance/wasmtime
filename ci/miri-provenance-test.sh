@@ -5,15 +5,20 @@
 # host to compile the wasm module in question to avoid needing to run Cranelift
 # under MIRI. That enables much faster iteration on the test here.
 
+# Note that this requires a nightly toolchain for the use of miri. If your
+# default toolchain is not a nightly toolchain, you can run this script via
+# `rustup run nightly ./ci/miri-provenance-test.sh`.
+
 set -ex
 
 compile() {
-  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async \
+  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async,debug \
     compile --target pulley64 $1 \
     -o ${1%.wat}.cwasm \
     -O memory-reservation=$((1 << 20)) \
     -O memory-guard-size=0 \
     -O signals-based-traps=n \
+    -D guest-debug=y \
     -W function-references,component-model-async,component-model-async-stackful,component-model-async-builtins,component-model-error-context
 }
 
