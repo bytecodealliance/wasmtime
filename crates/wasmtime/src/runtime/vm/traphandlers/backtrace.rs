@@ -220,7 +220,7 @@ impl Backtrace {
             Some((pc, fp)) => {
                 assert!(core::ptr::eq(
                     vm_store_context,
-                    state.vm_store_context.as_ptr()
+                    state.vm_store_context.get().as_ptr()
                 ));
                 (pc, fp)
             }
@@ -251,7 +251,7 @@ impl Backtrace {
                     .iter()
                     .flat_map(|state| state.iter())
                     .filter(|state| {
-                        core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr())
+                        core::ptr::eq(vm_store_context, state.vm_store_context.get().as_ptr())
                     })
                     .map(|state| unsafe {
                         (

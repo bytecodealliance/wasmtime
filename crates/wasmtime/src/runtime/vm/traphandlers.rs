@@ -544,7 +544,7 @@ mod call_thread_state {
         #[cfg(feature = "coredump")]
         pub(super) capture_coredump: bool,
 
-        pub(crate) vm_store_context: NonNull<VMStoreContext>,
+        pub(crate) vm_store_context: Cell<NonNull<VMStoreContext>>,
         pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
@@ -582,7 +582,7 @@ mod call_thread_state {
                 capture_backtrace: store.engine().config().wasm_backtrace,
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
-                vm_store_context: store.vm_store_context_ptr(),
+                vm_store_context: Cell::new(store.vm_store_context_ptr()),
                 prev: Cell::new(ptr::null()),
                 old_state,
             }
@@ -670,7 +670,7 @@ mod call_thread_state {
             }
 
             unsafe {
-                let cx = self.vm_store_context.as_ref();
+                let cx = self.vm_store_context.get().as_ref();
                 swap(
                     &cx.last_wasm_exit_trampoline_fp,
                     &mut (*self.old_state).last_wasm_exit_trampoline_fp,
@@ -803,19 +803,18 @@ impl CallThreadState {
             }
             UnwindReason::Trap(trap) => {
                 log::trace!("Capturing backtrace and coredump for {trap:?}");
-                // N.B.: we derive the `*const VMStoreContext` from our
-                // own pointer rather than the `store` so that provenance
-                // of that pointer is preserved for the subsequent `raise()`.
-                let vm_store_context = self.vm_store_context.as_ptr();
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(trap),
-                    backtrace: self.capture_backtrace(vm_store_context, None),
-                    coredump_stack: self.capture_coredump(vm_store_context, None),
+                    backtrace: self.capture_backtrace(store.vm_store_context_mut(), None),
+                    coredump_stack: self.capture_coredump(store.vm_store_context_mut(), None),
                 }
             }
         };
 
         self.unwind.set(state);
+
+        // Re-derive our VMStoreContext pointer for provenance.
+        self.vm_store_context.set(store.vm_store_context_ptr());
     }
 
     /// Helper function to perform an actual unwinding operation.
@@ -953,7 +952,7 @@ impl CallThreadState {
 
     pub(crate) fn entry_trap_handler(&self) -> Handler {
         unsafe {
-            let vm_store_context = self.vm_store_context.as_ref();
+            let vm_store_context = self.vm_store_context.get().as_ref();
             let fp = *vm_store_context.last_wasm_entry_fp.get();
             let sp = *vm_store_context.last_wasm_entry_sp.get();
             let pc = *vm_store_context.last_wasm_entry_trap_handler.get();
@@ -1062,8 +1061,10 @@ impl CallThreadState {
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::Trap,
     ) {
-        let backtrace = self.capture_backtrace(self.vm_store_context.as_ptr(), Some((pc, fp)));
-        let coredump_stack = self.capture_coredump(self.vm_store_context.as_ptr(), Some((pc, fp)));
+        let backtrace =
+            self.capture_backtrace(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
+        let coredump_stack =
+            self.capture_coredump(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
         self.unwind.set(UnwindState::UnwindToHost {
             reason: UnwindReason::Trap(TrapReason::Jit {
                 pc,

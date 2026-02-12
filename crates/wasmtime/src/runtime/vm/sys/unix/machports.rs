@@ -143,7 +143,7 @@ unsafe extern "C" fn sigbus_handler(
         };
         unsafe {
             let faulting_addr = (*siginfo).si_addr() as usize;
-            let range = &info.vm_store_context.as_ref().async_guard_range;
+            let range = &info.vm_store_context.get().as_ref().async_guard_range;
             if range.start.addr() <= faulting_addr && faulting_addr < range.end.addr() {
                 super::signals::abort_stack_overflow();
             }
