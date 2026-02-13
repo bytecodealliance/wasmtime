@@ -414,7 +414,7 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
                         "local:local/chain-http".to_owned(),
                         InstantiationArg {
                             instance: "local:local/chain-http".into(),
-                            export: Some("wasi:http/handler@0.3.0-rc-2026-01-06".into()),
+                            export: Some("wasi:http/handler@0.3.0-rc-2026-02-09".into()),
                         },
                     )]
                     .into_iter()

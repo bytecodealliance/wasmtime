@@ -1,10 +1,10 @@
-package wasi:clocks@0.3.0-rc-2026-01-06;
+package wasi:clocks@0.3.0-rc-2026-02-09;
 
 /// This interface common types used throughout wasi:clocks.
-@since(version = 0.3.0-rc-2026-01-06)
+@since(version = 0.3.0-rc-2026-02-09)
 interface types {
   /// A duration of time, in nanoseconds.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   type duration = u64;
 }
 
@@ -16,14 +16,14 @@ interface types {
 ///
 /// A monotonic clock is a clock which has an unspecified initial value, and
 /// successive reads of the clock will produce non-decreasing values.
-@since(version = 0.3.0-rc-2026-01-06)
+@since(version = 0.3.0-rc-2026-02-09)
 interface monotonic-clock {
   use types.{duration};
 
   /// A mark on a monotonic clock is a number of nanoseconds since an
   /// unspecified initial value, and can only be compared to instances from
   /// the same monotonic-clock.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   type mark = u64;
 
   /// Read the current value of the clock.
@@ -35,20 +35,20 @@ interface monotonic-clock {
   /// the value of the clock in a `mark`. Consequently, implementations
   /// should ensure that the starting time is low enough to avoid the
   /// possibility of overflow in practice.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   now: func() -> mark;
 
   /// Query the resolution of the clock. Returns the duration of time
   /// corresponding to a clock tick.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   get-resolution: func() -> duration;
 
   /// Wait until the specified mark has occurred.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   wait-until: async func(when: mark);
 
   /// Wait for the specified duration to elapse.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   wait-for: async func(how-long: duration);
 }
 
@@ -62,7 +62,7 @@ interface monotonic-clock {
 /// monotonic, making it unsuitable for measuring elapsed time.
 ///
 /// It is intended for reporting the current date and time for humans.
-@since(version = 0.3.0-rc-2026-01-06)
+@since(version = 0.3.0-rc-2026-02-09)
 interface system-clock {
   use types.{duration};
 
@@ -82,7 +82,7 @@ interface system-clock {
   ///
   /// [POSIX's Seconds Since the Epoch]: https://pubs.opengroup.org/onlinepubs/9699919799/xrat/V4_xbd_chap04.html#tag_21_04_16
   /// [Unix Time]: https://en.wikipedia.org/wiki/Unix_time
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   record instant {
     seconds: s64,
     nanoseconds: u32,
@@ -94,12 +94,12 @@ interface system-clock {
   /// will not necessarily produce a sequence of non-decreasing values.
   ///
   /// The nanoseconds field of the output is always less than 1000000000.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   now: func() -> instant;
 
   /// Query the resolution of the clock. Returns the smallest duration of time
   /// that the implementation permits distinguishing.
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   get-resolution: func() -> duration;
 }
 
@@ -148,13 +148,13 @@ interface timezone {
   to-debug-string: func() -> string;
 }
 
-@since(version = 0.3.0-rc-2026-01-06)
+@since(version = 0.3.0-rc-2026-02-09)
 world imports {
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   import types;
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   import monotonic-clock;
-  @since(version = 0.3.0-rc-2026-01-06)
+  @since(version = 0.3.0-rc-2026-02-09)
   import system-clock;
   @unstable(feature = clocks-timezone)
   import timezone;
