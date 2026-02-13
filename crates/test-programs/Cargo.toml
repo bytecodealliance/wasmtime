@@ -17,7 +17,7 @@ wit-bindgen = { workspace = true, features = ['default', 'async-spawn', 'inter-t
 libc = { workspace = true }
 futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 url = { workspace = true }
-sha2 = "0.10.2"
+sha2 = { workspace = true, features = ['std'] }
 base64 = { workspace = true }
 wasip1 = { version = "1.0.0", default-features = true }
 wasip2 = "1.0.0"

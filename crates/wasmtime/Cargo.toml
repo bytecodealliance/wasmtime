@@ -431,4 +431,7 @@ debug = [
 compile-time-builtins = ['anyhow', 'dep:wasm-compose', 'dep:tempfile']
 
 # Enable support for the common base infrastructure of record/replay
-rr = ["component-model"]
+rr = [
+  "component-model",
+  "wasmtime-environ/rr"
+]

@@ -22,7 +22,7 @@ use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
-    TypeTrace, VMOffsets, VMSharedTypeIndex,
+    TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
 };
 #[cfg(feature = "gc")]
 use wasmtime_unwinder::ExceptionTable;
@@ -161,6 +161,9 @@ struct ModuleInner {
 
     /// Runtime offset information for `VMContext`.
     offsets: VMOffsets<HostPtr>,
+
+    /// The checksum of the source binary from which this module was compiled.
+    checksum: WasmChecksum,
 }
 
 impl fmt::Debug for Module {
@@ -532,6 +535,7 @@ impl Module {
         index: Arc<CompiledFunctionsTable>,
         serializable: bool,
     ) -> Result<Self> {
+        let checksum = info.checksum;
         let module = CompiledModule::from_artifacts(code.clone(), info, index, engine.profiler())?;
 
         // Validate the module can be used with the current instance allocator.
@@ -551,6 +555,7 @@ impl Module {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 serializable,
                 offsets,
+                checksum,
             }),
         })
     }
@@ -892,6 +897,15 @@ impl Module {
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    #[allow(
+        unused,
+        reason = "used only for verification with wasmtime `rr` feature \
+        and requires a lot of unnecessary gating across crates"
+    )]
+    pub(crate) fn checksum(&self) -> &WasmChecksum {
+        &self.inner.checksum
     }
 
     /// Returns a summary of the resources required to instantiate this

@@ -144,6 +144,10 @@ define_tunables! {
         /// Whether any component model feature related to concurrency is
         /// enabled.
         pub concurrency_support: bool,
+
+        /// Whether recording in RR is enabled or not. This is used primarily
+        /// to signal checksum computation for compiled artifacts.
+        pub recording: bool,
     }
 
     pub struct ConfigTunables {
@@ -220,6 +224,7 @@ impl Tunables {
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
             concurrency_support: true,
+            recording: false,
         }
     }
 

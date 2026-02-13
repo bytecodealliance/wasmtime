@@ -2397,6 +2397,11 @@ impl Config {
         // is missing this is disabled.
         tunables.concurrency_support = cfg!(feature = "component-model-async");
 
+        #[cfg(feature = "rr")]
+        {
+            tunables.recording = matches!(self.rr_config, RRConfig::Recording);
+        }
+
         // If no target is explicitly specified then further refine `tunables`
         // for the configuration of this host depending on what platform
         // features were found available at compile time. This means that anyone

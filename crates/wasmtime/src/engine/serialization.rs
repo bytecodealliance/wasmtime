@@ -298,6 +298,7 @@ impl Metadata<'_> {
             inlining_small_callee_size,
             inlining_sum_size_threshold,
             concurrency_support,
+            recording,
 
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
@@ -383,6 +384,7 @@ impl Metadata<'_> {
             other.concurrency_support,
             "concurrency support",
         )?;
+        Self::check_bool(recording, other.recording, "RR recording support")?;
         Self::check_intra_module_inlining(inlining_intra_module, other.inlining_intra_module)?;
 
         Ok(())
