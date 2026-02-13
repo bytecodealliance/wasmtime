@@ -436,7 +436,7 @@ mod tests {
         }
     }
 
-    impl Nodes<Node> for Graph {
+    impl super::Graph<Node> for Graph {
         type NodesIter<'a>
             = cranelift_entity::Keys<Node>
         where
@@ -445,15 +445,13 @@ mod tests {
         fn nodes(&self) -> Self::NodesIter<'_> {
             self.edges.keys()
         }
-    }
 
-    impl Successors<Node> for Graph {
-        type SuccIter<'a>
+        type SuccessorsIter<'a>
             = core::iter::Copied<core::slice::Iter<'a, Node>>
         where
             Self: 'a;
 
-        fn successors(&self, node: Node) -> Self::SuccIter<'_> {
+        fn successors(&self, node: Node) -> Self::SuccessorsIter<'_> {
             self.edges[node].iter().copied()
         }
     }
