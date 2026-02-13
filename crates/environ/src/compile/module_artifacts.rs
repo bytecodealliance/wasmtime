@@ -119,9 +119,9 @@ impl<'a> ObjectBuilder<'a> {
             debuginfo,
             has_unparsed_debuginfo,
             data,
-            wasm,
             data_align,
             passive_data,
+            wasm,
             ..
         } = translation;
 
@@ -222,7 +222,7 @@ impl<'a> ObjectBuilder<'a> {
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,
                 dwarf,
             },
-            checksum: WasmChecksum::from_binary(wasm),
+            checksum: WasmChecksum::from_binary(wasm, self.tunables.recording),
         })
     }
 

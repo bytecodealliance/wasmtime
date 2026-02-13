@@ -86,3 +86,6 @@ std = [
   'indexmap/std',
   'wasmtime-core/std',
 ]
+rr = [
+  "component-model"
+]

@@ -17,7 +17,7 @@ workspace = true
 all-features = true
 
 [dependencies]
-wasmtime-environ = { workspace = true }
+wasmtime-environ = { workspace = true, features = ['rr'] }
 wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }

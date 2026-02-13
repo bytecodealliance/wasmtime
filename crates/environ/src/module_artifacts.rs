@@ -8,6 +8,7 @@ use core::{fmt, u32};
 use core::{iter, str};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use serde_derive::{Deserialize, Serialize};
+#[cfg(feature = "rr")]
 use sha2::{Digest, Sha256};
 
 /// Description of where a function is located in the text section of a
@@ -33,13 +34,25 @@ impl FunctionLoc {
 ///
 /// Allows for features requiring the exact same Wasm Module (e.g. deterministic replay)
 /// to verify that the binary used matches the one originally compiled.
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct WasmChecksum([u8; 32]);
 
 impl WasmChecksum {
-    /// Construct a [`WasmChecksum`] from the given wasm binary.
-    pub fn from_binary(bin: &[u8]) -> WasmChecksum {
-        WasmChecksum(Sha256::digest(bin).into())
+    /// Construct a [`WasmChecksum`] from the given wasm binary, used primarily for integrity
+    /// checks on compiled modules when recording configs are enabled. The checksum is not
+    /// computed when recording is disabled to prevent pessimization of non-recorded compilations.
+    pub fn from_binary(bin: &[u8], recording: bool) -> WasmChecksum {
+        #[cfg(feature = "rr")]
+        if recording {
+            WasmChecksum(Sha256::digest(bin).into())
+        } else {
+            WasmChecksum::default()
+        }
+        #[cfg(not(feature = "rr"))]
+        {
+            let _ = (bin, recording);
+            WasmChecksum::default()
+        }
     }
 }
 
