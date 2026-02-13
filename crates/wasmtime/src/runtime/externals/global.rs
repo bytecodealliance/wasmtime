@@ -208,6 +208,47 @@ impl Global {
         }
     }
 
+    /// Returns a raw pointer to this global's underlying storage.
+    ///
+    /// This is useful for cross-thread signaling scenarios (e.g. cooperative
+    /// scheduling) where one thread needs to write a flag that a running
+    /// WebAssembly module checks periodically without requiring `&mut Store`.
+    ///
+    /// The returned pointer points to a 16-byte aligned `VMGlobalDefinition`
+    /// whose first bytes store the value in native endian format. For an `i32`
+    /// global, the value occupies the first 4 bytes.
+    ///
+    /// # Safety
+    ///
+    /// - The pointer is valid for the lifetime of the `Store` that owns this
+    ///   global. Using it after the store is dropped is undefined behavior.
+    /// - For numeric types (i32, i64, f32, f64), writing to this pointer from
+    ///   another thread is safe on architectures where aligned 4/8-byte writes
+    ///   are atomic (x86, ARM64), but Rust's memory model technically considers
+    ///   this a data race. Callers should use `AtomicI32::from_ptr` or
+    ///   `write_volatile` to avoid UB.
+    /// - This must NOT be used for reference types (funcref, externref, etc.)
+    ///   as those require GC coordination.
+    /// - The global must be mutable (`Mutability::Var`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub unsafe fn value_ptr(&self, store: impl AsContext) -> *mut u8 {
+        let store = store.as_context().0;
+        assert!(
+            self._ty(store).mutability() == Mutability::Var,
+            "value_ptr requires a mutable global"
+        );
+        let content = self._ty(store).content();
+        assert!(
+            matches!(content, ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64),
+            "value_ptr only supports numeric types, got {:?}",
+            content,
+        );
+        self.definition(store).as_ptr().cast()
+    }
+
     /// Attempts to set the current value of this global to [`Val`].
     ///
     /// # Errors
