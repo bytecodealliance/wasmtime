@@ -17,7 +17,7 @@ workspace = true
 all-features = true
 
 [dependencies]
-wasmtime-environ = { workspace = true, features = ['rr'] }
+wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
@@ -431,4 +431,7 @@ debug = [
 compile-time-builtins = ['anyhow', 'dep:wasm-compose', 'dep:tempfile']
 
 # Enable support for the common base infrastructure of record/replay
-rr = ["component-model"]
+rr = [
+  "component-model",
+  "wasmtime-environ/rr"
+]

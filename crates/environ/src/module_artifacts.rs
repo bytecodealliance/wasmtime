@@ -41,18 +41,20 @@ impl WasmChecksum {
     /// Construct a [`WasmChecksum`] from the given wasm binary, used primarily for integrity
     /// checks on compiled modules when recording configs are enabled. The checksum is not
     /// computed when recording is disabled to prevent pessimization of non-recorded compilations.
+    #[cfg(feature = "rr")]
     pub fn from_binary(bin: &[u8], recording: bool) -> WasmChecksum {
-        #[cfg(feature = "rr")]
         if recording {
             WasmChecksum(Sha256::digest(bin).into())
         } else {
             WasmChecksum::default()
         }
-        #[cfg(not(feature = "rr"))]
-        {
-            let _ = (bin, recording);
-            WasmChecksum::default()
-        }
+    }
+
+    /// This method requires the `rr` feature to actual compute a checksum. Since the `rr`
+    /// feature is disabled, this only returns a default checksum value of all zeros.
+    #[cfg(not(feature = "rr"))]
+    pub fn from_binary(_: &[u8], _: bool) -> WasmChecksum {
+        WasmChecksum::default()
     }
 }
 
