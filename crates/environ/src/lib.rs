@@ -17,6 +17,7 @@ extern crate std;
 extern crate alloc;
 
 pub mod collections;
+pub mod graphs;
 pub mod prelude;
 
 mod address_map;
@@ -90,7 +91,7 @@ pub use wasmtime_core::error;
 #[cfg(feature = "anyhow")]
 pub use self::error::ToWasmtimeResult;
 
-pub use wasmtime_core::{alloc::PanicOnOom, undo::Undo};
+pub use wasmtime_core::{alloc::PanicOnOom, non_max, undo::Undo};
 
 // Only for use with `bindgen!`-generated code.
 #[doc(hidden)]
