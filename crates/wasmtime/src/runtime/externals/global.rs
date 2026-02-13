@@ -243,7 +243,10 @@ impl Global {
         let binding = self._ty(store);
         let content = binding.content();
         assert!(
-            matches!(content, ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64),
+            matches!(
+                content,
+                ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64
+            ),
             "value_ptr only supports numeric types, got {:?}",
             content,
         );
