@@ -48,7 +48,7 @@ pub enum MemoryInitialization {
     /// data segments when the module is instantiated.
     ///
     /// This is the default memory initialization type.
-    Segmented(Vec<MemoryInitializer>),
+    Segmented(collections::Vec<MemoryInitializer>),
 
     /// Memory initialization is statically known and involves a single `memcpy`
     /// or otherwise simply making the defined data visible.
@@ -88,7 +88,7 @@ pub enum MemoryInitialization {
 
 impl Default for MemoryInitialization {
     fn default() -> Self {
-        Self::Segmented(Vec::new())
+        Self::Segmented(collections::Vec::new())
     }
 }
 
@@ -233,7 +233,7 @@ pub struct TableInitialization {
     ///
     /// These element segments are iterated over during instantiation to apply
     /// any segments that weren't already moved into `initial_values` above.
-    pub segments: Vec<TableSegment>,
+    pub segments: collections::Vec<TableSegment>,
 }
 
 /// Initial value for all elements in a table.
@@ -249,7 +249,7 @@ pub enum TableInitialValue {
         /// `FuncIndex::reserved_value()`. Note that this image is empty by
         /// default and may not encompass the entire span of the table in which
         /// case the elements are initialized to null.
-        precomputed: Vec<FuncIndex>,
+        precomputed: collections::Vec<FuncIndex>,
     },
     /// An arbitrary const expression.
     Expr(ConstExpr),
@@ -301,7 +301,7 @@ pub struct Module {
     pub name: Option<Atom>,
 
     /// All import records, in the order they are declared in the module.
-    pub initializers: Vec<Initializer>,
+    pub initializers: collections::Vec<Initializer>,
 
     /// Exported entities.
     pub exports: collections::IndexMap<Atom, EntityIndex>,
@@ -316,7 +316,7 @@ pub struct Module {
     pub memory_initialization: MemoryInitialization,
 
     /// WebAssembly passive elements.
-    pub passive_elements: Vec<TableSegmentElements>,
+    pub passive_elements: collections::Vec<TableSegmentElements>,
 
     /// The map from passive element index (element segment index space) to index in `passive_elements`.
     pub passive_elements_map: BTreeMap<ElemIndex, usize>,

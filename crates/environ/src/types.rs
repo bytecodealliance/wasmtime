@@ -2,7 +2,6 @@ use crate::{Tunables, WasmResult, error::OutOfMemory, wasm_unsupported};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
-use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use wasmtime_core::alloc::{TryClone, TryCollect as _};
@@ -1536,67 +1535,80 @@ impl TypeTrace for WasmRecGroup {
     }
 }
 
+macro_rules! entity_impl_with_try_clone {
+    ( $ty:ident ) => {
+        cranelift_entity::entity_impl!($ty);
+
+        impl TryClone for $ty {
+            #[inline]
+            fn try_clone(&self) -> Result<Self, $crate::error::OutOfMemory> {
+                Ok(*self)
+            }
+        }
+    };
+}
+
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncIndex(u32);
-entity_impl!(FuncIndex);
+entity_impl_with_try_clone!(FuncIndex);
 
 /// Index type of a defined function inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedFuncIndex(u32);
-entity_impl!(DefinedFuncIndex);
+entity_impl_with_try_clone!(DefinedFuncIndex);
 
 /// Index type of a defined table inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedTableIndex(u32);
-entity_impl!(DefinedTableIndex);
+entity_impl_with_try_clone!(DefinedTableIndex);
 
 /// Index type of a defined memory inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedMemoryIndex(u32);
-entity_impl!(DefinedMemoryIndex);
+entity_impl_with_try_clone!(DefinedMemoryIndex);
 
 /// Index type of a defined memory inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct OwnedMemoryIndex(u32);
-entity_impl!(OwnedMemoryIndex);
+entity_impl_with_try_clone!(OwnedMemoryIndex);
 
 /// Index type of a defined global inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedGlobalIndex(u32);
-entity_impl!(DefinedGlobalIndex);
+entity_impl_with_try_clone!(DefinedGlobalIndex);
 
 /// Index type of a table (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TableIndex(u32);
-entity_impl!(TableIndex);
+entity_impl_with_try_clone!(TableIndex);
 
 /// Index type of a global variable (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct GlobalIndex(u32);
-entity_impl!(GlobalIndex);
+entity_impl_with_try_clone!(GlobalIndex);
 
 /// Index type of a linear memory (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct MemoryIndex(u32);
-entity_impl!(MemoryIndex);
+entity_impl_with_try_clone!(MemoryIndex);
 
 /// Index type of a canonicalized recursive type group inside a WebAssembly
 /// module (as opposed to canonicalized within the whole engine).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleInternedRecGroupIndex(u32);
-entity_impl!(ModuleInternedRecGroupIndex);
+entity_impl_with_try_clone!(ModuleInternedRecGroupIndex);
 
 /// Index type of a canonicalized recursive type group inside the whole engine
 /// (as opposed to canonicalized within just a single Wasm module).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct EngineInternedRecGroupIndex(u32);
-entity_impl!(EngineInternedRecGroupIndex);
+entity_impl_with_try_clone!(EngineInternedRecGroupIndex);
 
 /// Index type of a type (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TypeIndex(u32);
-entity_impl!(TypeIndex);
+entity_impl_with_try_clone!(TypeIndex);
 
 /// A canonicalized type index referencing a type within a single recursion
 /// group from another type within that same recursion group.
@@ -1605,7 +1617,7 @@ entity_impl!(TypeIndex);
 /// groups.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct RecGroupRelativeTypeIndex(u32);
-entity_impl!(RecGroupRelativeTypeIndex);
+entity_impl_with_try_clone!(RecGroupRelativeTypeIndex);
 
 /// A canonicalized type index for a type within a single WebAssembly module.
 ///
@@ -1616,7 +1628,7 @@ entity_impl!(RecGroupRelativeTypeIndex);
 /// involve entities defined in different modules).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleInternedTypeIndex(u32);
-entity_impl!(ModuleInternedTypeIndex);
+entity_impl_with_try_clone!(ModuleInternedTypeIndex);
 
 /// A canonicalized type index into an engine's shared type registry.
 ///
@@ -1628,7 +1640,7 @@ entity_impl!(ModuleInternedTypeIndex);
 #[repr(transparent)] // Used directly by JIT code.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct VMSharedTypeIndex(u32);
-entity_impl!(VMSharedTypeIndex);
+entity_impl_with_try_clone!(VMSharedTypeIndex);
 
 impl VMSharedTypeIndex {
     /// Create a new `VMSharedTypeIndex`.
@@ -1659,22 +1671,22 @@ impl Default for VMSharedTypeIndex {
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DataIndex(u32);
-entity_impl!(DataIndex);
+entity_impl_with_try_clone!(DataIndex);
 
 /// Index type of a passive element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ElemIndex(u32);
-entity_impl!(ElemIndex);
+entity_impl_with_try_clone!(ElemIndex);
 
 /// Index type of a defined tag inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedTagIndex(u32);
-entity_impl!(DefinedTagIndex);
+entity_impl_with_try_clone!(DefinedTagIndex);
 
 /// Index type of an event inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TagIndex(u32);
-entity_impl!(TagIndex);
+entity_impl_with_try_clone!(TagIndex);
 
 /// Index into the global list of modules found within an entire component.
 ///
@@ -1682,7 +1694,7 @@ entity_impl!(TagIndex);
 /// the original component has finished being translated.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct StaticModuleIndex(u32);
-entity_impl!(StaticModuleIndex);
+entity_impl_with_try_clone!(StaticModuleIndex);
 
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
