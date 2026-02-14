@@ -580,8 +580,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.bytes]]
-version = "1.10.0"
-when = "2025-02-03"
+version = "1.11.1"
+when = "2026-02-03"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
