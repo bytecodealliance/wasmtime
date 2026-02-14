@@ -6588,7 +6588,7 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2021-01-11"
-end = "2025-02-15"
+end = "2027-02-14"
 
 [[trusted.bzip2]]
 criteria = "safe-to-deploy"
