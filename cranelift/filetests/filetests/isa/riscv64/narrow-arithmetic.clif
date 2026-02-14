@@ -59,15 +59,15 @@ block0(v0: i32, v1: i8):
 
 ; VCode:
 ; block0:
-;   slli a4,a1,56
-;   srai a1,a4,56
+;   slli a1,a1,56
+;   srai a1,a1,56
 ;   addw a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a4, a1, 0x38
-;   srai a1, a4, 0x38
+;   slli a1, a1, 0x38
+;   srai a1, a1, 0x38
 ;   addw a0, a0, a1
 ;   ret
 
@@ -80,13 +80,13 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   sext.w a4,a1
-;   add a0,a0,a4
+;   sext.w a1,a1
+;   add a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w a4, a1
-;   add a0, a0, a4
+;   sext.w a1, a1
+;   add a0, a0, a1
 ;   ret
 

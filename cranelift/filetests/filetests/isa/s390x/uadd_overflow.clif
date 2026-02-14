@@ -9,20 +9,20 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   ark %r5, %r2, %r3
-;   clr %r5, %r2
+;   ark %r4, %r2, %r3
+;   clr %r4, %r2
 ;   lhi %r3, 0
 ;   lochil %r3, 1
-;   lgr %r2, %r5
+;   lgr %r2, %r4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ark %r5, %r2, %r3
-;   clr %r5, %r2
+;   ark %r4, %r2, %r3
+;   clr %r4, %r2
 ;   lhi %r3, 0
 ;   lochil %r3, 1
-;   lgr %r2, %r5
+;   lgr %r2, %r4
 ;   br %r14
 
 function %f4(i64, i64) -> i64, i8 {
@@ -33,19 +33,19 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   agrk %r5, %r2, %r3
-;   clgr %r5, %r2
+;   agrk %r4, %r2, %r3
+;   clgr %r4, %r2
 ;   lhi %r3, 0
 ;   lochil %r3, 1
-;   lgr %r2, %r5
+;   lgr %r2, %r4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   agrk %r5, %r2, %r3
-;   clgr %r5, %r2
+;   agrk %r4, %r2, %r3
+;   clgr %r4, %r2
 ;   lhi %r3, 0
 ;   lochil %r3, 1
-;   lgr %r2, %r5
+;   lgr %r2, %r4
 ;   br %r14
 

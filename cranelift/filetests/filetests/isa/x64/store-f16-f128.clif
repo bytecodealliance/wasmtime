@@ -11,8 +11,8 @@ block0(v0: f16, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pextrw $0x0, %xmm0, %ecx
-;   movw %cx, (%rdi)
+;   pextrw $0x0, %xmm0, %esi
+;   movw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -22,8 +22,8 @@ block0(v0: f16, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrw $0, %xmm0, %ecx
-;   movw %cx, (%rdi) ; trap: heap_oob
+;   pextrw $0, %xmm0, %esi
+;   movw %si, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

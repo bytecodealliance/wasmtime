@@ -26,15 +26,15 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,32
-;   srli a0,a2,32
+;   slli a0,a0,32
+;   srli a0,a0,32
 ;   li a1,0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x20
-;   srli a0, a2, 0x20
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
 ;   mv a1, zero
 ;   ret
 
@@ -46,15 +46,15 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srli a0,a2,48
+;   slli a0,a0,48
+;   srli a0,a0,48
 ;   li a1,0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srli a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srli a0, a0, 0x30
 ;   mv a1, zero
 ;   ret
 
@@ -118,15 +118,15 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srai a0,a2,48
+;   slli a0,a0,48
+;   srai a0,a0,48
 ;   srai a1,a0,63
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srai a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srai a0, a0, 0x30
 ;   srai a1, a0, 0x3f
 ;   ret
 
@@ -138,15 +138,15 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,56
-;   srai a0,a2,56
+;   slli a0,a0,56
+;   srai a0,a0,56
 ;   srai a1,a0,63
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x38
-;   srai a0, a2, 0x38
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
 ;   srai a1, a0, 0x3f
 ;   ret
 

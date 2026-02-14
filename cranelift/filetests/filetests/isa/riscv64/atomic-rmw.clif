@@ -10,12 +10,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amoadd.d.aqrl a3,a1,(a0)
+;   amoadd.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoadd.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoadd.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_add_i32(i64, i32) {
@@ -26,12 +26,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amoadd.w.aqrl a3,a1,(a0)
+;   amoadd.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoadd.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoadd.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_sub_i64(i64, i64) {
@@ -42,14 +42,14 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   sub a3,zero,a1
-;   amoadd.d.aqrl a5,a3,(a0)
+;   sub a1,zero,a1
+;   amoadd.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   neg a3, a1
-;   amoadd.d.aqrl a5, a3, (a0) ; trap: heap_oob
+;   neg a1, a1
+;   amoadd.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_sub_i32(i64, i32) {
@@ -60,14 +60,14 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   sub a3,zero,a1
-;   amoadd.w.aqrl a5,a3,(a0)
+;   sub a1,zero,a1
+;   amoadd.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   neg a3, a1
-;   amoadd.w.aqrl a5, a3, (a0) ; trap: heap_oob
+;   neg a1, a1
+;   amoadd.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_and_i64(i64, i64) {
@@ -78,12 +78,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amoand.d.aqrl a3,a1,(a0)
+;   amoand.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoand.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoand.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_and_i32(i64, i32) {
@@ -94,12 +94,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amoand.w.aqrl a3,a1,(a0)
+;   amoand.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoand.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoand.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_nand_i64(i64, i64) {
@@ -110,16 +110,20 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   atomic_rmw.i64 nand a3,a1,(a0)##t0=a4 offset=zero
+;   mv a2,a0
+;   mv a3,a1
+;   atomic_rmw.i64 nand a1,a3,(a2)##t0=a0 offset=zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lr.d.aqrl a3, (a0) ; trap: heap_oob
-;   and a4, a1, a3
-;   not a4, a4
-;   sc.d.aqrl a4, a4, (a0) ; trap: heap_oob
-;   bnez a4, -0x10
+;   mv a2, a0
+;   mv a3, a1
+;   lr.d.aqrl a1, (a2) ; trap: heap_oob
+;   and a0, a3, a1
+;   not a0, a0
+;   sc.d.aqrl a0, a0, (a2) ; trap: heap_oob
+;   bnez a0, -0x10
 ;   ret
 
 function %atomic_rmw_nand_i32(i64, i32) {
@@ -130,16 +134,20 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   atomic_rmw.i32 nand a3,a1,(a0)##t0=a4 offset=zero
+;   mv a2,a0
+;   mv a3,a1
+;   atomic_rmw.i32 nand a1,a3,(a2)##t0=a0 offset=zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lr.w.aqrl a3, (a0) ; trap: heap_oob
-;   and a4, a1, a3
-;   not a4, a4
-;   sc.w.aqrl a4, a4, (a0) ; trap: heap_oob
-;   bnez a4, -0x10
+;   mv a2, a0
+;   mv a3, a1
+;   lr.w.aqrl a1, (a2) ; trap: heap_oob
+;   and a0, a3, a1
+;   not a0, a0
+;   sc.w.aqrl a0, a0, (a2) ; trap: heap_oob
+;   bnez a0, -0x10
 ;   ret
 
 function %atomic_rmw_or_i64(i64, i64) {
@@ -150,12 +158,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amoor.d.aqrl a3,a1,(a0)
+;   amoor.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoor.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoor.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_or_i32(i64, i32) {
@@ -166,12 +174,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amoor.w.aqrl a3,a1,(a0)
+;   amoor.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoor.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoor.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_xor_i64(i64, i64) {
@@ -182,12 +190,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amoxor.d.aqrl a3,a1,(a0)
+;   amoxor.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoxor.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoxor.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_xor_i32(i64, i32) {
@@ -198,12 +206,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amoxor.w.aqrl a3,a1,(a0)
+;   amoxor.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amoxor.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amoxor.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_smax_i64(i64, i64) {
@@ -214,12 +222,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amomax.d.aqrl a3,a1,(a0)
+;   amomax.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomax.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomax.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_smax_i32(i64, i32) {
@@ -230,12 +238,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amomax.w.aqrl a3,a1,(a0)
+;   amomax.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomax.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomax.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_umax_i64(i64, i64) {
@@ -246,12 +254,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amomaxu.d.aqrl a3,a1,(a0)
+;   amomaxu.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomaxu.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomaxu.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_umax_i32(i64, i32) {
@@ -262,12 +270,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amomaxu.w.aqrl a3,a1,(a0)
+;   amomaxu.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomaxu.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomaxu.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_smin_i64(i64, i64) {
@@ -278,12 +286,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amomin.d.aqrl a3,a1,(a0)
+;   amomin.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomin.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomin.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_smin_i32(i64, i32) {
@@ -294,12 +302,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amomin.w.aqrl a3,a1,(a0)
+;   amomin.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amomin.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amomin.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_umin_i64(i64, i64) {
@@ -310,12 +318,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   amominu.d.aqrl a3,a1,(a0)
+;   amominu.d.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amominu.d.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amominu.d.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_rmw_umin_i32(i64, i32) {
@@ -326,11 +334,11 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   amominu.w.aqrl a3,a1,(a0)
+;   amominu.w.aqrl a0,a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   amominu.w.aqrl a3, a1, (a0) ; trap: heap_oob
+;   amominu.w.aqrl a0, a1, (a0) ; trap: heap_oob
 ;   ret
 

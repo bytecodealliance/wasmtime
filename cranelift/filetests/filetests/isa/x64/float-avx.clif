@@ -445,10 +445,10 @@ block0(v0: i32x4):
 ;   vpsrld $0x10, %xmm2, %xmm4
 ;   vpsubd %xmm4, %xmm0, %xmm6
 ;   vcvtdq2ps %xmm4, %xmm0
-;   vpsrld $0x1, %xmm6, %xmm2
-;   vcvtdq2ps %xmm2, %xmm4
-;   vaddps %xmm4, %xmm4, %xmm6
-;   vaddps %xmm0, %xmm6, %xmm0
+;   vpsrld $0x1, %xmm6, %xmm1
+;   vcvtdq2ps %xmm1, %xmm1
+;   vaddps %xmm1, %xmm1, %xmm1
+;   vaddps %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -462,10 +462,10 @@ block0(v0: i32x4):
 ;   vpsrld $0x10, %xmm2, %xmm4
 ;   vpsubd %xmm4, %xmm0, %xmm6
 ;   vcvtdq2ps %xmm4, %xmm0
-;   vpsrld $1, %xmm6, %xmm2
-;   vcvtdq2ps %xmm2, %xmm4
-;   vaddps %xmm4, %xmm4, %xmm6
-;   vaddps %xmm0, %xmm6, %xmm0
+;   vpsrld $1, %xmm6, %xmm1
+;   vcvtdq2ps %xmm1, %xmm1
+;   vaddps %xmm1, %xmm1, %xmm1
+;   vaddps %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -534,9 +534,9 @@ block0(v0: f32x4):
 ;   vandps %xmm2, %xmm0, %xmm4
 ;   vpxor %xmm4, %xmm2, %xmm6
 ;   vcvttps2dq %xmm4, %xmm0
-;   vpand %xmm6, %xmm0, %xmm2
-;   vpsrad $0x1f, %xmm2, %xmm4
-;   vpxor %xmm0, %xmm4, %xmm0
+;   vpand %xmm6, %xmm0, %xmm1
+;   vpsrad $0x1f, %xmm1, %xmm1
+;   vpxor %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -550,9 +550,9 @@ block0(v0: f32x4):
 ;   vandps %xmm2, %xmm0, %xmm4
 ;   vpxor %xmm4, %xmm2, %xmm6
 ;   vcvttps2dq %xmm4, %xmm0
-;   vpand %xmm6, %xmm0, %xmm2
-;   vpsrad $0x1f, %xmm2, %xmm4
-;   vpxor %xmm0, %xmm4, %xmm0
+;   vpand %xmm6, %xmm0, %xmm1
+;   vpsrad $0x1f, %xmm1, %xmm1
+;   vpxor %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

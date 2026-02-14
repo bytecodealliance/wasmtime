@@ -78,8 +78,8 @@ block0(v0: i64):
 ;   vst %v31, 704(%r15)
 ;   stmg %r0, %r5, 160(%r15)
 ; block0:
-;   bras %r1, 12 ; data %libcall + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %libcall + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
 ;   vl %v0, 208(%r15)
 ;   vl %v1, 224(%r15)
 ;   vl %v2, 240(%r15)
@@ -159,8 +159,8 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   lg %r3, 0(%r1)
+;   basr %r14, %r3
 ;   vl %v0, 0xd0(%r15)
 ;   vl %v1, 0xe0(%r15)
 ;   vl %v2, 0xf0(%r15)

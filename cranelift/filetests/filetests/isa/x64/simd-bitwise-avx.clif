@@ -40,13 +40,13 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   vxorps %xmm0, %xmm0, %xmm2
+;   vxorps %xmm0, %xmm0, %xmm0
 ;   vmovss (%rdi), %xmm1
-;   movl $0x80000000, %r8d
-;   vmovd %r8d, %xmm7
-;   vandnps %xmm2, %xmm7, %xmm2
-;   vandps %xmm1, %xmm7, %xmm3
-;   vorps %xmm3, %xmm2, %xmm0
+;   movl $0x80000000, %esi
+;   vmovd %esi, %xmm7
+;   vandnps %xmm0, %xmm7, %xmm0
+;   vandps %xmm1, %xmm7, %xmm1
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -56,13 +56,13 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vxorps %xmm0, %xmm0, %xmm2
+;   vxorps %xmm0, %xmm0, %xmm0
 ;   vmovss (%rdi), %xmm1
-;   movl $0x80000000, %r8d
-;   vmovd %r8d, %xmm7
-;   vandnps %xmm2, %xmm7, %xmm2
-;   vandps %xmm1, %xmm7, %xmm3
-;   vorps %xmm3, %xmm2, %xmm0
+;   movl $0x80000000, %esi
+;   vmovd %esi, %xmm7
+;   vandnps %xmm0, %xmm7, %xmm0
+;   vandps %xmm1, %xmm7, %xmm1
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

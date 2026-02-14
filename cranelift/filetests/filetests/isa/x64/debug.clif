@@ -18,19 +18,19 @@ block0(v0: i32, v1: i32):
 ;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
 ;   movq %r12, 0x40(%rsp)
-;   movq %r14, 0x48(%rsp)
+;   movq %r13, 0x48(%rsp)
 ; block0:
-;   load_ext_name %f1+0, %rdx
+;   load_ext_name %f1+0, %r8
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(0), User(0)]
-;   movq %rsi, %r12
-;   movq %rdi, %r14
-;   call    *%rdx
+;   movq %rdi, %r12
+;   movq %rsi, %r13
+;   call    *%r8
 ;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
 ;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
-;   leal (%r14, %r12), %eax
+;   leal (%r12, %r13), %eax
 ;   movq 0x40(%rsp), %r12
-;   movq 0x48(%rsp), %r14
+;   movq 0x48(%rsp), %r13
 ;   addq $0x50, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -42,15 +42,15 @@ block0(v0: i32, v1: i32):
 ;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
 ;   movq %r12, 0x40(%rsp)
-;   movq %r14, 0x48(%rsp)
+;   movq %r13, 0x48(%rsp)
 ; block1: ; offset 0x12
-;   movabsq $0, %rdx ; reloc_external Abs8 %f1 0
-;   movq %rsi, %r12
-;   movq %rdi, %r14
-;   callq *%rdx
-;   leal (%r14, %r12), %eax
+;   movabsq $0, %r8 ; reloc_external Abs8 %f1 0
+;   movq %rdi, %r12
+;   movq %rsi, %r13
+;   callq *%r8
+;   leal (%r12, %r13), %eax
 ;   movq 0x40(%rsp), %r12
-;   movq 0x48(%rsp), %r14
+;   movq 0x48(%rsp), %r13
 ;   addq $0x50, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -70,18 +70,18 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
-;   movq %rbx, 0x40(%rsp)
-;   movq %r15, 0x48(%rsp)
+;   movq %r12, 0x40(%rsp)
+;   movq %r13, 0x48(%rsp)
 ; block0:
-;   movq %rdi, %rbx
-;   movq %rsi, %r15
+;   movq %rdi, %r12
+;   movq %rsi, %r13
 ;   call    TestCase(%f1)
 ;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
 ;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
-;   leal (%rbx, %r15), %eax
-;   movq 0x40(%rsp), %rbx
-;   movq 0x48(%rsp), %r15
+;   leal (%r12, %r13), %eax
+;   movq 0x40(%rsp), %r12
+;   movq 0x48(%rsp), %r13
 ;   addq $0x50, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -92,15 +92,15 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
-;   movq %rbx, 0x40(%rsp)
-;   movq %r15, 0x48(%rsp)
+;   movq %r12, 0x40(%rsp)
+;   movq %r13, 0x48(%rsp)
 ; block1: ; offset 0x12
-;   movq %rdi, %rbx
-;   movq %rsi, %r15
+;   movq %rdi, %r12
+;   movq %rsi, %r13
 ;   callq 0x1d ; reloc_external CallPCRel4 %f1 -4
-;   leal (%rbx, %r15), %eax
-;   movq 0x40(%rsp), %rbx
-;   movq 0x48(%rsp), %r15
+;   leal (%r12, %r13), %eax
+;   movq 0x40(%rsp), %r12
+;   movq 0x48(%rsp), %r13
 ;   addq $0x50, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

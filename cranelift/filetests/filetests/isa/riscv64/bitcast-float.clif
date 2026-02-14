@@ -26,16 +26,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   lui a2,-16
-;   or a4,a0,a2
-;   fmv.w.x fa0,a4
+;   lui a1,-16
+;   or a0,a0,a1
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a2, 0xffff0
-;   or a4, a0, a2
-;   fmv.w.x fa0, a4
+;   lui a1, 0xffff0
+;   or a0, a0, a1
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %bitcast_f32_to_i32(f32) -> i32 {

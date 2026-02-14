@@ -299,33 +299,33 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-264192
-;   fmv.w.x fa1,a5
-;   fle.s a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,325632
-;   fmv.w.x fa2,a0
-;   fle.s a4,fa2,fa0
-;   trap_if int_ovf##(a4 ne zero)
+;   feq.s a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,-264192
+;   fmv.w.x fa1,a0
+;   fle.s a0,fa0,fa1
+;   trap_if int_ovf##(a0 ne zero)
+;   lui a2,325632
+;   fmv.w.x fa4,a2
+;   fle.s a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.wu.s a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a2, fa0, fa0
-;   bnez a2, 8
+;   feq.s a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbf800
-;   fmv.w.x fa1, a5
-;   fle.s a3, fa0, fa1
-;   beqz a3, 8
+;   lui a0, 0xbf800
+;   fmv.w.x fa1, a0
+;   fle.s a0, fa0, fa1
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x4f800
-;   fmv.w.x fa2, a0
-;   fle.s a4, fa2, fa0
-;   beqz a4, 8
+;   lui a2, 0x4f800
+;   fmv.w.x fa4, a2
+;   fle.s a0, fa4, fa0
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.wu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
@@ -338,34 +338,34 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-200704
-;   addi a1,a5,1
-;   fmv.w.x fa3,a1
-;   fle.s a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,323584
-;   fmv.w.x fa4,a2
-;   fle.s a0,fa4,fa0
+;   feq.s a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,-200704
+;   addi a0,a0,1
+;   fmv.w.x fa1,a0
+;   fle.s a1,fa0,fa1
+;   trap_if int_ovf##(a1 ne zero)
+;   lui a4,323584
+;   fmv.w.x fa1,a4
+;   fle.s a0,fa1,fa0
 ;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.w.s a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a2, fa0, fa0
-;   bnez a2, 8
+;   feq.s a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xcf000
-;   addi a1, a5, 1
-;   fmv.w.x fa3, a1
-;   fle.s a5, fa0, fa3
-;   beqz a5, 8
+;   lui a0, 0xcf000
+;   addi a0, a0, 1
+;   fmv.w.x fa1, a0
+;   fle.s a1, fa0, fa1
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x4f000
-;   fmv.w.x fa4, a2
-;   fle.s a0, fa4, fa0
+;   lui a4, 0x4f000
+;   fmv.w.x fa1, a4
+;   fle.s a0, fa1, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.w.s a0, fa0, rtz ; trap: bad_toint
@@ -379,33 +379,33 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-264192
-;   fmv.w.x fa1,a5
-;   fle.s a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,391168
-;   fmv.w.x fa2,a0
-;   fle.s a4,fa2,fa0
-;   trap_if int_ovf##(a4 ne zero)
+;   feq.s a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,-264192
+;   fmv.w.x fa1,a0
+;   fle.s a0,fa0,fa1
+;   trap_if int_ovf##(a0 ne zero)
+;   lui a2,391168
+;   fmv.w.x fa4,a2
+;   fle.s a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.lu.s a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a2, fa0, fa0
-;   bnez a2, 8
+;   feq.s a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbf800
-;   fmv.w.x fa1, a5
-;   fle.s a3, fa0, fa1
-;   beqz a3, 8
+;   lui a0, 0xbf800
+;   fmv.w.x fa1, a0
+;   fle.s a0, fa0, fa1
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x5f800
-;   fmv.w.x fa2, a0
-;   fle.s a4, fa2, fa0
-;   beqz a4, 8
+;   lui a2, 0x5f800
+;   fmv.w.x fa4, a2
+;   fle.s a0, fa4, fa0
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.lu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
@@ -418,34 +418,34 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-135168
-;   addi a1,a5,1
-;   fmv.w.x fa3,a1
-;   fle.s a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,389120
-;   fmv.w.x fa4,a2
-;   fle.s a0,fa4,fa0
+;   feq.s a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,-135168
+;   addi a0,a0,1
+;   fmv.w.x fa1,a0
+;   fle.s a1,fa0,fa1
+;   trap_if int_ovf##(a1 ne zero)
+;   lui a4,389120
+;   fmv.w.x fa1,a4
+;   fle.s a0,fa1,fa0
 ;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.l.s a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a2, fa0, fa0
-;   bnez a2, 8
+;   feq.s a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xdf000
-;   addi a1, a5, 1
-;   fmv.w.x fa3, a1
-;   fle.s a5, fa0, fa3
-;   beqz a5, 8
+;   lui a0, 0xdf000
+;   addi a0, a0, 1
+;   fmv.w.x fa1, a0
+;   fle.s a1, fa0, fa1
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x5f000
-;   fmv.w.x fa4, a2
-;   fle.s a0, fa4, fa0
+;   lui a4, 0x5f000
+;   fmv.w.x fa1, a4
+;   fle.s a0, fa1, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.l.s a0, fa0, rtz ; trap: bad_toint
@@ -459,37 +459,37 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   feq.d a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,3071
-;   slli a1,a5,40
-;   fmv.d.x fa3,a1
-;   fle.d a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,1055
-;   slli a4,a2,40
-;   fmv.d.x fa1,a4
-;   fle.d a2,fa1,fa0
-;   trap_if int_ovf##(a2 ne zero)
+;   feq.d a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,3071
+;   slli a0,a0,40
+;   fmv.d.x fa1,a0
+;   fle.d a1,fa0,fa1
+;   trap_if int_ovf##(a1 ne zero)
+;   lui a4,1055
+;   slli a0,a4,40
+;   fmv.d.x fa1,a0
+;   fle.d a0,fa1,fa0
+;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.wu.d a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.d a2, fa0, fa0
-;   bnez a2, 8
+;   feq.d a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbff
-;   slli a1, a5, 0x28
-;   fmv.d.x fa3, a1
-;   fle.d a5, fa0, fa3
-;   beqz a5, 8
+;   lui a0, 0xbff
+;   slli a0, a0, 0x28
+;   fmv.d.x fa1, a0
+;   fle.d a1, fa0, fa1
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x41f
-;   slli a4, a2, 0x28
-;   fmv.d.x fa1, a4
-;   fle.d a2, fa1, fa0
-;   beqz a2, 8
+;   lui a4, 0x41f
+;   slli a0, a4, 0x28
+;   fmv.d.x fa1, a0
+;   fle.d a0, fa1, fa0
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.wu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
@@ -502,35 +502,35 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   feq.d a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   ld a5,[const(0)]
-;   fmv.d.x fa1,a5
-;   fle.d a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,527
-;   slli a2,a0,41
-;   fmv.d.x fa4,a2
-;   fle.d a0,fa4,fa0
+;   feq.d a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   ld a0,[const(0)]
+;   fmv.d.x fa1,a0
+;   fle.d a0,fa0,fa1
+;   trap_if int_ovf##(a0 ne zero)
+;   lui a2,527
+;   slli a4,a2,41
+;   fmv.d.x fa1,a4
+;   fle.d a0,fa1,fa0
 ;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.w.d a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.d a2, fa0, fa0
-;   bnez a2, 8
+;   feq.d a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   auipc a5, 0
-;   ld a5, 0x3c(a5)
-;   fmv.d.x fa1, a5
-;   fle.d a3, fa0, fa1
-;   beqz a3, 8
+;   auipc a0, 0
+;   ld a0, 0x3c(a0)
+;   fmv.d.x fa1, a0
+;   fle.d a0, fa0, fa1
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x20f
-;   slli a2, a0, 0x29
-;   fmv.d.x fa4, a2
-;   fle.d a0, fa4, fa0
+;   lui a2, 0x20f
+;   slli a4, a2, 0x29
+;   fmv.d.x fa1, a4
+;   fle.d a0, fa1, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.w.d a0, fa0, rtz ; trap: bad_toint
@@ -547,37 +547,37 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   feq.d a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,3071
-;   slli a1,a5,40
-;   fmv.d.x fa3,a1
-;   fle.d a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,1087
-;   slli a4,a2,40
-;   fmv.d.x fa1,a4
-;   fle.d a2,fa1,fa0
-;   trap_if int_ovf##(a2 ne zero)
+;   feq.d a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   lui a0,3071
+;   slli a0,a0,40
+;   fmv.d.x fa1,a0
+;   fle.d a1,fa0,fa1
+;   trap_if int_ovf##(a1 ne zero)
+;   lui a4,1087
+;   slli a0,a4,40
+;   fmv.d.x fa1,a0
+;   fle.d a0,fa1,fa0
+;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.lu.d a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.d a2, fa0, fa0
-;   bnez a2, 8
+;   feq.d a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbff
-;   slli a1, a5, 0x28
-;   fmv.d.x fa3, a1
-;   fle.d a5, fa0, fa3
-;   beqz a5, 8
+;   lui a0, 0xbff
+;   slli a0, a0, 0x28
+;   fmv.d.x fa1, a0
+;   fle.d a1, fa0, fa1
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x43f
-;   slli a4, a2, 0x28
-;   fmv.d.x fa1, a4
-;   fle.d a2, fa1, fa0
-;   beqz a2, 8
+;   lui a4, 0x43f
+;   slli a0, a4, 0x28
+;   fmv.d.x fa1, a0
+;   fle.d a0, fa1, fa0
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.lu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
@@ -590,35 +590,35 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   feq.d a2,fa0,fa0
-;   trap_if bad_toint##(a2 eq zero)
-;   ld a5,[const(0)]
-;   fmv.d.x fa1,a5
-;   fle.d a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,543
-;   slli a2,a0,41
-;   fmv.d.x fa4,a2
-;   fle.d a0,fa4,fa0
+;   feq.d a0,fa0,fa0
+;   trap_if bad_toint##(a0 eq zero)
+;   ld a0,[const(0)]
+;   fmv.d.x fa1,a0
+;   fle.d a0,fa0,fa1
+;   trap_if int_ovf##(a0 ne zero)
+;   lui a2,543
+;   slli a4,a2,41
+;   fmv.d.x fa1,a4
+;   fle.d a0,fa1,fa0
 ;   trap_if int_ovf##(a0 ne zero)
 ;   fcvt.l.d a0,fa0,rtz
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.d a2, fa0, fa0
-;   bnez a2, 8
+;   feq.d a0, fa0, fa0
+;   bnez a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   auipc a5, 0
-;   ld a5, 0x3c(a5)
-;   fmv.d.x fa1, a5
-;   fle.d a3, fa0, fa1
-;   beqz a3, 8
+;   auipc a0, 0
+;   ld a0, 0x3c(a0)
+;   fmv.d.x fa1, a0
+;   fle.d a0, fa0, fa1
+;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x21f
-;   slli a2, a0, 0x29
-;   fmv.d.x fa4, a2
-;   fle.d a0, fa4, fa0
+;   lui a2, 0x21f
+;   slli a4, a2, 0x29
+;   fmv.d.x fa1, a4
+;   fle.d a0, fa1, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   fcvt.l.d a0, fa0, rtz ; trap: bad_toint
@@ -763,18 +763,18 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   fcvt.wu.s a2,fa0,rtz
-;   feq.s a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.wu.s a0,fa0,rtz
+;   feq.s a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.wu.s a2, fa0, rtz ; trap: bad_toint
-;   feq.s a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.wu.s a0, fa0, rtz ; trap: bad_toint
+;   feq.s a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f50(f32) -> i32 {
@@ -785,18 +785,18 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   fcvt.w.s a2,fa0,rtz
-;   feq.s a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.w.s a0,fa0,rtz
+;   feq.s a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.w.s a2, fa0, rtz ; trap: bad_toint
-;   feq.s a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.w.s a0, fa0, rtz ; trap: bad_toint
+;   feq.s a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f51(f32) -> i64 {
@@ -807,18 +807,18 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   fcvt.lu.s a2,fa0,rtz
-;   feq.s a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.lu.s a0,fa0,rtz
+;   feq.s a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.lu.s a2, fa0, rtz ; trap: bad_toint
-;   feq.s a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.lu.s a0, fa0, rtz ; trap: bad_toint
+;   feq.s a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f52(f32) -> i64 {
@@ -829,18 +829,18 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   fcvt.l.s a2,fa0,rtz
-;   feq.s a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.l.s a0,fa0,rtz
+;   feq.s a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.l.s a2, fa0, rtz ; trap: bad_toint
-;   feq.s a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.l.s a0, fa0, rtz ; trap: bad_toint
+;   feq.s a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f53(f64) -> i32 {
@@ -851,18 +851,18 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   fcvt.wu.d a2,fa0,rtz
-;   feq.d a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.wu.d a0,fa0,rtz
+;   feq.d a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.wu.d a2, fa0, rtz ; trap: bad_toint
-;   feq.d a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.wu.d a0, fa0, rtz ; trap: bad_toint
+;   feq.d a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f54(f64) -> i32 {
@@ -873,18 +873,18 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   fcvt.w.d a2,fa0,rtz
-;   feq.d a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.w.d a0,fa0,rtz
+;   feq.d a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.w.d a2, fa0, rtz ; trap: bad_toint
-;   feq.d a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.w.d a0, fa0, rtz ; trap: bad_toint
+;   feq.d a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f55(f64) -> i64 {
@@ -895,18 +895,18 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   fcvt.lu.d a2,fa0,rtz
-;   feq.d a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.lu.d a0,fa0,rtz
+;   feq.d a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.lu.d a2, fa0, rtz ; trap: bad_toint
-;   feq.d a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.lu.d a0, fa0, rtz ; trap: bad_toint
+;   feq.d a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 
 function %f56(f64) -> i64 {
@@ -917,17 +917,17 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   fcvt.l.d a2,fa0,rtz
-;   feq.d a4,fa0,fa0
-;   sub a0,zero,a4
-;   and a0,a2,a0
+;   fcvt.l.d a0,fa0,rtz
+;   feq.d a1,fa0,fa0
+;   sub a1,zero,a1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.l.d a2, fa0, rtz ; trap: bad_toint
-;   feq.d a4, fa0, fa0
-;   neg a0, a4
-;   and a0, a2, a0
+;   fcvt.l.d a0, fa0, rtz ; trap: bad_toint
+;   feq.d a1, fa0, fa0
+;   neg a1, a1
+;   and a0, a0, a1
 ;   ret
 

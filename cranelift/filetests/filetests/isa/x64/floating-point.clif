@@ -11,8 +11,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $0x7fffffffffffffff, %rax
-;   movq %rax, %xmm4
+;   movabsq $0x7fffffffffffffff, %rdx
+;   movq %rdx, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -23,8 +23,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0x7fffffffffffffff, %rax
-;   movq %rax, %xmm4
+;   movabsq $0x7fffffffffffffff, %rdx
+;   movq %rdx, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -42,8 +42,8 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movsd (%rdi), %xmm0
-;   movabsq $0x7fffffffffffffff, %rcx
-;   movq %rcx, %xmm5
+;   movabsq $0x7fffffffffffffff, %rsi
+;   movq %rsi, %xmm5
 ;   andpd %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -55,8 +55,8 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movsd (%rdi), %xmm0 ; trap: heap_oob
-;   movabsq $0x7fffffffffffffff, %rcx
-;   movq %rcx, %xmm5
+;   movabsq $0x7fffffffffffffff, %rsi
+;   movq %rsi, %xmm5
 ;   andpd %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

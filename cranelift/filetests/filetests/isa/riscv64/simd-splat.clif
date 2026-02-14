@@ -11,15 +11,15 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a1 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v8,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xd7, 0xc5, 0x05, 0x5e
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x57, 0xc4, 0x05, 0x5e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_i16x8(i16) -> i16x8 {
@@ -30,16 +30,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a1 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v8,a1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0xc5, 0x05, 0x5e
+;   .byte 0x57, 0xc4, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_i32x4(i32) -> i32x4 {
@@ -50,16 +50,16 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a1 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v8,a1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0xc5, 0x05, 0x5e
+;   .byte 0x57, 0xc4, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_i64x2(i64) -> i64x2 {
@@ -70,16 +70,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   vmv.v.x v11,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.x v8,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0xc5, 0x05, 0x5e
+;   .byte 0x57, 0xc4, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_const_i8x16() -> i8x16 {
@@ -91,15 +91,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   vmv.v.i v10,2 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v8,2 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x57, 0x35, 0x01, 0x5e
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x57, 0x34, 0x01, 0x5e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_const_i16x8() -> i16x8 {
@@ -111,16 +111,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   vmv.v.i v10,2 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v8,2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0x57, 0x35, 0x01, 0x5e
+;   .byte 0x57, 0x34, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_const_i32x4() -> i32x4 {
@@ -132,16 +132,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   vmv.v.i v10,2 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v8,2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0x57, 0x35, 0x01, 0x5e
+;   .byte 0x57, 0x34, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_const_i64x2() -> i64x2 {
@@ -153,16 +153,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   vmv.v.i v10,2 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v8,2 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0x35, 0x01, 0x5e
+;   .byte 0x57, 0x34, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_f32x4(f32) -> f32x4 {
@@ -173,16 +173,16 @@ block0(v0: f32):
 
 ; VCode:
 ; block0:
-;   vfmv.v.f v11,fa0 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmv.v.f v8,fa0 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0x55, 0x05, 0x5e
+;   .byte 0x57, 0x54, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 
 function %splat_f64x2(f64) -> f64x2 {
@@ -193,15 +193,15 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   vfmv.v.f v11,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmv.v.f v8,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0x55, 0x05, 0x5e
+;   .byte 0x57, 0x54, 0x05, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 

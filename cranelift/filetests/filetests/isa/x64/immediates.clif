@@ -19,15 +19,15 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $0xffffeeeeddddcccc, %r10
-;   leaq (%rdi, %r10), %r10
-;   movq %r10, (%rsi)
-;   movq %rdi, %r11
-;   subq (%rip), %r11
-;   movq %r11, (%rsi)
-;   movq %rdi, %rax
-;   andq (%rip), %rax
-;   movq %rax, (%rsi)
+;   movabsq $0xffffeeeeddddcccc, %r8
+;   leaq (%rdi, %r8), %r8
+;   movq %r8, (%rsi)
+;   movq %rdi, %r8
+;   subq (%rip), %r8
+;   movq %r8, (%rsi)
+;   movq %rdi, %r9
+;   andq (%rip), %r9
+;   movq %r9, (%rsi)
 ;   orq (%rip), %rdi
 ;   movq %rdi, (%rsi)
 ;   movq %rbp, %rsp
@@ -39,15 +39,15 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $18446725308424768716, %r10
-;   addq %rdi, %r10
-;   movq %r10, (%rsi) ; trap: heap_oob
-;   movq %rdi, %r11
-;   subq 0x22(%rip), %r11
-;   movq %r11, (%rsi) ; trap: heap_oob
-;   movq %rdi, %rax
-;   andq 0x15(%rip), %rax
-;   movq %rax, (%rsi) ; trap: heap_oob
+;   movabsq $18446725308424768716, %r8
+;   addq %rdi, %r8
+;   movq %r8, (%rsi) ; trap: heap_oob
+;   movq %rdi, %r8
+;   subq 0x22(%rip), %r8
+;   movq %r8, (%rsi) ; trap: heap_oob
+;   movq %rdi, %r9
+;   andq 0x15(%rip), %r9
+;   movq %r9, (%rsi) ; trap: heap_oob
 ;   orq 0xb(%rip), %rdi
 ;   movq %rdi, (%rsi) ; trap: heap_oob
 ;   movq %rbp, %rsp

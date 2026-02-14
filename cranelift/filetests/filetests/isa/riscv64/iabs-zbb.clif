@@ -9,16 +9,16 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   sext.b a2,a0
-;   sub a4,zero,a2
-;   max a0,a2,a4
+;   sext.b a0,a0
+;   sub a1,zero,a0
+;   max a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x13, 0x16, 0x45, 0x60
-;   neg a4, a2
-;   .byte 0x33, 0x65, 0xe6, 0x0a
+;   .byte 0x13, 0x15, 0x45, 0x60
+;   neg a1, a0
+;   .byte 0x33, 0x65, 0xb5, 0x0a
 ;   ret
 
 function %iabs_i16(i16) -> i16 {
@@ -29,16 +29,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   sext.h a2,a0
-;   sub a4,zero,a2
-;   max a0,a2,a4
+;   sext.h a0,a0
+;   sub a1,zero,a0
+;   max a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x13, 0x16, 0x55, 0x60
-;   neg a4, a2
-;   .byte 0x33, 0x65, 0xe6, 0x0a
+;   .byte 0x13, 0x15, 0x55, 0x60
+;   neg a1, a0
+;   .byte 0x33, 0x65, 0xb5, 0x0a
 ;   ret
 
 function %iabs_i32(i32) -> i32 {
@@ -49,16 +49,16 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   sext.w a2,a0
-;   sub a4,zero,a2
-;   max a0,a2,a4
+;   sext.w a0,a0
+;   sub a1,zero,a0
+;   max a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w a2, a0
-;   neg a4, a2
-;   .byte 0x33, 0x65, 0xe6, 0x0a
+;   sext.w a0, a0
+;   neg a1, a0
+;   .byte 0x33, 0x65, 0xb5, 0x0a
 ;   ret
 
 function %iabs_i64(i64) -> i64 {
@@ -69,13 +69,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   sub a2,zero,a0
-;   max a0,a0,a2
+;   sub a1,zero,a0
+;   max a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   neg a2, a0
-;   .byte 0x33, 0x65, 0xc5, 0x0a
+;   neg a1, a0
+;   .byte 0x33, 0x65, 0xb5, 0x0a
 ;   ret
 

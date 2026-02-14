@@ -10,14 +10,14 @@ block0(v0: f16, v1: i64):
 
 ; VCode:
 ; block0:
-;   fmv.x.w a3,fa0
-;   sh a3,0(a0)
+;   fmv.x.w a1,fa0
+;   sh a1,0(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.x.w a3, fa0
-;   sh a3, 0(a0) ; trap: heap_oob
+;   fmv.x.w a1, fa0
+;   sh a1, 0(a0) ; trap: heap_oob
 ;   ret
 
 function %store_f128(f128, i64) {
@@ -47,13 +47,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   lh a3,0(a0)
-;   sh a3,0(a1)
+;   lh a0,0(a0)
+;   sh a0,0(a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lh a3, 0(a0) ; trap: heap_oob
-;   sh a3, 0(a1) ; trap: heap_oob
+;   lh a0, 0(a0) ; trap: heap_oob
+;   sh a0, 0(a1) ; trap: heap_oob
 ;   ret
 

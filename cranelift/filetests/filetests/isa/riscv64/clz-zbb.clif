@@ -10,16 +10,16 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   andi a2,a0,255
-;   clz a4,a2
-;   addi a0,a4,-56
+;   andi a0,a0,255
+;   clz a0,a0
+;   addi a0,a0,-56
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi a2, a0, 0xff
-;   .byte 0x13, 0x17, 0x06, 0x60
-;   addi a0, a4, -0x38
+;   andi a0, a0, 0xff
+;   .byte 0x13, 0x15, 0x05, 0x60
+;   addi a0, a0, -0x38
 ;   ret
 
 function %clz_i16(i16) -> i16 {
@@ -30,16 +30,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   zext.h a2,a0
-;   clz a4,a2
-;   addi a0,a4,-48
+;   zext.h a0,a0
+;   clz a0,a0
+;   addi a0,a0,-48
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x46, 0x05, 0x08
-;   .byte 0x13, 0x17, 0x06, 0x60
-;   addi a0, a4, -0x30
+;   .byte 0x3b, 0x45, 0x05, 0x08
+;   .byte 0x13, 0x15, 0x05, 0x60
+;   addi a0, a0, -0x30
 ;   ret
 
 function %clz_i32(i32) -> i32 {
@@ -82,21 +82,20 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   clz a3,a1
-;   clz a5,a0
-;   select a2,a5,zero##condition=(a1 eq zero)
-;   add a0,a3,a2
+;   clz a2,a1
+;   clz a0,a0
+;   select a0,a0,zero##condition=(a1 eq zero)
+;   add a0,a2,a0
 ;   li a1,0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x93, 0x96, 0x05, 0x60
-;   .byte 0x93, 0x17, 0x05, 0x60
-;   mv a2, a5
+;   .byte 0x13, 0x96, 0x05, 0x60
+;   .byte 0x13, 0x15, 0x05, 0x60
 ;   beqz a1, 8
-;   mv a2, zero
-;   add a0, a3, a2
+;   mv a0, zero
+;   add a0, a2, a0
 ;   mv a1, zero
 ;   ret
 

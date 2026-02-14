@@ -243,9 +243,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   leal (%rsi, %rdx), %r8d
-;   shll $0x2, %r8d
-;   movq -1(%rdi, %r8), %rax
+;   leal (%rsi, %rdx), %esi
+;   shll $0x2, %esi
+;   movq -1(%rdi, %rsi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -255,9 +255,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leal (%rsi, %rdx), %r8d
-;   shll $2, %r8d
-;   movq -1(%rdi, %r8), %rax ; trap: heap_oob
+;   addl %edx, %esi
+;   shll $2, %esi
+;   movq -1(%rdi, %rsi), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

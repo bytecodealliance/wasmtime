@@ -434,18 +434,18 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   uninit  %xmm5
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm3
-;   vxorpd %xmm3, %xmm0, %xmm3
-;   uninit  %xmm5
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm4
-;   vxorpd %xmm4, %xmm3, %xmm3
-;   uninit  %xmm5
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm4
-;   vxorpd %xmm4, %xmm3, %xmm0
+;   uninit  %xmm3
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
+;   uninit  %xmm3
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
+;   uninit  %xmm3
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
 ;   vfnmadd213pd %xmm2, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -456,15 +456,15 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm3
-;   vxorpd %xmm3, %xmm0, %xmm3
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm4
-;   vxorpd %xmm4, %xmm3, %xmm3
-;   vpcmpeqd %xmm5, %xmm5, %xmm7
-;   vpsllq $0x3f, %xmm7, %xmm4
-;   vxorpd %xmm4, %xmm3, %xmm0
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
+;   vpcmpeqd %xmm3, %xmm3, %xmm3
+;   vpsllq $0x3f, %xmm3, %xmm3
+;   vxorpd %xmm3, %xmm0, %xmm0
 ;   vfnmadd213pd %xmm2, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

@@ -17,9 +17,9 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   cmpl $0x2a, %edi
 ;   movq %rcx, %rax
 ;   cmoveq %rsi, %rax
-;   movq %rdx, %rdi
+;   movq %rdx, %r10
 ;   movq %r8, %rdx
-;   cmoveq %rdi, %rdx
+;   cmoveq %r10, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -32,9 +32,9 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   cmpl $0x2a, %edi
 ;   movq %rcx, %rax
 ;   cmoveq %rsi, %rax
-;   movq %rdx, %rdi
+;   movq %rdx, %r10
 ;   movq %r8, %rdx
-;   cmoveq %rdi, %rdx
+;   cmoveq %r10, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -29,10 +29,10 @@ block0(v0: i64):
 ; block0:
 ;   leaq <offset:1>+(%rsp), %rax
 ;   leaq <offset:1>+0x10(%rsp), %rdx
-;   leaq <offset:1>+0x18(%rsp), %r8
-;   leaq <offset:1>+0x20(%rsp), %r9
-;   movq %r8, (%rdi)
-;   movq %r9, 8(%rdi)
+;   leaq <offset:1>+0x18(%rsp), %rsi
+;   leaq <offset:1>+0x20(%rsp), %r8
+;   movq %rsi, (%rdi)
+;   movq %r8, 8(%rdi)
 ;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -50,10 +50,10 @@ block0(v0: i64):
 ; block1: ; offset 0x18
 ;   leaq (%rsp), %rax
 ;   leaq 0x10(%rsp), %rdx
-;   leaq 0x18(%rsp), %r8
-;   leaq 0x20(%rsp), %r9
-;   movq %r8, (%rdi)
-;   movq %r9, 8(%rdi)
+;   leaq 0x18(%rsp), %rsi
+;   leaq 0x20(%rsp), %r8
+;   movq %rsi, (%rdi)
+;   movq %r8, 8(%rdi)
 ;   addq $0x30, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

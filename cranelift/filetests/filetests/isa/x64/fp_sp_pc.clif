@@ -62,8 +62,8 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq    %rbp, %rsi
-;   movq 8(%rsi), %rax
+;   movq    %rbp, %rax
+;   movq 8(%rax), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -73,8 +73,8 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rbp, %rsi
-;   movq 8(%rsi), %rax
+;   movq %rbp, %rax
+;   movq 8(%rax), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

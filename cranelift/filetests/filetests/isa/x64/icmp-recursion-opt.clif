@@ -12012,8 +12012,8 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block0:
 ;   testl %edi, %edi
-;   setne %dl
-;   movzbl %dl, %eax
+;   setne %sil
+;   movzbl %sil, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -12024,8 +12024,8 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   testl %edi, %edi
-;   setne %dl
-;   movzbl %dl, %eax
+;   setne %sil
+;   movzbl %sil, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

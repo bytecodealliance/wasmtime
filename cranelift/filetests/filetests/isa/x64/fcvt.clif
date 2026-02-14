@@ -13,8 +13,8 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movsbl %dil, %r9d
-;   cvtsi2ssl %r9d, %xmm0
+;   movsbl %dil, %esi
+;   cvtsi2ssl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -25,8 +25,8 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorps %xmm0, %xmm0
-;   movsbl %dil, %r9d
-;   cvtsi2ssl %r9d, %xmm0
+;   movsbl %dil, %esi
+;   cvtsi2ssl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -43,8 +43,8 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movswl %di, %r9d
-;   cvtsi2ssl %r9d, %xmm0
+;   movswl %di, %esi
+;   cvtsi2ssl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -55,8 +55,8 @@ block0(v0: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorps %xmm0, %xmm0
-;   movswl %di, %r9d
-;   cvtsi2ssl %r9d, %xmm0
+;   movswl %di, %esi
+;   cvtsi2ssl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -129,8 +129,8 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movsbl %dil, %r9d
-;   cvtsi2sdl %r9d, %xmm0
+;   movsbl %dil, %esi
+;   cvtsi2sdl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -141,8 +141,8 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorpd %xmm0, %xmm0
-;   movsbl %dil, %r9d
-;   cvtsi2sdl %r9d, %xmm0
+;   movsbl %dil, %esi
+;   cvtsi2sdl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -159,8 +159,8 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movswl %di, %r9d
-;   cvtsi2sdl %r9d, %xmm0
+;   movswl %di, %esi
+;   cvtsi2sdl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -171,8 +171,8 @@ block0(v0: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorpd %xmm0, %xmm0
-;   movswl %di, %r9d
-;   cvtsi2sdl %r9d, %xmm0
+;   movswl %di, %esi
+;   cvtsi2sdl %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -277,20 +277,20 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movzbq %dil, %r8
-;   cvtsi2ssq %r8, %xmm0
-;   uninit  %xmm6
-;   xorps %xmm6, %xmm6
-;   movzwq %si, %r8
-;   cvtsi2ssq %r8, %xmm6
-;   uninit  %xmm7
-;   xorps %xmm7, %xmm7
-;   movl %edx, %r8d
-;   cvtsi2ssq %r8, %xmm7
-;   u64_to_f32_seq %rcx, %xmm4, %r8, %rdx
-;   addss %xmm6, %xmm0
-;   addss %xmm7, %xmm0
-;   addss %xmm4, %xmm0
+;   movzbq %dil, %rax
+;   cvtsi2ssq %rax, %xmm0
+;   uninit  %xmm1
+;   xorps %xmm1, %xmm1
+;   movzwq %si, %rax
+;   cvtsi2ssq %rax, %xmm1
+;   uninit  %xmm2
+;   xorps %xmm2, %xmm2
+;   movl %edx, %eax
+;   cvtsi2ssq %rax, %xmm2
+;   u64_to_f32_seq %rcx, %xmm3, %rdx, %rax
+;   addss %xmm1, %xmm0
+;   addss %xmm2, %xmm0
+;   addss %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -301,28 +301,28 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorps %xmm0, %xmm0
-;   movzbq %dil, %r8
-;   cvtsi2ssq %r8, %xmm0
-;   xorps %xmm6, %xmm6
-;   movzwq %si, %r8
-;   cvtsi2ssq %r8, %xmm6
-;   xorps %xmm7, %xmm7
-;   movl %edx, %r8d
-;   cvtsi2ssq %r8, %xmm7
+;   movzbq %dil, %rax
+;   cvtsi2ssq %rax, %xmm0
+;   xorps %xmm1, %xmm1
+;   movzwq %si, %rax
+;   cvtsi2ssq %rax, %xmm1
+;   xorps %xmm2, %xmm2
+;   movl %edx, %eax
+;   cvtsi2ssq %rax, %xmm2
 ;   cmpq $0, %rcx
-;   jl 0x3b
-;   cvtsi2ssq %rcx, %xmm4
-;   jmp 0x55
-;   movq %rcx, %r8
-;   shrq $1, %r8
+;   jl 0x3a
+;   cvtsi2ssq %rcx, %xmm3
+;   jmp 0x54
 ;   movq %rcx, %rdx
-;   andq $1, %rdx
-;   orq %r8, %rdx
-;   cvtsi2ssq %rdx, %xmm4
-;   addss %xmm4, %xmm4
-;   addss %xmm6, %xmm0
-;   addss %xmm7, %xmm0
-;   addss %xmm4, %xmm0
+;   shrq $1, %rdx
+;   movq %rcx, %rax
+;   andq $1, %rax
+;   orq %rdx, %rax
+;   cvtsi2ssq %rax, %xmm3
+;   addss %xmm3, %xmm3
+;   addss %xmm1, %xmm0
+;   addss %xmm2, %xmm0
+;   addss %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -424,7 +424,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_seq %xmm0, %eax, %r8, %xmm3, %xmm4
+;   cvt_float32_to_uint32_seq %xmm0, %eax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -434,20 +434,20 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x4f000000, %r8d
-;   movd %r8d, %xmm3
+;   movl $0x4f000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x2d
-;   jp 0x4b
+;   jae 0x2b
+;   jp 0x49
 ;   cvttss2si %xmm0, %eax
 ;   cmpl $0, %eax
-;   jge 0x46
+;   jge 0x44
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %eax
 ;   cmpl $0, %eax
-;   jl 0x4d
+;   jl 0x4b
 ;   addl $0x80000000, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -465,7 +465,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_seq %xmm0, %rax, %r8, %xmm3, %xmm4
+;   cvt_float32_to_uint64_seq %xmm0, %rax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -475,22 +475,22 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x5f000000, %r8d
-;   movd %r8d, %xmm3
+;   movl $0x5f000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x2f
-;   jp 0x57
+;   jae 0x2d
+;   jp 0x55
 ;   cvttss2si %xmm0, %rax
 ;   cmpq $0, %rax
-;   jge 0x52
+;   jge 0x50
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %rax
 ;   cmpq $0, %rax
-;   jl 0x59
-;   movabsq $9223372036854775808, %r8
-;   addq %r8, %rax
+;   jl 0x57
+;   movabsq $9223372036854775808, %rsi
+;   addq %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -507,7 +507,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_seq %xmm0, %eax, %r8, %xmm3, %xmm4
+;   cvt_float64_to_uint32_seq %xmm0, %eax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -517,8 +517,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0x41e0000000000000, %r8
-;   movq %r8, %xmm3
+;   movabsq $0x41e0000000000000, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jae 0x32
 ;   jp 0x50
@@ -548,7 +548,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_seq %xmm0, %rax, %r8, %xmm3, %xmm4
+;   cvt_float64_to_uint64_seq %xmm0, %rax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -558,8 +558,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0x43e0000000000000, %r8
-;   movq %r8, %xmm3
+;   movabsq $0x43e0000000000000, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jae 0x34
 ;   jp 0x5c
@@ -572,8 +572,8 @@ block0(v0: f64):
 ;   cvttsd2si %xmm4, %rax
 ;   cmpq $0, %rax
 ;   jl 0x5e
-;   movabsq $9223372036854775808, %r8
-;   addq %r8, %rax
+;   movabsq $9223372036854775808, %rsi
+;   addq %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -590,7 +590,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm3, %xmm4
+;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -600,25 +600,25 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x4f000000, %r8d
-;   movd %r8d, %xmm3
+;   movl $0x4f000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x39
-;   jnp 0x25
+;   jae 0x37
+;   jnp 0x23
 ;   xorl %eax, %eax
-;   jmp 0x5c
+;   jmp 0x5a
 ;   cvttss2si %xmm0, %eax
 ;   cmpl $0, %eax
-;   jge 0x5c
+;   jge 0x5a
 ;   xorl %eax, %eax
-;   jmp 0x5c
+;   jmp 0x5a
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %eax
 ;   cmpl $0, %eax
-;   jge 0x57
+;   jge 0x55
 ;   movl $0xffffffff, %eax
-;   jmp 0x5c
+;   jmp 0x5a
 ;   addl $0x80000000, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -634,7 +634,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm3, %xmm4
+;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -644,27 +644,27 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x5f000000, %r8d
-;   movd %r8d, %xmm3
+;   movl $0x5f000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x3d
-;   jnp 0x26
+;   jae 0x3b
+;   jnp 0x24
 ;   xorq %rax, %rax
-;   jmp 0x6c
+;   jmp 0x6a
 ;   cvttss2si %xmm0, %rax
 ;   cmpq $0, %rax
-;   jge 0x6c
+;   jge 0x6a
 ;   xorq %rax, %rax
-;   jmp 0x6c
+;   jmp 0x6a
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %rax
 ;   cmpq $0, %rax
-;   jge 0x5f
+;   jge 0x5d
 ;   movq $18446744073709551615, %rax
-;   jmp 0x6c
-;   movabsq $9223372036854775808, %r8
-;   addq %r8, %rax
+;   jmp 0x6a
+;   movabsq $9223372036854775808, %rsi
+;   addq %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -679,7 +679,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm3, %xmm4
+;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -689,8 +689,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0x41e0000000000000, %r8
-;   movq %r8, %xmm3
+;   movabsq $0x41e0000000000000, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jae 0x3e
 ;   jnp 0x2a
@@ -723,7 +723,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm3, %xmm4
+;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %rsi, %xmm3, %xmm4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -733,8 +733,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0x43e0000000000000, %r8
-;   movq %r8, %xmm3
+;   movabsq $0x43e0000000000000, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jae 0x42
 ;   jnp 0x2b
@@ -752,8 +752,8 @@ block0(v0: f64):
 ;   jge 0x64
 ;   movq $18446744073709551615, %rax
 ;   jmp 0x71
-;   movabsq $9223372036854775808, %r8
-;   addq %r8, %rax
+;   movabsq $9223372036854775808, %rsi
+;   addq %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -768,7 +768,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint32_seq %xmm0, %eax, %rdx, %xmm3
+;   cvt_float32_to_sint32_seq %xmm0, %eax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -783,8 +783,8 @@ block0(v0: f32):
 ;   jno 0x39
 ;   ucomiss %xmm0, %xmm0
 ;   jp 0x3e
-;   movl $0xcf000000, %edx
-;   movd %edx, %xmm3
+;   movl $0xcf000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
 ;   jb 0x40
 ;   xorpd %xmm3, %xmm3
@@ -807,7 +807,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint64_seq %xmm0, %rax, %rdx, %xmm3
+;   cvt_float32_to_sint64_seq %xmm0, %rax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -822,8 +822,8 @@ block0(v0: f32):
 ;   jno 0x3b
 ;   ucomiss %xmm0, %xmm0
 ;   jp 0x40
-;   movl $0xdf000000, %edx
-;   movd %edx, %xmm3
+;   movl $0xdf000000, %esi
+;   movd %esi, %xmm3
 ;   ucomiss %xmm3, %xmm0
 ;   jb 0x42
 ;   xorpd %xmm3, %xmm3
@@ -846,7 +846,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint32_seq %xmm0, %eax, %rdx, %xmm3
+;   cvt_float64_to_sint32_seq %xmm0, %eax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -861,8 +861,8 @@ block0(v0: f64):
 ;   jno 0x42
 ;   ucomisd %xmm0, %xmm0
 ;   jp 0x47
-;   movabsq $13970166044105375744, %rdx
-;   movq %rdx, %xmm3
+;   movabsq $13970166044105375744, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jbe 0x49
 ;   xorpd %xmm3, %xmm3
@@ -885,7 +885,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint64_seq %xmm0, %rax, %rdx, %xmm3
+;   cvt_float64_to_sint64_seq %xmm0, %rax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -900,8 +900,8 @@ block0(v0: f64):
 ;   jno 0x44
 ;   ucomisd %xmm0, %xmm0
 ;   jp 0x49
-;   movabsq $14114281232179134464, %rdx
-;   movq %rdx, %xmm3
+;   movabsq $14114281232179134464, %rsi
+;   movq %rsi, %xmm3
 ;   ucomisd %xmm3, %xmm0
 ;   jb 0x4b
 ;   xorpd %xmm3, %xmm3
@@ -924,7 +924,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint32_sat_seq %xmm0, %eax, %rdx, %xmm3
+;   cvt_float32_to_sint32_sat_seq %xmm0, %eax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -959,7 +959,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint64_sat_seq %xmm0, %rax, %rdx, %xmm3
+;   cvt_float32_to_sint64_sat_seq %xmm0, %rax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -994,7 +994,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint32_sat_seq %xmm0, %eax, %rdx, %xmm3
+;   cvt_float64_to_sint32_sat_seq %xmm0, %eax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1029,7 +1029,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint64_sat_seq %xmm0, %rax, %rdx, %xmm3
+;   cvt_float64_to_sint64_sat_seq %xmm0, %rax, %rsi, %xmm3
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1069,16 +1069,16 @@ block0(v0: f32x4):
 ;   maxps %xmm6, %xmm0
 ;   pcmpeqd %xmm6, %xmm6
 ;   psrld $0x1, %xmm6
-;   cvtdq2ps %xmm6, %xmm7
-;   cvttps2dq %xmm0, %xmm6
-;   subps %xmm7, %xmm0
-;   cmpleps %xmm0, %xmm7
+;   cvtdq2ps %xmm6, %xmm2
+;   cvttps2dq %xmm0, %xmm1
+;   subps %xmm2, %xmm0
+;   cmpleps %xmm0, %xmm2
 ;   cvttps2dq %xmm0, %xmm0
-;   pxor %xmm7, %xmm0
-;   uninit  %xmm1
-;   pxor %xmm1, %xmm1
-;   pmaxsd %xmm1, %xmm0
-;   paddd %xmm6, %xmm0
+;   pxor %xmm2, %xmm0
+;   uninit  %xmm2
+;   pxor %xmm2, %xmm2
+;   pmaxsd %xmm2, %xmm0
+;   paddd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1092,15 +1092,15 @@ block0(v0: f32x4):
 ;   maxps %xmm6, %xmm0
 ;   pcmpeqd %xmm6, %xmm6
 ;   psrld $1, %xmm6
-;   cvtdq2ps %xmm6, %xmm7
-;   cvttps2dq %xmm0, %xmm6
-;   subps %xmm7, %xmm0
-;   cmpleps %xmm0, %xmm7
+;   cvtdq2ps %xmm6, %xmm2
+;   cvttps2dq %xmm0, %xmm1
+;   subps %xmm2, %xmm0
+;   cmpleps %xmm0, %xmm2
 ;   cvttps2dq %xmm0, %xmm0
-;   pxor %xmm7, %xmm0
-;   pxor %xmm1, %xmm1
-;   pmaxsd %xmm1, %xmm0
-;   paddd %xmm6, %xmm0
+;   pxor %xmm2, %xmm0
+;   pxor %xmm2, %xmm2
+;   pmaxsd %xmm2, %xmm0
+;   paddd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1206,16 +1206,18 @@ block0(v0: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   uninit  %xmm1
-;   xorpd %xmm1, %xmm1
-;   movdqa %xmm0, %xmm6
-;   movq %xmm6, %r9
-;   movdqa %xmm1, %xmm0
-;   cvtsi2sdq %r9, %xmm0
-;   pshufd $0xee, %xmm6, %xmm2
-;   movq %xmm2, %rcx
-;   cvtsi2sdq %rcx, %xmm1
-;   unpcklpd %xmm1, %xmm0
+;   uninit  %xmm2
+;   xorpd %xmm2, %xmm2
+;   movdqa %xmm0, %xmm1
+;   movq %xmm1, %rsi
+;   movdqa %xmm2, %xmm0
+;   cvtsi2sdq %rsi, %xmm0
+;   movdqa %xmm0, %xmm3
+;   pshufd $0xee, %xmm1, %xmm0
+;   movq %xmm0, %rax
+;   cvtsi2sdq %rax, %xmm2
+;   movdqa %xmm3, %xmm0
+;   unpcklpd %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1225,15 +1227,17 @@ block0(v0: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorpd %xmm1, %xmm1
-;   movdqa %xmm0, %xmm6
-;   movq %xmm6, %r9
-;   movdqa %xmm1, %xmm0
-;   cvtsi2sdq %r9, %xmm0
-;   pshufd $0xee, %xmm6, %xmm2
-;   movq %xmm2, %rcx
-;   cvtsi2sdq %rcx, %xmm1
-;   unpcklpd %xmm1, %xmm0
+;   xorpd %xmm2, %xmm2
+;   movdqa %xmm0, %xmm1
+;   movq %xmm1, %rsi
+;   movdqa %xmm2, %xmm0
+;   cvtsi2sdq %rsi, %xmm0
+;   movdqa %xmm0, %xmm3
+;   pshufd $0xee, %xmm1, %xmm0
+;   movq %xmm0, %rax
+;   cvtsi2sdq %rax, %xmm2
+;   movdqa %xmm3, %xmm0
+;   unpcklpd %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

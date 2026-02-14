@@ -49,15 +49,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lghi %r4, 12345
-;   strvg %r4, 0(%r2)
+;   lghi %r3, 12345
+;   strvg %r3, 0(%r2)
 ;   bcr 14, 0
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lghi %r4, 0x3039
-;   strvg %r4, 0(%r2) ; trap: heap_oob
+;   lghi %r3, 0x3039
+;   strvg %r3, 0(%r2) ; trap: heap_oob
 ;   bnor %r0
 ;   br %r14
 
@@ -109,15 +109,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lhi %r4, 12345
-;   strv %r4, 0(%r2)
+;   lhi %r3, 12345
+;   strv %r3, 0(%r2)
 ;   bcr 14, 0
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhi %r4, 0x3039
-;   strv %r4, 0(%r2) ; trap: heap_oob
+;   lhi %r3, 0x3039
+;   strv %r3, 0(%r2) ; trap: heap_oob
 ;   bnor %r0
 ;   br %r14
 

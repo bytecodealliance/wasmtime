@@ -12,8 +12,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   vgbm %v3, 0
 ;   vrepib %v5, 239
 ;   vno %v7, %v25, %v25
-;   vmxlb %v17, %v5, %v7
-;   vperm %v24, %v3, %v24, %v17
+;   vmxlb %v16, %v5, %v7
+;   vperm %v24, %v3, %v24, %v16
 ;   br %r14
 ;
 ; Disassembled:
@@ -21,8 +21,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   vzero %v3
 ;   vrepib %v5, 0xef
 ;   vno %v7, %v25, %v25
-;   vmxlb %v17, %v5, %v7
-;   vperm %v24, %v3, %v24, %v17
+;   vmxlb %v16, %v5, %v7
+;   vperm %v24, %v3, %v24, %v16
 ;   br %r14
 
 function %shuffle_0(i8x16, i8x16) -> i8x16 tail {

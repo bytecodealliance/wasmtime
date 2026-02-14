@@ -34,33 +34,33 @@ block0:
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x24, [sp, #-16]!
-;   stp x22, x23, [sp, #-16]!
+;   str x21, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #16
 ; block0:
-;   movz w24, #0
-;   movz w22, #1
-;   movz w23, #2
-;   str w24, [sp]
-;   str w22, [sp, #4]
-;   str w23, [sp, #8]
-;   mov x0, x24
+;   movz w21, #0
+;   movz w19, #1
+;   movz w20, #2
+;   str w21, [sp]
+;   str w19, [sp, #4]
+;   str w20, [sp, #8]
+;   mov x0, x21
 ;   bl 0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
-;   str w22, [sp]
-;   str w23, [sp, #4]
-;   mov x0, x24
+;   str w19, [sp]
+;   str w20, [sp, #4]
+;   mov x0, x21
 ;   bl 0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
-;   str w23, [sp]
-;   mov x0, x22
+;   str w20, [sp]
+;   mov x0, x19
 ;   bl 0
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
-;   mov x0, x23
+;   mov x0, x20
 ;   bl 0
 ;   add sp, sp, #16
-;   ldp x22, x23, [sp], #16
-;   ldr x24, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldr x21, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -68,30 +68,30 @@ block0:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   str x24, [sp, #-0x10]!
-;   stp x22, x23, [sp, #-0x10]!
+;   str x21, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0x14
-;   mov w24, #0
-;   mov w22, #1
-;   mov w23, #2
-;   stur w24, [sp]
-;   stur w22, [sp, #4]
-;   stur w23, [sp, #8]
-;   mov x0, x24
+;   mov w21, #0
+;   mov w19, #1
+;   mov w20, #2
+;   stur w21, [sp]
+;   stur w19, [sp, #4]
+;   stur w20, [sp, #8]
+;   mov x0, x21
 ;   bl #0x30 ; reloc_external Call u0:0 0
-;   stur w22, [sp]
-;   stur w23, [sp, #4]
-;   mov x0, x24
+;   stur w19, [sp]
+;   stur w20, [sp, #4]
+;   mov x0, x21
 ;   bl #0x40 ; reloc_external Call u0:0 0
-;   stur w23, [sp]
-;   mov x0, x22
+;   stur w20, [sp]
+;   mov x0, x19
 ;   bl #0x4c ; reloc_external Call u0:0 0
-;   mov x0, x23
+;   mov x0, x20
 ;   bl #0x54 ; reloc_external Call u0:0 0
 ;   add sp, sp, #0x10
-;   ldp x22, x23, [sp], #0x10
-;   ldr x24, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldr x21, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -118,33 +118,33 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   stp x24, x27, [sp, #-16]!
-;   stp x19, x23, [sp, #-16]!
+;   stp x21, x23, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
 ;   sub sp, sp, #128
 ; block0:
 ;   strb w0, [sp]
 ;   mov x23, x0
 ;   strh w1, [sp, #8]
-;   mov x19, x1
+;   mov x21, x1
 ;   str w2, [sp, #16]
-;   mov x27, x2
+;   mov x20, x2
 ;   str s0, [sp, #20]
 ;   str q0, [sp, #96]
 ;   str x3, [sp, #24]
-;   mov x24, x3
+;   mov x19, x3
 ;   str d1, [sp, #32]
 ;   str q1, [sp, #112]
 ;   bl 0
 ;   ; UserStackMap { by_type: [(types::I8, CompoundBitSet {0}), (types::I16, CompoundBitSet {8}), (types::I32, CompoundBitSet {16}), (types::F32, CompoundBitSet {20}), (types::I64, CompoundBitSet {24}), (types::F64, CompoundBitSet {32})], sp_to_sized_stack_slots: None }
 ;   mov x0, x23
-;   mov x1, x19
-;   mov x2, x27
-;   mov x3, x24
+;   mov x1, x21
+;   mov x2, x20
+;   mov x3, x19
 ;   ldr q0, [sp, #96]
 ;   ldr q1, [sp, #112]
 ;   add sp, sp, #128
-;   ldp x19, x23, [sp], #16
-;   ldp x24, x27, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x23, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -152,32 +152,32 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   stp x24, x27, [sp, #-0x10]!
-;   stp x19, x23, [sp, #-0x10]!
+;   stp x21, x23, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
 ;   sub sp, sp, #0x80
 ; block1: ; offset 0x14
 ;   sturb w0, [sp]
 ;   mov x23, x0
 ;   sturh w1, [sp, #8]
-;   mov x19, x1
+;   mov x21, x1
 ;   stur w2, [sp, #0x10]
-;   mov x27, x2
+;   mov x20, x2
 ;   stur s0, [sp, #0x14]
 ;   stur q0, [sp, #0x60]
 ;   stur x3, [sp, #0x18]
-;   mov x24, x3
+;   mov x19, x3
 ;   stur d1, [sp, #0x20]
 ;   stur q1, [sp, #0x70]
 ;   bl #0x44 ; reloc_external Call u0:0 0
 ;   mov x0, x23
-;   mov x1, x19
-;   mov x2, x27
-;   mov x3, x24
+;   mov x1, x21
+;   mov x2, x20
+;   mov x3, x19
 ;   ldur q0, [sp, #0x60]
 ;   ldur q1, [sp, #0x70]
 ;   add sp, sp, #0x80
-;   ldp x19, x23, [sp], #0x10
-;   ldp x24, x27, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x23, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

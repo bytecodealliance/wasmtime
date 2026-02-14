@@ -11,22 +11,22 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq %rdi, %rax
-;   shrq $0x1, %rax
-;   movabsq $0x7777777777777777, %rdx
-;   andq %rdx, %rax
-;   subq %rax, %rdi
-;   shrq $0x1, %rax
-;   andq %rdx, %rax
-;   subq %rax, %rdi
-;   shrq $0x1, %rax
-;   andq %rdx, %rax
-;   subq %rax, %rdi
+;   movq %rdi, %r10
+;   shrq $0x1, %r10
+;   movabsq $0x7777777777777777, %rsi
+;   andq %rsi, %r10
+;   subq %r10, %rdi
+;   shrq $0x1, %r10
+;   andq %rsi, %r10
+;   subq %r10, %rdi
+;   shrq $0x1, %r10
+;   andq %rsi, %r10
+;   subq %r10, %rdi
 ;   movq %rdi, %rax
 ;   shrq $0x4, %rax
 ;   addq %rdi, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %r11
-;   andq %r11, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %rcx
+;   andq %rcx, %rax
 ;   movabsq $0x101010101010101, %rcx
 ;   imulq %rcx, %rax
 ;   shrq $0x38, %rax
@@ -39,22 +39,22 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrq $1, %rax
-;   movabsq $0x7777777777777777, %rdx
-;   andq %rdx, %rax
-;   subq %rax, %rdi
-;   shrq $1, %rax
-;   andq %rdx, %rax
-;   subq %rax, %rdi
-;   shrq $1, %rax
-;   andq %rdx, %rax
-;   subq %rax, %rdi
+;   movq %rdi, %r10
+;   shrq $1, %r10
+;   movabsq $0x7777777777777777, %rsi
+;   andq %rsi, %r10
+;   subq %r10, %rdi
+;   shrq $1, %r10
+;   andq %rsi, %r10
+;   subq %r10, %rdi
+;   shrq $1, %r10
+;   andq %rsi, %r10
+;   subq %r10, %rdi
 ;   movq %rdi, %rax
 ;   shrq $4, %rax
 ;   addq %rdi, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %r11
-;   andq %r11, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %rcx
+;   andq %rcx, %rax
 ;   movabsq $0x101010101010101, %rcx
 ;   imulq %rcx, %rax
 ;   shrq $0x38, %rax
@@ -73,25 +73,25 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq (%rdi), %rdx
-;   movq %rdx, %rcx
-;   shrq $0x1, %rcx
-;   movabsq $0x7777777777777777, %r8
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $0x1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $0x1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   movq %rdx, %rax
-;   shrq $0x4, %rax
-;   addq %rdx, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %rsi
+;   movq (%rdi), %r11
+;   movq %r11, %rax
+;   shrq $0x1, %rax
+;   movabsq $0x7777777777777777, %rsi
 ;   andq %rsi, %rax
-;   movabsq $0x101010101010101, %rdx
-;   imulq %rdx, %rax
+;   subq %rax, %r11
+;   shrq $0x1, %rax
+;   andq %rsi, %rax
+;   subq %rax, %r11
+;   shrq $0x1, %rax
+;   andq %rsi, %rax
+;   subq %rax, %r11
+;   movq %r11, %rax
+;   shrq $0x4, %rax
+;   addq %r11, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %rcx
+;   andq %rcx, %rax
+;   movabsq $0x101010101010101, %rcx
+;   imulq %rcx, %rax
 ;   shrq $0x38, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -102,25 +102,25 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq (%rdi), %rdx ; trap: heap_oob
-;   movq %rdx, %rcx
-;   shrq $1, %rcx
-;   movabsq $0x7777777777777777, %r8
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   movq %rdx, %rax
-;   shrq $4, %rax
-;   addq %rdx, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %rsi
+;   movq (%rdi), %r11 ; trap: heap_oob
+;   movq %r11, %rax
+;   shrq $1, %rax
+;   movabsq $0x7777777777777777, %rsi
 ;   andq %rsi, %rax
-;   movabsq $0x101010101010101, %rdx
-;   imulq %rdx, %rax
+;   subq %rax, %r11
+;   shrq $1, %rax
+;   andq %rsi, %rax
+;   subq %rax, %r11
+;   shrq $1, %rax
+;   andq %rsi, %rax
+;   subq %rax, %r11
+;   movq %r11, %rax
+;   shrq $4, %rax
+;   addq %r11, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %rcx
+;   andq %rcx, %rax
+;   movabsq $0x101010101010101, %rcx
+;   imulq %rcx, %rax
 ;   shrq $0x38, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -136,22 +136,22 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   movq %rdi, %r10
+;   shrl $0x1, %r10d
+;   movl $0x77777777, %esi
+;   andl %esi, %r10d
+;   subl %r10d, %edi
+;   shrl $0x1, %r10d
+;   andl %esi, %r10d
+;   subl %r10d, %edi
+;   shrl $0x1, %r10d
+;   andl %esi, %r10d
+;   subl %r10d, %edi
 ;   movq %rdi, %rax
-;   shrl $0x1, %eax
-;   movl $0x77777777, %edx
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   shrl $0x1, %eax
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   shrl $0x1, %eax
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   movq %rdi, %r9
-;   shrl $0x4, %r9d
-;   addl %edi, %r9d
-;   andl $0xf0f0f0f, %r9d
-;   imull $0x1010101, %r9d, %eax
+;   shrl $0x4, %eax
+;   addl %edi, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -162,22 +162,22 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq %rdi, %r10
+;   shrl $1, %r10d
+;   movl $0x77777777, %esi
+;   andl %esi, %r10d
+;   subl %r10d, %edi
+;   shrl $1, %r10d
+;   andl %esi, %r10d
+;   subl %r10d, %edi
+;   shrl $1, %r10d
+;   andl %esi, %r10d
+;   subl %r10d, %edi
 ;   movq %rdi, %rax
-;   shrl $1, %eax
-;   movl $0x77777777, %edx
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   shrl $1, %eax
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   shrl $1, %eax
-;   andl %edx, %eax
-;   subl %eax, %edi
-;   movq %rdi, %r9
-;   shrl $4, %r9d
-;   addl %edi, %r9d
-;   andl $0xf0f0f0f, %r9d
-;   imull $0x1010101, %r9d, %eax
+;   shrl $4, %eax
+;   addl %edi, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -194,23 +194,23 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl (%rdi), %eax
-;   movq %rax, %rcx
-;   shrl $0x1, %ecx
-;   movl $0x77777777, %r8d
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   shrl $0x1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   shrl $0x1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   movq %rax, %r10
-;   shrl $0x4, %r10d
-;   addl %eax, %r10d
-;   andl $0xf0f0f0f, %r10d
-;   imull $0x1010101, %r10d, %eax
+;   movl (%rdi), %r11d
+;   movq %r11, %rax
+;   shrl $0x1, %eax
+;   movl $0x77777777, %esi
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   shrl $0x1, %eax
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   shrl $0x1, %eax
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   movq %r11, %rax
+;   shrl $0x4, %eax
+;   addl %r11d, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -221,23 +221,23 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rcx
-;   shrl $1, %ecx
-;   movl $0x77777777, %r8d
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   shrl $1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   shrl $1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %eax
-;   movq %rax, %r10
-;   shrl $4, %r10d
-;   addl %eax, %r10d
-;   andl $0xf0f0f0f, %r10d
-;   imull $0x1010101, %r10d, %eax
+;   movl (%rdi), %r11d ; trap: heap_oob
+;   movq %r11, %rax
+;   shrl $1, %eax
+;   movl $0x77777777, %esi
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   shrl $1, %eax
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   shrl $1, %eax
+;   andl %esi, %eax
+;   subl %eax, %r11d
+;   movq %r11, %rax
+;   shrl $4, %eax
+;   addl %r11d, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp

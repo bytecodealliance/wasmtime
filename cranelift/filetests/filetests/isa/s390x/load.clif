@@ -78,15 +78,15 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   agr %r2, %r3
-;   lgfi %r1, 10000000 ; llgc %r2, 0(%r1,%r2)
+;   agrk %r4, %r2, %r3
+;   lgfi %r1, 10000000 ; llgc %r2, 0(%r1,%r4)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   agr %r2, %r3
+;   agrk %r4, %r2, %r3
 ;   lgfi %r1, 0x989680
-;   llgc %r2, 0(%r1, %r2) ; trap: heap_oob
+;   llgc %r2, 0(%r1, %r4) ; trap: heap_oob
 ;   br %r14
 
 function %sload8_i64(i64) -> i64 {

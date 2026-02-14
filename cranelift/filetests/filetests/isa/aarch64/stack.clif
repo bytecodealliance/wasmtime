@@ -362,167 +362,167 @@ block0(v0: i8):
 ;   stp x23, x24, [sp, #-16]!
 ;   stp x21, x22, [sp, #-16]!
 ;   stp x19, x20, [sp, #-16]!
-;   sub sp, sp, #1216
+;   sub sp, sp, #1232
 ; block0:
 ;   str x0, [sp, #1000]
-;   movz x8, #2
-;   str x8, [sp, #1008]
-;   movz x8, #4
-;   movz x9, #6
-;   movz x10, #8
-;   movz x11, #10
-;   movz x12, #12
-;   movz x13, #14
-;   movz x14, #16
-;   movz x15, #18
-;   movz x1, #20
-;   movz x2, #22
-;   movz x3, #24
-;   movz x4, #26
-;   movz x5, #28
-;   movz x6, #30
-;   movz x23, #32
-;   movz x24, #34
-;   movz x25, #36
-;   movz x26, #38
-;   movz x27, #30
-;   movz x28, #32
-;   movz x21, #34
-;   movz x19, #36
-;   movz x20, #38
-;   movz x22, #30
+;   movz x1, #2
+;   movz x2, #4
+;   movz x3, #6
+;   movz x4, #8
+;   movz x5, #10
+;   movz x6, #12
+;   movz x7, #14
+;   movz x8, #16
+;   movz x9, #18
+;   movz x10, #20
+;   movz x11, #22
+;   movz x12, #24
+;   movz x13, #26
+;   movz x14, #28
+;   movz x15, #30
+;   movz x19, #32
+;   movz x20, #34
+;   movz x21, #36
+;   movz x22, #38
+;   movz x23, #30
+;   movz x24, #32
+;   movz x25, #34
+;   movz x26, #36
+;   movz x27, #38
+;   movz x28, #30
 ;   movz x0, #32
-;   movz x7, #34
-;   str x7, [sp, #1208]
-;   movz x7, #36
-;   str x7, [sp, #1200]
-;   movz x7, #38
-;   str x7, [sp, #1192]
-;   movz x7, #30
-;   str x7, [sp, #1184]
-;   movz x7, #32
-;   str x7, [sp, #1176]
-;   movz x7, #34
-;   str x7, [sp, #1168]
-;   movz x7, #36
-;   str x7, [sp, #1160]
-;   movz x7, #38
-;   str x7, [sp, #1152]
-;   ldr x7, [sp, #1008]
-;   add x7, x7, #1
-;   str x7, [sp, #1144]
-;   add x7, x8, #3
-;   str x7, [sp, #1136]
-;   add x7, x9, #5
-;   str x7, [sp, #1128]
-;   add x7, x10, #7
-;   str x7, [sp, #1120]
-;   add x7, x11, #9
-;   str x7, [sp, #1112]
-;   add x7, x12, #11
-;   str x7, [sp, #1104]
-;   add x7, x13, #13
-;   str x7, [sp, #1096]
-;   add x7, x14, #15
-;   str x7, [sp, #1088]
-;   add x7, x15, #17
-;   str x7, [sp, #1080]
-;   add x7, x1, #19
-;   str x7, [sp, #1072]
-;   add x7, x2, #21
-;   str x7, [sp, #1064]
-;   add x7, x3, #23
-;   str x7, [sp, #1056]
-;   add x7, x4, #25
-;   str x7, [sp, #1048]
-;   add x7, x5, #27
-;   str x7, [sp, #1040]
-;   add x7, x6, #29
-;   str x7, [sp, #1032]
-;   add x7, x23, #31
-;   str x7, [sp, #1024]
-;   add x7, x24, #33
-;   str x7, [sp, #1016]
-;   add x7, x25, #35
-;   str x7, [sp, #1008]
-;   add x26, x26, #37
-;   add x27, x27, #39
-;   add x28, x28, #31
-;   add x21, x21, #33
-;   add x19, x19, #35
-;   add x20, x20, #37
-;   add x22, x22, #39
-;   add x0, x0, #31
-;   ldr x7, [sp, #1208]
-;   add x7, x7, #33
-;   ldr x10, [sp, #1200]
-;   add x8, x10, #35
-;   ldr x13, [sp, #1192]
-;   add x9, x13, #37
-;   ldr x1, [sp, #1184]
-;   add x10, x1, #39
-;   ldr x3, [sp, #1176]
-;   add x11, x3, #31
+;   str x0, [sp, #1216]
+;   movz x0, #34
+;   str x0, [sp, #1208]
+;   movz x0, #36
+;   str x0, [sp, #1200]
+;   movz x0, #38
+;   str x0, [sp, #1192]
+;   movz x0, #30
+;   str x0, [sp, #1184]
+;   movz x0, #32
+;   str x0, [sp, #1176]
+;   movz x0, #34
+;   str x0, [sp, #1168]
+;   movz x0, #36
+;   str x0, [sp, #1160]
+;   movz x0, #38
+;   str x0, [sp, #1152]
+;   add x0, x1, #1
+;   str x0, [sp, #1144]
+;   add x0, x2, #3
+;   str x0, [sp, #1136]
+;   add x0, x3, #5
+;   str x0, [sp, #1128]
+;   add x0, x4, #7
+;   str x0, [sp, #1120]
+;   add x0, x5, #9
+;   str x0, [sp, #1112]
+;   add x0, x6, #11
+;   str x0, [sp, #1104]
+;   add x0, x7, #13
+;   str x0, [sp, #1096]
+;   add x0, x8, #15
+;   str x0, [sp, #1088]
+;   add x0, x9, #17
+;   str x0, [sp, #1080]
+;   add x0, x10, #19
+;   str x0, [sp, #1072]
+;   add x0, x11, #21
+;   str x0, [sp, #1064]
+;   add x0, x12, #23
+;   str x0, [sp, #1056]
+;   add x0, x13, #25
+;   str x0, [sp, #1048]
+;   add x0, x14, #27
+;   str x0, [sp, #1040]
+;   add x0, x15, #29
+;   str x0, [sp, #1032]
+;   add x0, x19, #31
+;   str x0, [sp, #1024]
+;   add x0, x20, #33
+;   str x0, [sp, #1016]
+;   add x0, x21, #35
+;   str x0, [sp, #1008]
+;   add x22, x22, #37
+;   add x23, x23, #39
+;   add x24, x24, #31
+;   add x25, x25, #33
+;   add x26, x26, #35
+;   add x27, x27, #37
+;   add x28, x28, #39
+;   ldr x1, [sp, #1216]
+;   add x0, x1, #31
+;   ldr x1, [sp, #1208]
+;   add x1, x1, #33
+;   ldr x2, [sp, #1200]
+;   add x2, x2, #35
+;   ldr x3, [sp, #1192]
+;   add x3, x3, #37
+;   ldr x4, [sp, #1184]
+;   add x4, x4, #39
+;   ldr x5, [sp, #1176]
+;   add x5, x5, #31
 ;   ldr x6, [sp, #1168]
-;   add x12, x6, #33
-;   ldr x13, [sp, #1160]
-;   add x13, x13, #35
-;   ldr x14, [sp, #1152]
-;   add x14, x14, #37
-;   ldr x15, [sp, #1144]
-;   add x15, x15, #39
-;   ldr x2, [sp, #1136]
-;   ldr x4, [sp, #1128]
-;   add x1, x2, x4
-;   ldr x2, [sp, #1112]
-;   ldr x3, [sp, #1120]
-;   add x2, x3, x2
-;   ldr x3, [sp, #1096]
-;   ldr x4, [sp, #1104]
-;   add x3, x4, x3
-;   ldr x4, [sp, #1080]
-;   ldr x5, [sp, #1088]
-;   add x4, x5, x4
-;   ldr x5, [sp, #1064]
-;   ldr x6, [sp, #1072]
-;   add x5, x6, x5
-;   ldr x6, [sp, #1048]
-;   ldr x23, [sp, #1056]
-;   add x6, x23, x6
-;   ldr x23, [sp, #1032]
-;   ldr x24, [sp, #1040]
-;   add x23, x24, x23
-;   ldr x24, [sp, #1024]
-;   ldr x25, [sp, #1016]
-;   add x24, x24, x25
-;   ldr x25, [sp, #1008]
-;   add x25, x25, x26
-;   add x26, x27, x28
-;   add x27, x21, x19
-;   add x28, x20, x22
-;   add x7, x0, x7
-;   add x8, x8, x9
-;   add x9, x10, x11
-;   add x10, x12, x13
-;   add x11, x14, x15
-;   add x12, x1, x2
-;   add x13, x3, x4
-;   add x14, x5, x6
-;   add x15, x23, x24
-;   add x0, x25, x26
-;   add x1, x27, x28
-;   add x7, x7, x8
-;   add x8, x9, x10
-;   add x9, x11, x12
-;   add x10, x13, x14
-;   add x11, x15, x0
-;   add x7, x1, x7
-;   add x8, x8, x9
-;   add x9, x10, x11
-;   add x7, x7, x8
-;   add x1, x9, x7
+;   add x6, x6, #33
+;   ldr x7, [sp, #1160]
+;   add x7, x7, #35
+;   ldr x8, [sp, #1152]
+;   add x8, x8, #37
+;   ldr x9, [sp, #1144]
+;   add x9, x9, #39
+;   ldr x10, [sp, #1128]
+;   ldr x11, [sp, #1136]
+;   add x10, x11, x10
+;   ldr x11, [sp, #1120]
+;   ldr x12, [sp, #1112]
+;   add x11, x11, x12
+;   ldr x12, [sp, #1096]
+;   ldr x15, [sp, #1104]
+;   add x12, x15, x12
+;   ldr x13, [sp, #1080]
+;   ldr x14, [sp, #1088]
+;   add x13, x14, x13
+;   ldr x14, [sp, #1064]
+;   ldr x15, [sp, #1072]
+;   add x14, x15, x14
+;   ldr x15, [sp, #1048]
+;   ldr x19, [sp, #1056]
+;   add x15, x19, x15
+;   ldr x19, [sp, #1032]
+;   ldr x20, [sp, #1040]
+;   add x19, x20, x19
+;   ldr x20, [sp, #1024]
+;   ldr x21, [sp, #1016]
+;   add x20, x20, x21
+;   ldr x21, [sp, #1008]
+;   add x21, x21, x22
+;   add x22, x23, x24
+;   add x23, x25, x26
+;   add x24, x27, x28
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x5, x10, x11
+;   add x6, x12, x13
+;   add x7, x14, x15
+;   add x8, x19, x20
+;   add x9, x21, x22
+;   add x10, x23, x24
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x0, x10, x0
+;   add x1, x1, x2
+;   add x2, x3, x4
+;   add x0, x0, x1
+;   add x1, x2, x0
 ;   ldr x0, [sp, #1000]
-;   add sp, sp, #1216
+;   add sp, sp, #1232
 ;   ldp x19, x20, [sp], #16
 ;   ldp x21, x22, [sp], #16
 ;   ldp x23, x24, [sp], #16
@@ -540,167 +540,167 @@ block0(v0: i8):
 ;   stp x23, x24, [sp, #-0x10]!
 ;   stp x21, x22, [sp, #-0x10]!
 ;   stp x19, x20, [sp, #-0x10]!
-;   sub sp, sp, #0x4c0
+;   sub sp, sp, #0x4d0
 ; block1: ; offset 0x20
 ;   str x0, [sp, #0x3e8]
-;   mov x8, #2
-;   str x8, [sp, #0x3f0]
-;   mov x8, #4
-;   mov x9, #6
-;   mov x10, #8
-;   mov x11, #0xa
-;   mov x12, #0xc
-;   mov x13, #0xe
-;   mov x14, #0x10
-;   mov x15, #0x12
-;   mov x1, #0x14
-;   mov x2, #0x16
-;   mov x3, #0x18
-;   mov x4, #0x1a
-;   mov x5, #0x1c
-;   mov x6, #0x1e
-;   mov x23, #0x20
-;   mov x24, #0x22
-;   mov x25, #0x24
-;   mov x26, #0x26
-;   mov x27, #0x1e
-;   mov x28, #0x20
-;   mov x21, #0x22
-;   mov x19, #0x24
-;   mov x20, #0x26
-;   mov x22, #0x1e
+;   mov x1, #2
+;   mov x2, #4
+;   mov x3, #6
+;   mov x4, #8
+;   mov x5, #0xa
+;   mov x6, #0xc
+;   mov x7, #0xe
+;   mov x8, #0x10
+;   mov x9, #0x12
+;   mov x10, #0x14
+;   mov x11, #0x16
+;   mov x12, #0x18
+;   mov x13, #0x1a
+;   mov x14, #0x1c
+;   mov x15, #0x1e
+;   mov x19, #0x20
+;   mov x20, #0x22
+;   mov x21, #0x24
+;   mov x22, #0x26
+;   mov x23, #0x1e
+;   mov x24, #0x20
+;   mov x25, #0x22
+;   mov x26, #0x24
+;   mov x27, #0x26
+;   mov x28, #0x1e
 ;   mov x0, #0x20
-;   mov x7, #0x22
-;   str x7, [sp, #0x4b8]
-;   mov x7, #0x24
-;   str x7, [sp, #0x4b0]
-;   mov x7, #0x26
-;   str x7, [sp, #0x4a8]
-;   mov x7, #0x1e
-;   str x7, [sp, #0x4a0]
-;   mov x7, #0x20
-;   str x7, [sp, #0x498]
-;   mov x7, #0x22
-;   str x7, [sp, #0x490]
-;   mov x7, #0x24
-;   str x7, [sp, #0x488]
-;   mov x7, #0x26
-;   str x7, [sp, #0x480]
-;   ldr x7, [sp, #0x3f0]
-;   add x7, x7, #1
-;   str x7, [sp, #0x478]
-;   add x7, x8, #3
-;   str x7, [sp, #0x470]
-;   add x7, x9, #5
-;   str x7, [sp, #0x468]
-;   add x7, x10, #7
-;   str x7, [sp, #0x460]
-;   add x7, x11, #9
-;   str x7, [sp, #0x458]
-;   add x7, x12, #0xb
-;   str x7, [sp, #0x450]
-;   add x7, x13, #0xd
-;   str x7, [sp, #0x448]
-;   add x7, x14, #0xf
-;   str x7, [sp, #0x440]
-;   add x7, x15, #0x11
-;   str x7, [sp, #0x438]
-;   add x7, x1, #0x13
-;   str x7, [sp, #0x430]
-;   add x7, x2, #0x15
-;   str x7, [sp, #0x428]
-;   add x7, x3, #0x17
-;   str x7, [sp, #0x420]
-;   add x7, x4, #0x19
-;   str x7, [sp, #0x418]
-;   add x7, x5, #0x1b
-;   str x7, [sp, #0x410]
-;   add x7, x6, #0x1d
-;   str x7, [sp, #0x408]
-;   add x7, x23, #0x1f
-;   str x7, [sp, #0x400]
-;   add x7, x24, #0x21
-;   str x7, [sp, #0x3f8]
-;   add x7, x25, #0x23
-;   str x7, [sp, #0x3f0]
-;   add x26, x26, #0x25
-;   add x27, x27, #0x27
-;   add x28, x28, #0x1f
-;   add x21, x21, #0x21
-;   add x19, x19, #0x23
-;   add x20, x20, #0x25
-;   add x22, x22, #0x27
-;   add x0, x0, #0x1f
-;   ldr x7, [sp, #0x4b8]
-;   add x7, x7, #0x21
-;   ldr x10, [sp, #0x4b0]
-;   add x8, x10, #0x23
-;   ldr x13, [sp, #0x4a8]
-;   add x9, x13, #0x25
-;   ldr x1, [sp, #0x4a0]
-;   add x10, x1, #0x27
-;   ldr x3, [sp, #0x498]
-;   add x11, x3, #0x1f
+;   str x0, [sp, #0x4c0]
+;   mov x0, #0x22
+;   str x0, [sp, #0x4b8]
+;   mov x0, #0x24
+;   str x0, [sp, #0x4b0]
+;   mov x0, #0x26
+;   str x0, [sp, #0x4a8]
+;   mov x0, #0x1e
+;   str x0, [sp, #0x4a0]
+;   mov x0, #0x20
+;   str x0, [sp, #0x498]
+;   mov x0, #0x22
+;   str x0, [sp, #0x490]
+;   mov x0, #0x24
+;   str x0, [sp, #0x488]
+;   mov x0, #0x26
+;   str x0, [sp, #0x480]
+;   add x0, x1, #1
+;   str x0, [sp, #0x478]
+;   add x0, x2, #3
+;   str x0, [sp, #0x470]
+;   add x0, x3, #5
+;   str x0, [sp, #0x468]
+;   add x0, x4, #7
+;   str x0, [sp, #0x460]
+;   add x0, x5, #9
+;   str x0, [sp, #0x458]
+;   add x0, x6, #0xb
+;   str x0, [sp, #0x450]
+;   add x0, x7, #0xd
+;   str x0, [sp, #0x448]
+;   add x0, x8, #0xf
+;   str x0, [sp, #0x440]
+;   add x0, x9, #0x11
+;   str x0, [sp, #0x438]
+;   add x0, x10, #0x13
+;   str x0, [sp, #0x430]
+;   add x0, x11, #0x15
+;   str x0, [sp, #0x428]
+;   add x0, x12, #0x17
+;   str x0, [sp, #0x420]
+;   add x0, x13, #0x19
+;   str x0, [sp, #0x418]
+;   add x0, x14, #0x1b
+;   str x0, [sp, #0x410]
+;   add x0, x15, #0x1d
+;   str x0, [sp, #0x408]
+;   add x0, x19, #0x1f
+;   str x0, [sp, #0x400]
+;   add x0, x20, #0x21
+;   str x0, [sp, #0x3f8]
+;   add x0, x21, #0x23
+;   str x0, [sp, #0x3f0]
+;   add x22, x22, #0x25
+;   add x23, x23, #0x27
+;   add x24, x24, #0x1f
+;   add x25, x25, #0x21
+;   add x26, x26, #0x23
+;   add x27, x27, #0x25
+;   add x28, x28, #0x27
+;   ldr x1, [sp, #0x4c0]
+;   add x0, x1, #0x1f
+;   ldr x1, [sp, #0x4b8]
+;   add x1, x1, #0x21
+;   ldr x2, [sp, #0x4b0]
+;   add x2, x2, #0x23
+;   ldr x3, [sp, #0x4a8]
+;   add x3, x3, #0x25
+;   ldr x4, [sp, #0x4a0]
+;   add x4, x4, #0x27
+;   ldr x5, [sp, #0x498]
+;   add x5, x5, #0x1f
 ;   ldr x6, [sp, #0x490]
-;   add x12, x6, #0x21
-;   ldr x13, [sp, #0x488]
-;   add x13, x13, #0x23
-;   ldr x14, [sp, #0x480]
-;   add x14, x14, #0x25
-;   ldr x15, [sp, #0x478]
-;   add x15, x15, #0x27
-;   ldr x2, [sp, #0x470]
-;   ldr x4, [sp, #0x468]
-;   add x1, x2, x4
-;   ldr x2, [sp, #0x458]
-;   ldr x3, [sp, #0x460]
-;   add x2, x3, x2
-;   ldr x3, [sp, #0x448]
-;   ldr x4, [sp, #0x450]
-;   add x3, x4, x3
-;   ldr x4, [sp, #0x438]
-;   ldr x5, [sp, #0x440]
-;   add x4, x5, x4
-;   ldr x5, [sp, #0x428]
-;   ldr x6, [sp, #0x430]
-;   add x5, x6, x5
-;   ldr x6, [sp, #0x418]
-;   ldr x23, [sp, #0x420]
-;   add x6, x23, x6
-;   ldr x23, [sp, #0x408]
-;   ldr x24, [sp, #0x410]
-;   add x23, x24, x23
-;   ldr x24, [sp, #0x400]
-;   ldr x25, [sp, #0x3f8]
-;   add x24, x24, x25
-;   ldr x25, [sp, #0x3f0]
-;   add x25, x25, x26
-;   add x26, x27, x28
-;   add x27, x21, x19
-;   add x28, x20, x22
-;   add x7, x0, x7
-;   add x8, x8, x9
-;   add x9, x10, x11
-;   add x10, x12, x13
-;   add x11, x14, x15
-;   add x12, x1, x2
-;   add x13, x3, x4
-;   add x14, x5, x6
-;   add x15, x23, x24
-;   add x0, x25, x26
-;   add x1, x27, x28
-;   add x7, x7, x8
-;   add x8, x9, x10
-;   add x9, x11, x12
-;   add x10, x13, x14
-;   add x11, x15, x0
-;   add x7, x1, x7
-;   add x8, x8, x9
-;   add x9, x10, x11
-;   add x7, x7, x8
-;   add x1, x9, x7
+;   add x6, x6, #0x21
+;   ldr x7, [sp, #0x488]
+;   add x7, x7, #0x23
+;   ldr x8, [sp, #0x480]
+;   add x8, x8, #0x25
+;   ldr x9, [sp, #0x478]
+;   add x9, x9, #0x27
+;   ldr x10, [sp, #0x468]
+;   ldr x11, [sp, #0x470]
+;   add x10, x11, x10
+;   ldr x11, [sp, #0x460]
+;   ldr x12, [sp, #0x458]
+;   add x11, x11, x12
+;   ldr x12, [sp, #0x448]
+;   ldr x15, [sp, #0x450]
+;   add x12, x15, x12
+;   ldr x13, [sp, #0x438]
+;   ldr x14, [sp, #0x440]
+;   add x13, x14, x13
+;   ldr x14, [sp, #0x428]
+;   ldr x15, [sp, #0x430]
+;   add x14, x15, x14
+;   ldr x15, [sp, #0x418]
+;   ldr x19, [sp, #0x420]
+;   add x15, x19, x15
+;   ldr x19, [sp, #0x408]
+;   ldr x20, [sp, #0x410]
+;   add x19, x20, x19
+;   ldr x20, [sp, #0x400]
+;   ldr x21, [sp, #0x3f8]
+;   add x20, x20, x21
+;   ldr x21, [sp, #0x3f0]
+;   add x21, x21, x22
+;   add x22, x23, x24
+;   add x23, x25, x26
+;   add x24, x27, x28
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x5, x10, x11
+;   add x6, x12, x13
+;   add x7, x14, x15
+;   add x8, x19, x20
+;   add x9, x21, x22
+;   add x10, x23, x24
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x0, x10, x0
+;   add x1, x1, x2
+;   add x2, x3, x4
+;   add x0, x0, x1
+;   add x1, x2, x0
 ;   ldr x0, [sp, #0x3e8]
-;   add sp, sp, #0x4c0
+;   add sp, sp, #0x4d0
 ;   ldp x19, x20, [sp], #0x10
 ;   ldp x21, x22, [sp], #0x10
 ;   ldp x23, x24, [sp], #0x10
