@@ -1334,6 +1334,7 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
         scratch_by_class: [None, None, None],
     };
 
+    debug_assert!(regs::PINNED_REG == cranelift_assembler_x64::gpr::enc::R15);
     if !enable_pinned_reg {
         env.non_preferred_regs_by_class[0] =
             env.non_preferred_regs_by_class[0].with(preg(regs::r15()));

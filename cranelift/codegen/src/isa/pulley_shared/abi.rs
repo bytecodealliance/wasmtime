@@ -1082,6 +1082,8 @@ const fn create_reg_environment() -> MachineEnv {
         PRegSet::empty(),
     ];
 
+    debug_assert!(XReg::SPECIAL_START == 30);
+
     MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,

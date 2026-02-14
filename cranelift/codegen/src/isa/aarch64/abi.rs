@@ -1621,6 +1621,7 @@ const fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
     };
 
     if !enable_pinned_reg {
+        debug_assert!(PINNED_REG == 21);
         env.non_preferred_regs_by_class[0].add(preg(xreg(PINNED_REG)));
     }
 
