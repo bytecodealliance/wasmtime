@@ -1,6 +1,7 @@
 #![cfg(not(miri))]
 
 use crate::ErrorExt;
+use std::num::NonZeroUsize;
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -211,7 +212,7 @@ fn test_trap_through_host() -> Result<()> {
 #[test]
 fn test_trap_backtrace_disabled() -> Result<()> {
     let mut config = Config::default();
-    config.wasm_backtrace(false);
+    config.wasm_backtrace_max_frames(None);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::<()>::new(&engine, ());
     let wat = r#"
@@ -263,21 +264,25 @@ fn test_trap_trace_cb() -> Result<()> {
 
 #[test]
 fn test_trap_stack_overflow() -> Result<()> {
-    let mut store = Store::<()>::default();
+    let max_frames = NonZeroUsize::new(32).unwrap();
     let wat = r#"
         (module $rec_mod
             (func $run (export "run") (call $run))
         )
     "#;
 
-    let module = Module::new(store.engine(), wat)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
+    let mut config = Config::new();
+    config.wasm_backtrace_max_frames(Some(max_frames));
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
     let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
     let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
-    assert!(trace.len() >= 32);
+    assert_eq!(trace.len(), max_frames.get());
     for i in 0..trace.len() {
         assert_eq!(trace[i].module().name().unwrap(), "rec_mod");
         assert_eq!(trace[i].func_index(), 0);
@@ -1152,7 +1157,7 @@ fn standalone_backtrace() -> Result<()> {
 #[test]
 fn standalone_backtrace_disabled() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_backtrace(false);
+    config.wasm_backtrace_max_frames(None);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
@@ -1180,7 +1185,7 @@ fn standalone_backtrace_disabled() -> Result<()> {
 #[test]
 fn host_return_error_no_backtrace() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_backtrace(false);
+    config.wasm_backtrace_max_frames(None);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(
@@ -1820,6 +1825,51 @@ fn return_call_to_aborting_wasm_function_with_stack_adjustments() -> Result<()> 
     assert_eq!(trace.frames().len(), 2);
     assert_eq!(trace.frames()[0].func_name(), Some("abort"));
     assert_eq!(trace.frames()[1].func_name(), Some("foo"));
+
+    Ok(())
+}
+
+#[test]
+fn test_wasm_backtrace_max_frames() -> Result<()> {
+    fn run(max_frames: Option<NonZeroUsize>) -> wasmtime::Error {
+        let wat = r#"
+            (module
+                (func $f1 (export "f1") (call $f2))
+                (func $f2 (call $f3))
+                (func $f3 (call $f4))
+                (func $f4 (call $f5))
+                (func $f5 (call $f6))
+                (func $f6 (call $f7))
+                (func $f7 (call $f8))
+                (func $f8 (call $f9))
+                (func $f9 (call $f10))
+                (func $f10 (unreachable))
+            )
+        "#;
+
+        let mut config = Config::new();
+        config.wasm_backtrace_max_frames(max_frames);
+        let engine = Engine::new(&config).unwrap();
+        let module = Module::new(&engine, wat).unwrap();
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[]).unwrap();
+        let f1 = instance.get_typed_func::<(), ()>(&mut store, "f1").unwrap();
+        f1.call(&mut store, ()).unwrap_err()
+    }
+
+    // Capturing more than 10 frames should get them all.
+    let err = run(NonZeroUsize::new(20));
+    let bt = err.downcast_ref::<WasmBacktrace>().unwrap();
+    assert_eq!(bt.frames().len(), 10);
+
+    // Limit to 5 frames gets the top 5.
+    let err = run(NonZeroUsize::new(5));
+    let bt = err.downcast_ref::<WasmBacktrace>().unwrap();
+    assert_eq!(bt.frames().len(), 5);
+
+    // Limit of None means no frames collected
+    let err = run(None);
+    assert!(err.downcast_ref::<WasmBacktrace>().is_none());
 
     Ok(())
 }
