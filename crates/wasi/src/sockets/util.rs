@@ -6,7 +6,7 @@ use core::time::Duration;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
 use rustix::fd::AsFd;
 use rustix::io::Errno;
-use rustix::net::{bind, connect_unspec, sockopt};
+use rustix::net::{bind, connect, connect_unspec, sockopt};
 use tracing::debug;
 
 use crate::sockets::SocketAddressFamily;
@@ -394,7 +394,27 @@ pub fn udp_bind(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), ErrorCode> {
     })
 }
 
-pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), ErrorCode> {
+pub fn udp_connect(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), Errno> {
+    match connect(sockfd.as_fd(), &addr) {
+        // When connecting a UDP socket, the OS looks up the best route to the
+        // remote address and selects an appropriate outgoing interface.
+        // If the new destination routes through an interface different than the
+        // previously selected interface, most operating systems will
+        // automatically update the socket's local address to match that route.
+        //
+        // Linux however doesn't do that automatically and we manually
+        // dissolve the existing association and then connect again to the
+        // new destination.
+        #[cfg(target_os = "linux")]
+        Err(Errno::INVAL) => {
+            _ = udp_disconnect(sockfd.as_fd());
+            return connect(sockfd.as_fd(), &addr);
+        }
+        r => r,
+    }
+}
+
+pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), Errno> {
     match connect_unspec(sockfd) {
         // BSD platforms return an error even if the UDP socket was disconnected successfully.
         //
@@ -409,8 +429,7 @@ pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), ErrorCode> {
         // address family of the socket.
         #[cfg(target_os = "macos")]
         Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
-        Err(err) => Err(err.into()),
-        Ok(()) => Ok(()),
+        r => r,
     }
 }
 
