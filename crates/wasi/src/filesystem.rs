@@ -750,9 +750,27 @@ impl File {
         advice: system_interface::fs::Advice,
     ) -> Result<(), ErrorCode> {
         use system_interface::fs::FileIoExt as _;
-        self.run_blocking(move |f| f.advise(offset, len, advice))
-            .await?;
-        Ok(())
+        let is_emulated_willneed = cfg!(any(target_os = "macos", target_os = "ios"))
+            && advice == system_interface::fs::Advice::WillNeed;
+        match self
+            .run_blocking(move |f| f.advise(offset, len, advice))
+            .await
+        {
+            Err(err) => {
+                let code: ErrorCode = err.into();
+
+                // Paper over a difference in behavior; we implement
+                // MADV_WILLNEED on macos via the F_RDADVISE fnctl,
+                // which errors on out-of-bounds ranges whereas POSIX
+                // silently succeeds.
+                if is_emulated_willneed && matches!(code, ErrorCode::FileTooLarge) {
+                    return Ok(());
+                }
+
+                Err(code)
+            }
+            Ok(()) => Ok(()),
+        }
     }
 
     pub(crate) async fn set_size(&self, size: u64) -> Result<(), ErrorCode> {
