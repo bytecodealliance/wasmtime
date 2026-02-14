@@ -23,15 +23,15 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a5, 0x40(a0)
-;;       slli    a2, a2, 0x20
-;;       srli    a4, a2, 0x20
-;;       addi    a5, a5, -4
-;;       bgeu    a5, a4, 8
+;;       ld      a4, 0x40(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a1, a1, 0x20
+;;       addi    a2, a4, -4
+;;       bgeu    a2, a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a5, 0x38(a0)
-;;       add     a4, a5, a4
-;;       sw      a3, 0(a4)
+;;       ld      a0, 0x38(a0)
+;;       add     a0, a0, a1
+;;       sw      a3, 0(a0)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -43,14 +43,14 @@
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
 ;;       ld      a3, 0x40(a0)
-;;       slli    a2, a2, 0x20
-;;       srli    a4, a2, 0x20
-;;       addi    a3, a3, -4
-;;       bgeu    a3, a4, 8
+;;       slli    a1, a2, 0x20
+;;       srli    a1, a1, 0x20
+;;       addi    a2, a3, -4
+;;       bgeu    a2, a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a5, 0x38(a0)
-;;       add     a4, a5, a4
-;;       lw      a0, 0(a4)
+;;       ld      a0, 0x38(a0)
+;;       add     a0, a0, a1
+;;       lw      a0, 0(a0)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

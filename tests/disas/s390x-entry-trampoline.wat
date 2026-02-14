@@ -17,13 +17,13 @@
 ;;       std     %f13, 0xc8(%r15)
 ;;       std     %f14, 0xd0(%r15)
 ;;       std     %f15, 0xd8(%r15)
-;;       lg      %r5, 8(%r2)
-;;       lg      %r4, 0(%r15)
-;;       stg     %r4, 0x48(%r5)
-;;       lgr     %r4, %r15
-;;       stg     %r4, 0x40(%r5)
-;;       larl    %r4, 0xbe
-;;       stg     %r4, 0x50(%r5)
+;;       lg      %r4, 8(%r2)
+;;       lg      %r5, 0(%r15)
+;;       stg     %r5, 0x48(%r4)
+;;       lgr     %r5, %r15
+;;       stg     %r5, 0x40(%r4)
+;;       larl    %r5, 0xbe
+;;       stg     %r5, 0x50(%r4)
 ;;       brasl   %r14, 0
 ;;       ├─╼ exception frame offset: SP = FP - 0xe0
 ;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0xbe

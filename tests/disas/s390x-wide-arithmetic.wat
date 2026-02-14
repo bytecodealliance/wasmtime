@@ -53,11 +53,11 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       vlvgp   %v17, %r5, %r4
-;;       vlvgp   %v18, %r7, %r6
-;;       vaq     %v17, %v17, %v18
-;;       vlgvg   %r3, %v17, 0
-;;       vlgvg   %r2, %v17, 1
+;;       vlvgp   %v16, %r5, %r4
+;;       vlvgp   %v17, %r7, %r6
+;;       vaq     %v16, %v16, %v17
+;;       vlgvg   %r3, %v16, 0
+;;       vlgvg   %r2, %v16, 1
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;
@@ -70,11 +70,11 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       vlvgp   %v17, %r5, %r4
-;;       vlvgp   %v18, %r7, %r6
-;;       vsq     %v17, %v17, %v18
-;;       vlgvg   %r3, %v17, 0
-;;       vlgvg   %r2, %v17, 1
+;;       vlvgp   %v16, %r5, %r4
+;;       vlvgp   %v17, %r7, %r6
+;;       vsq     %v16, %v16, %v17
+;;       vlgvg   %r3, %v16, 0
+;;       vlgvg   %r2, %v16, 1
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;
@@ -123,7 +123,7 @@
 ;;       mgrk    %r2, %r4, %r5
 ;;       vlvgp   %v16, %r2, %r3
 ;;       vlgvg   %r2, %v16, 0
-;;       vlgvg   %r3, %v16, 1
+;;       vlgvg   %r7, %v16, 1
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;
@@ -140,6 +140,6 @@
 ;;       mlgr    %r2, %r5
 ;;       vlvgp   %v16, %r2, %r3
 ;;       vlgvg   %r2, %v16, 0
-;;       vlgvg   %r3, %v16, 1
+;;       vlgvg   %r7, %v16, 1
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

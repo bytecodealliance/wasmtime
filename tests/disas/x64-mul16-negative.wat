@@ -12,8 +12,8 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       imulw   $0xe0ff, %dx, %dx
-;;       movswl  %dx, %eax
+;;       imulw   $0xe0ff, %dx, %si
+;;       movswl  %si, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
