@@ -88,19 +88,10 @@ enum TcpState {
     /// sockets from a TCP listener.
     ///
     /// From here a socket can transition to `Receiving` or `P2Streaming`.
-    Connected(Arc<tokio::net::TcpStream>),
-
-    /// A connection has been established and `receive` has been called.
-    ///
-    /// A socket will not transition out of this state.
-    #[cfg(feature = "p3")]
-    Receiving(Arc<tokio::net::TcpStream>),
-
-    /// This is a WASIp2-bound socket which stores some extra state for
-    /// read/write streams to handle TCP shutdown.
-    ///
-    /// A socket will not transition out of this state.
-    P2Streaming(Box<P2TcpStreamingState>),
+    Connected {
+        stream: Arc<tokio::net::TcpStream>,
+        p2_state: Option<P2TcpStreamingState>,
+    },
 
     /// This is not actually a socket but a deferred error.
     ///
@@ -124,9 +115,6 @@ impl Debug for TcpState {
             Self::Connecting(..) => f.debug_tuple("Connecting").finish(),
             Self::ConnectReady(..) => f.debug_tuple("ConnectReady").finish(),
             Self::Connected { .. } => f.debug_tuple("Connected").finish(),
-            #[cfg(feature = "p3")]
-            Self::Receiving { .. } => f.debug_tuple("Receiving").finish(),
-            Self::P2Streaming(_) => f.debug_tuple("P2Streaming").finish(),
             #[cfg(feature = "p3")]
             Self::Error(..) => f.debug_tuple("Error").finish(),
             Self::Closed => write!(f, "Closed"),
@@ -219,7 +207,10 @@ impl TcpSocket {
         })?;
         options.apply(family, &client);
         Ok(Self::from_state(
-            TcpState::Connected(Arc::new(client)),
+            TcpState::Connected {
+                stream: Arc::new(client),
+                p2_state: None,
+            },
             family,
         ))
     }
@@ -240,11 +231,8 @@ impl TcpSocket {
             | TcpState::BindStarted(socket)
             | TcpState::Bound(socket)
             | TcpState::ListenStarted(socket) => Ok(socket.as_socketlike_view()),
-            TcpState::Connected(stream) => Ok(stream.as_socketlike_view()),
-            #[cfg(feature = "p3")]
-            TcpState::Receiving(stream) => Ok(stream.as_socketlike_view()),
+            TcpState::Connected { stream, .. } => Ok(stream.as_socketlike_view()),
             TcpState::Listening { listener, .. } => Ok(listener.as_socketlike_view()),
-            TcpState::P2Streaming(state) => Ok(state.stream.as_socketlike_view()),
             TcpState::Connecting(..) | TcpState::ConnectReady(_) | TcpState::Closed => {
                 Err(ErrorCode::InvalidState)
             }
@@ -371,7 +359,10 @@ impl TcpSocket {
         }
         match result {
             Ok(stream) => {
-                self.tcp_state = TcpState::Connected(Arc::new(stream));
+                self.tcp_state = TcpState::Connected {
+                    stream: Arc::new(stream),
+                    p2_state: None,
+                };
                 Ok(())
             }
             Err(err) => {
@@ -511,25 +502,17 @@ impl TcpSocket {
 
     #[cfg(feature = "p3")]
     pub(crate) fn start_receive(&mut self) -> Option<&Arc<tokio::net::TcpStream>> {
-        match mem::replace(&mut self.tcp_state, TcpState::Closed) {
-            TcpState::Connected(stream) => {
-                self.tcp_state = TcpState::Receiving(stream);
-                Some(self.tcp_stream_arc().unwrap())
-            }
-            prev => {
-                self.tcp_state = prev;
-                None
-            }
+        if let TcpState::Connected { stream, .. } = &self.tcp_state {
+            Some(stream)
+        } else {
+            None
         }
     }
 
     pub(crate) fn local_address(&self) -> Result<SocketAddr, ErrorCode> {
         match &self.tcp_state {
             TcpState::Bound(socket) => Ok(socket.local_addr()?),
-            TcpState::Connected(stream) => Ok(stream.local_addr()?),
-            #[cfg(feature = "p3")]
-            TcpState::Receiving(stream) => Ok(stream.local_addr()?),
-            TcpState::P2Streaming(state) => Ok(state.stream.local_addr()?),
+            TcpState::Connected { stream, .. } => Ok(stream.local_addr()?),
             TcpState::Listening { listener, .. } => Ok(listener.local_addr()?),
             #[cfg(feature = "p3")]
             TcpState::Error(err) => Err(err.into()),
@@ -697,10 +680,7 @@ impl TcpSocket {
 
     pub(crate) fn tcp_stream_arc(&self) -> Result<&Arc<tokio::net::TcpStream>, ErrorCode> {
         match &self.tcp_state {
-            TcpState::Connected(socket) => Ok(socket),
-            #[cfg(feature = "p3")]
-            TcpState::Receiving(socket) => Ok(socket),
-            TcpState::P2Streaming(state) => Ok(&state.stream),
+            TcpState::Connected { stream, .. } => Ok(stream),
             #[cfg(feature = "p3")]
             TcpState::Error(err) => Err(err.into()),
             _ => Err(ErrorCode::InvalidState),
@@ -709,7 +689,10 @@ impl TcpSocket {
 
     pub(crate) fn p2_streaming_state(&self) -> Result<&P2TcpStreamingState, ErrorCode> {
         match &self.tcp_state {
-            TcpState::P2Streaming(state) => Ok(state),
+            TcpState::Connected {
+                p2_state: Some(state),
+                ..
+            } => Ok(state),
             #[cfg(feature = "p3")]
             TcpState::Error(err) => Err(err.into()),
             _ => Err(ErrorCode::InvalidState),
@@ -720,11 +703,12 @@ impl TcpSocket {
         &mut self,
         state: P2TcpStreamingState,
     ) -> Result<(), ErrorCode> {
-        if !matches!(self.tcp_state, TcpState::Connected(_)) {
-            return Err(ErrorCode::InvalidState);
+        if let TcpState::Connected { p2_state, .. } = &mut self.tcp_state {
+            *p2_state = Some(state);
+            Ok(())
+        } else {
+            Err(ErrorCode::InvalidState)
         }
-        self.tcp_state = TcpState::P2Streaming(Box::new(state));
-        Ok(())
     }
 
     /// Used for `Pollable` in the WASIp2 implementation this awaits the socket
@@ -745,11 +729,10 @@ impl TcpSocket {
             | TcpState::Listening {
                 pending_accept: Some(_),
                 ..
-            }
-            | TcpState::P2Streaming(_) => {}
+            } => {}
 
             #[cfg(feature = "p3")]
-            TcpState::Receiving(_) | TcpState::Error(_) => {}
+            TcpState::Error(_) => {}
 
             TcpState::Connecting(Some(future)) => {
                 self.tcp_state = TcpState::ConnectReady(future.as_mut().await);

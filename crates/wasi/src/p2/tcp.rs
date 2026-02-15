@@ -19,7 +19,6 @@ impl TcpSocket {
         let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
         let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
         self.set_p2_streaming_state(P2TcpStreamingState {
-            stream: client.clone(),
             reader: reader.clone(),
             writer: writer.clone(),
         })?;
@@ -30,7 +29,6 @@ impl TcpSocket {
 }
 
 pub(crate) struct P2TcpStreamingState {
-    pub(crate) stream: Arc<tokio::net::TcpStream>,
     reader: Arc<Mutex<TcpReader>>,
     writer: Arc<Mutex<TcpWriter>>,
 }
