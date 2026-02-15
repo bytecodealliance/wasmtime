@@ -106,6 +106,48 @@ async fn test_tcp_send_drops_stream_when_remote_shutdown(family: IpAddressFamily
     .await;
 }
 
+/// `receive` may be called successfully at most once.
+async fn test_tcp_receive_once(family: IpAddressFamily) {
+    setup(family, |mut server, client| async move {
+        // Give the client some potential data to _hopefully never_ read.
+        {
+            let rest = server.send.write_all(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".into()).await;
+            assert!(rest.is_empty());
+        }
+
+        // FYI, the first call to `receive` is part of the `setup` code, so every
+        // `receive` in here should fail.
+        for _ in 0..3 {
+            let (mut reader, future) = client.socket.receive();
+
+            let (stream_result, data) = reader.read(Vec::with_capacity(10)).await;
+            assert_eq!(data.len(), 0);
+            assert_eq!(stream_result, StreamResult::Dropped);
+            assert_eq!(future.await, Err(ErrorCode::InvalidState));
+        }
+    })
+    .await;
+}
+
+/// `send` may be called successfully at most once.
+async fn test_tcp_send_once(family: IpAddressFamily) {
+    setup(family, |_server, client| async move {
+        // FYI, the first call to `send` is part of the `setup` code, so every
+        // `send` in here should fail.
+        for _ in 0..3 {
+            let (mut writer, send_rx) = wit_stream::new();
+            let future = client.socket.send(send_rx);
+
+            const DATA: &[u8] = b"undeliverable";
+            let (stream_result, rest) = writer.write(DATA.into()).await;
+            assert_eq!(rest.into_vec(), DATA);
+            assert_eq!(stream_result, StreamResult::Dropped);
+            assert_eq!(future.await, Err(ErrorCode::InvalidState));
+        }
+    })
+    .await;
+}
+
 /// Model a situation where there's a continuous stream of data coming into the
 /// guest from one side and the other side is reading in chunks but also
 /// cancelling reads occasionally. Should receive the complete stream of data
@@ -178,6 +220,8 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         test_tcp_receive_future_should_resolve_when_stream_dropped(IpAddressFamily::Ipv4).await;
         test_tcp_send_future_should_resolve_when_stream_dropped(IpAddressFamily::Ipv4).await;
         test_tcp_send_drops_stream_when_remote_shutdown(IpAddressFamily::Ipv4).await;
+        test_tcp_receive_once(IpAddressFamily::Ipv4).await;
+        test_tcp_send_once(IpAddressFamily::Ipv4).await;
         test_tcp_read_cancellation(IpAddressFamily::Ipv4).await;
 
         if supports_ipv6() {
@@ -187,6 +231,8 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             test_tcp_receive_future_should_resolve_when_stream_dropped(IpAddressFamily::Ipv6).await;
             test_tcp_send_future_should_resolve_when_stream_dropped(IpAddressFamily::Ipv6).await;
             test_tcp_send_drops_stream_when_remote_shutdown(IpAddressFamily::Ipv6).await;
+            test_tcp_receive_once(IpAddressFamily::Ipv6).await;
+            test_tcp_send_once(IpAddressFamily::Ipv6).await;
             test_tcp_read_cancellation(IpAddressFamily::Ipv6).await;
         }
         Ok(())

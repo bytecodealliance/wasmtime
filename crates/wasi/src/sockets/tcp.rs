@@ -90,6 +90,8 @@ enum TcpState {
     /// From here a socket can transition to `Receiving` or `P2Streaming`.
     Connected {
         stream: Arc<tokio::net::TcpStream>,
+        receive_stream_taken: bool,
+        send_stream_taken: bool,
         p2_state: Option<P2TcpStreamingState>,
     },
 
@@ -209,6 +211,8 @@ impl TcpSocket {
         Ok(Self::from_state(
             TcpState::Connected {
                 stream: Arc::new(client),
+                receive_stream_taken: false,
+                send_stream_taken: false,
                 p2_state: None,
             },
             family,
@@ -361,6 +365,8 @@ impl TcpSocket {
             Ok(stream) => {
                 self.tcp_state = TcpState::Connected {
                     stream: Arc::new(stream),
+                    receive_stream_taken: false,
+                    send_stream_taken: false,
                     p2_state: None,
                 };
                 Ok(())
@@ -500,15 +506,6 @@ impl TcpSocket {
         Ok(Some(Self::new_accept(result, &self.options, self.family)?))
     }
 
-    #[cfg(feature = "p3")]
-    pub(crate) fn start_receive(&mut self) -> Option<&Arc<tokio::net::TcpStream>> {
-        if let TcpState::Connected { stream, .. } = &self.tcp_state {
-            Some(stream)
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn local_address(&self) -> Result<SocketAddr, ErrorCode> {
         match &self.tcp_state {
             TcpState::Bound(socket) => Ok(socket.local_addr()?),
@@ -521,9 +518,12 @@ impl TcpSocket {
     }
 
     pub(crate) fn remote_address(&self) -> Result<SocketAddr, ErrorCode> {
-        let stream = self.tcp_stream_arc()?;
-        let addr = stream.peer_addr()?;
-        Ok(addr)
+        match &self.tcp_state {
+            TcpState::Connected { stream, .. } => Ok(stream.peer_addr()?),
+            #[cfg(feature = "p3")]
+            TcpState::Error(err) => Err(err.into()),
+            _ => Err(ErrorCode::InvalidState),
+        }
     }
 
     pub(crate) fn is_listening(&self) -> bool {
@@ -678,11 +678,40 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn tcp_stream_arc(&self) -> Result<&Arc<tokio::net::TcpStream>, ErrorCode> {
-        match &self.tcp_state {
-            TcpState::Connected { stream, .. } => Ok(stream),
+    pub(crate) fn take_receive_stream(&mut self) -> Result<Arc<tokio::net::TcpStream>, ErrorCode> {
+        match &mut self.tcp_state {
+            TcpState::Connected {
+                stream,
+                receive_stream_taken,
+                ..
+            } => {
+                if *receive_stream_taken {
+                    return Err(ErrorCode::InvalidState);
+                }
+                *receive_stream_taken = true;
+                Ok(stream.clone())
+            }
             #[cfg(feature = "p3")]
-            TcpState::Error(err) => Err(err.into()),
+            TcpState::Error(err) => Err((&*err).into()),
+            _ => Err(ErrorCode::InvalidState),
+        }
+    }
+
+    pub(crate) fn take_send_stream(&mut self) -> Result<Arc<tokio::net::TcpStream>, ErrorCode> {
+        match &mut self.tcp_state {
+            TcpState::Connected {
+                stream,
+                send_stream_taken,
+                ..
+            } => {
+                if *send_stream_taken {
+                    return Err(ErrorCode::InvalidState);
+                }
+                *send_stream_taken = true;
+                Ok(stream.clone())
+            }
+            #[cfg(feature = "p3")]
+            TcpState::Error(err) => Err((&*err).into()),
             _ => Err(ErrorCode::InvalidState),
         }
     }
