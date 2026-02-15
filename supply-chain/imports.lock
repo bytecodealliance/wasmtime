@@ -1112,8 +1112,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.13.4"
-when = "2026-01-06"
+version = "0.14.0"
+when = "2026-02-14"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"
