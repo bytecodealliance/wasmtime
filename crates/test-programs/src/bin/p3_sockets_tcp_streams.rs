@@ -148,6 +148,55 @@ async fn test_tcp_send_once(family: IpAddressFamily) {
     .await;
 }
 
+/// The streams and futures returned by `send` and `receive` should remain
+/// operational even after the socket that spawned them has been dropped.
+async fn test_tcp_stream_lifetimes(family: IpAddressFamily) {
+    setup(family, |server, client| async move {
+        let Connection {
+            socket: server_socket,
+            send: mut server_send,
+            receive: server_receive,
+            send_result: server_send_result,
+            receive_result: server_receive_result,
+        } = server;
+        let Connection {
+            socket: client_socket,
+            send: mut client_send,
+            receive: client_receive,
+            send_result: client_send_result,
+            receive_result: client_receive_result,
+        } = client;
+
+        // Drop the parent sockets:
+        drop(server_socket);
+        drop(client_socket);
+
+        {
+            let rest = server_send.write_all(b"ping".into()).await;
+            assert!(rest.is_empty());
+            drop(server_send);
+            assert_eq!(server_send_result.await, Ok(()));
+        }
+        {
+            let data = client_receive.collect().await;
+            assert_eq!(data, b"ping");
+            assert_eq!(client_receive_result.await, Ok(()));
+        }
+        {
+            let rest = client_send.write_all(b"pong".into()).await;
+            assert!(rest.is_empty());
+            drop(client_send);
+            assert_eq!(client_send_result.await, Ok(()));
+        }
+        {
+            let data = server_receive.collect().await;
+            assert_eq!(data, b"pong");
+            assert_eq!(server_receive_result.await, Ok(()));
+        }
+    })
+    .await;
+}
+
 /// Model a situation where there's a continuous stream of data coming into the
 /// guest from one side and the other side is reading in chunks but also
 /// cancelling reads occasionally. Should receive the complete stream of data
@@ -222,6 +271,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         test_tcp_send_drops_stream_when_remote_shutdown(IpAddressFamily::Ipv4).await;
         test_tcp_receive_once(IpAddressFamily::Ipv4).await;
         test_tcp_send_once(IpAddressFamily::Ipv4).await;
+        test_tcp_stream_lifetimes(IpAddressFamily::Ipv4).await;
         test_tcp_read_cancellation(IpAddressFamily::Ipv4).await;
 
         if supports_ipv6() {
@@ -233,6 +283,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             test_tcp_send_drops_stream_when_remote_shutdown(IpAddressFamily::Ipv6).await;
             test_tcp_receive_once(IpAddressFamily::Ipv6).await;
             test_tcp_send_once(IpAddressFamily::Ipv6).await;
+            test_tcp_stream_lifetimes(IpAddressFamily::Ipv6).await;
             test_tcp_read_cancellation(IpAddressFamily::Ipv6).await;
         }
         Ok(())
