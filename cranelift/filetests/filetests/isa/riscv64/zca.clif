@@ -157,15 +157,15 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   andi a4,a0,255
-;   select a0,a1,a2##condition=(a4 ne zero)
+;   andi a3,a0,255
+;   select a0,a1,a2##condition=(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi a4, a0, 0xff
+;   andi a3, a0, 0xff
 ;   c.mv a0, a1
-;   bnez a4, 6
+;   bnez a3, 6
 ;   c.mv a0, a2
 ;   c.jr ra
 
@@ -619,20 +619,20 @@ block0:
 
 ; VCode:
 ; block0:
-;   mv a2,a0
+;   mv a3,a0
 ;   lui a0,4
 ;   lui a1,-1
-;   lui a4,-32
-;   sd a4,0(a2)
+;   lui a2,-32
+;   sd a2,0(a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.mv a2, a0
+;   c.mv a3, a0
 ;   c.lui a0, 4
 ;   c.lui a1, 0xfffff
-;   c.lui a4, 0xfffe0
-;   c.sd a4, 0(a2)
+;   c.lui a2, 0xfffe0
+;   c.sd a2, 0(a3)
 ;   c.jr ra
 
 function %c_andi_f(i64) -> i64 {

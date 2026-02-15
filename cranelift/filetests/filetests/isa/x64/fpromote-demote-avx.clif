@@ -45,11 +45,11 @@ block0(v1: i64, v2: f32):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %r8
+;   leaq <offset:1>+(%rsp), %rsi
 ;   vmovss %xmm0, <offset:1>+(%rsp)
 ;   uninit  %xmm4
 ;   vxorpd %xmm4, %xmm4, %xmm6
-;   vcvtss2sd (%r8), %xmm6, %xmm0
+;   vcvtss2sd (%rsi), %xmm6, %xmm0
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -61,10 +61,10 @@ block0(v1: i64, v2: f32):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %r8
+;   leaq (%rsp), %rsi
 ;   vmovss %xmm0, (%rsp)
 ;   vxorpd %xmm4, %xmm4, %xmm6
-;   vcvtss2sd (%r8), %xmm6, %xmm0 ; trap: heap_oob
+;   vcvtss2sd (%rsi), %xmm6, %xmm0 ; trap: heap_oob
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -114,11 +114,11 @@ block0(v1: i64, v2: f64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   leaq <offset:1>+(%rsp), %r8
+;   leaq <offset:1>+(%rsp), %rsi
 ;   vmovsd %xmm0, <offset:1>+(%rsp)
 ;   uninit  %xmm4
 ;   vxorps %xmm4, %xmm4, %xmm6
-;   vcvtsd2ss (%r8), %xmm6, %xmm0
+;   vcvtsd2ss (%rsi), %xmm6, %xmm0
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -130,10 +130,10 @@ block0(v1: i64, v2: f64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
-;   leaq (%rsp), %r8
+;   leaq (%rsp), %rsi
 ;   vmovsd %xmm0, (%rsp)
 ;   vxorps %xmm4, %xmm4, %xmm6
-;   vcvtsd2ss (%r8), %xmm6, %xmm0 ; trap: heap_oob
+;   vcvtsd2ss (%rsi), %xmm6, %xmm0 ; trap: heap_oob
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

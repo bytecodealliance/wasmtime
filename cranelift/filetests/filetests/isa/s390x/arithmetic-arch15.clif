@@ -88,11 +88,11 @@ block0(v0: i128, v1: i128):
 ;   vl %v3, 0(%r4)
 ;   vlcq %v6, %v3
 ;   veval %v16, %v1, %v3, %v6, 9
-;   vrepib %v18, 255
-;   vecq %v16, %v18
+;   vrepib %v17, 255
+;   vecq %v16, %v17
 ;   jge .+2 # trap=int_ovf
-;   vdq %v22, %v1, %v3, 0
-;   vst %v22, 0(%r2)
+;   vdq %v16, %v1, %v3, 0
+;   vst %v16, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
@@ -102,14 +102,14 @@ block0(v0: i128, v1: i128):
 ;   vlc %v6, %v3, 4
 ;   .byte 0xe7, 0x01
 ;   lper %f0, %f9
-;   ld %f8, 0x720(%r8, %r14)
+;   ld %f8, 0x710(%r8, %r14)
 ;   .byte 0x00, 0xff
 ;   .byte 0x08, 0x45
-;   vec %v16, %v18, 4
+;   vec %v16, %v17, 4
 ;   jge 0x26 ; trap: int_ovf
-;   .byte 0xe7, 0x61
+;   .byte 0xe7, 0x01
 ;   lper %f0, %f0
-;   lh %r11, 0x760(%r2, %r14) ; trap: int_divz
+;   lh %r11, 0x700(%r2, %r14) ; trap: int_divz
 ;   lpdr %f0, %f0
 ;   .byte 0x08, 0x0e
 ;   br %r14
@@ -153,8 +153,8 @@ block0(v0: i128, v1: i128):
 ;   vgbm %v16, 0
 ;   vecq %v3, %v7
 ;   jne 10 ; vlr %v6, %v16
-;   vrq %v21, %v6, %v3, 0
-;   vst %v21, 0(%r2)
+;   vrq %v16, %v6, %v3, 0
+;   vst %v16, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
@@ -166,9 +166,9 @@ block0(v0: i128, v1: i128):
 ;   vec %v3, %v7, 4
 ;   jne 0x28
 ;   vlr %v6, %v16
-;   .byte 0xe7, 0x56
+;   .byte 0xe7, 0x06
 ;   lper %f0, %f0
-;   lh %r11, 0x750(%r3, %r14) ; trap: int_divz
+;   lh %r11, 0x700(%r3, %r14) ; trap: int_divz
 ;   lpdr %f0, %f0
 ;   .byte 0x08, 0x0e
 ;   br %r14

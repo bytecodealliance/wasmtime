@@ -11,16 +11,16 @@ block0(v0: i8, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   llcr %r2, %r2
-;   clfi %r2, 42
+;   llcr %r5, %r2
+;   clfi %r5, 42
 ;   lgr %r2, %r4
 ;   locgre %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llcr %r2, %r2
-;   clfi %r2, 0x2a
+;   llcr %r5, %r2
+;   clfi %r5, 0x2a
 ;   lgr %r2, %r4
 ;   locgre %r2, %r3
 ;   br %r14
@@ -33,16 +33,16 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r2, %r2
-;   chi %r2, 0
+;   lbr %r5, %r2
+;   chi %r5, 0
 ;   lgr %r2, %r4
 ;   locrlh %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r2, %r2
-;   chi %r2, 0
+;   lbr %r5, %r2
+;   chi %r5, 0
 ;   lgr %r2, %r4
 ;   locrlh %r2, %r3
 ;   br %r14

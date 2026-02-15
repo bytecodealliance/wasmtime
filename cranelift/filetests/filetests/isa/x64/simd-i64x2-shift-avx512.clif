@@ -14,9 +14,9 @@ block0(v0: i64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq %rdi, %r9
-;   andq $0x3f, %r9
-;   vmovd %r9d, %xmm1
+;   movq %rdi, %rsi
+;   andq $0x3f, %rsi
+;   vmovd %esi, %xmm1
 ;   vpsraq %xmm1, %xmm0, %xmm0
 ;   andq $0x3f, %rdi
 ;   vmovd %edi, %xmm1
@@ -30,9 +30,9 @@ block0(v0: i64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %r9
-;   andq $0x3f, %r9
-;   vmovd %r9d, %xmm1
+;   movq %rdi, %rsi
+;   andq $0x3f, %rsi
+;   vmovd %esi, %xmm1
 ;   vpsraq %xmm1, %xmm0, %xmm0
 ;   andq $0x3f, %rdi
 ;   vmovd %edi, %xmm1

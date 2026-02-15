@@ -21,25 +21,25 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r8d
-;;       cmpq    0x40(%rdi), %r8
-;;       ja      0x22
-;;   11: movq    0x38(%rdi), %r10
-;;       movb    %cl, 0x1000(%r10, %r8)
+;;       movl    %edx, %esi
+;;       cmpq    0x40(%rdi), %rsi
+;;       ja      0x20
+;;   10: movq    0x38(%rdi), %rdi
+;;       movb    %cl, 0x1000(%rdi, %rsi)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   22: ud2
+;;   20: ud2
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r8d
-;;       cmpq    0x40(%rdi), %r8
-;;       ja      0x63
-;;   51: movq    0x38(%rdi), %r10
-;;       movzbq  0x1000(%r10, %r8), %rax
+;;       movl    %edx, %esi
+;;       cmpq    0x40(%rdi), %rsi
+;;       ja      0x62
+;;   50: movq    0x38(%rdi), %rdi
+;;       movzbq  0x1000(%rdi, %rsi), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   63: ud2
+;;   62: ud2

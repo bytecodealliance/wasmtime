@@ -17,7 +17,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::sync::OnceLock;
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
 // these ABIs are very similar.
@@ -1089,11 +1088,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env(true))
+            static MACHINE_ENV: MachineEnv = create_reg_env(true);
+            &MACHINE_ENV
         } else {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env(false))
+            static MACHINE_ENV: MachineEnv = create_reg_env(false);
+            &MACHINE_ENV
         }
     }
 
@@ -1534,100 +1533,96 @@ const WINCH_CLOBBERS: PRegSet = winch_clobbers();
 const ALL_CLOBBERS: PRegSet = all_clobbers();
 const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
-fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
+const fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
+    const fn preg(r: Reg) -> PReg {
+        r.to_real_reg().unwrap().preg()
     }
 
     let mut env = MachineEnv {
         preferred_regs_by_class: [
-            vec![
-                preg(xreg(0)),
-                preg(xreg(1)),
-                preg(xreg(2)),
-                preg(xreg(3)),
-                preg(xreg(4)),
-                preg(xreg(5)),
-                preg(xreg(6)),
-                preg(xreg(7)),
-                preg(xreg(8)),
-                preg(xreg(9)),
-                preg(xreg(10)),
-                preg(xreg(11)),
-                preg(xreg(12)),
-                preg(xreg(13)),
-                preg(xreg(14)),
-                preg(xreg(15)),
-                // x16 and x17 are spilltmp and tmp2 (see above).
-                // x18 could be used by the platform to carry inter-procedural state;
-                // conservatively assume so and make it not allocatable.
-                // x19-28 are callee-saved and so not preferred.
-                // x21 is the pinned register (if enabled) and not allocatable if so.
-                // x29 is FP, x30 is LR, x31 is SP/ZR.
-            ],
-            vec![
-                preg(vreg(0)),
-                preg(vreg(1)),
-                preg(vreg(2)),
-                preg(vreg(3)),
-                preg(vreg(4)),
-                preg(vreg(5)),
-                preg(vreg(6)),
-                preg(vreg(7)),
+            PRegSet::empty()
+                .with(preg(xreg(0)))
+                .with(preg(xreg(1)))
+                .with(preg(xreg(2)))
+                .with(preg(xreg(3)))
+                .with(preg(xreg(4)))
+                .with(preg(xreg(5)))
+                .with(preg(xreg(6)))
+                .with(preg(xreg(7)))
+                .with(preg(xreg(8)))
+                .with(preg(xreg(9)))
+                .with(preg(xreg(10)))
+                .with(preg(xreg(11)))
+                .with(preg(xreg(12)))
+                .with(preg(xreg(13)))
+                .with(preg(xreg(14)))
+                .with(preg(xreg(15))),
+            // x16 and x17 are spilltmp and tmp2 (see above).
+            // x18 could be used by the platform to carry inter-procedural state;
+            // conservatively assume so and make it not allocatable.
+            // x19-28 are callee-saved and so not preferred.
+            // x21 is the pinned register (if enabled) and not allocatable if so.
+            // x29 is FP, x30 is LR, x31 is SP/ZR.
+            PRegSet::empty()
+                .with(preg(vreg(0)))
+                .with(preg(vreg(1)))
+                .with(preg(vreg(2)))
+                .with(preg(vreg(3)))
+                .with(preg(vreg(4)))
+                .with(preg(vreg(5)))
+                .with(preg(vreg(6)))
+                .with(preg(vreg(7)))
                 // v8-15 are callee-saved and so not preferred.
-                preg(vreg(16)),
-                preg(vreg(17)),
-                preg(vreg(18)),
-                preg(vreg(19)),
-                preg(vreg(20)),
-                preg(vreg(21)),
-                preg(vreg(22)),
-                preg(vreg(23)),
-                preg(vreg(24)),
-                preg(vreg(25)),
-                preg(vreg(26)),
-                preg(vreg(27)),
-                preg(vreg(28)),
-                preg(vreg(29)),
-                preg(vreg(30)),
-                preg(vreg(31)),
-            ],
+                .with(preg(vreg(16)))
+                .with(preg(vreg(17)))
+                .with(preg(vreg(18)))
+                .with(preg(vreg(19)))
+                .with(preg(vreg(20)))
+                .with(preg(vreg(21)))
+                .with(preg(vreg(22)))
+                .with(preg(vreg(23)))
+                .with(preg(vreg(24)))
+                .with(preg(vreg(25)))
+                .with(preg(vreg(26)))
+                .with(preg(vreg(27)))
+                .with(preg(vreg(28)))
+                .with(preg(vreg(29)))
+                .with(preg(vreg(30)))
+                .with(preg(vreg(31))),
             // Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         non_preferred_regs_by_class: [
-            vec![
-                preg(xreg(19)),
-                preg(xreg(20)),
+            PRegSet::empty()
+                .with(preg(xreg(19)))
+                .with(preg(xreg(20)))
                 // x21 is pinned reg if enabled; we add to this list below if not.
-                preg(xreg(22)),
-                preg(xreg(23)),
-                preg(xreg(24)),
-                preg(xreg(25)),
-                preg(xreg(26)),
-                preg(xreg(27)),
-                preg(xreg(28)),
-            ],
-            vec![
-                preg(vreg(8)),
-                preg(vreg(9)),
-                preg(vreg(10)),
-                preg(vreg(11)),
-                preg(vreg(12)),
-                preg(vreg(13)),
-                preg(vreg(14)),
-                preg(vreg(15)),
-            ],
+                .with(preg(xreg(22)))
+                .with(preg(xreg(23)))
+                .with(preg(xreg(24)))
+                .with(preg(xreg(25)))
+                .with(preg(xreg(26)))
+                .with(preg(xreg(27)))
+                .with(preg(xreg(28))),
+            PRegSet::empty()
+                .with(preg(vreg(8)))
+                .with(preg(vreg(9)))
+                .with(preg(vreg(10)))
+                .with(preg(vreg(11)))
+                .with(preg(vreg(12)))
+                .with(preg(vreg(13)))
+                .with(preg(vreg(14)))
+                .with(preg(vreg(15))),
             // Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
     };
 
     if !enable_pinned_reg {
-        debug_assert_eq!(PINNED_REG, 21); // We assumed this above in hardcoded reg list.
-        env.non_preferred_regs_by_class[0].push(preg(xreg(PINNED_REG)));
+        debug_assert!(PINNED_REG == 21);
+        env.non_preferred_regs_by_class[0].add(preg(xreg(PINNED_REG)));
     }
 
     env

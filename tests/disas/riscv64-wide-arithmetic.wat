@@ -51,8 +51,8 @@
 ;;       mv      s0, sp
 ;;       add     a0, a2, a4
 ;;       sltu    a1, a0, a4
-;;       add     a3, a3, a5
-;;       add     a1, a3, a1
+;;       add     a2, a3, a5
+;;       add     a1, a2, a1
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -65,8 +65,8 @@
 ;;       mv      s0, sp
 ;;       sub     a0, a2, a4
 ;;       sltu    a1, a2, a0
-;;       sub     a3, a3, a5
-;;       sub     a1, a3, a1
+;;       sub     a2, a3, a5
+;;       sub     a1, a2, a1
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

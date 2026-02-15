@@ -73,8 +73,8 @@ block0(v0: i64):
 ;   movdqu %xmm14, 0x130(%rsp)
 ;   movdqu %xmm15, 0x140(%rsp)
 ; block0:
-;   load_ext_name %libcall+0, %rax
-;   call    *%rax
+;   load_ext_name %libcall+0, %rdx
+;   call    *%rdx
 ;   movq (%rsp), %rax
 ;   movq 8(%rsp), %rcx
 ;   movq 0x10(%rsp), %rdx
@@ -136,8 +136,8 @@ block0(v0: i64):
 ;   movdqu %xmm14, 0x130(%rsp)
 ;   movdqu %xmm15, 0x140(%rsp)
 ; block1: ; offset 0xc6
-;   movabsq $0, %rax ; reloc_external Abs8 %libcall 0
-;   callq *%rax
+;   movabsq $0, %rdx ; reloc_external Abs8 %libcall 0
+;   callq *%rdx
 ;   movq (%rsp), %rax
 ;   movq 8(%rsp), %rcx
 ;   movq 0x10(%rsp), %rdx

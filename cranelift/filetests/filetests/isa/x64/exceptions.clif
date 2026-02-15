@@ -30,11 +30,11 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block0:
-;   movabsq $0x3ff0000000000000, %rcx
-;   movq %rcx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
-;   load_ext_name %g+0, %rdx
-;   call    *%rdx; jmp MachLabel(1); catch [default: MachLabel(2)]
+;   load_ext_name %g+0, %rax
+;   call    *%rax; jmp MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   movl $0x1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -73,11 +73,11 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block1: ; offset 0x21
-;   movabsq $0x3ff0000000000000, %rcx
-;   movq %rcx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, (%rsp)
-;   movabsq $0, %rdx ; reloc_external Abs8 %g 0
-;   callq *%rdx
+;   movabsq $0, %rax ; reloc_external Abs8 %g 0
+;   callq *%rax
 ; block2: ; offset 0x41
 ;   movl $1, %eax
 ;   movdqu (%rsp), %xmm1
@@ -154,20 +154,19 @@ function %f1(i32) -> i32, f32, f64 {
 ;   testl %edi, %edi
 ;   jnz     label2; j label3
 ; block2:
-;   movq %rax, %r11
+;   movq %rax, %rcx
 ;   jmp     label8
 ; block3:
 ;   movdqu %xmm1, <offset:1>+(%rsp)
 ;   jmp     label7
 ; block4:
-;   movabsq $0x3ff0000000000000, %r10
-;   movq %r10, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
-;   load_ext_name %g+0, %r11
-;   call    *%r11; jmp MachLabel(6); catch [default: MachLabel(5)]
+;   load_ext_name %g+0, %rax
+;   call    *%rax; jmp MachLabel(6); catch [default: MachLabel(5)]
 ; block5:
-;   movq %rax, %rsi
-;   movq %rsi, %r11
+;   movq %rax, %rcx
 ;   jmp     label8
 ; block6:
 ;   jmp     label7
@@ -184,11 +183,10 @@ function %f1(i32) -> i32, f32, f64 {
 ;   popq %rbp
 ;   retq
 ; block8:
-;   leal 1(%r11), %eax
-;   movq %r11, %rsi
+;   leal 1(%rcx), %eax
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movq %rsi, %xmm1
+;   movq %rcx, %xmm1
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
 ;   movq 0x20(%rsp), %r13
@@ -221,23 +219,22 @@ function %f1(i32) -> i32, f32, f64 {
 ;   testl %edi, %edi
 ;   je 0x56
 ; block3: ; offset 0x4e
-;   movq %rax, %r11
-;   jmp 0xbd
+;   movq %rax, %rcx
+;   jmp 0xb9
 ; block4: ; offset 0x56
 ;   movdqu %xmm1, (%rsp)
-;   jmp 0x91
+;   jmp 0x8d
 ; block5: ; offset 0x60
-;   movabsq $0x3ff0000000000000, %r10
-;   movq %r10, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, (%rsp)
-;   movabsq $0, %r11 ; reloc_external Abs8 %g 0
-;   callq *%r11
-;   jmp 0x91
-; block6: ; offset 0x86
-;   movq %rax, %rsi
-;   movq %rsi, %r11
-;   jmp 0xbd
-; block7: ; offset 0x91
+;   movabsq $0, %rax ; reloc_external Abs8 %g 0
+;   callq *%rax
+;   jmp 0x8d
+; block6: ; offset 0x85
+;   movq %rax, %rcx
+;   jmp 0xb9
+; block7: ; offset 0x8d
 ;   movl $1, %eax
 ;   movdqu (%rsp), %xmm1
 ;   movq 0x10(%rsp), %rbx
@@ -249,11 +246,10 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block8: ; offset 0xbd
-;   leal 1(%r11), %eax
-;   movq %r11, %rsi
+; block8: ; offset 0xb9
+;   leal 1(%rcx), %eax
 ;   xorps %xmm0, %xmm0
-;   movq %rsi, %xmm1
+;   movq %rcx, %xmm1
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
 ;   movq 0x20(%rsp), %r13
@@ -294,11 +290,11 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block0:
-;   movabsq $0x3ff0000000000000, %rcx
-;   movq %rcx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
-;   load_ext_name %g+0, %rdx
-;   call    *%rdx; jmp MachLabel(1); catch [default: MachLabel(2)]
+;   load_ext_name %g+0, %rax
+;   call    *%rax; jmp MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   movl $0x1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -337,11 +333,11 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block1: ; offset 0x21
-;   movabsq $0x3ff0000000000000, %rcx
-;   movq %rcx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, (%rsp)
-;   movabsq $0, %rdx ; reloc_external Abs8 %g 0
-;   callq *%rdx
+;   movabsq $0, %rax ; reloc_external Abs8 %g 0
+;   callq *%rax
 ; block2: ; offset 0x41
 ;   movl $1, %eax
 ;   movdqu (%rsp), %xmm1
@@ -388,8 +384,8 @@ block2:
 ; block0:
 ;   jmp     label1
 ; block1:
-;   load_ext_name userextname0+0, %rcx
-;   call    *%rcx; jmp MachLabel(2); catch []
+;   load_ext_name userextname0+0, %rsi
+;   call    *%rsi; jmp MachLabel(2); catch []
 ; block2:
 ;   jmp     label3
 ; block3:
@@ -400,8 +396,8 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 u0:1 0
-;   callq *%rcx
+;   movabsq $0, %rsi ; reloc_external Abs8 u0:1 0
+;   callq *%rsi
 ; block2: ; offset 0x10
 ;   jmp 0x10
 
@@ -438,13 +434,13 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   movq %r15, 0x40(%rsp)
 ; block0:
 ;   movq %rdi, <offset:1>+8(%rsp)
-;   movabsq $0x3ff0000000000000, %rdx
-;   movq %rdx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, <offset:1>+0x10(%rsp)
-;   load_ext_name %g+0, %r8
+;   load_ext_name %g+0, %rax
 ;   movq %rsi, %rdi
 ;   movq %rsi, <offset:1>+(%rsp)
-;   call    *%r8; jmp MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
+;   call    *%rax; jmp MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
 ; block1:
 ;   movq %rax, %rdi
 ;   movdqu <offset:1>+0x10(%rsp), %xmm1
@@ -495,23 +491,23 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   movq %r15, 0x40(%rsp)
 ; block1: ; offset 0x21
 ;   movq %rdi, 8(%rsp)
-;   movabsq $0x3ff0000000000000, %rdx
-;   movq %rdx, %xmm1
+;   movabsq $0x3ff0000000000000, %rax
+;   movq %rax, %xmm1
 ;   movdqu %xmm1, 0x10(%rsp)
-;   movabsq $0, %r8 ; reloc_external Abs8 %g 0
+;   movabsq $0, %rax ; reloc_external Abs8 %g 0
 ;   movq %rsi, %rdi
 ;   movq %rsi, (%rsp)
-;   callq *%r8
-;   jmp 0x70
-; block2: ; offset 0x54
+;   callq *%rax
+;   jmp 0x6f
+; block2: ; offset 0x53
 ;   movq %rax, %rdi
 ;   movdqu 0x10(%rsp), %xmm1
-;   jmp 0xa8
-; block3: ; offset 0x62
+;   jmp 0xa7
+; block3: ; offset 0x61
 ;   movq %rax, %rdi
 ;   movdqu 0x10(%rsp), %xmm1
-;   jmp 0xa8
-; block4: ; offset 0x70
+;   jmp 0xa7
+; block4: ; offset 0x6f
 ;   movl $1, %eax
 ;   movdqu 0x10(%rsp), %xmm1
 ;   movq 0x20(%rsp), %rbx
@@ -523,10 +519,10 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block5: ; offset 0x9d
+; block5: ; offset 0x9c
 ;   movdqu 0x10(%rsp), %xmm1
 ;   movq 8(%rsp), %rdi
-; block6: ; offset 0xa8
+; block6: ; offset 0xa7
 ;   leal 1(%rdi), %eax
 ;   xorps %xmm0, %xmm0
 ;   movq 0x20(%rsp), %rbx
@@ -538,7 +534,6 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-
 
 function %f5() -> i64 {
     sig0 = () tail
@@ -572,8 +567,8 @@ function %f5() -> i64 {
 ;   movq %rax, <offset:1>+(%rsp)
 ;   jmp     label1
 ; block1:
-;   load_ext_name %g+0, %rdx
-;   call    *%rdx; jmp MachLabel(2); catch [default: MachLabel(3)]
+;   load_ext_name %g+0, %rsi
+;   call    *%rsi; jmp MachLabel(2); catch [default: MachLabel(3)]
 ; block2:
 ;   movq <offset:1>+(%rsp), %rax
 ;   movq 0x10(%rsp), %rbx
@@ -611,8 +606,8 @@ function %f5() -> i64 {
 ;   leaq 0x36(%rip), %rax
 ;   movq %rax, (%rsp)
 ; block2: ; offset 0x2c
-;   movabsq $0, %rdx ; reloc_external Abs8 %g 0
-;   callq *%rdx
+;   movabsq $0, %rsi ; reloc_external Abs8 %g 0
+;   callq *%rsi
 ; block3: ; offset 0x38
 ;   movq (%rsp), %rax
 ;   movq 0x10(%rsp), %rbx

@@ -46,12 +46,12 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   load_ext_name %munge_xmm0+0, %r8
-;   call    *%r8
-;   movl $0x2a, %r8d
+;   load_ext_name %munge_xmm0+0, %rsi
+;   call    *%rsi
+;   movl $0x2a, %esi
 ;   uninit  %xmm0
 ;   pxor %xmm0, %xmm0
-;   pinsrw $0x0, %r8d, %xmm0
+;   pinsrw $0x0, %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -61,11 +61,11 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %r8 ; reloc_external Abs8 %munge_xmm0 0
-;   callq *%r8
-;   movl $0x2a, %r8d
+;   movabsq $0, %rsi ; reloc_external Abs8 %munge_xmm0 0
+;   callq *%rsi
+;   movl $0x2a, %esi
 ;   pxor %xmm0, %xmm0
-;   pinsrw $0, %r8d, %xmm0
+;   pinsrw $0, %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

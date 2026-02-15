@@ -11,25 +11,25 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   li a2,127
-;   slli a3,a0,32
-;   srli a5,a3,32
-;   slli a1,a2,32
-;   srli a3,a1,32
-;   add a0,a5,a3
+;   slli a0,a0,32
 ;   srli a1,a0,32
-;   trap_if user1##(a1 ne zero)
+;   slli a0,a2,32
+;   srli a0,a0,32
+;   add a0,a1,a0
+;   srli a3,a0,32
+;   trap_if user1##(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x7f
-;   slli a3, a0, 0x20
-;   srli a5, a3, 0x20
-;   slli a1, a2, 0x20
-;   srli a3, a1, 0x20
-;   add a0, a5, a3
+;   slli a0, a0, 0x20
 ;   srli a1, a0, 0x20
-;   beqz a1, 8
+;   slli a0, a2, 0x20
+;   srli a0, a0, 0x20
+;   add a0, a1, a0
+;   srli a3, a0, 0x20
+;   beqz a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
@@ -42,26 +42,26 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a2,127
-;   slli a3,a2,32
-;   srli a5,a3,32
-;   slli a1,a0,32
-;   srli a3,a1,32
-;   add a0,a5,a3
-;   srli a1,a0,32
-;   trap_if user1##(a1 ne zero)
+;   li a1,127
+;   slli a1,a1,32
+;   srli a1,a1,32
+;   slli a0,a0,32
+;   srli a0,a0,32
+;   add a0,a1,a0
+;   srli a3,a0,32
+;   trap_if user1##(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x7f
-;   slli a3, a2, 0x20
-;   srli a5, a3, 0x20
-;   slli a1, a0, 0x20
-;   srli a3, a1, 0x20
-;   add a0, a5, a3
-;   srli a1, a0, 0x20
-;   beqz a1, 8
+;   addi a1, zero, 0x7f
+;   slli a1, a1, 0x20
+;   srli a1, a1, 0x20
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
+;   add a0, a1, a0
+;   srli a3, a0, 0x20
+;   beqz a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
@@ -73,24 +73,24 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   slli a3,a0,32
-;   srli a5,a3,32
+;   slli a0,a0,32
+;   srli a0,a0,32
 ;   slli a1,a1,32
-;   srli a3,a1,32
-;   add a0,a5,a3
-;   srli a1,a0,32
-;   trap_if user1##(a1 ne zero)
+;   srli a1,a1,32
+;   add a0,a0,a1
+;   srli a3,a0,32
+;   trap_if user1##(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a3, a0, 0x20
-;   srli a5, a3, 0x20
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
 ;   slli a1, a1, 0x20
-;   srli a3, a1, 0x20
-;   add a0, a5, a3
-;   srli a1, a0, 0x20
-;   beqz a1, 8
+;   srli a1, a1, 0x20
+;   add a0, a0, a1
+;   srli a3, a0, 0x20
+;   beqz a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 
@@ -104,16 +104,16 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   mv a1,a0
-;   li a3,127
-;   add a0,a1,a3
+;   li a0,127
+;   add a0,a1,a0
 ;   trap_if user1##(a0 ult a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a1, a0
-;   addi a3, zero, 0x7f
-;   add a0, a1, a3
+;   addi a0, zero, 0x7f
+;   add a0, a1, a0
 ;   bgeu a0, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
@@ -127,17 +127,21 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,127
-;   add a0,a3,a0
-;   trap_if user1##(a0 ult a3)
+;   mv a1,a0
+;   li a0,127
+;   add a1,a0,a1
+;   trap_if user1##(a1 ult a0)
+;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x7f
-;   add a0, a3, a0
-;   bgeu a0, a3, 8
+;   mv a1, a0
+;   addi a0, zero, 0x7f
+;   add a1, a0, a1
+;   bgeu a1, a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   mv a0, a1
 ;   ret
 
 function %f4(i64, i64) -> i64 {
@@ -148,16 +152,18 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   add a0,a5,a1
-;   trap_if user1##(a0 ult a5)
+;   mv a2,a0
+;   add a0,a2,a1
+;   mv a1,a2
+;   trap_if user1##(a0 ult a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
-;   add a0, a5, a1
-;   bgeu a0, a5, 8
+;   mv a2, a0
+;   add a0, a2, a1
+;   mv a1, a2
+;   bgeu a0, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 ;   ret
 

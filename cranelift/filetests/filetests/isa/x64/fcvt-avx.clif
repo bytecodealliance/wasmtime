@@ -127,8 +127,8 @@ block0(v0: i64x2):
 ;   vpor (%rip), %xmm2, %xmm4
 ;   vpsrlq $0x20, %xmm0, %xmm6
 ;   vpor (%rip), %xmm6, %xmm0
-;   vsubpd (%rip), %xmm0, %xmm2
-;   vaddpd %xmm2, %xmm4, %xmm0
+;   vsubpd (%rip), %xmm0, %xmm0
+;   vaddpd %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -142,8 +142,8 @@ block0(v0: i64x2):
 ;   vpor 0x3c(%rip), %xmm2, %xmm4
 ;   vpsrlq $0x20, %xmm0, %xmm6
 ;   vpor 0x3f(%rip), %xmm6, %xmm0
-;   vsubpd 0x47(%rip), %xmm0, %xmm2
-;   vaddpd %xmm2, %xmm4, %xmm0
+;   vsubpd 0x47(%rip), %xmm0, %xmm0
+;   vaddpd %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -167,12 +167,12 @@ block0(v0: i64x2):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorpd %xmm2, %xmm2, %xmm4
-;   vmovq %xmm0, %r9
-;   vcvtsi2sdq %r9, %xmm4, %xmm1
-;   vpshufd $0xee, %xmm0, %xmm2
-;   vmovq %xmm2, %rcx
-;   vcvtsi2sdq %rcx, %xmm4, %xmm6
-;   vunpcklpd %xmm6, %xmm1, %xmm0
+;   vmovq %xmm0, %rsi
+;   vcvtsi2sdq %rsi, %xmm4, %xmm1
+;   vpshufd $0xee, %xmm0, %xmm0
+;   vmovq %xmm0, %rax
+;   vcvtsi2sdq %rax, %xmm4, %xmm0
+;   vunpcklpd %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -183,12 +183,12 @@ block0(v0: i64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   vxorpd %xmm2, %xmm2, %xmm4
-;   vmovq %xmm0, %r9
-;   vcvtsi2sdq %r9, %xmm4, %xmm1
-;   vpshufd $0xee, %xmm0, %xmm2
-;   vmovq %xmm2, %rcx
-;   vcvtsi2sdq %rcx, %xmm4, %xmm6
-;   vunpcklpd %xmm6, %xmm1, %xmm0
+;   vmovq %xmm0, %rsi
+;   vcvtsi2sdq %rsi, %xmm4, %xmm1
+;   vpshufd $0xee, %xmm0, %xmm0
+;   vmovq %xmm0, %rax
+;   vcvtsi2sdq %rax, %xmm4, %xmm0
+;   vunpcklpd %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

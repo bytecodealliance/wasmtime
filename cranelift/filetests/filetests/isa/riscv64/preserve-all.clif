@@ -125,8 +125,8 @@ block0(v0: i64):
 ;   vse8.v v30,16(sp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v31,0(sp) #avl=16, #vtype=(e8, m1, ta, ma)
 ; block0:
-;   load_ext_name_far a2,%libcall+0
-;   callind a2
+;   load_ext_name_far a1,%libcall+0
+;   callind a1
 ;   ld ra,808(sp)
 ;   ld t0,800(sp)
 ;   ld t1,792(sp)
@@ -311,12 +311,12 @@ block0(v0: i64):
 ;   .byte 0x27, 0x8f, 0x0f, 0x02
 ;   .byte 0xa7, 0x0f, 0x01, 0x02
 ; block1: ; offset 0x1a8
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %libcall 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a2
+;   jalr a1
 ;   ld ra, 0x328(sp)
 ;   ld t0, 0x320(sp)
 ;   ld t1, 0x318(sp)

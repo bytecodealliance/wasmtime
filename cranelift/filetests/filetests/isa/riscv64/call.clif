@@ -17,8 +17,8 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_ext_name_far a3,%g+0
-;   callind a3
+;   load_ext_name_far a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -31,12 +31,12 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   auipc a3, 0
-;   ld a3, 0xc(a3)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a3
+;   jalr a1
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -57,8 +57,8 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   slli a0,a0,32; srli a0,a0,32
-;   load_ext_name_far a5,%g+0
-;   callind a5
+;   load_ext_name_far a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -73,12 +73,12 @@ block0(v0: i32):
 ; block1: ; offset 0x10
 ;   slli a0, a0, 0x20
 ;   srli a0, a0, 0x20
-;   auipc a5, 0
-;   ld a5, 0xc(a5)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a5
+;   jalr a1
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -115,8 +115,8 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   slli a0,a0,32; srai a0,a0,32
-;   load_ext_name_far a5,%g+0
-;   callind a5
+;   load_ext_name_far a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -131,12 +131,12 @@ block0(v0: i32):
 ; block1: ; offset 0x10
 ;   slli a0, a0, 0x20
 ;   srai a0, a0, 0x20
-;   auipc a5, 0
-;   ld a5, 0xc(a5)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a5
+;   jalr a1
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -172,13 +172,12 @@ block0(v0: i8):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-32
-;   sd s1,24(sp)
+;   addi sp,sp,-16
 ; block0:
 ;   li a7,42
-;   slli a4,a0,56; srai a4,a4,56
-;   sd a4,0(sp)
-;   load_ext_name_far s1,%g+0
+;   slli a0,a0,56; srai a0,a0,56
+;   sd a0,0(sp)
+;   load_ext_name_far t2,%g+0
 ;   mv a0,a7
 ;   mv a1,a7
 ;   mv a2,a7
@@ -186,9 +185,8 @@ block0(v0: i8):
 ;   mv a4,a7
 ;   mv a5,a7
 ;   mv a6,a7
-;   callind s1
-;   ld s1,24(sp)
-;   addi sp,sp,32
+;   callind t2
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -200,15 +198,14 @@ block0(v0: i8):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   addi sp, sp, -0x20
-;   sd s1, 0x18(sp)
-; block1: ; offset 0x18
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
 ;   addi a7, zero, 0x2a
-;   slli a4, a0, 0x38
-;   srai a4, a4, 0x38
-;   sd a4, 0(sp)
-;   auipc s1, 0
-;   ld s1, 0xc(s1)
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
+;   sd a0, 0(sp)
+;   auipc t2, 0
+;   ld t2, 0xc(t2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -219,9 +216,8 @@ block0(v0: i8):
 ;   mv a4, a7
 ;   mv a5, a7
 ;   mv a6, a7
-;   jalr s1
-;   ld s1, 0x18(sp)
-;   addi sp, sp, 0x20
+;   jalr t2
+;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -235,7 +231,7 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   mv a5,a1
+;   mv a2,a1
 ;   li a1,42
 ;   sw a1,0(a0)
 ;   sw a1,8(a0)
@@ -243,15 +239,14 @@ block0(v0: i8):
 ;   sw a1,24(a0)
 ;   sw a1,32(a0)
 ;   sw a1,40(a0)
-;   mv a2,a5
-;   slli a4,a2,56; srai a4,a4,56
+;   slli a3,a2,56; srai a3,a3,56
 ;   sd a2,48(a0)
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a1
+;   mv a2, a1
 ;   addi a1, zero, 0x2a
 ;   sw a1, 0(a0)
 ;   sw a1, 8(a0)
@@ -259,9 +254,8 @@ block0(v0: i8):
 ;   sw a1, 0x18(a0)
 ;   sw a1, 0x20(a0)
 ;   sw a1, 0x28(a0)
-;   mv a2, a5
-;   slli a4, a2, 0x38
-;   srai a4, a4, 0x38
+;   slli a3, a2, 0x38
+;   srai a3, a3, 0x38
 ;   sd a2, 0x30(a0)
 ;   mv a0, a1
 ;   ret
@@ -290,32 +284,32 @@ block0:
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   addi sp,sp,-32
-;   fsd fs0,24(sp)
-;   fsd fs2,16(sp)
+;   fsd fs2,24(sp)
+;   fsd fs3,16(sp)
 ;   fsd fs4,8(sp)
 ; block0:
-;   load_ext_name_far a3,%g0+0
-;   callind a3
-;   fmv.d fs0,fa0
-;   load_ext_name_far a3,%g1+0
-;   callind a3
-;   fmv.d fs2,fa0
-;   load_ext_name_far a3,%g1+0
-;   callind a3
-;   fmv.d fs4,fa0
-;   load_ext_name_far a3,%g2+0
-;   callind a3
-;   load_ext_name_far a4,%g3+0
-;   fmv.d fa0,fs0
-;   callind a4
-;   load_ext_name_far a5,%g4+0
-;   fmv.d fa0,fs2
-;   callind a5
-;   load_ext_name_far a0,%g4+0
-;   fmv.d fa0,fs4
+;   load_ext_name_far a0,%g0+0
 ;   callind a0
-;   fld fs0,24(sp)
-;   fld fs2,16(sp)
+;   fmv.d fs2,fa0
+;   load_ext_name_far a0,%g1+0
+;   callind a0
+;   fmv.d fs3,fa0
+;   load_ext_name_far a0,%g1+0
+;   callind a0
+;   fmv.d fs4,fa0
+;   load_ext_name_far a0,%g2+0
+;   callind a0
+;   load_ext_name_far a0,%g3+0
+;   fmv.d fa0,fs2
+;   callind a0
+;   load_ext_name_far a1,%g4+0
+;   fmv.d fa0,fs3
+;   callind a1
+;   load_ext_name_far a2,%g4+0
+;   fmv.d fa0,fs4
+;   callind a2
+;   fld fs2,24(sp)
+;   fld fs3,16(sp)
 ;   fld fs4,8(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
@@ -330,60 +324,60 @@ block0:
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
-;   fsd fs0, 0x18(sp)
-;   fsd fs2, 0x10(sp)
+;   fsd fs2, 0x18(sp)
+;   fsd fs3, 0x10(sp)
 ;   fsd fs4, 8(sp)
 ; block1: ; offset 0x20
-;   auipc a3, 0
-;   ld a3, 0xc(a3)
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a3
-;   fmv.d fs0, fa0
-;   auipc a3, 0
-;   ld a3, 0xc(a3)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a3
+;   jalr a0
 ;   fmv.d fs2, fa0
-;   auipc a3, 0
-;   ld a3, 0xc(a3)
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a3
+;   jalr a0
+;   fmv.d fs3, fa0
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a0
 ;   fmv.d fs4, fa0
-;   auipc a3, 0
-;   ld a3, 0xc(a3)
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a3
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   jalr a0
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g3 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   fmv.d fa0, fs0
-;   jalr a4
-;   auipc a5, 0
-;   ld a5, 0xc(a5)
+;   fmv.d fa0, fs2
+;   jalr a0
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   fmv.d fa0, fs2
-;   jalr a5
-;   auipc a0, 0
-;   ld a0, 0xc(a0)
+;   fmv.d fa0, fs3
+;   jalr a1
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   fmv.d fa0, fs4
-;   jalr a0
-;   fld fs0, 0x18(sp)
-;   fld fs2, 0x10(sp)
+;   jalr a2
+;   fld fs2, 0x18(sp)
+;   fld fs3, 0x10(sp)
 ;   fld fs4, 8(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
@@ -424,10 +418,10 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_ext_name_far a4,%f11+0
+;   load_ext_name_far a3,%f11+0
 ;   mv a1,a0
 ;   mv a0,a2
-;   callind a4
+;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -441,14 +435,14 @@ block0(v0: i64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   addi a2, zero, 0x2a
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   auipc a3, 0
+;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f11 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   mv a1, a0
 ;   mv a0, a2
-;   jalr a4
+;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -487,10 +481,10 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_ext_name_far a4,%f12+0
+;   load_ext_name_far a3,%f12+0
 ;   mv a1,a0
 ;   mv a0,a2
-;   callind a4
+;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -504,14 +498,14 @@ block0(v0: i64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   addi a2, zero, 0x2a
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   auipc a3, 0
+;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f12 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   mv a1, a0
 ;   mv a0, a2
-;   jalr a4
+;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -550,10 +544,10 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_ext_name_far a4,%f13+0
+;   load_ext_name_far a3,%f13+0
 ;   mv a1,a0
 ;   mv a0,a2
-;   callind a4
+;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -567,14 +561,14 @@ block0(v0: i64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   addi a2, zero, 0x2a
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   auipc a3, 0
+;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f13 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   mv a1, a0
 ;   mv a0, a2
-;   jalr a4
+;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -627,20 +621,18 @@ block0(v0: i128, v1: i64):
 ;   mv fp,sp
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
-;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
-;   load_ext_name_far s1,%f14+0
+;   load_ext_name_far t2,%f14+0
+;   mv s1,a1
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
-;   mv s3,a1
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
-;   callind s1
+;   callind t2
 ;   ld s1,24(sp)
-;   ld s3,16(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -655,24 +647,22 @@ block0(v0: i128, v1: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
-;   sd s3, 0x10(sp)
-; block1: ; offset 0x1c
+; block1: ; offset 0x18
 ;   sd a1, 0(sp)
-;   auipc s1, 0
-;   ld s1, 0xc(s1)
+;   auipc t2, 0
+;   ld t2, 0xc(t2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv s1, a1
 ;   mv a5, a1
 ;   mv a6, a2
 ;   mv a7, a0
-;   mv s3, a1
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
-;   jalr s1
+;   jalr t2
 ;   ld s1, 0x18(sp)
-;   ld s3, 0x10(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -726,20 +716,18 @@ block0(v0: i128, v1: i64):
 ;   mv fp,sp
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
-;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
-;   load_ext_name_far s1,%f15+0
+;   load_ext_name_far t2,%f15+0
+;   mv s1,a1
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
-;   mv s3,a1
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
-;   callind s1
+;   callind t2
 ;   ld s1,24(sp)
-;   ld s3,16(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -754,24 +742,22 @@ block0(v0: i128, v1: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
-;   sd s3, 0x10(sp)
-; block1: ; offset 0x1c
+; block1: ; offset 0x18
 ;   sd a1, 0(sp)
-;   auipc s1, 0
-;   ld s1, 0xc(s1)
+;   auipc t2, 0
+;   ld t2, 0xc(t2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv s1, a1
 ;   mv a5, a1
 ;   mv a6, a2
 ;   mv a7, a0
-;   mv s3, a1
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
-;   jalr s1
+;   jalr t2
 ;   ld s1, 0x18(sp)
-;   ld s3, 0x10(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

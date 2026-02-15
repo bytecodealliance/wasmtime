@@ -39,34 +39,34 @@ block1:
 }
 
 ; VCode:
-;   stmg %r6, %r15, 48(%r15)
+;   stmg %r7, %r15, 56(%r15)
 ; block0:
-;   lghi %r13, 1
+;   lghi %r7, 1
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r14, 5
-;   lghi %r6, 6
-;   stg %r14, 0(%r2)
-;   stg %r6, 8(%r2)
-;   lgr %r2, %r13
-;   lmg %r6, %r15, 48(%r15)
+;   lghi %r8, 5
+;   lghi %r9, 6
+;   stg %r8, 0(%r2)
+;   stg %r9, 8(%r2)
+;   lgr %r2, %r7
+;   lmg %r7, %r15, 56(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r6, %r15, 0x30(%r15)
+;   stmg %r7, %r15, 0x38(%r15)
 ; block1: ; offset 0x6
-;   lghi %r13, 1
+;   lghi %r7, 1
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r14, 5
-;   lghi %r6, 6
-;   stg %r14, 0(%r2)
-;   stg %r6, 8(%r2)
-;   lgr %r2, %r13
-;   lmg %r6, %r15, 0x30(%r15)
+;   lghi %r8, 5
+;   lghi %r9, 6
+;   stg %r8, 0(%r2)
+;   stg %r9, 8(%r2)
+;   lgr %r2, %r7
+;   lmg %r7, %r15, 0x38(%r15)
 ;   br %r14
 
 function %f3() -> f64, f64, f64, f64 {

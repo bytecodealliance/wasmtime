@@ -77,14 +77,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvh %r4, 0(%r2)
-;   llghr %r2, %r4
+;   lrvh %r2, 0(%r2)
+;   llghr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvh %r4, 0(%r2) ; trap: heap_oob
-;   llghr %r2, %r4
+;   lrvh %r2, 0(%r2) ; trap: heap_oob
+;   llghr %r2, %r2
 ;   br %r14
 
 function %uload16_i64_sym() -> i64 {
@@ -116,14 +116,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvh %r4, 0(%r2)
-;   lghr %r2, %r4
+;   lrvh %r2, 0(%r2)
+;   lghr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvh %r4, 0(%r2) ; trap: heap_oob
-;   lghr %r2, %r4
+;   lrvh %r2, 0(%r2) ; trap: heap_oob
+;   lghr %r2, %r2
 ;   br %r14
 
 function %sload16_i64_sym() -> i64 {
@@ -155,14 +155,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrv %r4, 0(%r2)
-;   llgfr %r2, %r4
+;   lrv %r2, 0(%r2)
+;   llgfr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrv %r4, 0(%r2) ; trap: heap_oob
-;   llgfr %r2, %r4
+;   lrv %r2, 0(%r2) ; trap: heap_oob
+;   llgfr %r2, %r2
 ;   br %r14
 
 function %uload32_i64_sym() -> i64 {
@@ -194,14 +194,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrv %r4, 0(%r2)
-;   lgfr %r2, %r4
+;   lrv %r2, 0(%r2)
+;   lgfr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrv %r4, 0(%r2) ; trap: heap_oob
-;   lgfr %r2, %r4
+;   lrv %r2, 0(%r2) ; trap: heap_oob
+;   lgfr %r2, %r2
 ;   br %r14
 
 function %sload32_i64_sym() -> i64 {
@@ -300,14 +300,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvh %r4, 0(%r2)
-;   llhr %r2, %r4
+;   lrvh %r2, 0(%r2)
+;   llhr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvh %r4, 0(%r2) ; trap: heap_oob
-;   llhr %r2, %r4
+;   lrvh %r2, 0(%r2) ; trap: heap_oob
+;   llhr %r2, %r2
 ;   br %r14
 
 function %uload16_i32_sym() -> i32 {
@@ -339,14 +339,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvh %r4, 0(%r2)
-;   lhr %r2, %r4
+;   lrvh %r2, 0(%r2)
+;   lhr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvh %r4, 0(%r2) ; trap: heap_oob
-;   lhr %r2, %r4
+;   lrvh %r2, 0(%r2) ; trap: heap_oob
+;   lhr %r2, %r2
 ;   br %r14
 
 function %sload16_i32_sym() -> i32 {
@@ -461,14 +461,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvh %r4, 0(%r2)
-;   vlvgh %v0, %r4, 0
+;   lrvh %r2, 0(%r2)
+;   vlvgh %v0, %r2, 0
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvh %r4, 0(%r2) ; trap: heap_oob
-;   vlvgh %v0, %r4, 0
+;   lrvh %r2, 0(%r2) ; trap: heap_oob
+;   vlvgh %v0, %r2, 0
 ;   br %r14
 
 function %load_f32(i64) -> f32 {
@@ -479,14 +479,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrv %r4, 0(%r2)
-;   vlvgf %v0, %r4, 0
+;   lrv %r2, 0(%r2)
+;   vlvgf %v0, %r2, 0
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrv %r4, 0(%r2) ; trap: heap_oob
-;   vlvgf %v0, %r4, 0
+;   lrv %r2, 0(%r2) ; trap: heap_oob
+;   vlvgf %v0, %r2, 0
 ;   br %r14
 
 function %load_f64(i64) -> f64 {
@@ -497,14 +497,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvg %r4, 0(%r2)
-;   ldgr %f0, %r4
+;   lrvg %r2, 0(%r2)
+;   ldgr %f0, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvg %r4, 0(%r2) ; trap: heap_oob
-;   ldgr %f0, %r4
+;   lrvg %r2, 0(%r2) ; trap: heap_oob
+;   ldgr %f0, %r2
 ;   br %r14
 
 function %load_f128(i64) -> f128 {
@@ -515,17 +515,17 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lrvg %r5, 0(%r3)
-;   lrvg %r3, 8(%r3)
-;   vlvgp %v7, %r3, %r5
+;   lrvg %r4, 0(%r3)
+;   lrvg %r5, 8(%r3)
+;   vlvgp %v7, %r5, %r4
 ;   vst %v7, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvg %r5, 0(%r3) ; trap: heap_oob
-;   lrvg %r3, 8(%r3) ; trap: heap_oob
-;   vlvgp %v7, %r3, %r5
+;   lrvg %r4, 0(%r3) ; trap: heap_oob
+;   lrvg %r5, 8(%r3) ; trap: heap_oob
+;   vlvgp %v7, %r5, %r4
 ;   vst %v7, 0(%r2)
 ;   br %r14
 

@@ -10,24 +10,24 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a3,fa0,fa0
-;   feq.s a5,fa1,fa1
-;   and a1,a3,a5
-;   fadd.s fa3,fa0,fa1,rne
-;   fmax.s fa5,fa0,fa1
-;   select fa0,fa5,fa3##condition=(a1 ne zero)
+;   feq.s a0,fa0,fa0
+;   feq.s a1,fa1,fa1
+;   and a0,a0,a1
+;   fadd.s fa2,fa0,fa1,rne
+;   fmax.s fa1,fa0,fa1
+;   select fa0,fa1,fa2##condition=(a0 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a3, fa0, fa0
-;   feq.s a5, fa1, fa1
-;   and a1, a3, a5
-;   fadd.s fa3, fa0, fa1, rne
-;   fmax.s fa5, fa0, fa1
-;   fmv.d fa0, fa5
-;   bnez a1, 8
-;   fmv.d fa0, fa3
+;   feq.s a0, fa0, fa0
+;   feq.s a1, fa1, fa1
+;   and a0, a0, a1
+;   fadd.s fa2, fa0, fa1, rne
+;   fmax.s fa1, fa0, fa1
+;   fmv.d fa0, fa1
+;   bnez a0, 8
+;   fmv.d fa0, fa2
 ;   ret
 
 function %fmax_f64(f64, f64) -> f64 {
@@ -38,23 +38,23 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   feq.d a3,fa0,fa0
-;   feq.d a5,fa1,fa1
-;   and a1,a3,a5
-;   fadd.d fa3,fa0,fa1,rne
-;   fmax.d fa5,fa0,fa1
-;   select fa0,fa5,fa3##condition=(a1 ne zero)
+;   feq.d a0,fa0,fa0
+;   feq.d a1,fa1,fa1
+;   and a0,a0,a1
+;   fadd.d fa2,fa0,fa1,rne
+;   fmax.d fa1,fa0,fa1
+;   select fa0,fa1,fa2##condition=(a0 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.d a3, fa0, fa0
-;   feq.d a5, fa1, fa1
-;   and a1, a3, a5
-;   fadd.d fa3, fa0, fa1, rne
-;   fmax.d fa5, fa0, fa1
-;   fmv.d fa0, fa5
-;   bnez a1, 8
-;   fmv.d fa0, fa3
+;   feq.d a0, fa0, fa0
+;   feq.d a1, fa1, fa1
+;   and a0, a0, a1
+;   fadd.d fa2, fa0, fa1, rne
+;   fmax.d fa1, fa0, fa1
+;   fmv.d fa0, fa1
+;   bnez a0, 8
+;   fmv.d fa0, fa2
 ;   ret
 

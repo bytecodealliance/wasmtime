@@ -50,9 +50,9 @@ function %f0(i32) -> i32, f32, f64 {
 ;   fsd fs10,32(sp)
 ;   fsd fs11,24(sp)
 ; block0:
-;   lui a4,1023
-;   slli a1,a4,40
-;   fmv.d.x fa1,a1
+;   lui a1,1023
+;   slli a2,a1,40
+;   fmv.d.x fa1,a2
 ;   fsd fa1,0(slot)
 ;   call %g; j MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
@@ -150,9 +150,9 @@ function %f0(i32) -> i32, f32, f64 {
 ;   fsd fs10, 0x20(sp)
 ;   fsd fs11, 0x18(sp)
 ; block1: ; offset 0x70
-;   lui a4, 0x3ff
-;   slli a1, a4, 0x28
-;   fmv.d.x fa1, a1
+;   lui a1, 0x3ff
+;   slli a2, a1, 0x28
+;   fmv.d.x fa1, a2
 ;   fsd fa1, 0(sp)
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %g 0
 ;   jalr ra
@@ -270,12 +270,12 @@ function %f2(i32) -> i32, f32, f64 {
 ;   fsd fs10,32(sp)
 ;   fsd fs11,24(sp)
 ; block0:
-;   lui a5,1023
-;   slli a1,a5,40
-;   fmv.d.x fa1,a1
+;   lui a1,1023
+;   slli a3,a1,40
+;   fmv.d.x fa1,a3
 ;   fsd fa1,0(slot)
-;   load_ext_name_far a1,%g+0
-;   callind a1; j MachLabel(1); catch [default: MachLabel(2)]
+;   load_ext_name_far a3,%g+0
+;   callind a3; j MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   li a0,1
 ;   fld fa1,0(slot)
@@ -371,16 +371,16 @@ function %f2(i32) -> i32, f32, f64 {
 ;   fsd fs10, 0x20(sp)
 ;   fsd fs11, 0x18(sp)
 ; block1: ; offset 0x70
-;   lui a5, 0x3ff
-;   slli a1, a5, 0x28
-;   fmv.d.x fa1, a1
+;   lui a1, 0x3ff
+;   slli a3, a1, 0x28
+;   fmv.d.x fa1, a3
 ;   fsd fa1, 0(sp)
-;   auipc a1, 0
-;   ld a1, 0xc(a1)
+;   auipc a3, 0
+;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a1
+;   jalr a3
 ; block2: ; offset 0x98
 ;   addi a0, zero, 1
 ;   fld fa1, 0(sp)
@@ -498,14 +498,14 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   fsd fs11,40(sp)
 ; block0:
 ;   sd a0,8(slot)
-;   lui a0,1023
-;   slli a2,a0,40
-;   fmv.d.x fa1,a2
+;   lui a2,1023
+;   slli a4,a2,40
+;   fmv.d.x fa1,a4
 ;   fsd fa1,16(slot)
-;   load_ext_name_far a2,%g+0
+;   load_ext_name_far a4,%g+0
 ;   mv a0,a1
 ;   sd a1,0(slot)
-;   callind a2; j MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
+;   callind a4; j MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
 ; block1:
 ;   fld fa1,16(slot)
 ;   j label5
@@ -611,18 +611,18 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   fsd fs11, 0x28(sp)
 ; block1: ; offset 0x70
 ;   sd a0, 8(sp)
-;   lui a0, 0x3ff
-;   slli a2, a0, 0x28
-;   fmv.d.x fa1, a2
+;   lui a2, 0x3ff
+;   slli a4, a2, 0x28
+;   fmv.d.x fa1, a4
 ;   fsd fa1, 0x10(sp)
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
+;   auipc a4, 0
+;   ld a4, 0xc(a4)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   mv a0, a1
 ;   sd a1, 0(sp)
-;   jalr a2
+;   jalr a4
 ;   j 0x14
 ; block2: ; offset 0xa8
 ;   fld fa1, 0x10(sp)
@@ -748,8 +748,8 @@ function %f5() -> i64 {
 ;   sd a0,0(slot)
 ;   j label1
 ; block1:
-;   load_ext_name_far a4,%g+0
-;   callind a4; j MachLabel(2); catch [default: MachLabel(3)]
+;   load_ext_name_far a1,%g+0
+;   callind a1; j MachLabel(2); catch [default: MachLabel(3)]
 ; block2:
 ;   ld a0,0(slot)
 ;   ld fp,200(sp)
@@ -846,12 +846,12 @@ function %f5() -> i64 {
 ;   addi a0, a0, 0x98
 ;   sd a0, 0(sp)
 ; block2: ; offset 0x7c
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a4
+;   jalr a1
 ; block3: ; offset 0x94
 ;   ld a0, 0(sp)
 ;   ld s0, 0xc8(sp)

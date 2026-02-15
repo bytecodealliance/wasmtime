@@ -12,16 +12,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   mul a3,a0,a1
+;   mul a2,a0,a1
 ;   mulhu a1,a0,a1
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul a3, a0, a1
+;   mul a2, a0, a1
 ;   mulhu a1, a0, a1
-;   mv a0, a3
+;   mv a0, a2
 ;   ret
 
 function %mul_sextend_i64(i64, i64) -> i128 {
@@ -34,16 +34,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   mul a3,a0,a1
+;   mul a2,a0,a1
 ;   mulh a1,a0,a1
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mul a3, a0, a1
+;   mul a2, a0, a1
 ;   mulh a1, a0, a1
-;   mv a0, a3
+;   mv a0, a2
 ;   ret
 
 function %smul_high_i64_pattern(i64, i64) -> i64 {

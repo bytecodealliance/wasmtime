@@ -154,8 +154,8 @@ block0(v0: i8):
 ; block0:
 ;   movq %rdi, %rax
 ;   cbtw  ;; implicit: %ax
-;   movl $0x11, %edx
-;   idivb %dl ;; implicit: %ax, trap=254
+;   movl $0x11, %esi
+;   idivb %sil ;; implicit: %ax, trap=254
 ;   shrq $0x8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -168,8 +168,8 @@ block0(v0: i8):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cbtw
-;   movl $0x11, %edx
-;   idivb %dl ; trap: int_divz
+;   movl $0x11, %esi
+;   idivb %sil ; trap: int_divz
 ;   shrq $8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -188,8 +188,8 @@ block0(v0: i16):
 ; block0:
 ;   movq %rdi, %rax
 ;   cwtd  ;; implicit: %dx, %ax
-;   movl $0x11, %r8d
-;   idivw %r8w ;; implicit: %ax, %dx, trap=254
+;   movl $0x11, %esi
+;   idivw %si ;; implicit: %ax, %dx, trap=254
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -202,8 +202,8 @@ block0(v0: i16):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cwtd
-;   movl $0x11, %r8d
-;   idivw %r8w ; trap: int_divz
+;   movl $0x11, %esi
+;   idivw %si ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -222,8 +222,8 @@ block0(v0: i32):
 ; block0:
 ;   movq %rdi, %rax
 ;   cltd  ;; implicit: %edx, %eax
-;   movl $0x11, %r8d
-;   idivl %r8d ;; implicit: %eax, %edx, trap=254
+;   movl $0x11, %esi
+;   idivl %esi ;; implicit: %eax, %edx, trap=254
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -236,8 +236,8 @@ block0(v0: i32):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cltd
-;   movl $0x11, %r8d
-;   idivl %r8d ; trap: int_divz
+;   movl $0x11, %esi
+;   idivl %esi ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -256,8 +256,8 @@ block0(v0: i64):
 ; block0:
 ;   movq %rdi, %rax
 ;   cqto  ;; implicit: %rdx, %rax
-;   movl $0x11, %r8d
-;   idivq %r8 ;; implicit: %rax, %rdx, trap=254
+;   movl $0x11, %esi
+;   idivq %rsi ;; implicit: %rax, %rdx, trap=254
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -270,8 +270,8 @@ block0(v0: i64):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cqto
-;   movl $0x11, %r8d
-;   idivq %r8 ; trap: int_divz
+;   movl $0x11, %esi
+;   idivq %rsi ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp

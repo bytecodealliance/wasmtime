@@ -16,7 +16,6 @@ use args::*;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -875,11 +874,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true);
+            &MACHINE_ENV
         } else {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(false);
+            &MACHINE_ENV
         }
     }
 
@@ -1278,70 +1277,67 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(XMM15))
 }
 
-fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
+const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
+    const fn preg(r: Reg) -> PReg {
+        r.to_real_reg().unwrap().preg()
     }
 
     let mut env = MachineEnv {
         preferred_regs_by_class: [
             // Preferred GPRs: caller-saved in the SysV ABI.
-            vec![
-                preg(regs::rsi()),
-                preg(regs::rdi()),
-                preg(regs::rax()),
-                preg(regs::rcx()),
-                preg(regs::rdx()),
-                preg(regs::r8()),
-                preg(regs::r9()),
-                preg(regs::r10()),
-                preg(regs::r11()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::rsi()))
+                .with(preg(regs::rdi()))
+                .with(preg(regs::rax()))
+                .with(preg(regs::rcx()))
+                .with(preg(regs::rdx()))
+                .with(preg(regs::r8()))
+                .with(preg(regs::r9()))
+                .with(preg(regs::r10()))
+                .with(preg(regs::r11())),
             // Preferred XMMs: the first 8, which can have smaller encodings
             // with AVX instructions.
-            vec![
-                preg(regs::xmm0()),
-                preg(regs::xmm1()),
-                preg(regs::xmm2()),
-                preg(regs::xmm3()),
-                preg(regs::xmm4()),
-                preg(regs::xmm5()),
-                preg(regs::xmm6()),
-                preg(regs::xmm7()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::xmm0()))
+                .with(preg(regs::xmm1()))
+                .with(preg(regs::xmm2()))
+                .with(preg(regs::xmm3()))
+                .with(preg(regs::xmm4()))
+                .with(preg(regs::xmm5()))
+                .with(preg(regs::xmm6()))
+                .with(preg(regs::xmm7())),
             // The Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         non_preferred_regs_by_class: [
             // Non-preferred GPRs: callee-saved in the SysV ABI.
-            vec![
-                preg(regs::rbx()),
-                preg(regs::r12()),
-                preg(regs::r13()),
-                preg(regs::r14()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::rbx()))
+                .with(preg(regs::r12()))
+                .with(preg(regs::r13()))
+                .with(preg(regs::r14())),
             // Non-preferred XMMs: the last 8 registers, which can have larger
             // encodings with AVX instructions.
-            vec![
-                preg(regs::xmm8()),
-                preg(regs::xmm9()),
-                preg(regs::xmm10()),
-                preg(regs::xmm11()),
-                preg(regs::xmm12()),
-                preg(regs::xmm13()),
-                preg(regs::xmm14()),
-                preg(regs::xmm15()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::xmm8()))
+                .with(preg(regs::xmm9()))
+                .with(preg(regs::xmm10()))
+                .with(preg(regs::xmm11()))
+                .with(preg(regs::xmm12()))
+                .with(preg(regs::xmm13()))
+                .with(preg(regs::xmm14()))
+                .with(preg(regs::xmm15())),
             // The Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
     };
 
-    debug_assert_eq!(regs::r15(), regs::pinned_reg());
+    debug_assert!(regs::PINNED_REG == cranelift_assembler_x64::gpr::enc::R15);
     if !enable_pinned_reg {
-        env.non_preferred_regs_by_class[0].push(preg(regs::r15()));
+        env.non_preferred_regs_by_class[0] =
+            env.non_preferred_regs_by_class[0].with(preg(regs::r15()));
     }
 
     env

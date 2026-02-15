@@ -126,16 +126,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lbu a3,0(a0)
+;   lbu a2,0(a0)
 ;   lbu a1,3(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x14, 0x81 ; trap: heap_oob
+;   .byte 0x10, 0x81 ; trap: heap_oob
 ;   .byte 0x6c, 0x81 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a2
 ;   c.jr ra
 
 function %c_lhu(i64) -> i32, i64 {
@@ -147,16 +147,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lhu a3,0(a0)
+;   lhu a2,0(a0)
 ;   lhu a1,2(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x14, 0x85 ; trap: heap_oob
+;   .byte 0x10, 0x85 ; trap: heap_oob
 ;   .byte 0x2c, 0x85 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a2
 ;   c.jr ra
 
 function %c_lh(i64) -> i16, i16 {
@@ -168,16 +168,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lh a3,0(a0)
+;   lh a2,0(a0)
 ;   lh a1,2(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x54, 0x85 ; trap: heap_oob
+;   .byte 0x50, 0x85 ; trap: heap_oob
 ;   .byte 0x6c, 0x85 ; trap: heap_oob
-;   c.mv a0, a3
+;   c.mv a0, a2
 ;   c.jr ra
 
 function %c_sb(i64, i8) {
@@ -278,12 +278,12 @@ block0(v0: i64):
 ;   sw zero,16(slot)
 ;   sd zero,0(a0)
 ;   sd zero,24(slot)
-;   fmv.w.x fa5,zero
-;   fsw fa5,0(a0)
-;   fsw fa5,16(slot)
-;   fmv.d.x fa1,zero
-;   fsd fa1,0(a0)
-;   fsd fa1,24(slot)
+;   fmv.w.x fa1,zero
+;   fsw fa1,0(a0)
+;   fsw fa1,16(slot)
+;   fmv.d.x fa3,zero
+;   fsd fa3,0(a0)
+;   fsd fa3,24(slot)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -306,12 +306,12 @@ block0(v0: i64):
 ;   c.swsp zero, 0x10(sp)
 ;   sd zero, 0(a0)
 ;   c.sdsp zero, 0x18(sp)
-;   fmv.w.x fa5, zero
-;   fsw fa5, 0(a0)
-;   fsw fa5, 0x10(sp)
-;   fmv.d.x fa1, zero
-;   fsd fa1, 0(a0)
-;   fsd fa1, 0x18(sp)
+;   fmv.w.x fa1, zero
+;   fsw fa1, 0(a0)
+;   fsw fa1, 0x10(sp)
+;   fmv.d.x fa3, zero
+;   fsd fa3, 0(a0)
+;   fsd fa3, 0x18(sp)
 ;   c.addi16sp sp, 0x20
 ;   c.ldsp ra, 8(sp)
 ;   c.ldsp s0, 0(sp)

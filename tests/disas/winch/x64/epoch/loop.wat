@@ -25,7 +25,7 @@
 ;;       cmpq    %rcx, %rdx
 ;;       jb      0x54
 ;;   47: movq    %r14, %rdi
-;;       callq   0x165
+;;       callq   0x15e
 ;;       movq    8(%rsp), %r14
 ;;       movq    0x18(%r14), %rdx
 ;;       movq    (%rdx), %rdx
@@ -34,7 +34,7 @@
 ;;       cmpq    %rcx, %rdx
 ;;       jb      0x79
 ;;   6c: movq    %r14, %rdi
-;;       callq   0x165
+;;       callq   0x15e
 ;;       movq    8(%rsp), %r14
 ;;       jmp     0x54
 ;;   7e: addq    $0x10, %rsp

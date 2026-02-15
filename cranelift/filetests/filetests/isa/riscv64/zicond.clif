@@ -104,16 +104,16 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   czero.nez a4,a1,a0
+;   czero.nez a1,a1,a0
 ;   czero.eqz a0,a2,a0
-;   or a0,a4,a0
+;   or a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0xf7, 0xa5, 0x0e
+;   .byte 0xb3, 0xf5, 0xa5, 0x0e
 ;   .byte 0x33, 0x55, 0xa6, 0x0e
-;   or a0, a4, a0
+;   or a0, a1, a0
 ;   ret
 
 function %select_icmp_ne_zero(i64, i64, i64) -> i64 {
@@ -126,18 +126,17 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   czero.eqz a4,a1,a0
+;   czero.eqz a1,a1,a0
 ;   czero.nez a0,a2,a0
-;   or a0,a4,a0
+;   or a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0xd7, 0xa5, 0x0e
+;   .byte 0xb3, 0xd5, 0xa5, 0x0e
 ;   .byte 0x33, 0x75, 0xa6, 0x0e
-;   or a0, a4, a0
+;   or a0, a1, a0
 ;   ret
-
 
 function %select_icmp_sle(i64, i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64, v3: i64):
@@ -148,18 +147,18 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 
 ; VCode:
 ; block0:
-;   slt a5,a0,a1
-;   czero.eqz a1,a2,a5
-;   czero.nez a3,a3,a5
-;   or a0,a1,a3
+;   slt a1,a0,a1
+;   czero.eqz a0,a2,a1
+;   czero.nez a1,a3,a1
+;   or a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slt a5, a0, a1
-;   .byte 0xb3, 0x55, 0xf6, 0x0e
-;   .byte 0xb3, 0xf6, 0xf6, 0x0e
-;   or a0, a1, a3
+;   slt a1, a0, a1
+;   .byte 0x33, 0x55, 0xb6, 0x0e
+;   .byte 0xb3, 0xf5, 0xb6, 0x0e
+;   or a0, a0, a1
 ;   ret
 
 ;; This can trigger a stack overflow with if the rules don't prevent
@@ -174,12 +173,13 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   li a1,0
-;   czero.nez a0,a1,zero
+;   li a0,0
+;   czero.nez a0,a0,zero
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a1, zero
-;   .byte 0x33, 0xf5, 0x05, 0x0e
+;   mv a0, zero
+;   .byte 0x33, 0x75, 0x05, 0x0e
 ;   ret
+

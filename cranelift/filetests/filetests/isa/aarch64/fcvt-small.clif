@@ -88,8 +88,8 @@ block0(v0: f32):
 ;   fcmp s0, s4
 ;   b.le #trap=int_ovf
 ;   movz w8, #17280, LSL #16
-;   fmov s18, w8
-;   fcmp s0, s18
+;   fmov s16, w8
+;   fcmp s0, s16
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
@@ -102,8 +102,8 @@ block0(v0: f32):
 ;   fcmp s0, s4
 ;   b.le #0x30
 ;   mov w8, #0x43800000
-;   fmov s18, w8
-;   fcmp s0, s18
+;   fmov s16, w8
+;   fcmp s0, s16
 ;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
@@ -125,8 +125,8 @@ block0(v0: f64):
 ;   fcmp d0, d4
 ;   b.le #trap=int_ovf
 ;   movz x8, #16496, LSL #48
-;   fmov d18, x8
-;   fcmp d0, d18
+;   fmov d16, x8
+;   fcmp d0, d16
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
@@ -139,8 +139,8 @@ block0(v0: f64):
 ;   fcmp d0, d4
 ;   b.le #0x30
 ;   mov x8, #0x4070000000000000
-;   fmov d18, x8
-;   fcmp d0, d18
+;   fmov d16, x8
+;   fcmp d0, d16
 ;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
@@ -162,8 +162,8 @@ block0(v0: f32):
 ;   fcmp s0, s4
 ;   b.le #trap=int_ovf
 ;   movz w8, #18304, LSL #16
-;   fmov s18, w8
-;   fcmp s0, s18
+;   fmov s16, w8
+;   fcmp s0, s16
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
@@ -176,8 +176,8 @@ block0(v0: f32):
 ;   fcmp s0, s4
 ;   b.le #0x30
 ;   mov w8, #0x47800000
-;   fmov s18, w8
-;   fcmp s0, s18
+;   fmov s16, w8
+;   fcmp s0, s16
 ;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
@@ -199,8 +199,8 @@ block0(v0: f64):
 ;   fcmp d0, d4
 ;   b.le #trap=int_ovf
 ;   movz x8, #16624, LSL #48
-;   fmov d18, x8
-;   fcmp d0, d18
+;   fmov d16, x8
+;   fcmp d0, d16
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
@@ -213,8 +213,8 @@ block0(v0: f64):
 ;   fcmp d0, d4
 ;   b.le #0x30
 ;   mov x8, #0x40f0000000000000
-;   fmov d18, x8
-;   fcmp d0, d18
+;   fmov d16, x8
+;   fcmp d0, d16
 ;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret

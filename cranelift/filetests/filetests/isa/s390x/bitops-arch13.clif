@@ -30,15 +30,15 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   llgfr %r4, %r2
-;   popcnt %r2, %r4, 8
+;   llgfr %r2, %r2
+;   popcnt %r2, %r2, 8
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgfr %r4, %r2
+;   llgfr %r2, %r2
 ;   .byte 0xb9, 0xe1
-;   .byte 0x80, 0x24
+;   .byte 0x80, 0x22
 ;   br %r14
 
 function %popcnt_i16(i16) -> i16 {
@@ -49,15 +49,15 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   llghr %r4, %r2
-;   popcnt %r2, %r4, 8
+;   llghr %r2, %r2
+;   popcnt %r2, %r2, 8
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llghr %r4, %r2
+;   llghr %r2, %r2
 ;   .byte 0xb9, 0xe1
-;   .byte 0x80, 0x24
+;   .byte 0x80, 0x22
 ;   br %r14
 
 function %popcnt_i8(i8) -> i8 {

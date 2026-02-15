@@ -48,11 +48,11 @@ block3(v6: i32):
 
 ; VCode:
 ; block0:
-;   lhi %r3, 0
+;   lhi %r5, 0
 ;   chi %r2, 0
 ;   jgh label2 ; jg label1
 ; block1:
-;   srk %r2, %r3, %r2
+;   srk %r2, %r5, %r2
 ;   jg label3
 ; block2:
 ;   mhi %r2, 2
@@ -62,11 +62,11 @@ block3(v6: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhi %r3, 0
+;   lhi %r5, 0
 ;   chi %r2, 0
 ;   jgh 0x18
 ; block1: ; offset 0xe
-;   srk %r2, %r3, %r2
+;   srk %r2, %r5, %r2
 ;   jg 0x1c
 ; block2: ; offset 0x18
 ;   mhi %r2, 2

@@ -109,11 +109,11 @@ block0(v0: i64x2, v1: i64x2):
 ;   movz x3, #1
 ;   dup v5.2d, x3
 ;   orr v7.16b, v0.16b, v1.16b
-;   and v17.16b, v7.16b, v5.16b
-;   ushr v19.2d, v0.2d, #1
-;   ushr v21.2d, v1.2d, #1
-;   add v23.2d, v19.2d, v21.2d
-;   add v0.2d, v17.2d, v23.2d
+;   and v16.16b, v7.16b, v5.16b
+;   ushr v17.2d, v0.2d, #1
+;   ushr v18.2d, v1.2d, #1
+;   add v17.2d, v17.2d, v18.2d
+;   add v0.2d, v16.2d, v17.2d
 ;   ret
 ;
 ; Disassembled:
@@ -121,11 +121,11 @@ block0(v0: i64x2, v1: i64x2):
 ;   mov x3, #1
 ;   dup v5.2d, x3
 ;   orr v7.16b, v0.16b, v1.16b
-;   and v17.16b, v7.16b, v5.16b
-;   ushr v19.2d, v0.2d, #1
-;   ushr v21.2d, v1.2d, #1
-;   add v23.2d, v19.2d, v21.2d
-;   add v0.2d, v17.2d, v23.2d
+;   and v16.16b, v7.16b, v5.16b
+;   ushr v17.2d, v0.2d, #1
+;   ushr v18.2d, v1.2d, #1
+;   add v17.2d, v17.2d, v18.2d
+;   add v0.2d, v16.2d, v17.2d
 ;   ret
 
 function %ishl_i8x16_imm(i8x16) -> i8x16 {

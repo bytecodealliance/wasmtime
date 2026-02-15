@@ -14,11 +14,11 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq (%rsi), %r9
-;   cmpq %r9, %rdi
-;   sete %r10b
-;   movzbq %r10b, %rax
-;   cmpq %r9, %rdi
+;   movq (%rsi), %r8
+;   cmpq %r8, %rdi
+;   sete %r9b
+;   movzbq %r9b, %rax
+;   cmpq %r8, %rdi
 ;   movq %rsi, %rdx
 ;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
@@ -30,11 +30,11 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq (%rsi), %r9 ; trap: heap_oob
-;   cmpq %r9, %rdi
-;   sete %r10b
-;   movzbq %r10b, %rax
-;   cmpq %r9, %rdi
+;   movq (%rsi), %r8 ; trap: heap_oob
+;   cmpq %r8, %rdi
+;   sete %r9b
+;   movzbq %r9b, %rax
+;   cmpq %r8, %rdi
 ;   movq %rsi, %rdx
 ;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
@@ -56,14 +56,14 @@ block0(v0: f64, v1: i64):
 ; block0:
 ;   movsd (%rdi), %xmm1
 ;   ucomisd %xmm1, %xmm0
-;   setnp %dil
-;   sete %al
-;   andl %eax, %edi
-;   movzbq %dil, %rax
+;   setnp %r10b
+;   sete %r11b
+;   andl %r11d, %r10d
+;   movzbq %r10b, %rax
 ;   ucomisd %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
-;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm2, %xmm0; $next:
-;   movsd %xmm0, %xmm0; jz $next; movsd %xmm2, %xmm0; $next:
+;   movdqa %xmm0, %xmm1
+;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm1, %xmm0; $next:
+;   movsd %xmm0, %xmm0; jz $next; movsd %xmm1, %xmm0; $next:
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -75,16 +75,16 @@ block0(v0: f64, v1: i64):
 ; block1: ; offset 0x4
 ;   movsd (%rdi), %xmm1 ; trap: heap_oob
 ;   ucomisd %xmm1, %xmm0
-;   setnp %dil
-;   sete %al
-;   andl %eax, %edi
-;   movzbq %dil, %rax
+;   setnp %r10b
+;   sete %r11b
+;   andl %r11d, %r10d
+;   movzbq %r10b, %rax
 ;   ucomisd %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
-;   jnp 0x2a
-;   movaps %xmm2, %xmm0
-;   je 0x33
-;   movaps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   jnp 0x2c
+;   movaps %xmm1, %xmm0
+;   je 0x35
+;   movaps %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

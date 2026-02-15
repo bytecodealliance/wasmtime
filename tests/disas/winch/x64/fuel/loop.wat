@@ -26,14 +26,14 @@
 ;;       cmpq    $0, %rcx
 ;;       jl      0x5e
 ;;   51: movq    %r14, %rdi
-;;       callq   0x179
+;;       callq   0x172
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rcx
 ;;       movq    (%rcx), %rcx
 ;;       cmpq    $0, %rcx
 ;;       jl      0x7c
 ;;   6f: movq    %r14, %rdi
-;;       callq   0x179
+;;       callq   0x172
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
 ;;       movq    (%rax), %r11
