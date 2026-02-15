@@ -226,6 +226,9 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
                             Poll::Pending => return Poll::Pending,
                         }
                     }
+                    Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => {
+                        break 'result Ok(());
+                    }
                     Err(err) => break 'result Err(err.into()),
                 }
             }
