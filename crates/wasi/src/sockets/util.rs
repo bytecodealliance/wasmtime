@@ -337,13 +337,15 @@ pub fn tcp_bind(
     socket: &tokio::net::TcpSocket,
     local_address: SocketAddr,
 ) -> Result<(), ErrorCode> {
-    // Automatically bypass the TIME_WAIT state when binding to a specific port
-    // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-    // This ensures we're not accidentally affected by any socket option
-    // state left behind by a previous failed call to this method.
+    // From the WASI spec:
+    // > The bind operation shouldn't be affected by the TIME_WAIT state of a
+    // > recently closed socket on the same local address. In practice this
+    // > means that the SO_REUSEADDR socket option should be set implicitly on
+    // > all platforms, except on Windows where this is the default behavior
+    // > and SO_REUSEADDR performs something different.
     #[cfg(not(windows))]
-    if let Err(err) = sockopt::set_socket_reuseaddr(&socket, local_address.port() > 0) {
-        return Err(err.into());
+    {
+        _ = sockopt::set_socket_reuseaddr(&socket, true);
     }
 
     // Perform the OS bind call.
