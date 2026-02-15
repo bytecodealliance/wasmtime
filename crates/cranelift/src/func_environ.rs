@@ -420,23 +420,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += match op {
-            // Nop and drop generate no code, so don't consume fuel for them.
-            Operator::Nop | Operator::Drop => 0,
-
-            // Control flow may create branches, but is generally cheap and
-            // free, so don't consume fuel. Note the lack of `if` since some
-            // cost is incurred with the conditional check.
-            Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Return
-            | Operator::Else
-            | Operator::End => 0,
-
-            // everything else, just call it one operation.
-            _ => 1,
-        };
+        self.fuel_consumed += self.tunables.operator_cost.cost(op);
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
