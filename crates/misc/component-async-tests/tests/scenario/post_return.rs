@@ -6,7 +6,7 @@ use std::future;
 use std::pin::pin;
 use std::task::Poll;
 use wasmtime::Result;
-use wasmtime::component::{Accessor, Linker, ResourceTable};
+use wasmtime::component::{Linker, ResourceTable};
 use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -14,7 +14,6 @@ mod yield_post_return {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "yield-post-return-callee",
-        exports: { default: task_exit },
     });
 }
 
@@ -73,39 +72,32 @@ async fn test_yield_post_return(components: &[&str]) -> Result<()> {
     )
     .await?;
 
-    async fn run_with(
-        accessor: &Accessor<Ctx>,
-        guest: &yield_post_return::YieldPostReturnCallee,
-    ) -> Result<()> {
-        // This function should return immediately, then yield the specified
-        // number of times after returning, and then finally exit.
-        let exit = guest
-            .local_local_yield_post_return()
-            .call_run(accessor, 100)
-            .await?
-            .1;
-        // The function has returned, now we wait for it (and any subtasks
-        // it may have spawned) to exit.
-        exit.block(accessor).await;
-        wasmtime::error::Ok(())
-    }
-
     async fn run(
         store: StoreContextMut<'_, Ctx>,
         guest: &yield_post_return::YieldPostReturnCallee,
     ) -> Result<()> {
         store
             .run_concurrent(async |accessor| {
-                run_with(accessor, guest).await?;
+                guest
+                    .local_local_yield_post_return()
+                    .call_run(accessor, 5)
+                    .await?;
 
                 // Go idle for a bit before doing it again.  This tests that
                 // `StoreContextMut::run_concurrent` is okay with having no
                 // outstanding guest or host tasks to poll for a while, trusting
                 // that we'll resolve the future independently, with or without
                 // giving it more work to do.
-                util::yield_times(10).await;
+                util::yield_times(100).await;
 
-                run_with(accessor, guest).await?;
+                guest
+                    .local_local_yield_post_return()
+                    .call_run(accessor, 5)
+                    .await?;
+
+                // Wait again for everything to be flushed to ensure that the
+                // assertion the store is empty below is correct.
+                util::yield_times(100).await;
 
                 wasmtime::error::Ok(())
             })
