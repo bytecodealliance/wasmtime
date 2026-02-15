@@ -64,24 +64,14 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
             return Err(ErrorCode::InvalidState.into());
         }
 
-        // We disconnect & (re)connect in two distinct steps for two reasons:
-        // - To leave our socket instance in a consistent state in case the
-        //   connect fails.
-        // - When reconnecting to a different address, Linux sometimes fails
-        //   if there isn't a disconnect in between.
-
-        // Step #1: Disconnect
-        if socket.is_connected() {
-            socket.disconnect()?;
-        }
-
-        // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
             let Some(check) = socket.socket_addr_check() else {
                 return Err(ErrorCode::InvalidState.into());
             };
             check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
             socket.connect_p2(connect_addr)?;
+        } else if socket.is_connected() {
+            socket.disconnect()?;
         }
 
         let incoming_stream = IncomingDatagramStream {
