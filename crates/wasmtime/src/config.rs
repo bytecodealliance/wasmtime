@@ -551,6 +551,8 @@ impl Config {
     /// applied to errors coming out of wasm.
     ///
     /// The default value is 20.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn wasm_backtrace_max_frames(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.wasm_backtrace_max_frames = limit;
         self

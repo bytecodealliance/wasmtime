@@ -107,17 +107,35 @@ fn assert_stack_matches(
         wasm_trace.push(entry);
     }
 
+    // Default configuration will only allow the host to see at most 20 frames.
+    let trace_limit = 20;
+
     // If the test case here trapped due to stack overflow then the host trace
     // will have one more frame than the wasm trace. The wasm didn't actually
     // get to the point of pushing onto its own trace stack where the host will
     // be able to see the exact function that triggered the stack overflow. In
     // this situation the host trace is asserted to be one larger and then the
     // top frame (first) of the host trace is discarded.
-    let host_trace = if trap == Trap::StackOverflow {
-        assert_eq!(host_trace.len(), wasm_trace.len() + 1);
-        &host_trace[1..]
+    let (host_trace, wasm_trace) = if trap == Trap::StackOverflow {
+        if host_trace.len() == trace_limit {
+            assert!(
+                trace_limit <= wasm_trace.len() + 1,
+                "Host trace size {} is larger than expected {}",
+                trace_limit,
+                wasm_trace.len() + 1
+            );
+        } else {
+            assert_eq!(host_trace.len(), wasm_trace.len() + 1);
+        }
+        (
+            &host_trace[1..],
+            &wasm_trace.get(..trace_limit - 1).unwrap_or(&wasm_trace),
+        )
     } else {
-        host_trace
+        (
+            host_trace,
+            &wasm_trace.get(..trace_limit).unwrap_or(&wasm_trace),
+        )
     };
 
     log::debug!("Wasm thinks its stack is: {wasm_trace:?}");
@@ -131,7 +149,7 @@ fn assert_stack_matches(
 
     assert_eq!(wasm_trace.len(), host_trace.len());
     for (wasm_entry, host_entry) in wasm_trace.into_iter().zip(host_trace) {
-        assert_eq!(wasm_entry, host_entry.func_index());
+        assert_eq!(wasm_entry, &host_entry.func_index());
     }
 }
 
