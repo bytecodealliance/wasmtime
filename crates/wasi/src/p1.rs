@@ -2317,9 +2317,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let events = events.as_array(nsubscriptions);
 
         let n = usize::try_from(nsubscriptions).unwrap_or(usize::MAX);
+        let mut pollables = Vec::with_capacity(n);
         let ready_result = async {
-            let mut pollables = Vec::with_capacity(n);
-
             for sub in subs.iter() {
                 let sub = memory.read(sub?)?;
                 let p = match sub.u {
@@ -2427,26 +2426,25 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 };
                 pollables.push(p);
             }
-
-            let result = self
-                .table
+            self.table
                 .poll(pollables.iter().map(ResourceExt::borrowed).collect())
-                .await;
-            let mut drop_error = None;
-            for pollable in pollables.drain(..) {
-                if let Err(err) = self.table.drop(pollable) {
-                    drop_error.get_or_insert(err);
-                }
-            }
-            drop_error.map_or(result, Err)
+                .await
+                .context("failed to call `poll-oneoff`")
+                .map_err(types::Error::trap)
         }
         .await;
 
-        let ready: HashSet<_> = ready_result
-            .context("failed to call `poll-oneoff`")
-            .map_err(types::Error::trap)?
-            .into_iter()
-            .collect();
+        let mut drop_error = None;
+        for pollable in pollables.drain(..) {
+            if let Err(err) = self.table.drop(pollable) {
+                drop_error.get_or_insert(err);
+            }
+        }
+        if let Some(err) = drop_error {
+            return Err(types::Error::trap(err));
+        }
+
+        let ready: HashSet<_> = ready_result?.into_iter().collect();
 
         let mut count: types::Size = 0;
         for (sub, event) in (0..)
