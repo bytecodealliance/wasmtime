@@ -87,11 +87,10 @@ enum TcpState {
     /// This is created either via `finish_connect` or for freshly accepted
     /// sockets from a TCP listener.
     ///
-    /// From here a socket can transition to `Receiving` or `P2Streaming`.
+    /// A socket will not transition out of this state.
     Connected {
         stream: Arc<tokio::net::TcpStream>,
-        receive_stream_taken: bool,
-        send_stream_taken: bool,
+        taken_streams: TakenStreams,
         p2_state: Option<P2TcpStreamingState>,
     },
 
@@ -105,7 +104,18 @@ enum TcpState {
     /// The socket is closed and no more operations can be performed.
     Closed,
 }
-
+impl TcpState {
+    fn connected(stream: tokio::net::TcpStream) -> Self {
+        TcpState::Connected {
+            stream: Arc::new(stream),
+            taken_streams: TakenStreams {
+                receive: false,
+                send: false,
+            },
+            p2_state: None,
+        }
+    }
+}
 impl Debug for TcpState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -122,6 +132,11 @@ impl Debug for TcpState {
             Self::Closed => write!(f, "Closed"),
         }
     }
+}
+
+struct TakenStreams {
+    receive: bool,
+    send: bool,
 }
 
 /// A host TCP socket, plus associated bookkeeping.
@@ -208,15 +223,7 @@ impl TcpSocket {
             _ => err,
         })?;
         options.apply(family, &client);
-        Ok(Self::from_state(
-            TcpState::Connected {
-                stream: Arc::new(client),
-                receive_stream_taken: false,
-                send_stream_taken: false,
-                p2_state: None,
-            },
-            family,
-        ))
+        Ok(Self::from_state(TcpState::connected(client), family))
     }
 
     /// Create a `TcpSocket` from an existing socket.
@@ -363,12 +370,7 @@ impl TcpSocket {
         }
         match result {
             Ok(stream) => {
-                self.tcp_state = TcpState::Connected {
-                    stream: Arc::new(stream),
-                    receive_stream_taken: false,
-                    send_stream_taken: false,
-                    p2_state: None,
-                };
+                self.tcp_state = TcpState::connected(stream);
                 Ok(())
             }
             Err(err) => {
@@ -679,35 +681,28 @@ impl TcpSocket {
     }
 
     pub(crate) fn take_receive_stream(&mut self) -> Result<Arc<tokio::net::TcpStream>, ErrorCode> {
-        match &mut self.tcp_state {
-            TcpState::Connected {
-                stream,
-                receive_stream_taken,
-                ..
-            } => {
-                if *receive_stream_taken {
-                    return Err(ErrorCode::InvalidState);
-                }
-                *receive_stream_taken = true;
-                Ok(stream.clone())
-            }
-            #[cfg(feature = "p3")]
-            TcpState::Error(err) => Err((&*err).into()),
-            _ => Err(ErrorCode::InvalidState),
-        }
+        self.take_stream(|s| &mut s.receive)
     }
 
     pub(crate) fn take_send_stream(&mut self) -> Result<Arc<tokio::net::TcpStream>, ErrorCode> {
+        self.take_stream(|s| &mut s.send)
+    }
+
+    fn take_stream(
+        &mut self,
+        direction: impl FnOnce(&mut TakenStreams) -> &mut bool,
+    ) -> Result<Arc<tokio::net::TcpStream>, ErrorCode> {
         match &mut self.tcp_state {
             TcpState::Connected {
                 stream,
-                send_stream_taken,
+                taken_streams,
                 ..
             } => {
-                if *send_stream_taken {
+                let taken = direction(taken_streams);
+                if *taken {
                     return Err(ErrorCode::InvalidState);
                 }
-                *send_stream_taken = true;
+                *taken = true;
                 Ok(stream.clone())
             }
             #[cfg(feature = "p3")]
