@@ -16,20 +16,20 @@ test_programs::p3::export!(Component);
 async fn test_tcp_ping_pong(family: IpAddressFamily) {
     setup(family, |mut server, mut client| async move {
         {
-            let rest = server.send.write_all(b"ping".into()).await;
+            let rest = server.send_stream.write_all(b"ping".into()).await;
             assert!(rest.is_empty());
         }
         {
-            let (status, buf) = client.receive.read(Vec::with_capacity(4)).await;
+            let (status, buf) = client.receive_stream.read(Vec::with_capacity(4)).await;
             assert_eq!(status, StreamResult::Complete(4));
             assert_eq!(buf, b"ping");
         }
         {
-            let rest = client.send.write_all(b"pong".into()).await;
+            let rest = client.send_stream.write_all(b"pong".into()).await;
             assert!(rest.is_empty());
         }
         {
-            let (status, buf) = server.receive.read(Vec::with_capacity(4)).await;
+            let (status, buf) = server.receive_stream.read(Vec::with_capacity(4)).await;
             assert_eq!(status, StreamResult::Complete(4));
             assert_eq!(buf, b"pong");
         }
@@ -44,7 +44,7 @@ async fn test_tcp_receive_stream_should_be_dropped_by_remote_shutdown(family: Ip
         drop(server);
 
         // Wait for the shutdown signal to reach the client:
-        let (stream_result, data) = client.receive.read(Vec::with_capacity(1)).await;
+        let (stream_result, data) = client.receive_stream.read(Vec::with_capacity(1)).await;
         assert_eq!(data.len(), 0);
         assert_eq!(stream_result, StreamResult::Dropped);
         assert_eq!(client.receive_result.await, Ok(()));
@@ -57,15 +57,15 @@ async fn test_tcp_receive_stream_should_be_dropped_by_remote_shutdown(family: Ip
 async fn test_tcp_receive_future_should_resolve_when_stream_dropped(family: IpAddressFamily) {
     setup(family, |mut server, client| async move {
         {
-            let rest = server.send.write_all(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".into()).await;
+            let rest = server.send_stream.write_all(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".into()).await;
             assert!(rest.is_empty());
         }
         {
-            let Connection { mut receive, receive_result, .. } = client;
+            let Connection { mut receive_stream, receive_result, .. } = client;
 
             // Wait for the data to be ready:
-            receive.next().await.unwrap();
-            drop(receive);
+            receive_stream.next().await.unwrap();
+            drop(receive_stream);
 
             // Dropping the stream should've caused the future to resolve even
             // though there was still data pending:
@@ -78,9 +78,11 @@ async fn test_tcp_receive_future_should_resolve_when_stream_dropped(family: IpAd
 async fn test_tcp_send_future_should_resolve_when_stream_dropped(family: IpAddressFamily) {
     setup(family, |_server, client| async move {
         let Connection {
-            send, send_result, ..
+            send_stream,
+            send_result,
+            ..
         } = client;
-        drop(send);
+        drop(send_stream);
         assert_eq!(send_result.await, Ok(()));
     })
     .await;
@@ -93,7 +95,7 @@ async fn test_tcp_send_drops_stream_when_remote_shutdown(family: IpAddressFamily
 
         // Give it a few tries for the shutdown signal to reach the client:
         loop {
-            let stream_result = client.send.write(b"undeliverable".into()).await.0;
+            let stream_result = client.send_stream.write(b"undeliverable".into()).await.0;
             if stream_result == StreamResult::Dropped {
                 break;
             }
@@ -111,7 +113,7 @@ async fn test_tcp_receive_once(family: IpAddressFamily) {
     setup(family, |mut server, client| async move {
         // Give the client some potential data to _hopefully never_ read.
         {
-            let rest = server.send.write_all(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".into()).await;
+            let rest = server.send_stream.write_all(b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".into()).await;
             assert!(rest.is_empty());
         }
 
@@ -154,15 +156,15 @@ async fn test_tcp_stream_lifetimes(family: IpAddressFamily) {
     setup(family, |server, client| async move {
         let Connection {
             socket: server_socket,
-            send: mut server_send,
-            receive: server_receive,
+            send_stream: mut server_send_stream,
+            receive_stream: server_receive_stream,
             send_result: server_send_result,
             receive_result: server_receive_result,
         } = server;
         let Connection {
             socket: client_socket,
-            send: mut client_send,
-            receive: client_receive,
+            send_stream: mut client_send_stream,
+            receive_stream: client_receive_stream,
             send_result: client_send_result,
             receive_result: client_receive_result,
         } = client;
@@ -172,24 +174,24 @@ async fn test_tcp_stream_lifetimes(family: IpAddressFamily) {
         drop(client_socket);
 
         {
-            let rest = server_send.write_all(b"ping".into()).await;
+            let rest = server_send_stream.write_all(b"ping".into()).await;
             assert!(rest.is_empty());
-            drop(server_send);
+            drop(server_send_stream);
             assert_eq!(server_send_result.await, Ok(()));
         }
         {
-            let data = client_receive.collect().await;
+            let data = client_receive_stream.collect().await;
             assert_eq!(data, b"ping");
             assert_eq!(client_receive_result.await, Ok(()));
         }
         {
-            let rest = client_send.write_all(b"pong".into()).await;
+            let rest = client_send_stream.write_all(b"pong".into()).await;
             assert!(rest.is_empty());
-            drop(client_send);
+            drop(client_send_stream);
             assert_eq!(client_send_result.await, Ok(()));
         }
         {
-            let data = server_receive.collect().await;
+            let data = server_receive_stream.collect().await;
             assert_eq!(data, b"pong");
             assert_eq!(server_receive_result.await, Ok(()));
         }
@@ -216,10 +218,10 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
         join!(
             async {
                 for _ in 0..CHUNKS {
-                    let ret = client.send.write_all(data.to_vec()).await;
+                    let ret = client.send_stream.write_all(data.to_vec()).await;
                     assert!(ret.is_empty());
                 }
-                drop(client.send);
+                drop(client.send_stream);
             },
             async {
                 let mut buf = Vec::with_capacity(1024);
@@ -228,7 +230,7 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
                 loop {
                     assert!(buf.is_empty());
                     let (status, b) = {
-                        let mut fut = pin!(server.receive.read(buf));
+                        let mut fut = pin!(server.receive_stream.read(buf));
                         let mut cx = Context::from_waker(Waker::noop());
                         match fut.as_mut().poll(&mut cx) {
                             Poll::Ready(pair) => pair,
@@ -250,7 +252,7 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
                         StreamResult::Cancelled => {
                             assert!(consecutive_zero_length_reads < 10);
                             consecutive_zero_length_reads += 1;
-                            server.receive.read(Vec::new()).await;
+                            server.receive_stream.read(Vec::new()).await;
                         }
                     }
                 }
@@ -294,21 +296,21 @@ fn main() {}
 
 struct Connection {
     socket: TcpSocket,
-    receive: StreamReader<u8>,
+    receive_stream: StreamReader<u8>,
     receive_result: FutureReader<Result<(), ErrorCode>>,
-    send: StreamWriter<u8>,
+    send_stream: StreamWriter<u8>,
     send_result: FutureReader<Result<(), ErrorCode>>,
 }
 impl Connection {
     fn new(socket: TcpSocket) -> Self {
-        let (send, send_rx) = wit_stream::new();
+        let (send_stream, send_rx) = wit_stream::new();
         let send_result = socket.send(send_rx);
-        let (receive, receive_result) = socket.receive();
+        let (receive_stream, receive_result) = socket.receive();
         Self {
             socket,
-            receive,
+            receive_stream,
             receive_result,
-            send,
+            send_stream,
             send_result,
         }
     }
