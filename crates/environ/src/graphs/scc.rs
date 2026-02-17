@@ -235,7 +235,7 @@ where
     /// In the following diagram, the solid lines are the input graph and the
     /// dotted lines show its condensation:
     ///
-    /// ```ignore
+    /// ```text
     /// ...............
     /// :             :
     /// :    ,-----.  :
