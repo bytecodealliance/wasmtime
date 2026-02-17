@@ -35,7 +35,7 @@ use object::{
 };
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+use wasmtime_environ::{FlagValue, ObjectKind, Tunables, collections};
 
 const VERSION: u8 = 0;
 
@@ -180,11 +180,11 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 
 #[derive(Serialize, Deserialize)]
 pub struct Metadata<'a> {
-    target: String,
+    target: collections::String,
     #[serde(borrow)]
-    shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    shared_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
     #[serde(borrow)]
-    isa_flags: Vec<(&'a str, FlagValue<'a>)>,
+    isa_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: u64,
 }
@@ -194,9 +194,9 @@ impl Metadata<'_> {
     pub fn new(engine: &Engine) -> Result<Metadata<'static>> {
         let compiler = engine.try_compiler()?;
         Ok(Metadata {
-            target: compiler.triple().to_string(),
-            shared_flags: compiler.flags(),
-            isa_flags: compiler.isa_flags(),
+            target: compiler.triple().to_string().into(),
+            shared_flags: compiler.flags().into(),
+            isa_flags: compiler.isa_flags().into(),
             tunables: engine.tunables().clone(),
             features: engine.features().bits(),
         })
