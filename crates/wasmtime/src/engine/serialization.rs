@@ -463,7 +463,7 @@ mod test {
     fn test_architecture_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine)?;
-        metadata.target = "unknown-generic-linux".to_string();
+        metadata.target = "unknown-generic-linux".to_string().into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -486,7 +486,8 @@ mod test {
         metadata.target = format!(
             "{}-generic-unknown",
             target_lexicon::Triple::host().architecture
-        );
+        )
+        .into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -515,7 +516,7 @@ mod test {
 
         metadata
             .shared_flags
-            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -541,7 +542,7 @@ mod test {
 
         metadata
             .isa_flags
-            .push(("not_a_flag", FlagValue::Bool(true)));
+            .push(("not_a_flag", FlagValue::Bool(true)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
