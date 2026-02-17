@@ -8,6 +8,31 @@ use crate::memory::JITMemoryKind;
 
 const VENEER_SIZE: usize = 24; // ldr + br + pointer
 
+/// ARM64 macOS W^X helpers: switch the current thread between write mode
+/// and execute mode for MAP_JIT pages.
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+mod wx {
+    unsafe extern "C" {
+        fn pthread_jit_write_protect_np(enabled: libc::c_int);
+    }
+
+    /// Enable write mode (disable execute) for MAP_JIT pages on this thread.
+    pub(super) fn enable_write() {
+        unsafe { pthread_jit_write_protect_np(0) }
+    }
+
+    /// Enable execute mode (disable write) for MAP_JIT pages on this thread.
+    pub(super) fn enable_exec() {
+        unsafe { pthread_jit_write_protect_np(1) }
+    }
+}
+
+#[cfg(not(all(target_arch = "aarch64", target_os = "macos")))]
+mod wx {
+    pub(super) fn enable_write() {}
+    pub(super) fn enable_exec() {}
+}
+
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
 unsafe fn modify_inst32(iptr: *mut u32, modifier: impl FnOnce(u32) -> u32) {
@@ -22,6 +47,7 @@ pub(crate) struct CompiledBlob {
     size: usize,
     relocs: Vec<ModuleReloc>,
     veneer_count: usize,
+    is_executable: bool,
     #[cfg(feature = "wasmtime-unwinder")]
     wasmtime_exception_data: Option<Vec<u8>>,
 }
@@ -46,12 +72,20 @@ impl CompiledBlob {
             }
         }
 
+        let is_executable = matches!(kind, JITMemoryKind::Executable);
+
         let ptr = memory
             .allocate(data.len() + veneer_count * VENEER_SIZE, align, kind)
             .map_err(|e| ModuleError::Allocation { err: e })?;
 
+        if is_executable {
+            wx::enable_write();
+        }
         unsafe {
             ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+        }
+        if is_executable {
+            wx::enable_exec();
         }
 
         Ok(CompiledBlob {
@@ -59,6 +93,7 @@ impl CompiledBlob {
             size: data.len(),
             relocs,
             veneer_count,
+            is_executable,
             #[cfg(feature = "wasmtime-unwinder")]
             wasmtime_exception_data,
         })
@@ -72,17 +107,26 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
+        let is_executable = matches!(kind, JITMemoryKind::Executable);
+
         let ptr = memory
             .allocate(size, align, kind)
             .map_err(|e| ModuleError::Allocation { err: e })?;
 
+        if is_executable {
+            wx::enable_write();
+        }
         unsafe { ptr::write_bytes(ptr, 0, size) };
+        if is_executable {
+            wx::enable_exec();
+        }
 
         Ok(CompiledBlob {
             ptr,
             size,
             relocs,
             veneer_count: 0,
+            is_executable,
             #[cfg(feature = "wasmtime-unwinder")]
             wasmtime_exception_data,
         })
@@ -106,6 +150,10 @@ impl CompiledBlob {
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
+
+        if self.is_executable {
+            wx::enable_write();
+        }
 
         let mut next_veneer_idx = 0;
 
@@ -320,6 +368,10 @@ impl CompiledBlob {
 
                 other => unimplemented!("unimplemented reloc {other:?}"),
             }
+        }
+
+        if self.is_executable {
+            wx::enable_exec();
         }
     }
 }

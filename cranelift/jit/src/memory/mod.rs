@@ -81,16 +81,5 @@ pub(crate) fn set_readable_and_executable(
         }
     }
 
-    // ARM64 macOS: Switch to execute mode (W^X: disable writing, enable execution).
-    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
-    {
-        unsafe extern "C" {
-            fn pthread_jit_write_protect_np(enabled: libc::c_int);
-        }
-        unsafe {
-            pthread_jit_write_protect_np(1);
-        }
-    }
-
     Ok(())
 }

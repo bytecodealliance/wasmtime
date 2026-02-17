@@ -84,17 +84,6 @@ impl PtrLen {
             return Err(io::Error::last_os_error());
         }
 
-        // Enable writing to MAP_JIT memory (W^X: start in write mode).
-        // Scoped here so write mode is only enabled when MAP_JIT pages are created.
-        if executable {
-            unsafe extern "C" {
-                fn pthread_jit_write_protect_np(enabled: libc::c_int);
-            }
-            unsafe {
-                pthread_jit_write_protect_np(0);
-            }
-        }
-
         Ok(Self {
             ptr: ptr as *mut u8,
             len: alloc_size,
