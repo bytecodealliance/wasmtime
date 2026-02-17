@@ -36,3 +36,4 @@ test-programs-artifacts = { workspace = true }
 wasmtime-wasi = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 futures = { workspace = true }
+test-log = { workspace = true }

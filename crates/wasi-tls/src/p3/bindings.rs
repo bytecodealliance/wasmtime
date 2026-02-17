@@ -6,16 +6,13 @@ mod generated {
         path: "src/p3/wit",
         world: "wasi:tls/imports",
         imports: {
-            "wasi:tls/client.[static]handshake.finish": trappable | tracing | store,
-            "wasi:tls/client.connect": trappable | tracing | store,
-            "wasi:tls/server.[static]handshake.finish": trappable | tracing | store,
+            "wasi:tls/client.[method]connector.receive": trappable | tracing | store,
+            "wasi:tls/client.[method]connector.send": trappable | tracing | store,
             default: trappable | tracing
         },
         with: {
-            "wasi:tls/client.handshake": crate::p3::ClientHandshake,
-            "wasi:tls/client.hello": crate::p3::ClientHello,
-            "wasi:tls/server.handshake": crate::p3::ServerHandshake,
-            "wasi:tls/types.certificate": crate::p3::Certificate,
+            "wasi:tls/client.connector": crate::p3::Connector,
+            "wasi:tls/types.error": String,
         },
     });
 }

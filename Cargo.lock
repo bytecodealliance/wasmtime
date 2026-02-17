@@ -5186,6 +5186,7 @@ dependencies = [
  "bytes",
  "futures",
  "rustls",
+ "test-log",
  "test-programs-artifacts",
  "tokio",
  "tokio-rustls",

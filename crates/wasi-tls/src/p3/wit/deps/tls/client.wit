@@ -1,38 +1,22 @@
 interface client {
-    use types.{certificate};
+    use types.{error};
 
-    resource hello {
-        /// Constructs a new ClientHello message.
+    resource connector {
         constructor();
 
-        /// Sets the server name indicator.
-        set-server-name: func(server-name: string) -> result;
+        /// Set up the encryption stream transform.
+        /// This takes an unprotected `cleartext` application data stream and
+        /// returns an encrypted data stream, ready to be sent out over the network.
+        /// Closing the `cleartext` stream will cause a `close_notify` packet to be emitted on the returned output stream.
+        send: func(cleartext: stream<u8>) -> tuple<stream<u8>, future<result<_, error>>>;
 
-        /// Sets the ALPN IDs advertised by the client.
-        set-alpn-ids: func(alpn-ids: list<list<u8>>);
+        /// Set up the decryption stream transform.
+        /// This takes an encrypted data stream, as received via e.g. the network,
+        /// and returns a decrypted application data stream.
+        receive: func(ciphertext: stream<u8>) -> tuple<stream<u8>, future<result<_, error>>>;
 
-        /// Sets a list of the symmetric cipher options supported by
-        /// the client, specifically the record protection algorithm
-        /// (including secret key length) and a hash to be used with HKDF, in
-        /// descending order of client preference.
-        ///
-        /// If this list is empty, the implementation must use a reasonable default.
-        set-cipher-suites: func(cipher-suites: list<u16>);
+        /// Perform the handshake.
+        /// The `send` & `receive` streams must be set up before calling this method.
+        connect: static async func(this: connector, server-name: string) -> result<_, error>;
     }
-
-    resource handshake {
-        set-client-certificate: func(cert: certificate);
-
-        get-server-certificate: func() -> option<certificate>;
-
-        /// Gets the single cipher suite selected by the server from
-        /// the list in ClientHello.cipher_suites.
-        get-cipher-suite: func() -> u16;
-
-        /// Closing the `data` stream will trigger `close_notify`.
-        finish: static func(this: handshake, data: stream<u8>) -> tuple<stream<u8>, future<result>>;
-    }
-
-    /// Initiate the client TLS handshake
-    connect: func(hello: hello, incoming: stream<u8>) -> tuple<stream<u8>, future<result<handshake>>>;
 }

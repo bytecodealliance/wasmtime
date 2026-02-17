@@ -1,15 +1,21 @@
-use super::mk_delete;
+use super::{mk_delete, mk_get};
 use crate::p3::WasiTlsCtxView;
-use crate::p3::bindings::tls::types::{Certificate, Host, HostCertificate};
+use crate::p3::bindings::tls::types::{Error, Host, HostError};
 use wasmtime::component::Resource;
 
-mk_delete!(Certificate, delete_certificate, "certificate");
+mk_get!(Error, get_error, "error");
+mk_delete!(Error, delete_error, "error");
 
 impl Host for WasiTlsCtxView<'_> {}
 
-impl HostCertificate for WasiTlsCtxView<'_> {
-    fn drop(&mut self, cert: Resource<Certificate>) -> wasmtime::Result<()> {
-        delete_certificate(&mut self.table, cert)?;
+impl HostError for WasiTlsCtxView<'_> {
+    fn to_debug_string(&mut self, err: Resource<Error>) -> wasmtime::Result<String> {
+        let err = get_error(self.table, &err)?;
+        Ok(err.clone())
+    }
+
+    fn drop(&mut self, err: Resource<Error>) -> wasmtime::Result<()> {
+        delete_error(&mut self.table, err)?;
         Ok(())
     }
 }

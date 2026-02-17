@@ -1,15 +1,10 @@
-use anyhow::{Context as _, Result, anyhow, bail};
-use core::future::{Future as _, poll_fn};
-use core::pin::pin;
-use core::str;
-use core::task::{Poll, ready};
+use anyhow::{Context as _, Result, anyhow};
+use core::future::Future;
 use futures::try_join;
 use test_programs::p3::wasi::sockets::ip_name_lookup::resolve_addresses;
 use test_programs::p3::wasi::sockets::types::{IpAddress, IpSocketAddress, TcpSocket};
-use test_programs::p3::wasi::tls;
-use test_programs::p3::wasi::tls::client::Hello;
+use test_programs::p3::wasi::tls::client::Connector;
 use test_programs::p3::wit_stream;
-use wit_bindgen::StreamResult;
 
 struct Component;
 
@@ -27,63 +22,52 @@ async fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> 
         .await
         .context("tcp connect failed")?;
 
+    let conn = Connector::new();
+
     let (sock_rx, sock_rx_fut) = sock.receive();
-    let hello = Hello::new();
-    hello
-        .set_server_name(domain)
-        .map_err(|()| anyhow!("failed to set SNI"))?;
-    let (sock_tx, conn) = tls::client::connect(hello, sock_rx);
-    let sock_tx_fut = sock.send(sock_tx);
+    let (tls_rx, tls_rx_fut) = conn.receive(sock_rx);
 
-    let mut conn = pin!(conn.into_future());
-    let mut sock_rx_fut = pin!(sock_rx_fut.into_future());
-    let mut sock_tx_fut = pin!(sock_tx_fut);
-    let conn = poll_fn(|cx| match conn.as_mut().poll(cx) {
-        Poll::Ready(Ok(conn)) => Poll::Ready(Ok(conn)),
-        Poll::Ready(Err(())) => Poll::Ready(Err(anyhow!("tls handshake failed"))),
-        Poll::Pending => match sock_tx_fut.as_mut().poll(cx) {
-            Poll::Ready(Ok(())) => Poll::Ready(Err(anyhow!("Tx stream closed unexpectedly"))),
-            Poll::Ready(Err(err)) => {
-                Poll::Ready(Err(anyhow!("Tx stream closed with error: {err:?}")))
-            }
-            Poll::Pending => match ready!(sock_rx_fut.as_mut().poll(cx)) {
-                Ok(_) => Poll::Ready(Err(anyhow!("Rx stream closed unexpectedly"))),
-                Err(err) => Poll::Ready(Err(anyhow!("Rx stream closed with error: {err:?}"))),
-            },
-        },
-    })
-    .await?;
+    let (mut data_tx, data_rx) = wit_stream::new();
+    let (tls_tx, tls_tx_err_fut) = conn.send(data_rx);
+    let sock_tx_fut = sock.send(tls_tx);
 
-    let (mut req_tx, req_rx) = wit_stream::new();
-    let (mut res_rx, result_fut) = tls::client::Handshake::finish(conn, req_rx);
-
-    let res = Vec::with_capacity(8192);
     try_join!(
         async {
-            let buf = req_tx.write_all(request.into()).await;
-            assert_eq!(buf, []);
-            drop(req_tx);
+            Connector::connect(conn, domain.into())
+                .await
+                .map_err(|err| {
+                    anyhow!(err.to_debug_string()).context("failed to establish connection")
+                })
+        },
+        async {
+            let buf = data_tx.write_all(request.into()).await;
+            assert!(buf.is_empty());
+            drop(data_tx);
             Ok(())
         },
         async {
-            let (result, buf) = res_rx.read(res).await;
-            match result {
-                StreamResult::Complete(..) => {
-                    drop(res_rx);
-                    let res = String::from_utf8(buf)?;
-                    if res.contains("HTTP/1.1 200 OK") {
-                        Ok(())
-                    } else {
-                        bail!("server did not respond with 200 OK: {res}")
-                    }
-                }
-                StreamResult::Dropped => bail!("read dropped"),
-                StreamResult::Cancelled => bail!("read cancelled"),
+            let response = tls_rx.collect().await;
+            let response = String::from_utf8(response)?;
+            if response.contains("HTTP/1.1 200 OK") {
+                Ok(())
+            } else {
+                Err(anyhow!("server did not respond with 200 OK: {response}"))
             }
         },
-        async { result_fut.await.map_err(|()| anyhow!("TLS session failed")) },
-        async { sock_rx_fut.await.context("TCP receipt failed") },
-        async { sock_tx_fut.await.context("TCP transmit failed") },
+        async { sock_rx_fut.await.context("failed to receive ciphertext") },
+        async { sock_tx_fut.await.context("failed to send ciphertext") },
+        async {
+            tls_rx_fut
+                .await
+                .map_err(|err| anyhow!(err.to_debug_string()))
+                .context("failed to receive plaintext")
+        },
+        async {
+            tls_tx_err_fut
+                .await
+                .map_err(|err| anyhow!(err.to_debug_string()))
+                .context("failed to send plaintext")
+        },
     )?;
     Ok(())
 }
@@ -92,32 +76,57 @@ async fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> 
 /// perform a TLS handshake using another unrelated domain. This should result
 /// in a handshake error.
 async fn test_tls_invalid_certificate(_domain: &str, ip: IpAddress) -> Result<()> {
-    const BAD_DOMAIN: &'static str = "wrongdomain.localhost";
+    const BAD_DOMAIN: &str = "wrongdomain.localhost";
 
     let sock = TcpSocket::create(ip.family()).unwrap();
     sock.connect(IpSocketAddress::new(ip, PORT))
         .await
         .context("tcp connect failed")?;
 
-    let (sock_rx, sock_rx_fut) = sock.receive();
-    let hello = Hello::new();
-    hello
-        .set_server_name(BAD_DOMAIN)
-        .map_err(|()| anyhow!("failed to set SNI"))?;
-    let (sock_tx, conn) = tls::client::connect(hello, sock_rx);
-    let sock_tx_fut = sock.send(sock_tx);
+    let conn = Connector::new();
 
-    try_join!(
+    let (sock_rx, sock_rx_fut) = sock.receive();
+    let (tls_rx, tls_rx_fut) = conn.receive(sock_rx);
+
+    let (_, data_rx) = wit_stream::new();
+    let (tls_tx, tls_tx_err_fut) = conn.send(data_rx);
+    let sock_tx_fut = sock.send(tls_tx);
+    let res = try_join!(
         async {
-            match conn.await {
-                Err(()) => Ok(()),
-                Ok(_) => panic!("expecting server name mismatch"),
-            }
+            Connector::connect(conn, BAD_DOMAIN.into())
+                .await
+                .expect("`connect` failed");
+            Ok(())
         },
-        async { sock_rx_fut.await.context("TCP receipt failed") },
-        async { sock_tx_fut.await.context("TCP transmit failed") },
-    )?;
-    Ok(())
+        async {
+            let response = tls_rx.collect().await;
+            assert_eq!(response, []);
+            Ok(())
+        },
+        async {
+            sock_rx_fut.await.expect("failed to receive ciphertext");
+            Ok(())
+        },
+        async {
+            sock_tx_fut.await.expect("failed to send ciphertext");
+            Ok(())
+        },
+        async { tls_rx_fut.await },
+        async { tls_tx_err_fut.await },
+    );
+    match res {
+        Err(e) => {
+            let debug_string = e.to_debug_string();
+            // We're expecting an error regarding certificates in some form or
+            // another. When we add more TLS backends this naive check will
+            // likely need to be revisited/expanded:
+            if debug_string.contains("certificate") || debug_string.contains("HandshakeFailure") {
+                return Ok(());
+            }
+            Err(anyhow!(debug_string))
+        }
+        Ok(_) => panic!("expecting server name mismatch"),
+    }
 }
 
 async fn try_live_endpoints<'a, Fut>(test: impl Fn(&'a str, IpAddress) -> Fut)
@@ -126,7 +135,7 @@ where
 {
     // since this is testing remote endpoints to ensure system cert store works
     // the test uses a couple different endpoints to reduce the number of flakes
-    const DOMAINS: &'static [&'static str] = &[
+    const DOMAINS: &[&str] = &[
         "example.com",
         "api.github.com",
         "docs.wasmtime.dev",
@@ -141,7 +150,7 @@ where
                 .first()
                 .map(|a| a.to_owned())
                 .ok_or_else(|| anyhow!("DNS lookup failed."))?;
-            test(&domain, ip).await
+            test(domain, ip).await
         })();
 
         match result.await {

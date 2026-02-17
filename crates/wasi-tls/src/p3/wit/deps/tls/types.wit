@@ -1,5 +1,5 @@
 interface types {
-    resource certificate {
-        // TODO: define
+    resource error {
+        to-debug-string: func() -> string;
     }
 }
