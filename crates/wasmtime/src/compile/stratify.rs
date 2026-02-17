@@ -50,13 +50,12 @@
 //! dependencies each component has, and a component is ready for inclusion in a
 //! layer once its unprocessed-dependencies count reaches zero.
 
-use super::{
-    call_graph::CallGraph,
-    scc::{Scc, StronglyConnectedComponents},
-    *,
-};
+use super::*;
 use std::{fmt::Debug, ops::Range};
-use wasmtime_environ::{EntityRef, SecondaryMap};
+use wasmtime_environ::{
+    EntityRef, SecondaryMap,
+    graphs::{Graph, Scc, StronglyConnectedComponents},
+};
 
 /// A stratified call graph; essentially a parallel-execution plan for bottom-up
 /// inlining.
@@ -90,15 +89,15 @@ impl<Node: Debug> Debug for Strata<Node> {
 impl<Node> Strata<Node> {
     /// Stratify the given call graph, yielding a `Strata` parallel-execution
     /// plan.
-    pub fn new(nodes: impl IntoIterator<Item = Node>, call_graph: &CallGraph<Node>) -> Self
+    pub fn new<G>(call_graph: &G) -> Self
     where
         Node: EntityRef + Debug,
+        G: Debug + Graph<Node>,
     {
         log::trace!("Stratifying {call_graph:#?}");
 
-        let components =
-            StronglyConnectedComponents::new(nodes, |node| call_graph.edges(node).iter().copied());
-        let evaporation = components.evaporation(|node| call_graph.edges(node).iter().copied());
+        let components = StronglyConnectedComponents::new(call_graph);
+        let evaporation = components.evaporation(call_graph);
 
         // A map from each component to the count of how many call-graph
         // dependencies to other components it has that have not been fulfilled
@@ -122,14 +121,16 @@ impl<Node> Strata<Node> {
         // fixed point, similarly to GC tracing and ref-count decrementing.
 
         let mut layers: Vec<Range<u32>> = vec![];
-        let mut layer_elems: Vec<Node> = Vec::with_capacity(call_graph.nodes().len());
+        let (min, max) = call_graph.nodes().size_hint();
+        let cap = max.unwrap_or(min);
+        let mut layer_elems: Vec<Node> = Vec::with_capacity(cap);
 
         let mut current_layer: Vec<Scc> = components
             .keys()
             .filter(|scc| unfulfilled_deps_count[*scc] == 0)
             .collect();
         debug_assert!(
-            !current_layer.is_empty() || call_graph.nodes().len() == 0,
+            !current_layer.is_empty() || call_graph.nodes().next().is_none(),
             "the first layer can only be empty when the call graph itself is empty"
         );
 
@@ -187,11 +188,13 @@ impl<Node> Strata<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasmtime_environ::graphs::Graph;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     struct Function(u32);
     wasmtime_environ::entity_impl!(Function);
 
+    #[derive(Debug)]
     struct Functions {
         calls: SecondaryMap<Function, Vec<Function>>,
     }
@@ -202,6 +205,26 @@ mod tests {
             Self {
                 calls: Default::default(),
             }
+        }
+    }
+
+    impl Graph<Function> for Functions {
+        type NodesIter<'a>
+            = wasmtime_environ::Keys<Function>
+        where
+            Self: 'a;
+
+        fn nodes(&self) -> Self::NodesIter<'_> {
+            self.calls.keys()
+        }
+
+        type SuccessorsIter<'a>
+            = core::iter::Copied<core::slice::Iter<'a, Function>>
+        where
+            Self: 'a;
+
+        fn successors(&self, f: Function) -> Self::SuccessorsIter<'_> {
+            self.calls[f].iter().copied()
         }
     }
 
@@ -235,12 +258,7 @@ mod tests {
         }
 
         fn stratify(&self) -> Strata<Function> {
-            let call_graph = CallGraph::new(self.calls.keys(), |f, calls| {
-                calls.extend_from_slice(&self.calls[f]);
-                Ok(())
-            })
-            .unwrap();
-            Strata::<Function>::new(self.calls.keys(), &call_graph)
+            Strata::new(self)
         }
 
         fn assert_stratification(&self, mut expected: Vec<Vec<u32>>) {

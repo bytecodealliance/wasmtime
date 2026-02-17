@@ -12,20 +12,23 @@
 //! [Tarjan's algorithm]: https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 
 use super::*;
-use std::{
-    collections::BTreeSet,
+use crate::{
+    EntityRef, EntitySet, PrimaryMap, SecondaryMap, non_max::NonMaxU32,
+    packed_option::PackedOption, prelude::*,
+};
+use alloc::collections::BTreeSet;
+use core::{
+    cmp,
     fmt::{self, Debug},
     hash::Hash,
+    iter,
     ops::Range,
-};
-use wasmtime_environ::{
-    EntityRef, EntitySet, PrimaryMap, SecondaryMap, packed_option::PackedOption,
 };
 
 /// A strongly-connected component.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Scc(u32);
-wasmtime_environ::entity_impl!(Scc);
+crate::entity_impl!(Scc);
 
 /// The set of strongly-connected components for a graph of `Node`s.
 pub struct StronglyConnectedComponents<Node>
@@ -64,16 +67,14 @@ where
 
 impl<Node> StronglyConnectedComponents<Node>
 where
-    Node: EntityRef + std::fmt::Debug,
+    Node: EntityRef + Debug,
 {
     /// Find the strongly-connected for the given graph.
-    pub fn new<I, F, S>(nodes: I, successors: F) -> Self
+    pub fn new<G>(graph: G) -> Self
     where
-        I: IntoIterator<Item = Node>,
-        F: Fn(Node) -> S,
-        S: Iterator<Item = Node>,
+        G: Graph<Node>,
     {
-        let nodes = nodes.into_iter();
+        let nodes = graph.nodes();
 
         // The resulting components and their nodes.
         let mut component_nodes = vec![];
@@ -97,7 +98,7 @@ where
 
         let mut dfs = Dfs::new(nodes);
         while let Some(event) = dfs.next(
-            &successors,
+            &graph,
             // We have seen the node before if we have assigned it a DFS index.
             |node| indices[node].is_some(),
         ) {
@@ -134,10 +135,8 @@ where
                     // part of the same SCC as this node, so propagate its
                     // lowlink to this node's lowlink.
                     if on_stack.contains(succ) {
-                        lowlinks[node] = Some(std::cmp::min(
-                            lowlinks[node].unwrap(),
-                            lowlinks[succ].unwrap(),
-                        ));
+                        lowlinks[node] =
+                            Some(cmp::min(lowlinks[node].unwrap(), lowlinks[succ].unwrap()));
                     }
                 }
 
@@ -153,7 +152,7 @@ where
                         let mut done = false;
                         components.push(extend_with_range(
                             &mut component_nodes,
-                            std::iter::from_fn(|| {
+                            iter::from_fn(|| {
                                 if done {
                                     return None;
                                 }
@@ -236,7 +235,7 @@ where
     /// In the following diagram, the solid lines are the input graph and the
     /// dotted lines show its condensation:
     ///
-    /// ```ignore
+    /// ```text
     /// ...............
     /// :             :
     /// :    ,-----.  :
@@ -302,10 +301,9 @@ where
     /// question "given that I've finished processing calls in `scc({e,f,...})`
     /// for inlining, which other SCCs are now potentially ready for
     /// processing?".
-    pub fn evaporation<F, S>(&self, successors: F) -> Evaporation
+    pub fn evaporation<G>(&self, graph: G) -> Evaporation
     where
-        F: Fn(Node) -> S,
-        S: Iterator<Item = Node>,
+        G: Graph<Node>,
     {
         log::trace!("Creating the evaporation of {self:#?}");
 
@@ -328,7 +326,7 @@ where
         let mut reverse_edge_set = BTreeSet::<(Scc, Scc)>::new();
         for (from_component, nodes) in self.iter() {
             for node in nodes {
-                for succ in successors(*node) {
+                for succ in graph.successors(*node) {
                     let to_component = node_to_component[succ].unwrap();
                     if to_component == from_component {
                         continue;
@@ -408,120 +406,13 @@ impl Evaporation {
     }
 }
 
-/// An iterative depth-first traversal.
-struct Dfs<Node> {
-    stack: Vec<DfsEvent<Node>>,
-}
-
-impl<Node> Dfs<Node> {
-    fn new(roots: impl IntoIterator<Item = Node>) -> Self {
-        Self {
-            stack: roots.into_iter().map(|v| DfsEvent::Pre(v)).collect(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DfsEvent<Node> {
-    /// The first time seeing this node.
-    Pre(Node),
-
-    /// After having just visited the given edge.
-    AfterEdge(Node, Node),
-
-    /// Finished visiting this node and all of its successors.
-    Post(Node),
-}
-
-impl<Node> Dfs<Node>
-where
-    Node: Copy + std::fmt::Debug,
-{
-    /// Pump the traversal, yielding the next `DfsEvent`.
-    fn next<S>(
-        &mut self,
-        successors: impl Fn(Node) -> S,
-        seen: impl Fn(Node) -> bool,
-    ) -> Option<DfsEvent<Node>>
-    where
-        S: Iterator<Item = Node>,
-    {
-        loop {
-            let event = self.stack.pop()?;
-
-            if let DfsEvent::Pre(node) = event {
-                if seen(node) {
-                    continue;
-                }
-
-                let successors = successors(node);
-
-                let (min, max) = successors.size_hint();
-                let estimated_successors_len = max.unwrap_or_else(|| 2 * min);
-                self.stack.reserve(
-                    // We push an after-edge and pre event for each successor.
-                    2 * estimated_successors_len
-                        // And we push one post event for this node.
-                        + 1,
-                );
-
-                self.stack.push(DfsEvent::Post(node));
-                for succ in successors {
-                    self.stack.push(DfsEvent::AfterEdge(node, succ));
-                    if !seen(succ) {
-                        self.stack.push(DfsEvent::Pre(succ));
-                    }
-                }
-            }
-
-            return Some(event);
-        }
-    }
-}
-
-mod non_max {
-    use std::num::NonZeroU32;
-
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct NonMaxU32(NonZeroU32);
-
-    impl Default for NonMaxU32 {
-        fn default() -> Self {
-            Self::new(0).unwrap()
-        }
-    }
-
-    impl core::fmt::Debug for NonMaxU32 {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            f.debug_tuple("NonMaxU32").field(&self.get()).finish()
-        }
-    }
-
-    impl NonMaxU32 {
-        pub fn new(x: u32) -> Option<Self> {
-            if x == u32::MAX {
-                None
-            } else {
-                // Safety: We know that `x+1` is non-zero because it will not
-                // overflow because `x` is not `u32::MAX`.
-                Some(Self(unsafe { NonZeroU32::new_unchecked(x + 1) }))
-            }
-        }
-
-        pub fn get(&self) -> u32 {
-            self.0.get() - 1
-        }
-    }
-}
-use non_max::*;
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Node(u32);
-    wasmtime_environ::entity_impl!(Node);
+    crate::entity_impl!(Node);
 
     #[derive(Debug)]
     struct Graph {
@@ -543,14 +434,30 @@ mod tests {
             self.edges[Node::from_u32(node)].extend(edges.into_iter().map(|v| Node::from_u32(v)));
             self
         }
+    }
 
-        fn edges(&self, node: Node) -> impl Iterator<Item = Node> {
+    impl super::Graph<Node> for Graph {
+        type NodesIter<'a>
+            = cranelift_entity::Keys<Node>
+        where
+            Self: 'a;
+
+        fn nodes(&self) -> Self::NodesIter<'_> {
+            self.edges.keys()
+        }
+
+        type SuccessorsIter<'a>
+            = core::iter::Copied<core::slice::Iter<'a, Node>>
+        where
+            Self: 'a;
+
+        fn successors(&self, node: Node) -> Self::SuccessorsIter<'_> {
             self.edges[node].iter().copied()
         }
     }
 
     fn components(graph: &Graph) -> Vec<Vec<u32>> {
-        let components = StronglyConnectedComponents::new(graph.edges.keys(), |v| graph.edges(v));
+        let components = StronglyConnectedComponents::new(graph);
         components
             .values()
             .map(|vs| vs.iter().map(|v| v.as_u32()).collect::<Vec<_>>())
