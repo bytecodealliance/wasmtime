@@ -433,7 +433,12 @@ impl Profile {
 }
 
 #[derive(Default, Clone)]
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
+#[cfg(all(
+    any(feature = "wasi-http", feature = "wasi-tls"),
+    feature = "component-model-async"
+))]
 pub struct DefaultP3Ctx;
 #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
 impl wasmtime_wasi_http::p3::WasiHttpCtx for DefaultP3Ctx {}
+#[cfg(all(feature = "wasi-tls", feature = "component-model-async"))]
+impl wasmtime_wasi_tls::p3::WasiTlsCtx for DefaultP3Ctx {}
