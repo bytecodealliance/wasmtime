@@ -107,15 +107,56 @@ async fn test_tcp_connect_explicit_bind(family: IpAddressFamily) {
     };
 
     let listener_address = listener.get_local_address().unwrap();
-    let client = TcpSocket::create(family).unwrap();
-
-    // Manually bind the client:
-    client.bind(IpSocketAddress::new(ip, 0)).unwrap();
 
     // Connect should work:
     join!(
         async {
+            let client = TcpSocket::create(family).unwrap();
+            client
+                .bind(IpSocketAddress::new(IpAddress::new_unspecified(family), 0))
+                .unwrap();
+            println!("local address: {:?}", client.get_local_address().unwrap());
             client.connect(listener_address).await.unwrap();
+            println!("local address: {:?}", client.get_local_address().unwrap());
+        },
+        async {
+            accept.next().await.unwrap();
+        }
+    );
+}
+
+/// Connecting a TCP socket should update the local address to reflect the best
+/// network path.
+async fn test_tcp_connect_local_address_change(family: IpAddressFamily) {
+    let ip_unspec = IpAddress::new_unspecified(family);
+    let ip_loopback = IpAddress::new_loopback(family);
+
+    let (listener, mut accept) = {
+        let bind_address = IpSocketAddress::new(ip_loopback, 0);
+        let listener = TcpSocket::create(family).unwrap();
+        listener.bind(bind_address).unwrap();
+        let accept = listener.listen().unwrap();
+        (listener, accept)
+    };
+
+    join!(
+        async {
+            let listener_address = listener.get_local_address().unwrap();
+            let client = TcpSocket::create(family).unwrap();
+            client.bind(IpSocketAddress::new(ip_unspec, 0)).unwrap();
+
+            let before = client.get_local_address().unwrap();
+            client.connect(listener_address).await.unwrap();
+            let after = client.get_local_address().unwrap();
+
+            println!("local address changed from {before:?} to {after:?}");
+
+            // Note: these assertions are based on observed behavior on Linux,
+            // MacOS and Windows, but there is nothing in their official
+            // documentation to corroborate this.
+            assert_eq!(before.ip(), ip_unspec);
+            assert_eq!(after.ip(), ip_loopback);
+            assert_eq!(before.port(), after.port());
         },
         async {
             accept.next().await.unwrap();
@@ -129,6 +170,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         test_tcp_connect_port_0(IpAddressFamily::Ipv4).await;
         test_tcp_connect_wrong_family(IpAddressFamily::Ipv4).await;
         test_tcp_connect_explicit_bind(IpAddressFamily::Ipv4).await;
+        test_tcp_connect_local_address_change(IpAddressFamily::Ipv4).await;
 
         if supports_ipv6() {
             test_tcp_connect_unspec(IpAddressFamily::Ipv6).await;
@@ -137,6 +179,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             test_tcp_connect_non_unicast().await;
             test_tcp_connect_dual_stack().await;
             test_tcp_connect_explicit_bind(IpAddressFamily::Ipv6).await;
+            test_tcp_connect_local_address_change(IpAddressFamily::Ipv6).await;
         }
         Ok(())
     }
