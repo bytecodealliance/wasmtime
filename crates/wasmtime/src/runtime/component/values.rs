@@ -919,7 +919,7 @@ fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize
         .checked_mul(element_size)
         .and_then(|len| ptr.checked_add(len))
     {
-        Some(n) if n <= cx.memory().len() => {}
+        Some(n) if n <= cx.memory().len() => cx.consume_fuel(n - ptr)?,
         _ => bail!("list pointer/length out of bounds of memory"),
     }
     if ptr % usize::try_from(element_alignment)? != 0 {

@@ -6,13 +6,14 @@ use crate::{
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
 use bytes::Bytes;
+use http::header::{HeaderMap, HeaderName, HeaderValue};
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use hyper::header::HeaderName;
 use std::any::Any;
+use std::fmt;
 use std::time::Duration;
-use wasmtime::bail;
 use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::{Result, bail};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
@@ -24,16 +25,39 @@ use {
     tokio::time::timeout,
 };
 
+/// Default maximum size for the contents of a fields resource.
+///
+/// Typically, HTTP proxies limit headers to 8k. This number is higher than that
+/// because it not only includes the wire-size of headers but it additionally
+/// includes factors for the in-memory representation of `HeaderMap`. This is in
+/// theory high enough that no one runs into it but low enough such that a
+/// completely full `HeaderMap` doesn't break the bank in terms of memory
+/// consumption.
+const DEFAULT_FIELD_SIZE_LIMIT: usize = 128 * 1024;
+
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug)]
 pub struct WasiHttpCtx {
-    _priv: (),
+    pub(crate) field_size_limit: usize,
 }
 
 impl WasiHttpCtx {
     /// Create a new context.
     pub fn new() -> Self {
-        Self { _priv: () }
+        Self {
+            field_size_limit: DEFAULT_FIELD_SIZE_LIMIT,
+        }
+    }
+
+    /// Set the maximum size for any fields resources created by this context.
+    ///
+    /// The limit specified here is roughly a byte limit for the size of the
+    /// in-memory representation of headers. This means that the limit needs to
+    /// be larger than the literal representation of headers on the wire to
+    /// account for in-memory Rust-side data structures representing the header
+    /// names/values/etc.
+    pub fn set_field_size_limit(&mut self, limit: usize) {
+        self.field_size_limit = limit;
     }
 }
 
@@ -96,14 +120,17 @@ pub trait WasiHttpView {
         B::Error: Into<ErrorCode>,
         Self: Sized,
     {
+        let field_size_limit = self.ctx().field_size_limit;
         let (parts, body) = req.into_parts();
         let body = body.map_err(Into::into).boxed_unsync();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
             std::time::Duration::from_millis(600 * 1000),
+            field_size_limit,
         );
-        let incoming_req = HostIncomingRequest::new(self, parts, scheme, Some(body))?;
+        let incoming_req =
+            HostIncomingRequest::new(self, parts, scheme, Some(body), field_size_limit)?;
         Ok(self.table().push(incoming_req)?)
     }
 
@@ -306,12 +333,9 @@ pub const DEFAULT_FORBIDDEN_HEADERS: [http::header::HeaderName; 9] = [
     HeaderName::from_static("http2-settings"),
 ];
 
-/// Removes forbidden headers from a [`hyper::HeaderMap`].
-pub(crate) fn remove_forbidden_headers(
-    view: &mut dyn WasiHttpView,
-    headers: &mut hyper::HeaderMap,
-) {
-    let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
+/// Removes forbidden headers from a [`FieldMap`].
+pub(crate) fn remove_forbidden_headers(view: &mut dyn WasiHttpView, headers: &mut FieldMap) {
+    let forbidden_keys = Vec::from_iter(headers.as_ref().keys().filter_map(|name| {
         if view.is_forbidden_header(name) {
             Some(name.clone())
         } else {
@@ -320,7 +344,7 @@ pub(crate) fn remove_forbidden_headers(
     }));
 
     for name in forbidden_keys {
-        headers.remove(name);
+        headers.remove_all(&name);
     }
 }
 
@@ -534,7 +558,9 @@ impl TryInto<http::Method> for types::Method {
 /// The concrete type behind a `wasi:http/types.incoming-request` resource.
 #[derive(Debug)]
 pub struct HostIncomingRequest {
-    pub(crate) parts: http::request::Parts,
+    pub(crate) method: http::method::Method,
+    pub(crate) uri: http::uri::Uri,
+    pub(crate) headers: FieldMap,
     pub(crate) scheme: Scheme,
     pub(crate) authority: String,
     /// The body of the incoming request.
@@ -545,9 +571,10 @@ impl HostIncomingRequest {
     /// Create a new `HostIncomingRequest`.
     pub fn new(
         view: &mut dyn WasiHttpView,
-        mut parts: http::request::Parts,
+        parts: http::request::Parts,
         scheme: Scheme,
         body: Option<HostIncomingBody>,
+        field_size_limit: usize,
     ) -> wasmtime::Result<Self> {
         let authority = match parts.uri.authority() {
             Some(authority) => authority.to_string(),
@@ -557,9 +584,13 @@ impl HostIncomingRequest {
             },
         };
 
-        remove_forbidden_headers(view, &mut parts.headers);
+        let mut headers = FieldMap::new(parts.headers, field_size_limit);
+        remove_forbidden_headers(view, &mut headers);
+
         Ok(Self {
-            parts,
+            method: parts.method,
+            uri: parts.uri,
+            headers,
             authority,
             scheme,
             body,
@@ -594,7 +625,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
 
         let mut builder = hyper::Response::builder().status(resp.status);
 
-        *builder.headers_mut().unwrap() = resp.headers;
+        *builder.headers_mut().unwrap() = resp.headers.map;
 
         match resp.body {
             Some(body) => builder.body(body),
@@ -668,8 +699,130 @@ pub enum HostFields {
     },
 }
 
-/// An owned version of `HostFields`
-pub type FieldMap = hyper::HeaderMap;
+/// An owned version of `HostFields`. A wrapper on http `HeaderMap` that
+/// keeps a running tally of memory consumed by header names and values.
+#[derive(Debug, Clone)]
+pub struct FieldMap {
+    map: HeaderMap,
+    limit: usize,
+    size: usize,
+}
+
+/// Error given when a `FieldMap` has exceeded the size limit.
+#[derive(Debug)]
+pub struct FieldSizeLimitError {
+    /// The erroring `FieldMap` operation would require this content size
+    pub(crate) size: usize,
+    /// The limit set on `FieldMap` content size
+    pub(crate) limit: usize,
+}
+impl fmt::Display for FieldSizeLimitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Field size limit {} exceeded: {}", self.limit, self.size)
+    }
+}
+impl std::error::Error for FieldSizeLimitError {}
+
+impl FieldMap {
+    /// Construct a `FieldMap` from a `HeaderMap` and a size limit.
+    ///
+    /// Construction with a `HeaderMap` which exceeds the size limit is
+    /// allowed, but subsequent operations to expand the resource use will
+    /// fail.
+    pub fn new(map: HeaderMap, limit: usize) -> Self {
+        let size = Self::content_size(&map);
+        Self { map, size, limit }
+    }
+    /// Construct an empty `FieldMap`
+    pub fn empty(limit: usize) -> Self {
+        Self {
+            map: HeaderMap::new(),
+            size: 0,
+            limit,
+        }
+    }
+    /// Get the `HeaderMap` out of the `FieldMap`
+    pub fn into_inner(self) -> HeaderMap {
+        self.map
+    }
+    /// Calculate the content size of a `HeaderMap`. This is a sum of the size
+    /// of all of the keys and all of the values.
+    pub(crate) fn content_size(map: &HeaderMap) -> usize {
+        let mut sum = 0;
+        for key in map.keys() {
+            sum += header_name_size(key);
+        }
+        for value in map.values() {
+            sum += header_value_size(value);
+        }
+        sum
+    }
+    /// Remove all values associated with a key in a map.
+    ///
+    /// Returns an empty list if the key is not already present within the map.
+    pub fn remove_all(&mut self, key: &HeaderName) -> Vec<HeaderValue> {
+        use http::header::Entry;
+        match self.map.try_entry(key) {
+            Ok(Entry::Vacant { .. }) | Err(_) => Vec::new(),
+            Ok(Entry::Occupied(e)) => {
+                let (name, value_drain) = e.remove_entry_mult();
+                let mut removed = header_name_size(&name);
+                let values = value_drain.collect::<Vec<_>>();
+                for v in values.iter() {
+                    removed += header_value_size(v);
+                }
+                self.size -= removed;
+                values
+            }
+        }
+    }
+    /// Add a value associated with a key to the map.
+    ///
+    /// If `key` is already present within the map then `value` is appended to
+    /// the list of values it already has.
+    pub fn append(&mut self, key: &HeaderName, value: HeaderValue) -> Result<bool> {
+        let key_size = header_name_size(key);
+        let val_size = header_value_size(&value);
+        let new_size = if !self.map.contains_key(key) {
+            self.size + key_size + val_size
+        } else {
+            self.size + val_size
+        };
+        if new_size > self.limit {
+            bail!(FieldSizeLimitError {
+                limit: self.limit,
+                size: new_size
+            })
+        }
+        self.size = new_size;
+        Ok(self.map.try_append(key, value)?)
+    }
+}
+
+/// Returns the size, in accounting cost, to consider for `name`.
+///
+/// This includes both the byte length of the `name` itself as well as the size
+/// of the data structure itself as it'll reside within a `HeaderMap`.
+fn header_name_size(name: &HeaderName) -> usize {
+    name.as_str().len() + size_of::<HeaderName>()
+}
+
+/// Same as `header_name_size`, but for values.
+///
+/// This notably includes the size of `HeaderValue` itself to ensure that all
+/// headers have a nonzero size as otherwise this would never limit addition of
+/// an empty header value.
+fn header_value_size(value: &HeaderValue) -> usize {
+    value.len() + size_of::<HeaderValue>()
+}
+
+// We impl AsRef, but not AsMut, because any modifications of the
+// underlying HeaderMap must account for changes in size
+impl AsRef<HeaderMap> for FieldMap {
+    fn as_ref(&self) -> &HeaderMap {
+        &self.map
+    }
+}
 
 /// A handle to a future incoming response.
 pub type FutureIncomingResponseHandle =
