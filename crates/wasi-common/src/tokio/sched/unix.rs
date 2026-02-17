@@ -5,8 +5,8 @@ use crate::{
         subscription::{RwEventFlags, Subscription},
     },
 };
-use std::future::Future;
-use std::pin::Pin;
+use std::future::{self, Future};
+use std::pin::{Pin, pin};
 use std::task::{Context, Poll as FPoll};
 
 struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + Send + 'a>>>);
@@ -83,13 +83,20 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             Subscription::MonotonicClock { .. } => unreachable!(),
         }
     }
-    if let Some(Some(remaining_duration)) = duration {
-        match tokio::time::timeout(remaining_duration, futures).await {
+    match duration {
+        Some(Some(remaining)) => match tokio::time::timeout(remaining, futures).await {
             Ok(r) => r?,
             Err(_deadline_elapsed) => {}
+        },
+        Some(None) => {
+            let mut futures = pin!(futures);
+            future::poll_fn(|cx| match futures.as_mut().poll(cx) {
+                FPoll::Ready(e) => FPoll::Ready(e),
+                FPoll::Pending => FPoll::Ready(Ok(())),
+            })
+            .await?
         }
-    } else {
-        futures.await?;
+        None => futures.await?,
     }
 
     Ok(())

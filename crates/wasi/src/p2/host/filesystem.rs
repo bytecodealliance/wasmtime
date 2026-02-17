@@ -115,7 +115,12 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
 
         let (mut buffer, r) = f
             .run_blocking(move |f| {
-                let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
+                let mut buffer = vec![
+                    0;
+                    len.try_into()
+                        .unwrap_or(usize::MAX)
+                        .min(crate::MAX_READ_SIZE_ALLOC)
+                ];
                 let r = f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset);
                 (buffer, r)
             })

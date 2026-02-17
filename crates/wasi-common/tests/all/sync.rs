@@ -281,9 +281,7 @@ fn p1_file_write() {
 fn p1_path_open_lots() {
     run(P1_PATH_OPEN_LOTS, true).unwrap()
 }
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p1_cli_much_stdout() {}
+#[test_log::test]
+fn p1_sleep_quickly_but_lots() {
+    run(P1_SLEEP_QUICKLY_BUT_LOTS, true).unwrap()
+}
