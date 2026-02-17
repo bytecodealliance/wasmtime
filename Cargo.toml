@@ -520,6 +520,7 @@ component-model-async = [
   "component-model",
   "wasmtime-wasi?/p3",
   "wasmtime-wasi-http?/p3",
+  "wasmtime-wasi-tls?/p3",
   "dep:futures",
 ]
 rr = ["wasmtime/rr", "component-model", "wasmtime-cli-flags/rr", "run"]

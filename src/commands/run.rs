@@ -1092,6 +1092,10 @@ impl RunCommand {
                                 ctx.ctx().table,
                             )
                         })?;
+                        #[cfg(feature = "component-model-async")]
+                        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                            wasmtime_wasi_tls::p3::add_to_linker(linker)?;
+                        }
 
                         let ctx = wasmtime_wasi_tls::WasiTlsCtxBuilder::new().build();
                         store.data_mut().wasi_tls = Some(Arc::new(ctx));
@@ -1225,8 +1229,11 @@ pub struct Host {
     wasi_http_outgoing_body_buffer_chunks: Option<usize>,
     #[cfg(feature = "wasi-http")]
     wasi_http_outgoing_body_chunk_size: Option<usize>,
-    #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-    p3_http: crate::common::DefaultP3Ctx,
+    #[cfg(all(
+        any(feature = "wasi-http", feature = "wasi-tls"),
+        feature = "component-model-async"
+    ))]
+    p3_ctx: crate::common::DefaultP3Ctx,
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
@@ -1286,7 +1293,17 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
     fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
         wasmtime_wasi_http::p3::WasiHttpCtxView {
             table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
-            ctx: &mut self.p3_http,
+            ctx: &mut self.p3_ctx,
+        }
+    }
+}
+
+#[cfg(all(feature = "wasi-tls", feature = "component-model-async"))]
+impl wasmtime_wasi_tls::p3::WasiTlsView for Host {
+    fn tls(&mut self) -> wasmtime_wasi_tls::p3::WasiTlsCtxView<'_> {
+        wasmtime_wasi_tls::p3::WasiTlsCtxView {
+            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            ctx: &mut self.p3_ctx,
         }
     }
 }
