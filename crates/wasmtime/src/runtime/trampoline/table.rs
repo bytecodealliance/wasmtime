@@ -21,7 +21,7 @@ pub async fn create_table(
         wasmtime_table.ref_type
     );
 
-    let table_id = module.tables.push(wasmtime_table);
+    let table_id = module.tables.push(wasmtime_table)?;
 
     // TODO: can this `exports.insert` get removed?
     let name = module.strings.insert("")?;

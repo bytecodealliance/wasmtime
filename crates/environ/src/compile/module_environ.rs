@@ -281,7 +281,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 log::trace!("interning {count} Wasm types");
 
                 let capacity = usize::try_from(count).unwrap();
-                self.result.module.types.reserve(capacity);
+                self.result.module.types.reserve(capacity)?;
                 self.types.reserve_wasm_signatures(capacity);
 
                 // Iterate over each *rec group* -- not type -- defined in the
@@ -318,9 +318,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let interned = self.types.intern_rec_group(validator_types, rec_group_id)?;
                     let elems = self.types.rec_group_elements(interned);
                     let len = elems.len();
-                    self.result.module.types.reserve(len);
+                    self.result.module.types.reserve(len)?;
                     for ty in elems {
-                        self.result.module.types.push(ty.into());
+                        self.result.module.types.push(ty.into())?;
                     }
 
                     // Advance `type_index` to the start of the next rec group.
@@ -381,7 +381,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.function_section(&functions)?;
 
                 let cnt = usize::try_from(functions.count()).unwrap();
-                self.result.module.functions.reserve_exact(cnt);
+                self.result.module.functions.reserve_exact(cnt)?;
 
                 for entry in functions {
                     let sigindex = entry?;
@@ -394,13 +394,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TableSection(tables) => {
                 self.validator.table_section(&tables)?;
                 let cnt = usize::try_from(tables.count()).unwrap();
-                self.result.module.tables.reserve_exact(cnt);
+                self.result.module.tables.reserve_exact(cnt)?;
 
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
                     let table = self.convert_table_type(&ty)?;
                     self.result.module.needs_gc_heap |= table.ref_type.is_vmgcref_type();
-                    self.result.module.tables.push(table);
+                    self.result.module.tables.push(table)?;
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {
                             precomputed: collections::Vec::new(),
@@ -417,7 +417,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         .module
                         .table_initialization
                         .initial_values
-                        .push(init);
+                        .push(init)?;
                 }
             }
 
@@ -425,11 +425,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.memory_section(&memories)?;
 
                 let cnt = usize::try_from(memories.count()).unwrap();
-                self.result.module.memories.reserve_exact(cnt);
+                self.result.module.memories.reserve_exact(cnt)?;
 
                 for entry in memories {
                     let memory = entry?;
-                    self.result.module.memories.push(memory.into());
+                    self.result.module.memories.push(memory.into())?;
                 }
             }
 
@@ -451,7 +451,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.global_section(&globals)?;
 
                 let cnt = usize::try_from(globals.count()).unwrap();
-                self.result.module.globals.reserve_exact(cnt);
+                self.result.module.globals.reserve_exact(cnt)?;
 
                 for entry in globals {
                     let wasmparser::Global { ty, init_expr } = entry?;
@@ -460,8 +460,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         self.flag_func_escaped(f);
                     }
                     let ty = self.convert_global_type(&ty)?;
-                    self.result.module.globals.push(ty);
-                    self.result.module.global_initializers.push(initializer);
+                    self.result.module.globals.push(ty)?;
+                    self.result.module.global_initializers.push(initializer)?;
                 }
             }
 
@@ -835,10 +835,18 @@ and for re-adding support for interface types you can see this issue:
                 self.flag_func_escaped(func_index);
                 func_index
             }),
-            EntityType::Table(ty) => EntityIndex::Table(self.result.module.tables.push(ty)),
-            EntityType::Memory(ty) => EntityIndex::Memory(self.result.module.memories.push(ty)),
-            EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
-            EntityType::Tag(ty) => EntityIndex::Tag(self.result.module.tags.push(ty)),
+            EntityType::Table(ty) => {
+                EntityIndex::Table(self.result.module.tables.push(ty).panic_on_oom())
+            }
+            EntityType::Memory(ty) => {
+                EntityIndex::Memory(self.result.module.memories.push(ty).panic_on_oom())
+            }
+            EntityType::Global(ty) => {
+                EntityIndex::Global(self.result.module.globals.push(ty).panic_on_oom())
+            }
+            EntityType::Tag(ty) => {
+                EntityIndex::Tag(self.result.module.tags.push(ty).panic_on_oom())
+            }
         }
     }
 
@@ -1099,7 +1107,7 @@ impl ModuleTranslation<'_> {
         // memory initialization image is built here from the page data and then
         // it's converted to a single initializer.
         let data = mem::replace(&mut self.data, Vec::new());
-        let mut map = PrimaryMap::with_capacity(info.len());
+        let mut map = collections::PrimaryMap::with_capacity(info.len()).panic_on_oom();
         let mut module_data_size = 0u32;
         for (memory, info) in info.iter() {
             // Create the in-memory `image` which is the initialized contents of
@@ -1183,7 +1191,7 @@ impl ModuleTranslation<'_> {
             } else {
                 None
             };
-            let idx = map.push(init);
+            let idx = map.push(init).panic_on_oom();
             assert_eq!(idx, memory);
             module_data_size += len;
         }

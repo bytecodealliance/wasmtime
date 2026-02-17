@@ -82,7 +82,7 @@ pub enum MemoryInitialization {
         ///
         /// The offset, range base, and range end are all guaranteed to be page
         /// aligned to the page size passed in to `try_static_init`.
-        map: PrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
+        map: collections::PrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
     },
 }
 
@@ -226,7 +226,7 @@ pub struct TableInitialization {
     /// initialization. For example table initializers to a table that are all
     /// in-bounds will get removed from `segment` and moved into
     /// `initial_values` here.
-    pub initial_values: PrimaryMap<DefinedTableIndex, TableInitialValue>,
+    pub initial_values: collections::PrimaryMap<DefinedTableIndex, TableInitialValue>,
 
     /// Element segments present in the initial wasm module which are executed
     /// at instantiation time.
@@ -325,7 +325,7 @@ pub struct Module {
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
-    pub types: PrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
+    pub types: collections::PrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
 
     /// Number of imported or aliased functions in the module.
     pub num_imported_funcs: usize,
@@ -353,22 +353,22 @@ pub struct Module {
     pub num_escaped_funcs: usize,
 
     /// Types of functions, imported and local.
-    pub functions: PrimaryMap<FuncIndex, FunctionType>,
+    pub functions: collections::PrimaryMap<FuncIndex, FunctionType>,
 
     /// WebAssembly tables.
-    pub tables: PrimaryMap<TableIndex, Table>,
+    pub tables: collections::PrimaryMap<TableIndex, Table>,
 
     /// WebAssembly linear memory plans.
-    pub memories: PrimaryMap<MemoryIndex, Memory>,
+    pub memories: collections::PrimaryMap<MemoryIndex, Memory>,
 
     /// WebAssembly global variables.
-    pub globals: PrimaryMap<GlobalIndex, Global>,
+    pub globals: collections::PrimaryMap<GlobalIndex, Global>,
 
     /// WebAssembly global initializers for locally-defined globals.
-    pub global_initializers: PrimaryMap<DefinedGlobalIndex, ConstExpr>,
+    pub global_initializers: collections::PrimaryMap<DefinedGlobalIndex, ConstExpr>,
 
     /// WebAssembly exception and control tags.
-    pub tags: PrimaryMap<TagIndex, Tag>,
+    pub tags: collections::PrimaryMap<TagIndex, Tag>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -605,10 +605,12 @@ impl Module {
     ) -> TagIndex {
         let signature = signature.into();
         let exception = exception.into();
-        self.tags.push(Tag {
-            signature,
-            exception,
-        })
+        self.tags
+            .push(Tag {
+                signature,
+                exception,
+            })
+            .panic_on_oom()
     }
 
     /// Appends a new function to this module with the given type information,
@@ -616,10 +618,12 @@ impl Module {
     /// they escape yet.
     pub fn push_function(&mut self, signature: impl Into<EngineOrModuleTypeIndex>) -> FuncIndex {
         let signature = signature.into();
-        self.functions.push(FunctionType {
-            signature,
-            func_ref: FuncRefIndex::reserved_value(),
-        })
+        self.functions
+            .push(FunctionType {
+                signature,
+                func_ref: FuncRefIndex::reserved_value(),
+            })
+            .panic_on_oom()
     }
 
     /// Returns an iterator over all of the defined function indices in this
