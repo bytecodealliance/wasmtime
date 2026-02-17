@@ -2870,6 +2870,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "r-efi"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
 name = "rand"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3087,12 +3093,12 @@ dependencies = [
 [[package]]
 name = "region"
 version = "3.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b6ebd13bc009aef9cd476c1310d49ac354d36e240cf1bd753290f3dc7199a7"
+source = "git+https://github.com/RossComputerGuy/region-rs?branch=fix%2Fuefi#8f86bd4cd9951e61c20b9c2ed1048fd3f5e5955f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
  "mach2",
+ "r-efi",
  "windows-sys 0.52.0",
 ]
 
