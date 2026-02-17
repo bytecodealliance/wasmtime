@@ -280,7 +280,7 @@ mod set;
 mod sparse;
 
 pub use self::boxed_slice::BoxedSlice;
-pub use self::iter::{Iter, IterMut, IntoIter};
+pub use self::iter::{IntoIter, Iter, IterMut};
 pub use self::keys::Keys;
 pub use self::list::{EntityList, ListPool};
 pub use self::map::SecondaryMap;
