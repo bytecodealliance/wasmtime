@@ -1,6 +1,7 @@
 #![cfg(feature = "p3")]
 
 use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::error::Context as _;
 use wasmtime::{Result, Store, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
@@ -43,7 +44,6 @@ async fn run_test(path: &str) -> Result<()> {
     };
 
     let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
         config.wasm_component_model_async(true);
     });
     let mut store = Store::new(&engine, ctx);
@@ -59,12 +59,15 @@ async fn run_test(path: &str) -> Result<()> {
     let command = Command::instantiate_async(&mut store, &component, &linker)
         .await
         .context("failed to instantiate `wasi:cli/command`")?;
-    store
+    let (res, task) = store
         .run_concurrent(async move |store| command.wasi_cli_run().call_run(store).await)
         .await
         .context("failed to call `wasi:cli/run#run`")?
-        .context("guest trapped")?
-        .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
+        .context("guest trapped")?;
+    res.map_err(|()| format_err!("`wasi:cli/run#run` failed"))?;
+    store
+        .run_concurrent(async move |store| task.block(store).await)
+        .await
 }
 
 macro_rules! assert_test_exists {
@@ -76,7 +79,7 @@ macro_rules! assert_test_exists {
 
 test_programs_artifacts::foreach_p3_tls!(assert_test_exists);
 
-#[tokio::test(flavor = "multi_thread")]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_tls_sample_application() -> Result<()> {
     run_test(test_programs_artifacts::P3_TLS_SAMPLE_APPLICATION_COMPONENT).await
 }

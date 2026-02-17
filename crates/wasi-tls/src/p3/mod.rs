@@ -11,11 +11,12 @@
 pub mod bindings;
 mod host;
 
+use crate::p3::host::{
+    CiphertextConsumer, CiphertextProducer, PlaintextConsumer, PlaintextProducer,
+};
+use bindings::tls::{client, types};
 use core::task::Waker;
 use std::sync::{Arc, Mutex};
-
-use bindings::tls::{client, server, types};
-use rustls::pki_types::ServerName;
 use tokio::sync::oneshot;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
@@ -65,7 +66,6 @@ pub trait WasiTlsView: Send {
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///
@@ -103,61 +103,33 @@ where
     T: WasiTlsView + 'static,
 {
     client::add_to_linker::<_, WasiTls>(linker, T::tls)?;
-    server::add_to_linker::<_, WasiTls>(linker, T::tls)?;
     types::add_to_linker::<_, WasiTls>(linker, T::tls)?;
     Ok(())
 }
 
-/// Client hello
-#[derive(Clone, Default, Eq, PartialEq, Hash)]
-pub struct ClientHello {
-    /// Server name indicator.
-    pub server_name: Option<ServerName<'static>>,
-    /// ALPN IDs
-    pub alpn_ids: Option<Vec<Vec<u8>>>,
-    /// Cipher suites
-    pub cipher_suites: Vec<u16>,
-}
-
-/// Server hello
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct ServerHello {
-    /// Cipher suite
-    pub cipher_suite: u16,
-}
-
-impl ServerHello {
-    /// Constructs a new server hello message
-    pub fn new(cipher_suite: u16) -> Self {
-        Self { cipher_suite }
-    }
+/// TLS client connector state.
+#[derive(Default)]
+pub struct Connector {
+    pub(crate) receive_tx: Option<(
+        oneshot::Sender<PlaintextProducer<rustls::ClientConnection>>,
+        oneshot::Sender<CiphertextConsumer<rustls::ClientConnection>>,
+        oneshot::Sender<rustls::Error>,
+    )>,
+    pub(crate) send_tx: Option<(
+        oneshot::Sender<CiphertextProducer<rustls::ClientConnection>>,
+        oneshot::Sender<
+            PlaintextConsumer<rustls::ClientConnection, rustls::client::ClientConnectionData>,
+        >,
+        oneshot::Sender<rustls::Error>,
+    )>,
 }
 
 type TlsStreamArc<T> = Arc<Mutex<TlsStream<T>>>;
-type TlsStreamClientArc = TlsStreamArc<rustls::ClientConnection>;
-type TlsStreamServerArc = TlsStreamArc<rustls::ServerConnection>;
-
-/// Client handshake
-pub struct ClientHandshake {
-    stream: TlsStreamClientArc,
-    error_rx: oneshot::Receiver<rustls::Error>,
-}
-
-/// Server handshake
-pub struct ServerHandshake {
-    accepted: rustls::server::Accepted,
-    consumer_tx: oneshot::Sender<TlsStreamServerArc>,
-    producer_tx: oneshot::Sender<TlsStreamServerArc>,
-}
-
-/// Certificate
-pub struct Certificate;
 
 struct TlsStream<T> {
     conn: T,
-    error_tx: Option<oneshot::Sender<rustls::Error>>,
-    close_notify: bool,
-    read_tls: Option<Waker>,
+    plaintext_consumer_dropped: bool,
+    ciphertext_consumer_dropped: bool,
     ciphertext_consumer: Option<Waker>,
     ciphertext_producer: Option<Waker>,
     plaintext_consumer: Option<Waker>,
@@ -165,12 +137,11 @@ struct TlsStream<T> {
 }
 
 impl<T> TlsStream<T> {
-    fn new(conn: T, error_tx: oneshot::Sender<rustls::Error>) -> Self {
+    fn new(conn: T) -> Self {
         Self {
             conn,
-            error_tx: Some(error_tx),
-            close_notify: false,
-            read_tls: None,
+            plaintext_consumer_dropped: false,
+            ciphertext_consumer_dropped: false,
             plaintext_producer: None,
             plaintext_consumer: None,
             ciphertext_producer: None,
