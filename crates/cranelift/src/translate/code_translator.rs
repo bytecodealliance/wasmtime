@@ -1161,33 +1161,28 @@ pub fn translate_operator(
         }
         Operator::I32Extend8S => {
             let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().ireduce(I8, val));
-            let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().sextend(I32, val));
+            let reduced = builder.ins().ireduce(I8, val);
+            environ.stacks.push1(builder.ins().sextend(I32, reduced));
         }
         Operator::I32Extend16S => {
             let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().ireduce(I16, val));
-            let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().sextend(I32, val));
+            let reduced = builder.ins().ireduce(I16, val);
+            environ.stacks.push1(builder.ins().sextend(I32, reduced));
         }
         Operator::I64Extend8S => {
             let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().ireduce(I8, val));
-            let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().sextend(I64, val));
+            let reduced = builder.ins().ireduce(I8, val);
+            environ.stacks.push1(builder.ins().sextend(I64, reduced));
         }
         Operator::I64Extend16S => {
             let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().ireduce(I16, val));
-            let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().sextend(I64, val));
+            let reduced = builder.ins().ireduce(I16, val);
+            environ.stacks.push1(builder.ins().sextend(I64, reduced));
         }
         Operator::I64Extend32S => {
             let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().ireduce(I32, val));
-            let val = environ.stacks.pop1();
-            environ.stacks.push1(builder.ins().sextend(I64, val));
+            let reduced = builder.ins().ireduce(I32, val);
+            environ.stacks.push1(builder.ins().sextend(I64, reduced));
         }
         /****************************** Binary Operators ************************************/
         Operator::I32Add | Operator::I64Add => {
