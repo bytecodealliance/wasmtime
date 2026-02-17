@@ -111,7 +111,9 @@ fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
 
 fn parse_dirs(s: &str) -> Result<(String, String)> {
     let mut parts = s.split("::");
-    let host = parts.next().unwrap();
+    let host = parts
+        .next()
+        .ok_or_else(|| format_err!("invalid --dir argument"))?;
     let guest = match parts.next() {
         Some(guest) => guest,
         None => host,
