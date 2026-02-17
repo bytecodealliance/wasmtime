@@ -1,10 +1,10 @@
+use crate::{collections::TryExtend, error::OutOfMemory};
 use core::{
     fmt,
     ops::{Index, IndexMut},
 };
 use cranelift_entity::EntityRef;
 use serde::{Serialize, ser::SerializeSeq};
-use wasmtime_core::error::OutOfMemory;
 
 /// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
 /// all methods that allocate.
@@ -214,6 +214,25 @@ where
     /// Same as [`cranelift_entity::PrimaryMap::get_raw_mut`].
     pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
         self.inner.get_raw_mut(k)
+    }
+}
+
+impl<K, V> TryExtend<V> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn try_extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
+    where
+        I: IntoIterator<Item = V>,
+    {
+        let iter = iter.into_iter();
+        let (min, max) = iter.size_hint();
+        let cap = max.unwrap_or(min);
+        self.reserve(cap)?;
+        for v in iter {
+            self.push(v)?;
+        }
+        Ok(())
     }
 }
 
