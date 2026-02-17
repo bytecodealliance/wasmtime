@@ -142,6 +142,7 @@ pub struct WasiP1Ctx {
     table: ResourceTable,
     wasi: WasiCtx,
     adapter: WasiPreview1Adapter,
+    hostcall_fuel: usize,
 }
 
 impl WasiP1Ctx {
@@ -150,6 +151,7 @@ impl WasiP1Ctx {
             table: ResourceTable::new(),
             wasi,
             adapter: WasiPreview1Adapter::new(),
+            hostcall_fuel: 0,
         }
     }
 
@@ -159,6 +161,78 @@ impl WasiP1Ctx {
 
     fn as_io_impl(&mut self) -> &mut ResourceTable {
         &mut self.table
+    }
+
+    fn consume_fuel(&mut self, fuel: usize) -> Result<()> {
+        if fuel > self.hostcall_fuel {
+            return Err(types::Errno::Nomem.into());
+        }
+        self.hostcall_fuel -= fuel;
+        Ok(())
+    }
+
+    /// Assumes the host is going to copy all of `array` in which case a
+    /// corresponding amount of fuel is consumed to ensure it's not too large.
+    fn consume_fuel_for_array<T>(&mut self, array: wiggle::GuestPtr<[T]>) -> Result<()> {
+        let byte_size = usize::try_from(array.len())?
+            .checked_mul(size_of::<T>())
+            .ok_or(types::Errno::Overflow)?;
+        self.consume_fuel(byte_size)
+    }
+
+    /// Returns the first non-empty buffer in `ciovs` or a single empty buffer
+    /// if they're all empty.
+    ///
+    /// Additionally consumes a corresponding amount of fuel appropriate to the
+    /// size of `ciovs` and the first non-empty array.
+    fn first_non_empty_ciovec(
+        &mut self,
+        memory: &GuestMemory<'_>,
+        ciovs: types::CiovecArray,
+    ) -> Result<GuestPtr<[u8]>> {
+        self.consume_fuel_for_array(ciovs)?;
+        for iov in ciovs.iter() {
+            let iov = memory.read(iov?)?;
+            if iov.buf_len == 0 {
+                continue;
+            }
+            let ret = iov.buf.as_array(iov.buf_len);
+            self.consume_fuel_for_array(ret)?;
+            return Ok(ret);
+        }
+        Ok(GuestPtr::new((0, 0)))
+    }
+
+    /// Returns the first non-empty buffer in `iovs` or a single empty buffer if
+    /// they're all empty.
+    ///
+    /// Additionally consumes a corresponding amount of fuel appropriate to the
+    /// size of `ciovs` and the first non-empty array.
+    fn first_non_empty_iovec(
+        &mut self,
+        memory: &GuestMemory<'_>,
+        iovs: types::IovecArray,
+    ) -> Result<GuestPtr<[u8]>> {
+        self.consume_fuel_for_array(iovs)?;
+        for iov in iovs.iter() {
+            let iov = memory.read(iov?)?;
+            if iov.buf_len == 0 {
+                continue;
+            }
+            let ret = iov.buf.as_array(iov.buf_len);
+            self.consume_fuel_for_array(ret)?;
+            return Ok(ret);
+        }
+        Ok(GuestPtr::new((0, 0)))
+    }
+
+    /// Copies the guest string `ptr` into the host.
+    ///
+    /// Consumes a corresponding amount of fuel for the byte size of `ptr` and
+    /// fails if it's too large.
+    fn read_string(&mut self, memory: &GuestMemory<'_>, ptr: GuestPtr<str>) -> Result<String> {
+        self.consume_fuel(usize::try_from(ptr.len())?)?;
+        Ok(memory.as_cow_str(ptr)?.into_owned())
     }
 }
 
@@ -556,6 +630,7 @@ impl WasiP1Ctx {
         ciovs: types::CiovecArray,
         write: FdWrite,
     ) -> Result<types::Size, types::Error> {
+        let buf = self.first_non_empty_ciovec(memory, ciovs)?;
         let t = self.transact()?;
         let desc = t.get_descriptor(fd)?;
         match desc {
@@ -577,7 +652,6 @@ impl WasiP1Ctx {
                 let append = *append;
                 drop(t);
                 let f = self.table.get(&fd)?.file()?;
-                let buf = first_non_empty_ciovec(memory, ciovs)?;
 
                 let do_write = move |f: &cap_std::fs::File, buf: &[u8]| match (append, write) {
                     // Note that this is implementing Linux semantics of
@@ -628,7 +702,6 @@ impl WasiP1Ctx {
                 }
                 let stream = stream.borrowed();
                 drop(t);
-                let buf = first_non_empty_ciovec(memory, ciovs)?;
                 let n = BlockingMode::Blocking
                     .write(memory, &mut self.as_io_impl(), stream, buf)
                     .await?
@@ -1084,47 +1157,15 @@ fn write_byte(memory: &mut GuestMemory<'_>, ptr: GuestPtr<u8>, byte: u8) -> Resu
     Ok(next)
 }
 
-fn read_string<'a>(memory: &'a GuestMemory<'_>, ptr: GuestPtr<str>) -> Result<String> {
-    Ok(memory.as_cow_str(ptr)?.into_owned())
-}
-
-// Returns the first non-empty buffer in `ciovs` or a single empty buffer if
-// they're all empty.
-fn first_non_empty_ciovec(
-    memory: &GuestMemory<'_>,
-    ciovs: types::CiovecArray,
-) -> Result<GuestPtr<[u8]>> {
-    for iov in ciovs.iter() {
-        let iov = memory.read(iov?)?;
-        if iov.buf_len == 0 {
-            continue;
-        }
-        return Ok(iov.buf.as_array(iov.buf_len));
-    }
-    Ok(GuestPtr::new((0, 0)))
-}
-
-// Returns the first non-empty buffer in `iovs` or a single empty buffer if
-// they're all empty.
-fn first_non_empty_iovec(
-    memory: &GuestMemory<'_>,
-    iovs: types::IovecArray,
-) -> Result<GuestPtr<[u8]>> {
-    for iov in iovs.iter() {
-        let iov = memory.read(iov?)?;
-        if iov.buf_len == 0 {
-            continue;
-        }
-        return Ok(iov.buf.as_array(iov.buf_len));
-    }
-    Ok(GuestPtr::new((0, 0)))
-}
-
 #[async_trait::async_trait]
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
 impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
+    fn set_hostcall_fuel(&mut self, fuel: usize) {
+        self.hostcall_fuel = fuel;
+    }
+
     #[instrument(skip(self, memory))]
     fn args_get(
         &mut self,
@@ -1608,6 +1649,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
         iovs: types::IovecArray,
     ) -> Result<types::Size, types::Error> {
+        let iov = self.first_non_empty_iovec(memory, iovs)?;
         let t = self.transact()?;
         let desc = t.get_descriptor(fd)?;
         match desc {
@@ -1624,7 +1666,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let pos = position.load(Ordering::Relaxed);
                 let file = self.table.get(&fd)?.file()?;
-                let iov = first_non_empty_iovec(memory, iovs)?;
                 let bytes_read = match (file.as_blocking_file(), memory.as_slice_mut(iov)?) {
                     // Try to read directly into wasm memory where possible
                     // when the current thread can block and additionally wasm
@@ -1663,15 +1704,14 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             Descriptor::Stdin { stream, .. } => {
                 let stream = stream.borrowed();
                 drop(t);
-                let buf = first_non_empty_iovec(memory, iovs)?;
                 let read = BlockingMode::Blocking
-                    .read(&mut self.as_io_impl(), stream, buf.len().try_into()?)
+                    .read(&mut self.as_io_impl(), stream, iov.len().try_into()?)
                     .await?;
-                if read.len() > buf.len().try_into()? {
+                if read.len() > iov.len().try_into()? {
                     return Err(types::Errno::Range.into());
                 }
-                let buf = buf.get_range(0..u32::try_from(read.len())?).unwrap();
-                memory.copy_from_slice(&read, buf)?;
+                let iov = iov.get_range(0..u32::try_from(read.len())?).unwrap();
+                memory.copy_from_slice(&read, iov)?;
                 let n = read.len().try_into()?;
                 Ok(n)
             }
@@ -1689,6 +1729,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         iovs: types::IovecArray,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
+        let buf = self.first_non_empty_iovec(memory, iovs)?;
         let t = self.transact()?;
         let desc = t.get_descriptor(fd)?;
         let (buf, read) = match desc {
@@ -1698,7 +1739,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
-                let buf = first_non_empty_iovec(memory, iovs)?;
 
                 let stream = self.as_wasi_impl().read_via_stream(fd, offset)?;
                 let read = blocking_mode
@@ -1987,7 +2027,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         path: GuestPtr<str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
         self.as_wasi_impl()
             .create_directory_at(dirfd.borrowed(), path)
             .await?;
@@ -2005,7 +2045,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         path: GuestPtr<str>,
     ) -> Result<types::Filestat, types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
         let filesystem::DescriptorStat {
             type_,
             link_count: nlink,
@@ -2066,7 +2106,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         )?;
 
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
         self.as_wasi_impl()
             .set_times_at(dirfd, flags.into(), path, atim, mtim)
             .await?;
@@ -2087,8 +2127,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let src_fd = self.get_dir_fd(src_fd)?;
         let target_fd = self.get_dir_fd(target_fd)?;
-        let src_path = read_string(memory, src_path)?;
-        let target_path = read_string(memory, target_path)?;
+        let src_path = self.read_string(memory, src_path)?;
+        let target_path = self.read_string(memory, target_path)?;
         self.as_wasi_impl()
             .link_at(src_fd, src_flags.into(), src_path, target_fd, target_path)
             .await?;
@@ -2109,7 +2149,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _fs_rights_inheriting: types::Rights,
         fdflags: types::Fdflags,
     ) -> Result<types::Fd, types::Error> {
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
 
         let mut flags = filesystem::DescriptorFlags::empty();
         if fs_rights_base.contains(types::Rights::FD_READ) {
@@ -2168,7 +2208,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         buf_len: types::Size,
     ) -> Result<types::Size, types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
         let mut path = self
             .as_wasi_impl()
             .readlink_at(dirfd, path)
@@ -2191,7 +2231,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         path: GuestPtr<str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = read_string(memory, path)?;
+        let path = self.read_string(memory, path)?;
         self.as_wasi_impl().remove_directory_at(dirfd, path).await?;
         Ok(())
     }
@@ -2209,8 +2249,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let src_fd = self.get_dir_fd(src_fd)?;
         let dest_fd = self.get_dir_fd(dest_fd)?;
-        let src_path = read_string(memory, src_path)?;
-        let dest_path = read_string(memory, dest_path)?;
+        let src_path = self.read_string(memory, src_path)?;
+        let dest_path = self.read_string(memory, dest_path)?;
         self.as_wasi_impl()
             .rename_at(src_fd, src_path, dest_fd, dest_path)
             .await?;
@@ -2226,8 +2266,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         dest_path: GuestPtr<str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let src_path = read_string(memory, src_path)?;
-        let dest_path = read_string(memory, dest_path)?;
+        let src_path = self.read_string(memory, src_path)?;
+        let dest_path = self.read_string(memory, dest_path)?;
         self.as_wasi_impl()
             .symlink_at(dirfd.borrowed(), src_path, dest_path)
             .await?;
@@ -2295,9 +2335,18 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
 
         let subs = subs.as_array(nsubscriptions);
         let events = events.as_array(nsubscriptions);
-
         let n = usize::try_from(nsubscriptions).unwrap_or(usize::MAX);
-        let mut pollables = Vec::with_capacity(n);
+
+        self.consume_fuel_for_array(subs)?;
+        self.consume_fuel_for_array(events)?;
+
+        let mut temp = TempResources {
+            ctx: self,
+            pollables: Vec::with_capacity(n),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+        };
+        let mut borrowed_pollables = Vec::with_capacity(n);
         for sub in subs.iter() {
             let sub = memory.read(sub?)?;
             let p = match sub.u {
@@ -2312,7 +2361,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         types::Clockid::Monotonic => (timeout, absolute),
                         types::Clockid::Realtime if !absolute => (timeout, false),
                         types::Clockid::Realtime => {
-                            let now = wall_clock::Host::now(&mut self.as_wasi_impl())
+                            let now = wall_clock::Host::now(&mut temp.ctx.as_wasi_impl())
                                 .context("failed to call `wall_clock::now`")
                                 .map_err(types::Error::trap)?;
 
@@ -2335,20 +2384,26 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         _ => return Err(types::Errno::Inval.into()),
                     };
                     if absolute {
-                        monotonic_clock::Host::subscribe_instant(&mut self.as_wasi_impl(), timeout)
-                            .context("failed to call `monotonic_clock::subscribe_instant`")
-                            .map_err(types::Error::trap)?
+                        monotonic_clock::Host::subscribe_instant(
+                            &mut temp.ctx.as_wasi_impl(),
+                            timeout,
+                        )
+                        .context("failed to call `monotonic_clock::subscribe_instant`")
+                        .map_err(types::Error::trap)?
                     } else {
-                        monotonic_clock::Host::subscribe_duration(&mut self.as_wasi_impl(), timeout)
-                            .context("failed to call `monotonic_clock::subscribe_duration`")
-                            .map_err(types::Error::trap)?
+                        monotonic_clock::Host::subscribe_duration(
+                            &mut temp.ctx.as_wasi_impl(),
+                            timeout,
+                        )
+                        .context("failed to call `monotonic_clock::subscribe_duration`")
+                        .map_err(types::Error::trap)?
                     }
                 }
                 types::SubscriptionU::FdRead(types::SubscriptionFdReadwrite {
                     file_descriptor,
                 }) => {
                     let stream = {
-                        let t = self.transact()?;
+                        let t = temp.ctx.transact()?;
                         let desc = t.get_descriptor(file_descriptor)?;
                         match desc {
                             Descriptor::Stdin { stream, .. } => stream.borrowed(),
@@ -2356,13 +2411,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let pos = position.load(Ordering::Relaxed);
                                 let fd = fd.borrowed();
                                 drop(t);
-                                self.as_wasi_impl().read_via_stream(fd, pos)?
+                                let r = temp.ctx.as_wasi_impl().read_via_stream(fd, pos)?;
+                                let ret = r.borrowed();
+                                temp.inputs.push(r);
+                                ret
                             }
                             // TODO: Support sockets
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostInputStream::subscribe(&mut self.as_io_impl(), stream)
+                    streams::HostInputStream::subscribe(&mut temp.ctx.as_io_impl(), stream)
                         .context("failed to call `subscribe` on `input-stream`")
                         .map_err(types::Error::trap)?
                 }
@@ -2370,7 +2428,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     file_descriptor,
                 }) => {
                     let stream = {
-                        let t = self.transact()?;
+                        let t = temp.ctx.transact()?;
                         let desc = t.get_descriptor(file_descriptor)?;
                         match desc {
                             Descriptor::Stdout { stream, .. }
@@ -2385,32 +2443,38 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let position = position.clone();
                                 let append = *append;
                                 drop(t);
-                                if append {
-                                    self.as_wasi_impl().append_via_stream(fd)?
+                                let r = if append {
+                                    temp.ctx.as_wasi_impl().append_via_stream(fd)?
                                 } else {
                                     let pos = position.load(Ordering::Relaxed);
-                                    self.as_wasi_impl().write_via_stream(fd, pos)?
-                                }
+                                    temp.ctx.as_wasi_impl().write_via_stream(fd, pos)?
+                                };
+                                let ret = r.borrowed();
+                                temp.outputs.push(r);
+                                ret
                             }
                             // TODO: Support sockets
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostOutputStream::subscribe(&mut self.as_io_impl(), stream)
+                    streams::HostOutputStream::subscribe(&mut temp.ctx.as_io_impl(), stream)
                         .context("failed to call `subscribe` on `output-stream`")
                         .map_err(types::Error::trap)?
                 }
             };
-            pollables.push(p);
+            borrowed_pollables.push(p.borrowed());
+            temp.pollables.push(p);
         }
-        let ready: HashSet<_> = self
+        let ready: HashSet<_> = temp
+            .ctx
             .as_io_impl()
-            .poll(pollables)
+            .poll(borrowed_pollables)
             .await
             .context("failed to call `poll-oneoff`")
             .map_err(types::Error::trap)?
             .into_iter()
             .collect();
+        drop(temp);
 
         let mut count: types::Size = 0;
         for (sub, event) in (0..)
@@ -2507,7 +2571,31 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 .checked_add(1)
                 .ok_or_else(|| types::Error::from(types::Errno::Overflow))?
         }
-        Ok(count)
+        return Ok(count);
+
+        struct TempResources<'a> {
+            ctx: &'a mut WasiP1Ctx,
+            pollables: Vec<Resource<crate::p2::bindings::io::streams::Pollable>>,
+            inputs: Vec<Resource<crate::p2::bindings::io::streams::InputStream>>,
+            outputs: Vec<Resource<crate::p2::bindings::io::streams::OutputStream>>,
+        }
+
+        impl Drop for TempResources<'_> {
+            fn drop(&mut self) {
+                for p in self.pollables.drain(..) {
+                    use wasmtime_wasi_io::bindings::wasi::io::poll::HostPollable;
+                    self.ctx.table.drop(p).unwrap();
+                }
+                for p in self.inputs.drain(..) {
+                    assert!(p.owned());
+                    self.ctx.table.delete(p).unwrap();
+                }
+                for p in self.outputs.drain(..) {
+                    assert!(p.owned());
+                    self.ctx.table.delete(p).unwrap();
+                }
+            }
+        }
     }
 
     #[instrument(skip(self, _memory))]

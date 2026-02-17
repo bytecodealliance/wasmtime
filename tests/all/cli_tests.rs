@@ -172,9 +172,12 @@ fn assert_trap_code(status: &ExitStatus) {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
     for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let stdout = run_wasmtime(&["-Ccache=n", preview2, wasm.path().to_str().unwrap()])?;
+        let stdout = run_wasmtime(&[
+            "-Ccache=n",
+            preview2,
+            "tests/all/cli_tests/hello_wasi_snapshot0.wat",
+        ])?;
         assert_eq!(stdout, "Hello, world!\n");
     }
     Ok(())
@@ -183,8 +186,7 @@ fn hello_wasi_snapshot0() -> Result<()> {
 // Run a simple WASI hello world, snapshot1 edition.
 #[test]
 fn hello_wasi_snapshot1() -> Result<()> {
-    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
-    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/hello_wasi_snapshot1.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -1104,7 +1106,7 @@ fn increase_stack_size() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::{Context, Result, bail};
+    use anyhow::{Context, Result, bail, format_err};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
     use std::io::{BufRead, BufReader, Read, Write};
@@ -2123,24 +2125,249 @@ start a print 1234
         cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
-    mod invoke {
-        use super::*;
+    #[test]
+    fn cli_hello_stdout_component() -> Result<()> {
+        println!("{CLI_HELLO_STDOUT_COMPONENT}");
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "--invoke",
+            "run()",
+            CLI_HELLO_STDOUT_COMPONENT,
+        ])?;
+        // First this component prints "hello, world", then the invoke
+        // result is printed as "ok".
+        assert_eq!(output, "hello, world\nok\n");
+        Ok(())
+    }
 
-        #[test]
-        fn cli_hello_stdout() -> Result<()> {
-            println!("{CLI_HELLO_STDOUT_COMPONENT}");
-            let output = run_wasmtime(&[
-                "run",
-                "-Wcomponent-model",
-                "--invoke",
-                "run()",
-                CLI_HELLO_STDOUT_COMPONENT,
-            ])?;
-            // First this component prints "hello, world", then the invoke
-            // result is printed as "ok".
-            assert_eq!(output, "hello, world\nok\n");
-            Ok(())
+    #[test]
+    fn preview2_random_limits() -> Result<()> {
+        println!("{PREVIEW2_RANDOM_COMPONENT}");
+
+        // By default, p2_random.rs fits within the random limits - always
+        // asks for 256 bytes.
+        let output = run_wasmtime(&["run", PREVIEW2_RANDOM_COMPONENT])?;
+        assert_eq!(output, "");
+
+        // Lowering limit to 255 bytes should produce a trap in the first
+        // call, which goes by way of the wasip1 adapter:
+        let output = run_wasmtime(&["run", "-Smax-random-size=255", PREVIEW2_RANDOM_COMPONENT])
+            .err()
+            .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
+        let output = format!("{output:?}");
+        assert!(
+            output.contains("wasi::lib_generated::random_get"),
+            "expected error stack frames to contain 'wasip1::lib_generated::random_get'. Got:\n{output}"
+        );
+        assert!(
+            output.contains("requested len 256 exceeds limit 255"),
+            "expected error stack frames to contain 'requested len 256 exceeds limit 255'. Got:\n{output}"
+        );
+
+        // Lowering limit to 255 bytes and setting environment variable for
+        // the first call to only request 255 bytes should be OK, and then the
+        // program produce a trap in the second call, which calls the wasip2
+        // random import directly:
+        let output = run_wasmtime(&[
+            "run",
+            "-Smax-random-size=255",
+            "--env",
+            "TEST_P1_RANDOM_LEN=255",
+            PREVIEW2_RANDOM_COMPONENT,
+        ])
+        .err()
+        .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
+        let output = format!("{output:?}");
+        assert!(
+            output.contains("wasi::random::random::get_random_bytes"),
+            "expected error stack frames to contain 'wasi::random::random::get_random_bytes'. Got:\n{output}"
+        );
+        assert!(
+            output.contains("requested len 256 exceeds limit 255"),
+            "expected error stack frames to contain 'requested len 256 exceeds limit 255'. Got:\n{output}"
+        );
+
+        // Lowering limit to 255 bytes and setting environment variable for
+        // the first and second calls to be at the limit should produce a trap
+        // in the third call, which calls the wasip2 insecure random import:
+        let output = run_wasmtime(&[
+            "run",
+            "-Smax-random-size=255",
+            "--env",
+            "TEST_P1_RANDOM_LEN=255",
+            "--env",
+            "TEST_P2_RANDOM_LEN=255",
+            PREVIEW2_RANDOM_COMPONENT,
+        ])
+        .err()
+        .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
+        let output = format!("{output:?}");
+        assert!(
+            output.contains("wasi::random::insecure::get_insecure_random_bytes"),
+            "expected error stack frames to contain 'wasi::random::insecure::get_insecure_random_bytes'. Got:\n{output}"
+        );
+        assert!(
+            output.contains("requested len 256 exceeds limit 255"),
+            "expected error stack frames to contain 'requested len 256 exceeds limit 255'. Got:\n{output}"
+        );
+
+        // Lowering limit to 255 bytes and setting environment variable for
+        // the first and second calls to be under the limit should trap in the
+        // third call, which calls the wasip2 insecure random import:
+        let output = run_wasmtime(&[
+            "run",
+            "-Smax-random-size=255",
+            "--env",
+            "TEST_P1_RANDOM_LEN=255",
+            "--env",
+            "TEST_P2_RANDOM_LEN=255",
+            "--env",
+            "TEST_P2_INSECURE_RANDOM_LEN=255",
+            PREVIEW2_RANDOM_COMPONENT,
+        ])
+        .context("setting all calls to be equal to the limit should pass")?;
+        assert_eq!(output, "");
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_many_resources() -> Result<()> {
+        let err = run_wasmtime(&["run", CLI_MANY_RESOURCES_COMPONENT]).unwrap_err();
+        assert!(
+            err.to_string().contains("resource table has no free keys"),
+            "bad error message: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_max_resources() -> Result<()> {
+        let err =
+            run_wasmtime(&["run", "-Smax-resources=50", CLI_MAX_RESOURCES_COMPONENT]).unwrap_err();
+        assert!(
+            err.to_string().contains("resource table has no free keys"),
+            "bad error message: {err}"
+        );
+        run_wasmtime(&["run", "-Smax-resources=200", CLI_MAX_RESOURCES_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_p1_hostcall_fuel() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        run_wasmtime(&[
+            "run",
+            &format!("--dir={}::.", dir.path().to_str().unwrap()),
+            "-Shostcall-fuel=1000",
+            CLI_P1_HOSTCALL_FUEL,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_p2_hostcall_fuel() -> Result<()> {
+        enum Exit {
+            Ok,
+            NoFuel,
+            TooManyZeroes,
+            BufferTooLarge,
         }
+
+        let dir = tempfile::tempdir()?;
+        let file = dir.path().join("1mb");
+        std::fs::write(&file, vec![0; 1024 * 1024])?;
+        for (arg, exit) in [
+            ("poll", Exit::NoFuel),
+            ("read", Exit::Ok),
+            ("write", Exit::NoFuel),
+            ("mkdir", Exit::NoFuel),
+            ("write-stream", Exit::NoFuel),
+            ("write-stream-blocking", Exit::NoFuel),
+            ("resolve", Exit::NoFuel),
+            ("udp-send-many", Exit::NoFuel),
+            ("udp-send-big", Exit::NoFuel),
+            ("write-zeroes", Exit::TooManyZeroes),
+            ("write-stream-buffer-too-large", Exit::BufferTooLarge),
+            ("write-zeroes-buffer-too-large", Exit::BufferTooLarge),
+            ("read-file-big", Exit::Ok),
+            ("read-tcp-big", Exit::Ok),
+        ] {
+            println!("test: {arg}");
+            let result = run_wasmtime(&[
+                "run",
+                "-Shostcall-fuel=5000",
+                "-Sinherit-network",
+                &format!("--dir={}::.", dir.path().to_str().unwrap()),
+                CLI_P2_HOSTCALL_FUEL_COMPONENT,
+                arg,
+            ]);
+
+            match exit {
+                Exit::Ok => {
+                    result.unwrap();
+                }
+                Exit::NoFuel => {
+                    let err = result.unwrap_err();
+                    assert!(
+                        err.to_string()
+                            .contains("fuel allocated for hostcalls has been exhausted"),
+                        "bad error message: {err}"
+                    );
+                }
+                Exit::TooManyZeroes => {
+                    let err = result.unwrap_err();
+                    assert!(
+                        err.to_string()
+                            .contains("cannot write more zeroes than `check_write` allows"),
+                        "bad error message: {err}"
+                    );
+                }
+                Exit::BufferTooLarge => {
+                    let err = result.unwrap_err();
+                    assert!(
+                        err.to_string().contains("Buffer too large"),
+                        "bad error message: {err}"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_http_headers() -> Result<()> {
+        for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+            let err = run_wasmtime(&[
+                "run",
+                "-Shttp",
+                "-Smax-http-fields-size=1048576",
+                CLI_HTTP_HEADERS_COMPONENT,
+                test,
+            ])
+            .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("Field size limit 1048576 exceeded"),
+                "bad error message: {err:?}"
+            );
+        }
+
+        // With an extremely large limit Wasmtime still shouldn't panic.
+        let err = run_wasmtime(&[
+            "run",
+            "-Shttp",
+            &format!("-Smax-http-fields-size={}", 1 << 30),
+            CLI_HTTP_HEADERS_COMPONENT,
+            "append",
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("max size reached"),
+            "bad error message: {err:?}"
+        );
+        Ok(())
     }
 }
 
