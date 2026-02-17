@@ -255,3 +255,36 @@ where
         &mut self.inner[k]
     }
 }
+
+impl<K, V> IntoIterator for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, V);
+    type IntoIter = cranelift_entity::IntoIter<K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a V);
+    type IntoIter = cranelift_entity::Iter<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a mut V);
+    type IntoIter = cranelift_entity::IterMut<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
