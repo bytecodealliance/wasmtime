@@ -24,11 +24,12 @@ async fn run_allow_blocking_current_thread(
         .context("failed to link `wasi:cli@0.2.x`")?;
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
 
-    let (mut store, _td) = Ctx::new(&engine, name, |builder| MyWasiCtx {
-        wasi: builder
-            .allow_blocking_current_thread(allow_blocking_current_thread)
-            .build(),
-        table: Default::default(),
+    let (mut store, _td) = Ctx::new(&engine, name, |builder| {
+        MyWasiCtx::new(
+            builder
+                .allow_blocking_current_thread(allow_blocking_current_thread)
+                .build(),
+        )
     })?;
     let component = Component::from_file(&engine, path)?;
     let command = Command::instantiate_async(&mut store, &component, &linker)
@@ -163,33 +164,3 @@ async fn p3_file_write() -> wasmtime::Result<()> {
 async fn p3_file_write_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_hello_stdout() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_hello_stdout_post_return() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_much_stdout() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_serve_hello_world() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_serve_sleep() {}

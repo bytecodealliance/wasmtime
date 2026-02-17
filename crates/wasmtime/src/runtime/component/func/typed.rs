@@ -1651,7 +1651,7 @@ impl WasmStr {
             }
         };
         match byte_len.and_then(|len| ptr.checked_add(len)) {
-            Some(n) if n <= cx.memory().len() => {}
+            Some(n) if n <= cx.memory().len() => cx.consume_fuel(n - ptr)?,
             _ => bail!("string pointer/length out of bounds of memory"),
         }
         Ok(WasmStr {
@@ -1909,7 +1909,7 @@ impl<T: Lift> WasmList<T> {
             .checked_mul(T::SIZE32)
             .and_then(|len| ptr.checked_add(len))
         {
-            Some(n) if n <= cx.memory().len() => {}
+            Some(n) if n <= cx.memory().len() => cx.consume_fuel(n - ptr)?,
             _ => bail!("list pointer/length out of bounds of memory"),
         }
         if ptr % usize::try_from(T::ALIGN32)? != 0 {

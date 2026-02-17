@@ -21,10 +21,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
                 builder.inherit_stdio();
             }
             builder.allow_blocking_current_thread(blocking);
-            MyWasiCtx {
-                wasi: builder.build(),
-                table: Default::default(),
-            }
+            MyWasiCtx::new(builder.build())
         })?;
         let command = Command::instantiate(&mut store, &component, &linker)?;
         command
@@ -250,6 +247,10 @@ fn p1_file_write() {
 fn p1_path_open_lots() {
     run(P1_PATH_OPEN_LOTS_COMPONENT, false).unwrap()
 }
+#[test_log::test]
+fn p1_sleep_quickly_but_lots() {
+    run(P1_SLEEP_QUICKLY_BUT_LOTS_COMPONENT, false).unwrap()
+}
 
 #[test_log::test]
 fn p2_sleep() {
@@ -351,8 +352,3 @@ fn p2_udp_send_too_much() {
         "unpermitted: argument exceeds permitted size"
     )
 }
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p1_cli_much_stdout() {}

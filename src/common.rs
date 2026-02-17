@@ -325,8 +325,20 @@ impl RunCommon {
         if let Some(enable) = self.common.wasi.udp {
             builder.allow_udp(enable);
         }
+        if let Some(max_size) = self.common.wasi.max_random_size {
+            builder.max_random_size(max_size);
+        }
 
         Ok(())
+    }
+
+    #[cfg(feature = "wasi-http")]
+    pub fn wasi_http_ctx(&self) -> Result<wasmtime_wasi_http::WasiHttpCtx> {
+        let mut http = wasmtime_wasi_http::WasiHttpCtx::new();
+        if let Some(limit) = self.common.wasi.max_http_fields_size {
+            http.set_field_size_limit(limit);
+        }
+        Ok(http)
     }
 
     pub fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {

@@ -3,6 +3,7 @@ use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime::Result;
 use wasmtime::{Linker, Module};
+use wasmtime_wasi::WasiView;
 use wasmtime_wasi::p1::{WasiP1Ctx, add_to_linker_async};
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
@@ -19,6 +20,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         }
         builder.build_p1()
     })?;
+    store.data_mut().wasi.ctx().table.set_max_capacity(1000);
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     start.call_async(&mut store, ()).await?;
@@ -241,9 +243,7 @@ async fn p1_file_write() {
 async fn p1_path_open_lots() {
     run(P1_PATH_OPEN_LOTS, true).await.unwrap()
 }
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p1_cli_much_stdout() {}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p1_sleep_quickly_but_lots() {
+    run(P1_SLEEP_QUICKLY_BUT_LOTS, true).await.unwrap()
+}

@@ -1057,8 +1057,8 @@ impl RunCommand {
                         }
                     }
                 }
-
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+                let http = self.run.wasi_http_ctx()?;
+                store.data_mut().wasi_http = Some(Arc::new(http));
             }
         }
 
@@ -1153,7 +1153,13 @@ impl RunCommand {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
         self.run.configure_wasip2(&mut builder)?;
-        let ctx = builder.build_p1();
+        let mut ctx = builder.build_p1();
+        if let Some(max) = self.run.common.wasi.max_resources {
+            ctx.ctx().table.set_max_capacity(max);
+        }
+        if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
+            store.set_hostcall_fuel(fuel);
+        }
         store.data_mut().wasip1_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }

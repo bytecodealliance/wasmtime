@@ -497,6 +497,18 @@ wasmtime_option_group! {
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
         /// Enable support for WASIp3 APIs.
         pub p3: Option<bool>,
+        /// Maximum resources the guest is allowed to create simultaneously.
+        pub max_resources: Option<usize>,
+        /// Fuel to use for all hostcalls to limit guest<->host data transfer.
+        pub hostcall_fuel: Option<usize>,
+        /// Maximum value, in bytes, for a wasi-random 0.2
+        /// `get{,-insecure}-random-bytes` `len` parameter. Calls with a value
+        /// exceeding this limit will trap.
+        pub max_random_size: Option<u64>,
+        /// Maximum value, in bytes, for the contents of a wasi-http 0.2
+        /// `fields` resource (aka `headers` and `trailers`). `fields` methods
+        /// which cause the contents to exceed this size limit will trap.
+        pub max_http_fields_size: Option<usize>,
     }
 
     enum Wasi {

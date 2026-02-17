@@ -232,10 +232,14 @@ impl ServeCommand {
         builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
         builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
 
+        let mut table = wasmtime::component::ResourceTable::new();
+        if let Some(max) = self.run.common.wasi.max_resources {
+            table.set_max_capacity(max);
+        }
         let mut host = Host {
-            table: wasmtime::component::ResourceTable::new(),
+            table,
             ctx: builder.build(),
-            http: WasiHttpCtx::new(),
+            http: self.run.wasi_http_ctx()?,
             http_outgoing_body_buffer_chunks: self.run.common.wasi.http_outgoing_body_buffer_chunks,
             http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
 
@@ -302,6 +306,10 @@ impl ServeCommand {
         }
 
         let mut store = Store::new(engine, host);
+
+        if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
+            store.set_hostcall_fuel(fuel);
+        }
 
         store.data_mut().limits = self.run.store_limits();
         store.limiter(|t| &mut t.limits);

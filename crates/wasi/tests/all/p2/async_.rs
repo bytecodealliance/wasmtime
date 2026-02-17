@@ -17,10 +17,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         }
-        MyWasiCtx {
-            wasi: builder.build(),
-            table: Default::default(),
-        }
+        MyWasiCtx::new(builder.build())
     })?;
     let component = Component::from_file(&engine, path)?;
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -260,6 +257,12 @@ async fn p1_file_write() {
 async fn p1_path_open_lots() {
     run(P1_PATH_OPEN_LOTS_COMPONENT, false).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p1_sleep_quickly_but_lots() {
+    run(P1_SLEEP_QUICKLY_BUT_LOTS_COMPONENT, false)
+        .await
+        .unwrap()
+}
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_sleep() {
@@ -371,8 +374,3 @@ async fn p2_udp_send_too_much() {
         "unpermitted: argument exceeds permitted size"
     )
 }
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p1_cli_much_stdout() {}
