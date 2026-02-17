@@ -940,7 +940,7 @@ impl Engine {
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = crate::CodeMemory::new(self, mmap)?;
         code.publish()?;
-        Ok(Arc::new(code))
+        Ok(try_new(code)?)
     }
 
     /// Unload process-related trap/signal handlers and destroy this engine.
