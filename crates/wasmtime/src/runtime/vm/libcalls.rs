@@ -57,7 +57,7 @@
 #[cfg(feature = "stack-switching")]
 use super::stack_switching::VMContObj;
 use crate::prelude::*;
-use crate::runtime::store::{InstanceId, StoreInstanceId, StoreOpaque};
+use crate::runtime::store::{Asyncness, InstanceId, StoreInstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
 use crate::runtime::vm::table::TableElementType;
@@ -69,6 +69,7 @@ use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
+use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
     DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
     TableIndex, Trap,
@@ -115,6 +116,7 @@ pub mod raw {
                 // with conversion of the return value in the face of traps.
                 #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 #[allow(unused_variables, reason = "macro-generated")]
+                #[allow(unreachable_code, reason = "some types uninhabited on some platforms")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -169,7 +171,7 @@ pub mod raw {
 ///
 /// This will internally multiplex on `$store.with_blocking(...)` vs simply
 /// asserting the closure is ready depending on whether a store's
-/// `async_support` flag is set or not.
+/// `can_block` flag is set or not.
 ///
 /// FIXME: ideally this would be a function, not a macro. If this is a function
 /// though it would require placing a bound on the async closure $f where the
@@ -185,27 +187,60 @@ macro_rules! block_on {
     ($store:expr, $f:expr) => {{
         let store: &mut StoreOpaque = $store;
         let closure = assert_async_fn_closure($f);
-        if store.async_support() {
+
+        if store.can_block() {
+            // If the store can block then that means it's on a fiber. We can
+            // forward to `block_on` and everything should be fine and dandy.
             #[cfg(feature = "async")]
             {
-                store.with_blocking(|store, cx| cx.block_on(closure(store)))
+                store.with_blocking(|store, cx| cx.block_on(closure(store, Asyncness::Yes)))
             }
             #[cfg(not(feature = "async"))]
             {
                 unreachable!()
             }
         } else {
-            // Note that if `async_support` is disabled then it should not be
-            // possible to introduce await points so the provided future should
-            // always be ready.
-            anyhow::Ok(vm::assert_ready(closure(store)))
+            // If the store cannot block it's not on a fiber. That means that we get
+            // at most one poll of `closure(store)` here. In the typical case
+            // what this means is that nothing async is configured in the store
+            // and one poll should be all we need. There are niche cases where
+            // one poll is not sufficient though, for example:
+            //
+            // * Store is created.
+            // * Wasm is called.
+            // * Wasm calls host.
+            // * Host configures an async resource limiter, returns back to
+            //   wasm.
+            // * Wasm grows memory.
+            // * Limiter wants to block asynchronously.
+            //
+            // Technically there's nothing wrong with this, but it means that
+            // we're in wasm and one poll is not enough here. Given the niche
+            // nature of this scenario and how it's not really expected to work
+            // this translates failures in `closure` to a trap. This trap is
+            // only expected to show up in niche-ish scenarios, not for actual
+            // blocking work, as that would otherwise be too surprising.
+            vm::one_poll(closure(store, Asyncness::No)).ok_or_else(|| {
+                crate::format_err!(
+                    "
+
+A synchronously called wasm function invoked an async-defined libcall which
+failed to complete synchronously and is thus raising a trap. It's expected
+that this indicates that the store was configured to do async things after the
+original synchronous entrypoint to wasm was called. That's generally not
+supported in Wasmtime and async entrypoint should be used instead. If you're
+seeing this message in error please file an issue on Wasmtime.
+
+"
+                )
+            })
         }
     }};
 }
 
 fn assert_async_fn_closure<F, R>(f: F) -> F
 where
-    F: AsyncFnOnce(&mut StoreOpaque) -> R,
+    F: AsyncFnOnce(&mut StoreOpaque, Asyncness) -> R,
 {
     f
 }
@@ -219,7 +254,7 @@ fn memory_grow(
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, _| {
         let instance = store.instance_mut(instance);
         let module = instance.env_module();
         let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
@@ -282,7 +317,7 @@ unsafe fn table_grow_func_ref(
     let element = NonNull::new(init_value.cast::<VMFuncRef>()).map(SendSyncPtr::new);
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, _| {
         let mut instance = store.instance_mut(instance);
         let table_index = instance.env_module().table_index(defined_table_index);
         debug_assert!(matches!(
@@ -312,7 +347,7 @@ fn table_grow_gc_ref(
     let element = VMGcRef::from_raw_u32(init_value);
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, _| {
         let (gc_store, mut instance) = store.optional_gc_store_and_instance_mut(instance);
         let table_index = instance.env_module().table_index(defined_table_index);
         debug_assert!(matches!(
@@ -347,7 +382,7 @@ unsafe fn table_grow_cont_obj(
     let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, _| {
         let mut instance = store.instance_mut(instance);
         let table_index = instance.env_module().table_index(defined_table_index);
         debug_assert!(matches!(
@@ -488,10 +523,11 @@ fn table_init(
     let elem_index = ElemIndex::from_u32(elem_index);
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, asyncness| {
         vm::Instance::table_init(
             store,
             limiter.as_mut(),
+            asyncness,
             instance,
             table_index,
             elem_index,
@@ -505,9 +541,10 @@ fn table_init(
 }
 
 // Implementation of `elem.drop`.
-fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) {
+fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) -> Result<()> {
     let elem_index = ElemIndex::from_u32(elem_index);
-    store.instance_mut(instance).elem_drop(elem_index)
+    store.instance_mut(instance).elem_drop(elem_index)?;
+    Ok(())
 }
 
 // Implementation of `memory.copy`.
@@ -562,17 +599,18 @@ fn memory_init(
 
 // Implementation of `ref.func`.
 fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
-    store
-        .instance_mut(instance)
-        .get_func_ref(FuncIndex::from_u32(func_index))
+    let (instance, registry) = store.instance_and_module_registry_mut(instance);
+    instance
+        .get_func_ref(registry, FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
         .cast()
 }
 
 // Implementation of `data.drop`.
-fn data_drop(store: &mut dyn VMStore, instance: InstanceId, data_index: u32) {
+fn data_drop(store: &mut dyn VMStore, instance: InstanceId, data_index: u32) -> Result<()> {
     let data_index = DataIndex::from_u32(data_index);
-    store.instance_mut(instance).data_drop(data_index)
+    store.instance_mut(instance).data_drop(data_index)?;
+    Ok(())
 }
 
 // Returns a table entry after lazily initializing it.
@@ -583,9 +621,8 @@ fn table_get_lazy_init_func_ref(
     index: u64,
 ) -> *mut u8 {
     let table_index = TableIndex::from_u32(table_index);
-    let table = store
-        .instance_mut(instance)
-        .get_table_with_lazy_init(table_index, core::iter::once(index));
+    let (instance, registry) = store.instance_and_module_registry_mut(instance);
+    let table = instance.get_table_with_lazy_init(registry, table_index, core::iter::once(index));
     let elem = table
         .get_func(index)
         .expect("table access already bounds-checked");
@@ -620,8 +657,10 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
     .unwrap();
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
-        store.gc(limiter.as_mut(), None, Some(bytes_needed)).await;
+    block_on!(store, async |store, asyncness| {
+        store
+            .gc(limiter.as_mut(), None, Some(bytes_needed), asyncness)
+            .await;
     })?;
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
@@ -686,9 +725,9 @@ fn gc_alloc_raw(
     })?;
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, asyncness| {
         let gc_ref = store
-            .retry_after_gc_async(limiter.as_mut(), (), |store, ()| {
+            .retry_after_gc_async(limiter.as_mut(), (), asyncness, |store, ()| {
                 store
                     .unwrap_gc_store_mut()
                     .alloc_raw(header, layout)?
@@ -780,7 +819,7 @@ fn array_new_data(
     use wasmtime_environ::ModuleInternedTypeIndex;
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, asyncness| {
         let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
         let data_index = DataIndex::from_u32(data_index);
         let instance = store.instance(instance_id);
@@ -815,7 +854,7 @@ fn array_new_data(
             .expect("array types have GC layouts");
         let array_layout = gc_layout.unwrap_array();
         let array_ref = store
-            .retry_after_gc_async(limiter.as_mut(), (), |store, ()| {
+            .retry_after_gc_async(limiter.as_mut(), (), asyncness, |store, ()| {
                 store
                     .unwrap_gc_store_mut()
                     .alloc_uninit_array(shared_ty, len, &array_layout)?
@@ -955,21 +994,21 @@ fn array_new_elem(
     let pre = ArrayRefPre::_new(store, array_ty);
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, asyncness| {
         let mut store = OpaqueRootScope::new(store);
         // Turn the elements into `Val`s.
         let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
         match elements {
             TableSegmentElements::Functions(fs) => {
                 let store_id = store.id();
-                let mut instance = store.instance_mut(instance_id);
+                let (mut instance, registry) = store.instance_and_module_registry_mut(instance_id);
                 vals.extend(
                     fs.get(src..)
                         .and_then(|s| s.get(..len))
                         .ok_or_else(|| Trap::TableOutOfBounds)?
                         .iter()
                         .map(|f| {
-                            let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                            let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
                             let func = unsafe {
                                 raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p))
                             };
@@ -983,7 +1022,7 @@ fn array_new_elem(
                     .and_then(|s| s.get(..len))
                     .ok_or_else(|| Trap::TableOutOfBounds)?;
 
-                let mut const_context = ConstEvalContext::new(instance_id);
+                let mut const_context = ConstEvalContext::new(instance_id, asyncness);
                 let mut const_evaluator = ConstExprEvaluator::default();
 
                 for x in xs.iter() {
@@ -995,7 +1034,9 @@ fn array_new_elem(
             }
         }
 
-        let array = ArrayRef::_new_fixed_async(&mut store, limiter.as_mut(), &pre, &vals).await?;
+        let array =
+            ArrayRef::_new_fixed_async(&mut store, limiter.as_mut(), &pre, &vals, asyncness)
+                .await?;
 
         let mut store = AutoAssertNoGc::new(&mut store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
@@ -1023,7 +1064,7 @@ fn array_init_elem(
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store| {
+    block_on!(store, async |store, asyncness| {
         let mut store = OpaqueRootScope::new(store);
 
         // Convert the indices into their typed forms.
@@ -1052,7 +1093,7 @@ fn array_init_elem(
         // Get the passive element segment.
         let mut storage = None;
         let store_id = store.id();
-        let mut instance = store.instance_mut(instance);
+        let (mut instance, registry) = store.instance_and_module_registry_mut(instance);
         let elements = instance.passive_element_segment(&mut storage, elem_index);
 
         // Convert array offsets into `usize`s.
@@ -1067,13 +1108,13 @@ fn array_init_elem(
                 .ok_or_else(|| Trap::TableOutOfBounds)?
                 .iter()
                 .map(|f| {
-                    let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                    let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
                     let func = unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p)) };
                     Val::FuncRef(func)
                 })
                 .collect::<Vec<_>>(),
             TableSegmentElements::Expressions(xs) => {
-                let mut const_context = ConstEvalContext::new(instance.id());
+                let mut const_context = ConstEvalContext::new(instance.id(), asyncness);
                 let mut const_evaluator = ConstExprEvaluator::default();
 
                 let mut vals = Vec::new();
@@ -1239,7 +1280,7 @@ fn memory_atomic_wait64(
 
 // Hook for when an instance runs out of fuel.
 fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
-    block_on!(store, async |store| {
+    block_on!(store, async |store, _| {
         if !store.refuel() {
             return Err(Trap::OutOfFuel.into());
         }
@@ -1256,34 +1297,42 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch> {
     use crate::UpdateDeadline;
 
+    #[cfg(feature = "debug")]
+    {
+        store.block_on_debug_handler(crate::DebugEvent::EpochYield)?;
+    }
+
     let update_deadline = store.new_epoch_updated_deadline()?;
-    block_on!(store, async move |store| {
+    block_on!(store, async move |store, asyncness| {
+        #[cfg(not(feature = "async"))]
+        let _ = asyncness;
+
         let delta = match update_deadline {
             UpdateDeadline::Interrupt => return Err(Trap::Interrupt.into()),
             UpdateDeadline::Continue(delta) => delta,
 
-            // Note that custom assertions for `async_support` are needed below
-            // as otherwise if these are used in an
-            // `async_support`-disabled-build it'll trip the `assert_ready` part
-            // of `block_on!` above. The assertion here provides a more direct
-            // error message as to what's going on.
+            // Note that custom errors are used here to avoid tripping up on the
+            // `block_on!` message that otherwise assumes
+            // async-configuration-after-the-fact.
             #[cfg(feature = "async")]
             UpdateDeadline::Yield(delta) => {
-                assert!(
-                    store.async_support(),
-                    "cannot use `UpdateDeadline::Yield` without enabling \
-                     async support in the config"
-                );
+                if asyncness != Asyncness::Yes {
+                    bail!(
+                        "cannot use `UpdateDeadline::Yield` without using \
+                         an async wasm entrypoint",
+                    );
+                }
                 crate::runtime::vm::Yield::new().await;
                 delta
             }
             #[cfg(feature = "async")]
             UpdateDeadline::YieldCustom(delta, future) => {
-                assert!(
-                    store.async_support(),
-                    "cannot use `UpdateDeadline::YieldCustom` without enabling \
-                     async support in the config"
-                );
+                if asyncness != Asyncness::Yes {
+                    bail!(
+                        "cannot use `UpdateDeadline::YieldCustom` without using \
+                         an async wasm entrypoint",
+                    );
+                }
                 future.await;
                 delta
             }
@@ -1446,35 +1495,35 @@ fn update_mem_size(store: &mut dyn VMStore, instance: InstanceId, num_pages: u32
 }
 
 fn floor_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_floor(val)
+    val.wasm_floor()
 }
 
 fn floor_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_floor(val)
+    val.wasm_floor()
 }
 
 fn ceil_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_ceil(val)
+    val.wasm_ceil()
 }
 
 fn ceil_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_ceil(val)
+    val.wasm_ceil()
 }
 
 fn trunc_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_trunc(val)
+    val.wasm_trunc()
 }
 
 fn trunc_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_trunc(val)
+    val.wasm_trunc()
 }
 
 fn nearest_f32(_store: &mut dyn VMStore, _instance: InstanceId, val: f32) -> f32 {
-    wasmtime_math::WasmFloat::wasm_nearest(val)
+    val.wasm_nearest()
 }
 
 fn nearest_f64(_store: &mut dyn VMStore, _instance: InstanceId, val: f64) -> f64 {
-    wasmtime_math::WasmFloat::wasm_nearest(val)
+    val.wasm_nearest()
 }
 
 // This intrinsic is only used on x86_64 platforms as an implementation of
@@ -1612,10 +1661,10 @@ fn fma_f32x4(
 
         U {
             mem: [
-                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[2], y[2], z[2]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[3], y[3], z[3]),
+                x[0].wasm_mul_add(y[0], z[0]),
+                x[1].wasm_mul_add(y[1], z[1]),
+                x[2].wasm_mul_add(y[2], z[2]),
+                x[3].wasm_mul_add(y[3], z[3]),
             ],
         }
         .reg
@@ -1640,10 +1689,7 @@ fn fma_f64x2(
         let z = U { reg: z }.mem;
 
         U {
-            mem: [
-                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
-                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
-            ],
+            mem: [x[0].wasm_mul_add(y[0], z[0]), x[1].wasm_mul_add(y[1], z[1])],
         }
         .reg
     }
@@ -1704,4 +1750,15 @@ fn throw_ref(
         .expect("gc ref should be an exception object");
     store.set_pending_exception(exnref);
     Err(TrapReason::Exception)
+}
+
+fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
+    #[cfg(feature = "debug")]
+    {
+        log::trace!("hit breakpoint");
+        store.block_on_debug_handler(crate::DebugEvent::Breakpoint)?;
+    }
+    // Avoid unused-argument warning in no-debugger builds.
+    let _ = store;
+    Ok(())
 }

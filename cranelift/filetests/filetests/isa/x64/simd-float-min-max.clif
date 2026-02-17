@@ -13,17 +13,17 @@ block0(v0: i64, v1: f32x4):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movups (%rdi), %xmm4
-;   movdqa %xmm0, %xmm6
-;   maxps %xmm4, %xmm0
-;   maxps %xmm6, %xmm4
 ;   movdqa %xmm0, %xmm1
-;   xorps %xmm4, %xmm1
-;   orps %xmm1, %xmm0
-;   movdqa %xmm0, %xmm4
-;   subps %xmm1, %xmm4
+;   maxps %xmm4, %xmm0
+;   maxps %xmm1, %xmm4
+;   movdqa %xmm0, %xmm2
+;   xorps %xmm4, %xmm2
+;   orps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   subps %xmm2, %xmm1
 ;   cmpunordps %xmm0, %xmm0
 ;   psrld $0xa, %xmm0
-;   andnps %xmm4, %xmm0
+;   andnps %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -34,17 +34,17 @@ block0(v0: i64, v1: f32x4):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movups (%rdi), %xmm4 ; trap: heap_oob
-;   movdqa %xmm0, %xmm6
-;   maxps %xmm4, %xmm0
-;   maxps %xmm6, %xmm4
 ;   movdqa %xmm0, %xmm1
-;   xorps %xmm4, %xmm1
-;   orps %xmm1, %xmm0
-;   movdqa %xmm0, %xmm4
-;   subps %xmm1, %xmm4
+;   maxps %xmm4, %xmm0
+;   maxps %xmm1, %xmm4
+;   movdqa %xmm0, %xmm2
+;   xorps %xmm4, %xmm2
+;   orps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   subps %xmm2, %xmm1
 ;   cmpunordps %xmm0, %xmm0
 ;   psrld $0xa, %xmm0
-;   andnps %xmm4, %xmm0
+;   andnps %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -105,17 +105,17 @@ block0(v0: i64, v1: f64x2):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movupd (%rdi), %xmm4
-;   movdqa %xmm0, %xmm6
-;   maxpd %xmm4, %xmm0
-;   maxpd %xmm6, %xmm4
 ;   movdqa %xmm0, %xmm1
-;   xorpd %xmm4, %xmm1
-;   orpd %xmm1, %xmm0
-;   movdqa %xmm0, %xmm4
-;   subpd %xmm1, %xmm4
+;   maxpd %xmm4, %xmm0
+;   maxpd %xmm1, %xmm4
+;   movdqa %xmm0, %xmm2
+;   xorpd %xmm4, %xmm2
+;   orpd %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   subpd %xmm2, %xmm1
 ;   cmpunordpd %xmm0, %xmm0
 ;   psrlq $0xd, %xmm0
-;   andnpd %xmm4, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -126,17 +126,17 @@ block0(v0: i64, v1: f64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movupd (%rdi), %xmm4 ; trap: heap_oob
-;   movdqa %xmm0, %xmm6
-;   maxpd %xmm4, %xmm0
-;   maxpd %xmm6, %xmm4
 ;   movdqa %xmm0, %xmm1
-;   xorpd %xmm4, %xmm1
-;   orpd %xmm1, %xmm0
-;   movdqa %xmm0, %xmm4
-;   subpd %xmm1, %xmm4
+;   maxpd %xmm4, %xmm0
+;   maxpd %xmm1, %xmm4
+;   movdqa %xmm0, %xmm2
+;   xorpd %xmm4, %xmm2
+;   orpd %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   subpd %xmm2, %xmm1
 ;   cmpunordpd %xmm0, %xmm0
 ;   psrlq $0xd, %xmm0
-;   andnpd %xmm4, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -153,15 +153,15 @@ block0(v0: i64, v1: f64x2):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movupd (%rdi), %xmm4
-;   movdqa %xmm0, %xmm5
+;   movdqa %xmm0, %xmm1
 ;   minpd %xmm4, %xmm0
-;   minpd %xmm5, %xmm4
-;   movdqa %xmm0, %xmm2
-;   orpd %xmm4, %xmm2
+;   minpd %xmm1, %xmm4
+;   movdqa %xmm0, %xmm1
+;   orpd %xmm4, %xmm1
 ;   cmpunordpd %xmm4, %xmm0
-;   orpd %xmm0, %xmm2
+;   orpd %xmm0, %xmm1
 ;   psrlq $0xd, %xmm0
-;   andnpd %xmm2, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -172,15 +172,15 @@ block0(v0: i64, v1: f64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movupd (%rdi), %xmm4 ; trap: heap_oob
-;   movdqa %xmm0, %xmm5
+;   movdqa %xmm0, %xmm1
 ;   minpd %xmm4, %xmm0
-;   minpd %xmm5, %xmm4
-;   movdqa %xmm0, %xmm2
-;   orpd %xmm4, %xmm2
+;   minpd %xmm1, %xmm4
+;   movdqa %xmm0, %xmm1
+;   orpd %xmm4, %xmm1
 ;   cmpunordpd %xmm4, %xmm0
-;   orpd %xmm0, %xmm2
+;   orpd %xmm0, %xmm1
 ;   psrlq $0xd, %xmm0
-;   andnpd %xmm2, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -3,6 +3,7 @@ use alloc::boxed::Box;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::io;
+use std::mem::needs_drop;
 use std::ops::Range;
 use std::ptr;
 use windows_sys::Win32::Foundation::*;
@@ -128,6 +129,21 @@ impl Fiber {
             let parent_fiber = if is_fiber {
                 wasmtime_fiber_get_current()
             } else {
+                // Newer Rust versions use fiber local storage to register an internal hook that
+                // calls thread locals' destructors on thread exit.
+                // This has a limitation: the hook only runs in a regular thread (not in a fiber).
+                // We convert back into a thread once execution returns to this function,
+                // but we must also ensure that the hook is registered before converting into a fiber.
+                // Otherwise, a different fiber could be the first to register the hook,
+                // causing the hook to be called (and skipped) prematurely when that fiber is deleted.
+                struct Guard;
+
+                impl Drop for Guard {
+                    fn drop(&mut self) {}
+                }
+                assert!(needs_drop::<Guard>());
+                thread_local!(static GUARD: Guard = Guard);
+                GUARD.with(|_g| {});
                 ConvertThreadToFiber(ptr::null_mut())
             };
             assert!(

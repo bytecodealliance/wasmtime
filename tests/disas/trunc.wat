@@ -11,71 +11,71 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x20, %rsp
-;;       movq    %r14, 0x10(%rsp)
-;;       movq    8(%rdi), %r11
-;;       movq    %rdi, %r14
-;;       movq    0x10(%r11), %r11
-;;       movq    %rsp, %rsi
-;;       cmpq    %r11, %rsi
+;;       movq    %rbx, 0x10(%rsp)
+;;       movq    8(%rdi), %rax
+;;       movq    %rdi, %rbx
+;;       movq    0x18(%rax), %rax
+;;       movq    %rsp, %rcx
+;;       cmpq    %rax, %rcx
 ;;       jb      0x118
 ;;   24: ucomisd %xmm0, %xmm0
 ;;       movdqu  %xmm0, (%rsp)
 ;;       jp      0x101
 ;;       jne     0x101
-;;   39: movq    %r14, %rdi
+;;   39: movq    %rbx, %rdi
 ;;       movdqu  (%rsp), %xmm0
-;;       callq   0x245
+;;       callq   0x244
 ;;       movabsq $13830554455654793216, %rax
-;;       movq    %rax, %xmm6
-;;       ucomisd %xmm0, %xmm6
+;;       movq    %rax, %xmm1
+;;       ucomisd %xmm0, %xmm1
 ;;       jae     0xea
 ;;   5f: ucomisd 0xc9(%rip), %xmm0
 ;;       jae     0xd3
-;;   6d: movdqu  (%rsp), %xmm1
-;;       movabsq $0x43e0000000000000, %r10
-;;       movq    %r10, %xmm7
-;;       ucomisd %xmm7, %xmm1
+;;   6d: movdqu  (%rsp), %xmm2
+;;       movabsq $0x43e0000000000000, %rcx
+;;       movq    %rcx, %xmm1
+;;       ucomisd %xmm1, %xmm2
 ;;       jae     0xa2
 ;;       jp      0x12c
-;;   91: cvttsd2si %xmm1, %rax
+;;   91: cvttsd2si %xmm2, %rax
 ;;       cmpq    $0, %rax
 ;;       jge     0xc5
 ;;   a0: ud2
-;;       movaps  %xmm1, %xmm0
-;;       subsd   %xmm7, %xmm0
+;;       movaps  %xmm2, %xmm0
+;;       subsd   %xmm1, %xmm0
 ;;       cvttsd2si %xmm0, %rax
 ;;       cmpq    $0, %rax
 ;;       jl      0x12e
-;;   b8: movabsq $9223372036854775808, %r10
-;;       addq    %r10, %rax
-;;       movq    0x10(%rsp), %r14
+;;   b8: movabsq $9223372036854775808, %rcx
+;;       addq    %rcx, %rax
+;;       movq    0x10(%rsp), %rbx
 ;;       addq    $0x20, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
 ;;   d3: movl    $6, %esi
-;;   d8: movq    %r14, %rdi
+;;   d8: movq    %rbx, %rdi
 ;;   db: callq   0x271
-;;   e0: movq    %r14, %rdi
-;;   e3: callq   0x2a1
+;;   e0: movq    %rbx, %rdi
+;;   e3: callq   0x2a2
 ;;   e8: ud2
 ;;   ea: movl    $6, %esi
-;;   ef: movq    %r14, %rdi
+;;   ef: movq    %rbx, %rdi
 ;;   f2: callq   0x271
-;;   f7: movq    %r14, %rdi
-;;   fa: callq   0x2a1
+;;   f7: movq    %rbx, %rdi
+;;   fa: callq   0x2a2
 ;;   ff: ud2
 ;;  101: movl    $8, %esi
-;;  106: movq    %r14, %rdi
+;;  106: movq    %rbx, %rdi
 ;;  109: callq   0x271
-;;  10e: movq    %r14, %rdi
-;;  111: callq   0x2a1
+;;  10e: movq    %rbx, %rdi
+;;  111: callq   0x2a2
 ;;  116: ud2
 ;;  118: xorl    %esi, %esi
-;;  11a: movq    %r14, %rdi
+;;  11a: movq    %rbx, %rdi
 ;;  11d: callq   0x271
-;;  122: movq    %r14, %rdi
-;;  125: callq   0x2a1
+;;  122: movq    %rbx, %rdi
+;;  125: callq   0x2a2
 ;;  12a: ud2
 ;;  12c: ud2
 ;;  12e: ud2

@@ -109,8 +109,6 @@ pub struct W {
     interface3: exports::foo::foo::export_using_export2::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl WIndices {
         /// Creates a new copy of `WIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -235,7 +233,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod transitive_import {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum Y {}
             pub trait HostYWithStore: wasmtime::component::HasData {
                 fn drop<T>(
@@ -289,11 +287,12 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple_export {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                     static_a_static_a: wasmtime::component::Func,
@@ -319,7 +318,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple-export")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple-export`"
                                 )
                             })?;
@@ -328,9 +327,9 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple-export` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -444,12 +443,13 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_import {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type Y = super::super::super::super::foo::foo::transitive_import::Y;
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                     static_a_static_a: wasmtime::component::Func,
@@ -475,7 +475,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-import")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-import`"
                                 )
                             })?;
@@ -484,9 +484,9 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-import` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -610,11 +610,12 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_export1 {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_a_constructor: wasmtime::component::Func,
                 }
@@ -636,7 +637,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-export1")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-export1`"
                                 )
                             })?;
@@ -645,9 +646,9 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export1` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -704,12 +705,13 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_export2 {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type A = super::super::super::super::exports::foo::foo::export_using_export1::A;
                 pub type B = wasmtime::component::ResourceAny;
                 pub struct GuestB<'a> {
                     funcs: &'a Guest,
                 }
+                #[derive(Clone)]
                 pub struct Guest {
                     constructor_b_constructor: wasmtime::component::Func,
                 }
@@ -731,7 +733,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/export-using-export2")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/export-using-export2`"
                                 )
                             })?;
@@ -740,9 +742,9 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/export-using-export2` does \
-                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };

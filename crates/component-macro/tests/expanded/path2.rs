@@ -99,8 +99,6 @@ pub struct Path2Indices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Path2 {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl Path2Indices {
         /// Creates a new copy of `Path2Indices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -181,7 +179,7 @@ pub mod paths {
         #[allow(clippy::all)]
         pub mod test {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where

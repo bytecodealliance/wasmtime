@@ -10,7 +10,7 @@ fn interruptable_store() -> Store<()> {
     store
 }
 
-fn hugely_recursive_module(engine: &Engine) -> anyhow::Result<Module> {
+fn hugely_recursive_module(engine: &Engine) -> wasmtime::Result<Module> {
     let mut wat = String::new();
     wat.push_str(
         r#"
@@ -27,7 +27,7 @@ fn hugely_recursive_module(engine: &Engine) -> anyhow::Result<Module> {
 }
 
 #[test]
-fn loops_interruptable() -> anyhow::Result<()> {
+fn loops_interruptable() -> wasmtime::Result<()> {
     let mut store = interruptable_store();
     let module = Module::new(store.engine(), r#"(func (export "loop") (loop br 0))"#)?;
     let instance = Instance::new(&mut store, &module, &[])?;
@@ -39,7 +39,7 @@ fn loops_interruptable() -> anyhow::Result<()> {
 }
 
 #[test]
-fn functions_interruptable() -> anyhow::Result<()> {
+fn functions_interruptable() -> wasmtime::Result<()> {
     let mut store = interruptable_store();
     let module = hugely_recursive_module(store.engine())?;
     let func = Func::wrap(&mut store, || {});
@@ -54,7 +54,7 @@ fn functions_interruptable() -> anyhow::Result<()> {
 const NUM_HITS: usize = 100_000;
 
 #[test]
-fn loop_interrupt_from_afar() -> anyhow::Result<()> {
+fn loop_interrupt_from_afar() -> wasmtime::Result<()> {
     // Create an instance which calls an imported function on each iteration of
     // the loop so we can count the number of loop iterations we've executed so
     // far.
@@ -101,7 +101,7 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
 }
 
 #[test]
-fn function_interrupt_from_afar() -> anyhow::Result<()> {
+fn function_interrupt_from_afar() -> wasmtime::Result<()> {
     // Create an instance which calls an imported function on each iteration of
     // the loop so we can count the number of loop iterations we've executed so
     // far.

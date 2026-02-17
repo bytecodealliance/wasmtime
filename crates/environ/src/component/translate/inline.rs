@@ -386,7 +386,7 @@ impl<'a> Inliner<'a> {
                 // Process the initializer and if it started the instantiation
                 // of another component then we push that frame on the stack to
                 // continue onwards.
-                Some(init) => match self.initializer(frame, types, init)? {
+                Some(init) => match self.initializer(frames, types, init)? {
                     Some(new_frame) => {
                         frames.push((new_frame, types.resources_mut().clone()));
                     }
@@ -422,12 +422,13 @@ impl<'a> Inliner<'a> {
 
     fn initializer(
         &mut self,
-        frame: &mut InlinerFrame<'a>,
+        frames: &mut Vec<(InlinerFrame<'a>, ResourcesBuilder)>,
         types: &mut ComponentTypesBuilder,
         initializer: &'a LocalInitializer,
     ) -> Result<Option<InlinerFrame<'a>>> {
         use LocalInitializer::*;
 
+        let (frame, _) = frames.last_mut().unwrap();
         match initializer {
             // When a component imports an item the actual definition of the
             // item is looked up here (not at runtime) via its name. The
@@ -512,7 +513,8 @@ impl<'a> Inliner<'a> {
             } => {
                 let lower_ty =
                     types.convert_component_func_type(frame.translation.types_ref(), *lower_ty)?;
-                let options_lower = self.adapter_options(frame, types, options);
+                let options_lower = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let lower_core_type = options_lower.core_type;
                 let func = match &frame.component_funcs[*func] {
                     // If this component function was originally a host import
@@ -533,45 +535,8 @@ impl<'a> Inliner<'a> {
                         dfg::CoreDef::Trampoline(index)
                     }
 
-                    // This case handles when a lifted function is later
-                    // lowered, and both the lowering and the lifting are
-                    // happening within the same component instance.
-                    //
-                    // In this situation if the `canon.lower`'d function is
-                    // called then it immediately sets `may_enter` to `false`.
-                    // When calling the callee, however, that's `canon.lift`
-                    // which immediately traps if `may_enter` is `false`. That
-                    // means that this pairing of functions creates a function
-                    // that always traps.
-                    //
-                    // When closely reading the spec though the precise trap
-                    // that comes out can be somewhat variable. Technically the
-                    // function yielded here is one that should validate the
-                    // arguments by lifting them, and then trap. This means that
-                    // the trap could be different depending on whether all
-                    // arguments are valid for now. This was discussed in
-                    // WebAssembly/component-model#51 somewhat and the
-                    // conclusion was that we can probably get away with "always
-                    // trap" here.
-                    //
-                    // The `CoreDef::AlwaysTrap` variant here is used to
-                    // indicate that this function is valid but if something
-                    // actually calls it then it just generates a trap
-                    // immediately.
-                    ComponentFuncDef::Lifted {
-                        options: options_lift,
-                        ..
-                    } if options_lift.instance == options_lower.instance => {
-                        let index = self
-                            .result
-                            .trampolines
-                            .push((lower_core_type, dfg::Trampoline::AlwaysTrap));
-                        dfg::CoreDef::Trampoline(index)
-                    }
-
-                    // Lowering a lifted function where the destination
-                    // component is different than the source component means
-                    // that a "fused adapter" was just identified.
+                    // Lowering a lifted functio means that a "fused adapter"
+                    // was just identified.
                     //
                     // Metadata about this fused adapter is recorded in the
                     // `Adapters` output of this compilation pass. Currently the
@@ -624,7 +589,8 @@ impl<'a> Inliner<'a> {
             // plumbed through to exports or a fused adapter later on.
             Lift(ty, func, options) => {
                 let ty = types.convert_component_func_type(frame.translation.types_ref(), *ty)?;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let func = frame.funcs[*func].1.clone();
                 frame
                     .component_funcs
@@ -699,15 +665,6 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*ty, dfg::CoreDef::Trampoline(index)));
             }
-            BackpressureSet { func } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::BackpressureSet {
-                        instance: frame.instance,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
             BackpressureInc { func } => {
                 let index = self.result.trampolines.push((
                     *func,
@@ -733,7 +690,8 @@ impl<'a> Inliner<'a> {
                     .collect::<Result<_>>()?;
                 let results = types.new_tuple_type(results);
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -765,7 +723,8 @@ impl<'a> Inliner<'a> {
             }
             WaitableSetWait { options } => {
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -778,7 +737,8 @@ impl<'a> Inliner<'a> {
             }
             WaitableSetPoll { options } => {
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -858,7 +818,8 @@ impl<'a> Inliner<'a> {
                     unreachable!()
                 };
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -877,7 +838,8 @@ impl<'a> Inliner<'a> {
                     unreachable!()
                 };
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -973,7 +935,8 @@ impl<'a> Inliner<'a> {
                     unreachable!()
                 };
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -992,7 +955,8 @@ impl<'a> Inliner<'a> {
                     unreachable!()
                 };
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -1069,7 +1033,8 @@ impl<'a> Inliner<'a> {
             ErrorContextNew { options } => {
                 let ty = types.error_context_table_type()?;
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -1084,7 +1049,8 @@ impl<'a> Inliner<'a> {
             ErrorContextDebugMessage { options } => {
                 let ty = types.error_context_table_type()?;
                 let func = options.core_type;
-                let options = self.adapter_options(frame, types, options);
+                let options = self.adapter_options(frames, types, options);
+                let (frame, _) = frames.last_mut().unwrap();
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
                     func,
@@ -1157,10 +1123,20 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSwitchTo { func, cancellable } => {
+            ThreadSuspendToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadSwitchTo {
+                    dfg::Trampoline::ThreadSuspendToSuspended {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSuspendTo { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSuspendTo {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
@@ -1177,19 +1153,19 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadResumeLater { func } => {
+            ThreadUnsuspend { func } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadResumeLater {
+                    dfg::Trampoline::ThreadUnsuspend {
                         instance: frame.instance,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldTo { func, cancellable } => {
+            ThreadYieldToSuspended { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadYieldTo {
+                    dfg::Trampoline::ThreadYieldToSuspended {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },
@@ -1250,7 +1226,7 @@ impl<'a> Inliner<'a> {
 
                 self.result
                     .side_effects
-                    .push(dfg::SideEffect::Instance(instance));
+                    .push(dfg::SideEffect::Instance(instance, frame.instance));
 
                 frame
                     .module_instances
@@ -1334,7 +1310,12 @@ impl<'a> Inliner<'a> {
                     ModuleInstanceDef::Instantiated(instance, module) => {
                         let (ty, item) = match &frame.modules[*module] {
                             ModuleDef::Static(idx, _ty) => {
-                                let entity = self.nested_modules[*idx].module.exports[*name];
+                                let name = self.nested_modules[*idx]
+                                    .module
+                                    .strings
+                                    .get_atom(name)
+                                    .unwrap();
+                                let entity = self.nested_modules[*idx].module.exports[&name];
                                 let ty = match entity {
                                     EntityIndex::Function(f) => {
                                         self.nested_modules[*idx].module.functions[f]
@@ -1505,7 +1486,12 @@ impl<'a> Inliner<'a> {
             ModuleInstanceDef::Instantiated(instance, module) => {
                 let item = match frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
-                        let entity = self.nested_modules[idx].module.exports[name];
+                        let name = self.nested_modules[idx]
+                            .module
+                            .strings
+                            .get_atom(name)
+                            .unwrap();
+                        let entity = self.nested_modules[idx].module.exports[&name];
                         ExportItem::Index(entity)
                     }
                     ModuleDef::Import(..) => ExportItem::Name(name.to_string()),
@@ -1568,10 +1554,11 @@ impl<'a> Inliner<'a> {
     /// specified into a runtime representation.
     fn adapter_options(
         &mut self,
-        frame: &InlinerFrame<'a>,
+        frames: &mut Vec<(InlinerFrame<'a>, ResourcesBuilder)>,
         types: &ComponentTypesBuilder,
         options: &LocalCanonicalOptions,
     ) -> AdapterOptions {
+        let (frame, _) = frames.last_mut().unwrap();
         let data_model = match options.data_model {
             LocalDataModel::Gc {} => DataModel::Gc {},
             LocalDataModel::LinearMemory { memory, realloc } => {
@@ -1593,6 +1580,12 @@ impl<'a> Inliner<'a> {
         let post_return = options.post_return.map(|i| frame.funcs[i].1.clone());
         AdapterOptions {
             instance: frame.instance,
+            ancestors: frames
+                .iter()
+                .rev()
+                .skip(1)
+                .map(|(frame, _)| frame.instance)
+                .collect(),
             string_encoding: options.string_encoding,
             callback,
             post_return,
@@ -1603,7 +1596,7 @@ impl<'a> Inliner<'a> {
         }
     }
 
-    /// Translatees an `AdapterOptions` into a `CanonicalOptions` where
+    /// Translates an `AdapterOptions` into a `CanonicalOptions` where
     /// memories/functions are inserted into the global initializer list for
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.

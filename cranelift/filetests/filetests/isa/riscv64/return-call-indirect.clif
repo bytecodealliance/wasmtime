@@ -100,17 +100,17 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   lui a3,1027
-;   slli a5,a3,40
-;   fmv.d.x fa1,a5
+;   lui a0,1027
+;   slli a0,a0,40
+;   fmv.d.x fa1,a0
 ;   fadd.d fa0,fa0,fa1,rne
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a3, 0x403
-;   slli a5, a3, 0x28
-;   fmv.d.x fa1, a5
+;   lui a0, 0x403
+;   slli a0, a0, 0x28
+;   fmv.d.x fa1, a0
 ;   fadd.d fa0, fa0, fa1, rne
 ;   ret
 
@@ -160,14 +160,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   andi a2,a0,255
-;   seqz a0,a2
+;   andi a0,a0,255
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi a2, a0, 0xff
-;   seqz a0, a2
+;   andi a0, a0, 0xff
+;   seqz a0, a0
 ;   ret
 
 function %call_i8(i8) -> i8 tail {
@@ -275,41 +275,41 @@ block0:
 ;   li a5,35
 ;   li a6,40
 ;   li a7,45
-;   li s2,50
-;   li s3,55
-;   li s4,60
-;   li s5,65
-;   li s6,70
-;   li s7,75
-;   li s8,80
-;   li s9,85
-;   li s10,90
-;   li s11,95
-;   li t0,100
-;   li t1,105
-;   li t2,110
-;   li t3,115
-;   li t4,120
-;   li s1,125
+;   li s10,50
+;   li s11,55
+;   li t3,60
+;   li t4,65
+;   li t0,70
+;   li t1,75
+;   li t2,80
+;   li s1,85
+;   li s2,90
+;   li s3,95
+;   li s4,100
+;   li s5,105
+;   li s6,110
+;   li s7,115
+;   li s8,120
+;   li s9,125
 ;   li a0,130
 ;   li a1,135
 ;   load_ext_name_far a2,%tail_callee_stack_args+0
-;   sd s2,-144(incoming_arg)
-;   sd s3,-136(incoming_arg)
-;   sd s4,-128(incoming_arg)
-;   sd s5,-120(incoming_arg)
-;   sd s6,-112(incoming_arg)
-;   sd s7,-104(incoming_arg)
-;   sd s8,-96(incoming_arg)
-;   sd s9,-88(incoming_arg)
-;   sd s10,-80(incoming_arg)
-;   sd s11,-72(incoming_arg)
-;   sd t0,-64(incoming_arg)
-;   sd t1,-56(incoming_arg)
-;   sd t2,-48(incoming_arg)
-;   sd t3,-40(incoming_arg)
-;   sd t4,-32(incoming_arg)
-;   sd s1,-24(incoming_arg)
+;   sd s10,-144(incoming_arg)
+;   sd s11,-136(incoming_arg)
+;   sd t3,-128(incoming_arg)
+;   sd t4,-120(incoming_arg)
+;   sd t0,-112(incoming_arg)
+;   sd t1,-104(incoming_arg)
+;   sd t2,-96(incoming_arg)
+;   sd s1,-88(incoming_arg)
+;   sd s2,-80(incoming_arg)
+;   sd s3,-72(incoming_arg)
+;   sd s4,-64(incoming_arg)
+;   sd s5,-56(incoming_arg)
+;   sd s6,-48(incoming_arg)
+;   sd s7,-40(incoming_arg)
+;   sd s8,-32(incoming_arg)
+;   sd s9,-24(incoming_arg)
 ;   sd a0,-16(incoming_arg)
 ;   sd a1,-8(incoming_arg)
 ;   ld a1,8(slot)
@@ -353,22 +353,22 @@ block0:
 ;   addi a5, zero, 0x23
 ;   addi a6, zero, 0x28
 ;   addi a7, zero, 0x2d
-;   addi s2, zero, 0x32
-;   addi s3, zero, 0x37
-;   addi s4, zero, 0x3c
-;   addi s5, zero, 0x41
-;   addi s6, zero, 0x46
-;   addi s7, zero, 0x4b
-;   addi s8, zero, 0x50
-;   addi s9, zero, 0x55
-;   addi s10, zero, 0x5a
-;   addi s11, zero, 0x5f
-;   addi t0, zero, 0x64
-;   addi t1, zero, 0x69
-;   addi t2, zero, 0x6e
-;   addi t3, zero, 0x73
-;   addi t4, zero, 0x78
-;   addi s1, zero, 0x7d
+;   addi s10, zero, 0x32
+;   addi s11, zero, 0x37
+;   addi t3, zero, 0x3c
+;   addi t4, zero, 0x41
+;   addi t0, zero, 0x46
+;   addi t1, zero, 0x4b
+;   addi t2, zero, 0x50
+;   addi s1, zero, 0x55
+;   addi s2, zero, 0x5a
+;   addi s3, zero, 0x5f
+;   addi s4, zero, 0x64
+;   addi s5, zero, 0x69
+;   addi s6, zero, 0x6e
+;   addi s7, zero, 0x73
+;   addi s8, zero, 0x78
+;   addi s9, zero, 0x7d
 ;   addi a0, zero, 0x82
 ;   addi a1, zero, 0x87
 ;   auipc a2, 0
@@ -376,22 +376,22 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   sd s2, 0x90(sp)
-;   sd s3, 0x98(sp)
-;   sd s4, 0xa0(sp)
-;   sd s5, 0xa8(sp)
-;   sd s6, 0xb0(sp)
-;   sd s7, 0xb8(sp)
-;   sd s8, 0xc0(sp)
-;   sd s9, 0xc8(sp)
-;   sd s10, 0xd0(sp)
-;   sd s11, 0xd8(sp)
-;   sd t0, 0xe0(sp)
-;   sd t1, 0xe8(sp)
-;   sd t2, 0xf0(sp)
-;   sd t3, 0xf8(sp)
-;   sd t4, 0x100(sp)
-;   sd s1, 0x108(sp)
+;   sd s10, 0x90(sp)
+;   sd s11, 0x98(sp)
+;   sd t3, 0xa0(sp)
+;   sd t4, 0xa8(sp)
+;   sd t0, 0xb0(sp)
+;   sd t1, 0xb8(sp)
+;   sd t2, 0xc0(sp)
+;   sd s1, 0xc8(sp)
+;   sd s2, 0xd0(sp)
+;   sd s3, 0xd8(sp)
+;   sd s4, 0xe0(sp)
+;   sd s5, 0xe8(sp)
+;   sd s6, 0xf0(sp)
+;   sd s7, 0xf8(sp)
+;   sd s8, 0x100(sp)
+;   sd s9, 0x108(sp)
 ;   sd a0, 0x110(sp)
 ;   sd a1, 0x118(sp)
 ;   ld a1, 8(sp)

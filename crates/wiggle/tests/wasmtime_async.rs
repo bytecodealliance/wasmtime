@@ -1,4 +1,4 @@
-use wasmtime::{Config, Engine, Linker, Module, Store, Val};
+use wasmtime::{Engine, Linker, Module, Store, Val};
 use wiggle::GuestMemory;
 
 wiggle::from_witx!({
@@ -106,10 +106,7 @@ async fn test_async_host_func() {
 }
 
 fn async_store() -> Store<Ctx> {
-    Store::new(
-        &Engine::new(Config::new().async_support(true)).unwrap(),
-        Ctx,
-    )
+    Store::new(&Engine::default(), Ctx)
 }
 
 // Wiggle expects the caller to have an exported memory. Wasmtime can only

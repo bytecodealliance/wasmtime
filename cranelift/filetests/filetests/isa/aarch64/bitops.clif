@@ -405,8 +405,8 @@ block0(v0: i128):
 ;   fmov d4, x0
 ;   mov v4.d[1], v4.d[1], x1
 ;   cnt v7.16b, v4.16b
-;   addv b17, v7.16b
-;   umov w0, v17.b[0]
+;   addv b16, v7.16b
+;   umov w0, v16.b[0]
 ;   movz x1, #0
 ;   ret
 ;
@@ -415,8 +415,8 @@ block0(v0: i128):
 ;   fmov d4, x0
 ;   mov v4.d[1], x1
 ;   cnt v7.16b, v4.16b
-;   addv b17, v7.16b
-;   umov w0, v17.b[0]
+;   addv b16, v7.16b
+;   umov w0, v16.b[0]
 ;   mov x1, #0
 ;   ret
 
@@ -1691,9 +1691,9 @@ block0(v0: i128, v1: i128):
 ;   lsl x11, x1, #1
 ;   lsl x13, x11, x9
 ;   asr x15, x1, #63
-;   orr x1, x5, x13
+;   orr x0, x5, x13
 ;   ands xzr, x2, #64
-;   csel x0, x7, x1, ne
+;   csel x0, x7, x0, ne
 ;   csel x1, x15, x7, ne
 ;   ret
 ;
@@ -1705,9 +1705,9 @@ block0(v0: i128, v1: i128):
 ;   lsl x11, x1, #1
 ;   lsl x13, x11, x9
 ;   asr x15, x1, #0x3f
-;   orr x1, x5, x13
+;   orr x0, x5, x13
 ;   tst x2, #0x40
-;   csel x0, x7, x1, ne
+;   csel x0, x7, x0, ne
 ;   csel x1, x15, x7, ne
 ;   ret
 
@@ -1745,5 +1745,133 @@ block0(v0: i128, v1: i128):
 ; block0: ; offset 0x0
 ;   eon x0, x0, x2
 ;   eon x1, x1, x3
+;   ret
+
+function %bnot_of_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = bnot v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   mvn v0.8b, v0.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mvn v0.8b, v0.8b
+;   ret
+
+function %bnot_of_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = bnot v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   mvn v0.8b, v0.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mvn v0.8b, v0.8b
+;   ret
+
+function %band_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = band v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+
+function %band_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = band v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bor_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = bor v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bor_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = bor v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bxor_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = bxor v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bxor_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = bxor v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eor v0.8b, v0.8b, v1.8b
 ;   ret
 

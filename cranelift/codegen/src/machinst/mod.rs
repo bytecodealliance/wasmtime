@@ -53,13 +53,13 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
 use smallvec::{SmallVec, smallvec};
-use std::string::String;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -176,6 +176,10 @@ pub trait MachInst: Clone + Debug {
     /// preferred size, but must not return a NOP that is larger. However,
     /// the instruction must have a nonzero size if preferred_size is nonzero.
     fn gen_nop(preferred_size: usize) -> Self;
+
+    /// The various kinds of NOP, with size, sorted in ascending-size
+    /// order.
+    fn gen_nop_units() -> Vec<Vec<u8>>;
 
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.
@@ -440,12 +444,13 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
         params: Option<&crate::ir::function::FunctionParameters>,
         cs: &capstone::Capstone,
     ) -> Result<String, anyhow::Error> {
-        use std::fmt::Write;
+        use core::fmt::Write;
 
         let mut buf = String::new();
 
         let relocs = self.buffer.relocs();
         let traps = self.buffer.traps();
+        let mut patchables = self.buffer.patchable_call_sites().peekable();
 
         // Normalize the block starts to include an initial block of offset 0.
         let mut block_starts = Vec::new();
@@ -493,6 +498,17 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
                 if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
                     write!(buf, " ; trap: {}", trap.code)?;
+                }
+
+                if let Some(patchable) = patchables.peek()
+                    && patchable.ret_addr == end as u32
+                {
+                    write!(
+                        buf,
+                        " ; patchable call: NOP out last {} bytes",
+                        patchable.len
+                    )?;
+                    patchables.next();
                 }
 
                 writeln!(buf)?;

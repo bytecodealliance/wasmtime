@@ -45,7 +45,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // These are implemented and should work on all backends
         let mut allowed_callconvs = vec![
             CallConv::Fast,
-            CallConv::Cold,
+            CallConv::PreserveAll,
             CallConv::SystemV,
             CallConv::Tail,
         ];
@@ -97,7 +97,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         mut simd_enabled: bool,
         architecture: Architecture,
         max_params: usize,
-        max_rets: usize,
+        mut max_rets: usize,
     ) -> Result<Signature> {
         let callconv = self.callconv(architecture)?;
 
@@ -105,6 +105,11 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // https://github.com/bytecodealliance/wasmtime/issues/8093
         if callconv == CallConv::Winch {
             simd_enabled = false;
+        }
+
+        // We can't have any returns in the `preserve_all` calling convention.
+        if callconv == CallConv::PreserveAll {
+            max_rets = 0;
         }
 
         let mut sig = Signature::new(callconv);

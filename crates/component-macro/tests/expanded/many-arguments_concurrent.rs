@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::manyarg::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod manyarg {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -275,7 +273,7 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn many_args<T>(
+                fn many_args<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a1: u64,
                     a2: u64,
@@ -294,7 +292,7 @@ pub mod foo {
                     a15: u64,
                     a16: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn big_argument<T>(
+                fn big_argument<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: BigStruct,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -401,7 +399,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod manyarg {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -487,6 +485,7 @@ pub mod exports {
                         4 == < BigStruct as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     many_args: wasmtime::component::Func,
                     big_argument: wasmtime::component::Func,
@@ -510,7 +509,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/manyarg")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/manyarg`"
                                 )
                             })?;
@@ -519,7 +518,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/manyarg` does \
                 not have export `{name}`"
                                     )

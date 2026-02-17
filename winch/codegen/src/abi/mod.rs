@@ -45,10 +45,10 @@
 //! |        + arguments            |
 //! |                               | ----> Space allocated for calls
 //! |                               |
+use crate::Result;
 use crate::codegen::ptr_type_from_ptr_size;
 use crate::isa::{CallingConvention, reg::Reg};
 use crate::masm::SPOffset;
-use anyhow::Result;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};

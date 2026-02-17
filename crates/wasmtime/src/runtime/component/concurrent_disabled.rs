@@ -1,51 +1,32 @@
-use crate::Uninhabited;
-use crate::component::Val;
-use crate::component::func::{ComponentType, LiftContext, LowerContext};
-use crate::runtime::vm::VMStore;
-use anyhow::{Result, anyhow};
-use core::future::Future;
-use core::marker::PhantomData;
-use core::pin::pin;
-use core::task::{Context, Poll, Waker};
-use wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex};
+use crate::component::func::{LiftContext, LowerContext};
+use crate::component::matching::InstanceType;
+use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
+use crate::store::StoreOpaque;
+use crate::vm::component::CallContext;
+use crate::{Result, bail, error::format_err};
+use core::convert::Infallible;
+use core::mem::MaybeUninit;
+use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
-#[derive(Default)]
-pub struct ConcurrentState;
+pub enum ConcurrentState {}
+
+impl ConcurrentState {
+    pub fn call_context(&mut self, _: u32) -> &mut CallContext {
+        match *self {}
+    }
+
+    pub fn current_call_context_scope_id(&self) -> u32 {
+        match *self {}
+    }
+}
 
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
     // bug in Wasmtime rather than in the guest.
-    Err(anyhow!(
+    Err(format_err!(
         "{what} should have failed validation \
          when `component-model-async` feature disabled"
     ))
-}
-
-pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
-    _store: &mut dyn VMStore,
-    future: impl Future<Output = Result<R>> + Send + 'static,
-    _caller_instance: RuntimeComponentInstanceIndex,
-) -> Result<R> {
-    match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
-        Poll::Ready(result) => result,
-        Poll::Pending => should_have_failed_validation("async lowered import"),
-    }
-}
-
-pub(crate) fn lower_future_to_index<U>(
-    _rep: u32,
-    _cx: &mut LowerContext<'_, U>,
-    _ty: InterfaceType,
-) -> Result<u32> {
-    should_have_failed_validation("use of `future`")
-}
-
-pub(crate) fn lower_stream_to_index<U>(
-    _rep: u32,
-    _cx: &mut LowerContext<'_, U>,
-    _ty: InterfaceType,
-) -> Result<u32> {
-    should_have_failed_validation("use of `stream`")
 }
 
 pub(crate) fn lower_error_context_to_index<U>(
@@ -56,7 +37,7 @@ pub(crate) fn lower_error_context_to_index<U>(
     should_have_failed_validation("use of `error-context`")
 }
 
-pub struct ErrorContext(Uninhabited);
+pub struct ErrorContext(Infallible);
 
 impl ErrorContext {
     pub(crate) fn into_val(self) -> Val {
@@ -80,56 +61,133 @@ impl ErrorContext {
     }
 }
 
-pub struct StreamReader<P> {
-    uninhabited: Uninhabited,
-    _phantom: PhantomData<P>,
+#[derive(PartialEq, Clone, Debug)]
+pub struct FutureAny(Infallible);
+
+unsafe impl ComponentType for FutureAny {
+    type Lower = <u32 as ComponentType>::Lower;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+
+    fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+        bail!("support for component-model-async disabled at compile time")
+    }
 }
 
-impl<P> StreamReader<P> {
-    pub(crate) fn into_val(self) -> Val {
-        match self.uninhabited {}
-    }
-
-    pub(crate) fn linear_lift_from_flat(
+unsafe impl Lift for FutureAny {
+    fn linear_lift_from_flat(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
-        _src: &<u32 as ComponentType>::Lower,
+        _src: &Self::Lower,
     ) -> Result<Self> {
-        should_have_failed_validation("use of `stream`")
+        bail!("support for component-model-async disabled at compile time")
     }
 
-    pub(crate) fn linear_lift_from_memory(
+    fn linear_lift_from_memory(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        should_have_failed_validation("use of `stream`")
+        bail!("support for component-model-async disabled at compile time")
     }
 }
 
-pub struct FutureReader<P> {
-    uninhabited: Uninhabited,
-    _phantom: PhantomData<P>,
-}
-
-impl<P> FutureReader<P> {
-    pub(crate) fn into_val(self) -> Val {
-        match self.uninhabited {}
+unsafe impl Lower for FutureAny {
+    fn linear_lower_to_flat<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        match self.0 {}
     }
 
-    pub(crate) fn linear_lift_from_flat(
+    fn linear_lower_to_memory<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _offset: usize,
+    ) -> Result<()> {
+        match self.0 {}
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct StreamAny(Infallible);
+
+unsafe impl ComponentType for StreamAny {
+    type Lower = <u32 as ComponentType>::Lower;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+
+    fn typecheck(_ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+        bail!("support for component-model-async disabled at compile time")
+    }
+}
+
+unsafe impl Lift for StreamAny {
+    fn linear_lift_from_flat(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
-        _src: &<u32 as ComponentType>::Lower,
+        _src: &Self::Lower,
     ) -> Result<Self> {
-        should_have_failed_validation("use of `future`")
+        bail!("support for component-model-async disabled at compile time")
     }
 
-    pub(crate) fn linear_lift_from_memory(
+    fn linear_lift_from_memory(
         _cx: &mut LiftContext<'_>,
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        should_have_failed_validation("use of `future`")
+        bail!("support for component-model-async disabled at compile time")
+    }
+}
+
+unsafe impl Lower for StreamAny {
+    fn linear_lower_to_flat<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        match self.0 {}
+    }
+
+    fn linear_lower_to_memory<T>(
+        &self,
+        _cx: &mut LowerContext<'_, T>,
+        _ty: InterfaceType,
+        _offset: usize,
+    ) -> Result<()> {
+        match self.0 {}
+    }
+}
+
+impl StoreOpaque {
+    pub(crate) fn enter_guest_sync_call(
+        &mut self,
+        _guest_caller: Option<RuntimeInstance>,
+        _callee_async: bool,
+        _callee: RuntimeInstance,
+    ) -> Result<()> {
+        Ok(self.enter_call_not_concurrent())
+    }
+
+    pub(crate) fn exit_guest_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
+        Ok(self.exit_call_not_concurrent())
+    }
+
+    pub(crate) fn enter_host_call(&mut self) -> Result<()> {
+        Ok(self.enter_call_not_concurrent())
+    }
+
+    pub(crate) fn exit_host_call(&mut self) -> Result<()> {
+        Ok(self.exit_call_not_concurrent())
+    }
+
+    pub(crate) fn check_blocking(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> bool {
+        !self.trapped()
     }
 }

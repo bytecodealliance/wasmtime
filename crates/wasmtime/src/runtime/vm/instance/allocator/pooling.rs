@@ -391,7 +391,7 @@ impl PoolingInstanceAllocator {
             pagemap: match config.pagemap_scan {
                 Enabled::Auto => PageMap::new(),
                 Enabled::Yes => Some(PageMap::new().ok_or_else(|| {
-                    anyhow!(
+                    format_err!(
                         "required to enable PAGEMAP_SCAN but this system \
                          does not support it"
                     )
@@ -569,12 +569,12 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             use wasmtime_environ::component::GlobalInitializer::*;
             use wasmtime_environ::component::InstantiateModule;
             match init {
-                InstantiateModule(InstantiateModule::Import(_, _)) => {
+                InstantiateModule(InstantiateModule::Import(_, _), _) => {
                     num_core_instances += 1;
                     // Can't statically account for the total vmctx size, number
                     // of memories, and number of tables in this component.
                 }
-                InstantiateModule(InstantiateModule::Static(static_module_index, _)) => {
+                InstantiateModule(InstantiateModule::Static(static_module_index, _), _) => {
                     let module = get_module(*static_module_index);
                     let offsets = VMOffsets::new(HostPtr, &module);
                     self.validate_module(module, &offsets)?;

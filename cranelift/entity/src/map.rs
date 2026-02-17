@@ -15,6 +15,7 @@ use serde::{
     de::{Deserializer, SeqAccess, Visitor},
     ser::{SerializeSeq, Serializer},
 };
+use wasmtime_core::{alloc::PanicOnOom as _, error::OutOfMemory};
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///
@@ -67,6 +68,22 @@ where
         }
     }
 
+    /// Like `with_capacity` but returns an error on allocation failure.
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, OutOfMemory>
+    where
+        V: Default,
+    {
+        let mut elems = Vec::new();
+        elems
+            .try_reserve(capacity)
+            .map_err(|_| OutOfMemory::new(core::mem::size_of::<V>().saturating_mul(capacity)))?;
+        Ok(Self {
+            elems,
+            default: Default::default(),
+            unused: PhantomData,
+        })
+    }
+
     /// Create a new empty map with a specified default value.
     ///
     /// This constructor does not require V to implement Default.
@@ -87,6 +104,40 @@ where
     #[inline(always)]
     pub fn get(&self, k: K) -> Option<&V> {
         self.elems.get(k.index())
+    }
+
+    /// Get the element at `k` mutably, if it exists.
+    pub fn get_mut(&mut self, k: K) -> Option<&mut V> {
+        self.elems.get_mut(k.index())
+    }
+
+    /// Insert the given key-value pair, returning the old value if it exists.
+    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+        self.try_insert(k, v).panic_on_oom()
+    }
+
+    /// Like `insert` but returns an error on allocation failure.
+    pub fn try_insert(&mut self, k: K, v: V) -> Result<Option<V>, OutOfMemory> {
+        let i = k.index();
+        if i < self.elems.len() {
+            Ok(Some(core::mem::replace(&mut self.elems[i], v)))
+        } else {
+            self.try_resize(i + 1)?;
+            self.elems[i] = v;
+            Ok(None)
+        }
+    }
+
+    /// Remove the element at `k`, if it exists, replacing it with the default
+    /// value.
+    pub fn remove(&mut self, k: K) -> Option<V> {
+        let i = k.index();
+        if i < self.elems.len() {
+            let default = self.default.clone();
+            Some(core::mem::replace(&mut self.elems[i], default))
+        } else {
+            None
+        }
     }
 
     /// Is this map completely empty?
@@ -131,6 +182,18 @@ where
         self.elems.resize(n, self.default.clone());
     }
 
+    /// Like `resize` but returns an error on allocation failure.
+    pub fn try_resize(&mut self, n: usize) -> Result<(), OutOfMemory> {
+        if self.elems.capacity() < n {
+            self.elems
+                .try_reserve(n - self.elems.len())
+                .map_err(|_| OutOfMemory::new(core::mem::size_of::<V>().saturating_mul(n)))?;
+        }
+        debug_assert!(self.elems.capacity() >= n);
+        self.elems.resize(n, self.default.clone());
+        Ok(())
+    }
+
     /// Slow path for `index_mut` which resizes the vector.
     #[cold]
     fn resize_for_index_mut(&mut self, i: usize) -> &mut V {
@@ -146,6 +209,21 @@ where
 {
     fn default() -> SecondaryMap<K, V> {
         SecondaryMap::new()
+    }
+}
+
+impl<K, V> From<Vec<V>> for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default,
+{
+    fn from(elems: Vec<V>) -> Self {
+        let default = Default::default();
+        Self {
+            elems,
+            default,
+            unused: PhantomData,
+        }
     }
 }
 
@@ -331,6 +409,7 @@ mod tests {
         let r0 = E(0);
         let r1 = E(1);
         let r2 = E(2);
+        let r3 = E(3);
         let mut m = SecondaryMap::new();
 
         let v: Vec<E> = m.keys().collect();
@@ -341,6 +420,32 @@ mod tests {
 
         assert_eq!(m[r1], 5);
         assert_eq!(m[r2], 3);
+
+        assert!(m.get(r3).is_none());
+        assert!(m.get_mut(r3).is_none());
+
+        let old = m.insert(r3, 99);
+        assert!(old.is_none());
+        assert_eq!(m.get(r3), Some(&99));
+        assert_eq!(m[r3], 99);
+
+        *m.get_mut(r3).unwrap() += 1;
+        assert_eq!(m.get(r3), Some(&100));
+        assert_eq!(m[r3], 100);
+
+        let old = m.insert(r3, 42);
+        assert_eq!(old, Some(100));
+        assert_eq!(m.get(r3), Some(&42));
+        assert_eq!(m[r3], 42);
+
+        let old = m.remove(r3);
+        assert_eq!(old, Some(42));
+        assert_eq!(m[r3], 0);
+        let old = m.remove(r3);
+        assert_eq!(old, Some(0));
+        m.resize(3);
+        let old = m.remove(r3);
+        assert_eq!(old, None);
 
         let v: Vec<E> = m.keys().collect();
         assert_eq!(v, [r0, r1, r2]);

@@ -43,8 +43,11 @@ world round-trip-direct {
 }
 
 interface ready {
-  set-ready: func(ready: bool);
-  when-ready: async func();
+  resource thing {
+    constructor();
+    set-ready: func(ready: bool);
+    when-ready: async func();
+  }
 }
 
 interface continue {
@@ -122,7 +125,7 @@ interface resource-stream {
     foo: func();
   }
 
-  foo: func(count: u32) -> stream<x>;
+  foo: async func(count: u32) -> stream<x>;
 }
 
 interface closed {
@@ -131,11 +134,11 @@ interface closed {
   read-future-post-return: async func(rx: future<u8>, expected: u8, rx-ignore: future<u8>);
 }
 
-interface sleep {
-  sleep-millis: async func(time-in-millis: u64);
+interface yield {
+  yield-times: async func(times: u64);
 }
 
-interface sleep-with-options {
+interface yield-with-options {
   use cancel.{mode};
 
   variant on-cancel {
@@ -143,7 +146,7 @@ interface sleep-with-options {
     task-cancel
   }
 
-  sleep-millis: async func(time-in-millis: u64, on-cancel: on-cancel, on-cancel-delay-millis: u64, synchronous-delay: bool, mode: mode);
+  yield-times: async func(times: u64, on-cancel: on-cancel, on-cancel-delay-times: u64, synchronous-delay: bool, mode: mode);
 }
 
 interface cancel {
@@ -157,7 +160,7 @@ interface cancel {
     leak-task-after-cancel,
   }
 
-  run: func(mode: mode, cancel-delay-millis: u64);
+  run: async func(mode: mode, cancel-delay-times: u64);
 }
 
 interface intertask {
@@ -172,8 +175,8 @@ interface synchronous-transmit {
   start: async func(s: stream<u8>, s-expected: list<u8>, f: future<u8>, f-expected: u8) -> tuple<stream<u8>, list<u8>, future<u8>, u8>;
 }
 
-interface sleep-post-return {
-  run: async func(sleep-time-millis: u64);
+interface yield-post-return {
+  run: async func(times: u64);
 }
 
 interface closed-stream {
@@ -201,7 +204,7 @@ world yield-callee {
   export run;
 }
 
-world yield-host {
+world yield-runner {
   import continue;
   import ready;
   export run;
@@ -308,22 +311,22 @@ world closed-streams {
   export closed;
 }
 
-world sleep-host {
-  import sleep;
+world yield-host {
+  import yield;
 }
 
 world cancel-caller {
   import backpressure;
-  import sleep;
-  import sleep-with-options;
+  import yield;
+  import yield-with-options;
   export cancel;
 }
 
 world cancel-callee {
-  import sleep;
+  import yield;
   export backpressure;
-  export sleep;
-  export sleep-with-options;
+  export yield;
+  export yield-with-options;
 }
 
 world cancel-host {
@@ -343,15 +346,15 @@ world synchronous-transmit-guest {
   export synchronous-transmit;
 }
 
-world sleep-post-return-callee {
-  import sleep;
-  export sleep-post-return;
+world yield-post-return-callee {
+  import yield;
+  export yield-post-return;
 }
 
-world sleep-post-return-caller {
-  import sleep;
-  import sleep-post-return;
-  export sleep-post-return;
+world yield-post-return-caller {
+  import yield;
+  import yield-post-return;
+  export yield-post-return;
 }
 
 world closed-stream-guest {

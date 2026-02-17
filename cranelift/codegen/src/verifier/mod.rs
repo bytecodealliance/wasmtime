@@ -84,6 +84,7 @@ use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
+use cranelift_entity::packed_option::ReservedValue;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -99,7 +100,7 @@ pub struct VerifierError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierError {}
+impl core::error::Error for VerifierError {}
 
 impl Display for VerifierError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -178,7 +179,7 @@ pub struct VerifierErrors(pub Vec<VerifierError>);
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierErrors {}
+impl core::error::Error for VerifierErrors {}
 
 impl VerifierErrors {
     /// Return a new `VerifierErrors` struct.
@@ -587,10 +588,14 @@ impl<'a> Verifier<'a> {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {
-                func_ref, ref args, ..
+                opcode,
+                func_ref,
+                ref args,
+                ..
             } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
+                self.verify_callee_patchability(inst, func_ref, opcode, errors)?;
             }
             CallIndirect {
                 sig_ref, ref args, ..
@@ -946,6 +951,44 @@ impl<'a> Verifier<'a> {
                 format!(
                     "calling convention `{callee_call_conv}` of callee does not support exceptions"
                 ),
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn verify_callee_patchability(
+        &self,
+        inst: Inst,
+        func_ref: FuncRef,
+        opcode: Opcode,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        let ir::ExtFuncData {
+            patchable,
+            colocated,
+            signature,
+            name: _,
+        } = self.func.dfg.ext_funcs[func_ref];
+        let signature = &self.func.dfg.signatures[signature];
+        if patchable && (opcode == Opcode::ReturnCall || opcode == Opcode::ReturnCallIndirect) {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable funcref cannot be used in a return_call".to_string(),
+            ))?;
+        }
+        if patchable && !colocated {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call to non-colocated function".to_string(),
+            ))?;
+        }
+        if patchable && !signature.returns.is_empty() {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call cannot occur to a function with return values".to_string(),
             ))?;
         }
         Ok(())
@@ -1974,8 +2017,6 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        self.verify_signature(AnyEntity::Function, &self.func.signature, errors)?;
-
         if errors.has_error() { Err(()) } else { Ok(()) }
     }
 
@@ -2044,51 +2085,43 @@ impl<'a> Verifier<'a> {
 
     fn verify_signature(
         &self,
-        loc: impl Into<AnyEntity>,
-        data: &Signature,
+        sig: &Signature,
+        entity: impl Into<AnyEntity>,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
-        if data.call_conv == CallConv::Patchable {
-            if data.params.len() > 4 {
-                return errors.fatal((
-                    loc,
-                    "signature with patchable ABI does not allow more than four arguments"
-                        .to_string(),
-                ));
-            }
-            if data.returns.len() > 0 {
-                return errors.fatal((
-                    loc,
-                    "signature with patchable ABI does not allow any returns".to_string(),
-                ));
-            }
-            for param in &data.params {
-                if param.value_type != crate::ir::types::I32
-                    && param.value_type != crate::ir::types::I64
-                {
-                    return errors.fatal((
-                        loc,
-                        "signature with patchable ABI does not allow non-I32/I64 arguments"
-                            .to_string(),
-                    ));
-                }
-                if param.extension != ArgumentExtension::None {
-                    return errors.fatal((
-                        loc,
-                        "signature with patchable ABI does not allow sign/zero-extended arguments"
-                            .to_string(),
-                    ));
+        match sig.call_conv {
+            CallConv::PreserveAll => {
+                if !sig.returns.is_empty() {
+                    errors.fatal((
+                        entity,
+                        "Signature with `preserve_all` ABI cannot have return values".to_string(),
+                    ))?;
                 }
             }
+            _ => {}
         }
         Ok(())
     }
 
     fn verify_signatures(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        // Check that "patchable" ABI signatures have no returns and
-        // only up to four integer-typed args.
-        for (sigref, data) in &self.func.dfg.signatures {
-            self.verify_signature(sigref, data, errors)?;
+        // Verify this function's own signature.
+        self.verify_signature(&self.func.signature, AnyEntity::Function, errors)?;
+        // Verify signatures referenced by any extfunc, using that
+        // extfunc as the entity to which to attach the error.
+        for (func, funcdata) in &self.func.dfg.ext_funcs {
+            // Non-contiguous func entities result in placeholders
+            // with invalid signatures; skip them.
+            if !funcdata.signature.is_reserved_value() {
+                self.verify_signature(&self.func.dfg.signatures[funcdata.signature], func, errors)?;
+            }
+        }
+        // Verify all signatures, including those only used by
+        // e.g. indirect calls. Technically this re-verifies
+        // signatures verified above but we want the first pass to
+        // attach errors to funcrefs and we also need to verify all
+        // defined signatures.
+        for (sig, sigdata) in &self.func.dfg.signatures {
+            self.verify_signature(sigdata, sig, errors)?;
         }
         Ok(())
     }

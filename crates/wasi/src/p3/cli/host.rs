@@ -7,7 +7,6 @@ use crate::p3::bindings::cli::{
     terminal_stdin, terminal_stdout,
 };
 use crate::p3::cli::{TerminalInput, TerminalOutput};
-use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -15,10 +14,10 @@ use std::io::{self, Cursor};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Access, Accessor, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
+    Access, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
     StreamReader, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
+use wasmtime::{AsContextMut as _, StoreContextMut, error::Context as _, format_err};
 
 struct InputStreamProducer {
     rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
@@ -206,7 +205,7 @@ impl stdin::HostWithStore for WasiCli {
             },
         );
         let future = FutureReader::new(&mut store, async {
-            anyhow::Ok(match result_rx.await {
+            wasmtime::error::Ok(match result_rx.await {
                 Ok(err) => Err(err),
                 Err(_) => Ok(()),
             })
@@ -218,50 +217,50 @@ impl stdin::HostWithStore for WasiCli {
 impl stdin::Host for WasiCliCtxView<'_> {}
 
 impl stdout::HostWithStore for WasiCli {
-    async fn write_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn write_via_stream<U>(
+        mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
-        store.with(|mut store| {
-            let tx = store.get().ctx.stdout.async_stream();
-            data.pipe(
-                store,
-                OutputStreamConsumer {
-                    tx: Box::into_pin(tx),
-                    result_tx: Some(result_tx),
-                },
-            );
-        });
-        Ok(match result_rx.await {
-            Ok(err) => Err(err),
-            Err(_) => Ok(()),
-        })
+        let tx = store.get().ctx.stdout.async_stream();
+        data.pipe(
+            &mut store,
+            OutputStreamConsumer {
+                tx: Box::into_pin(tx),
+                result_tx: Some(result_tx),
+            },
+        );
+        Ok(FutureReader::new(&mut store, async {
+            wasmtime::error::Ok(match result_rx.await {
+                Ok(err) => Err(err),
+                Err(_) => Ok(()),
+            })
+        }))
     }
 }
 
 impl stdout::Host for WasiCliCtxView<'_> {}
 
 impl stderr::HostWithStore for WasiCli {
-    async fn write_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn write_via_stream<U>(
+        mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
-        store.with(|mut store| {
-            let tx = store.get().ctx.stderr.async_stream();
-            data.pipe(
-                store,
-                OutputStreamConsumer {
-                    tx: Box::into_pin(tx),
-                    result_tx: Some(result_tx),
-                },
-            );
-        });
-        Ok(match result_rx.await {
-            Ok(err) => Err(err),
-            Err(_) => Ok(()),
-        })
+        let tx = store.get().ctx.stderr.async_stream();
+        data.pipe(
+            &mut store,
+            OutputStreamConsumer {
+                tx: Box::into_pin(tx),
+                result_tx: Some(result_tx),
+            },
+        );
+        Ok(FutureReader::new(&mut store, async {
+            wasmtime::error::Ok(match result_rx.await {
+                Ok(err) => Err(err),
+                Err(_) => Ok(()),
+            })
+        }))
     }
 }
 
@@ -287,10 +286,10 @@ impl exit::Host for WasiCliCtxView<'_> {
             Ok(()) => 0,
             Err(()) => 1,
         };
-        Err(anyhow!(I32Exit(status)))
+        Err(format_err!(I32Exit(status)))
     }
 
     fn exit_with_code(&mut self, status_code: u8) -> wasmtime::Result<()> {
-        Err(anyhow!(I32Exit(status_code.into())))
+        Err(format_err!(I32Exit(status_code.into())))
     }
 }

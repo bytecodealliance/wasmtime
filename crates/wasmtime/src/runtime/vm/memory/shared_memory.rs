@@ -1,3 +1,4 @@
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::memory::{LocalMemory, MmapMemory, validate_atomic_addr};
 use crate::runtime::vm::parking_spot::{ParkingSpot, Waiter};
@@ -8,7 +9,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use wasmtime_environ::{Trap, Tunables};
+use wasmtime_environ::Trap;
 
 /// For shared memory (and only for shared memory), this lock-version restricts
 /// access when growing the memory or checking its size. This is to conform with
@@ -30,19 +31,30 @@ struct SharedMemoryInner {
 
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
-    pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
+    pub fn new(engine: &Engine, ty: &wasmtime_environ::Memory) -> Result<Self> {
+        let tunables = engine.tunables();
         // Note that without a limiter being passed to `limit_new` this
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
         Self::wrap(
+            engine,
             ty,
             LocalMemory::new(ty, tunables, Box::new(mmap_memory), None)?,
         )
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(ty: &wasmtime_environ::Memory, memory: LocalMemory) -> Result<Self> {
+    pub fn wrap(
+        engine: &Engine,
+        ty: &wasmtime_environ::Memory,
+        memory: LocalMemory,
+    ) -> Result<Self> {
+        if !engine.config().shared_memory {
+            bail!(
+                "shared memory support is disabled for this engine -- see `Config::shared_memory`"
+            );
+        }
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }

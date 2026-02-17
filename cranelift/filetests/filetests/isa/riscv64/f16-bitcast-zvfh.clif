@@ -78,15 +78,15 @@ block0(v0: f16):
 
 ; VCode:
 ; block0:
-;   vfmv.s.f v11,fa0 #avl=1, #vtype=(e16, m1, ta, ma)
-;   vse8.v v11,0(a0) #avl=2, #vtype=(e8, m1, ta, ma)
+;   vfmv.s.f v8,fa0 #avl=1, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=2, #vtype=(e8, m1, ta, ma)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0xf0, 0x80, 0xcc
-;   .byte 0xd7, 0x55, 0x05, 0x42
+;   .byte 0x57, 0x54, 0x05, 0x42
 ;   .byte 0x57, 0x70, 0x01, 0xcc
-;   .byte 0xa7, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ret
 

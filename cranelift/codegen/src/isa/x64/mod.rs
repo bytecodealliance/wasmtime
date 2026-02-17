@@ -10,16 +10,16 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
-    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode, compile,
+    CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
+    compile,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use crate::{Final, MachBufferFinalized};
+use alloc::string::String;
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::Triple;
 
 mod abi;
@@ -28,6 +28,7 @@ mod lower;
 mod pcc;
 pub mod settings;
 
+#[cfg(feature = "unwind")]
 pub use inst::unwind::systemv::create_cie;
 
 /// An X64 backend.
@@ -126,7 +127,7 @@ impl TargetIsa for X64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &CompiledCode,
+        result: &crate::machinst::CompiledCode,
         kind: crate::isa::unwind::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         emit_unwind_info(&result.buffer, kind)
@@ -178,7 +179,7 @@ impl TargetIsa for X64Backend {
         self.x64_flags.has_sse41()
     }
 
-    fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
+    fn has_blendv_lowering(&self, ty: Type) -> bool {
         // The `blendvpd`, `blendvps`, and `pblendvb` instructions are all only
         // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
         // equivalent instruction which only looks at the top bit for a select
@@ -215,8 +216,12 @@ pub fn emit_unwind_info(
     buffer: &MachBufferFinalized<Final>,
     kind: crate::isa::unwind::UnwindInfoKind,
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+    #[cfg(feature = "unwind")]
     use crate::isa::unwind::{UnwindInfo, UnwindInfoKind};
+    #[cfg(not(feature = "unwind"))]
+    let _ = buffer;
     Ok(match kind {
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::SystemV => {
             let mapper = self::inst::unwind::systemv::RegisterMapper;
             Some(UnwindInfo::SystemV(
@@ -227,6 +232,7 @@ pub fn emit_unwind_info(
                 )?,
             ))
         }
+        #[cfg(feature = "unwind")]
         UnwindInfoKind::Windows => Some(UnwindInfo::WindowsX64(
             crate::isa::unwind::winx64::create_unwind_info_from_insts::<
                 self::inst::unwind::winx64::RegisterMapper,

@@ -114,7 +114,7 @@
        (call $drop (local.get $r2))
        (local.set $r2 (call $new (i32.const 400)))
 
-       ;; should have reused index 1
+       ;; should have reused index 3
        (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
 
        ;; representations all look good
@@ -494,10 +494,10 @@
       (import "" "drop" (func $drop (param i32)))
 
       (func (export "alloc")
-        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
+        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 1)) (then (unreachable)))
       )
       (func (export "dealloc")
-        (call $drop (i32.const 2))
+        (call $drop (i32.const 1))
       )
     )
     (core instance $i (instantiate $m
@@ -554,10 +554,10 @@
       (import "" "drop" (func $drop (param i32)))
 
       (func (export "alloc")
-        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 2)) (then (unreachable)))
+        (if (i32.ne (call $ctor (i32.const 100)) (i32.const 1)) (then (unreachable)))
       )
       (func (export "dealloc")
-        (call $drop (i32.const 2))
+        (call $drop (i32.const 1))
       )
     )
     (core instance $i (instantiate $m
@@ -868,7 +868,7 @@
       (call $drop (local.get $r2))
 
       ;; table should be empty at this point, so a fresh allocation should get
-      ;; index 0
+      ;; index 2
       (if (i32.ne (call $ctor (i32.const 600)) (i32.const 1)) (then (unreachable)))
     )
 
@@ -1027,8 +1027,8 @@
         (local.set $r1 (call $ctor (i32.const 100)))
         (local.set $r2 (call $ctor (i32.const 200)))
 
-        (if (i32.ne (local.get $r1) (i32.const 2)) (then (unreachable)))
-        (if (i32.ne (local.get $r2) (i32.const 3)) (then (unreachable)))
+        (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
+        (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
 
         (call $assert-borrow (local.get $r2) (i32.const 200))
         (call $assert-borrow (local.get $r1) (i32.const 100))
@@ -1088,6 +1088,39 @@
 )
 
 (component instance $C1 $C)
-(assert_trap (invoke "drop-r1-as-r2") "handle index 2 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "drop-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
 (component instance $C1 $C)
-(assert_trap (invoke "return-r1-as-r2") "handle index 2 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "return-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+
+;; Test that `resource.rep` is exempt from may-leave checks
+(component
+  (type $r (resource (rep i32)))
+  (core func $resource.new (canon resource.new $r))
+  (core func $resource.rep (canon resource.rep $r))
+
+  (core module $DM
+    (import "" "resource.new" (func $resource.new (param i32) (result i32)))
+    (import "" "resource.rep" (func $resource.rep (param i32) (result i32)))
+
+    (global $g (mut i32) (i32.const 0))
+
+    (func (export "run")
+      (global.set $g (call $resource.new (i32.const 42)))
+    )
+    (func (export "post-return")
+      (i32.eq
+        (call $resource.rep (global.get $g))
+        (i32.const 42))
+      if return end
+      unreachable
+    )
+  )
+  (core instance $dm (instantiate $DM (with "" (instance
+    (export "resource.new" (func $resource.new))
+    (export "resource.rep" (func $resource.rep))
+  ))))
+  (func (export "run")
+    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+)
+
+(assert_return (invoke "run"))

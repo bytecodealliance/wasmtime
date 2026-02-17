@@ -3,6 +3,8 @@
 use crate::scalar::{self, ScalarBitSet, ScalarBitSetStorage};
 use alloc::boxed::Box;
 use core::{cmp, iter, mem};
+use wasmtime_core::alloc::{TryExtend, Vec};
+use wasmtime_core::error::OutOfMemory;
 
 /// A large bit set backed by dynamically-sized storage.
 ///
@@ -83,6 +85,11 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     ///
     /// The actual capacity reserved may be greater than that requested.
     ///
+    /// # Panics
+    ///
+    /// Panics on allocation failure. Use [`CompoundBitSet::try_with_capacity`]
+    /// to handle allocation failure.
+    ///
     /// # Example
     ///
     /// ```
@@ -95,9 +102,16 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// ```
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
+        Self::try_with_capacity(capacity).unwrap()
+    }
+
+    /// Like [`CompoundBitSet::with_capacity`] but returns an error on
+    /// allocation failure.
+    #[inline]
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, OutOfMemory> {
         let mut bitset = Self::default();
-        bitset.ensure_capacity(capacity);
-        bitset
+        bitset.try_ensure_capacity(capacity)?;
+        Ok(bitset)
     }
 
     /// Get the number of elements in this bitset.
@@ -221,6 +235,11 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// where `i < n` is guaranteed to succeed without growing the bitset's
     /// backing storage.
     ///
+    /// # Panics
+    ///
+    /// Panics on allocation failure. Use
+    /// [`CompoundBitSet::try_ensure_capacity`] to handle allocation failure.
+    ///
     /// # Example
     ///
     /// ```
@@ -243,32 +262,44 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// ```
     #[inline]
     pub fn ensure_capacity(&mut self, n: usize) {
+        self.try_ensure_capacity(n).unwrap()
+    }
+
+    /// Like [`CompoundBitSet::ensure_capacity`] but returns an error on
+    /// allocation failure.
+    #[inline]
+    pub fn try_ensure_capacity(&mut self, n: usize) -> Result<(), OutOfMemory> {
         // Subtract one from the capacity to get the maximum bit that we might
         // set. If `n` is 0 then nothing need be done as no capacity needs to be
         // allocated.
         let (word, _bit) = Self::word_and_bit(match n.checked_sub(1) {
-            None => return,
+            None => return Ok(()),
             Some(n) => n,
         });
-        if word >= self.elems.len() {
-            assert!(word < usize::try_from(isize::MAX).unwrap());
 
-            let delta = word - self.elems.len();
-            let to_grow = delta + 1;
-
-            // Amortize the cost of growing.
-            let to_grow = cmp::max(to_grow, self.elems.len() * 2);
-            // Don't make ridiculously small allocations.
-            let to_grow = cmp::max(to_grow, 4);
-
-            let new_elems = self
-                .elems
-                .iter()
-                .copied()
-                .chain(iter::repeat(ScalarBitSet::new()).take(to_grow))
-                .collect::<Box<[_]>>();
-            self.elems = new_elems;
+        if word < self.elems.len() {
+            // Already have capacity.
+            return Ok(());
         }
+
+        // Need to allocate additional capacity.
+
+        assert!(word < usize::try_from(isize::MAX).unwrap());
+
+        let delta = word - self.elems.len();
+        let to_grow = delta + 1;
+
+        // Amortize the cost of growing by at least growing another
+        // `self.elems.len()`, so the new length is double the old length.
+        let to_grow = cmp::max(to_grow, self.elems.len());
+        // Don't make ridiculously small allocations.
+        let to_grow = cmp::max(to_grow, 4);
+
+        let mut new_elems = Vec::from(mem::take(&mut self.elems));
+        new_elems.reserve_exact(to_grow)?;
+        new_elems.try_extend(iter::repeat(ScalarBitSet::new()).take(to_grow))?;
+        self.elems = new_elems.into_boxed_slice()?;
+        Ok(())
     }
 
     /// Insert `i` into this bitset.

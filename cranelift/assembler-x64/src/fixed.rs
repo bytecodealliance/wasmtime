@@ -1,6 +1,7 @@
 //! Operands with fixed register encodings.
 
 use crate::{AsReg, Size};
+use alloc::string::String;
 
 /// A _fixed_ register.
 ///

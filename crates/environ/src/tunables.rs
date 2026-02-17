@@ -1,5 +1,5 @@
+use crate::prelude::*;
 use crate::{IndexType, Limits, Memory, TripleExt};
-use anyhow::{Error, Result, anyhow, bail};
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
@@ -140,6 +140,14 @@ define_tunables! {
         /// The general size threshold for the sum of the caller's and callee's
         /// sizes, past which we will generally not inline calls anymore.
         pub inlining_sum_size_threshold: u32,
+
+        /// Whether any component model feature related to concurrency is
+        /// enabled.
+        pub concurrency_support: bool,
+
+        /// Whether recording in RR is enabled or not. This is used primarily
+        /// to signal checksum computation for compiled artifacts.
+        pub recording: bool,
     }
 
     pub struct ConfigTunables {
@@ -168,7 +176,7 @@ impl Tunables {
         }
         let mut ret = match target
             .pointer_width()
-            .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
+            .map_err(|_| format_err!("failed to retrieve target pointer width"))?
         {
             PointerWidth::U32 => Tunables::default_u32(),
             PointerWidth::U64 => Tunables::default_u64(),
@@ -215,6 +223,8 @@ impl Tunables {
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
+            concurrency_support: true,
+            recording: false,
         }
     }
 

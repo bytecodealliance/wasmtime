@@ -4,23 +4,23 @@
 //! `Option<Thing>` is also zero-sized so there should be no runtime cost for
 //! having these structures plumbed around.
 
-use crate::runtime::Uninhabited;
 use crate::runtime::vm::{VMContext, VMOpaqueContext};
-use crate::{Engine, ValRaw};
+use crate::{Engine, ValRaw, error::OutOfMemory};
+use core::convert::Infallible;
 use core::marker;
 use core::mem;
 use core::ptr::NonNull;
 use wasmtime_unwinder::Unwind;
 
 pub struct Interpreter {
-    empty: Uninhabited,
+    empty: Infallible,
 }
 
 const _: () = assert!(mem::size_of::<Interpreter>() == 0);
 const _: () = assert!(mem::size_of::<Option<Interpreter>>() == 0);
 
 impl Interpreter {
-    pub fn new(_engine: &Engine) -> Interpreter {
+    pub fn new(_engine: &Engine) -> Result<Interpreter, OutOfMemory> {
         unreachable!()
     }
 
@@ -34,7 +34,7 @@ impl Interpreter {
 }
 
 pub struct InterpreterRef<'a> {
-    empty: Uninhabited,
+    empty: Infallible,
     _marker: marker::PhantomData<&'a mut Interpreter>,
 }
 

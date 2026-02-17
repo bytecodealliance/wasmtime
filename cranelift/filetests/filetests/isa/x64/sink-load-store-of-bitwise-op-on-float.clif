@@ -13,8 +13,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   orl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   orl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -24,8 +24,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   orl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   orl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,8 +42,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   orl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   orl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -53,8 +53,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   orl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   orl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -71,8 +71,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   andl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   andl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -82,8 +82,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   andl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   andl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -100,8 +100,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   andl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   andl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -111,8 +111,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   andl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   andl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -129,8 +129,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   xorl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   xorl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -140,8 +140,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   xorl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   xorl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -158,8 +158,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movd %xmm0, %ecx
-;   xorl %ecx, (%rdi)
+;   movd %xmm0, %esi
+;   xorl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -169,8 +169,8 @@ block0(v0: i64, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movd %xmm0, %ecx
-;   xorl %ecx, (%rdi) ; trap: heap_oob
+;   movd %xmm0, %esi
+;   xorl %esi, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -2,8 +2,8 @@
 
 use crate::generators::{CompilerStrategy, Config, DiffValue, DiffValueType};
 use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
-use anyhow::Error;
 use arbitrary::Unstructured;
+use wasmtime::Error;
 use wasmtime::Trap;
 
 /// Returns a function which can be used to build the engine name specified.
@@ -55,7 +55,7 @@ pub trait DiffEngine {
     fn name(&self) -> &'static str;
 
     /// Create a new instance with the given engine.
-    fn instantiate(&mut self, wasm: &[u8]) -> anyhow::Result<Box<dyn DiffInstance>>;
+    fn instantiate(&mut self, wasm: &[u8]) -> wasmtime::Result<Box<dyn DiffInstance>>;
 
     /// Tests that the wasmtime-originating `trap` matches the error this engine
     /// generated.
@@ -85,7 +85,7 @@ pub trait DiffInstance {
         function_name: &str,
         arguments: &[DiffValue],
         results: &[DiffValueType],
-    ) -> anyhow::Result<Option<Vec<DiffValue>>>;
+    ) -> wasmtime::Result<Option<Vec<DiffValue>>>;
 
     /// Attempts to return the value of the specified global, returning `None`
     /// if this engine doesn't support retrieving globals at this time.

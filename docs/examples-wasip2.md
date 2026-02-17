@@ -45,7 +45,9 @@ This example shows adding and configuring the WASI imports to invoke the above W
 This [async example code][code2] shows how to use the [wasmtime-wasi][`wasmtime-wasi`] crate to
 execute the same WASIp2 component from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
 
-This does not require any change to the WASIp2 component, it's just the WASIp2 API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
+This does not require any change to the WASIp2 component, it's just the WASIp2
+API host functions which are implemented to be async. See [wasmtime async
+support](https://docs.wasmtime.dev/api/wasmtime/#async).
 
 [code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip2-async/main.rs
 [`wasmtime-wasi`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/preview2/index.html

@@ -2,7 +2,7 @@
 
 We're excited to work on Wasmtime and/or Cranelift together with you! This guide
 should help you get up and running with Wasmtime and Cranelift development. But
-first, make sure you've read the [Code of Conduct](./contributing-coc.html)!
+first, make sure you've read the [Code of Conduct](./contributing-coc.md)!
 
 Wasmtime and Cranelift are very ambitious projects with many goals, and while
 we're confident we can achieve some of them, we see many opportunities for

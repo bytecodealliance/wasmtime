@@ -1,3 +1,5 @@
+use wasmtime_environ::error::format_err;
+
 pub use super::types::{Errno, Error};
 
 pub trait ErrorExt {
@@ -217,7 +219,7 @@ impl From<std::io::Error> for Error {
                 std::io::ErrorKind::AlreadyExists => Errno::Exist.into(),
                 std::io::ErrorKind::InvalidInput => Errno::Inval.into(),
                 std::io::ErrorKind::WouldBlock => Errno::Again.into(),
-                _ => Error::trap(anyhow::anyhow!(err).context("Unknown OS error")),
+                _ => Error::trap(format_err!(err).context("Unknown OS error")),
             },
         }
     }

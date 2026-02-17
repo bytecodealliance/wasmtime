@@ -23,15 +23,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
+pub(crate) struct i8x16(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
+pub(crate) struct f32x4(core::convert::Infallible);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
-pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
+pub(crate) struct f64x2(core::convert::Infallible);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
@@ -44,9 +44,8 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
-use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
-};
+use wasmtime_environ::error::OutOfMemory;
+use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
@@ -124,10 +123,12 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
+#[cfg(feature = "component-model")]
+pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
@@ -150,9 +151,9 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 mod async_yield;
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "gc"))]
 pub use crate::runtime::vm::async_yield::*;
 
 #[cfg(feature = "gc-null")]
@@ -222,7 +223,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut component::CallContexts;
+    fn component_task_state_mut(&mut self) -> &mut crate::component::store::ComponentTaskState;
 
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
@@ -231,7 +232,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Invoke a debug handler, if present, at a debug event.
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> crate::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {
@@ -284,23 +285,12 @@ struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 unsafe impl Send for VMStoreRawPtr {}
 unsafe impl Sync for VMStoreRawPtr {}
 
-/// Functionality required by this crate for a particular module. This
-/// is chiefly needed for lazy initialization of various bits of
-/// instance state.
-///
-/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
-/// so that it can get to signatures, metadata on functions, memory and
-/// funcref-table images, etc. All of these things are ordinarily known
-/// by the higher-level layers of Wasmtime. Specifically, the main
-/// implementation of this trait is provided by
-/// `wasmtime::module::ModuleInner`.  Since the runtime crate sits at
-/// the bottom of the dependence DAG though, we don't know or care about
-/// that; we just need some implementor of this trait for each
-/// allocation request.
+/// Functionality required by this crate for a particular module. This is
+/// chiefly needed for lazy initialization of various bits of instance state.
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
     Module(crate::Module),
-    Bare(Box<BareModuleInfo>),
+    Bare(Arc<BareModuleInfo>),
 }
 
 /// A barebones implementation of ModuleRuntimeInfo that is useful for
@@ -315,19 +305,20 @@ pub struct BareModuleInfo {
 }
 
 impl ModuleRuntimeInfo {
-    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
+    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
         ModuleRuntimeInfo::bare_with_registered_type(module, None)
     }
 
     pub(crate) fn bare_with_registered_type(
         module: Arc<wasmtime_environ::Module>,
         registered_type: Option<RegisteredType>,
-    ) -> Self {
-        ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
+    ) -> Result<Self, OutOfMemory> {
+        let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
             _registered_type: registered_type,
-        }))
+        })?;
+        Ok(ModuleRuntimeInfo::Bare(info))
     }
 
     /// The underlying Module.
@@ -344,7 +335,7 @@ impl ModuleRuntimeInfo {
     fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .shared_type(module_index)
                 .expect("bad module-level interned type index"),
@@ -352,44 +343,9 @@ impl ModuleRuntimeInfo {
         }
     }
 
-    /// Returns the address, in memory, that the function `index` resides at.
-    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
-        let module = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = module
-            .compiled_module()
-            .finished_function(index)
-            .as_ptr()
-            .cast::<VMWasmCallFunction>()
-            .cast_mut();
-        NonNull::new(ptr).unwrap()
-    }
-
-    /// Returns the address, in memory, of the trampoline that allows the given
-    /// defined Wasm function to be called by the array calling convention.
-    ///
-    /// Returns `None` for Wasm functions which do not escape, and therefore are
-    /// not callable from outside the Wasm module itself.
-    fn array_to_wasm_trampoline(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<NonNull<VMArrayCallFunction>> {
-        let m = match self {
-            ModuleRuntimeInfo::Module(m) => m,
-            ModuleRuntimeInfo::Bare(_) => unreachable!(),
-        };
-        let ptr = NonNull::from(m.compiled_module().array_to_wasm_trampoline(index)?);
-        Some(ptr.cast())
-    }
-
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
-    fn memory_image(
-        &self,
-        memory: DefinedMemoryIndex,
-    ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
+    fn memory_image(&self, memory: DefinedMemoryIndex) -> crate::Result<Option<&Arc<MemoryImage>>> {
         match self {
             ModuleRuntimeInfo::Module(m) => {
                 let images = m.memory_images()?;
@@ -413,7 +369,7 @@ impl ModuleRuntimeInfo {
     /// A slice pointing to all data that is referenced by this instance.
     fn wasm_data(&self) -> &[u8] {
         match self {
-            ModuleRuntimeInfo::Module(m) => m.compiled_module().code_memory().wasm_data(),
+            ModuleRuntimeInfo::Module(m) => m.engine_code().wasm_data(),
             ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
@@ -423,7 +379,7 @@ impl ModuleRuntimeInfo {
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match self {
             ModuleRuntimeInfo::Module(m) => m
-                .code_object()
+                .engine_code()
                 .signatures()
                 .as_module_map()
                 .values()
@@ -494,12 +450,18 @@ impl fmt::Display for WasmFault {
 
 /// Asserts that the future `f` is ready and returns its output.
 ///
-/// This function is intended to be used when `async_support` is verified as
-/// disabled. Internals of Wasmtime are generally `async` when they optionally
-/// can be, meaning that synchronous entrypoints will invoke this function
-/// after invoking the asynchronous internals. Due to `async_support` being
-/// disabled there should be no way to introduce a yield point meaning that all
-/// futures built from internal functions should always be ready.
+/// This function is intended to be used with `Store::validate_sync_call`.
+/// Internals of Wasmtime are generally `async` when they optionally can be,
+/// meaning that synchronous entrypoints will invoke this function after
+/// invoking the asynchronous internals. The `validate_sync_call` method
+/// ensures that during this `async` function call there won't actually be any
+/// yield points. If a yield point could possibly happen, then
+/// `validate_sync_call` will fail.
+///
+/// If `validate_sync_call` passes, then this function is an extra assert that
+/// yes, indeed, we coded everything correctly in Wasmtime and there shouldn't
+/// be any yield points in the future provided, so its result should be ready
+/// immediately.
 ///
 /// # Panics
 ///
@@ -519,7 +481,7 @@ pub fn assert_ready<F: Future>(f: F) -> F::Output {
 /// is available. If it isn't then `None` is returned and an appropriate panic
 /// message should be generated recommending to use an async function (e.g.
 /// `grow_async` instead of `grow`).
-pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+fn one_poll<F: Future>(f: F) -> Option<F::Output> {
     let mut context = Context::from_waker(&Waker::noop());
     match pin!(f).poll(&mut context) {
         Poll::Ready(output) => Some(output),

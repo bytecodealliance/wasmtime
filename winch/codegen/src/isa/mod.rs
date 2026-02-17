@@ -1,5 +1,4 @@
-use crate::BuiltinFunctions;
-use anyhow::{Result, anyhow};
+use crate::{BuiltinFunctions, Result, format_err};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -30,7 +29,7 @@ macro_rules! isa_builder {
         }
         #[cfg(not $cfg_terms)]
         {
-            Err(anyhow!(LookupError::SupportDisabled))
+            Err(format_err!(LookupError::SupportDisabled))
         }
     }};
 }
@@ -47,7 +46,7 @@ pub fn lookup(triple: Triple) -> Result<Builder> {
             isa_builder!(aarch64, (feature = "arm64"), triple)
         }
 
-        _ => Err(anyhow!(LookupError::Unsupported)),
+        _ => Err(format_err!(LookupError::Unsupported)),
     }
 }
 

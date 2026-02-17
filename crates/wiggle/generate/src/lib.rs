@@ -43,7 +43,7 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
             let methodname = names::user_error_conversion_method(&errtype);
             Some(quote! {
                 fn #methodname(&mut self, e: super::#user_typename)
-                    -> wiggle::anyhow::Result<#abi_typename>;
+                    -> wiggle::error::Result<#abi_typename>;
             })
         }
         ErrorType::Generated(_) => None,

@@ -1,0 +1,223 @@
+test compile precise-output
+target s390x
+
+function %call_preserve_all_abi(i64) system_v {
+    sig0 = (i64, i64, i64, i64) preserve_all
+block0(v0: i64):
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    call_indirect sig0, v0(v0, v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   basr %r14, %r5
+;   basr %r14, %r5
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   lgr %r5, %r2
+;   lgr %r3, %r5
+;   lgr %r4, %r5
+;   basr %r14, %r5
+;   basr %r14, %r5
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %preserve_all_abi_trampoline(i64) preserve_all {
+    fn0 = %libcall(i64) system_v
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+;   aghi %r15, -720
+;   vst %v0, 208(%r15)
+;   vst %v1, 224(%r15)
+;   vst %v2, 240(%r15)
+;   vst %v3, 256(%r15)
+;   vst %v4, 272(%r15)
+;   vst %v5, 288(%r15)
+;   vst %v6, 304(%r15)
+;   vst %v7, 320(%r15)
+;   vst %v8, 336(%r15)
+;   vst %v9, 352(%r15)
+;   vst %v10, 368(%r15)
+;   vst %v11, 384(%r15)
+;   vst %v12, 400(%r15)
+;   vst %v13, 416(%r15)
+;   vst %v14, 432(%r15)
+;   vst %v15, 448(%r15)
+;   vst %v16, 464(%r15)
+;   vst %v17, 480(%r15)
+;   vst %v18, 496(%r15)
+;   vst %v19, 512(%r15)
+;   vst %v20, 528(%r15)
+;   vst %v21, 544(%r15)
+;   vst %v22, 560(%r15)
+;   vst %v23, 576(%r15)
+;   vst %v24, 592(%r15)
+;   vst %v25, 608(%r15)
+;   vst %v26, 624(%r15)
+;   vst %v27, 640(%r15)
+;   vst %v28, 656(%r15)
+;   vst %v29, 672(%r15)
+;   vst %v30, 688(%r15)
+;   vst %v31, 704(%r15)
+;   stmg %r0, %r5, 160(%r15)
+; block0:
+;   bras %r1, 12 ; data %libcall + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   vl %v0, 208(%r15)
+;   vl %v1, 224(%r15)
+;   vl %v2, 240(%r15)
+;   vl %v3, 256(%r15)
+;   vl %v4, 272(%r15)
+;   vl %v5, 288(%r15)
+;   vl %v6, 304(%r15)
+;   vl %v7, 320(%r15)
+;   vl %v8, 336(%r15)
+;   vl %v9, 352(%r15)
+;   vl %v10, 368(%r15)
+;   vl %v11, 384(%r15)
+;   vl %v12, 400(%r15)
+;   vl %v13, 416(%r15)
+;   vl %v14, 432(%r15)
+;   vl %v15, 448(%r15)
+;   vl %v16, 464(%r15)
+;   vl %v17, 480(%r15)
+;   vl %v18, 496(%r15)
+;   vl %v19, 512(%r15)
+;   vl %v20, 528(%r15)
+;   vl %v21, 544(%r15)
+;   vl %v22, 560(%r15)
+;   vl %v23, 576(%r15)
+;   vl %v24, 592(%r15)
+;   vl %v25, 608(%r15)
+;   vl %v26, 624(%r15)
+;   vl %v27, 640(%r15)
+;   vl %v28, 656(%r15)
+;   vl %v29, 672(%r15)
+;   vl %v30, 688(%r15)
+;   vl %v31, 704(%r15)
+;   lmg %r0, %r5, 160(%r15)
+;   lmg %r6, %r15, 768(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+;   aghi %r15, -0x2d0
+;   vst %v0, 0xd0(%r15)
+;   vst %v1, 0xe0(%r15)
+;   vst %v2, 0xf0(%r15)
+;   vst %v3, 0x100(%r15)
+;   vst %v4, 0x110(%r15)
+;   vst %v5, 0x120(%r15)
+;   vst %v6, 0x130(%r15)
+;   vst %v7, 0x140(%r15)
+;   vst %v8, 0x150(%r15)
+;   vst %v9, 0x160(%r15)
+;   vst %v10, 0x170(%r15)
+;   vst %v11, 0x180(%r15)
+;   vst %v12, 0x190(%r15)
+;   vst %v13, 0x1a0(%r15)
+;   vst %v14, 0x1b0(%r15)
+;   vst %v15, 0x1c0(%r15)
+;   vst %v16, 0x1d0(%r15)
+;   vst %v17, 0x1e0(%r15)
+;   vst %v18, 0x1f0(%r15)
+;   vst %v19, 0x200(%r15)
+;   vst %v20, 0x210(%r15)
+;   vst %v21, 0x220(%r15)
+;   vst %v22, 0x230(%r15)
+;   vst %v23, 0x240(%r15)
+;   vst %v24, 0x250(%r15)
+;   vst %v25, 0x260(%r15)
+;   vst %v26, 0x270(%r15)
+;   vst %v27, 0x280(%r15)
+;   vst %v28, 0x290(%r15)
+;   vst %v29, 0x2a0(%r15)
+;   vst %v30, 0x2b0(%r15)
+;   vst %v31, 0x2c0(%r15)
+;   stmg %r0, %r5, 0xa0(%r15)
+; block1: ; offset 0xd0
+;   bras %r1, 0xdc
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %libcall 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   vl %v0, 0xd0(%r15)
+;   vl %v1, 0xe0(%r15)
+;   vl %v2, 0xf0(%r15)
+;   vl %v3, 0x100(%r15)
+;   vl %v4, 0x110(%r15)
+;   vl %v5, 0x120(%r15)
+;   vl %v6, 0x130(%r15)
+;   vl %v7, 0x140(%r15)
+;   vl %v8, 0x150(%r15)
+;   vl %v9, 0x160(%r15)
+;   vl %v10, 0x170(%r15)
+;   vl %v11, 0x180(%r15)
+;   vl %v12, 0x190(%r15)
+;   vl %v13, 0x1a0(%r15)
+;   vl %v14, 0x1b0(%r15)
+;   vl %v15, 0x1c0(%r15)
+;   vl %v16, 0x1d0(%r15)
+;   vl %v17, 0x1e0(%r15)
+;   vl %v18, 0x1f0(%r15)
+;   vl %v19, 0x200(%r15)
+;   vl %v20, 0x210(%r15)
+;   vl %v21, 0x220(%r15)
+;   vl %v22, 0x230(%r15)
+;   vl %v23, 0x240(%r15)
+;   vl %v24, 0x250(%r15)
+;   vl %v25, 0x260(%r15)
+;   vl %v26, 0x270(%r15)
+;   vl %v27, 0x280(%r15)
+;   vl %v28, 0x290(%r15)
+;   vl %v29, 0x2a0(%r15)
+;   vl %v30, 0x2b0(%r15)
+;   vl %v31, 0x2c0(%r15)
+;   lmg %r0, %r5, 0xa0(%r15)
+;   lmg %r6, %r15, 0x300(%r15)
+;   br %r14
+
+function %preserve_all_call(i64) system_v {
+  fn0 = colocated %f(i64) preserve_all
+block0(v0: i64):
+  call fn0(v0)
+  return
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+; block0:
+;   brasl %r14, %f
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %f 2
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+

@@ -99,8 +99,6 @@ pub struct DIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct D {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl DIndices {
         /// Creates a new copy of `DIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -188,7 +186,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod a {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -205,7 +203,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -237,14 +235,14 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod b {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Foo = super::super::super::foo::foo::a::Foo;
             const _: () = {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -276,14 +274,14 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod c {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Foo = super::super::super::foo::foo::b::Foo;
             const _: () = {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T>(
+                fn a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -317,14 +315,14 @@ pub mod foo {
 #[allow(clippy::all)]
 pub mod d {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::{anyhow, Box};
+    use wasmtime::component::__internal::Box;
     pub type Foo = super::foo::foo::c::Foo;
     const _: () = {
         assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
         assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn b<T>(
+        fn b<T: Send>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = Foo> + Send;
     }

@@ -29,61 +29,61 @@ block5(v5: i32):
 
 ; VCode:
 ; block0:
-;   br_table a0,[MachLabel(6),MachLabel(5),MachLabel(1),MachLabel(2),MachLabel(3)]##tmp1=a2,tmp2=a3
+;   br_table a0,[MachLabel(6),MachLabel(5),MachLabel(1),MachLabel(2),MachLabel(3)]##tmp1=a2,tmp2=a1
 ; block1:
 ;   j label4
 ; block2:
 ;   j label4
 ; block3:
-;   li a5,3
+;   li a1,3
 ;   j label7
 ; block4:
-;   li a5,2
+;   li a1,2
 ;   j label7
 ; block5:
-;   li a5,1
+;   li a1,1
 ;   j label7
 ; block6:
-;   li a5,4
+;   li a1,4
 ;   j label7
 ; block7:
-;   addw a0,a0,a5
+;   addw a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t6, a0, 0x20
 ;   srli t6, t6, 0x20
-;   addi a3, zero, 4
-;   bltu t6, a3, 0xc
-;   auipc a3, 0
-;   jalr zero, a3, 0x54
+;   addi a1, zero, 4
+;   bltu t6, a1, 0xc
+;   auipc a1, 0
+;   jalr zero, a1, 0x54
 ;   auipc a2, 0
-;   slli a3, t6, 3
-;   add a2, a2, a3
+;   slli a1, t6, 3
+;   add a2, a2, a1
 ;   jalr zero, a2, 0x10
-;   auipc a3, 0
-;   jalr zero, a3, 0x34
-;   auipc a3, 0
-;   jalr zero, a3, 0x24
-;   auipc a3, 0
-;   jalr zero, a3, 0x1c
-;   auipc a3, 0
-;   jalr zero, a3, 0xc
+;   auipc a1, 0
+;   jalr zero, a1, 0x34
+;   auipc a1, 0
+;   jalr zero, a1, 0x24
+;   auipc a1, 0
+;   jalr zero, a1, 0x1c
+;   auipc a1, 0
+;   jalr zero, a1, 0xc
 ; block1: ; offset 0x48
 ;   j 0xc
 ; block2: ; offset 0x4c
-;   addi a5, zero, 3
+;   addi a1, zero, 3
 ;   j 0x18
 ; block3: ; offset 0x54
-;   addi a5, zero, 2
+;   addi a1, zero, 2
 ;   j 0x10
 ; block4: ; offset 0x5c
-;   addi a5, zero, 1
+;   addi a1, zero, 1
 ;   j 8
 ; block5: ; offset 0x64
-;   addi a5, zero, 4
+;   addi a1, zero, 4
 ; block6: ; offset 0x68
-;   addw a0, a0, a5
+;   addw a0, a0, a1
 ;   ret
 

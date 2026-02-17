@@ -17,25 +17,29 @@
 ;; block0(v0: i64, v1: i64, v2: i32):
 ;;     v3 = load.i64 notrap aligned v0+16
 ;;     v4 = get_frame_pointer.i64 
-;;     store notrap aligned v4, v3+40
+;;     store notrap aligned v4, v3+48
 ;;     v5 = get_return_address.i64 
-;;     store notrap aligned v5, v3+48
-;;     v8 = load.i64 notrap aligned readonly v0+8
-;;     v9 = load.i64 notrap aligned readonly v8+16
-;;     v6 = iconst.i32 0
-;;     v10 = call_indirect sig0, v9(v0, v6, v6, v2)  ; v6 = 0, v6 = 0
-;;     v11 = iconst.i64 -1
-;;     v12 = icmp ne v10, v11  ; v11 = -1
-;;     brif v12, block2, block1
+;;     store notrap aligned v5, v3+56
+;;     v6 = load.i32 notrap aligned v0+32
+;;     v17 = iconst.i32 1
+;;     v7 = band v6, v17  ; v17 = 1
+;;     trapz v7, user25
+;;     v10 = load.i64 notrap aligned readonly v0+8
+;;     v11 = load.i64 notrap aligned readonly v10+16
+;;     v8 = iconst.i32 0
+;;     v12 = call_indirect sig0, v11(v0, v8, v8, v2)  ; v8 = 0, v8 = 0
+;;     v13 = iconst.i64 -1
+;;     v14 = icmp ne v12, v13  ; v13 = -1
+;;     brif v14, block2, block1
 ;;
 ;; block1 cold:
-;;     v13 = load.i64 notrap aligned readonly v1+16
-;;     v14 = load.i64 notrap aligned readonly v13+408
-;;     call_indirect sig1, v14(v1)
+;;     v15 = load.i64 notrap aligned readonly v1+16
+;;     v16 = load.i64 notrap aligned readonly v15+408
+;;     call_indirect sig1, v16(v1)
 ;;     trap user1
 ;;
 ;; block2:
-;;     brif.i64 v10, block3, block4
+;;     brif.i64 v12, block3, block4
 ;;
 ;; block3:
 ;;     jump block4

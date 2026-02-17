@@ -41,14 +41,14 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   movq %r12, (%rsp)
 ; block0:
-;   movq %rsi, %r15
-;   load_ext_name %f2+0, %rax
-;   movq %r15, %rdi
-;   call    *%rax
-;   movq %r15, %rax
-;   movq (%rsp), %r15
+;   movq %rsi, %r12
+;   load_ext_name %f2+0, %rdx
+;   movq %r12, %rdi
+;   call    *%rdx
+;   movq %r12, %rax
+;   movq (%rsp), %r12
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -59,14 +59,14 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   movq %r12, (%rsp)
 ; block1: ; offset 0xc
-;   movq %rsi, %r15
-;   movabsq $0, %rax ; reloc_external Abs8 %f2 0
-;   movq %r15, %rdi
-;   callq *%rax
-;   movq %r15, %rax
-;   movq (%rsp), %r15
+;   movq %rsi, %r12
+;   movabsq $0, %rdx ; reloc_external Abs8 %f2 0
+;   movq %r12, %rdi
+;   callq *%rdx
+;   movq %r12, %rax
+;   movq (%rsp), %r12
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -84,13 +84,13 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   movq %r12, (%rsp)
 ; block0:
-;   movq %rdi, %r15
-;   load_ext_name %f4+0, %rax
-;   call    *%rax
-;   movq %r15, %rax
-;   movq (%rsp), %r15
+;   movq %rdi, %r12
+;   load_ext_name %f4+0, %rdx
+;   call    *%rdx
+;   movq %r12, %rax
+;   movq (%rsp), %r12
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -101,13 +101,13 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   movq %r12, (%rsp)
 ; block1: ; offset 0xc
-;   movq %rdi, %r15
-;   movabsq $0, %rax ; reloc_external Abs8 %f4 0
-;   callq *%rax
-;   movq %r15, %rax
-;   movq (%rsp), %r15
+;   movq %rdi, %r12
+;   movabsq $0, %rdx ; reloc_external Abs8 %f4 0
+;   callq *%rdx
+;   movq %r12, %rax
+;   movq (%rsp), %r12
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

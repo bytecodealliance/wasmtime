@@ -2,12 +2,11 @@
 
 use super::REALLOC_AND_FREE;
 use crate::call_hook::{Context, State, sync_call_hook};
-use anyhow::{Result, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
 use wasmtime::component::*;
-use wasmtime::{CallHook, CallHookHandler, Config, Engine, Store, StoreContextMut};
+use wasmtime::{CallHook, CallHookHandler, Engine, Result, Store, StoreContextMut, bail};
 
 // Crate a synchronous Func, call it directly:
 #[test]
@@ -60,7 +59,6 @@ fn call_wrapped_func() -> Result<()> {
         .expect("looking up `export`");
 
     export.call(&mut store, ())?;
-    export.post_return(&mut store)?;
 
     let s = store.into_data();
     assert_eq!(s.calls_into_host, 1);
@@ -127,8 +125,6 @@ fn call_func_with_realloc() -> Result<()> {
     let result = res.to_str(&store)?;
     assert_eq!(&message, &result);
 
-    export.post_return(&mut store)?;
-
     // There are two wasm calls for the `list8-to-str` call and the guest realloc call for the list
     // argument.
     let s = store.into_data();
@@ -174,12 +170,6 @@ fn call_func_with_post_return() -> Result<()> {
 
     export.call(&mut store, ())?;
 
-    // Before post-return, there will only have been one call into wasm.
-    assert_eq!(store.data().calls_into_wasm, 1);
-    assert_eq!(store.data().returns_from_wasm, 1);
-
-    export.post_return(&mut store)?;
-
     // There are no host calls in this example, but the post-return does increment the count of
     // wasm calls by 1, putting the total number of wasm calls at 2.
     let s = store.into_data();
@@ -223,9 +213,7 @@ async fn call_wrapped_async_func() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 
@@ -247,7 +235,6 @@ async fn call_wrapped_async_func() -> Result<()> {
         .expect("looking up `export`");
 
     export.call_async(&mut store, ()).await?;
-    export.post_return_async(&mut store).await?;
 
     let s = store.into_data();
     assert_eq!(s.calls_into_host, 1);
@@ -320,7 +307,7 @@ fn trapping() -> Result<()> {
 
     let component = Component::new(&engine, wat)?;
 
-    let run = |action: i32, again: bool| -> (State, Option<anyhow::Error>) {
+    let run = |action: i32, again: bool| -> (State, Option<wasmtime::Error>) {
         let mut store = Store::new(&engine, State::default());
         store.call_hook(sync_call_hook);
         let inst = linker
@@ -333,7 +320,6 @@ fn trapping() -> Result<()> {
 
         let mut r = export.call(&mut store, (action,));
         if r.is_ok() && again {
-            export.post_return(&mut store).unwrap();
             r = export.call(&mut store, (action,));
         }
         (store.into_data(), r.err())
@@ -470,9 +456,7 @@ async fn timeout_async_hook() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 
@@ -558,9 +542,7 @@ async fn drop_suspended_async_hook() -> Result<()> {
         )
     "#;
 
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     let component = Component::new(&engine, wat)?;
 

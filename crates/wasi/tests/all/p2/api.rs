@@ -1,7 +1,7 @@
-use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
+use wasmtime::Result;
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::add_to_linker_async;
@@ -30,9 +30,7 @@ use test_programs_artifacts::*;
 foreach_p2_api!(assert_test_exists);
 
 async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, Command)> {
-    let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
-    });
+    let engine = test_programs_artifacts::engine(|_config| {});
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 
@@ -86,7 +84,7 @@ async fn p2_api_time() -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+        .map_err(|()| wasmtime::format_err!("command returned with failing exit status"))
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -108,7 +106,7 @@ async fn p2_api_read_only() -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+        .map_err(|()| wasmtime::format_err!("command returned with failing exit status"))
 }
 
 #[expect(
@@ -145,9 +143,7 @@ wasmtime::component::bindgen!({
 async fn p2_api_reactor() -> Result<()> {
     let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
-    let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
-    });
+    let engine = test_programs_artifacts::engine(|_config| {});
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 

@@ -19,7 +19,7 @@
 //! [`wasi:http/types`]: crate::bindings::http::types::Host
 //! [`wasi:http/incoming-handler`]: crate::bindings::exports::wasi::http::incoming_handler::Guest
 //!
-//! This crate is very similar to [`wasmtime-wasi`] in the it uses the
+//! This crate is very similar to [`wasmtime_wasi`] in the it uses the
 //! `bindgen!` macro in Wasmtime to generate bindings to interfaces. Bindings
 //! are located in the [`bindings`] module.
 //!
@@ -65,12 +65,12 @@
 //! A standalone example of doing all this looks like:
 //!
 //! ```no_run
-//! use anyhow::bail;
+//! use wasmtime::bail;
 //! use hyper::server::conn::http1;
 //! use std::sync::Arc;
 //! use tokio::net::TcpListener;
 //! use wasmtime::component::{Component, Linker, ResourceTable};
-//! use wasmtime::{Config, Engine, Result, Store};
+//! use wasmtime::{Engine, Result, Store};
 //! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime_wasi_http::bindings::ProxyPre;
 //! use wasmtime_wasi_http::bindings::http::types::Scheme;
@@ -83,9 +83,7 @@
 //!     let component = std::env::args().nth(1).unwrap();
 //!
 //!     // Prepare the `Engine` for Wasmtime
-//!     let mut config = Config::new();
-//!     config.async_support(true);
-//!     let engine = Engine::new(&config)?;
+//!     let engine = Engine::default();
 //!
 //!     // Compile the component on the command line to machine code
 //!     let component = Component::from_file(&engine, &component)?;
@@ -249,24 +247,19 @@ use wasmtime::component::{HasData, Linker};
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
 /// This function will add the `async` variant of all interfaces into the
-/// `Linker` provided. By `async` this means that this function is only
-/// compatible with [`Config::async_support(true)`][async]. For embeddings with
-/// async support disabled see [`add_to_linker_sync`] instead.
-///
-/// [async]: wasmtime::Config::async_support
+/// `Linker` provided. For embeddings with async support disabled see
+/// [`add_to_linker_sync`] instead.
 ///
 /// # Example
 ///
 /// ```
-/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime::{Engine, Result};
 /// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker = Linker::<MyState>::new(&engine);
 ///     wasmtime_wasi_http::add_to_linker_async(&mut linker)?;
@@ -292,7 +285,7 @@ use wasmtime::component::{HasData, Linker};
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
@@ -307,7 +300,7 @@ where
 /// example to avoid re-adding the same interfaces twice.
 pub fn add_only_http_to_linker_async<T>(
     l: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     T: WasiHttpView + 'static,
 {
@@ -368,7 +361,7 @@ impl<T: 'static> HasData for WasiHttp<T> {
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
+pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
@@ -381,7 +374,7 @@ where
 ///
 /// This is useful when using [`wasmtime_wasi::p2::add_to_linker_sync`] for
 /// example to avoid re-adding the same interfaces twice.
-pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
+pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiHttpView + 'static,
 {

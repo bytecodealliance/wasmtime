@@ -1,7 +1,7 @@
-use anyhow::bail;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
+use wasmtime::bail;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -923,7 +923,7 @@ fn get_from_signature() {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn get_from_module(config: &mut Config) -> anyhow::Result<()> {
+fn get_from_module(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(
@@ -996,7 +996,7 @@ fn call_wrapped_func() -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn caller_memory(config: &mut Config) -> anyhow::Result<()> {
+fn caller_memory(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::<()>::new(&engine, ());
     let f = Func::wrap(&mut store, |mut c: Caller<'_, ()>| {
@@ -1063,7 +1063,7 @@ fn caller_memory(config: &mut Config) -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn func_write_nothing() -> anyhow::Result<()> {
+fn func_write_nothing() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(store.engine(), None, Some(ValType::I32));
     let f = Func::new(&mut store, ty, |_, _, _| Ok(()));
@@ -1077,7 +1077,7 @@ fn func_write_nothing() -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
-fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
+fn return_cross_store_value(config: &mut Config) -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     let wasm = wat::parse_str(
@@ -1109,7 +1109,7 @@ fn return_cross_store_value(config: &mut Config) -> anyhow::Result<()> {
 }
 
 #[wasmtime_test(wasm_features(reference_types))]
-fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
+fn pass_cross_store_arg(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
 
     let mut store1 = Store::new(&engine, ());
@@ -1137,7 +1137,7 @@ fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn externref_signature_no_reference_types() -> anyhow::Result<()> {
+fn externref_signature_no_reference_types() -> wasmtime::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
     let mut store = Store::new(&Engine::new(&config)?, ());
@@ -1153,7 +1153,7 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn trampolines_always_valid(config: &mut Config) -> anyhow::Result<()> {
+fn trampolines_always_valid(config: &mut Config) -> wasmtime::Result<()> {
     // Compile two modules up front
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
@@ -1181,7 +1181,7 @@ fn trampolines_always_valid(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn typed_multiple_results(config: &mut Config) -> anyhow::Result<()> {
+fn typed_multiple_results(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(
@@ -1219,7 +1219,7 @@ fn typed_multiple_results(config: &mut Config) -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn trap_doesnt_leak() -> anyhow::Result<()> {
+fn trap_doesnt_leak() -> wasmtime::Result<()> {
     #[derive(Default)]
     struct Canary(Arc<AtomicBool>);
 
@@ -1261,8 +1261,8 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn wrap_multiple_results(config: &mut Config) -> anyhow::Result<()> {
-    fn test<T>(store: &mut Store<()>, t: T) -> anyhow::Result<()>
+fn wrap_multiple_results(config: &mut Config) -> wasmtime::Result<()> {
+    fn test<T>(store: &mut Store<()>, t: T) -> wasmtime::Result<()>
     where
         T: WasmRet
             + WasmResults
@@ -1427,7 +1427,7 @@ fn wrap_multiple_results(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(reference_types, gc_types))]
 #[cfg_attr(miri, ignore)]
-fn trampoline_for_declared_elem(config: &mut Config) -> anyhow::Result<()> {
+fn trampoline_for_declared_elem(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
 
     let module = Module::new(
@@ -1455,7 +1455,7 @@ fn trampoline_for_declared_elem(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn wasm_ty_roundtrip(config: &mut Config) -> Result<(), anyhow::Error> {
+fn wasm_ty_roundtrip(config: &mut Config) -> Result<(), wasmtime::Error> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let debug = Func::wrap(
@@ -1512,7 +1512,9 @@ fn wasm_ty_roundtrip(config: &mut Config) -> Result<(), anyhow::Error> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> anyhow::Result<()> {
+fn typed_funcs_count_params_correctly_in_error_messages(
+    config: &mut Config,
+) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(
@@ -1556,7 +1558,7 @@ fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> 
 
 #[wasmtime_test(wasm_features(reference_types, gc_types))]
 #[cfg_attr(miri, ignore)]
-fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
+fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(
@@ -1675,7 +1677,7 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
-fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
+fn typed_concrete_param(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -1748,7 +1750,7 @@ fn typed_concrete_param(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
-fn typed_concrete_result(config: &mut Config) -> anyhow::Result<()> {
+fn typed_concrete_result(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -1801,7 +1803,7 @@ fn typed_concrete_result(config: &mut Config) -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn wrap_subtype_param() -> anyhow::Result<()> {
+fn wrap_subtype_param() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let f = Func::wrap(&mut store, |_caller: Caller<'_, ()>, _: Option<Func>| {
         // No-op.
@@ -1825,7 +1827,7 @@ fn wrap_subtype_param() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn wrap_supertype_result() -> anyhow::Result<()> {
+fn wrap_supertype_result() -> wasmtime::Result<()> {
     let mut store = Store::<()>::default();
     let f = Func::wrap(&mut store, |_caller: Caller<'_, ()>| -> NoFunc {
         unreachable!()
@@ -1845,7 +1847,7 @@ fn wrap_supertype_result() -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(function_references))]
 #[cfg_attr(miri, ignore)]
-fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<()> {
+fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result<()> {
     config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
@@ -1924,7 +1926,7 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> anyhow::Result<(
 
 #[wasmtime_test(wasm_features(gc, function_references))]
 #[cfg_attr(miri, ignore)]
-fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<()> {
+fn call_wasm_getting_subtype_func_return(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -1996,7 +1998,7 @@ fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<
 
 #[wasmtime_test(wasm_features(simd), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
-fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
+fn typed_v128(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(
@@ -2065,7 +2067,7 @@ fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
 
 #[wasmtime_test(wasm_features(simd))]
 #[cfg_attr(miri, ignore)]
-fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {
+fn typed_v128_imports(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::<()>::new(&engine, ());
     let module = Module::new(

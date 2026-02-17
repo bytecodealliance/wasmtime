@@ -14,9 +14,9 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq    %r15, %rdi
-;   leaq 1(%rdi), %rdi
-;   movq    %rdi, %r15
+;   movq    %r15, %rcx
+;   leaq 1(%rcx), %rcx
+;   movq    %rcx, %r15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -26,9 +26,9 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %r15, %rdi
-;   addq $1, %rdi
-;   movq %rdi, %r15
+;   movq %r15, %rcx
+;   addq $1, %rcx
+;   movq %rcx, %r15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -44,14 +44,10 @@ block0:
 ; VCode:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %rdi, (%rsp)
 ; block0:
-;   movq    %r15, %rdi
-;   leaq 1(%rdi), %rdi
-;   movq    %rdi, %r15
-;   movq (%rsp), %rdi
-;   addq $0x10, %rsp
+;   movq    %r15, %rcx
+;   leaq 1(%rcx), %rcx
+;   movq    %rcx, %r15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -60,14 +56,10 @@ block0:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %rdi, (%rsp)
-; block1: ; offset 0xc
-;   movq %r15, %rdi
-;   addq $1, %rdi
-;   movq %rdi, %r15
-;   movq (%rsp), %rdi
-;   addq $0x10, %rsp
+; block1: ; offset 0x4
+;   movq %r15, %rcx
+;   addq $1, %rcx
+;   movq %rcx, %r15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

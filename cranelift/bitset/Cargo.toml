@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-bitset"
-version = "0.127.0"
+version = "0.130.0"
 description = "Various bitset stuff for use inside Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bitset"
@@ -16,6 +16,7 @@ workspace = true
 arbitrary = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
+wasmtime-core = { workspace = true }
 
 [features]
 enable-serde = ["dep:serde", "dep:serde_derive"]

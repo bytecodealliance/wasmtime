@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::simple::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -301,7 +299,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     f1: wasmtime::component::Func,
                     f2: wasmtime::component::Func,
@@ -333,7 +332,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple`"
                                 )
                             })?;
@@ -342,7 +341,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple` does \
                             not have export `{name}`"
                                     )
@@ -410,7 +409,6 @@ pub mod exports {
                             >::new_unchecked(self.f1)
                         };
                         let () = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f2<S: wasmtime::AsContextMut>(
@@ -425,7 +423,6 @@ pub mod exports {
                             >::new_unchecked(self.f2)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f3<S: wasmtime::AsContextMut>(
@@ -441,7 +438,6 @@ pub mod exports {
                             >::new_unchecked(self.f3)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f4<S: wasmtime::AsContextMut>(
@@ -455,7 +451,6 @@ pub mod exports {
                             >::new_unchecked(self.f4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f5<S: wasmtime::AsContextMut>(
@@ -469,7 +464,6 @@ pub mod exports {
                             >::new_unchecked(self.f5)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f6<S: wasmtime::AsContextMut>(
@@ -487,7 +481,6 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call(store.as_context_mut(), (arg0, arg1, arg2))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

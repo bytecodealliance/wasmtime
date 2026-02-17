@@ -1,11 +1,10 @@
-fn main() -> anyhow::Result<()> {
+fn main() -> wasmtime::Result<()> {
     component::generate_static_api_tests()?;
 
     Ok(())
 }
 
 mod component {
-    use anyhow::{Context, Error, Result, anyhow};
     use arbitrary::Unstructured;
     use proc_macro2::TokenStream;
     use quote::quote;
@@ -18,6 +17,7 @@ mod component {
     use std::iter;
     use std::path::PathBuf;
     use std::process::Command;
+    use wasmtime::{Error, Result, error::Context as _, format_err};
     use wasmtime_test_util::component_fuzz::{Declarations, MAX_TYPE_DEPTH, TestCase, Type};
 
     pub fn generate_static_api_tests() -> Result<()> {
@@ -38,9 +38,10 @@ mod component {
     }
 
     fn write_static_api_tests(out: &mut String) -> Result<()> {
+        println!("cargo:rerun-if-env-changed=WASMTIME_FUZZ_SEED");
         let seed = if let Ok(seed) = env::var("WASMTIME_FUZZ_SEED") {
             seed.parse::<u64>()
-                .with_context(|| anyhow!("expected u64 in WASMTIME_FUZZ_SEED"))?
+                .with_context(|| format_err!("expected u64 in WASMTIME_FUZZ_SEED"))?
         } else {
             StdRng::from_entropy().r#gen()
         };
@@ -143,7 +144,7 @@ mod component {
         let module = quote! {
             #[allow(unused_imports, reason = "macro-generated code")]
             fn static_component_api_target(input: &mut libfuzzer_sys::arbitrary::Unstructured) -> libfuzzer_sys::arbitrary::Result<()> {
-                use anyhow::Result;
+                use wasmtime::Result;
                 use wasmtime_test_util::component_fuzz::Declarations;
                 use wasmtime_test_util::component::{Float32, Float64};
                 use libfuzzer_sys::arbitrary::{self, Arbitrary};

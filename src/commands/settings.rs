@@ -1,10 +1,10 @@
 //! The module that implements the `wasmtime settings` command.
 
-use anyhow::{Result, anyhow};
 use clap::Parser;
 use serde::{Serialize, ser::SerializeMap};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use wasmtime::{Result, format_err};
 use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind, Tunables};
 
 /// Displays available Cranelift settings for a target.
@@ -109,7 +109,7 @@ impl SettingsCommand {
         // Gather settings from the cranelift compiler builder
         let mut builder = wasmtime_cranelift::builder(None)?;
         let tunables = if let Some(target) = &self.target {
-            let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
+            let target = target_lexicon::Triple::from_str(target).map_err(|e| format_err!(e))?;
             let tunables = Tunables::default_for_target(&target)?;
             builder.target(target)?;
             tunables

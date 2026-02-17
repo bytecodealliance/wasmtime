@@ -39,11 +39,14 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl $0x80000000, %eax
-;   vmovd %eax, %xmm4
-;   vandnps (%rip), %xmm4, %xmm6
-;   vandps (%rdi), %xmm4, %xmm0
-;   vorps %xmm0, %xmm6, %xmm0
+;   uninit  %xmm0
+;   vxorps %xmm0, %xmm0, %xmm0
+;   vmovss (%rdi), %xmm1
+;   movl $0x80000000, %esi
+;   vmovd %esi, %xmm7
+;   vandnps %xmm0, %xmm7, %xmm0
+;   vandps %xmm1, %xmm7, %xmm1
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -53,29 +56,16 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x80000000, %eax
-;   vmovd %eax, %xmm4
-;   vandnps 0x1b(%rip), %xmm4, %xmm6
-;   vandps (%rdi), %xmm4, %xmm0
-;   vorps %xmm0, %xmm6, %xmm0
+;   vxorps %xmm0, %xmm0, %xmm0
+;   vmovss (%rdi), %xmm1
+;   movl $0x80000000, %esi
+;   vmovd %esi, %xmm7
+;   vandnps %xmm0, %xmm7, %xmm0
+;   vandps %xmm1, %xmm7, %xmm1
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
 
 function %bor_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):

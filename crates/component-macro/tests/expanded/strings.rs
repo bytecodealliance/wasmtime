@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::strings::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod strings {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -279,7 +277,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod strings {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     a: wasmtime::component::Func,
                     b: wasmtime::component::Func,
@@ -305,7 +304,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/strings")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/strings`"
                                 )
                             })?;
@@ -314,7 +313,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/strings` does \
                       not have export `{name}`"
                                     )
@@ -367,7 +366,6 @@ pub mod exports {
                             >::new_unchecked(self.a)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_b<S: wasmtime::AsContextMut>(
@@ -381,7 +379,6 @@ pub mod exports {
                             >::new_unchecked(self.b)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_c<S: wasmtime::AsContextMut>(
@@ -397,7 +394,6 @@ pub mod exports {
                             >::new_unchecked(self.c)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

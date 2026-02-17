@@ -292,6 +292,8 @@ pub enum VMGlobalKind {
     /// Flags for a component instance, stored in `VMComponentContext`.
     #[cfg(feature = "component-model")]
     ComponentFlags(wasmtime_environ::component::RuntimeComponentInstanceIndex),
+    #[cfg(feature = "component-model")]
+    TaskMayBlock,
 }
 
 // SAFETY: the above enum is repr(C) and stores nothing else
@@ -1102,6 +1104,39 @@ pub struct VMStoreContext {
     /// yield if running asynchronously.
     pub epoch_deadline: UnsafeCell<u64>,
 
+    /// The "store version".
+    ///
+    /// This is used to test whether stack-frame handles referring to
+    /// suspended stack frames remain valid.
+    ///
+    /// The invariant that this upward-counting number must satisfy
+    /// is: the number must be incremented whenever execution starts
+    /// or resumes in the `Store` or when any stack is
+    /// dropped/freed. That way, if we take a reference to some
+    /// suspended stack frame and track the "version" at the time we
+    /// took that reference, if the version still matches, we can be
+    /// sure that nothing could have unwound the referenced Wasm
+    /// frame.
+    ///
+    /// This version number is incremented in exactly one place: the
+    /// Wasm-to-host trampolines, after return from host code. Note
+    /// that this captures both the normal "return into Wasm" case
+    /// (where Wasm frames can subsequently return normally and thus
+    /// invalidate frames), and the "trap/exception unwinds Wasm
+    /// frames" case, which is done internally via the `raise` libcall
+    /// invoked after the main hostcall returns an error, and after we
+    /// increment this version number.
+    ///
+    /// Note that this also handles the fiber/future-drop case because
+    /// because we *always* return into the trampoline to clean up;
+    /// that trampoline immediately raises an error and uses the
+    /// longjmp-like unwind within Cranelift frames to skip over all
+    /// the guest Wasm frames, but not before it increments the
+    /// store's execution version number.
+    ///
+    /// This field is in use only if guest debugging is enabled.
+    pub execution_version: u64,
+
     /// Current stack limit of the wasm module.
     ///
     /// For more information see `crates/cranelift/src/lib.rs`.
@@ -1258,6 +1293,7 @@ impl Default for VMStoreContext {
         VMStoreContext {
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
+            execution_version: 0,
             stack_limit: UnsafeCell::new(usize::max_value()),
             gc_heap: VMMemoryDefinition {
                 base: NonNull::dangling().into(),
@@ -1296,6 +1332,10 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, epoch_deadline),
             usize::from(offsets.ptr.vmstore_context_epoch_deadline())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, execution_version),
+            usize::from(offsets.ptr.vmstore_context_execution_version())
         );
         assert_eq!(
             offset_of!(VMStoreContext, gc_heap),

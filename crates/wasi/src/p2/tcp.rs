@@ -4,7 +4,6 @@ use crate::p2::{
 };
 use crate::runtime::AbortOnDropJoinHandle;
 use crate::sockets::TcpSocket;
-use anyhow::Result;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use std::io;
@@ -12,6 +11,7 @@ use std::mem;
 use std::net::Shutdown;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use wasmtime::Result;
 
 impl TcpSocket {
     pub(crate) fn p2_streams(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
@@ -191,7 +191,7 @@ impl TcpWriter {
             WriteState::Ready => {}
             WriteState::Closed => return Err(StreamError::Closed),
             WriteState::Writing(_) | WriteState::Closing(_) | WriteState::Error(_) => {
-                return Err(StreamError::Trap(anyhow::anyhow!(
+                return Err(StreamError::Trap(wasmtime::format_err!(
                     "unpermitted: must call check_write first"
                 )));
             }
@@ -354,7 +354,7 @@ fn try_lock_for_stream<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_
 
 fn try_lock_for_socket<T>(mutex: &Mutex<T>) -> SocketResult<tokio::sync::MutexGuard<'_, T>> {
     mutex.try_lock().map_err(|_| {
-        SocketError::trap(anyhow::anyhow!(
+        SocketError::trap(wasmtime::format_err!(
             "concurrent access to resource not supported"
         ))
     })

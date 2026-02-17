@@ -103,8 +103,6 @@ pub struct TheFlags {
     interface0: exports::foo::foo::flegs::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheFlagsIndices {
         /// Creates a new copy of `TheFlagsIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod flegs {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             wasmtime::component::flags!(Flag1 { #[component(name = "b0")] const B0; });
             const _: () = {
                 assert!(1 == < Flag1 as wasmtime::component::ComponentType >::SIZE32);
@@ -496,7 +494,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod flegs {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 wasmtime::component::flags!(
                     Flag1 { #[component(name = "b0")] const B0; }
                 );
@@ -646,6 +644,7 @@ pub mod exports {
                         4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     roundtrip_flag1: wasmtime::component::Func,
                     roundtrip_flag2: wasmtime::component::Func,
@@ -679,7 +678,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/flegs")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/flegs`"
                                 )
                             })?;
@@ -688,7 +687,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/flegs` does \
                               not have export `{name}`"
                                     )
@@ -793,7 +792,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
@@ -813,7 +811,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
@@ -833,7 +830,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
@@ -853,7 +849,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
@@ -873,7 +868,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
@@ -893,7 +887,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
@@ -913,7 +906,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                 }

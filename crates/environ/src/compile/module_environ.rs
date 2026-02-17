@@ -1,3 +1,4 @@
+use crate::error::{OutOfMemory, Result, bail};
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
@@ -6,12 +7,11 @@ use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert,
-    TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
-    WasmparserTypeConverter,
+    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, SizeOverflow,
+    StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex,
+    Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
+    WasmValType, WasmparserTypeConverter, collections,
 };
-use anyhow::{Result, bail};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -332,9 +332,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.import_section(&imports)?;
 
                 let cnt = usize::try_from(imports.count()).unwrap();
-                self.result.module.initializers.reserve(cnt);
+                self.result.module.initializers.reserve(cnt)?;
 
-                for entry in imports {
+                for entry in imports.into_imports() {
                     let import = entry?;
                     let ty = match import.ty {
                         TypeRef::Func(index) => {
@@ -369,8 +369,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result.module.num_imported_tags += 1;
                             EntityType::Tag(tag)
                         }
+                        TypeRef::FuncExact(_) => {
+                            bail!("custom-descriptors proposal not implemented yet");
+                        }
                     };
-                    self.declare_import(import.module, import.name, ty);
+                    self.declare_import(import.module, import.name, ty)?;
                 }
             }
 
@@ -400,7 +403,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.module.tables.push(table);
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {
-                            precomputed: Vec::new(),
+                            precomputed: collections::Vec::new(),
                         },
                         wasmparser::TableInit::Expr(expr) => {
                             let (init, escaped) = ConstExpr::from_wasmparser(self, expr)?;
@@ -466,12 +469,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.export_section(&exports)?;
 
                 let cnt = usize::try_from(exports.count()).unwrap();
-                self.result.module.exports.reserve(cnt);
+                self.result.module.exports.reserve(cnt)?;
 
                 for entry in exports {
                     let wasmparser::Export { name, kind, index } = entry?;
                     let entity = match kind {
-                        ExternalKind::Func => {
+                        ExternalKind::Func | ExternalKind::FuncExact => {
                             let index = FuncIndex::from_u32(index);
                             self.flag_func_escaped(index);
                             EntityIndex::Function(index)
@@ -481,10 +484,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
                         ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
-                    self.result
-                        .module
-                        .exports
-                        .insert(String::from(name), entity);
+                    let name = self.result.module.strings.insert(name)?;
+                    self.result.module.exports.insert(name, entity)?;
                 }
             }
 
@@ -546,21 +547,19 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            self.result
-                                .module
-                                .table_initialization
-                                .segments
-                                .push(TableSegment {
+                            self.result.module.table_initialization.segments.push(
+                                TableSegment {
                                     table_index,
                                     offset,
                                     elements,
-                                });
+                                },
+                            )?;
                         }
 
                         ElementKind::Passive => {
                             let elem_index = ElemIndex::from_u32(index as u32);
                             let index = self.result.module.passive_elements.len();
-                            self.result.module.passive_elements.push(elements);
+                            self.result.module.passive_elements.push(elements)?;
                             self.result
                                 .module
                                 .passive_elements_map
@@ -605,6 +604,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
+                if self.tunables.debug_guest {
+                    // All functions are potentially reachable and
+                    // callable by the guest debugger, so they must
+                    // all be flagged as escaping.
+                    self.flag_func_escaped(func_index);
+                }
                 self.result
                     .function_body_inputs
                     .push(FunctionBodyData { validator, body });
@@ -620,7 +625,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 };
 
                 let cnt = usize::try_from(data.count()).unwrap();
-                initializers.reserve_exact(cnt);
+                initializers.reserve_exact(cnt)?;
                 self.result.data.reserve_exact(cnt);
 
                 for (index, entry) in data.into_iter().enumerate() {
@@ -663,7 +668,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 memory_index,
                                 offset,
                                 data: range,
-                            });
+                            })?;
                             self.result.data.push(data.into());
                         }
                         DataKind::Passive => {
@@ -803,13 +808,19 @@ and for re-adding support for interface types you can see this issue:
     /// When the module linking proposal is disabled, however, disregard this
     /// logic and instead work directly with two-level imports since no
     /// instances are defined.
-    fn declare_import(&mut self, module: &'data str, field: &'data str, ty: EntityType) {
+    fn declare_import(
+        &mut self,
+        module: &'data str,
+        field: &'data str,
+        ty: EntityType,
+    ) -> Result<(), OutOfMemory> {
         let index = self.push_type(ty);
         self.result.module.initializers.push(Initializer::Import {
-            name: module.to_owned(),
-            field: field.to_owned(),
+            name: self.result.module.strings.insert(module)?,
+            field: self.result.module.strings.insert(field)?,
             index,
-        });
+        })?;
+        Ok(())
     }
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
@@ -868,7 +879,8 @@ and for re-adding support for interface types you can see this issue:
                     }
                 }
                 wasmparser::Name::Module { name, .. } => {
-                    self.result.module.name = Some(name.to_string());
+                    self.result.module.name =
+                        Some(self.result.module.strings.insert(name).panic_on_oom());
                     if self.tunables.debug_native {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
@@ -1210,7 +1222,7 @@ impl ModuleTranslation<'_> {
             if let TableInitialValue::Expr(expr) = init {
                 if let [ConstOp::RefFunc(f)] = expr.ops() {
                     *init = TableInitialValue::Null {
-                        precomputed: vec![*f; table_size as usize],
+                        precomputed: collections::vec![*f; table_size as usize].panic_on_oom(),
                     };
                 }
             }
@@ -1304,7 +1316,9 @@ impl ModuleTranslation<'_> {
             // it's large enough to hold the segment and then copying the
             // segment into the precomputed list.
             if precomputed.len() < top as usize {
-                precomputed.resize(top as usize, FuncIndex::reserved_value());
+                precomputed
+                    .resize(top as usize, FuncIndex::reserved_value())
+                    .panic_on_oom();
             }
             let dst = &mut precomputed[offset as usize..top as usize];
             dst.copy_from_slice(&function_elements);
@@ -1312,6 +1326,6 @@ impl ModuleTranslation<'_> {
             // advance the iterator to see the next segment
             let _ = segments.next();
         }
-        self.module.table_initialization.segments = segments.collect();
+        self.module.table_initialization.segments = segments.try_collect().panic_on_oom();
     }
 }

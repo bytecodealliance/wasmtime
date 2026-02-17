@@ -4,13 +4,21 @@ on:
     - cron: '0 0 * * *'
 jobs:
   security_audit:
-    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
+    env:
+      CARGO_AUDIT_VERSION: 0.22.1
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: rustsec/audit-check@v1.4.1
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/cargo-audit
+          key: cargo-audit-${{ env.CARGO_AUDIT_VERSION }}
+      - run: |
+          echo "${{ runner.tool_cache }}/cargo-audit/bin" >> $GITHUB_PATH
+          cargo install --root ${{ runner.tool_cache }}/cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} cargo-audit --locked
+      - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
         # This seems to hit rate limits about 50% of the time, unclear why, but

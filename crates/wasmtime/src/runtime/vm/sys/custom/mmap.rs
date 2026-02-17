@@ -9,7 +9,7 @@ use std::{fs::File, path::Path};
 
 #[cfg(feature = "std")]
 pub fn open_file_for_mmap(_path: &Path) -> Result<File> {
-    anyhow::bail!("not supported on this platform");
+    crate::bail!("not supported on this platform");
 }
 
 #[derive(Debug)]
@@ -48,7 +48,7 @@ impl Mmap {
 
     #[cfg(feature = "std")]
     pub fn from_file(_file: &File) -> Result<Self> {
-        anyhow::bail!("not supported on this platform");
+        crate::bail!("not supported on this platform");
     }
 
     pub unsafe fn make_accessible(
@@ -105,6 +105,20 @@ impl Mmap {
             let len = range.end - range.start;
 
             cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
+        }
+        Ok(())
+    }
+
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        unsafe {
+            let base = self.memory.as_ptr().byte_add(range.start).cast();
+            let len = range.end - range.start;
+
+            cvt(capi::wasmtime_mprotect(
+                base,
+                len,
+                capi::PROT_READ | capi::PROT_WRITE,
+            ))?;
         }
         Ok(())
     }

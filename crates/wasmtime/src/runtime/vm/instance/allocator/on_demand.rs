@@ -129,7 +129,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let allocation_index = MemoryAllocationIndex::default();
         let memory = Memory::new_dynamic(
             ty,
-            request.store.engine().tunables(),
+            request.store.engine(),
             creator,
             image,
             request.limiter.as_deref_mut(),
@@ -177,7 +177,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
-            anyhow::bail!("fiber stacks are not supported by the allocator")
+            crate::bail!("fiber stacks are not supported by the allocator")
         }
         let stack = match &self.stack_creator {
             Some(stack_creator) => {

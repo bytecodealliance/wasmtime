@@ -21,8 +21,6 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
-#[cfg(feature = "debug")]
-use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::stack_switching::VMStackChain;
@@ -34,10 +32,36 @@ use crate::runtime::vm::{
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
 use wasmtime_unwinder::Frame;
+#[cfg(feature = "debug")]
+use wasmtime_unwinder::FrameCursor;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
 pub struct Backtrace(Vec<Frame>);
+
+/// One activation: information sufficient to trace an activation on a
+/// frame as long as that frame remains alive.
+pub(crate) struct Activation {
+    exit_pc: usize,
+    exit_fp: usize,
+    entry_trampoline_fp: usize,
+}
+
+impl Activation {
+    /// Create a frame cursor starting at the exit frame of this activation.
+    ///
+    /// # Safety
+    ///
+    /// This activation must currently be valid (i.e., execution must
+    /// not have returned into the activation to unwind any frames,
+    /// and the stack must not have been freed).
+    #[cfg(feature = "debug")]
+    pub(crate) unsafe fn cursor(&self) -> FrameCursor {
+        // SAFETY: validity of this activation is ensured by our
+        // safety condition.
+        unsafe { FrameCursor::new(self.exit_pc, self.exit_fp, self.entry_trampoline_fp) }
+    }
+}
 
 impl Backtrace {
     /// Returns an empty backtrace
@@ -69,23 +93,41 @@ impl Backtrace {
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
+        let f = |activation: Activation| unsafe {
+            wasmtime_unwinder::visit_frames(
+                unwind,
+                activation.exit_pc,
+                activation.exit_fp,
+                activation.entry_trampoline_fp,
+                |frame| {
+                    frames.push(frame);
+                    ControlFlow::Continue(())
+                },
+            )
+        };
         unsafe {
-            Self::trace_with_trap_state(vm_store_context, unwind, state, trap_pc_and_fp, |frame| {
-                frames.push(frame);
-                ControlFlow::Continue(())
-            });
+            Self::trace_with_trap_state(vm_store_context, state, trap_pc_and_fp, f);
         }
         Backtrace(frames)
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
     #[cfg(feature = "gc")]
-    pub fn trace(store: &StoreOpaque, f: impl FnMut(Frame) -> ControlFlow<()>) {
+    pub fn trace(store: &StoreOpaque, mut f: impl FnMut(Frame) -> ControlFlow<()>) {
         let vm_store_context = store.vm_store_context();
         let unwind = store.unwinder();
         tls::with(|state| match state {
             Some(state) => unsafe {
-                Self::trace_with_trap_state(vm_store_context, unwind, state, None, f)
+                let f = |activation: Activation| {
+                    wasmtime_unwinder::visit_frames(
+                        unwind,
+                        activation.exit_pc,
+                        activation.exit_fp,
+                        activation.entry_trampoline_fp,
+                        &mut f,
+                    )
+                };
+                Self::trace_with_trap_state(vm_store_context, state, None, f)
             },
             None => {}
         });
@@ -97,7 +139,7 @@ impl Backtrace {
     pub fn trace_suspended_continuation(
         store: &StoreOpaque,
         continuation: &VMContRef,
-        f: impl FnMut(Frame) -> ControlFlow<()>,
+        mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
         log::trace!("====== Capturing Backtrace (suspended continuation) ======");
 
@@ -122,9 +164,21 @@ impl Backtrace {
             let stack_chain =
                 VMStackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
 
-            if let ControlFlow::Break(()) =
-                Self::trace_through_continuations(unwind, stack_chain, pc, fp, trampoline_fp, f)
-            {
+            if let ControlFlow::Break(()) = Self::trace_through_continuations(
+                stack_chain,
+                pc,
+                fp,
+                trampoline_fp,
+                |activation| {
+                    wasmtime_unwinder::visit_frames(
+                        unwind,
+                        activation.exit_pc,
+                        activation.exit_fp,
+                        activation.entry_trampoline_fp,
+                        &mut f,
+                    )
+                },
+            ) {
                 log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
             }
@@ -153,10 +207,9 @@ impl Backtrace {
     /// other opaque host code; we don't know anything about it.
     pub(crate) unsafe fn trace_with_trap_state(
         vm_store_context: *const VMStoreContext,
-        unwind: &dyn Unwind,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
-        mut f: impl FnMut(Frame) -> ControlFlow<()>,
+        mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) {
         log::trace!("====== Capturing Backtrace ======");
 
@@ -167,7 +220,7 @@ impl Backtrace {
             Some((pc, fp)) => {
                 assert!(core::ptr::eq(
                     vm_store_context,
-                    state.vm_store_context.as_ptr()
+                    state.vm_store_context.get().as_ptr()
                 ));
                 (pc, fp)
             }
@@ -198,7 +251,7 @@ impl Backtrace {
                     .iter()
                     .flat_map(|state| state.iter())
                     .filter(|state| {
-                        core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr())
+                        core::ptr::eq(vm_store_context, state.vm_store_context.get().as_ptr())
                     })
                     .map(|state| unsafe {
                         (
@@ -219,9 +272,16 @@ impl Backtrace {
                 *pc != 0
             });
 
-        for (chain, pc, fp, sp) in activations {
-            let res =
-                unsafe { Self::trace_through_continuations(unwind, chain, pc, fp, sp, &mut f) };
+        for (chain, exit_pc, exit_fp, entry_trampoline_fp) in activations {
+            let res = unsafe {
+                Self::trace_through_continuations(
+                    chain,
+                    exit_pc,
+                    exit_fp,
+                    entry_trampoline_fp,
+                    &mut f,
+                )
+            };
             if let ControlFlow::Break(()) = res {
                 log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
@@ -240,20 +300,21 @@ impl Backtrace {
     /// ends with the initial stack. We then trace through each of these stacks
     /// individually, up to (and including) the initial stack.
     unsafe fn trace_through_continuations(
-        unwind: &dyn Unwind,
         chain: VMStackChain,
-        pc: usize,
-        fp: usize,
-        trampoline_fp: usize,
-        mut f: impl FnMut(Frame) -> ControlFlow<()>,
+        exit_pc: usize,
+        exit_fp: usize,
+        entry_trampoline_fp: usize,
+        mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
         use crate::runtime::vm::stack_switching::{VMContRef, VMStackLimits};
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).
-        unsafe {
-            wasmtime_unwinder::visit_frames(unwind, pc, fp, trampoline_fp, &mut f)?;
-        }
+        f(Activation {
+            exit_pc,
+            exit_fp,
+            entry_trampoline_fp,
+        })?;
 
         // Note that the rest of this function has no effect if `chain` is
         // `Some(VMStackChain::InitialStack(_))` (i.e., there is only one stack to
@@ -307,17 +368,31 @@ impl Backtrace {
                 debug_assert!(parent_stack_range.contains(&parent_limits.stack_limit));
             });
 
-            unsafe {
-                wasmtime_unwinder::visit_frames(
-                    unwind,
-                    resume_pc,
-                    resume_fp,
-                    parent_limits.last_wasm_entry_fp,
-                    &mut f,
-                )?
-            }
+            f(Activation {
+                exit_pc: resume_pc,
+                exit_fp: resume_fp,
+                entry_trampoline_fp: parent_limits.last_wasm_entry_fp,
+            })?;
         }
         ControlFlow::Continue(())
+    }
+
+    /// Capture all Activations reachable from the current point
+    /// within a hostcall.
+    #[cfg(feature = "debug")]
+    pub(crate) fn activations(store: &StoreOpaque) -> Vec<Activation> {
+        let mut activations = vec![];
+        let vm_store_context = store.vm_store_context();
+        tls::with(|state| match state {
+            Some(state) => unsafe {
+                Self::trace_with_trap_state(vm_store_context, state, None, |act| {
+                    activations.push(act);
+                    ControlFlow::Continue(())
+                });
+            },
+            None => {}
+        });
+        activations
     }
 
     /// Iterate over the frames inside this backtrace.
@@ -325,66 +400,5 @@ impl Backtrace {
         &'a self,
     ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
-    }
-}
-
-/// An iterator over one Wasm activation.
-#[cfg(feature = "debug")]
-pub(crate) struct CurrentActivationBacktrace<'a, T: 'static> {
-    pub(crate) store: StoreContextMut<'a, T>,
-    inner: Box<dyn Iterator<Item = Frame>>,
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
-    /// Return an iterator over the most recent Wasm activation.
-    ///
-    /// The iterator captures the store with a mutable borrow, and
-    /// then yields it back at each frame. This ensures that the stack
-    /// remains live while still providing a mutable store that may be
-    /// needed to access items in the frame (e.g., to create new roots
-    /// when reading out GC refs).
-    ///
-    /// This serves as an alternative to `Backtrace::trace()` and
-    /// friends: it allows external iteration (and e.g. lazily walking
-    /// through frames in a stack) rather than visiting via a closure.
-    ///
-    /// # Safety
-    ///
-    /// Although the iterator provides mutable store as a public
-    /// field, this *must not* be used to mutate the stack activation
-    /// itself that this iterator is visiting. While the `store`
-    /// technically owns the stack in question, the only way to do
-    /// this with the current API would be to return back into the
-    /// Wasm activation. As long as this iterator is held and used
-    /// while within host code called from that activation (which will
-    /// ordinarily be ensured if the `store`'s lifetime came from the
-    /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(store: StoreContextMut<'a, T>) -> CurrentActivationBacktrace<'a, T> {
-        // Get the initial exit FP, exit PC, and entry FP.
-        let vm_store_context = store.0.vm_store_context();
-        let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
-        let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
-        let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
-        let inner: Box<dyn Iterator<Item = Frame>> = if exit_fp == 0 {
-            // No activations on this Store; return an empty iterator.
-            Box::new(core::iter::empty())
-        } else {
-            let unwind = store.0.unwinder();
-            // Establish the iterator.
-            Box::new(unsafe {
-                wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
-            })
-        };
-
-        CurrentActivationBacktrace { store, inner }
-    }
-}
-
-#[cfg(feature = "debug")]
-impl<'a, T: 'static> Iterator for CurrentActivationBacktrace<'a, T> {
-    type Item = Frame;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
     }
 }

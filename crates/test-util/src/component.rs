@@ -1,53 +1,11 @@
-use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
     CanonicalAbiInfo, InstanceType, InterfaceType, LiftContext, LowerContext,
 };
-use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
-use wasmtime::{AsContextMut, Config, Engine};
-
-pub trait TypedFuncExt<P, R> {
-    fn call_and_post_return(&self, store: impl AsContextMut<Data: Send>, params: P) -> Result<R>;
-}
-
-impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
-where
-    P: ComponentNamedList + Lower,
-    R: ComponentNamedList + Lift + Send + Sync + 'static,
-{
-    fn call_and_post_return(
-        &self,
-        mut store: impl AsContextMut<Data: Send>,
-        params: P,
-    ) -> Result<R> {
-        let result = self.call(&mut store, params)?;
-        self.post_return(&mut store)?;
-        Ok(result)
-    }
-}
-
-pub trait FuncExt {
-    fn call_and_post_return(
-        &self,
-        store: impl AsContextMut<Data: Send>,
-        params: &[Val],
-        results: &mut [Val],
-    ) -> Result<()>;
-}
-
-impl FuncExt for Func {
-    fn call_and_post_return(
-        &self,
-        mut store: impl AsContextMut<Data: Send>,
-        params: &[Val],
-        results: &mut [Val],
-    ) -> Result<()> {
-        self.call(&mut store, params, results)?;
-        self.post_return(&mut store)?;
-        Ok(())
-    }
-}
+use wasmtime::component::{ComponentType, Lift, Lower};
+use wasmtime::{Config, Engine};
+use wasmtime_environ::prelude::*;
 
 pub fn config() -> Config {
     drop(env_logger::try_init());
@@ -70,9 +28,7 @@ pub fn engine() -> Engine {
 }
 
 pub fn async_engine() -> Engine {
-    let mut config = config();
-    config.async_support(true);
-    Engine::new(&config).unwrap()
+    Engine::default()
 }
 
 /// Newtype wrapper for `f32` whose `PartialEq` impl considers NaNs equal to each other.

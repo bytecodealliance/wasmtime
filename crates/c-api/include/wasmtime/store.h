@@ -144,7 +144,8 @@ WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t *context,
  *
  * The `context` argument must not be NULL.
  */
-WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t *context);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_gc(wasmtime_context_t *context);
 
 /**
  * \brief Set fuel to this context's store for wasm to consume while executing.

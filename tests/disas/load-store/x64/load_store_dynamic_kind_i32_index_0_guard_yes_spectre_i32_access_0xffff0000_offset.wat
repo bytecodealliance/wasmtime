@@ -21,45 +21,45 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r10d
-;;       movq    %r10, %rdx
-;;       addq    0x2f(%rip), %rdx
-;;       jb      0x3a
-;;   17: movq    0x40(%rdi), %r9
-;;       xorq    %r8, %r8
-;;       addq    0x38(%rdi), %r10
-;;       movl    $0xffff0000, %r11d
-;;       addq    %r11, %r10
-;;       cmpq    %r9, %rdx
-;;       cmovaq  %r8, %r10
-;;       movl    %ecx, (%r10)
+;;       movq    %rdi, %rsi
+;;       movl    %edx, %edi
+;;       movq    %rdi, %rax
+;;       addq    0x2d(%rip), %rax
+;;       jb      0x3e
+;;   19: movq    %rsi, %r8
+;;       movq    0x40(%r8), %rsi
+;;       xorq    %rdx, %rdx
+;;       addq    0x38(%r8), %rdi
+;;       movl    $0xffff0000, %r8d
+;;       addq    %r8, %rdi
+;;       cmpq    %rsi, %rax
+;;       cmovaq  %rdx, %rdi
+;;       movl    %ecx, (%rdi)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   3a: ud2
-;;   3c: addb    %al, (%rax)
-;;   3e: addb    %al, (%rax)
+;;   3e: ud2
 ;;   40: addb    $0, %al
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r10d
-;;       movq    %r10, %rcx
-;;       addq    0x2f(%rip), %rcx
-;;       jb      0x9a
-;;   77: movq    0x40(%rdi), %r8
-;;       xorq    %rdx, %rdx
-;;       addq    0x38(%rdi), %r10
-;;       movl    $0xffff0000, %r9d
-;;       addq    %r10, %r9
-;;       cmpq    %r8, %rcx
-;;       cmovaq  %rdx, %r9
-;;       movl    (%r9), %eax
+;;       movq    %rdi, %rcx
+;;       movl    %edx, %edi
+;;       movq    %rdi, %rax
+;;       addq    0x2d(%rip), %rax
+;;       jb      0x9d
+;;   79: movq    %rcx, %rsi
+;;       movq    0x40(%rsi), %rdx
+;;       xorq    %rcx, %rcx
+;;       addq    0x38(%rsi), %rdi
+;;       movl    $0xffff0000, %esi
+;;       addq    %rdi, %rsi
+;;       cmpq    %rdx, %rax
+;;       cmovaq  %rcx, %rsi
+;;       movl    (%rsi), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   9a: ud2
-;;   9c: addb    %al, (%rax)
-;;   9e: addb    %al, (%rax)
-;;   a0: addb    $0, %al
+;;   9d: ud2
+;;   9f: addb    %al, (%rax, %rax)

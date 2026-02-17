@@ -59,19 +59,17 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table,
     /// or if `init` does not belong to the `store` provided.
     ///
-    /// # Panics
-    ///
-    /// This function will panic when used with a [`Store`](`crate::Store`)
-    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
-    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`).
-    /// When using an async resource limiter, use [`Table::new_async`]
-    /// instead.
+    /// This function will also return an error when used with a
+    /// [`Store`](`crate::Store`) which has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`).  When using an
+    /// async resource limiter, use [`Table::new_async`] instead.
     ///
     /// # Examples
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -94,19 +92,17 @@ impl Table {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: TableType, init: Ref) -> Result<Table> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        vm::one_poll(Table::_new(store, limiter.as_mut(), ty, init))
-            .expect("must use `new_async` when async resource limiters are in use")
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Table::_new(store, limiter.as_mut(), ty, init))
     }
 
-    /// Async variant of [`Table::new`]. You must use this variant with
-    /// [`Store`](`crate::Store`)s which have a
+    /// Async variant of [`Table::new`].
+    ///
+    /// You must use this variant with [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
-    ///
-    /// # Panics
-    ///
-    /// This function will panic when used with a non-async
-    /// [`Store`](`crate::Store`)
     #[cfg(feature = "async")]
     pub async fn new_async(
         mut store: impl AsContextMut,
@@ -154,10 +150,11 @@ impl Table {
         lazy_init_range: impl IntoIterator<Item = u64>,
     ) -> (&'a mut vm::Table, Option<&'a mut GcStore>) {
         self.instance.assert_belongs_to(store.id());
-        let (store, instance) = store.optional_gc_store_and_instance_mut(self.instance.instance());
+        let (store, registry, instance) =
+            store.optional_gc_store_and_registry_and_instance_mut(self.instance.instance());
 
         (
-            instance.get_defined_table_with_lazy_init(self.index, lazy_init_range),
+            instance.get_defined_table_with_lazy_init(registry, self.index, lazy_init_range),
             store,
         )
     }
@@ -274,18 +271,19 @@ impl Table {
     /// error if `init` is not of the right type or if `init` does not belong to
     /// `store`.
     ///
+    /// This function also returns an error when used with a
+    /// [`Store`](`crate::Store`) which has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`)).  When using an
+    /// async resource limiter, use [`Table::grow_async`] instead.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
-    ///
-    /// This function will panic when used with a [`Store`](`crate::Store`)
-    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
-    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`)).
-    /// When using an async resource limiter, use [`Table::grow_async`]
-    /// instead.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64, init: Ref) -> Result<u64> {
-        vm::one_poll(self._grow(store.as_context_mut(), delta, init))
-            .expect("must use `grow_async` when async resource limiters are in use")
+        let store = store.as_context_mut();
+        store.0.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(self._grow(store, delta, init))
     }
 
     async fn _grow<T>(&self, store: StoreContextMut<'_, T>, delta: u64, init: Ref) -> Result<u64> {
@@ -341,13 +339,14 @@ impl Table {
         }
     }
 
-    /// Async variant of [`Table::grow`]. Required when using a
+    /// Async variant of [`Table::grow`].
+    ///
+    /// Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a non-async
-    /// [`Store`](`crate::Store`).
+    /// This function will panic when if the store doens't own the table.
     #[cfg(feature = "async")]
     pub async fn grow_async(
         &self,

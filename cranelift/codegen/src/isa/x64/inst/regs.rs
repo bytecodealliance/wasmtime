@@ -6,10 +6,10 @@
 //! Note also that we make use of pinned VRegs to refer to PRegs.
 
 use crate::machinst::Reg;
+use alloc::string::String;
 use alloc::string::ToString;
 use cranelift_assembler_x64::{gpr, xmm};
 use regalloc2::{PReg, RegClass, VReg};
-use std::string::String;
 
 // Constructors for Regs.
 
@@ -73,8 +73,9 @@ pub(crate) const fn r15() -> Reg {
 /// The pinned register on this architecture.
 /// It must be the same as Spidermonkey's HeapReg, as found in this file.
 /// https://searchfox.org/mozilla-central/source/js/src/jit/x64/Assembler-x64.h#99
+pub(crate) const PINNED_REG: u8 = gpr::enc::R15;
 pub(crate) const fn pinned_reg() -> Reg {
-    r15()
+    gpr(PINNED_REG)
 }
 
 const fn fpr(enc: u8) -> Reg {

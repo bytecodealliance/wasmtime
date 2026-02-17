@@ -87,7 +87,7 @@ impl Mmap {
                 .metadata()
                 .context("failed to get file metadata")?
                 .len();
-            let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
+            let len = usize::try_from(len).map_err(|_| format_err!("file too large to map"))?;
 
             // Create a file mapping that allows PAGE_EXECUTE_WRITECOPY.
             // This enables up-to these permissions but we won't leave all
@@ -241,6 +241,18 @@ impl Mmap {
         unsafe {
             let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
             let result = VirtualProtect(base, range.end - range.start, PAGE_READONLY, &mut old);
+            if result == 0 {
+                bail!(io::Error::last_os_error());
+            }
+        }
+        Ok(())
+    }
+
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        let mut old = 0;
+        unsafe {
+            let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+            let result = VirtualProtect(base, range.end - range.start, PAGE_READWRITE, &mut old);
             if result == 0 {
                 bail!(io::Error::last_os_error());
             }

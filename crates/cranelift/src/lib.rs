@@ -48,10 +48,8 @@ use self::compiler::Compiler;
 
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_OFFSET: u8 = 2;
-pub const TRAP_ALWAYS: TrapCode =
-    TrapCode::unwrap_user(Trap::AlwaysTrapAdapter as u8 + TRAP_OFFSET);
-pub const TRAP_CANNOT_ENTER: TrapCode =
-    TrapCode::unwrap_user(Trap::CannotEnterComponent as u8 + TRAP_OFFSET);
+pub const TRAP_CANNOT_LEAVE_COMPONENT: TrapCode =
+    TrapCode::unwrap_user(Trap::CannotLeaveComponent as u8 + TRAP_OFFSET);
 pub const TRAP_INDIRECT_CALL_TO_NULL: TrapCode =
     TrapCode::unwrap_user(Trap::IndirectCallToNull as u8 + TRAP_OFFSET);
 pub const TRAP_BAD_SIGNATURE: TrapCode =

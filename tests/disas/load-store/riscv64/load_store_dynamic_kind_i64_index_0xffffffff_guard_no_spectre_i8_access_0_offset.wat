@@ -26,9 +26,9 @@
 ;;       ld      a1, 0x40(a0)
 ;;       bltu    a2, a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x38(a0)
-;;       add     a1, a1, a2
-;;       sb      a3, 0(a1)
+;;       ld      a0, 0x38(a0)
+;;       add     a0, a0, a2
+;;       sb      a3, 0(a0)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -42,9 +42,9 @@
 ;;       ld      a1, 0x40(a0)
 ;;       bltu    a2, a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x38(a0)
-;;       add     a1, a1, a2
-;;       lbu     a0, 0(a1)
+;;       ld      a0, 0x38(a0)
+;;       add     a0, a0, a2
+;;       lbu     a0, 0(a0)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

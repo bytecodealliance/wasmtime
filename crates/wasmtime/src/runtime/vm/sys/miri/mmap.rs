@@ -10,7 +10,7 @@ use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::alloc::{self, Layout};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
@@ -63,6 +63,7 @@ impl Mmap {
         // Read the file and copy it in to a fresh "mmap" to have allocation for
         // an mmap only in one location.
         let mut dst = Vec::new();
+        file.seek(SeekFrom::Start(0))?;
         file.read_to_end(&mut dst)?;
         let count = HostAlignedByteCount::new_rounded_up(dst.len())?;
         let result = Mmap::new(count)?;
@@ -111,6 +112,10 @@ impl Mmap {
     }
 
     pub unsafe fn make_readonly(&self, _range: Range<usize>) -> Result<()> {
+        Ok(())
+    }
+
+    pub unsafe fn make_readwrite(&self, _range: Range<usize>) -> Result<()> {
         Ok(())
     }
 

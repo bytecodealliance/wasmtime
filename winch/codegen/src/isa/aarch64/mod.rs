@@ -1,6 +1,6 @@
 use self::regs::{fpr_bit_set, gpr_bit_set};
 use crate::{
-    BuiltinFunctions,
+    BuiltinFunctions, Result,
     abi::{ABI, wasm_sig},
     codegen::{CodeGen, CodeGenContext, FuncEnv, TypeConverter},
     frame::{DefinedLocals, Frame},
@@ -9,7 +9,6 @@ use crate::{
     regalloc::RegAlloc,
     stack::Stack,
 };
-use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{Final, MachBufferFinalized, isa::aarch64::settings as aarch64_settings};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};

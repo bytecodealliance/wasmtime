@@ -1,6 +1,7 @@
 //! Types for the `gc` operations.
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
+use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -11,19 +12,21 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct RecGroupId(pub(crate) u32);
 
 /// TypeID struct definition.
-#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub struct TypeId(pub(crate) u32);
 
-/// StructType definition
+/// StructType definition.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StructType {
     // Empty for now; fields will come in a future PR.
 }
 
-/// CompsiteType definition
+/// CompsiteType definition.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositeType {
-    /// Struct Type definition
+    /// Struct Type definition.
     Struct(StructType),
 }
 
@@ -49,12 +52,34 @@ impl Types {
         }
     }
 
+    /// Returns a fresh rec-group id that is not already in use.
+    pub fn fresh_rec_group_id(&self, rng: &mut mutatis::Rng) -> RecGroupId {
+        for _ in 0..1000 {
+            let id = RecGroupId(rng.gen_u32());
+            if !self.rec_groups.contains(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new RecGroupId in 1000 iterations; bad RNG?");
+    }
+
+    /// Returns a fresh type id that is not already in use.
+    pub fn fresh_type_id(&self, rng: &mut mutatis::Rng) -> TypeId {
+        for _ in 0..1000 {
+            let id = TypeId(rng.gen_u32());
+            if !self.type_defs.contains_key(&id) {
+                return id;
+            }
+        }
+        panic!("failed to generate a new TypeId in 1000 iterations; bad RNG?");
+    }
+
     /// Insert a rec-group id. Returns true if newly inserted, false if it already existed.
     pub fn insert_rec_group(&mut self, id: RecGroupId) -> bool {
         self.rec_groups.insert(id)
     }
 
-    ///  Insert a rec-group id.
+    /// Insert a rec-group id.
     pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
         self.type_defs.insert(
             id,
@@ -86,5 +111,107 @@ impl Types {
                 .all(|ty| self.rec_groups.contains(&ty.rec_group)),
             "type_defs must only reference existing rec_groups"
         );
+    }
+}
+
+/// This is used to track the requirements for the operands of an operation.
+#[derive(Copy, Clone, Debug)]
+pub enum StackType {
+    /// `externref`.
+    ExternRef,
+    /// `(ref $*)`.
+    Struct(Option<u32>),
+}
+
+impl StackType {
+    /// Fixes the stack type to match the given requirement.
+    pub fn fixup(
+        req: Option<StackType>,
+        stack: &mut Vec<StackType>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+    ) {
+        let mut result_types = Vec::new();
+        match req {
+            None => {
+                if stack.is_empty() {
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
+                }
+                stack.pop(); // always consume exactly one value
+            }
+            Some(Self::ExternRef) => match stack.last() {
+                Some(Self::ExternRef) => {
+                    stack.pop();
+                }
+                _ => {
+                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
+                    stack.pop(); // consume just-synthesized externref
+                }
+            },
+            Some(Self::Struct(wanted)) => {
+                let ok = match (wanted, stack.last()) {
+                    (Some(wanted), Some(Self::Struct(Some(s)))) => *s == wanted,
+                    (None, Some(Self::Struct(_))) => true,
+                    _ => false,
+                };
+
+                if ok {
+                    stack.pop();
+                } else {
+                    match wanted {
+                        // When num_types == 0, GcOp::fixup() should have dropped the ops
+                        // that require a concrete type.
+                        // But it keeps the ops that work with abstract types.
+                        // Since our mutator can legally remove all the types,
+                        // StackType::fixup() should insert GcOp::NullStruct()
+                        // to satisfy the undropped ops that work with abstract types.
+                        None => {
+                            Self::emit(GcOp::NullStruct, stack, out, num_types, &mut result_types);
+                            stack.pop();
+                        }
+
+                        // Typed struct requirement: only satisfiable if we have concrete types.
+                        Some(t) => {
+                            debug_assert_ne!(
+                                num_types, 0,
+                                "typed struct requirement with num_types == 0; op should have been removed"
+                            );
+                            let t = Self::clamp(t, num_types);
+                            Self::emit(
+                                GcOp::StructNew { type_index: t },
+                                stack,
+                                out,
+                                num_types,
+                                &mut result_types,
+                            );
+                            stack.pop();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn emit(
+        op: GcOp,
+        stack: &mut Vec<Self>,
+        out: &mut Vec<GcOp>,
+        num_types: u32,
+        result_types: &mut Vec<Self>,
+    ) {
+        out.push(op);
+        result_types.clear();
+        op.result_types(result_types);
+        for ty in result_types {
+            let clamped_ty = match ty {
+                Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
+                other => *other,
+            };
+            stack.push(clamped_ty);
+        }
+    }
+
+    fn clamp(t: u32, n: u32) -> u32 {
+        if n == 0 { 0 } else { t % n }
     }
 }

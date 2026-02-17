@@ -96,11 +96,10 @@ macro_rules! foreach_builtin_component_function {
 
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
-            resource_enter_call(vmctx: vmctx);
-            resource_exit_call(vmctx: vmctx) -> bool;
 
-            #[cfg(feature = "component-model-async")]
-            backpressure_set(vmctx: vmctx, caller_instance: u32, enabled: u32) -> bool;
+            enter_sync_call(vmctx: vmctx, caller_instance: u32, callee_async: u32, callee_instance: u32) -> bool;
+            exit_sync_call(vmctx: vmctx) -> bool;
+
             #[cfg(feature = "component-model-async")]
             backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -132,6 +131,7 @@ macro_rules! foreach_builtin_component_function {
                 caller_instance: u32,
                 callee_instance: u32,
                 task_return_type: u32,
+                callee_async: u32,
                 string_encoding: u32,
                 result_count_or_max_if_async: u32,
                 storage: ptr_u8,
@@ -194,15 +194,17 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             thread_new_indirect(vmctx: vmctx, caller_instance: u32, func_ty_id: u32, func_table_idx: u32, func_idx: u32, context: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            thread_switch_to(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_suspend_to_suspended(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            #[cfg(feature = "component-model-async")]
+            thread_suspend_to(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
             #[cfg(feature = "component-model-async")]
             thread_suspend(vmctx: vmctx, caller_instance: u32, cancellable: u8) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_resume_later(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> bool;
+            thread_unsuspend(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            thread_yield_to(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_yield_to_suspended(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
 
-            trap(vmctx: vmctx, code: u8) -> bool;
+            trap(vmctx: vmctx, code: u32) -> bool;
 
             utf8_to_utf8(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8) -> bool;
             utf16_to_utf16(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u16) -> bool;

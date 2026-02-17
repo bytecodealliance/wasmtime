@@ -7,7 +7,6 @@ foreach_p2_http!(assert_test_exists);
 async fn run(path: &str, server: &Server) -> Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.async_support(true);
     });
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
@@ -16,7 +15,7 @@ async fn run(path: &str, server: &Server) -> Result<()> {
     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;
-    result.map_err(|()| anyhow::anyhow!("run returned an error"))
+    result.map_err(|()| wasmtime::format_err!("run returned an error"))
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

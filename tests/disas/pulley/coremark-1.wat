@@ -70,28 +70,28 @@
   (func $other)
 )
 ;; wasm[0]::function[0]:
-;;       push_frame_save 16, x26
+;;       push_frame_save 16, x24
 ;;       xzero x6
-;;       xload64le_o32 x7, x0, 56
-;;       xload64le_o32 x9, x0, 64
-;;       xload16le_u32_g32 x8, x7, x9, x2, 0
-;;       xload16le_u32_g32 x9, x7, x9, x3, 0
+;;       xload64le_o32 x1, x0, 56
+;;       xload64le_o32 x8, x0, 64
+;;       xload16le_u32_g32 x7, x1, x8, x2, 0
+;;       xload16le_u32_g32 x8, x1, x8, x3, 0
 ;;       xsub32_u8 x4, x4, 1
-;;       xmul32 x8, x8, x9
-;;       xshr32_u_u6 x9, x8, 2
-;;       xband32_s8 x9, x9, 15
-;;       xshr32_u_u6 x8, x8, 5
-;;       xband32_s8 x8, x8, 127
-;;       xmadd32 x6, x9, x8, x6
-;;       xmov x26, x6
+;;       xmul32 x7, x7, x8
+;;       xshr32_u_u6 x8, x7, 2
+;;       xband32_s8 x8, x8, 15
+;;       xshr32_u_u6 x7, x7, 5
+;;       xband32_s8 x7, x7, 127
+;;       xmadd32 x6, x8, x7, x6
+;;       xmov x24, x6
 ;;       xadd32 x2, x2, x5
 ;;       xadd32_u8 x3, x3, 2
 ;;       br_if_not32 x4, 0xe    // target = 0x53
-;;   4b: xmov x6, x26
+;;   4b: xmov x6, x24
 ;;       jump -0x40    // target = 0xe
 ;;   53: call2 x0, x0, 0x10    // target = 0x63
-;;       xmov x0, x26
-;;       pop_frame_restore 16, x26
+;;       xmov x0, x24
+;;       pop_frame_restore 16, x24
 ;;       ret
 ;;
 ;; wasm[0]::function[1]::other:

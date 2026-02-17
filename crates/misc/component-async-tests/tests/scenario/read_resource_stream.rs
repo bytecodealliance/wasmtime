@@ -1,5 +1,5 @@
 use super::util::test_run;
-use anyhow::Result;
+use wasmtime::Result;
 
 #[tokio::test]
 pub async fn async_read_resource_stream() -> Result<()> {

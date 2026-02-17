@@ -63,11 +63,16 @@ impl Artifacts {
         let missing_sdk_path =
             PathBuf::from("Asset not compiled, WASI_SDK_PATH missing at compile time");
         for test in tests.iter() {
-            let camel = test.name.to_shouty_snake_case();
+            let shouty_snake = test.name.to_shouty_snake_case();
+            let snake = test.name.to_snake_case();
 
+            let core_wasm = test.core_wasm.as_deref().unwrap_or(&missing_sdk_path);
+            generated_code +=
+                &format!("pub const {shouty_snake}: &'static str = {core_wasm:?};\n",);
             generated_code += &format!(
-                "pub const {camel}: &'static str = {:?};\n",
-                test.core_wasm.as_deref().unwrap_or(&missing_sdk_path)
+                "#[macro_export] macro_rules! {snake}_bytes {{
+                    () => {{ include_bytes!({core_wasm:?}) }}
+                }}",
             );
 
             // Bucket, based on the name of the test, into a "kind" which
@@ -88,6 +93,7 @@ impl Artifacts {
                 s if s.starts_with("p3_http_") => "p3_http",
                 s if s.starts_with("p3_api_") => "p3_api",
                 s if s.starts_with("p3_") => "p3",
+                s if s.starts_with("fuzz_") => "fuzz",
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that
@@ -118,7 +124,13 @@ impl Artifacts {
                 Some(path) => self.compile_component(path, adapter),
                 None => missing_sdk_path.clone(),
             };
-            generated_code += &format!("pub const {camel}_COMPONENT: &'static str = {path:?};\n");
+            generated_code +=
+                &format!("pub const {shouty_snake}_COMPONENT: &'static str = {path:?};\n");
+            generated_code += &format!(
+                "#[macro_export] macro_rules! {snake}_component_bytes {{
+                    () => {{ include_bytes!({path:?}) }}
+                }}",
+            );
         }
 
         for (kind, targets) in kinds {

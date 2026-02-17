@@ -12,10 +12,10 @@ use crate::machinst::{
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
+use alloc::string::String;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
@@ -227,7 +227,7 @@ impl TargetIsa for AArch64Backend {
         true
     }
 
-    fn has_x86_blendv_lowering(&self, _: Type) -> bool {
+    fn has_blendv_lowering(&self, _: Type) -> bool {
         false
     }
 

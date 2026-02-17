@@ -17,12 +17,28 @@ start = "2019-03-16"
 end = "2026-08-21"
 
 [[wildcard-audits.cranelift]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-assembler-x64]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-assembler-x64]]
 who = "Saúl Cabrera <saulecabrera@gmail.com>"
@@ -33,12 +49,28 @@ end = "2026-02-20"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-assembler-x64-meta]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-assembler-x64-meta]]
 who = "Saúl Cabrera <saulecabrera@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-02-20"
 end = "2026-02-20"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-bforest]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-bforest]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -56,6 +88,22 @@ start = "2025-04-21"
 end = "2026-04-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.cranelift-bitset]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-codegen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.cranelift-codegen]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -63,6 +111,14 @@ user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-codegen-meta]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-codegen-meta]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -73,12 +129,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-codegen-shared]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-codegen-shared]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-control]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-control]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -89,12 +161,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-entity]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-entity]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-frontend]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-frontend]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -105,12 +193,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-interpreter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-interpreter]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-isle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-isle]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -121,12 +225,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-jit]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-jit]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-module]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-module]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -137,12 +257,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-native]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-native]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-object]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -153,12 +289,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-reader]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.cranelift-reader]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-serde]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-serde]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -175,6 +327,14 @@ user-id = 73222 # wasmtime-publish
 start = "2025-04-21"
 end = "2026-04-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-srcgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-wasm]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -202,6 +362,14 @@ notes = """
 The Bytecode Alliance is the author of this crate.
 """
 
+[[wildcard-audits.json-from-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.mutatis]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -220,6 +388,14 @@ start = "2024-09-20"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.pulley-interpreter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.pulley-macros]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -242,6 +418,14 @@ user-id = 73222 # wasmtime-publish
 start = "2025-06-20"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.pulley-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.regalloc2]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -281,6 +465,14 @@ user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasi-common]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasi-common]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -346,6 +538,14 @@ notes = """
 The Bytecode Alliance is the author of this crate
 """
 
+[[wildcard-audits.wasm-compose]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -379,6 +579,14 @@ start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasm-metadata]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -411,6 +619,14 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2026-02-10"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasm-mutate]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -424,6 +640,14 @@ repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
+
+[[wildcard-audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasm-mutate]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -445,6 +669,14 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasm-wave]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -452,6 +684,14 @@ user-id = 73222 # wasmtime-publish
 start = "2024-06-19"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasm-wave]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -485,6 +725,14 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -520,11 +768,27 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmprinter]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2021-04-28"
 end = "2026-08-21"
+
+[[wildcard-audits.wasmtime]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -567,12 +831,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-cli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-cli]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cli-flags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-cli-flags]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -613,6 +893,14 @@ user-id = 73222 # wasmtime-publish
 start = "2023-04-20"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-environ]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-environ]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -662,6 +950,14 @@ start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-internal-c-api-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasmtime-internal-cache]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -671,6 +967,22 @@ end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-internal-cache]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-07-20"
+end = "2026-07-20"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-internal-cache]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-component-macro]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -681,10 +993,10 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-component-macro]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2025-07-20"
-end = "2026-07-20"
-notes = "The Bytecode Alliance is the author of this crate."
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-internal-component-util]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -694,6 +1006,22 @@ start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-internal-component-util]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasmtime-internal-cranelift]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -710,6 +1038,38 @@ start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-internal-cranelift]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-debugger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
+
+[[wildcard-audits.wasmtime-internal-error]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2025-12-16"
+end = "2027-01-09"
+notes = "This crate is authored by the Bytecode Alliance."
+
 [[wildcard-audits.wasmtime-internal-explorer]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -719,6 +1079,22 @@ end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-internal-explorer]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-07-20"
+end = "2026-07-20"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-internal-explorer]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-fiber]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -729,12 +1105,28 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-fiber]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-jit-debug]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-internal-jit-debug]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-jit-icache-coherence]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -745,12 +1137,28 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-jit-icache-coherence]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-math]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-internal-math]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-slab]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -761,12 +1169,28 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-slab]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-unwinder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-internal-unwinder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-versioned-export-macros]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -777,10 +1201,10 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-versioned-export-macros]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2025-07-20"
-end = "2026-07-20"
-notes = "The Bytecode Alliance is the author of this crate."
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-internal-winch]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -798,7 +1222,31 @@ start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-internal-winch]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasmtime-internal-wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-07-20"
+end = "2026-07-20"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-internal-wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-internal-wmemcheck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -809,10 +1257,10 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.wasmtime-internal-wmemcheck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2025-07-20"
-end = "2026-07-20"
-notes = "The Bytecode Alliance is the author of this crate."
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-jit]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -875,6 +1323,14 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wasi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wasi]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -890,6 +1346,14 @@ start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-wasi-config]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wasmtime-wasi-crypto]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -899,12 +1363,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wasi-http]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wasi-http]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-05-22"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-io]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-wasi-io]]
 who = "Saúl Cabrera <saulecabrera@gmail.com>"
@@ -921,6 +1401,22 @@ user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-keyvalue]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wasi-nn]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-wasi-nn]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -939,6 +1435,14 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wasi-threads]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wasi-threads]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -953,6 +1457,14 @@ user-id = 73222 # wasmtime-publish
 start = "2025-04-21"
 end = "2026-04-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-tls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-wasi-tls-nativetls]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -969,6 +1481,30 @@ user-id = 73222 # wasmtime-publish
 start = "2025-07-20"
 end = "2026-07-20"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-tls-nativetls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wasi-tls-openssl]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wasmtime-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-wast]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -1001,6 +1537,14 @@ user-id = 73222 # wasmtime-publish
 start = "2025-11-19"
 end = "2026-11-19"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wizer]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wasmtime-wmemcheck]]
 who = "Pat Hickey <pat@moreproductive.org>"
@@ -1043,6 +1587,14 @@ start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1076,6 +1628,22 @@ start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wiggle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wiggle]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1085,12 +1653,28 @@ end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wiggle-generate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[wildcard-audits.wiggle-generate]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2021-10-29"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wiggle-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wiggle-macro]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -1107,6 +1691,14 @@ user-id = 18162 # Pat Hickey (pchickey)
 start = "2020-03-12"
 end = "2025-07-30"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.winch-codegen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.winch-codegen]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -1141,6 +1733,14 @@ publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
+[[wildcard-audits.wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+start = "2025-08-13"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wit-bindgen-core]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1165,6 +1765,14 @@ The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
+
+[[wildcard-audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+start = "2025-08-13"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wit-bindgen-rt]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1202,6 +1810,14 @@ The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
+
+[[wildcard-audits.wit-bindgen-rust]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+start = "2025-08-13"
+end = "2027-01-12"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wit-bindgen-rust-lib]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1241,6 +1857,14 @@ publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
+[[wildcard-audits.wit-bindgen-rust-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+start = "2025-08-13"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[wildcard-audits.wit-component]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1273,6 +1897,14 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.wit-component]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -1313,6 +1945,14 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2026-08-21"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+start = "2025-08-14"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.addr2line]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1357,6 +1997,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.25.0 -> 0.25.1"
 notes = "Minor updates, looks like a minor bug fix, nothing awry."
+
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.25.1 -> 0.26.0"
+notes = "Nothing out of the ordinary for this update, all DWARF all the time."
 
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2147,6 +2793,12 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 version = "0.1.3"
 
+[[audits.der]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.10"
+notes = "No unsafe code aside from transmutes for transparent newtypes."
+
 [[audits.derive_arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2477,7 +3129,7 @@ delta = "0.3.27 -> 0.3.31"
 who = "Pat Hickey <pat@moreproductive.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.27 -> 0.3.31"
-notes = "New waker_ref module contains \"FIXME: panics on Arc::clone / refcount changes could wreak havoc...\" comment, but this corner case feels low risk."
+notes = 'New waker_ref module contains "FIXME: panics on Arc::clone / refcount changes could wreak havoc..." comment, but this corner case feels low risk.'
 
 [[audits.fxprof-processed-profile]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -2485,7 +3137,7 @@ criteria = "safe-to-deploy"
 version = "0.6.0"
 notes = """
 No unsafe code, I/O, or powerful imports. This is a straightforward set of data
-structures representing the Firefox \"processed\" profile format, with serde
+structures representing the Firefox "processed" profile format, with serde
 serialization support. All logic is trivial: either unit conversion, or
 hash-consing to support de-duplication required by the format.
 """
@@ -2889,6 +3541,24 @@ criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.json-from-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.json-from-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.json-from-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -3284,6 +3954,11 @@ criteria = "safe-to-deploy"
 delta = "0.37.1 -> 0.37.3"
 notes = "Lots of new support for new object features, no new unsafe or anything suspicious."
 
+[[audits.object]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.37.3 -> 0.38.1"
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -3414,6 +4089,12 @@ criteria = "safe-to-deploy"
 delta = "2.0.0-rc.0 -> 2.0.0-rc.2"
 notes = "Same as previous audit: the crate inherently uses `unsafe` FFI calls for using ONNX through `ort-sys` (e.g., logging C error strings). The changes are relatively uninteresting: a lot of documentation, some `must_use`, and general refactoring due to changes in the underlying API."
 
+[[audits.ort]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.0.0-rc.2 -> 2.0.0-rc.10"
+notes = "A bunch of unsafe code inherent to FFI, but nothing that looks malicious."
+
 [[audits.ort-sys]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -3426,6 +4107,12 @@ criteria = "safe-to-deploy"
 delta = "2.0.0-rc.0 -> 2.0.0-rc.2"
 notes = "This crate still downloads the ONNX libraries as a part of the `build.rs` script; now with more platform options for pre-built binaries stored in a `dist.txt` file. Otherwise largely unchanged since the previous audit."
 
+[[audits.ort-sys]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.0.0-rc.2 -> 2.0.0-rc.10"
+notes = "Large build.rs script that downloads a binary distribution, so inherently somewhat dangerous; but it appears that the URLs are from the distributor of this library (`ort` at `pyke.io`). The file contents are verified by hash, so could not be swapped out later without a version bump."
+
 [[audits.overload]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3437,6 +4124,12 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
+
+[[audits.pem-rfc7468]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.0"
+notes = "Only `unsafe` around a `from_utf8_unchecked`, and no IO."
 
 [[audits.percent-encoding]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3473,6 +4166,11 @@ notes = """
 No `unsafe` additions or anything outside of the purview of the crate in this
 change.
 """
+
+[[audits.pkg-config]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.29 -> 0.3.32"
 
 [[audits.postcard]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3694,6 +4392,11 @@ criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.7"
 notes = "No new unsafe code."
 
+[[audits.rustls-pki-types]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "1.3.1 -> 1.13.1"
+
 [[audits.rustls-webpki]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3808,6 +4511,12 @@ criteria = "safe-to-deploy"
 delta = "1.13.2 -> 1.14.0"
 notes = "Minor new feature, nothing out of the ordinary."
 
+[[audits.smallvec]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "1.15.1 -> 2.0.0-alpha.10"
+notes = "Nothing obviously malicious in the (large) diff. There is a lot of unsafe code, as expected for an optimized core data structure library; I didn't internalize all the invariants or review the code in detail for correctness line-by-line. The library is widely used in the ecosystem and well-tested/fuzzed so I trust that basic data structure invariant violations will be found."
+
 [[audits.socket2]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3830,6 +4539,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.6.0 -> 0.6.1"
 notes = "Minor new changes and windows updates, all looks reasonable."
+
+[[audits.socks]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.3.4"
+notes = "SOCKS protocol library with `unsafe` only inside a custom readv/writev wrapper, and no IO aside from network IO to the specified endpoint. Unit tests ping Google on the Internet to test functionality."
 
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4041,6 +4756,12 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 notes = "unsafety is used for smuggling std::task::Context as a raw pointer. Lifetime and type safety appears to be taken care of correctly."
 
+[[audits.tokio-openssl]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.6.5"
+notes = "Minor usage of `unsafe` but not obviously incorrect or problematic. Does not use any undue ambient state or anything like that, does what it says on the tin."
+
 [[audits.tokio-rustls]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -4194,6 +4915,18 @@ criteria = "safe-to-deploy"
 delta = "2.9.6 -> 2.10.0"
 notes = "No `unsafe` changes; this audit observed mainly license and documentation changes."
 
+[[audits.ureq]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "2.10.0 -> 3.1.4"
+notes = "Network protocol library with no unsafe code."
+
+[[audits.ureq-proto]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.5.3"
+notes = "Network protocol library with no unsafe code."
+
 [[audits.url]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4206,6 +4939,12 @@ and suss out bugs. I've historically reviewed this crate in the past and it
 is similar to what it once was back then. Skimming over the crate there is
 nothing suspicious and it's everything you'd expect a Rust URL parser to be.
 """
+
+[[audits.utf-8]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "0.7.6"
+notes = "Small library that uses `unsafe` only around `str::from_utf8_unchecked` after explicitly verifying UTF-8."
 
 [[audits.vcpkg]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -4275,6 +5014,24 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-compose]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-compose]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-compose]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wasm-coredump-builder]]
@@ -4433,6 +5190,24 @@ criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wasm-metadata]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4467,6 +5242,24 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wasm-mutate]]
@@ -4661,6 +5454,24 @@ criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasm-wave]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-wave]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasm-wave]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wasmi]]
 who = "Robin Freyler <robin.freyler@gmail.com>"
 criteria = "safe-to-run"
@@ -4823,6 +5634,24 @@ criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wasmparser-nostd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -4954,6 +5783,36 @@ criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wasmtime-internal-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.0.0"
+notes = "Empty crate"
+
+[[audits.wasmtime-wasi-tls-openssl]]
+who = "Dave Bakker <github@davebakker.io>"
+criteria = "safe-to-deploy"
+version = "0.0.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -5068,6 +5927,24 @@ criteria = "safe-to-deploy"
 delta = "240.0.0 -> 241.0.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "241.0.2 -> 242.0.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "242.0.0 -> 243.0.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "243.0.0 -> 244.0.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -5170,6 +6047,36 @@ criteria = "safe-to-deploy"
 delta = "1.240.0 -> 1.241.2"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.241.2 -> 1.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.242.0 -> 1.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.242.2 -> 1.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.243.0 -> 1.244.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.webpki-root-certs]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+version = "1.0.4"
+notes = "Purely a data crate."
+
 [[audits.webpki-roots]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -5239,6 +6146,18 @@ criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.48.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.48.0 -> 0.49.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.49.0 -> 0.50.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wit-bindgen-core]]
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
@@ -5266,6 +6185,18 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.48.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.48.0 -> 0.49.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen-core]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.49.0 -> 0.50.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wit-bindgen-rt]]
@@ -5302,6 +6233,18 @@ criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.48.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.wit-bindgen-rust]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.48.0 -> 0.49.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen-rust]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.49.0 -> 0.50.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wit-bindgen-rust-macro]]
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
@@ -5329,6 +6272,18 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.46.0 -> 0.48.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen-rust-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.48.0 -> 0.49.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-bindgen-rust-macro]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.49.0 -> 0.50.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wit-component]]
@@ -5365,6 +6320,24 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wit-parser]]
@@ -5449,6 +6422,24 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.240.0 -> 0.241.2"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.241.2 -> 0.242.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.242.0 -> 0.243.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.243.0 -> 0.244.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.xattr]]
@@ -5597,7 +6588,7 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2021-01-11"
-end = "2025-02-15"
+end = "2027-02-14"
 
 [[trusted.bzip2]]
 criteria = "safe-to-deploy"
@@ -5773,6 +6764,12 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-15"
 end = "2026-10-10"
 
+[[trusted.gimli]]
+criteria = "safe-to-deploy"
+user-id = 4415 # Philip Craig (philipc)
+start = "2019-04-25"
+end = "2027-01-24"
+
 [[trusted.h2]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -5784,6 +6781,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2025-12-02"
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-04-30"
+end = "2027-01-24"
 
 [[trusted.http]]
 criteria = "safe-to-deploy"
@@ -5814,6 +6817,12 @@ criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-03-01"
 end = "2026-10-10"
+
+[[trusted.id-arena]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2026-01-14"
+end = "2027-02-11"
 
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"

@@ -7,17 +7,14 @@ You can execute this example with:
     cargo run --example wasip1-async
 */
 
-use anyhow::Result;
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::Result;
+use wasmtime::{Engine, Linker, Module, Store};
 use wasmtime_wasi::WasiCtx;
 use wasmtime_wasi::p1::{self, WasiP1Ctx};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Construct the wasm engine with async support enabled.
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::default();
 
     // Add the WASIp1 APIs to the linker
     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);

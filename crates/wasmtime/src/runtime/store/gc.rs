@@ -20,13 +20,16 @@ impl StoreOpaque {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         root: Option<VMGcRef>,
         bytes_needed: Option<u64>,
+        asyncness: Asyncness,
     ) -> Option<VMGcRef> {
         let mut scope = crate::OpaqueRootScope::new(self);
         scope.trim_gc_liveness_flags(true);
         let store_id = scope.id();
         let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
 
-        scope.grow_or_collect_gc_heap(limiter, bytes_needed).await;
+        scope
+            .grow_or_collect_gc_heap(limiter, bytes_needed, asyncness)
+            .await;
 
         root.map(|r| {
             let r = r
@@ -51,13 +54,14 @@ impl StoreOpaque {
         &mut self,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: Option<u64>,
+        asyncness: Asyncness,
     ) {
         if let Some(n) = bytes_needed {
             if self.grow_gc_heap(limiter, n).await.is_ok() {
                 return;
             }
         }
-        self.do_gc().await;
+        self.do_gc(asyncness).await;
     }
 
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
@@ -113,7 +117,7 @@ impl StoreOpaque {
             heap.memory
                 .grow(delta_pages_for_alloc, limiter)
                 .await?
-                .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
+                .ok_or_else(|| format_err!("failed to grow GC heap"))?;
         }
         heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
 
@@ -167,6 +171,7 @@ impl StoreOpaque {
         &mut self,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         value: T,
+        asyncness: Asyncness,
         alloc_func: impl Fn(&mut Self, T) -> Result<U>,
     ) -> Result<U>
     where
@@ -178,7 +183,8 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    self.gc(limiter, None, Some(oom.bytes_needed())).await;
+                    self.gc(limiter, None, Some(oom.bytes_needed()), asyncness)
+                        .await;
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),

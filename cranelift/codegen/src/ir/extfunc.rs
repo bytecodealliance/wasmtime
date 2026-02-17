@@ -313,6 +313,14 @@ pub struct ExtFuncData {
     /// See the documentation for `RelocDistance` for more details. A `colocated` flag value of
     /// `true` implies `RelocDistance::Near`.
     pub colocated: bool,
+    /// Is this function "patchable"? If so, calls to this function will
+    /// emit additional metadata indicating how to patch them in or out.
+    ///
+    /// Calls to functions of any calling convention may be patchable,
+    /// *but* only calls with no return values are patchable. This is
+    /// because every SSA value must always be defined, and return
+    /// values would not be if the call were patched out.
+    pub patchable: bool,
 }
 
 impl ExtFuncData {
@@ -339,6 +347,9 @@ impl<'a> fmt::Display for DisplayableExtFuncData<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.ext_func.colocated {
             write!(f, "colocated ")?;
+        }
+        if self.ext_func.patchable {
+            write!(f, "patchable ")?;
         }
         write!(
             f,
@@ -384,7 +395,8 @@ mod tests {
     fn call_conv() {
         for &cc in &[
             CallConv::Fast,
-            CallConv::Cold,
+            CallConv::PreserveAll,
+            CallConv::Tail,
             CallConv::SystemV,
             CallConv::WindowsFastcall,
         ] {

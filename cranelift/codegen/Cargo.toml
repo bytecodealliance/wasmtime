@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen"
-version = "0.127.0"
+version = "0.130.0"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-codegen"
@@ -25,25 +25,26 @@ anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
 cranelift-assembler-x64 = { workspace = true }
-cranelift-codegen-shared = { path = "./shared", version = "0.127.0" }
+cranelift-codegen-shared = { path = "./shared", version = "0.130.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 pulley-interpreter = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
-gimli = { workspace = true, features = ["write", "std"], optional = true }
+gimli = { workspace = true, features = ["write"], optional = true }
 smallvec = { workspace = true }
 regalloc2 = { workspace = true, features = ["checker"] }
 souper-ir = { version = "2.1.0", optional = true }
 sha2 = { version = "0.10.2", optional = true }
 rustc-hash = { workspace = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
+libm = { workspace = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
@@ -56,8 +57,8 @@ env_logger = { workspace = true }
 proptest = { workspace = true }
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.127.0" }
-cranelift-isle = { path = "../isle/isle", version = "=0.127.0" }
+cranelift-codegen-meta = { path = "meta", version = "0.130.0" }
+cranelift-isle = { path = "../isle/isle", version = "=0.130.0" }
 
 [features]
 default = ["std", "unwind", "host-arch", "timing"]
@@ -65,7 +66,7 @@ default = ["std", "unwind", "host-arch", "timing"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = ["serde?/std"]
+std = ["serde?/std", "rustc-hash/std", "gimli/std", "cranelift-control/fuzz"]
 
 # The "core" feature used to enable a hashmap workaround, but is now
 # deprecated (we (i) always use hashbrown, and (ii) don't support a
@@ -79,6 +80,14 @@ disas = ["anyhow", "capstone"]
 
 # Enables detailed logging which can be somewhat expensive.
 trace-log = ["regalloc2/trace-log"]
+
+# By default, an ISLE term is compiled into a single Rust function, but it can be
+# significantly inefficient for large terms (e.g. `simplify` with hundreds of rules).
+# This is because the generated Rust code for such terms is large, and `rustc` takes quadratically longer to compile huge functions. 
+# This feature splits large match arms in such ISLE terms into closures, for compiling ISLE terms more efficiently.
+# However, this can degrade Cranelift compilation times, introducing ABI boundaries between the closures.
+# Therefore, we recommend enabling this feature only for debugging/development purposes.
+isle-split-match = []
 
 # This enables unwind info generation functionality.
 unwind = ["gimli"]

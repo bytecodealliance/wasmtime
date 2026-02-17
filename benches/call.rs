@@ -67,10 +67,7 @@ fn engines() -> Vec<(Engine, IsAsync)> {
             .unwrap(),
             IsAsync::NoPooling,
         ),
-        (
-            Engine::new(config.async_support(true)).unwrap(),
-            IsAsync::Yes,
-        ),
+        (Engine::new(&config).unwrap(), IsAsync::Yes),
         (
             Engine::new(config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool)))
                 .unwrap(),
@@ -337,15 +334,15 @@ fn wasm_to_host(c: &mut Criterion) {
             let ty = FuncType::new(&engine, [ValType::I32, ValType::I64], [ValType::F32]);
             unchecked
                 .func_new_unchecked("", "nop-params-and-results", ty, |mut caller, space| {
-                    match Val::from_raw(&mut caller, space[0], ValType::I32) {
+                    match Val::from_raw(&mut caller, space[0].assume_init(), ValType::I32) {
                         Val::I32(0) => {}
                         _ => unreachable!(),
                     }
-                    match Val::from_raw(&mut caller, space[1], ValType::I64) {
+                    match Val::from_raw(&mut caller, space[1].assume_init(), ValType::I64) {
                         Val::I64(0) => {}
                         _ => unreachable!(),
                     }
-                    space[0] = Val::F32(0).to_raw(&mut caller).unwrap();
+                    space[0].write(Val::F32(0).to_raw(&mut caller).unwrap());
                     Ok(())
                 })
                 .unwrap();
@@ -645,11 +642,6 @@ mod component {
                     typed.call(&mut *store, typed_params).unwrap()
                 };
                 assert_eq!(results, typed_results);
-                if is_async.use_async() {
-                    run_await(typed.post_return_async(&mut *store)).unwrap()
-                } else {
-                    typed.post_return(&mut *store).unwrap()
-                }
             })
         });
 
@@ -669,11 +661,6 @@ mod component {
                     }
                     for (expected, actual) in expected_results.iter().zip(&results) {
                         assert_eq!(expected, actual);
-                    }
-                    if is_async.use_async() {
-                        run_await(untyped.post_return_async(&mut *store)).unwrap()
-                    } else {
-                        untyped.post_return(&mut *store).unwrap()
                     }
                 })
             },
@@ -867,10 +854,8 @@ mod component {
                     let start = Instant::now();
                     if is_async.use_async() {
                         run_await(run.call_async(&mut *store, (iters,))).unwrap();
-                        run_await(run.post_return_async(&mut *store)).unwrap();
                     } else {
                         run.call(&mut *store, (iters,)).unwrap();
-                        run.post_return(&mut *store).unwrap();
                     }
                     start.elapsed()
                 })
@@ -885,10 +870,8 @@ mod component {
                         let start = Instant::now();
                         if is_async.use_async() {
                             run_await(run.call_async(&mut *store, (iters,))).unwrap();
-                            run_await(run.post_return_async(&mut *store)).unwrap();
                         } else {
                             run.call(&mut *store, (iters,)).unwrap();
-                            run.post_return(&mut *store).unwrap();
                         }
                         start.elapsed()
                     })

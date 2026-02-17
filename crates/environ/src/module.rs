@@ -48,7 +48,7 @@ pub enum MemoryInitialization {
     /// data segments when the module is instantiated.
     ///
     /// This is the default memory initialization type.
-    Segmented(Vec<MemoryInitializer>),
+    Segmented(collections::Vec<MemoryInitializer>),
 
     /// Memory initialization is statically known and involves a single `memcpy`
     /// or otherwise simply making the defined data visible.
@@ -88,7 +88,7 @@ pub enum MemoryInitialization {
 
 impl Default for MemoryInitialization {
     fn default() -> Self {
-        Self::Segmented(Vec::new())
+        Self::Segmented(collections::Vec::new())
     }
 }
 
@@ -233,7 +233,7 @@ pub struct TableInitialization {
     ///
     /// These element segments are iterated over during instantiation to apply
     /// any segments that weren't already moved into `initial_values` above.
-    pub segments: Vec<TableSegment>,
+    pub segments: collections::Vec<TableSegment>,
 }
 
 /// Initial value for all elements in a table.
@@ -249,7 +249,7 @@ pub enum TableInitialValue {
         /// `FuncIndex::reserved_value()`. Note that this image is empty by
         /// default and may not encompass the entire span of the table in which
         /// case the elements are initialized to null.
-        precomputed: Vec<FuncIndex>,
+        precomputed: collections::Vec<FuncIndex>,
     },
     /// An arbitrary const expression.
     Expr(ConstExpr),
@@ -294,14 +294,17 @@ pub struct Module {
     /// This module's index.
     pub module_index: StaticModuleIndex,
 
+    /// A pool of strings used in this module.
+    pub strings: StringPool,
+
     /// The name of this wasm module, often found in the wasm file.
-    pub name: Option<String>,
+    pub name: Option<Atom>,
 
     /// All import records, in the order they are declared in the module.
-    pub initializers: Vec<Initializer>,
+    pub initializers: collections::Vec<Initializer>,
 
     /// Exported entities.
-    pub exports: IndexMap<String, EntityIndex>,
+    pub exports: collections::IndexMap<Atom, EntityIndex>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
@@ -313,7 +316,7 @@ pub struct Module {
     pub memory_initialization: MemoryInitialization,
 
     /// WebAssembly passive elements.
-    pub passive_elements: Vec<TableSegmentElements>,
+    pub passive_elements: collections::Vec<TableSegmentElements>,
 
     /// The map from passive element index (element segment index space) to index in `passive_elements`.
     pub passive_elements_map: BTreeMap<ElemIndex, usize>,
@@ -375,9 +378,9 @@ pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
         /// Name of this import
-        name: String,
+        name: Atom,
         /// The field name projection of this import
-        field: String,
+        field: Atom,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
@@ -389,6 +392,7 @@ impl Module {
     pub fn new(module_index: StaticModuleIndex) -> Self {
         Self {
             module_index,
+            strings: Default::default(),
             name: Default::default(),
             initializers: Default::default(),
             exports: Default::default(),
@@ -563,9 +567,10 @@ impl Module {
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
+        let pool = &self.strings;
         self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
-                (name.as_str(), field.as_str(), self.type_of(*index))
+                (&pool[name], &pool[field], self.type_of(*index))
             }
         })
     }
@@ -573,7 +578,11 @@ impl Module {
     /// Get this module's `i`th import.
     pub fn import(&self, i: usize) -> Option<(&str, &str, EntityType)> {
         match self.initializers.get(i)? {
-            Initializer::Import { name, field, index } => Some((name, field, self.type_of(*index))),
+            Initializer::Import { name, field, index } => Some((
+                &self.strings[name],
+                &self.strings[field],
+                self.type_of(*index),
+            )),
         }
     }
 
@@ -648,6 +657,17 @@ impl Module {
     pub fn num_defined_tags(&self) -> usize {
         self.tags.len() - self.num_imported_tags
     }
+
+    /// Tests whether `index` is valid for this module.
+    pub fn is_valid(&self, index: EntityIndex) -> bool {
+        match index {
+            EntityIndex::Function(i) => self.functions.is_valid(i),
+            EntityIndex::Table(i) => self.tables.is_valid(i),
+            EntityIndex::Memory(i) => self.memories.is_valid(i),
+            EntityIndex::Global(i) => self.globals.is_valid(i),
+            EntityIndex::Tag(i) => self.tags.is_valid(i),
+        }
+    }
 }
 
 impl TypeTrace for Module {
@@ -659,6 +679,7 @@ impl TypeTrace for Module {
         // when adding new fields that might need re-canonicalization.
         let Self {
             module_index: _,
+            strings: _,
             name: _,
             initializers: _,
             exports: _,
@@ -710,6 +731,7 @@ impl TypeTrace for Module {
         // when adding new fields that might need re-canonicalization.
         let Self {
             module_index: _,
+            strings: _,
             name: _,
             initializers: _,
             exports: _,

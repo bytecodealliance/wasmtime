@@ -1,10 +1,10 @@
-use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
 use test_programs_artifacts::*;
+use wasmtime::{Result, bail, format_err};
 
 macro_rules! assert_test_exists {
     ($name:ident) => {
@@ -449,7 +449,12 @@ check: exited with status = 0
 
 fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
     println!("testing {wasm:?}");
-    let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
+    let mut args = vec![
+        "-Ccache=n",
+        "-Oopt-level=0",
+        "-Ddebug-info",
+        "-Wshared-memory",
+    ];
     args.extend(extra_args);
     args.push(wasm);
     let output = lldb_with_script(
@@ -547,5 +552,44 @@ check: exited with status = 0
 "#,
         )?;
     }
+    Ok(())
+}
+
+#[test]
+#[ignore]
+pub fn dwarf_cold_block() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Oopt-level=0",
+            "-Ddebug-info",
+            DWARF_COLD_BLOCK,
+        ],
+        r#"b foo
+r
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+n
+p __vmctx->set(),*f1
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: frame #0
+sameln: foo(f1=(__ptr =
+check: data = 42
+check: data = 42
+check: data = 42
+check: data = 42
+check: resuming
+"#,
+    )?;
     Ok(())
 }

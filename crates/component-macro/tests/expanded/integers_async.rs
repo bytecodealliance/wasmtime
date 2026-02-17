@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::integers::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod integers {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -570,7 +568,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod integers {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     a1: wasmtime::component::Func,
                     a2: wasmtime::component::Func,
@@ -626,7 +625,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/integers")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/integers`"
                                 )
                             })?;
@@ -635,7 +634,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/integers` does \
                                                     not have export `{name}`"
                                     )
@@ -791,7 +790,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a2<S: wasmtime::AsContextMut>(
@@ -811,7 +809,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a3<S: wasmtime::AsContextMut>(
@@ -831,7 +828,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a4<S: wasmtime::AsContextMut>(
@@ -851,7 +847,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a5<S: wasmtime::AsContextMut>(
@@ -871,7 +866,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a6<S: wasmtime::AsContextMut>(
@@ -891,7 +885,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a7<S: wasmtime::AsContextMut>(
@@ -911,7 +904,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a8<S: wasmtime::AsContextMut>(
@@ -931,7 +923,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_a9<S: wasmtime::AsContextMut>(
@@ -961,7 +952,6 @@ pub mod exports {
                                 (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7),
                             )
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
                     }
                     pub async fn call_r1<S: wasmtime::AsContextMut>(
@@ -980,7 +970,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r2<S: wasmtime::AsContextMut>(
@@ -999,7 +988,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r3<S: wasmtime::AsContextMut>(
@@ -1018,7 +1006,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r4<S: wasmtime::AsContextMut>(
@@ -1037,7 +1024,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r5<S: wasmtime::AsContextMut>(
@@ -1056,7 +1042,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r6<S: wasmtime::AsContextMut>(
@@ -1075,7 +1060,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r7<S: wasmtime::AsContextMut>(
@@ -1094,7 +1078,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_r8<S: wasmtime::AsContextMut>(
@@ -1113,7 +1096,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_pair_ret<S: wasmtime::AsContextMut>(
@@ -1132,7 +1114,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                 }

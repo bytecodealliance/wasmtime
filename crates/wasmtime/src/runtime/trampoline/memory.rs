@@ -38,9 +38,11 @@ pub async fn create_memory(
     // Since we have only associated a single memory with the "frankenstein"
     // instance, it will be exported at index 0.
     debug_assert_eq!(memory_id.as_u32(), 0);
+    let name = module.strings.insert("")?;
     module
         .exports
-        .insert(String::new(), EntityIndex::Memory(memory_id));
+        .insert(name, EntityIndex::Memory(memory_id))?;
+    let info = ModuleRuntimeInfo::bare(Arc::new(module))?;
 
     // We create an instance in the on-demand allocator when creating handles
     // associated with external objects. The configured instance allocator
@@ -57,7 +59,7 @@ pub async fn create_memory(
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
-                &ModuleRuntimeInfo::bare(Arc::new(module)),
+                &info,
                 Default::default(),
             )
             .await
@@ -115,7 +117,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 usize::try_from(tunables.memory_guard_size).unwrap(),
             )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
-            .map_err(|e| anyhow!(e))
+            .map_err(|e| format_err!(e))
     }
 }
 
@@ -137,7 +139,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
     }
 
     fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        anyhow::ensure!(
+        crate::ensure!(
             module.memories.len() == 1,
             "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
         );

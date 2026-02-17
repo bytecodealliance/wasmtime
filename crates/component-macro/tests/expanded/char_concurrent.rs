@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::chars::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -190,15 +188,15 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod chars {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
                 /// A function that accepts a character
-                fn take_char<T>(
+                fn take_char<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: char,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// A function that returns a character
-                fn return_char<T>(
+                fn return_char<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = char> + Send;
             }
@@ -245,7 +243,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod chars {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     take_char: wasmtime::component::Func,
                     return_char: wasmtime::component::Func,
@@ -269,7 +268,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/chars")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/chars`"
                                 )
                             })?;
@@ -278,7 +277,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/chars` does \
                 not have export `{name}`"
                                     )

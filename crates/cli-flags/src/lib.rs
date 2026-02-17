@@ -1,6 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
 use std::{
@@ -8,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use wasmtime::Config;
+use wasmtime::{Config, Result, bail, error::Context as _};
 
 pub mod opt;
 
@@ -369,6 +368,8 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure the ability to create a `shared` memory.
+        pub shared_memory: Option<bool>,
         /// Configure support for the shared-everything-threads proposal.
         pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
@@ -408,6 +409,12 @@ wasmtime_option_group! {
         pub exceptions: Option<bool>,
         /// Whether or not any GC infrastructure in Wasmtime is enabled or not.
         pub gc_support: Option<bool>,
+        /// Component model support for fixed-length lists: this corresponds
+        /// to the 🔧 emoji in the component model specification
+        pub component_model_fixed_length_lists: Option<bool>,
+        /// Whether or not any concurrency infrastructure in Wasmtime is
+        /// enabled or not.
+        pub concurrency_support: Option<bool>,
     }
 
     enum Wasm {
@@ -497,6 +504,25 @@ wasmtime_option_group! {
     }
 }
 
+wasmtime_option_group! {
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+    pub struct RecordOptions {
+        /// Filename for the recorded execution trace (or empty string to skip writing a file).
+        pub path: Option<String>,
+        /// Include (optional) signatures to facilitate validation checks during replay
+        /// (see `wasmtime replay` for details).
+        pub validation_metadata: Option<bool>,
+        /// Window size of internal buffering for record events (large windows offer more opportunities
+        /// for coalescing events at the cost of memory usage).
+        pub event_window_size: Option<usize>,
+    }
+
+    enum Record {
+        ...
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiNnGraph {
     pub format: String,
@@ -547,6 +573,18 @@ pub struct CommonOptions {
     #[serde(skip)]
     wasi_raw: Vec<opt::CommaSeparated<Wasi>>,
 
+    /// Options to enable and configure execution recording, `-R help` to see all.
+    ///
+    /// Generates a serialized trace of the Wasm module execution that captures all
+    /// non-determinism observable by the module. This trace can subsequently be
+    /// re-executed in a determinstic, embedding-agnostic manner (see the `wasmtime replay` command).
+    ///
+    /// Note: Minimal configuration options for deterministic Wasm semantics will be
+    /// enforced during recording by default (NaN canonicalization, deterministic relaxed SIMD).
+    #[arg(short = 'R', long = "record", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
+    record_raw: Vec<opt::CommaSeparated<Record>>,
+
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
     #[arg(skip)]
@@ -572,6 +610,10 @@ pub struct CommonOptions {
     #[arg(skip)]
     #[serde(rename = "wasi", default)]
     pub wasi: WasiOptions,
+
+    #[arg(skip)]
+    #[serde(rename = "record", default)]
+    pub record: RecordOptions,
 
     /// The target triple; default is the host triple
     #[arg(long, value_name = "TARGET")]
@@ -604,7 +646,7 @@ macro_rules! match_feature {
         #[cfg(not(feature = $feat))]
         {
             if let Some($p) = $config {
-                anyhow::bail!(concat!("support for ", $feat, " disabled at compile time"));
+                bail!(concat!("support for ", $feat, " disabled at compile time"));
             }
         }
     };
@@ -619,12 +661,14 @@ impl CommonOptions {
             debug_raw: Vec::new(),
             wasm_raw: Vec::new(),
             wasi_raw: Vec::new(),
+            record_raw: Vec::new(),
             configured: true,
             opts: Default::default(),
             codegen: Default::default(),
             debug: Default::default(),
             wasm: Default::default(),
             wasi: Default::default(),
+            record: Default::default(),
             target: None,
             config: None,
         }
@@ -642,12 +686,14 @@ impl CommonOptions {
             self.debug = toml_options.debug;
             self.wasm = toml_options.wasm;
             self.wasi = toml_options.wasi;
+            self.record = toml_options.record;
         }
         self.opts.configure_with(&self.opts_raw);
         self.codegen.configure_with(&self.codegen_raw);
         self.debug.configure_with(&self.debug_raw);
         self.wasm.configure_with(&self.wasm_raw);
         self.wasi.configure_with(&self.wasi_raw);
+        self.record.configure_with(&self.record_raw);
         Ok(())
     }
 
@@ -679,7 +725,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "logging"))]
         if self.debug.log_to_files == Some(true) || self.debug.logging == Some(true) {
-            anyhow::bail!("support for logging disabled at compile time");
+            bail!("support for logging disabled at compile time");
         }
         Ok(())
     }
@@ -718,7 +764,7 @@ impl CommonOptions {
             #[cfg(feature = "coredump")]
             config.coredump_on_trap(true);
             #[cfg(not(feature = "coredump"))]
-            anyhow::bail!("support for coredumps disabled at compile time");
+            bail!("support for coredumps disabled at compile time");
         }
         match_feature! {
             ["cranelift" : self.opts.opt_level]
@@ -759,7 +805,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "cranelift"))]
         if !self.codegen.cranelift.is_empty() {
-            anyhow::bail!("support for cranelift disabled at compile time");
+            bail!("support for cranelift disabled at compile time");
         }
 
         #[cfg(feature = "cache")]
@@ -773,7 +819,7 @@ impl CommonOptions {
         }
         #[cfg(not(feature = "cache"))]
         if self.codegen.cache == Some(true) {
-            anyhow::bail!("support for caching disabled at compile time");
+            bail!("support for caching disabled at compile time");
         }
 
         match_feature! {
@@ -858,7 +904,7 @@ impl CommonOptions {
         #[cfg(not(any(feature = "async", feature = "stack-switching")))]
         {
             if let Some(_size) = self.wasm.async_stack_size {
-                anyhow::bail!(concat!(
+                bail!(concat!(
                     "support for async/stack-switching disabled at compile time"
                 ));
             }
@@ -961,15 +1007,13 @@ impl CommonOptions {
         if self.opts.pooling_memory_protection_keys.is_some()
             && !self.opts.pooling_allocator.unwrap_or(false)
         {
-            anyhow::bail!("memory protection keys require the pooling allocator");
+            bail!("memory protection keys require the pooling allocator");
         }
 
         if self.opts.pooling_max_memory_protection_keys.is_some()
             && !self.opts.pooling_memory_protection_keys.is_some()
         {
-            anyhow::bail!(
-                "max memory protection keys requires memory protection keys to be enabled"
-            );
+            bail!("max memory protection keys requires memory protection keys to be enabled");
         }
 
         match_feature! {
@@ -1002,6 +1046,23 @@ impl CommonOptions {
 
         if let Some(enable) = self.wasm.gc_support {
             config.gc_support(enable);
+        }
+
+        if let Some(enable) = self.wasm.concurrency_support {
+            config.concurrency_support(enable);
+        }
+
+        if let Some(enable) = self.wasm.shared_memory {
+            config.shared_memory(enable);
+        }
+
+        let record = &self.record;
+        match_feature! {
+            ["rr" : &record.path]
+            _path => {
+                bail!("recording configuration for `rr` feature is not supported yet");
+            },
+            _ => err,
         }
 
         Ok(config)
@@ -1051,7 +1112,7 @@ impl CommonOptions {
                     config.$method(enable);
                     #[cfg(not(feature = $feature))]
                     if enable && all.is_none() {
-                        anyhow::bail!("support for {} was disabled at compile-time", $feature);
+                        bail!("support for {} was disabled at compile-time", $feature);
                     }
                 }
             )*)
@@ -1064,6 +1125,7 @@ impl CommonOptions {
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
+            ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
@@ -1077,7 +1139,7 @@ impl CommonOptions {
             config.wasm_component_model_gc(enable);
             #[cfg(not(all(feature = "component-model", feature = "gc")))]
             if enable && all.is_none() {
-                anyhow::bail!("support for `component-model-gc` was disabled at compile time")
+                bail!("support for `component-model-gc` was disabled at compile time")
             }
         }
 
@@ -1113,6 +1175,7 @@ mod tests {
             [debug]
             [wasm]
             [wasi]
+            [record]
         "#;
         let mut common_options: CommonOptions = toml::from_str(basic_toml).unwrap();
         common_options.config(None).unwrap();
@@ -1235,6 +1298,8 @@ impl fmt::Display for CommonOptions {
             wasm,
             wasi_raw,
             wasi,
+            record_raw,
+            record,
             configured,
             target,
             config,
@@ -1251,6 +1316,7 @@ impl fmt::Display for CommonOptions {
         let wasi_flags;
         let wasm_flags;
         let debug_flags;
+        let record_flags;
 
         if *configured {
             codegen_flags = codegen.to_options();
@@ -1258,6 +1324,7 @@ impl fmt::Display for CommonOptions {
             wasi_flags = wasi.to_options();
             wasm_flags = wasm.to_options();
             opts_flags = opts.to_options();
+            record_flags = record.to_options();
         } else {
             codegen_flags = codegen_raw
                 .iter()
@@ -1268,6 +1335,11 @@ impl fmt::Display for CommonOptions {
             wasi_flags = wasi_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
             wasm_flags = wasm_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
             opts_flags = opts_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
+            record_flags = record_raw
+                .iter()
+                .flat_map(|t| t.0.iter())
+                .cloned()
+                .collect();
         }
 
         for flag in codegen_flags {
@@ -1284,6 +1356,9 @@ impl fmt::Display for CommonOptions {
         }
         for flag in debug_flags {
             write!(f, "-D{flag} ")?;
+        }
+        for flag in record_flags {
+            write!(f, "-R{flag} ")?;
         }
 
         Ok(())

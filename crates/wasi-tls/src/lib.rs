@@ -11,7 +11,7 @@
 //! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime::{
 //!     component::{Linker, ResourceTable},
-//!     Store, Engine, Result, Config
+//!     Store, Engine, Result,
 //! };
 //! use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 //!
@@ -42,9 +42,7 @@
 //!             .build(),
 //!     };
 //!
-//!     let mut config = Config::new();
-//!     config.async_support(true);
-//!     let engine = Engine::new(&config)?;
+//!     let engine = Engine::default();
 //!
 //!     // Set up wasi-cli
 //!     let mut store = Store::new(&engine, ctx);
@@ -100,7 +98,7 @@ pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     opts: &mut LinkOptions,
     f: fn(&mut T) -> WasiTls<'_>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     bindings::types::add_to_linker::<_, HasWasiTls>(l, &opts, f)?;
     Ok(())
 }

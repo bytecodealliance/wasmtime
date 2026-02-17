@@ -1,7 +1,6 @@
 //! Implementation of the `wasi:http/types` interface's various body types.
 
 use crate::{bindings::http::types, types::FieldMap};
-use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
@@ -11,6 +10,7 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
+use wasmtime::format_err;
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
 use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
 
@@ -164,7 +164,7 @@ enum StreamEnd {
 pub struct HostIncomingBodyStream {
     state: IncomingBodyStreamState,
     buffer: Bytes,
-    error: Option<anyhow::Error>,
+    error: Option<wasmtime::Error>,
 }
 
 impl HostIncomingBodyStream {
@@ -613,7 +613,7 @@ impl OutputStream for BodyWriteStream {
                 if let Some(written) = self.written.as_ref() {
                     if !written.update(len) {
                         let total = written.written();
-                        return Err(StreamError::LastOperationFailed(anyhow!(
+                        return Err(StreamError::LastOperationFailed(format_err!(
                             self.context.as_body_size_error(total)
                         )));
                     }
@@ -626,7 +626,7 @@ impl OutputStream for BodyWriteStream {
             // called. The call to `check_write` always guarantees that there's
             // at least one capacity if a write is allowed.
             Err(mpsc::error::TrySendError::Full(_)) => {
-                Err(StreamError::Trap(anyhow!("write exceeded budget")))
+                Err(StreamError::Trap(format_err!("write exceeded budget")))
             }
 
             // Hyper is gone so this stream is now closed.

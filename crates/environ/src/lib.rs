@@ -16,6 +16,7 @@
 extern crate std;
 extern crate alloc;
 
+pub mod collections;
 pub mod prelude;
 
 mod address_map;
@@ -23,7 +24,6 @@ mod frame_table;
 #[macro_use]
 mod builtin;
 mod demangling;
-mod error;
 mod ext;
 mod gc;
 mod hostcall;
@@ -36,16 +36,17 @@ mod ref_bits;
 mod scopevec;
 mod stack_map;
 mod stack_switching;
+mod string_pool;
 mod trap_encoding;
 mod tunables;
 mod types;
 mod vmoffsets;
+mod wasm_error;
 
 pub use self::ext::*;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;
-pub use crate::error::*;
 pub use crate::frame_table::*;
 pub use crate::gc::*;
 pub use crate::hostcall::*;
@@ -57,10 +58,12 @@ pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::*;
 pub use crate::stack_switching::*;
+pub use crate::string_pool::{Atom, StringPool};
 pub use crate::trap_encoding::*;
 pub use crate::tunables::*;
 pub use crate::types::*;
 pub use crate::vmoffsets::*;
+pub use crate::wasm_error::*;
 pub use object;
 
 pub use wasmparser;
@@ -79,6 +82,20 @@ pub mod fact;
 // much easier to refer to everything through one crate rather than importing
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
+
+// Reexport the error module for convenience.
+#[doc(inline)]
+pub use wasmtime_core::error;
+
+#[cfg(feature = "anyhow")]
+pub use self::error::ToWasmtimeResult;
+
+pub use wasmtime_core::{alloc::PanicOnOom, undo::Undo};
+
+// Only for use with `bindgen!`-generated code.
+#[doc(hidden)]
+#[cfg(feature = "anyhow")]
+pub use anyhow;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

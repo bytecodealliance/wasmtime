@@ -1,9 +1,8 @@
 use super::regs;
-use crate::RegIndexEnv;
 use crate::abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, align_to};
 use crate::codegen::CodeGenError;
 use crate::isa::{CallingConvention, reg::Reg};
-use anyhow::{Result, bail};
+use crate::{RegIndexEnv, Result, bail};
 use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
@@ -198,6 +197,7 @@ impl Aarch64ABI {
 mod tests {
     use super::Aarch64ABI;
     use crate::{
+        Result,
         abi::{ABI, ABIOperand},
         isa::CallingConvention,
         isa::aarch64::regs,
@@ -207,8 +207,6 @@ mod tests {
         WasmFuncType,
         WasmValType::{self, *},
     };
-
-    use anyhow::Result;
 
     #[test]
     fn xreg_abi_sig() -> Result<()> {

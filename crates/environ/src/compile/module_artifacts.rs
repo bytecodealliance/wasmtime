@@ -1,12 +1,13 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
 //! with `postcard` as part of a module's compilation process.
 
+use crate::WasmChecksum;
+use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
     CompiledModuleInfo, DebugInfoData, FunctionName, MemoryInitialization, Metadata,
     ModuleTranslation, Tunables, obj,
 };
-use anyhow::{Result, bail};
 use object::SectionKind;
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use std::ops::Range;
@@ -120,6 +121,7 @@ impl<'a> ObjectBuilder<'a> {
             data,
             data_align,
             passive_data,
+            wasm,
             ..
         } = translation;
 
@@ -220,6 +222,7 @@ impl<'a> ObjectBuilder<'a> {
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,
                 dwarf,
             },
+            checksum: WasmChecksum::from_binary(wasm, self.tunables.recording),
         })
     }
 

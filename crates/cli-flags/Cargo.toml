@@ -13,7 +13,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, features = ['std'] }
 clap = { workspace = true }
 file-per-thread-logger = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
@@ -41,3 +40,4 @@ memory-protection-keys = ["wasmtime/memory-protection-keys"]
 pulley = ["wasmtime/pulley"]
 stack-switching = ["wasmtime/stack-switching"]
 debug = ["wasmtime/debug"]
+rr = ["wasmtime/rr", "component-model"]

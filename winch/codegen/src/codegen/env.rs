@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     abi::{ABI, ABISig, wasm_sig},
     codegen::{BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize, control},
     isa::TargetIsa,
 };
-use anyhow::Result;
 use cranelift_codegen::ir::{UserExternalName, UserExternalNameRef};
 use std::collections::{
     HashMap,

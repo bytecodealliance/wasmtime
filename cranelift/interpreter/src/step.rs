@@ -886,20 +886,60 @@ where
         Opcode::Fneg => unary(DataValueExt::neg, arg(0))?,
         Opcode::Fabs => unary(DataValueExt::abs, arg(0))?,
         Opcode::Fcopysign => binary(DataValueExt::copysign, arg(0), arg(1))?,
-        Opcode::Fmin => assign(match (arg(0), arg(1)) {
-            (a, _) if a.is_nan()? => a,
-            (_, b) if b.is_nan()? => b,
-            (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => a,
-            (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
-            (a, b) => a.smin(b)?,
-        }),
-        Opcode::Fmax => assign(match (arg(0), arg(1)) {
-            (a, _) if a.is_nan()? => a,
-            (_, b) if b.is_nan()? => b,
-            (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => b,
-            (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
-            (a, b) => a.smax(b)?,
-        }),
+        Opcode::Fmin => {
+            let scalar_min = |a: DataValue, b: DataValue| -> ValueResult<DataValue> {
+                Ok(match (a, b) {
+                    (a, _) if a.is_nan()? => a,
+                    (_, b) if b.is_nan()? => b,
+                    (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => a,
+                    (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
+                    (a, b) => a.smin(b)?,
+                })
+            };
+
+            if ctrl_ty.is_vector() {
+                let arg0 = extractlanes(&arg(0), ctrl_ty)?;
+                let arg1 = extractlanes(&arg(1), ctrl_ty)?;
+
+                assign(vectorizelanes(
+                    &(arg0
+                        .into_iter()
+                        .zip(arg1.into_iter())
+                        .map(|(a, b)| scalar_min(a, b))
+                        .collect::<ValueResult<SimdVec<DataValue>>>()?),
+                    ctrl_ty,
+                )?)
+            } else {
+                assign(scalar_min(arg(0), arg(1))?)
+            }
+        }
+        Opcode::Fmax => {
+            let scalar_max = |a: DataValue, b: DataValue| -> ValueResult<DataValue> {
+                Ok(match (a, b) {
+                    (a, _) if a.is_nan()? => a,
+                    (_, b) if b.is_nan()? => b,
+                    (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => b,
+                    (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
+                    (a, b) => a.smax(b)?,
+                })
+            };
+
+            if ctrl_ty.is_vector() {
+                let arg0 = extractlanes(&arg(0), ctrl_ty)?;
+                let arg1 = extractlanes(&arg(1), ctrl_ty)?;
+
+                assign(vectorizelanes(
+                    &(arg0
+                        .into_iter()
+                        .zip(arg1.into_iter())
+                        .map(|(a, b)| scalar_max(a, b))
+                        .collect::<ValueResult<SimdVec<DataValue>>>()?),
+                    ctrl_ty,
+                )?)
+            } else {
+                assign(scalar_max(arg(0), arg(1))?)
+            }
+        }
         Opcode::Ceil => unary(DataValueExt::ceil, arg(0))?,
         Opcode::Floor => unary(DataValueExt::floor, arg(0))?,
         Opcode::Trunc => unary(DataValueExt::trunc, arg(0))?,
@@ -1311,7 +1351,7 @@ where
         Opcode::GetStackPointer => unimplemented!("GetStackPointer"),
         Opcode::GetReturnAddress => unimplemented!("GetReturnAddress"),
         Opcode::X86Pshufb => unimplemented!("X86Pshufb"),
-        Opcode::X86Blendv => unimplemented!("X86Blendv"),
+        Opcode::Blendv => unimplemented!("Blendv"),
         Opcode::X86Pmulhrsw => unimplemented!("X86Pmulhrsw"),
         Opcode::X86Pmaddubsw => unimplemented!("X86Pmaddubsw"),
         Opcode::X86Cvtt2dq => unimplemented!("X86Cvtt2dq"),

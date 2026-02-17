@@ -23,17 +23,17 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x40(a0)
-;;       ld      a4, 0x38(a0)
-;;       sltu    a1, a1, a2
-;;       add     a2, a4, a2
-;;       lui     a0, 0xffff
-;;       slli    a4, a0, 4
-;;       add     a2, a2, a4
-;;       neg     a5, a1
-;;       not     a1, a5
-;;       and     a4, a2, a1
-;;       sb      a3, 0(a4)
+;;       ld      a4, 0x40(a0)
+;;       ld      a5, 0x38(a0)
+;;       sltu    a4, a4, a2
+;;       add     a5, a5, a2
+;;       lui     a2, 0xffff
+;;       slli    a0, a2, 4
+;;       add     a5, a5, a0
+;;       neg     a1, a4
+;;       not     a4, a1
+;;       and     a5, a5, a4
+;;       sb      a3, 0(a5)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -44,17 +44,17 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x40(a0)
-;;       ld      a3, 0x38(a0)
-;;       sltu    a1, a1, a2
-;;       add     a2, a3, a2
-;;       lui     a0, 0xffff
-;;       slli    a3, a0, 4
-;;       add     a2, a2, a3
-;;       neg     a5, a1
-;;       not     a1, a5
-;;       and     a3, a2, a1
-;;       lbu     a0, 0(a3)
+;;       ld      a3, 0x40(a0)
+;;       ld      a4, 0x38(a0)
+;;       sltu    a3, a3, a2
+;;       add     a4, a4, a2
+;;       lui     a2, 0xffff
+;;       slli    a5, a2, 4
+;;       add     a4, a4, a5
+;;       neg     a1, a3
+;;       not     a3, a1
+;;       and     a5, a4, a3
+;;       lbu     a0, 0(a5)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

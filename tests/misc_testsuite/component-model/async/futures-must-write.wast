@@ -79,7 +79,7 @@
         ;; call 'start-future' to get the future we'll be working with
         (local $fr i32)
         (local.set $fr (call $start-future))
-        (if (i32.ne (i32.const 2) (local.get $fr))
+        (if (i32.ne (i32.const 1) (local.get $fr))
           (then unreachable))
 
         ;; ok to immediately drop the readable end
@@ -92,7 +92,7 @@
         ;; call 'start-future' to get the future we'll be working with
         (local $fr i32)
         (local.set $fr (call $start-future))
-        (if (i32.ne (i32.const 2) (local.get $fr))
+        (if (i32.ne (i32.const 1) (local.get $fr))
           (then unreachable))
 
         ;; boom

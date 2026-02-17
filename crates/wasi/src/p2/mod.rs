@@ -113,21 +113,19 @@
 //!
 //! # Async and Sync
 //!
-//! As of WASI0.2, WASI functions are not blocking from WebAssembly's point of
-//! view: a WebAssembly call into these functions returns when they are
-//! complete.
+//! All WASIp2 functions are blocking from WebAssembly's point of view: a
+//! WebAssembly call into these functions returns only when they are complete.
 //!
-//! This module provides an implementation of those functions in the host,
-//! where for some functions, it is appropriate to implement them using
-//! async Rust and the Tokio executor, so that the host implementation can be
-//! nonblocking when Wasmtime's [`Config::async_support`][async] is set.
-//! Synchronous wrappers are provided for all async implementations, which
-//! creates a private Tokio executor.
+//! This module provides an implementation of those functions in the host, where
+//! for some functions, it is appropriate to implement them using async Rust and
+//! the Tokio executor. The host implementation still blocks WebAssembly, but it
+//! does not block the host's thread. Synchronous wrappers are also provided for
+//! all async implementations, which create a private Tokio executor.
 //!
 //! Users can choose between these modes of implementation using variants
 //! of the add_to_linker functions:
 //!
-//! * For non-async users (the default of `Config`), use [`add_to_linker_sync`].
+//! * For non-async users, use [`add_to_linker_sync`].
 //! * For async users, use [`add_to_linker_async`].
 //!
 //! Note that bindings are generated once for async and once for sync. Most
@@ -218,8 +216,14 @@
 //! [`wasi:sockets/tcp`]: bindings::sockets::tcp::Host
 //! [`wasi:sockets/udp-create-socket`]: bindings::sockets::udp_create_socket::Host
 //! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
-//! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
+//! [`WasiCtx`]: crate::WasiCtx
+//! [`WasiCtxView`]: crate::WasiCtxView
+//! [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+//! [`WasiCtxBuilder::wall_clock`]: crate::WasiCtxBuilder::wall_clock
+//! [`WasiCtxBuilder::monotonic_clock`]: crate::WasiCtxBuilder::monotonic_clock
+//! [`StdinStream`]: crate::cli::StdinStream
+//! [`StdoutStream`]: crate::cli::StdoutStream
 
 use crate::WasiView;
 use crate::cli::{WasiCli, WasiCliView as _};
@@ -257,15 +261,12 @@ pub use wasmtime_wasi_io::streams::{
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///
 /// This function will add the `async` variant of all interfaces into the
-/// [`Linker`] provided. By `async` this means that this function is only
-/// compatible with [`Config::async_support(true)`][async]. For embeddings with
-/// async support disabled see [`add_to_linker_sync`] instead.
+/// [`Linker`] provided. For embeddings with async support disabled see
+/// [`add_to_linker_sync`] instead.
 ///
 /// This function will add all interfaces implemented by this crate to the
 /// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
 /// this crate.
-///
-/// [async]: wasmtime::Config::async_support
 ///
 /// # Example
 ///
@@ -275,9 +276,7 @@ pub use wasmtime_wasi_io::streams::{
 /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
+///     let engine = Engine::default();
 ///
 ///     let mut linker = Linker::<MyState>::new(&engine);
 ///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
@@ -311,7 +310,7 @@ pub use wasmtime_wasi_io::streams::{
 ///     }
 /// }
 /// ```
-pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
     let options = bindings::LinkOptions::default();
     add_to_linker_with_options_async(linker, &options)
 }
@@ -320,7 +319,7 @@ pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Resul
 pub fn add_to_linker_with_options_async<T: WasiView>(
     linker: &mut Linker<T>,
     options: &bindings::LinkOptions,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_async_io_to_linker(linker)?;
     add_nonblocking_to_linker(linker, options)?;
 
@@ -335,7 +334,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 fn add_nonblocking_to_linker<'a, T: WasiView, O>(
     linker: &mut Linker<T>,
     options: &'a O,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     bindings::sockets::network::LinkOptions: From<&'a O>,
     bindings::cli::exit::LinkOptions: From<&'a O>,
@@ -371,7 +370,7 @@ where
 /// present in the `wasi:http/proxy` world.
 pub fn add_to_linker_proxy_interfaces_async<T: WasiView>(
     linker: &mut Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_async_io_to_linker(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
@@ -381,12 +380,12 @@ pub fn add_to_linker_proxy_interfaces_async<T: WasiView>(
 #[doc(hidden)]
 pub fn add_to_linker_proxy_interfaces_sync<T: WasiView>(
     linker: &mut Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_sync_wasi_io(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
 
-fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
     use crate::p2::bindings::{cli, clocks, random};
 
     let l = linker;
@@ -402,15 +401,12 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///
 /// This function will add the synchronous variant of all interfaces into the
-/// [`Linker`] provided. By synchronous this means that this function is only
-/// compatible with [`Config::async_support(false)`][async]. For embeddings
-/// with async support enabled see [`add_to_linker_async`] instead.
+/// [`Linker`] provided. For embeddings with async support enabled see
+/// [`add_to_linker_async`] instead.
 ///
 /// This function will add all interfaces implemented by this crate to the
 /// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
 /// this crate.
-///
-/// [async]: wasmtime::Config::async_support
 ///
 /// # Example
 ///
@@ -455,7 +451,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
 /// ```
 pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let options = bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
 }
@@ -464,7 +460,7 @@ pub fn add_to_linker_sync<T: WasiView>(
 pub fn add_to_linker_with_options_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
     options: &bindings::sync::LinkOptions,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     add_nonblocking_to_linker(linker, options)?;
     add_sync_wasi_io(linker)?;
 
@@ -479,7 +475,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
 /// [`add_to_linker_proxy_interfaces_sync`].
 fn add_sync_wasi_io<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     let l = linker;
     wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     bindings::sync::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
@@ -499,7 +495,7 @@ impl HasData for HasIo {
 // that's not possible with these two traits in separate crates. For now this
 // is some small duplication but if this gets worse over time then we'll want
 // to massage this.
-fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> anyhow::Result<()> {
+fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> wasmtime::Result<()> {
     wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::streams::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;

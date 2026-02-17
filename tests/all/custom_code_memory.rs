@@ -11,7 +11,7 @@ mod not_for_windows {
             page_size()
         }
 
-        fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()> {
+        fn publish_executable(&self, ptr: *const u8, len: usize) -> wasmtime::Result<()> {
             unsafe {
                 mprotect(
                     ptr as *mut _,
@@ -22,7 +22,7 @@ mod not_for_windows {
             Ok(())
         }
 
-        fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()> {
+        fn unpublish_executable(&self, ptr: *const u8, len: usize) -> wasmtime::Result<()> {
             unsafe {
                 mprotect(
                     ptr as *mut _,

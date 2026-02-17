@@ -8,8 +8,10 @@ use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 
 /// This implementation will yield output streams that block on writes, and
-/// output directly to a file. If truly async output is required, [`AsyncStdoutStream`]
-/// should be used instead.
+/// output directly to a file. If truly async output is required,
+/// [`AsyncStdoutStream`] should be used instead.
+///
+/// [`AsyncStdoutStream`]: crate::cli::AsyncStdoutStream
 #[derive(Clone)]
 pub struct OutputFile {
     file: Arc<std::fs::File>,
@@ -48,14 +50,14 @@ impl OutputStream for OutputFile {
     fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
         (&*self.file)
             .write_all(&bytes)
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))
     }
 
     fn flush(&mut self) -> StreamResult<()> {
         use std::io::Write;
         self.file
             .flush()
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
@@ -85,6 +87,8 @@ impl AsyncWrite for OutputFile {
 /// This implementation will yield input streams that block on reads, and
 /// reads directly from a file. If truly async input is required,
 /// [`AsyncStdinStream`] should be used instead.
+///
+/// [`AsyncStdinStream`]: crate::cli::AsyncStdinStream
 #[derive(Clone)]
 pub struct InputFile {
     file: Arc<std::fs::File>,
@@ -124,7 +128,7 @@ impl InputStream for InputFile {
         let bytes_read = self
             .file
             .read(&mut buf)
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))?;
+            .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))?;
         if bytes_read == 0 {
             return Err(StreamError::Closed);
         }

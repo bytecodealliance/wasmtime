@@ -22,11 +22,11 @@ use crate::machinst::{
 };
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
+use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 use cranelift_control::ControlPlane;
-use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
-use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 
@@ -710,10 +710,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> CallInfo<T> {
-        self.vcode
-            .abi()
-            .gen_call_info(self.vcode.sigs(), sig, dest, uses, defs, try_call_info)
+        self.vcode.abi().gen_call_info(
+            self.vcode.sigs(),
+            sig,
+            dest,
+            uses,
+            defs,
+            try_call_info,
+            patchable,
+        )
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its

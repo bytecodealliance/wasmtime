@@ -5,7 +5,6 @@ use crate::debug::transform::debug_transform_logging::{
     dbi_log_enabled, log_get_value_loc, log_get_value_name, log_get_value_ranges,
 };
 use crate::translate::get_vmctx_value_label;
-use anyhow::{Context, Error, Result};
 use core::fmt;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
@@ -17,6 +16,7 @@ use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use wasmtime_environ::error::{Context, Error, Result};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -647,7 +647,9 @@ where
             | Operation::ImplicitValue { .. }
             | Operation::ImplicitPointer { .. }
             | Operation::EntryValue { .. }
-            | Operation::ParameterRef { .. } => {
+            | Operation::ParameterRef { .. }
+            | Operation::VariableValue { .. }
+            | Operation::Uninitialized => {
                 return Ok(None);
             }
             Operation::WasmGlobal { index: _ } | Operation::WasmStack { index: _ } => {

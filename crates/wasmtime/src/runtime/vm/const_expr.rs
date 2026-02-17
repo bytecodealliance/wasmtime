@@ -2,13 +2,13 @@
 
 use crate::prelude::*;
 use crate::runtime::vm;
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
 #[cfg(feature = "gc")]
 use crate::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
 };
 use crate::{OpaqueRootScope, Val};
-use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
+use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalConstValue, GlobalIndex};
 #[cfg(feature = "gc")]
 use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
 
@@ -33,12 +33,16 @@ impl Default for ConstExprEvaluator {
 /// The context within which a particular const expression is evaluated.
 pub struct ConstEvalContext {
     pub(crate) instance: InstanceId,
+    pub(crate) asyncness: Asyncness,
 }
 
 impl ConstEvalContext {
     /// Create a new context.
-    pub fn new(instance: InstanceId) -> Self {
-        Self { instance }
+    pub fn new(instance: InstanceId, asyncness: Asyncness) -> Self {
+        Self {
+            instance,
+            asyncness,
+        }
     }
 
     fn global_get(&mut self, store: &mut StoreOpaque, index: GlobalIndex) -> Result<Val> {
@@ -51,13 +55,10 @@ impl ConstEvalContext {
 
     fn ref_func(&mut self, store: &mut StoreOpaque, index: FuncIndex) -> Result<Val> {
         let id = store.id();
+        let (instance, registry) = store.instance_and_module_registry_mut(self.instance);
         // SAFETY: `id` is the correct store-owner of the function being looked
         // up
-        let func = unsafe {
-            store
-                .instance_mut(self.instance)
-                .get_exported_func(id, index)
-        };
+        let func = unsafe { instance.get_exported_func(registry, id, index) };
         Ok(func.into())
     }
 
@@ -78,7 +79,8 @@ impl ConstEvalContext {
     ) -> Result<Val> {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = StructRef::_new_async(store, limiter, &allocator, &fields).await?;
+        let struct_ref =
+            StructRef::_new_async(store, limiter, &allocator, &fields, self.asyncness).await?;
         Ok(Val::AnyRef(Some(struct_ref.into())))
     }
 
@@ -166,12 +168,12 @@ impl ConstExprEvaluator {
     /// for `i32.const N`.
     #[inline]
     pub fn try_simple(&mut self, expr: &ConstExpr) -> Option<&Val> {
-        match expr.ops() {
-            [ConstOp::I32Const(i)] => Some(self.return_one(Val::I32(*i))),
-            [ConstOp::I64Const(i)] => Some(self.return_one(Val::I64(*i))),
-            [ConstOp::F32Const(f)] => Some(self.return_one(Val::F32(*f))),
-            [ConstOp::F64Const(f)] => Some(self.return_one(Val::F64(*f))),
-            _ => None,
+        match expr.const_eval()? {
+            GlobalConstValue::I32(i) => Some(self.return_one(Val::I32(i))),
+            GlobalConstValue::I64(i) => Some(self.return_one(Val::I64(i))),
+            GlobalConstValue::F32(f) => Some(self.return_one(Val::F32(f))),
+            GlobalConstValue::F64(f) => Some(self.return_one(Val::F64(f))),
+            GlobalConstValue::V128(i) => Some(self.return_one(Val::V128(i.into()))),
         }
     }
 
@@ -205,9 +207,6 @@ impl ConstExprEvaluator {
     fn return_one(&mut self, val: Val) -> &Val {
         self.simple = val;
         &self.simple
-        // self.stack.clear();
-        // self.stack.push(val);
-        // &self.stack[0]
     }
 
     #[cold]
@@ -341,9 +340,15 @@ impl ConstExprEvaluator {
                     let elem = self.pop()?;
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
-                            .await?;
+                    let array = ArrayRef::_new_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elem,
+                        len,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -360,9 +365,15 @@ impl ConstExprEvaluator {
                         .expect("type should have a default value");
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
-                            .await?;
+                    let array = ArrayRef::_new_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elem,
+                        len,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -392,9 +403,14 @@ impl ConstExprEvaluator {
                         .collect::<smallvec::SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array =
-                        ArrayRef::_new_fixed_async(store, limiter.as_deref_mut(), &pre, &elems)
-                            .await?;
+                    let array = ArrayRef::_new_fixed_async(
+                        store,
+                        limiter.as_deref_mut(),
+                        &pre,
+                        &elems,
+                        context.asyncness,
+                    )
+                    .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -434,7 +450,7 @@ impl ConstExprEvaluator {
 
     fn pop(&mut self) -> Result<Val> {
         self.stack.pop().ok_or_else(|| {
-            anyhow!(
+            format_err!(
                 "const expr evaluation error: attempted to pop from an empty \
                  evaluation stack"
             )

@@ -10,7 +10,7 @@ test_programs::p3::export!(Component);
 async fn test_udp_unbound_state_invariants(family: IpAddressFamily) {
     let sock = UdpSocket::create(family).unwrap();
 
-    // Skipping: udp::start_bind
+    // Skipping: udp::bind
 
     assert_eq!(
         sock.send(b"test".into(), None).await,
@@ -38,7 +38,7 @@ fn test_udp_bound_state_invariants(family: IpAddressFamily) {
         sock.bind(bind_address),
         Err(ErrorCode::InvalidState)
     ));
-    // Skipping: udp::stream
+    // Skipping: udp::connect
 
     assert!(matches!(sock.get_local_address(), Ok(_)));
     assert!(matches!(
@@ -59,14 +59,13 @@ fn test_udp_connected_state_invariants(family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let connect_address = IpSocketAddress::new(IpAddress::new_loopback(family), 54321);
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind(bind_address).unwrap();
     sock.connect(connect_address).unwrap();
 
     assert!(matches!(
         sock.bind(bind_address),
         Err(ErrorCode::InvalidState)
     ));
-    // Skipping: udp::stream
+    // Skipping: udp::connect
 
     assert!(matches!(sock.get_local_address(), Ok(_)));
     assert!(matches!(sock.get_remote_address(), Ok(_)));

@@ -37,22 +37,22 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x30(%rdi), %rdx
-;;       movq    8(%rdx), %rcx
-;;       shrq    $0x10, %rcx
-;;       movq    %rcx, %rdx
-;;       shll    $0x10, %edx
-;;       leal    4(%rcx), %r8d
-;;       cmpl    %r8d, %edx
-;;       jbe     0x3d
-;;   23: testl   %ecx, %ecx
-;;       jle     0x3d
-;;   2b: movq    0x30(%rdi), %rdi
-;;       movq    (%rdi), %rdi
-;;       movl    %ecx, %eax
-;;       movl    (%rdi, %rax), %r10d
-;;       jmp     0x40
-;;   3d: xorl    %r10d, %r10d
+;;       movq    0x30(%rdi), %rax
+;;       movq    8(%rax), %rax
+;;       shrq    $0x10, %rax
+;;       movq    %rax, %rcx
+;;       shll    $0x10, %ecx
+;;       leal    4(%rax), %edx
+;;       cmpl    %edx, %ecx
+;;       jbe     0x3a
+;;   21: testl   %eax, %eax
+;;       jle     0x3a
+;;   29: movq    0x30(%rdi), %rcx
+;;       movq    (%rcx), %rcx
+;;       movl    %eax, %eax
+;;       movl    (%rcx, %rax), %eax
+;;       jmp     0x3c
+;;   3a: xorl    %eax, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

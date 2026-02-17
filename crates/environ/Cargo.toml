@@ -23,6 +23,7 @@ postcard = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 wasmparser = { workspace = true, features = ['validate', 'serde', 'features'] }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
@@ -35,8 +36,10 @@ target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+wasmtime-core = { workspace = true }
 semver = { workspace = true, optional = true, features = ['serde'] }
 smallvec = { workspace = true, features = ['serde'] }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }
@@ -55,6 +58,8 @@ name = "factc"
 required-features = ['component-model', 'compile']
 
 [features]
+anyhow = ["wasmtime-core/anyhow"]
+backtrace = ["std", "wasmtime-core/backtrace"]
 component-model = [
   "dep:wasmtime-component-util",
   "dep:semver",
@@ -79,4 +84,8 @@ std = [
   'object/std',
   'wasmparser/std',
   'indexmap/std',
+  'wasmtime-core/std',
+]
+rr = [
+  "component-model"
 ]

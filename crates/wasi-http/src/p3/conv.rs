@@ -25,6 +25,7 @@ impl ErrorCode {
     }
 
     /// Translate a [`hyper::Error`] to a wasi-http [ErrorCode] in the context of a response.
+    #[cfg(feature = "default-send-request")]
     pub(crate) fn from_hyper_response_error(err: hyper::Error) -> Self {
         if err.is_timeout() {
             return ErrorCode::HttpResponseTimeout;

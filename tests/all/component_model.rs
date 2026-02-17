@@ -1,12 +1,15 @@
-use anyhow::Result;
 use std::fmt::Write;
 use std::iter;
-use wasmtime::component::Component;
+use wasmtime::component::{
+    Component, ComponentNamedList, Instance, Lift, Linker, Lower, ResourceAny, TypedFunc,
+};
+use wasmtime::{Config, Result, Store};
 use wasmtime_component_util::REALLOC_AND_FREE;
-use wasmtime_test_util::component::{TypedFuncExt, async_engine, engine};
+use wasmtime_test_util::component::{async_engine, config, engine};
 
 mod aot;
 mod r#async;
+mod async_dynamic;
 mod bindgen;
 mod call_hook;
 mod dynamic;
@@ -15,10 +18,83 @@ mod import;
 mod instance;
 mod linker;
 mod macros;
+mod missing_async;
 mod nested;
 mod post_return;
 mod resources;
 mod strings;
+
+#[derive(Copy, Clone)]
+enum ApiStyle {
+    Sync,
+    Async,
+    AsyncNotConcurrent,
+    Concurrent,
+}
+
+impl ApiStyle {
+    fn config(self) -> Config {
+        let mut config = config();
+        match self {
+            ApiStyle::AsyncNotConcurrent => {
+                config.concurrency_support(false);
+            }
+            ApiStyle::Sync | ApiStyle::Async | ApiStyle::Concurrent => {
+                config.wasm_component_model_threading(true);
+            }
+        }
+        config
+    }
+
+    async fn instantiate<T: Send>(
+        self,
+        store: &mut Store<T>,
+        linker: &Linker<T>,
+        component: &Component,
+    ) -> Result<Instance> {
+        match self {
+            ApiStyle::Sync => linker.instantiate(store, &component),
+            ApiStyle::Async | ApiStyle::AsyncNotConcurrent | ApiStyle::Concurrent => {
+                linker.instantiate_async(store, &component).await
+            }
+        }
+    }
+
+    async fn call<
+        P: ComponentNamedList + Lower + 'static,
+        R: ComponentNamedList + Lift + 'static,
+        T: Send,
+    >(
+        self,
+        store: &mut Store<T>,
+        func: TypedFunc<P, R>,
+        params: P,
+    ) -> Result<R> {
+        match self {
+            ApiStyle::Sync => func.call(&mut *store, params),
+            ApiStyle::Async | ApiStyle::AsyncNotConcurrent => {
+                func.call_async(&mut *store, params).await
+            }
+            ApiStyle::Concurrent => Ok(store
+                .run_concurrent(async |access| func.call_concurrent(access, params).await)
+                .await??
+                .0),
+        }
+    }
+
+    async fn resource_drop<T: Send>(
+        self,
+        store: &mut Store<T>,
+        resource: ResourceAny,
+    ) -> Result<()> {
+        match self {
+            ApiStyle::Sync => resource.resource_drop(store),
+            ApiStyle::Async | ApiStyle::AsyncNotConcurrent | ApiStyle::Concurrent => {
+                resource.resource_drop_async(store).await
+            }
+        }
+    }
+}
 
 #[test]
 #[cfg_attr(miri, ignore)]

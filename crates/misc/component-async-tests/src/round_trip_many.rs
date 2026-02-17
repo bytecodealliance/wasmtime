@@ -1,6 +1,6 @@
 use super::Ctx;
-use anyhow::Result;
-use std::time::Duration;
+use crate::util::yield_times;
+use wasmtime::Result;
 use wasmtime::component::Accessor;
 
 pub mod bindings {
@@ -41,7 +41,7 @@ impl bindings::local::local::many::HostWithStore for Ctx {
         Option<Stuff>,
         Result<Stuff, ()>,
     ) {
-        crate::util::sleep(Duration::from_millis(10)).await;
+        yield_times(5).await;
         (
             format!("{a} - entered host - exited host"),
             b,

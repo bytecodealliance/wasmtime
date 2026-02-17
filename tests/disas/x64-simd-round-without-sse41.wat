@@ -14,10 +14,10 @@
 ;; function u0:0(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1610612736:38 sig0
+;;     fn0 = colocated u805306368:38 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -46,10 +46,10 @@
 ;; function u0:1(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1610612736:40 sig0
+;;     fn0 = colocated u805306368:40 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -78,10 +78,10 @@
 ;; function u0:2(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1610612736:42 sig0
+;;     fn0 = colocated u805306368:42 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -110,10 +110,10 @@
 ;; function u0:3(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1610612736:44 sig0
+;;     fn0 = colocated u805306368:44 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -142,10 +142,10 @@
 ;; function u0:4(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1610612736:39 sig0
+;;     fn0 = colocated u805306368:39 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -168,10 +168,10 @@
 ;; function u0:5(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1610612736:41 sig0
+;;     fn0 = colocated u805306368:41 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -194,10 +194,10 @@
 ;; function u0:6(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1610612736:43 sig0
+;;     fn0 = colocated u805306368:43 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -220,10 +220,10 @@
 ;; function u0:7(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1610612736:45 sig0
+;;     fn0 = colocated u805306368:45 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -246,7 +246,7 @@
 ;; function u0:8(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;

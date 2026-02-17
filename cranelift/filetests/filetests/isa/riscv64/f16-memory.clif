@@ -132,13 +132,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   flh fa3,0(a0)
-;   fsh fa3,0(a1)
+;   flh fa0,0(a0)
+;   fsh fa0,0(a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x87, 0x16, 0x05, 0x00 ; trap: heap_oob
-;   .byte 0x27, 0x90, 0xd5, 0x00 ; trap: heap_oob
+;   .byte 0x07, 0x15, 0x05, 0x00 ; trap: heap_oob
+;   .byte 0x27, 0x90, 0xa5, 0x00 ; trap: heap_oob
 ;   ret
 

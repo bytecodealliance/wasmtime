@@ -11,28 +11,28 @@ block0(v0: i128):
 }
 
 ; VCode:
-;   stmg %r6, %r15, 48(%r15)
+;   stmg %r8, %r15, 64(%r15)
 ;   aghi %r15, -208
 ; block0:
-;   lgr %r6, %r2
+;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   la %r3, 160(%r15)
 ;   vst %v1, 0(%r3)
 ;   la %r2, 176(%r15)
 ;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
 ;   basr %r14, %r4 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
-;   lgr %r2, %r6
+;   lgr %r2, %r8
 ;   vl %v16, 192(%r15)
 ;   vst %v16, 0(%r2)
-;   lmg %r6, %r15, 256(%r15)
+;   lmg %r8, %r15, 272(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r6, %r15, 0x30(%r15)
+;   stmg %r8, %r15, 0x40(%r15)
 ;   aghi %r15, -0xd0
 ; block1: ; offset 0xa
-;   lgr %r6, %r2
+;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   la %r3, 0xa0(%r15)
 ;   vst %v1, 0(%r3)
@@ -46,10 +46,10 @@ block0(v0: i128):
 ;   basr %r14, %r4
 ;   vl %v1, 0xb0(%r15)
 ;   vst %v1, 0xc0(%r15)
-;   lgr %r2, %r6
+;   lgr %r2, %r8
 ;   vl %v16, 0xc0(%r15)
 ;   vst %v16, 0(%r2)
-;   lmg %r6, %r15, 0x100(%r15)
+;   lmg %r8, %r15, 0x110(%r15)
 ;   br %r14
 
 function %caller_be_to_le(i128) -> i128 {
@@ -78,11 +78,11 @@ block0(v0: i128):
 ;   la %r3, 160(%r15)
 ;   vst %v1, 0(%r3)
 ;   la %r2, 336(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
-;   basr %r14, %r5 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
 ;   lgr %r2, %r8
-;   vl %v17, 176(%r15)
-;   vst %v17, 0(%r2)
+;   vl %v16, 176(%r15)
+;   vst %v16, 0(%r2)
 ;   ld %f8, 192(%r15)
 ;   ld %f9, 200(%r15)
 ;   ld %f10, 208(%r15)
@@ -118,13 +118,13 @@ block0(v0: i128):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r5, 0(%r1)
-;   basr %r14, %r5
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   vl %v1, 0xa0(%r15)
 ;   vst %v1, 0xb0(%r15)
 ;   lgr %r2, %r8
-;   vl %v17, 0xb0(%r15)
-;   vst %v17, 0(%r2)
+;   vl %v16, 0xb0(%r15)
+;   vst %v16, 0(%r2)
 ;   ld %f8, 0xc0(%r15)
 ;   ld %f9, 0xc8(%r15)
 ;   ld %f10, 0xd0(%r15)
@@ -156,14 +156,14 @@ block0(v0: i128):
 ;   std %f14, 256(%r15)
 ;   std %f15, 264(%r15)
 ; block0:
-;   lgr %r7, %r2
+;   lgr %r6, %r2
 ;   vl %v1, 0(%r3)
 ;   la %r3, 160(%r15)
 ;   vst %v1, 0(%r3)
 ;   la %r2, 176(%r15)
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r6, 0(%r1)
-;   basr %r14, %r6 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
-;   lgr %r2, %r7
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
+;   lgr %r2, %r6
 ;   vl %v16, 192(%r15)
 ;   vst %v16, 0(%r2)
 ;   ld %f8, 208(%r15)
@@ -191,7 +191,7 @@ block0(v0: i128):
 ;   std %f14, 0x100(%r15)
 ;   std %f15, 0x108(%r15)
 ; block1: ; offset 0x2a
-;   lgr %r7, %r2
+;   lgr %r6, %r2
 ;   vl %v1, 0(%r3)
 ;   la %r3, 0xa0(%r15)
 ;   vst %v1, 0(%r3)
@@ -201,11 +201,11 @@ block0(v0: i128):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r6, 0(%r1)
-;   basr %r14, %r6
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   vl %v1, 0xb0(%r15)
 ;   vst %v1, 0xc0(%r15)
-;   lgr %r2, %r7
+;   lgr %r2, %r6
 ;   vl %v16, 0xc0(%r15)
 ;   vst %v16, 0(%r2)
 ;   ld %f8, 0xd0(%r15)
@@ -229,30 +229,30 @@ block0(v0: i128):
 }
 
 ; VCode:
-;   stmg %r9, %r15, 248(%r15)
+;   stmg %r8, %r15, 240(%r15)
 ;   aghi %r15, -192
 ; block0:
-;   lgr %r9, %r2
+;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -176
 ;   la %r3, 160(%r15)
 ;   vst %v1, 0(%r3)
 ;   la %r2, 336(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r7, 0(%r1)
-;   basr %r14, %r7 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
-;   lgr %r2, %r9
-;   vl %v17, 176(%r15)
-;   vst %v17, 0(%r2)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
+;   lgr %r2, %r8
+;   vl %v16, 176(%r15)
+;   vst %v16, 0(%r2)
 ;   aghi %r15, 368
-;   lmg %r9, %r14, 72(%r15)
+;   lmg %r8, %r14, 64(%r15)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r9, %r15, 0xf8(%r15)
+;   stmg %r8, %r15, 0xf0(%r15)
 ;   aghi %r15, -0xc0
 ; block1: ; offset 0xa
-;   lgr %r9, %r2
+;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -0xb0
 ;   la %r3, 0xa0(%r15)
@@ -263,14 +263,14 @@ block0(v0: i128):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r7, 0(%r1)
-;   basr %r14, %r7
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   vl %v1, 0xa0(%r15)
 ;   vst %v1, 0xb0(%r15)
-;   lgr %r2, %r9
-;   vl %v17, 0xb0(%r15)
-;   vst %v17, 0(%r2)
+;   lgr %r2, %r8
+;   vl %v16, 0xb0(%r15)
+;   vst %v16, 0(%r2)
 ;   aghi %r15, 0x170
-;   lmg %r9, %r14, 0x48(%r15)
+;   lmg %r8, %r14, 0x40(%r15)
 ;   br %r14
 

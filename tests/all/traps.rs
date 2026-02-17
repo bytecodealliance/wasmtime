@@ -1,10 +1,10 @@
 #![cfg(not(miri))]
 
 use crate::ErrorExt;
-use anyhow::bail;
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
+use wasmtime::bail;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -37,7 +37,7 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
-fn test_anyhow_error_return() -> Result<()> {
+fn test_format_err_error_return() -> Result<()> {
     let mut store = Store::<()>::default();
     let wat = r#"
         (module
@@ -49,7 +49,7 @@ fn test_anyhow_error_return() -> Result<()> {
     let module = Module::new(store.engine(), wat)?;
     let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
-        Err(anyhow::Error::msg("test 1234"))
+        Err(wasmtime::Error::msg("test 1234"))
     });
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
@@ -86,7 +86,7 @@ fn test_trap_return_downcast() -> Result<()> {
     let module = Module::new(store.engine(), wat)?;
     let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
-        Err(anyhow::Error::from(MyTrap))
+        Err(wasmtime::Error::from(MyTrap))
     });
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
@@ -994,7 +994,7 @@ async fn async_then_sync_trap() -> Result<()> {
     }
 
     let mut async_store = Store::new(
-        &Engine::new(Config::new().async_support(true)).unwrap(),
+        &Engine::default(),
         AsyncCtx {
             sync_instance,
             sync_store,
@@ -1057,7 +1057,7 @@ async fn sync_then_async_trap() -> Result<()> {
         )
     "#;
 
-    let mut async_store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), ());
+    let mut async_store = Store::new(&Engine::default(), ());
 
     let async_module = Module::new(async_store.engine(), wat)?;
 
@@ -1513,7 +1513,7 @@ fn dont_see_stale_stack_walking_registers() -> Result<()> {
     let host_get_trap = Func::new(
         &mut store,
         FuncType::new(&engine, [], []),
-        |_caller, _args, _results| Err(anyhow::anyhow!("trap!!!")),
+        |_caller, _args, _results| Err(wasmtime::format_err!("trap!!!")),
     );
     linker.define(&store, "", "host_get_trap", host_get_trap)?;
 
@@ -1644,16 +1644,6 @@ fn same_module_multiple_stores() -> Result<()> {
             assert_eq!(actual_frame.func_name(), Some(expected_frame));
         }
     }
-
-    Ok(())
-}
-
-#[test]
-fn async_stack_size_ignored_if_disabled() -> Result<()> {
-    let mut config = Config::new();
-    config.async_support(false);
-    config.max_wasm_stack(8 << 20);
-    Engine::new(&config)?;
 
     Ok(())
 }

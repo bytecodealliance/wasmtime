@@ -1,0 +1,946 @@
+test compile precise-output
+target s390x arch15
+
+function %band_band_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r1, 0xf88(%r10)
+;   br %r14
+
+function %band_band_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x01
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %band_band_nota_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v0
+  v4 = band.i64x2 v3, v1
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r1, %r0, 0xf88(%r10)
+;   br %r14
+
+function %band_band_notb_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v1
+  v4 = band.i64x2 v0, v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v25, %v24, %v26, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x89
+;   .byte 0x80, 0x04
+;   mc 0x7fe, 0x88
+
+function %band_band_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v2
+  v4 = band.i64x2 v0, v1
+  v5 = band.i64x2 v4, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r2, 0xf88(%r10)
+;   br %r14
+
+function %band_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = bnot v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 84
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r5, %r4, 0xf88(%r10)
+;   br %r14
+
+function %band_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v1, v2
+  v4 = bnot v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 14
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r14, 0xf88(%r10)
+;   br %r14
+
+function %band_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 21
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r1, %r5, 0xf88(%r10)
+;   br %r14
+
+function %band_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v1, v2
+  v4 = band.i64x2 v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 7
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r7, 0xf88(%r10)
+;   br %r14
+
+function %band_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 64
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r4, %r0, 0xf88(%r10)
+;   br %r14
+
+function %band_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v1, v2
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 8
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r8, 0xf88(%r10)
+;   br %r14
+
+function %band_bxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 20
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r1, %r4, 0xf88(%r10)
+;   br %r14
+
+function %band_bxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v1, v2
+  v4 = band.i64x2 v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 6
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r6, 0xf88(%r10)
+;   br %r14
+
+function %band_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v0, v1
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 65
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r4, %r1, 0xf88(%r10)
+;   br %r14
+
+function %band_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v1, v2
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 9
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r0, %r9, 0xf88(%r10)
+;   br %r14
+
+function %bor_bor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x7f
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %bor_bor_nota_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v0
+  v4 = bor v3, v1
+  v5 = bor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 247
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r15, %r7, 0xf88(%r10)
+;   br %r14
+
+function %bor_bor_notb_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v1
+  v4 = bor v0, v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 223
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r13, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bor_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v2
+  v4 = bor.i64x2 v0, v1
+  v5 = bor.i64x2 v4, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 191
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r11, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 253
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r15, %r13, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 239
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r14, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bor v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 127
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 213
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r13, %r5, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 143
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r8, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 125
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r13, 0xf88(%r10)
+;   br %r14
+
+function %bor_bxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bor v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 111
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 215
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r13, %r7, 0xf88(%r10)
+;   br %r14
+
+function %bor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 159
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r15, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bxor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 105
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r9, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bxor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 105
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x69
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %bxor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 169
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r10, %r9, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 225
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r14, %r1, 0xf88(%r10)
+;   br %r14
+
+function %bxor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bxor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 106
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r10, 0xf88(%r10)
+;   br %r14
+
+function %bxor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bxor v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 120
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r8, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 149
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r5, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 135
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r8, %r7, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 150
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r6, 0xf88(%r10)
+;   br %r14
+
+function %bxor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 150
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r6, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bxor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v3, v2
+  v5 = bnot v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 150
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r6, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bxor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v2, v3
+  v5 = bnot v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v26, %v24, %v25, 150
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x8a
+;   .byte 0x80, 0x96
+;   .byte 0x9f, 0x88
+;   br %r14
+
+function %bnxor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 86
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r5, %r6, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 30
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r1, %r14, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bxor v3, v2
+  v5 = bnot v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 149
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r9, %r5, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bxor v0, v3
+  v5 = bnot v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 135
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r8, %r7, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 106
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r10, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 120
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r7, %r8, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 105
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r9, 0xf88(%r10)
+;   br %r14
+
+function %bnxor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   veval %v24, %v24, %v25, %v26, 105
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe7, 0x88
+;   stm %r6, %r9, 0xf88(%r10)
+;   br %r14

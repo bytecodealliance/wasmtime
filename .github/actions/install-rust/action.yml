@@ -32,30 +32,16 @@ runs:
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
-          echo "version=nightly-2025-11-01" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-2026-01-26" >> "$GITHUB_OUTPUT"
+        elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-oss-fuzz-pin" ]; then
+          # Do not change this number unless OSS-Fuzz has updated. If you update
+          # this version and do not update OSS-Fuzz then you will break our
+          # fuzzer build. Update OSS-Fuzz first, wait for that, then land the PR
+          # in Wasmtime that needs to update this.
+          echo "version=nightly-2026-01-28" >> "$GITHUB_OUTPUT"
         else
           echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi
-
-
-    # GitHub Actions default runners have `rustup` instaleld, but IBM-provided
-    # s390x runners do not. If we're using the IBM runner then install rustup.
-    - name: Install rustup
-      shell: bash
-      if: runner.arch == 'S390X'
-      run: |
-        export RUSTUP_HOME=${{ runner.tool_cache }}/rustup
-        export CARGO_HOME=${{ runner.tool_cache }}/cargo
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-          sh -s -- \
-            -y \
-            --default-toolchain ${{ steps.select.outputs.version }} \
-            --profile minimal \
-            --no-modify-path
-        echo "RUSTUP_HOME=$RUSTUP_HOME" >> $GITHUB_ENV
-        echo "CARGO_HOME=$CARGO_HOME" >> $GITHUB_ENV
-        echo "$CARGO_HOME/bin" >> $GITHUB_PATH
-
 
     - name: Install Rust
       shell: bash
@@ -78,7 +64,7 @@ runs:
         EOF
 
         # Deny warnings on CI to keep our code warning-free as it lands in-tree.
-        echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
+        echo RUSTFLAGS="-D warnings $RUSTFLAGS" >> "$GITHUB_ENV"
 
         if [[ "${{ runner.os }}" = "macOS" ]]; then
           cat >> "$GITHUB_ENV" <<EOF

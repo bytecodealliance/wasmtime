@@ -64,7 +64,7 @@ where
     U: Default,
 {
     fn drop(&mut self) {
-        *(self.proj)(self.container) = std::mem::take(&mut self.value);
+        *(self.proj)(self.container) = core::mem::take(&mut self.value);
     }
 }
 
@@ -76,7 +76,7 @@ where
     /// Create a new `TakeAndReplace` that temporarily takes out
     /// `proj(container)`.
     pub fn new(mut container: &'a mut T, proj: F) -> Self {
-        let value = std::mem::take(proj(&mut container));
+        let value = core::mem::take(proj(&mut container));
         TakeAndReplace {
             container,
             value,

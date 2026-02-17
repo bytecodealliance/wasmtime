@@ -5,7 +5,7 @@ use crate::runtime::vm::{
     VMStore, VMTableImport, VMTagImport,
 };
 use crate::store::{
-    AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
+    AllocateInstanceKind, Asyncness, InstanceId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
 };
 use crate::types::matching;
 use crate::{
@@ -33,10 +33,10 @@ use wasmtime_environ::{
 /// [`Linker::instantiate`](crate::Linker::instantiate) or similar
 /// [`Linker`](crate::Linker) methods, but a more low-level constructor is also
 /// available as [`Instance::new`].
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Instance {
-    id: StoreInstanceId,
+    pub(crate) id: StoreInstanceId,
 }
 
 // Double-check that the C representation in `instance.h` matches our in-Rust
@@ -93,6 +93,8 @@ impl Instance {
     ///   [`ExternType`] entry that it maps to.
     /// * The `start` function in the instance, if present, traps.
     /// * Module/instance resource limits are exceeded.
+    /// * The `store` provided requires the use of [`Instance::new_async`]
+    ///   instead, such as if epochs or fuel are configured.
     ///
     /// When instantiation fails it's recommended to inspect the return value to
     /// see why it failed, or bubble it upwards. If you'd like to specifically
@@ -103,9 +105,8 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called with a store associated with a
-    /// [`asynchronous config`](crate::Config::async_support). This function
-    /// will also panic if any [`Extern`] supplied is not owned by `store`.
+    /// This function will panic if any [`Extern`] supplied is not owned by
+    /// `store`.
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [`ExternType`]: crate::ExternType
@@ -115,12 +116,14 @@ impl Instance {
         imports: &[Extern],
     ) -> Result<Instance> {
         let mut store = store.as_context_mut();
+        store.0.validate_sync_call()?;
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // Note that the unsafety here should be satisfied by the call to
         // `typecheck_externs` above which satisfies the condition that all
         // the imports are valid for this module.
-        assert!(!store.0.async_support());
-        vm::assert_ready(unsafe { Instance::new_started(&mut store, module, imports.as_ref()) })
+        vm::assert_ready(unsafe {
+            Instance::new_started(&mut store, module, imports.as_ref(), Asyncness::No)
+        })
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -133,12 +136,7 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called with a store associated with a
-    /// [`synchronous config`](crate::Config::new). This is only compatible with
-    /// stores associated with an [`asynchronous
-    /// config`](crate::Config::async_support).
-    ///
-    /// This function will also panic, like [`Instance::new`], if any [`Extern`]
+    /// This function will panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
     ///
     /// # Examples
@@ -146,13 +144,11 @@ impl Instance {
     /// An example of using this function:
     ///
     /// ```
-    /// use wasmtime::{Result, Store, Engine, Config, Module, Instance};
+    /// use wasmtime::{Result, Store, Engine, Module, Instance};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut config = Config::new();
-    ///     config.async_support(true);
-    ///     let engine = Engine::new(&config)?;
+    ///     let engine = Engine::default();
     ///
     ///     // For this example, a module with no imports is being used hence
     ///     // the empty array to `Instance::new_async`.
@@ -171,14 +167,12 @@ impl Instance {
     /// compile for example:
     ///
     /// ```compile_fail
-    /// use wasmtime::{Result, Store, Engine, Config, Module, Instance};
+    /// use wasmtime::{Result, Store, Engine, Module, Instance};
     /// use std::rc::Rc;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut config = Config::new();
-    ///     config.async_support(true);
-    ///     let engine = Engine::new(&config)?;
+    ///     let engine = Engine::default();
     ///
     ///     let module = Module::new(&engine, "(module)")?;
     ///
@@ -203,7 +197,7 @@ impl Instance {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // See `new` for notes on this unsafety
-        unsafe { Instance::new_started(&mut store, module, imports.as_ref()).await }
+        unsafe { Instance::new_started(&mut store, module, imports.as_ref(), Asyncness::Yes).await }
     }
 
     fn typecheck_externs(
@@ -231,7 +225,8 @@ impl Instance {
         // Note that under normal operation this shouldn't do much as the list
         // of funcs-with-holes should generally be empty. As a result the
         // process of filling this out is not super optimized at this point.
-        store.modules_mut().register_module(module);
+        let (modules, engine) = store.modules_and_engine_mut();
+        modules.register_module(module, engine)?;
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
@@ -249,15 +244,18 @@ impl Instance {
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
+        asyncness: Asyncness,
     ) -> Result<Instance> {
         let (instance, start) = {
             let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
             // SAFETY: the safety contract of `new_raw` is the same as this
             // function.
-            unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports).await? }
+            unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports, asyncness).await? }
         };
         if let Some(start) = start {
-            if store.0.async_support() {
+            if asyncness == Asyncness::No {
+                instance.start_raw(store, start)?;
+            } else {
                 #[cfg(feature = "async")]
                 {
                     store
@@ -266,8 +264,6 @@ impl Instance {
                 }
                 #[cfg(not(feature = "async"))]
                 unreachable!();
-            } else {
-                instance.start_raw(store, start)?;
             }
         }
         Ok(instance)
@@ -293,6 +289,7 @@ impl Instance {
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
         imports: Imports<'_>,
+        asyncness: Asyncness,
     ) -> Result<(Instance, Option<FuncIndex>)> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
@@ -308,7 +305,8 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        let module_id = store.modules_mut().register_module(module);
+        let (modules, engine) = store.modules_and_engine_mut();
+        let module_id = modules.register_module(module, engine)?;
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -356,7 +354,15 @@ impl Instance {
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
 
-        vm::initialize_instance(store, limiter, id, compiled_module.module(), bulk_memory).await?;
+        vm::initialize_instance(
+            store,
+            limiter,
+            id,
+            compiled_module.module(),
+            bulk_memory,
+            asyncness,
+        )
+        .await?;
 
         Ok((instance, compiled_module.module().start_func))
     }
@@ -371,10 +377,14 @@ impl Instance {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
-        let mut instance = self.id.get_mut(store.0);
+        let (mut instance, registry) = self.id.get_mut_and_module_registry(store.0);
         // SAFETY: the `store_id` is the id of the store that owns this
         // instance and any function stored within the instance.
-        let f = unsafe { instance.as_mut().get_exported_func(store_id, start) };
+        let f = unsafe {
+            instance
+                .as_mut()
+                .get_exported_func(registry, store_id, start)
+        };
         let caller_vmctx = instance.vmctx();
         unsafe {
             let funcref = f.vm_func_ref(store.0);
@@ -390,7 +400,7 @@ impl Instance {
         self._module(store.into().0)
     }
 
-    fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
+    pub(crate) fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
         store.module_for_instance(self.id).unwrap()
     }
 
@@ -415,12 +425,12 @@ impl Instance {
         for (_name, entity) in module.exports.iter() {
             items.push(self._get_export(store, *entity));
         }
-        store[self.id]
-            .env_module()
+        let module = store[self.id].env_module();
+        module
             .exports
             .iter()
             .zip(items)
-            .map(|((name, _), item)| Export::new(name, item))
+            .map(|((name, _), item)| Export::new(&module.strings[name], item))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -442,7 +452,9 @@ impl Instance {
     /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
         let store = store.as_context_mut().0;
-        let entity = *store[self.id].env_module().exports.get(name)?;
+        let module = store[self.id].env_module();
+        let name = module.strings.get_atom(name)?;
+        let entity = *module.exports.get(&name)?;
         Some(self._get_export(store, entity))
     }
 
@@ -479,7 +491,10 @@ impl Instance {
         let id = store.id();
         // SAFETY: the store `id` owns this instance and all exports contained
         // within.
-        let export = unsafe { self.id.get_mut(store).get_export_by_index_mut(id, entity) };
+        let export = unsafe {
+            let (instance, registry) = self.id.get_mut_and_module_registry(store);
+            instance.get_export_by_index_mut(registry, id, entity)
+        };
         Extern::from_wasmtime_export(export, store)
     }
 
@@ -518,7 +533,7 @@ impl Instance {
         let f = self
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
-            .ok_or_else(|| anyhow!("failed to find function export `{name}`"))?;
+            .ok_or_else(|| format_err!("failed to find function export `{name}`"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{name}` to given type"))?)
     }
@@ -777,6 +792,12 @@ pub struct InstancePre<T> {
     /// This is an `Arc<[T]>` for the same reason as `items`.
     func_refs: Arc<[VMFuncRef]>,
 
+    /// Whether or not any import in `items` is flagged as needing async.
+    ///
+    /// This is used to update stores during instantiation as to whether they
+    /// require async entrypoints.
+    asyncness: Asyncness,
+
     _marker: core::marker::PhantomData<fn() -> T>,
 }
 
@@ -788,6 +809,7 @@ impl<T> Clone for InstancePre<T> {
             items: self.items.clone(),
             host_funcs: self.host_funcs,
             func_refs: self.func_refs.clone(),
+            asyncness: self.asyncness,
             _marker: self._marker,
         }
     }
@@ -807,15 +829,13 @@ impl<T: 'static> InstancePre<T> {
 
         let mut func_refs = vec![];
         let mut host_funcs = 0;
+        let mut asyncness = Asyncness::No;
         for item in &items {
             match item {
                 Definition::Extern(_, _) => {}
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
                     if f.func_ref().wasm_call.is_none() {
-                        // `f` needs its `VMFuncRef::wasm_call` patched with a
-                        // Wasm-to-native trampoline.
-                        debug_assert!(matches!(f.host_ctx(), crate::HostContext::Array(_)));
                         func_refs.push(VMFuncRef {
                             wasm_call: module
                                 .wasm_to_array_trampoline(f.sig_index())
@@ -823,6 +843,7 @@ impl<T: 'static> InstancePre<T> {
                             ..*f.func_ref()
                         });
                     }
+                    asyncness = asyncness | f.asyncness();
                 }
             }
         }
@@ -832,6 +853,7 @@ impl<T: 'static> InstancePre<T> {
             items: items.into(),
             host_funcs,
             func_refs: func_refs.into(),
+            asyncness,
             _marker: core::marker::PhantomData,
         })
     }
@@ -865,14 +887,20 @@ impl<T: 'static> InstancePre<T> {
             &self.items,
             self.host_funcs,
             &self.func_refs,
+            self.asyncness,
         )?;
+
+        // Note that this is specifically done after `pre_instantiate_raw` to
+        // handle the case that if any imports in this `InstancePre` require
+        // async that it's flagged in the store by that point which will reject
+        // this instantiation to say "use `instantiate_async` instead".
+        store.0.validate_sync_call()?;
 
         // This unsafety should be handled by the type-checking performed by the
         // constructor of `InstancePre` to assert that all the imports we're passing
         // in match the module we're instantiating.
-        assert!(!store.0.async_support());
         vm::assert_ready(unsafe {
-            Instance::new_started(&mut store, &self.module, imports.as_ref())
+            Instance::new_started(&mut store, &self.module, imports.as_ref(), Asyncness::No)
         })
     }
 
@@ -898,12 +926,15 @@ impl<T: 'static> InstancePre<T> {
             &self.items,
             self.host_funcs,
             &self.func_refs,
+            self.asyncness,
         )?;
 
         // This unsafety should be handled by the type-checking performed by the
         // constructor of `InstancePre` to assert that all the imports we're passing
         // in match the module we're instantiating.
-        unsafe { Instance::new_started(&mut store, &self.module, imports.as_ref()).await }
+        unsafe {
+            Instance::new_started(&mut store, &self.module, imports.as_ref(), Asyncness::Yes).await
+        }
     }
 }
 
@@ -919,10 +950,12 @@ fn pre_instantiate_raw(
     items: &Arc<[Definition]>,
     host_funcs: usize,
     func_refs: &Arc<[VMFuncRef]>,
+    asyncness: Asyncness,
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
-    store.modules_mut().register_module(module);
+    let (modules, engine) = store.modules_and_engine_mut();
+    modules.register_module(module, engine)?;
     let (funcrefs, modules) = store.func_refs_and_modules();
     funcrefs.fill(modules);
 
@@ -940,6 +973,8 @@ fn pre_instantiate_raw(
         funcrefs.push_instance_pre_definitions(items.clone());
         funcrefs.push_instance_pre_func_refs(func_refs.clone());
     }
+
+    store.set_async_required(asyncness);
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
     let mut imports = OwnedImports::new(module);

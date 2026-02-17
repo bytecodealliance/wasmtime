@@ -1,5 +1,4 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{Context as _, Result, bail};
 use bytes::Bytes;
 use clap::Parser;
 use futures::future::FutureExt;
@@ -21,7 +20,9 @@ use std::{
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Engine, Store, StoreContextMut, StoreLimits, UpdateDeadline};
+use wasmtime::{
+    Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail, error::Context as _,
+};
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
@@ -402,7 +403,6 @@ impl ServeCommand {
             .common
             .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
-        config.async_support(true);
 
         if self.run.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
@@ -430,7 +430,7 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
-        let instance = match wasmtime_wasi_http::p3::bindings::ProxyPre::new(instance.clone()) {
+        let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
             Ok(pre) => ProxyPre::P3(pre),
             Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
         };
@@ -639,7 +639,7 @@ impl HandlerState for HostHandlerState {
         self.max_instance_concurrent_reuse_count
     }
 
-    fn handle_worker_error(&self, error: anyhow::Error) {
+    fn handle_worker_error(&self, error: wasmtime::Error) {
         eprintln!("worker error: {error}");
     }
 }
@@ -769,11 +769,12 @@ fn setup_guest_profiler(
     let module_name = "<main>";
 
     store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
+        store.engine(),
         module_name,
         interval,
         component,
         std::iter::empty(),
-    )));
+    )?));
 
     fn sample(
         mut store: StoreContextMut<Host>,
@@ -807,7 +808,7 @@ fn setup_guest_profiler(
         let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
             .expect("profiling doesn't support threads yet");
         if let Err(e) = std::fs::File::create(&path)
-            .map_err(anyhow::Error::new)
+            .map_err(wasmtime::Error::new)
             .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
         {
             eprintln!("failed writing profile at {path}: {e:#}");
@@ -826,7 +827,7 @@ type Request = hyper::Request<hyper::body::Incoming>;
 async fn handle_request(
     handler: ProxyHandler<HostHandlerState>,
     req: Request,
-) -> Result<hyper::Response<UnsyncBoxBody<Bytes, anyhow::Error>>> {
+) -> Result<hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>> {
     use tokio::sync::oneshot;
 
     let req_id = handler.next_req_id();
@@ -841,13 +842,13 @@ async fn handle_request(
     // `WasiHttpView::new_response_outparam` expects a specific kind of sender
     // that uses `p2::http::types::ErrorCode`, and we don't want to have to
     // convert from the p3 `ErrorCode` to the p2 one, only to convert again to
-    // `anyhow::Error`.
+    // `wasmtime::Error`.
 
     type P2Response = Result<
         hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
         p2::http::types::ErrorCode,
     >;
-    type P3Response = hyper::Response<UnsyncBoxBody<Bytes, anyhow::Error>>;
+    type P3Response = hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;
 
     enum Sender {
         P2(oneshot::Sender<P2Response>),
@@ -887,7 +888,7 @@ async fn handle_request(
                                     .data_mut()
                                     .new_incoming_request(p2::http::types::Scheme::Http, req)?;
                                 let out = store.data_mut().new_response_outparam(tx)?;
-                                anyhow::Ok((req, out))
+                                wasmtime::error::Ok((req, out))
                             })?;
 
                             proxy
@@ -929,7 +930,7 @@ async fn handle_request(
         Receiver::P2(rx) => rx
             .await
             .context("guest never invoked `response-outparam::set` method")?
-            .map_err(|e| anyhow::Error::from(e))?
+            .map_err(|e| wasmtime::Error::from(e))?
             .map(|body| body.map_err(|e| e.into()).boxed_unsync()),
         Receiver::P3(rx) => rx.await?,
     })

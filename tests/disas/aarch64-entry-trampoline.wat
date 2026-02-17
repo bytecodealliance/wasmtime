@@ -18,11 +18,11 @@
 ;;       stp     d8, d9, [sp, #-0x10]!
 ;;       ldr     x11, [x0, #8]
 ;;       mov     x12, x29
-;;       str     x12, [x11, #0x40]
+;;       str     x12, [x11, #0x48]
 ;;       mov     x12, sp
-;;       str     x12, [x11, #0x38]
+;;       str     x12, [x11, #0x40]
 ;;       adr     x13, #0x94
-;;       str     x13, [x11, #0x48]
+;;       str     x13, [x11, #0x50]
 ;;       mov     x2, x0
 ;;       mov     x3, x1
 ;;       bl      #0

@@ -26,14 +26,13 @@ use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use anyhow::{Result, bail};
 use core::cell::{Cell, RefCell};
 use core::fmt::Write as _;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 use wasmtime::component::{Component, Linker, Resource, ResourceTable};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Result, Store, bail};
 use wasmtime_wasi_io::{
     IoView,
     bytes::Bytes,
@@ -74,12 +73,7 @@ pub unsafe extern "C" fn run_wasi(
 }
 
 fn run(wasi_component: &[u8]) -> Result<String> {
-    // wasmtime-wasi-io requires an async store, because the wasi:io/poll
-    // interface will poll as Pending while execution is suspended and it is
-    // waiting for a Pollable to become Ready. This example provides a very
-    // small async executor which is entered below with `block_on`.
-    let mut config = super::config();
-    config.async_support(true);
+    let config = super::config();
     // For future: we could consider turning on fuel in the Config to meter
     // how long a wasm guest could execute for.
     let engine = Engine::new(&config)?;
@@ -120,7 +114,7 @@ fn run(wasi_component: &[u8]) -> Result<String> {
             .wasi_cli_run()
             .call_run(&mut store)
             .await?
-            .map_err(|()| anyhow::anyhow!("wasi cli run returned error"))?;
+            .map_err(|()| wasmtime::format_err!("wasi cli run returned error"))?;
 
         store.into_data().output()
     })

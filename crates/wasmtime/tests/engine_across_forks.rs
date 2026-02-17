@@ -72,7 +72,7 @@ mod unix {
             let memory = instance.get_memory(&mut store, "").unwrap();
             let data = memory.data(&store);
             assert_eq!(data[0], 0x0a);
-            anyhow::Ok((store, memory))
+            wasmtime::error::Ok((store, memory))
         };
         run_in_child(|| {
             // Allocate a memory, and then mutate it.

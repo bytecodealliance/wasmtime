@@ -9,7 +9,6 @@ with plugins for arithmetic operations.
 publish = false
 
 [dependencies]
-anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 wasmtime = { workspace = true, features = ['std', 'cranelift'] }
 wasmtime-wasi = { workspace = true }

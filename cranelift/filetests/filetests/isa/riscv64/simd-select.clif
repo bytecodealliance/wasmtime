@@ -15,10 +15,10 @@ block0(v0: i64, v1: i64x2, v2: i64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select v15,v10,v12##condition=(a1 ne zero)
-;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   select v8,v8,v9##condition=(a1 ne zero)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -33,13 +33,12 @@ block0(v0: i64, v1: i64x2, v2: i64x2):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
-;   .byte 0xd7, 0x37, 0xa0, 0x9e
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   bnez a1, 8
-;   .byte 0xd7, 0x37, 0xc0, 0x9e
-;   .byte 0xa7, 0x07, 0x05, 0x02
+;   .byte 0x57, 0x34, 0x90, 0x9e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -57,10 +56,10 @@ block0(v0: i32, v1: i32x4, v2: i32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   sext.w a1,a1
-;   select v9,v10,v12##condition=(a1 ne zero)
+;   select v9,v8,v9##condition=(a1 ne zero)
 ;   vse8.v v9,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -76,13 +75,12 @@ block0(v0: i32, v1: i32x4, v2: i32x4):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   sext.w a1, a1
-;   .byte 0xd7, 0x34, 0xa0, 0x9e
-;   bnez a1, 8
-;   .byte 0xd7, 0x34, 0xc0, 0x9e
+;   beqz a1, 8
+;   .byte 0xd7, 0x34, 0x80, 0x9e
 ;   .byte 0xa7, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -101,11 +99,11 @@ block0(v0: i16, v1: i16x8, v2: i16x8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   slli a1,a1,48
-;   srai a3,a1,48
-;   select v11,v10,v12##condition=(a3 ne zero)
+;   srai a1,a1,48
+;   select v11,v8,v9##condition=(a1 ne zero)
 ;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -121,14 +119,14 @@ block0(v0: i16, v1: i16x8, v2: i16x8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   slli a1, a1, 0x30
-;   srai a3, a1, 0x30
-;   .byte 0xd7, 0x35, 0xa0, 0x9e
-;   bnez a3, 8
-;   .byte 0xd7, 0x35, 0xc0, 0x9e
+;   srai a1, a1, 0x30
+;   .byte 0xd7, 0x35, 0x80, 0x9e
+;   bnez a1, 8
+;   .byte 0xd7, 0x35, 0x90, 0x9e
 ;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -147,10 +145,10 @@ block0(v0: i8, v1: i8x16, v2: i8x16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   andi a1,a1,255
-;   select v9,v10,v12##condition=(a1 ne zero)
+;   select v9,v8,v9##condition=(a1 ne zero)
 ;   vse8.v v9,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -166,13 +164,12 @@ block0(v0: i8, v1: i8x16, v2: i8x16):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   andi a1, a1, 0xff
-;   .byte 0xd7, 0x34, 0xa0, 0x9e
-;   bnez a1, 8
-;   .byte 0xd7, 0x34, 0xc0, 0x9e
+;   beqz a1, 8
+;   .byte 0xd7, 0x34, 0x80, 0x9e
 ;   .byte 0xa7, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -191,10 +188,10 @@ block0(v0: i64, v1: f64x2, v2: f64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select v15,v10,v12##condition=(a1 ne zero)
-;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   select v8,v8,v9##condition=(a1 ne zero)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -209,13 +206,12 @@ block0(v0: i64, v1: f64x2, v2: f64x2):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
-;   .byte 0xd7, 0x37, 0xa0, 0x9e
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   bnez a1, 8
-;   .byte 0xd7, 0x37, 0xc0, 0x9e
-;   .byte 0xa7, 0x07, 0x05, 0x02
+;   .byte 0x57, 0x34, 0x90, 0x9e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -233,10 +229,10 @@ block0(v0: i64, v1: f32x4, v2: f32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select v15,v10,v12##condition=(a1 ne zero)
-;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   select v8,v8,v9##condition=(a1 ne zero)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -251,13 +247,12 @@ block0(v0: i64, v1: f32x4, v2: f32x4):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x07, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x07, 0x86, 0x0f, 0x02
-;   .byte 0xd7, 0x37, 0xa0, 0x9e
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   bnez a1, 8
-;   .byte 0xd7, 0x37, 0xc0, 0x9e
-;   .byte 0xa7, 0x07, 0x05, 0x02
+;   .byte 0x57, 0x34, 0x90, 0x9e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

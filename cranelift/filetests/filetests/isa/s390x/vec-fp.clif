@@ -777,10 +777,10 @@ block0(v0: i32x4):
 ;   vcdlgb %v4, %v2, 0, 3
 ;   vledb %v6, %v4, 0, 4
 ;   vupllf %v16, %v24
-;   vcdlgb %v18, %v16, 0, 3
-;   vledb %v20, %v18, 0, 4
-;   larl %r1, [const(0)] ; vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
+;   vcdlgb %v16, %v16, 0, 3
+;   vledb %v16, %v16, 0, 4
+;   larl %r1, [const(0)] ; vl %v17, 0(%r1)
+;   vperm %v24, %v6, %v16, %v17
 ;   br %r14
 ;
 ; Disassembled:
@@ -789,11 +789,11 @@ block0(v0: i32x4):
 ;   vcdlgb %v4, %v2, 0, 3
 ;   vledb %v6, %v4, 0, 4
 ;   vupllf %v16, %v24
-;   vcdlgb %v18, %v16, 0, 3
-;   vledb %v20, %v18, 0, 4
+;   vcdlgb %v16, %v16, 0, 3
+;   vledb %v16, %v16, 0, 4
 ;   larl %r1, 0x40
-;   vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
+;   vl %v17, 0(%r1)
+;   vperm %v24, %v6, %v16, %v17
 ;   br %r14
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -820,10 +820,10 @@ block0(v0: i32x4):
 ;   vcdgb %v4, %v2, 0, 3
 ;   vledb %v6, %v4, 0, 4
 ;   vuplf %v16, %v24
-;   vcdgb %v18, %v16, 0, 3
-;   vledb %v20, %v18, 0, 4
-;   larl %r1, [const(0)] ; vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
+;   vcdgb %v16, %v16, 0, 3
+;   vledb %v16, %v16, 0, 4
+;   larl %r1, [const(0)] ; vl %v17, 0(%r1)
+;   vperm %v24, %v6, %v16, %v17
 ;   br %r14
 ;
 ; Disassembled:
@@ -832,11 +832,11 @@ block0(v0: i32x4):
 ;   vcdgb %v4, %v2, 0, 3
 ;   vledb %v6, %v4, 0, 4
 ;   vuplf %v16, %v24
-;   vcdgb %v18, %v16, 0, 3
-;   vledb %v20, %v18, 0, 4
+;   vcdgb %v16, %v16, 0, 3
+;   vledb %v16, %v16, 0, 4
 ;   larl %r1, 0x40
-;   vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
+;   vl %v17, 0(%r1)
+;   vperm %v24, %v6, %v16, %v17
 ;   br %r14
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -933,9 +933,9 @@ block0(v0: f32x4):
 ;   vldeb %v4, %v2
 ;   vclgdb %v6, %v4, 0, 5
 ;   vmrlf %v16, %v24, %v24
-;   vldeb %v18, %v16
-;   vclgdb %v20, %v18, 0, 5
-;   vpklsg %v24, %v6, %v20
+;   vldeb %v16, %v16
+;   vclgdb %v16, %v16, 0, 5
+;   vpklsg %v24, %v6, %v16
 ;   br %r14
 ;
 ; Disassembled:
@@ -944,9 +944,9 @@ block0(v0: f32x4):
 ;   vldeb %v4, %v2
 ;   vclgdb %v6, %v4, 0, 5
 ;   vmrlf %v16, %v24, %v24
-;   vldeb %v18, %v16
-;   vclgdb %v20, %v18, 0, 5
-;   vpklsg %v24, %v6, %v20
+;   vldeb %v16, %v16
+;   vclgdb %v16, %v16, 0, 5
+;   vpklsg %v24, %v6, %v16
 ;   br %r14
 
 function %fcvt_to_sint_sat_f32x4_i32x4(f32x4) -> i32x4 {
@@ -961,12 +961,12 @@ block0(v0: f32x4):
 ;   vldeb %v4, %v2
 ;   vcgdb %v6, %v4, 0, 5
 ;   vmrlf %v16, %v24, %v24
-;   vldeb %v18, %v16
-;   vcgdb %v20, %v18, 0, 5
-;   vpksg %v22, %v6, %v20
-;   vgbm %v25, 0
-;   vfcesb %v26, %v24, %v24
-;   vsel %v24, %v22, %v25, %v26
+;   vldeb %v16, %v16
+;   vcgdb %v16, %v16, 0, 5
+;   vpksg %v16, %v6, %v16
+;   vgbm %v17, 0
+;   vfcesb %v18, %v24, %v24
+;   vsel %v24, %v16, %v17, %v18
 ;   br %r14
 ;
 ; Disassembled:
@@ -975,12 +975,12 @@ block0(v0: f32x4):
 ;   vldeb %v4, %v2
 ;   vcgdb %v6, %v4, 0, 5
 ;   vmrlf %v16, %v24, %v24
-;   vldeb %v18, %v16
-;   vcgdb %v20, %v18, 0, 5
-;   vpksg %v22, %v6, %v20
-;   vzero %v25
-;   vfcesb %v26, %v24, %v24
-;   vsel %v24, %v22, %v25, %v26
+;   vldeb %v16, %v16
+;   vcgdb %v16, %v16, 0, 5
+;   vpksg %v16, %v6, %v16
+;   vzero %v17
+;   vfcesb %v18, %v24, %v24
+;   vsel %v24, %v16, %v17, %v18
 ;   br %r14
 
 function %fcvt_to_uint_sat_f64x2_i64x2(f64x2) -> i64x2 {

@@ -12,14 +12,15 @@ mod bindings {
 use {
     bindings::{exports::local::local::run::Guest, local::local::ready},
     test_programs::async_::{
-        EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED, subtask_drop, waitable_join, waitable_set_drop,
-        waitable_set_new, waitable_set_poll,
+        EVENT_NONE, EVENT_SUBTASK, STATUS_RETURNED, SUSPEND_RESULT_NOT_CANCELLED, subtask_drop,
+        thread_yield, waitable_join, waitable_set_drop, waitable_set_new, waitable_set_poll,
     },
 };
 
-fn async_when_ready() -> u32 {
+fn async_when_ready(handle: u32) -> u32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
+        _ = handle;
         unreachable!()
     }
 
@@ -27,10 +28,10 @@ fn async_when_ready() -> u32 {
     {
         #[link(wasm_import_module = "local:local/ready")]
         unsafe extern "C" {
-            #[link_name = "[async-lower]when-ready"]
-            fn call_when_ready() -> u32;
+            #[link_name = "[async-lower][method]thing.when-ready"]
+            fn call_when_ready(handle: u32) -> u32;
         }
-        unsafe { call_when_ready() }
+        unsafe { call_when_ready(handle) }
     }
 }
 
@@ -39,13 +40,14 @@ struct Component;
 impl Guest for Component {
     fn run() {
         unsafe {
-            ready::set_ready(false);
+            let thing = ready::Thing::new();
+            thing.set_ready(false);
 
             let set = waitable_set_new();
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
-            let result = async_when_ready();
+            let result = async_when_ready(thing.handle());
             let status = result & 0xf;
             let call = result >> 4;
             assert!(status != STATUS_RETURNED);
@@ -53,7 +55,9 @@ impl Guest for Component {
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
-            ready::set_ready(true);
+            thing.set_ready(true);
+
+            assert_eq!(thread_yield(), SUSPEND_RESULT_NOT_CANCELLED);
 
             let (event, task, code) = waitable_set_poll(set);
             assert_eq!(event, EVENT_SUBTASK);
@@ -64,7 +68,7 @@ impl Guest for Component {
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
-            assert_eq!(async_when_ready(), STATUS_RETURNED);
+            assert_eq!(async_when_ready(thing.handle()), STATUS_RETURNED);
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 

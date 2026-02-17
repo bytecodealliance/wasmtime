@@ -99,8 +99,6 @@ pub struct WasiIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Wasi {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl WasiIndices {
         /// Creates a new copy of `WasiIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -185,7 +183,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod wasi_filesystem {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -248,10 +246,10 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn create_directory_at<T>(
+                fn create_directory_at<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Errno>> + Send;
-                fn stat<T>(
+                fn stat<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<DescriptorStat, Errno>,
@@ -296,7 +294,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod wall_clock {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]

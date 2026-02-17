@@ -121,6 +121,7 @@ const FULL_MATRIX = [
   },
   {
     "name": "Test Linux s390x",
+    // "os": 'ubuntu-24.04-s390x',
     "os": ubuntu,
     "target": "s390x-unknown-linux-gnu",
     "filter": "linux-s390x",

@@ -29,8 +29,9 @@
 /// When used as an error type and returned from a Wasm-to-host call,
 /// or host-to-Wasm call, it indicates that the caller should either
 /// continue propagating the error upward, or take and handle the
-/// exception using [`crate::Store::take_exception`] (or a helper such
-/// as [`crate::Store::catch`].
+/// exception using [`Store::take_pending_exception`].
+///
+/// [`Store::take_pending_exception`]: crate::Store::take_pending_exception
 ///
 /// Wasmtime uses an error type *without* payload, and stores the
 /// exception itself on the store, to maintain proper GC rooting;
@@ -41,7 +42,8 @@
 #[derive(Debug)]
 pub struct ThrownException;
 
-/// We need to implement Error for `ThrownException` so it can be boxed up into an `anyhow::Error`.
+/// We need to implement Error for `ThrownException` so it can be boxed up into
+/// a `wasmtime::Error`.
 impl core::error::Error for ThrownException {}
 
 /// `Error` requires `Display`.

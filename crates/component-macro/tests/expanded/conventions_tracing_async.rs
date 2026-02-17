@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::conventions::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod conventions {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -632,7 +630,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod conventions {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -671,6 +669,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     kebab_case: wasmtime::component::Func,
                     foo: wasmtime::component::Func,
@@ -714,7 +713,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/conventions")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/conventions`"
                                 )
                             })?;
@@ -723,7 +722,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/conventions` does \
                                         not have export `{name}`"
                                     )
@@ -856,10 +855,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_foo<S: wasmtime::AsContextMut>(
@@ -885,10 +880,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_function_with_dashes<S: wasmtime::AsContextMut>(
@@ -912,10 +903,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -941,10 +928,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_apple<S: wasmtime::AsContextMut>(
@@ -968,10 +951,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -997,10 +976,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_apple_pear_grape<S: wasmtime::AsContextMut>(
@@ -1025,10 +1000,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_a0<S: wasmtime::AsContextMut>(
@@ -1052,10 +1023,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -1086,10 +1053,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_explicit<S: wasmtime::AsContextMut>(
@@ -1113,10 +1076,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }
@@ -1142,10 +1101,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     /// Identifiers with the same name as keywords are quoted.
@@ -1170,10 +1125,6 @@ pub mod exports {
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(())
                     }

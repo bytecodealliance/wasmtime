@@ -103,8 +103,6 @@ pub struct MyWorld {
     interface0: exports::foo::foo::variants::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl MyWorldIndices {
         /// Creates a new copy of `MyWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod variants {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -900,7 +898,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod variants {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -1245,6 +1243,7 @@ pub mod exports {
                         4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     e1_arg: wasmtime::component::Func,
                     e1_result: wasmtime::component::Func,
@@ -1304,7 +1303,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/variants")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/variants`"
                                 )
                             })?;
@@ -1313,7 +1312,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/variants` does \
                                                             not have export `{name}`"
                                     )
@@ -1550,7 +1549,6 @@ pub mod exports {
                             >::new_unchecked(self.e1_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_e1_result<S: wasmtime::AsContextMut>(
@@ -1564,7 +1562,6 @@ pub mod exports {
                             >::new_unchecked(self.e1_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_v1_arg<S: wasmtime::AsContextMut>(
@@ -1579,7 +1576,6 @@ pub mod exports {
                             >::new_unchecked(self.v1_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_v1_result<S: wasmtime::AsContextMut>(
@@ -1593,7 +1589,6 @@ pub mod exports {
                             >::new_unchecked(self.v1_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_bool_arg<S: wasmtime::AsContextMut>(
@@ -1608,7 +1603,6 @@ pub mod exports {
                             >::new_unchecked(self.bool_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_bool_result<S: wasmtime::AsContextMut>(
@@ -1622,7 +1616,6 @@ pub mod exports {
                             >::new_unchecked(self.bool_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_option_arg<S: wasmtime::AsContextMut>(
@@ -1653,7 +1646,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_option_result<S: wasmtime::AsContextMut>(
@@ -1685,7 +1677,6 @@ pub mod exports {
                             >::new_unchecked(self.option_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_casts<S: wasmtime::AsContextMut>(
@@ -1711,7 +1702,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_result_arg<S: wasmtime::AsContextMut>(
@@ -1742,7 +1732,6 @@ pub mod exports {
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
                             )?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_result_result<S: wasmtime::AsContextMut>(
@@ -1780,7 +1769,6 @@ pub mod exports {
                             >::new_unchecked(self.result_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar<S: wasmtime::AsContextMut>(
@@ -1794,7 +1782,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar2<S: wasmtime::AsContextMut>(
@@ -1808,7 +1795,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar3<S: wasmtime::AsContextMut>(
@@ -1822,7 +1808,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar3)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_result_sugar4<S: wasmtime::AsContextMut>(
@@ -1836,7 +1821,6 @@ pub mod exports {
                             >::new_unchecked(self.return_result_sugar4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_option_sugar<S: wasmtime::AsContextMut>(
@@ -1850,7 +1834,6 @@ pub mod exports {
                             >::new_unchecked(self.return_option_sugar)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_return_option_sugar2<S: wasmtime::AsContextMut>(
@@ -1864,7 +1847,6 @@ pub mod exports {
                             >::new_unchecked(self.return_option_sugar2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_result_simple<S: wasmtime::AsContextMut>(
@@ -1878,7 +1860,6 @@ pub mod exports {
                             >::new_unchecked(self.result_simple)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_is_clone_arg<S: wasmtime::AsContextMut>(
@@ -1893,7 +1874,6 @@ pub mod exports {
                             >::new_unchecked(self.is_clone_arg)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_is_clone_return<S: wasmtime::AsContextMut>(
@@ -1907,7 +1887,6 @@ pub mod exports {
                             >::new_unchecked(self.is_clone_return)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

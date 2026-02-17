@@ -13,18 +13,18 @@ block0(v0: i8, v1: i64, v2: i64):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   andi a5,a0,255
+;   andi a4,a0,255
 ;   andi a3,a3,255
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   select a0,a1,a2##condition=(a4 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   andi a5, a0, 0xff
+;   andi a4, a0, 0xff
 ;   andi a3, a3, 0xff
 ;   mv a0, a1
-;   beq a5, a3, 8
+;   beq a4, a3, 8
 ;   mv a0, a2
 ;   ret
 
@@ -37,17 +37,17 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,56
-;   srai a4,a2,56
-;   xori a0,a4,42
+;   slli a0,a0,56
+;   srai a0,a0,56
+;   xori a0,a0,42
 ;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x38
-;   srai a4, a2, 0x38
-;   xori a0, a4, 0x2a
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
+;   xori a0, a0, 0x2a
 ;   seqz a0, a0
 ;   ret
 
@@ -59,18 +59,18 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   and a4,a0,a1
+;   and a1,a0,a1
 ;   not a0,a0
-;   and a2,a0,a2
-;   or a0,a4,a2
+;   and a0,a0,a2
+;   or a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   and a4, a0, a1
+;   and a1, a0, a1
 ;   not a0, a0
-;   and a2, a0, a2
-;   or a0, a4, a2
+;   and a0, a0, a2
+;   or a0, a1, a0
 ;   ret
 
 function %i(i8, i8, i8) -> i8 {
@@ -81,15 +81,15 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   andi a4,a0,255
-;   select a0,a1,a2##condition=(a4 ne zero)
+;   andi a3,a0,255
+;   select a0,a1,a2##condition=(a3 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi a4, a0, 0xff
+;   andi a3, a0, 0xff
 ;   mv a0, a1
-;   bnez a4, 8
+;   bnez a3, 8
 ;   mv a0, a2
 ;   ret
 
@@ -104,18 +104,18 @@ block0(v0: i32, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   sext.w a5,a0
+;   sext.w a4,a0
 ;   sext.w a3,a3
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   select a0,a1,a2##condition=(a4 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   sext.w a5, a0
+;   sext.w a4, a0
 ;   sext.w a3, a3
 ;   mv a0, a1
-;   beq a5, a3, 8
+;   beq a4, a3, 8
 ;   mv a0, a2
 ;   ret
 
@@ -126,43 +126,20 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   addi sp,sp,-16
-;   sd s4,8(sp)
 ; block0:
-;   mv s4,a1
+;   mv a6,a1
 ;   andi a5,a0,255
-;   select [a0,a1],[s4,a2],[a3,a4]##condition=(a5 ne zero)
-;   ld s4,8(sp)
-;   addi sp,sp,16
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
+;   select [a0,a1],[a6,a2],[a3,a4]##condition=(a5 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   addi sp, sp, -0x10
-;   sd s4, 8(sp)
-; block1: ; offset 0x18
-;   mv s4, a1
+;   mv a6, a1
 ;   andi a5, a0, 0xff
-;   mv a0, s4
+;   mv a0, a6
 ;   mv a1, a2
 ;   bnez a5, 0xc
 ;   mv a0, a3
 ;   mv a1, a4
-;   ld s4, 8(sp)
-;   addi sp, sp, 0x10
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
 ;   ret
 

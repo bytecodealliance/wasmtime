@@ -26,14 +26,14 @@ block0():
 ; VCode:
 ; block0:
 ;   lui a0,4
-;   addi a2,a0,-1024
-;   fmv.h.x fa0,a2
+;   addi a0,a0,-1024
+;   fmv.h.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 4
-;   addi a2, a0, -0x400
-;   .byte 0x53, 0x05, 0x06, 0xf4
+;   addi a0, a0, -0x400
+;   .byte 0x53, 0x05, 0x05, 0xf4
 ;   ret
 

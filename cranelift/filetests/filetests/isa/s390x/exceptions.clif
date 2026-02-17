@@ -151,8 +151,8 @@ function %f2(i32) -> i32, f32, f64 {
 ; block0:
 ;   larl %r1, [const(1)] ; ld %f2, 0(%r1)
 ;   vst %v2, 160(%r15)
-;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
-;   basr %r14, %r5; jg MachLabel(1); catch [default: MachLabel(2)]
+;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3; jg MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   lhi %r2, 1
 ;   vl %v2, 160(%r15)
@@ -202,8 +202,8 @@ function %f2(i32) -> i32, f32, f64 {
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r5, 0(%r1)
-;   basr %r14, %r5
+;   lg %r3, 0(%r1)
+;   basr %r14, %r3
 ; block2: ; offset 0x4e
 ;   lhi %r2, 1
 ;   vl %v2, 0xa0(%r15)
@@ -430,8 +430,8 @@ function %f5() -> i64 {
 ;   stg %r2, 160(%r15)
 ;   jg label1
 ; block1:
-;   bras %r1, 12 ; data %g + 0 ; lg %r2, 0(%r1)
-;   basr %r14, %r2; jg MachLabel(2); catch [default: MachLabel(3)]
+;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4; jg MachLabel(2); catch [default: MachLabel(3)]
 ; block2:
 ;   lg %r2, 160(%r15)
 ;   ld %f8, 168(%r15)
@@ -478,8 +478,8 @@ function %f5() -> i64 {
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r2, 0(%r1)
-;   basr %r14, %r2
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
 ; block3: ; offset 0x4a
 ;   lg %r2, 0xa0(%r15)
 ;   ld %f8, 0xa8(%r15)

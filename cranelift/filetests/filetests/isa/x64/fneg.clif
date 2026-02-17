@@ -11,8 +11,8 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl $0x80000000, %eax
-;   movd %eax, %xmm4
+;   movl $0x80000000, %edx
+;   movd %edx, %xmm4
 ;   xorps %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -23,8 +23,8 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x80000000, %eax
-;   movd %eax, %xmm4
+;   movl $0x80000000, %edx
+;   movd %edx, %xmm4
 ;   xorps %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -40,8 +40,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $0x8000000000000000, %rax
-;   movq %rax, %xmm4
+;   movabsq $0x8000000000000000, %rdx
+;   movq %rdx, %xmm4
 ;   xorpd %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -52,8 +52,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $9223372036854775808, %rax
-;   movq %rax, %xmm4
+;   movabsq $9223372036854775808, %rdx
+;   movq %rdx, %xmm4
 ;   xorpd %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

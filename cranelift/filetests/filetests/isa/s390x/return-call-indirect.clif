@@ -46,8 +46,8 @@ block0(v0: i64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r4, 0(%r1)
-;   lmg %r14, %r15, 272(%r15) ; br %r4
+;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r3, 0(%r1)
+;   lmg %r14, %r15, 272(%r15) ; br %r3
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -61,9 +61,9 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
+;   lg %r3, 0(%r1)
 ;   lmg %r14, %r15, 0x110(%r15)
-;   br %r4
+;   br %r3
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -82,8 +82,8 @@ block0(v0: i64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   larl %r4, %callee_i64 + 0
-;   lmg %r14, %r15, 272(%r15) ; br %r4
+;   larl %r3, %callee_i64 + 0
+;   lmg %r14, %r15, 272(%r15) ; br %r3
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -92,9 +92,9 @@ block0(v0: i64):
 ;   aghi %r15, -0xa0
 ;   stg %r1, 0(%r15)
 ; block1: ; offset 0x14
-;   larl %r4, 0x14 ; reloc_external PCRel32Dbl %callee_i64 2
+;   larl %r3, 0x14 ; reloc_external PCRel32Dbl %callee_i64 2
 ;   lmg %r14, %r15, 0x110(%r15)
-;   br %r4
+;   br %r3
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -150,8 +150,8 @@ block0(v0: f64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   bras %r1, 12 ; data %callee_f64 + 0 ; lg %r4, 0(%r1)
-;   lmg %r14, %r15, 272(%r15) ; br %r4
+;   bras %r1, 12 ; data %callee_f64 + 0 ; lg %r2, 0(%r1)
+;   lmg %r14, %r15, 272(%r15) ; br %r2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -165,9 +165,9 @@ block0(v0: f64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
+;   lg %r2, 0(%r1)
 ;   lmg %r14, %r15, 0x110(%r15)
-;   br %r4
+;   br %r2
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -184,8 +184,8 @@ block0(v0: i8):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   llcr %r4, %r2
-;   clfi %r4, 0
+;   llcr %r2, %r2
+;   clfi %r2, 0
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   lmg %r14, %r15, 272(%r15)
@@ -198,8 +198,8 @@ block0(v0: i8):
 ;   aghi %r15, -0xa0
 ;   stg %r1, 0(%r15)
 ; block1: ; offset 0x14
-;   llcr %r4, %r2
-;   clfi %r4, 0
+;   llcr %r2, %r2
+;   clfi %r2, 0
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   lmg %r14, %r15, 0x110(%r15)
@@ -220,8 +220,8 @@ block0(v0: i8):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   bras %r1, 12 ; data %callee_i8 + 0 ; lg %r4, 0(%r1)
-;   lmg %r14, %r15, 272(%r15) ; br %r4
+;   bras %r1, 12 ; data %callee_i8 + 0 ; lg %r3, 0(%r1)
+;   lmg %r14, %r15, 272(%r15) ; br %r3
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -235,9 +235,9 @@ block0(v0: i8):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
+;   lg %r3, 0(%r1)
 ;   lmg %r14, %r15, 0x110(%r15)
-;   br %r4
+;   br %r3
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -293,74 +293,74 @@ block0:
 ;   stg %r7, 240(%r15)
 ;   lghi %r7, 35
 ;   stg %r7, 232(%r15)
-;   lghi %r14, 40
-;   lghi %r8, 45
-;   lghi %r9, 50
-;   lghi %r10, 55
-;   lghi %r11, 60
-;   lghi %r12, 65
-;   lghi %r13, 70
-;   lghi %r2, 75
+;   lghi %r8, 40
+;   lghi %r9, 45
+;   lghi %r10, 50
+;   lghi %r11, 55
+;   lghi %r12, 60
+;   lghi %r13, 65
+;   lghi %r14, 70
+;   lghi %r3, 75
+;   stg %r3, 224(%r15)
 ;   lghi %r3, 80
 ;   lghi %r4, 85
-;   lghi %r6, 90
-;   stg %r6, 224(%r15)
+;   lghi %r5, 90
 ;   lghi %r6, 95
 ;   lghi %r7, 100
-;   lghi %r5, 105
-;   stg %r5, 216(%r15)
-;   lghi %r5, 110
-;   stg %r5, 208(%r15)
-;   lghi %r5, 115
-;   stg %r5, 200(%r15)
-;   lghi %r5, 120
-;   stg %r5, 192(%r15)
-;   lghi %r5, 125
-;   stg %r5, 184(%r15)
-;   lghi %r5, 130
-;   stg %r5, 176(%r15)
-;   lghi %r5, 135
-;   stg %r5, 168(%r15)
-;   bras %r1, 12 ; data %tail_callee_stack_args + 0 ; lg %r5, 0(%r1)
-;   stg %r5, 160(%r15)
-;   lg %r5, 600(%r15)
-;   stg %r5, 280(%r15)
-;   stg %r14, 440(%r15)
-;   stg %r8, 448(%r15)
-;   stg %r9, 456(%r15)
-;   stg %r10, 464(%r15)
-;   stg %r11, 472(%r15)
-;   stg %r12, 480(%r15)
-;   stg %r13, 488(%r15)
+;   lghi %r2, 105
+;   stg %r2, 216(%r15)
+;   lghi %r2, 110
+;   stg %r2, 208(%r15)
+;   lghi %r2, 115
+;   stg %r2, 200(%r15)
+;   lghi %r2, 120
+;   stg %r2, 192(%r15)
+;   lghi %r2, 125
+;   stg %r2, 184(%r15)
+;   lghi %r2, 130
+;   stg %r2, 176(%r15)
+;   lghi %r2, 135
+;   stg %r2, 168(%r15)
+;   bras %r1, 12 ; data %tail_callee_stack_args + 0 ; lg %r2, 0(%r1)
+;   stg %r2, 160(%r15)
+;   lg %r2, 600(%r15)
+;   stg %r2, 280(%r15)
+;   stg %r8, 440(%r15)
+;   stg %r9, 448(%r15)
+;   stg %r10, 456(%r15)
+;   stg %r11, 464(%r15)
+;   stg %r12, 472(%r15)
+;   stg %r13, 480(%r15)
+;   stg %r14, 488(%r15)
+;   lg %r2, 224(%r15)
 ;   stg %r2, 496(%r15)
 ;   stg %r3, 504(%r15)
 ;   stg %r4, 512(%r15)
-;   lg %r2, 224(%r15)
-;   stg %r2, 520(%r15)
+;   stg %r5, 520(%r15)
 ;   stg %r6, 528(%r15)
 ;   stg %r7, 536(%r15)
-;   lg %r5, 216(%r15)
-;   stg %r5, 544(%r15)
-;   lg %r5, 208(%r15)
-;   stg %r5, 552(%r15)
-;   lg %r5, 200(%r15)
-;   stg %r5, 560(%r15)
-;   lg %r5, 192(%r15)
-;   stg %r5, 568(%r15)
-;   lg %r5, 184(%r15)
-;   stg %r5, 576(%r15)
-;   lg %r5, 176(%r15)
-;   stg %r5, 584(%r15)
-;   lg %r5, 168(%r15)
-;   stg %r5, 592(%r15)
+;   lg %r2, 216(%r15)
+;   stg %r2, 544(%r15)
+;   lg %r2, 208(%r15)
+;   stg %r2, 552(%r15)
+;   lg %r2, 200(%r15)
+;   stg %r2, 560(%r15)
+;   lg %r2, 192(%r15)
+;   stg %r2, 568(%r15)
+;   lg %r2, 184(%r15)
+;   stg %r2, 576(%r15)
+;   lg %r2, 176(%r15)
+;   stg %r2, 584(%r15)
+;   lg %r2, 168(%r15)
+;   stg %r2, 592(%r15)
 ;   lg %r2, 272(%r15)
 ;   lg %r3, 264(%r15)
 ;   lg %r4, 256(%r15)
 ;   lg %r5, 248(%r15)
 ;   lg %r6, 240(%r15)
 ;   lg %r7, 232(%r15)
-;   lg %r12, 160(%r15)
-;   lgr %r1, %r12 ; aghi %r15, 280 ; lmg %r8, %r14, 384(%r15) ; br %r1 ; callee_pop_size 320
+;   lg %r8, 160(%r15)
+;   lgr %r1, %r8 ; aghi %r15, 280 ; lmg %r8, %r14, 384(%r15) ; br %r1 ; callee_pop_size 320
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -381,79 +381,79 @@ block0:
 ;   stg %r7, 0xf0(%r15)
 ;   lghi %r7, 0x23
 ;   stg %r7, 0xe8(%r15)
-;   lghi %r14, 0x28
-;   lghi %r8, 0x2d
-;   lghi %r9, 0x32
-;   lghi %r10, 0x37
-;   lghi %r11, 0x3c
-;   lghi %r12, 0x41
-;   lghi %r13, 0x46
-;   lghi %r2, 0x4b
+;   lghi %r8, 0x28
+;   lghi %r9, 0x2d
+;   lghi %r10, 0x32
+;   lghi %r11, 0x37
+;   lghi %r12, 0x3c
+;   lghi %r13, 0x41
+;   lghi %r14, 0x46
+;   lghi %r3, 0x4b
+;   stg %r3, 0xe0(%r15)
 ;   lghi %r3, 0x50
 ;   lghi %r4, 0x55
-;   lghi %r6, 0x5a
-;   stg %r6, 0xe0(%r15)
+;   lghi %r5, 0x5a
 ;   lghi %r6, 0x5f
 ;   lghi %r7, 0x64
-;   lghi %r5, 0x69
-;   stg %r5, 0xd8(%r15)
-;   lghi %r5, 0x6e
-;   stg %r5, 0xd0(%r15)
-;   lghi %r5, 0x73
-;   stg %r5, 0xc8(%r15)
-;   lghi %r5, 0x78
-;   stg %r5, 0xc0(%r15)
-;   lghi %r5, 0x7d
-;   stg %r5, 0xb8(%r15)
-;   lghi %r5, 0x82
-;   stg %r5, 0xb0(%r15)
-;   lghi %r5, 0x87
-;   stg %r5, 0xa8(%r15)
+;   lghi %r2, 0x69
+;   stg %r2, 0xd8(%r15)
+;   lghi %r2, 0x6e
+;   stg %r2, 0xd0(%r15)
+;   lghi %r2, 0x73
+;   stg %r2, 0xc8(%r15)
+;   lghi %r2, 0x78
+;   stg %r2, 0xc0(%r15)
+;   lghi %r2, 0x7d
+;   stg %r2, 0xb8(%r15)
+;   lghi %r2, 0x82
+;   stg %r2, 0xb0(%r15)
+;   lghi %r2, 0x87
+;   stg %r2, 0xa8(%r15)
 ;   bras %r1, 0xdc
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r5, 0(%r1)
-;   stg %r5, 0xa0(%r15)
-;   lg %r5, 0x258(%r15)
-;   stg %r5, 0x118(%r15)
-;   stg %r14, 0x1b8(%r15)
-;   stg %r8, 0x1c0(%r15)
-;   stg %r9, 0x1c8(%r15)
-;   stg %r10, 0x1d0(%r15)
-;   stg %r11, 0x1d8(%r15)
-;   stg %r12, 0x1e0(%r15)
-;   stg %r13, 0x1e8(%r15)
+;   lg %r2, 0(%r1)
+;   stg %r2, 0xa0(%r15)
+;   lg %r2, 0x258(%r15)
+;   stg %r2, 0x118(%r15)
+;   stg %r8, 0x1b8(%r15)
+;   stg %r9, 0x1c0(%r15)
+;   stg %r10, 0x1c8(%r15)
+;   stg %r11, 0x1d0(%r15)
+;   stg %r12, 0x1d8(%r15)
+;   stg %r13, 0x1e0(%r15)
+;   stg %r14, 0x1e8(%r15)
+;   lg %r2, 0xe0(%r15)
 ;   stg %r2, 0x1f0(%r15)
 ;   stg %r3, 0x1f8(%r15)
 ;   stg %r4, 0x200(%r15)
-;   lg %r2, 0xe0(%r15)
-;   stg %r2, 0x208(%r15)
+;   stg %r5, 0x208(%r15)
 ;   stg %r6, 0x210(%r15)
 ;   stg %r7, 0x218(%r15)
-;   lg %r5, 0xd8(%r15)
-;   stg %r5, 0x220(%r15)
-;   lg %r5, 0xd0(%r15)
-;   stg %r5, 0x228(%r15)
-;   lg %r5, 0xc8(%r15)
-;   stg %r5, 0x230(%r15)
-;   lg %r5, 0xc0(%r15)
-;   stg %r5, 0x238(%r15)
-;   lg %r5, 0xb8(%r15)
-;   stg %r5, 0x240(%r15)
-;   lg %r5, 0xb0(%r15)
-;   stg %r5, 0x248(%r15)
-;   lg %r5, 0xa8(%r15)
-;   stg %r5, 0x250(%r15)
+;   lg %r2, 0xd8(%r15)
+;   stg %r2, 0x220(%r15)
+;   lg %r2, 0xd0(%r15)
+;   stg %r2, 0x228(%r15)
+;   lg %r2, 0xc8(%r15)
+;   stg %r2, 0x230(%r15)
+;   lg %r2, 0xc0(%r15)
+;   stg %r2, 0x238(%r15)
+;   lg %r2, 0xb8(%r15)
+;   stg %r2, 0x240(%r15)
+;   lg %r2, 0xb0(%r15)
+;   stg %r2, 0x248(%r15)
+;   lg %r2, 0xa8(%r15)
+;   stg %r2, 0x250(%r15)
 ;   lg %r2, 0x110(%r15)
 ;   lg %r3, 0x108(%r15)
 ;   lg %r4, 0x100(%r15)
 ;   lg %r5, 0xf8(%r15)
 ;   lg %r6, 0xf0(%r15)
 ;   lg %r7, 0xe8(%r15)
-;   lg %r12, 0xa0(%r15)
-;   lgr %r1, %r12
+;   lg %r8, 0xa0(%r15)
+;   lgr %r1, %r8
 ;   aghi %r15, 0x118
 ;   lmg %r8, %r14, 0x180(%r15)
 ;   br %r1

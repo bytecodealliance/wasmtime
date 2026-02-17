@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use wasmtime::{Result, error::Context as _, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
@@ -7,7 +7,6 @@ async fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<
     let _ = env_logger::try_init();
 
     let mut config = wasmtime::Config::new();
-    config.async_support(true);
     wasmtime::Cache::from_file(None)
         .map(|cache| config.cache(Some(cache)))
         .unwrap();
@@ -41,23 +40,23 @@ async fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<
 
     let mut linker = wasmtime::Linker::new(&engine);
     linker.func_wrap("foo", "bar", |_: i32| -> Result<i32> {
-        Err(anyhow!("shouldn't be called"))
+        Err(format_err!("shouldn't be called"))
     })?;
 
     let instance = linker.instantiate_async(&mut store, &module).await?;
 
-    let run = instance
-        .get_func(&mut store, "run")
-        .ok_or_else(|| anyhow::anyhow!("the test Wasm module does not export a `run` function"))?;
+    let run = instance.get_func(&mut store, "run").ok_or_else(|| {
+        wasmtime::format_err!("the test Wasm module does not export a `run` function")
+    })?;
 
     let mut actual = vec![wasmtime::Val::I32(0)];
     run.call_async(&mut store, args, &mut actual).await?;
-    anyhow::ensure!(actual.len() == 1, "expected one result");
+    wasmtime::ensure!(actual.len() == 1, "expected one result");
     let actual = match actual[0] {
         wasmtime::Val::I32(x) => x,
-        _ => anyhow::bail!("expected an i32 result"),
+        _ => wasmtime::bail!("expected an i32 result"),
     };
-    anyhow::ensure!(
+    wasmtime::ensure!(
         expected == actual,
         "expected `{expected}`, found `{actual}`",
     );

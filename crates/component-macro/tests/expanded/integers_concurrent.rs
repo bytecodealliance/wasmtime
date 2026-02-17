@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::integers::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,41 +190,41 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod integers {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a1<T>(
+                fn a1<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: u8,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a2<T>(
+                fn a2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: i8,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a3<T>(
+                fn a3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: u16,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a4<T>(
+                fn a4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: i16,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a5<T>(
+                fn a5<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: u32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a6<T>(
+                fn a6<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: i32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a7<T>(
+                fn a7<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a8<T>(
+                fn a8<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: i64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn a9<T>(
+                fn a9<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     p1: u8,
                     p2: i8,
@@ -237,31 +235,31 @@ pub mod foo {
                     p7: u64,
                     p8: i64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn r1<T>(
+                fn r1<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u8> + Send;
-                fn r2<T>(
+                fn r2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = i8> + Send;
-                fn r3<T>(
+                fn r3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u16> + Send;
-                fn r4<T>(
+                fn r4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = i16> + Send;
-                fn r5<T>(
+                fn r5<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u32> + Send;
-                fn r6<T>(
+                fn r6<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = i32> + Send;
-                fn r7<T>(
+                fn r7<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u64> + Send;
-                fn r8<T>(
+                fn r8<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = i64> + Send;
-                fn pair_ret<T>(
+                fn pair_ret<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = (i64, u8)> + Send;
             }
@@ -491,7 +489,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod integers {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     a1: wasmtime::component::Func,
                     a2: wasmtime::component::Func,
@@ -547,7 +546,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/integers")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/integers`"
                                 )
                             })?;
@@ -556,7 +555,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/integers` does \
                 not have export `{name}`"
                                     )

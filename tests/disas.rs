@@ -39,7 +39,6 @@
 //! at the start of the file. These comments are then parsed as TOML and
 //! deserialized into `TestConfig` in this crate.
 
-use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cranelift_codegen::ir::Function;
 use libtest_mimic::{Arguments, Trial};
@@ -50,7 +49,9 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tempfile::TempDir;
-use wasmtime::{CodeBuilder, CodeHint, Engine, OptLevel, Strategy};
+use wasmtime::{
+    CodeBuilder, CodeHint, Engine, OptLevel, Result, Strategy, bail, error::Context as _,
+};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {

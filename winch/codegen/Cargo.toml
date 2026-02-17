@@ -14,7 +14,6 @@ workspace = true
 [dependencies]
 wasmparser = { workspace = true }
 smallvec = { workspace = true }
-anyhow = { workspace = true }
 target-lexicon = { workspace = true, features = ["std"] }
 # The following two dependencies (cranelift-codegen, regalloc2) are temporary;
 # mostly to have access to `PReg`s and the calling convention.
@@ -27,7 +26,7 @@ gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 thiserror = { workspace = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]

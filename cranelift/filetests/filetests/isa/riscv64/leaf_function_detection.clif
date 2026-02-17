@@ -18,14 +18,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a3,10
-;   mulw a0,a0,a3
+;   li a1,10
+;   mulw a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0xa
-;   mulw a0, a0, a3
+;   addi a1, zero, 0xa
+;   mulw a0, a0, a1
 ;   ret
 
 ;; Test 2: Leaf function with multiple basic blocks and control flow
@@ -57,8 +57,8 @@ block3(v6: i32):
 ;   subw a0,a1,a0
 ;   j label3
 ; block2:
-;   li a3,2
-;   mulw a0,a0,a3
+;   li a1,2
+;   mulw a0,a0,a1
 ;   j label3
 ; block3:
 ;   ret
@@ -72,8 +72,8 @@ block3(v6: i32):
 ;   subw a0, a1, a0
 ;   j 0xc
 ; block2: ; offset 0x14
-;   addi a3, zero, 2
-;   mulw a0, a0, a3
+;   addi a1, zero, 2
+;   mulw a0, a0, a1
 ; block3: ; offset 0x1c
 ;   ret
 
@@ -160,15 +160,15 @@ block0(v0: i32, v1: i64):
 ; VCode:
 ; block0:
 ;   sw a0,0(a1)
-;   lw a5,0(a1)
-;   addiw a0,a5,1
+;   lw a0,0(a1)
+;   addiw a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sw a0, 0(a1) ; trap: heap_oob
-;   lw a5, 0(a1) ; trap: heap_oob
-;   addiw a0, a5, 1
+;   lw a0, 0(a1) ; trap: heap_oob
+;   addiw a0, a0, 1
 ;   ret
 
 ;; Test 6: Leaf function that looks like it might call but doesn't

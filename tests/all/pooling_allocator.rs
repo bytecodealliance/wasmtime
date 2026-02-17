@@ -859,7 +859,7 @@ fn component_instance_size_limit() -> Result<()> {
     match wasmtime::component::Component::new(&engine, "(component)") {
         Ok(_) => panic!("should have hit limit"),
         Err(e) => e.assert_contains(
-            "instance allocation for this component requires 48 bytes of \
+            "instance allocation for this component requires 64 bytes of \
             `VMComponentContext` space which exceeds the configured maximum of 1 bytes",
         ),
     }
@@ -912,7 +912,6 @@ async fn total_stacks_limit() -> Result<()> {
     pool.total_stacks(TOTAL_STACKS)
         .total_core_instances(TOTAL_STACKS + 1);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;

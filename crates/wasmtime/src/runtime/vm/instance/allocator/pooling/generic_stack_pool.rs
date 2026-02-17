@@ -65,7 +65,7 @@ impl StackPool {
             Ok(stack) => Ok(stack),
             Err(e) => {
                 self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                Err(anyhow::Error::from(e))
+                Err(crate::Error::from(e))
             }
         }
     }

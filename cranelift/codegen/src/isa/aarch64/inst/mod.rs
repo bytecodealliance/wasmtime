@@ -9,11 +9,11 @@ use crate::{CodegenError, CodegenResult, settings};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt::Write;
 use core::slice;
 use smallvec::{SmallVec, smallvec};
-use std::fmt::Write;
-use std::string::{String, ToString};
 
 pub(crate) mod regs;
 pub(crate) use self::regs::*;
@@ -1108,6 +1108,10 @@ impl MachInst for Inst {
         // We can't give a NOP (or any insn) < 4 bytes.
         assert!(preferred_size >= 4);
         Inst::Nop4
+    }
+
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![vec![0x1f, 0x20, 0x03, 0xd5]]
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -3105,6 +3109,6 @@ mod tests {
         } else {
             32
         };
-        assert_eq!(expected, std::mem::size_of::<Inst>());
+        assert_eq!(expected, core::mem::size_of::<Inst>());
     }
 }

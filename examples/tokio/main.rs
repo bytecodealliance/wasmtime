@@ -1,6 +1,6 @@
-use anyhow::Error;
 use std::sync::Arc;
 use tokio::time::Duration;
+use wasmtime::Error;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
 
@@ -45,9 +45,8 @@ struct Environment {
 impl Environment {
     pub fn new() -> Result<Self, Error> {
         let mut config = Config::new();
-        // We need this engine's `Store`s to be async, and consume fuel, so
-        // that they can co-operatively yield during execution.
-        config.async_support(true);
+        // Consume fuel for guests so that they can co-operatively yield during
+        // execution.
         config.consume_fuel(true);
 
         let engine = Engine::new(&config)?;

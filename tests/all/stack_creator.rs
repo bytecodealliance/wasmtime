@@ -1,11 +1,11 @@
 #![cfg(all(not(target_os = "windows"), not(miri)))]
-use anyhow::{Context, bail};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     ops::Range,
     ptr::NonNull,
     sync::Arc,
 };
+use wasmtime::error::Context as _;
 use wasmtime::*;
 
 fn align_up(v: usize, align: usize) -> usize {
@@ -117,7 +117,6 @@ fn config() -> (Store<()>, Arc<CustomStackCreator>) {
     let stack_creator = Arc::new(CustomStackCreator::new().unwrap());
     let mut config = Config::new();
     config
-        .async_support(true)
         .max_wasm_stack(stack_creator.size / 2)
         .async_stack_size(stack_creator.size)
         .with_host_stack(stack_creator.clone());

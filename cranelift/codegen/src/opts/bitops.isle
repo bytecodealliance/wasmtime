@@ -41,14 +41,6 @@
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
 
-;; DeMorgan's rule (two versions):
-;; bnot(bor(x, y)) == band(bnot(x), bnot(y))
-(rule (simplify (bnot ty (bor ty x y)))
-      (band ty (bnot ty x) (bnot ty y)))
-;; bnot(band(x, y)) == bor(bnot(x), bnot(y))
-(rule (simplify (bnot ty (band t x y)))
-      (bor ty (bnot ty x) (bnot ty y)))
-
 ;; `or(and(x, y), not(y)) == or(x, not(y))`
 (rule (simplify (bor ty
                      (band ty x y)

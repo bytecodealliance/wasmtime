@@ -167,6 +167,8 @@ fn pulley_emit<P>(
         }
 
         Inst::Call { info } => {
+            let start = sink.cur_offset();
+
             // If arguments happen to already be in the right register for the
             // ABI then remove them from this list. Otherwise emit the
             // appropriate `Call` instruction depending on how many arguments we
@@ -200,17 +202,21 @@ fn pulley_emit<P>(
                 sink.add_call_site();
             }
 
-            let adjust = -i32::try_from(info.callee_pop_size).unwrap();
-            for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                i.emit(sink, emit_info, state);
-            }
+            if info.patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
+            } else {
+                let adjust = -i32::try_from(info.callee_pop_size).unwrap();
+                for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
+                    i.emit(sink, emit_info, state);
+                }
 
-            // Load any stack-carried return values.
-            info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
-                state.frame_layout().stackslots_size,
-                |inst| inst.emit(sink, emit_info, state),
-                |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
-            );
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
+                );
+            }
 
             // If this is a try-call, jump to the continuation
             // (normal-return) block.

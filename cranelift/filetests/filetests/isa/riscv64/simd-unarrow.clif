@@ -16,10 +16,10 @@ block0(v0: i16x8, v1: i16x8):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vmax.vx v14,v9,zero #avl=8, #vtype=(e16, m1, ta, ma)
-;   vmax.vx v8,v11,zero #avl=8, #vtype=(e16, m1, ta, ma)
-;   vnclipu.wi v12,v14,0 #avl=8, #vtype=(e8, mf2, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmax.vx v9,v9,zero #avl=8, #vtype=(e16, m1, ta, ma)
+;   vmax.vx v8,v8,zero #avl=8, #vtype=(e16, m1, ta, ma)
+;   vnclipu.wi v12,v9,0 #avl=8, #vtype=(e8, mf2, ta, ma)
 ;   vnclipu.wi v13,v8,0 #avl=8, #vtype=(e8, mf2, ta, ma)
 ;   vslideup.vi v12,v13,8 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -39,12 +39,12 @@ block0(v0: i16x8, v1: i16x8):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0x57, 0x47, 0x90, 0x1e
-;   .byte 0x57, 0x44, 0xb0, 0x1e
+;   .byte 0xd7, 0x44, 0x90, 0x1e
+;   .byte 0x57, 0x44, 0x80, 0x1e
 ;   .byte 0x57, 0x70, 0x74, 0xcc
-;   .byte 0x57, 0x36, 0xe0, 0xba
+;   .byte 0x57, 0x36, 0x90, 0xba
 ;   .byte 0xd7, 0x36, 0x80, 0xba
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   .byte 0x57, 0x36, 0xd4, 0x3a
@@ -67,10 +67,10 @@ block0(v0: i32x4, v1: i32x4):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vmax.vx v14,v9,zero #avl=4, #vtype=(e32, m1, ta, ma)
-;   vmax.vx v8,v11,zero #avl=4, #vtype=(e32, m1, ta, ma)
-;   vnclipu.wi v12,v14,0 #avl=4, #vtype=(e16, mf2, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmax.vx v9,v9,zero #avl=4, #vtype=(e32, m1, ta, ma)
+;   vmax.vx v8,v8,zero #avl=4, #vtype=(e32, m1, ta, ma)
+;   vnclipu.wi v12,v9,0 #avl=4, #vtype=(e16, mf2, ta, ma)
 ;   vnclipu.wi v13,v8,0 #avl=4, #vtype=(e16, mf2, ta, ma)
 ;   vslideup.vi v12,v13,4 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -90,12 +90,12 @@ block0(v0: i32x4, v1: i32x4):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0x57, 0x47, 0x90, 0x1e
-;   .byte 0x57, 0x44, 0xb0, 0x1e
+;   .byte 0xd7, 0x44, 0x90, 0x1e
+;   .byte 0x57, 0x44, 0x80, 0x1e
 ;   .byte 0x57, 0x70, 0xf2, 0xcc
-;   .byte 0x57, 0x36, 0xe0, 0xba
+;   .byte 0x57, 0x36, 0x90, 0xba
 ;   .byte 0xd7, 0x36, 0x80, 0xba
 ;   .byte 0x57, 0x70, 0x84, 0xcc
 ;   .byte 0x57, 0x36, 0xd2, 0x3a
@@ -119,10 +119,10 @@ block0(v0: i64x2, v1: i64x2):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vmax.vx v14,v9,zero #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmax.vx v8,v11,zero #avl=2, #vtype=(e64, m1, ta, ma)
-;   vnclipu.wi v12,v14,0 #avl=2, #vtype=(e32, mf2, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmax.vx v9,v9,zero #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmax.vx v8,v8,zero #avl=2, #vtype=(e64, m1, ta, ma)
+;   vnclipu.wi v12,v9,0 #avl=2, #vtype=(e32, mf2, ta, ma)
 ;   vnclipu.wi v13,v8,0 #avl=2, #vtype=(e32, mf2, ta, ma)
 ;   vslideup.vi v12,v13,2 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -142,12 +142,12 @@ block0(v0: i64x2, v1: i64x2):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0x47, 0x90, 0x1e
-;   .byte 0x57, 0x44, 0xb0, 0x1e
+;   .byte 0xd7, 0x44, 0x90, 0x1e
+;   .byte 0x57, 0x44, 0x80, 0x1e
 ;   .byte 0x57, 0x70, 0x71, 0xcd
-;   .byte 0x57, 0x36, 0xe0, 0xba
+;   .byte 0x57, 0x36, 0x90, 0xba
 ;   .byte 0xd7, 0x36, 0x80, 0xba
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x36, 0xd1, 0x3a

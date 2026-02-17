@@ -1,6 +1,5 @@
 //! Module for configuring the cache system.
 
-use anyhow::{Context, Result, anyhow, bail};
 use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
@@ -11,6 +10,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use wasmtime_environ::prelude::*;
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility
@@ -132,7 +132,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Resu
 
     let parent_dir = config_file
         .parent()
-        .ok_or_else(|| anyhow!("Invalid cache config path: {}", config_file.display()))?;
+        .ok_or_else(|| format_err!("Invalid cache config path: {}", config_file.display()))?;
 
     fs::create_dir_all(parent_dir).with_context(|| {
         format!(
@@ -355,14 +355,12 @@ impl CacheConfig {
         match (entity_exists, user_custom_file) {
             (false, false) => Ok(Self::new()),
             _ => {
-                let contents = fs::read_to_string(&config_file).context(format!(
-                    "failed to read config file: {}",
-                    config_file.display()
-                ))?;
-                let config = toml::from_str::<Config>(&contents).context(format!(
-                    "failed to parse config file: {}",
-                    config_file.display()
-                ))?;
+                let contents = fs::read_to_string(&config_file).with_context(|| {
+                    format!("failed to read config file: {}", config_file.display())
+                })?;
+                let config = toml::from_str::<Config>(&contents).with_context(|| {
+                    format!("failed to parse config file: {}", config_file.display())
+                })?;
                 Ok(config.cache)
             }
         }
@@ -537,14 +535,15 @@ impl CacheConfig {
             );
         }
 
-        fs::create_dir_all(cache_dir).context(format!(
-            "failed to create cache directory: {}",
-            cache_dir.display()
-        ))?;
-        let canonical = fs::canonicalize(cache_dir).context(format!(
-            "failed to canonicalize cache directory: {}",
-            cache_dir.display()
-        ))?;
+        fs::create_dir_all(cache_dir).with_context(|| {
+            format!("failed to create cache directory: {}", cache_dir.display())
+        })?;
+        let canonical = fs::canonicalize(cache_dir).with_context(|| {
+            format!(
+                "failed to canonicalize cache directory: {}",
+                cache_dir.display()
+            )
+        })?;
         self.directory = Some(canonical);
         Ok(())
     }

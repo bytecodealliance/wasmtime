@@ -112,8 +112,8 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       testl   $0x100000, %edx
-;;       sete    %r8b
-;;       movzbl  %r8b, %eax
+;;       sete    %sil
+;;       movzbl  %sil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -144,8 +144,8 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       btq     $0x28, %rdx
-;;       setae   %r8b
-;;       movzbl  %r8b, %eax
+;;       setae   %sil
+;;       movzbl  %sil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -176,8 +176,8 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       btl     %ecx, %edx
-;;       setae   %r9b
-;;       movzbl  %r9b, %eax
+;;       setae   %sil
+;;       movzbl  %sil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -208,8 +208,8 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       btq     %rcx, %rdx
-;;       setae   %r9b
-;;       movzbl  %r9b, %eax
+;;       setae   %sil
+;;       movzbl  %sil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

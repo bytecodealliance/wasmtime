@@ -43,16 +43,16 @@
 
         ;; check the incoming readable stream end
         (global.set $insr (local.get 0))
-        (if (i32.ne (i32.const 3) (global.get $insr))
+        (if (i32.ne (i32.const 2) (global.get $insr))
           (then unreachable))
 
         ;; create a new stream r/w pair $outsr/$outsw
         (local.set $ret64 (call $stream.new))
         (local.set $outsr (i32.wrap_i64 (local.get $ret64)))
-        (if (i32.ne (i32.const 4) (local.get $outsr))
+        (if (i32.ne (i32.const 3) (local.get $outsr))
           (then unreachable))
         (global.set $outsw (i32.wrap_i64 (i64.shr_u (local.get $ret64) (i64.const 32))))
-        (if (i32.ne (i32.const 5) (global.get $outsw))
+        (if (i32.ne (i32.const 4) (global.get $outsw))
           (then unreachable))
 
         ;; start async read on $insr which will block
@@ -161,10 +161,10 @@
         ;; create a new stream r/w pair $insr/$insw
         (local.set $ret64 (call $stream.new))
         (local.set $insr (i32.wrap_i64 (local.get $ret64)))
-        (if (i32.ne (i32.const 2) (local.get $insr))
+        (if (i32.ne (i32.const 1) (local.get $insr))
           (then unreachable))
         (local.set $insw (i32.wrap_i64 (i64.shr_u (local.get $ret64) (i64.const 32))))
-        (if (i32.ne (i32.const 3) (local.get $insw))
+        (if (i32.ne (i32.const 2) (local.get $insw))
           (then unreachable))
 
         ;; call 'transform' which will return a readable stream $outsr eagerly
@@ -173,7 +173,7 @@
         (if (i32.ne (i32.const 2 (; RETURNED=2 | (0<<4) ;)) (local.get $ret))
           (then unreachable))
         (local.set $outsr (i32.load (local.get $retp)))
-        (if (i32.ne (i32.const 2) (local.get $outsr))
+        (if (i32.ne (i32.const 1) (local.get $outsr))
           (then unreachable))
 
         ;; multiple write calls succeed until 12-byte buffer is filled
@@ -234,7 +234,7 @@
       (export "stream.drop-writable" (func $stream.drop-writable))
       (export "transform" (func $transform'))
     ))))
-    (func (export "run") (result u32) (canon lift (core func $dm "run")))
+    (func (export "run") async (result u32) (canon lift (core func $dm "run")))
   )
 
   (instance $c (instantiate $C))

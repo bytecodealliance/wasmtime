@@ -1,16 +1,16 @@
 use crate::info::ModuleContext;
-use anyhow::{Context, bail};
 use wasmparser::{Encoding, Parser};
+use wasmtime::{bail, error::Context as _};
 
 /// Parse the given Wasm bytes into a `ModuleInfo` tree.
-pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>> {
+pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> wasmtime::Result<ModuleContext<'a>> {
     parse_with(full_wasm, &mut Parser::new(0).parse_all(full_wasm))
 }
 
 pub(crate) fn parse_with<'a>(
     full_wasm: &'a [u8],
     payloads: &mut impl Iterator<Item = wasmparser::Result<wasmparser::Payload<'a>>>,
-) -> anyhow::Result<ModuleContext<'a>> {
+) -> wasmtime::Result<ModuleContext<'a>> {
     log::debug!("Parsing the input Wasm");
 
     let mut module = ModuleContext::default();
@@ -48,13 +48,13 @@ pub(crate) fn parse_with<'a>(
 fn import_section<'a>(
     module: &mut ModuleContext<'a>,
     imports: wasmparser::ImportSectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     // Check that we can properly handle all imports.
-    for imp in imports {
+    for imp in imports.into_imports() {
         let imp = imp?;
 
         if imp.module.starts_with("__wizer_") || imp.name.starts_with("__wizer_") {
-            anyhow::bail!(
+            wasmtime::bail!(
                 "input Wasm module already imports entities named with the `__wizer_*` prefix"
             );
         }
@@ -67,7 +67,7 @@ fn import_section<'a>(
 fn function_section<'a>(
     module: &mut ModuleContext<'a>,
     funcs: wasmparser::FunctionSectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     for ty_idx in funcs {
         module.push_function(ty_idx?);
     }
@@ -77,7 +77,7 @@ fn function_section<'a>(
 fn table_section<'a>(
     module: &mut ModuleContext<'a>,
     tables: wasmparser::TableSectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     for table in tables {
         module.push_table(table?.ty);
     }
@@ -87,7 +87,7 @@ fn table_section<'a>(
 fn memory_section<'a>(
     module: &mut ModuleContext<'a>,
     mems: wasmparser::MemorySectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     for m in mems {
         module.push_defined_memory(m?);
     }
@@ -97,7 +97,7 @@ fn memory_section<'a>(
 fn global_section<'a>(
     module: &mut ModuleContext<'a>,
     globals: wasmparser::GlobalSectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     for g in globals {
         module.push_defined_global(g?.ty);
     }
@@ -107,12 +107,12 @@ fn global_section<'a>(
 fn export_section<'a>(
     module: &mut ModuleContext<'a>,
     exports: wasmparser::ExportSectionReader<'a>,
-) -> anyhow::Result<()> {
+) -> wasmtime::Result<()> {
     for export in exports {
         let export = export?;
 
         if export.name.starts_with("__wizer_") {
-            anyhow::bail!(
+            wasmtime::bail!(
                 "input Wasm module already exports entities named with the `__wizer_*` prefix"
             );
         }
@@ -120,6 +120,7 @@ fn export_section<'a>(
         match export.kind {
             wasmparser::ExternalKind::Tag
             | wasmparser::ExternalKind::Func
+            | wasmparser::ExternalKind::FuncExact
             | wasmparser::ExternalKind::Table
             | wasmparser::ExternalKind::Memory
             | wasmparser::ExternalKind::Global => {

@@ -1,5 +1,5 @@
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
-use crate::p3::bindings::clocks::wall_clock;
+use crate::p3::bindings::clocks::system_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
@@ -7,7 +7,6 @@ use crate::p3::bindings::filesystem::types::{
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
-use anyhow::Context as _;
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -22,6 +21,7 @@ use wasmtime::component::{
     Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::error::Context as _;
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -96,10 +96,19 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
     }
 }
 
-fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
-    std::time::SystemTime::UNIX_EPOCH
-        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
-        .ok_or(ErrorCode::Overflow)
+fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
+    if let Ok(seconds) = t.seconds.try_into() {
+        std::time::SystemTime::UNIX_EPOCH
+            .checked_add(core::time::Duration::new(seconds, t.nanoseconds))
+            .ok_or(ErrorCode::Overflow)
+    } else {
+        std::time::SystemTime::UNIX_EPOCH
+            .checked_sub(core::time::Duration::new(
+                t.seconds.unsigned_abs(),
+                t.nanoseconds,
+            ))
+            .ok_or(ErrorCode::Overflow)
+    }
 }
 
 fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
@@ -495,7 +504,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             return Ok((
                 StreamReader::new(&mut store, iter::empty()),
                 FutureReader::new(&mut store, async {
-                    anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
                 }),
             ));
         }
@@ -516,49 +525,56 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         ))
     }
 
-    async fn write_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn write_via_stream<U>(
+        mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
-        data: StreamReader<u8>,
+        mut data: StreamReader<u8>,
         offset: Filesize,
-    ) -> FilesystemResult<()> {
+    ) -> FutureReader<Result<(), ErrorCode>> {
         let (result_tx, result_rx) = oneshot::channel();
-        store.with(|mut store| {
-            let file = get_file(store.get().table, &fd)?;
+        match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
-                return Err(ErrorCode::NotPermitted.into());
+                Err(ErrorCode::NotPermitted.into())
+            } else {
+                Ok(file.clone())
             }
-            let file = file.clone();
-            data.pipe(store, WriteStreamConsumer::new_at(file, offset, result_tx));
-            FilesystemResult::Ok(())
-        })?;
-        result_rx
-            .await
-            .context("oneshot sender dropped")
-            .map_err(FilesystemError::trap)??;
-        Ok(())
+        }) {
+            Ok(file) => {
+                data.pipe(
+                    &mut store,
+                    WriteStreamConsumer::new_at(file, offset, result_tx),
+                );
+            }
+            Err(err) => {
+                data.close(&mut store);
+                let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
+            }
+        }
+        FutureReader::new(&mut store, result_rx)
     }
 
-    async fn append_via_stream<U>(
-        store: &Accessor<U, Self>,
+    fn append_via_stream<U>(
+        mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
-        data: StreamReader<u8>,
-    ) -> FilesystemResult<()> {
+        mut data: StreamReader<u8>,
+    ) -> FutureReader<Result<(), ErrorCode>> {
         let (result_tx, result_rx) = oneshot::channel();
-        store.with(|mut store| {
-            let file = get_file(store.get().table, &fd)?;
+        match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
-                return Err(ErrorCode::NotPermitted.into());
+                Err(ErrorCode::NotPermitted.into())
+            } else {
+                Ok(file.clone())
             }
-            let file = file.clone();
-            data.pipe(store, WriteStreamConsumer::new_append(file, result_tx));
-            FilesystemResult::Ok(())
-        })?;
-        result_rx
-            .await
-            .context("oneshot sender dropped")
-            .map_err(FilesystemError::trap)??;
-        Ok(())
+        }) {
+            Ok(file) => {
+                data.pipe(&mut store, WriteStreamConsumer::new_append(file, result_tx));
+            }
+            Err(err) => {
+                data.close(&mut store);
+                let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
+            }
+        }
+        FutureReader::new(&mut store, result_rx)
     }
 
     async fn advise<U>(
@@ -623,45 +639,48 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn read_directory<U>(
-        store: &Accessor<U, Self>,
+    fn read_directory<U>(
+        mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
-    ) -> wasmtime::Result<(
+    ) -> (
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
-    )> {
-        store.with(|mut store| {
-            let dir = get_dir(store.get().table, &fd)?;
+    ) {
+        let (result_tx, result_rx) = oneshot::channel();
+        let stream = match get_dir(store.get().table, &fd).and_then(|dir| {
             if !dir.perms.contains(DirPerms::READ) {
-                return Ok((
-                    StreamReader::new(&mut store, iter::empty()),
-                    FutureReader::new(&mut store, async {
-                        anyhow::Ok(Err(ErrorCode::NotPermitted))
-                    }),
-                ));
-            }
-            let allow_blocking_current_thread = dir.allow_blocking_current_thread;
-            let dir = Arc::clone(dir.as_dir());
-            let (result_tx, result_rx) = oneshot::channel();
-            let stream = if allow_blocking_current_thread {
-                match dir.entries() {
-                    Ok(readdir) => StreamReader::new(
-                        &mut store,
-                        FallibleIteratorProducer::new(
-                            readdir.filter_map(|e| map_dir_entry(e).transpose()),
-                            result_tx,
-                        ),
-                    ),
-                    Err(e) => {
-                        result_tx.send(Err(e.into())).unwrap();
-                        StreamReader::new(&mut store, iter::empty())
-                    }
-                }
+                Err(ErrorCode::NotPermitted.into())
             } else {
-                StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))
-            };
-            Ok((stream, FutureReader::new(&mut store, result_rx)))
-        })
+                Ok(dir)
+            }
+        }) {
+            Ok(dir) => {
+                let allow_blocking_current_thread = dir.allow_blocking_current_thread;
+                let dir = Arc::clone(dir.as_dir());
+                if allow_blocking_current_thread {
+                    match dir.entries() {
+                        Ok(readdir) => StreamReader::new(
+                            &mut store,
+                            FallibleIteratorProducer::new(
+                                readdir.filter_map(|e| map_dir_entry(e).transpose()),
+                                result_tx,
+                            ),
+                        ),
+                        Err(e) => {
+                            let _ = result_tx.send(Err(e.into()));
+                            StreamReader::new(&mut store, iter::empty())
+                        }
+                    }
+                } else {
+                    StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))
+                }
+            }
+            Err(err) => {
+                let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
+                StreamReader::new(&mut store, iter::empty())
+            }
+        };
+        (stream, FutureReader::new(&mut store, result_rx))
     }
 
     async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {
@@ -819,7 +838,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let table = store.get().table;
             let fd = get_descriptor(table, &fd)?.clone();
             let other = get_descriptor(table, &other)?.clone();
-            anyhow::Ok((fd, other))
+            wasmtime::error::Ok((fd, other))
         })?;
         fd.is_same_object(&other).await
     }

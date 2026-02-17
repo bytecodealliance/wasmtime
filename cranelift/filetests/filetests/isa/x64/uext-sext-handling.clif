@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64
 
 ; The x86_64 system_v call conv respects uext and sext
@@ -11,14 +11,29 @@ block0(v0: i8):
     return
 }
 
-; check:  pushq %rbp
-; nextln: movq %rsp, %rbp
-; nextln: block0:
-; nextln: movzbq %dil, %rdi
-; nextln: load_ext_name userextname0+0, %rdx
-; nextln: call    *%rdx
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movzbq %dil, %rdi
+;   load_ext_name userextname0+0, %rsi
+;   call    *%rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq %dil, %rdi
+;   movabsq $0, %rsi ; reloc_external Abs8 u0:0 0
+;   callq *%rsi
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
-; The x86_64 windows_fastcall call conv respects uext and sext
 function u0:0(i8) windows_fastcall {
     sig0 = (i8 uext) windows_fastcall
     fn0 = u0:0 sig0
@@ -28,10 +43,34 @@ block0(v0: i8):
     return
 }
 
-; check: pushq %rbp
-; nextln: movq %rsp, %rbp
-; nextln: subq $$0x20, %rsp
-; nextln: block0:
-; nextln: movzbq %cl, %rcx
-; nextln: load_ext_name userextname0+0, %rdx
-; nextln: call    *%rdx
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rsi, 0x20(%rsp)
+; block0:
+;   movzbq %cl, %rcx
+;   load_ext_name userextname0+0, %rsi
+;   call    *%rsi
+;   movq 0x20(%rsp), %rsi
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rsi, 0x20(%rsp)
+; block1: ; offset 0xd
+;   movzbq %cl, %rcx
+;   movabsq $0, %rsi ; reloc_external Abs8 u0:0 0
+;   callq *%rsi
+;   movq 0x20(%rsp), %rsi
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

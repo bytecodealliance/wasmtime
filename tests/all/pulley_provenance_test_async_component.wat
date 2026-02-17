@@ -1,9 +1,9 @@
 (component
-  (import "sleep" (func $sleep))
+  (import "sleep" (func $sleep async))
 
   (component $A
-    (import "run-stackless" (func $run_stackless))
-    (import "run-stackful" (func $run_stackful))
+    (import "run-stackless" (func $run_stackless async))
+    (import "run-stackful" (func $run_stackful async))
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
 
@@ -91,8 +91,8 @@
         (export "run-stackless" (func $run_stackless))
         (export "run-stackful" (func $run_stackful))))))
 
-    (func (export "run-stackless") (canon lift (core func $i "run-stackless") async (callback (func $i "cb"))))
-    (func (export "run-stackful") (canon lift (core func $i "run-stackful") async)))
+    (func (export "run-stackless") async (canon lift (core func $i "run-stackless") async (callback (func $i "cb"))))
+    (func (export "run-stackful") async (canon lift (core func $i "run-stackful") async)))
 
   (instance $a (instantiate $A
     (with "run-stackless" (func $sleep))

@@ -32,7 +32,7 @@
 //! [`Inst::features`]: crate::inst::Inst::features
 
 use crate::inst::for_each_feature;
-use std::fmt;
+use core::fmt;
 
 // Helpfully generate `enum Feature`.
 macro_rules! create_feature_enum {

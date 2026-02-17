@@ -51,9 +51,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpckhwd %xmm2, %xmm0
+;   punpckhwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -66,9 +66,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpckhwd %xmm2, %xmm0
+;   punpckhwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -150,9 +150,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpcklwd %xmm2, %xmm0
+;   punpcklwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -165,9 +165,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpcklwd %xmm2, %xmm0
+;   punpcklwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -255,9 +255,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhuw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpckhwd %xmm2, %xmm0
+;   punpckhwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -270,9 +270,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhuw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpckhwd %xmm2, %xmm0
+;   punpckhwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -354,9 +354,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhuw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpcklwd %xmm2, %xmm0
+;   punpcklwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -369,9 +369,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm0, %xmm5
 ;   pmullw %xmm1, %xmm5
 ;   pmulhuw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movdqa %xmm0, %xmm1
 ;   movdqa %xmm5, %xmm0
-;   punpcklwd %xmm2, %xmm0
+;   punpcklwd %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

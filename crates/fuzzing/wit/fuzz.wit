@@ -1,0 +1,139 @@
+// For more information on what this is used for, see `fuzz_async.rs`
+
+package wasmtime-fuzz:fuzz;
+
+interface types {
+  variant command {
+    // invoke the imported `sync-ready` function
+    sync-ready-call,
+
+    // invoke the imported `async-ready` function, and assert it's ready
+    async-ready-call,
+
+    // invoke the imported `async-pending` function, assert it's not
+    // ready, and save it with the id provided.
+    async-pending-import-call(u32),
+    // cancel's a prior call of `async-pending` with the id specified
+    async-pending-import-cancel(u32),
+    // asserts that a prior call of `async-pending` with the id specified is
+    // ready.
+    async-pending-import-assert-ready(u32),
+    // complete a previous invocation of this component's `async-pending`
+    // export.
+    async-pending-export-complete(u32),
+    // assert a previous invocation of this component's `async-pending` export
+    // is cancelled.
+    async-pending-export-assert-cancelled(u32),
+
+    // make a future read/write combo with the `id` specified.
+    future-new(u32),
+    // take a future readable end through the `future-take` import.
+    future-take(u32),
+    // pass the future specified to this component's `future-receive` import.
+    future-give(u32),
+    // drop the future end identified
+    future-drop-readable(u32),
+    // ...
+    future-write-ready(future-payload),
+    future-read-ready(future-payload),
+    future-write-pending(future-payload),
+    future-read-pending(u32),
+    future-write-dropped(u32),
+    future-cancel-write(u32),
+    future-cancel-read(u32),
+    future-write-assert-complete(u32),
+    future-write-assert-dropped(u32),
+    future-read-assert-complete(future-payload),
+
+    // make a stream read/write combo with the `id` specified.
+    stream-new(u32),
+    // take a stream readable end through the `stream-take` import.
+    stream-take(u32),
+    // pass the stream specified to this component's `stream-receive` import.
+    stream-give(u32),
+    // drop the stream end identified
+    stream-drop-readable(u32),
+    stream-drop-writable(u32),
+    // ...
+    stream-write-ready(stream-ready-payload),
+    stream-read-ready(stream-ready-payload),
+    stream-write-pending(stream-write-payload),
+    stream-read-pending(stream-read-payload),
+    stream-write-dropped(stream-write-payload),
+    stream-read-dropped(stream-read-payload),
+    stream-cancel-write(u32),
+    stream-cancel-read(u32),
+    stream-write-assert-complete(stream-read-payload),
+    stream-write-assert-dropped(stream-read-payload),
+    stream-read-assert-complete(stream-write-payload),
+    stream-read-assert-dropped(u32),
+
+    ack,
+  }
+
+  record future-payload {
+    %future: u32,
+    item: u32,
+  }
+
+  record stream-ready-payload {
+    %stream: u32,
+    item: u32,
+    op-count: u32,
+    ready-count: u32,
+  }
+
+  record stream-write-payload {
+    %stream: u32,
+    item: u32,
+    count: u32,
+  }
+
+  record stream-read-payload {
+    %stream: u32,
+    count: u32,
+  }
+
+  enum scope {
+    caller,
+    callee,
+  }
+
+  get-commands: func(s: scope) -> stream<command>;
+}
+
+interface async-test {
+  use types.{command, scope};
+
+  // Initialization function. Invokes `task.return` but keeps running to receive
+  // commands. Commands come from the `get-commands` function which is passed
+  // the `scope` provided here.
+  //
+  // This invokes the imported `init` function with the `callee` scope.
+  init: async func(scope: scope);
+
+  sync-ready: func();
+
+  // Must return immediately.
+  async-ready: async func();
+
+  // Must not be ready when called. Status will be resolved through a later
+  // command using the `id` provided.
+  async-pending: async func(id: u32);
+
+  // Remove the future reader `id` from this component's state and return it.
+  future-take: func(id: u32) -> future<u32>;
+  // Receive a future from another component.
+  future-receive: func(id: u32, f: future<u32>);
+
+  // Remove the stream reader `id` from this component's state and return it.
+  stream-take: func(id: u32) -> stream<u32>;
+  // Receive a stream from another component.
+  stream-receive: func(id: u32, f: stream<u32>);
+
+}
+
+world fuzz-async {
+  import async-test;
+  export async-test;
+}

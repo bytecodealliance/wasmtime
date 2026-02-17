@@ -23,7 +23,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.3.0-rc-2025-09-16;
+//!             include wasi:cli/command@0.3.0-rc-2026-02-09;
 //!
 //!             import custom-host;
 //!         }
@@ -61,7 +61,6 @@
 //!
 //! fn main() -> Result<()> {
 //!     let mut config = Config::default();
-//!     config.async_support(true);
 //!     config.wasm_component_model_async(true);
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
@@ -83,14 +82,18 @@ mod generated {
             "wasi:cli/stdout": store | tracing | trappable,
             "wasi:cli/stderr": store | tracing | trappable,
             "wasi:filesystem/types.[method]descriptor.read-via-stream": store | tracing | trappable,
-            "wasi:sockets/types.[method]tcp-socket.bind": async | store | tracing | trappable,
-            "wasi:sockets/types.[method]tcp-socket.listen": async | store | tracing | trappable,
-            "wasi:sockets/types.[method]tcp-socket.receive": async | store | tracing | trappable,
-            "wasi:sockets/types.[method]udp-socket.bind": async | store | tracing | trappable,
-            "wasi:sockets/types.[method]udp-socket.connect": async | store | tracing | trappable,
+            "wasi:filesystem/types.[method]descriptor.write-via-stream": store | tracing,
+            "wasi:filesystem/types.[method]descriptor.append-via-stream": store | tracing,
+            "wasi:filesystem/types.[method]descriptor.read-directory": store | tracing,
+            "wasi:sockets/types.[method]tcp-socket.bind": async | tracing | trappable,
+            "wasi:sockets/types.[method]tcp-socket.listen":  store | tracing | trappable,
+            "wasi:sockets/types.[method]tcp-socket.send": store | tracing,
+            "wasi:sockets/types.[method]tcp-socket.receive": store | tracing | trappable,
+            "wasi:sockets/types.[method]udp-socket.bind": async | tracing | trappable,
+            "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
             default: tracing | trappable,
         },
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
         with: {
             "wasi:cli/terminal-input.terminal-input": crate::p3::cli::TerminalInput,
             "wasi:cli/terminal-output.terminal-output": crate::p3::cli::TerminalOutput,
@@ -132,7 +135,6 @@ pub use self::generated::wasi::*;
 ///
 ///     // Configure and create `Engine`
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///
@@ -159,7 +161,7 @@ pub use self::generated::wasi::*;
 ///     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
 ///     let program_result = store.run_concurrent(async move |store| {
 ///         command.wasi_cli_run().call_run(store).await
-///     }).await??;
+///     }).await??.0;
 ///     match program_result {
 ///         Ok(()) => Ok(()),
 ///         Err(()) => std::process::exit(1),
@@ -205,7 +207,6 @@ pub use self::generated::Command;
 ///
 ///     // Configure and create `Engine`
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///

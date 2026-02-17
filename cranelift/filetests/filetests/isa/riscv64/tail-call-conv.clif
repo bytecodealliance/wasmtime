@@ -98,46 +98,46 @@ block0:
 ;   li a5,35
 ;   li a6,40
 ;   li a7,45
-;   li s3,50
-;   li s4,55
-;   li s5,60
-;   li s6,65
-;   li s7,70
-;   li s8,75
-;   li s9,80
-;   li s10,85
-;   li s11,90
-;   li t0,95
-;   li t1,100
-;   li t2,105
-;   li t3,110
-;   li t4,115
-;   li s1,120
-;   li s2,125
+;   li s11,50
+;   li t3,55
+;   li t4,60
+;   li t0,65
+;   li t1,70
+;   li t2,75
+;   li s1,80
+;   li s2,85
+;   li s3,90
+;   li s4,95
+;   li s5,100
+;   li s6,105
+;   li s7,110
+;   li s8,115
+;   li s9,120
+;   li s10,125
 ;   li a0,130
 ;   li a1,135
-;   sd s3,0(sp)
-;   sd s4,8(sp)
-;   sd s5,16(sp)
-;   sd s6,24(sp)
-;   sd s7,32(sp)
-;   sd s8,40(sp)
-;   sd s9,48(sp)
-;   sd s10,56(sp)
-;   sd s11,64(sp)
-;   sd t0,72(sp)
-;   sd t1,80(sp)
-;   sd t2,88(sp)
-;   sd t3,96(sp)
-;   sd t4,104(sp)
-;   sd s1,112(sp)
-;   sd s2,120(sp)
+;   sd s11,0(sp)
+;   sd t3,8(sp)
+;   sd t4,16(sp)
+;   sd t0,24(sp)
+;   sd t1,32(sp)
+;   sd t2,40(sp)
+;   sd s1,48(sp)
+;   sd s2,56(sp)
+;   sd s3,64(sp)
+;   sd s4,72(sp)
+;   sd s5,80(sp)
+;   sd s6,88(sp)
+;   sd s7,96(sp)
+;   sd s8,104(sp)
+;   sd s9,112(sp)
+;   sd s10,120(sp)
 ;   sd a0,128(sp)
 ;   sd a1,136(sp)
-;   load_ext_name_far s3,%tail_callee_stack_args+0
+;   load_ext_name_far t0,%tail_callee_stack_args+0
 ;   ld a0,8(slot)
 ;   ld a1,0(slot)
-;   callind s3
+;   callind t0
 ;   ld s1,248(sp)
 ;   ld s2,240(sp)
 ;   ld s3,232(sp)
@@ -184,50 +184,50 @@ block0:
 ;   addi a5, zero, 0x23
 ;   addi a6, zero, 0x28
 ;   addi a7, zero, 0x2d
-;   addi s3, zero, 0x32
-;   addi s4, zero, 0x37
-;   addi s5, zero, 0x3c
-;   addi s6, zero, 0x41
-;   addi s7, zero, 0x46
-;   addi s8, zero, 0x4b
-;   addi s9, zero, 0x50
-;   addi s10, zero, 0x55
-;   addi s11, zero, 0x5a
-;   addi t0, zero, 0x5f
-;   addi t1, zero, 0x64
-;   addi t2, zero, 0x69
-;   addi t3, zero, 0x6e
-;   addi t4, zero, 0x73
-;   addi s1, zero, 0x78
-;   addi s2, zero, 0x7d
+;   addi s11, zero, 0x32
+;   addi t3, zero, 0x37
+;   addi t4, zero, 0x3c
+;   addi t0, zero, 0x41
+;   addi t1, zero, 0x46
+;   addi t2, zero, 0x4b
+;   addi s1, zero, 0x50
+;   addi s2, zero, 0x55
+;   addi s3, zero, 0x5a
+;   addi s4, zero, 0x5f
+;   addi s5, zero, 0x64
+;   addi s6, zero, 0x69
+;   addi s7, zero, 0x6e
+;   addi s8, zero, 0x73
+;   addi s9, zero, 0x78
+;   addi s10, zero, 0x7d
 ;   addi a0, zero, 0x82
 ;   addi a1, zero, 0x87
-;   sd s3, 0(sp)
-;   sd s4, 8(sp)
-;   sd s5, 0x10(sp)
-;   sd s6, 0x18(sp)
-;   sd s7, 0x20(sp)
-;   sd s8, 0x28(sp)
-;   sd s9, 0x30(sp)
-;   sd s10, 0x38(sp)
-;   sd s11, 0x40(sp)
-;   sd t0, 0x48(sp)
-;   sd t1, 0x50(sp)
-;   sd t2, 0x58(sp)
-;   sd t3, 0x60(sp)
-;   sd t4, 0x68(sp)
-;   sd s1, 0x70(sp)
-;   sd s2, 0x78(sp)
+;   sd s11, 0(sp)
+;   sd t3, 8(sp)
+;   sd t4, 0x10(sp)
+;   sd t0, 0x18(sp)
+;   sd t1, 0x20(sp)
+;   sd t2, 0x28(sp)
+;   sd s1, 0x30(sp)
+;   sd s2, 0x38(sp)
+;   sd s3, 0x40(sp)
+;   sd s4, 0x48(sp)
+;   sd s5, 0x50(sp)
+;   sd s6, 0x58(sp)
+;   sd s7, 0x60(sp)
+;   sd s8, 0x68(sp)
+;   sd s9, 0x70(sp)
+;   sd s10, 0x78(sp)
 ;   sd a0, 0x80(sp)
 ;   sd a1, 0x88(sp)
-;   auipc s3, 0
-;   ld s3, 0xc(s3)
+;   auipc t0, 0
+;   ld t0, 0xc(t0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld a0, 0x98(sp)
 ;   ld a1, 0x90(sp)
-;   jalr s3
+;   jalr t0
 ;   addi sp, sp, -0x90
 ;   ld s1, 0xf8(sp)
 ;   ld s2, 0xf0(sp)
@@ -301,56 +301,56 @@ block0:
 ;   sd a1,16(slot)
 ;   li a1,15
 ;   sd a1,8(slot)
-;   li a4,20
-;   li a5,25
-;   li a2,30
-;   li s3,35
-;   li s4,40
-;   li s5,45
-;   li s6,50
-;   li s7,55
-;   li s8,60
-;   li s9,65
-;   li s10,70
-;   li s11,75
-;   li t0,80
-;   li t1,85
-;   li t2,90
-;   li a6,95
-;   li a7,100
-;   li t3,105
-;   li t4,110
-;   li s1,115
-;   li s2,120
-;   li a3,125
-;   sd a3,0(slot)
+;   li a3,20
+;   li a4,25
+;   li a5,30
+;   li s11,35
+;   li t3,40
+;   li t4,45
+;   li t0,50
+;   li t1,55
+;   li t2,60
+;   li s1,65
+;   li a6,70
+;   li a7,75
+;   li s2,80
+;   li s3,85
+;   li s4,90
+;   li s5,95
+;   li s6,100
+;   li s7,105
+;   li s8,110
+;   li s9,115
+;   li s10,120
+;   li a2,125
 ;   li a1,130
-;   li a3,135
-;   sd a4,0(a0)
-;   sd a5,8(a0)
-;   sd a2,16(a0)
-;   sd s3,24(a0)
-;   sd s4,32(a0)
-;   sd s5,40(a0)
-;   sd s6,48(a0)
-;   sd s7,56(a0)
-;   sd s8,64(a0)
-;   sd s9,72(a0)
-;   sd s10,80(a0)
-;   sd s11,88(a0)
-;   sd t0,96(a0)
-;   sd t1,104(a0)
-;   sd t2,112(a0)
-;   sd a6,120(a0)
-;   sd a7,128(a0)
-;   sd t3,136(a0)
-;   sd t4,144(a0)
-;   sd s1,152(a0)
-;   sd s2,160(a0)
-;   ld a4,0(slot)
-;   sd a4,168(a0)
-;   sd a1,176(a0)
-;   sd a3,184(a0)
+;   sd a1,0(slot)
+;   li a1,135
+;   sd a3,0(a0)
+;   sd a4,8(a0)
+;   sd a5,16(a0)
+;   sd s11,24(a0)
+;   sd t3,32(a0)
+;   sd t4,40(a0)
+;   sd t0,48(a0)
+;   sd t1,56(a0)
+;   sd t2,64(a0)
+;   sd s1,72(a0)
+;   sd a6,80(a0)
+;   sd a7,88(a0)
+;   sd s2,96(a0)
+;   sd s3,104(a0)
+;   sd s4,112(a0)
+;   sd s5,120(a0)
+;   sd s6,128(a0)
+;   sd s7,136(a0)
+;   sd s8,144(a0)
+;   sd s9,152(a0)
+;   sd s10,160(a0)
+;   sd a2,168(a0)
+;   ld a2,0(slot)
+;   sd a2,176(a0)
+;   sd a1,184(a0)
 ;   ld a0,16(slot)
 ;   ld a1,8(slot)
 ;   ld s1,120(sp)
@@ -393,56 +393,56 @@ block0:
 ;   sd a1, 0x10(sp)
 ;   addi a1, zero, 0xf
 ;   sd a1, 8(sp)
-;   addi a4, zero, 0x14
-;   addi a5, zero, 0x19
-;   addi a2, zero, 0x1e
-;   addi s3, zero, 0x23
-;   addi s4, zero, 0x28
-;   addi s5, zero, 0x2d
-;   addi s6, zero, 0x32
-;   addi s7, zero, 0x37
-;   addi s8, zero, 0x3c
-;   addi s9, zero, 0x41
-;   addi s10, zero, 0x46
-;   addi s11, zero, 0x4b
-;   addi t0, zero, 0x50
-;   addi t1, zero, 0x55
-;   addi t2, zero, 0x5a
-;   addi a6, zero, 0x5f
-;   addi a7, zero, 0x64
-;   addi t3, zero, 0x69
-;   addi t4, zero, 0x6e
-;   addi s1, zero, 0x73
-;   addi s2, zero, 0x78
-;   addi a3, zero, 0x7d
-;   sd a3, 0(sp)
+;   addi a3, zero, 0x14
+;   addi a4, zero, 0x19
+;   addi a5, zero, 0x1e
+;   addi s11, zero, 0x23
+;   addi t3, zero, 0x28
+;   addi t4, zero, 0x2d
+;   addi t0, zero, 0x32
+;   addi t1, zero, 0x37
+;   addi t2, zero, 0x3c
+;   addi s1, zero, 0x41
+;   addi a6, zero, 0x46
+;   addi a7, zero, 0x4b
+;   addi s2, zero, 0x50
+;   addi s3, zero, 0x55
+;   addi s4, zero, 0x5a
+;   addi s5, zero, 0x5f
+;   addi s6, zero, 0x64
+;   addi s7, zero, 0x69
+;   addi s8, zero, 0x6e
+;   addi s9, zero, 0x73
+;   addi s10, zero, 0x78
+;   addi a2, zero, 0x7d
 ;   addi a1, zero, 0x82
-;   addi a3, zero, 0x87
-;   sd a4, 0(a0)
-;   sd a5, 8(a0)
-;   sd a2, 0x10(a0)
-;   sd s3, 0x18(a0)
-;   sd s4, 0x20(a0)
-;   sd s5, 0x28(a0)
-;   sd s6, 0x30(a0)
-;   sd s7, 0x38(a0)
-;   sd s8, 0x40(a0)
-;   sd s9, 0x48(a0)
-;   sd s10, 0x50(a0)
-;   sd s11, 0x58(a0)
-;   sd t0, 0x60(a0)
-;   sd t1, 0x68(a0)
-;   sd t2, 0x70(a0)
-;   sd a6, 0x78(a0)
-;   sd a7, 0x80(a0)
-;   sd t3, 0x88(a0)
-;   sd t4, 0x90(a0)
-;   sd s1, 0x98(a0)
-;   sd s2, 0xa0(a0)
-;   ld a4, 0(sp)
-;   sd a4, 0xa8(a0)
-;   sd a1, 0xb0(a0)
-;   sd a3, 0xb8(a0)
+;   sd a1, 0(sp)
+;   addi a1, zero, 0x87
+;   sd a3, 0(a0)
+;   sd a4, 8(a0)
+;   sd a5, 0x10(a0)
+;   sd s11, 0x18(a0)
+;   sd t3, 0x20(a0)
+;   sd t4, 0x28(a0)
+;   sd t0, 0x30(a0)
+;   sd t1, 0x38(a0)
+;   sd t2, 0x40(a0)
+;   sd s1, 0x48(a0)
+;   sd a6, 0x50(a0)
+;   sd a7, 0x58(a0)
+;   sd s2, 0x60(a0)
+;   sd s3, 0x68(a0)
+;   sd s4, 0x70(a0)
+;   sd s5, 0x78(a0)
+;   sd s6, 0x80(a0)
+;   sd s7, 0x88(a0)
+;   sd s8, 0x90(a0)
+;   sd s9, 0x98(a0)
+;   sd s10, 0xa0(a0)
+;   sd a2, 0xa8(a0)
+;   ld a2, 0(sp)
+;   sd a2, 0xb0(a0)
+;   sd a1, 0xb8(a0)
 ;   ld a0, 0x10(sp)
 ;   ld a1, 8(sp)
 ;   ld s1, 0x78(sp)
@@ -489,8 +489,8 @@ block0:
 ;   sd s11,312(sp)
 ; block0:
 ;   load_addr a0,0(sp)
-;   load_ext_name_far a4,%tail_callee_stack_rets+0
-;   callind a4
+;   load_ext_name_far a1,%tail_callee_stack_rets+0
+;   callind a1
 ;   ld a0,96(slot)
 ;   ld s1,392(sp)
 ;   ld s2,384(sp)
@@ -529,12 +529,12 @@ block0:
 ;   sd s11, 0x138(sp)
 ; block1: ; offset 0x40
 ;   mv a0, sp
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a4
+;   jalr a1
 ;   ld a2, 0(sp)
 ;   sd a2, 0xc0(sp)
 ;   ld a2, 8(sp)
@@ -559,17 +559,17 @@ block0:
 ;   sd a2, 0x110(sp)
 ;   ld a2, 0x58(sp)
 ;   sd a2, 0x118(sp)
-;   ld s8, 0x60(sp)
-;   ld s9, 0x68(sp)
+;   ld s1, 0x60(sp)
+;   ld s11, 0x68(sp)
 ;   ld s10, 0x70(sp)
-;   ld s11, 0x78(sp)
-;   ld s7, 0x80(sp)
-;   ld s6, 0x88(sp)
-;   ld s5, 0x90(sp)
-;   ld s4, 0x98(sp)
-;   ld s3, 0xa0(sp)
-;   ld s2, 0xa8(sp)
-;   ld s1, 0xb0(sp)
+;   ld s9, 0x78(sp)
+;   ld s2, 0x80(sp)
+;   ld s3, 0x88(sp)
+;   ld s4, 0x90(sp)
+;   ld s5, 0x98(sp)
+;   ld s6, 0xa0(sp)
+;   ld s7, 0xa8(sp)
+;   ld s8, 0xb0(sp)
 ;   ld a2, 0xb8(sp)
 ;   sd a2, 0x120(sp)
 ;   ld a0, 0x120(sp)
@@ -619,48 +619,48 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd a1,0(slot)
 ;   sd a2,8(slot)
 ;   sd a7,16(slot)
-;   ld s3,-160(incoming_arg)
-;   ld s5,-152(incoming_arg)
-;   ld s7,-144(incoming_arg)
-;   ld s9,-136(incoming_arg)
-;   ld s11,-128(incoming_arg)
-;   ld t1,-120(incoming_arg)
-;   ld t3,-112(incoming_arg)
-;   ld a7,-104(incoming_arg)
-;   ld t4,-96(incoming_arg)
-;   ld s2,-88(incoming_arg)
-;   ld s4,-80(incoming_arg)
-;   ld s6,-72(incoming_arg)
-;   ld s8,-64(incoming_arg)
-;   ld s10,-56(incoming_arg)
-;   ld t0,-48(incoming_arg)
-;   ld t2,-40(incoming_arg)
-;   ld s1,-32(incoming_arg)
+;   ld s9,-160(incoming_arg)
+;   ld s7,-152(incoming_arg)
+;   ld s5,-144(incoming_arg)
+;   ld s3,-136(incoming_arg)
+;   ld a7,-128(incoming_arg)
+;   ld s2,-120(incoming_arg)
+;   ld s4,-112(incoming_arg)
+;   ld s6,-104(incoming_arg)
+;   ld s8,-96(incoming_arg)
+;   ld s10,-88(incoming_arg)
+;   ld t3,-80(incoming_arg)
+;   ld s11,-72(incoming_arg)
+;   ld s1,-64(incoming_arg)
+;   ld t2,-56(incoming_arg)
+;   ld t1,-48(incoming_arg)
+;   ld t0,-40(incoming_arg)
+;   ld t4,-32(incoming_arg)
 ;   ld a1,-24(incoming_arg)
 ;   ld a2,-16(incoming_arg)
 ;   sd a3,0(a0)
 ;   sd a4,8(a0)
 ;   sd a5,16(a0)
 ;   sd a6,24(a0)
-;   ld a5,16(slot)
-;   sd a5,32(a0)
-;   sd s3,40(a0)
-;   sd s5,48(a0)
-;   sd s7,56(a0)
-;   sd s9,64(a0)
-;   sd s11,72(a0)
-;   sd t1,80(a0)
-;   sd t3,88(a0)
-;   sd a7,96(a0)
-;   sd t4,104(a0)
-;   sd s2,112(a0)
-;   sd s4,120(a0)
-;   sd s6,128(a0)
-;   sd s8,136(a0)
-;   sd s10,144(a0)
-;   sd t0,152(a0)
-;   sd t2,160(a0)
-;   sd s1,168(a0)
+;   ld a3,16(slot)
+;   sd a3,32(a0)
+;   sd s9,40(a0)
+;   sd s7,48(a0)
+;   sd s5,56(a0)
+;   sd s3,64(a0)
+;   sd a7,72(a0)
+;   sd s2,80(a0)
+;   sd s4,88(a0)
+;   sd s6,96(a0)
+;   sd s8,104(a0)
+;   sd s10,112(a0)
+;   sd t3,120(a0)
+;   sd s11,128(a0)
+;   sd s1,136(a0)
+;   sd t2,144(a0)
+;   sd t1,152(a0)
+;   sd t0,160(a0)
+;   sd t4,168(a0)
 ;   sd a1,176(a0)
 ;   sd a2,184(a0)
 ;   ld a0,0(slot)
@@ -705,48 +705,48 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd a1, 0(sp)
 ;   sd a2, 8(sp)
 ;   sd a7, 0x10(sp)
-;   ld s3, 0x90(sp)
-;   ld s5, 0x98(sp)
-;   ld s7, 0xa0(sp)
-;   ld s9, 0xa8(sp)
-;   ld s11, 0xb0(sp)
-;   ld t1, 0xb8(sp)
-;   ld t3, 0xc0(sp)
-;   ld a7, 0xc8(sp)
-;   ld t4, 0xd0(sp)
-;   ld s2, 0xd8(sp)
-;   ld s4, 0xe0(sp)
-;   ld s6, 0xe8(sp)
-;   ld s8, 0xf0(sp)
-;   ld s10, 0xf8(sp)
-;   ld t0, 0x100(sp)
-;   ld t2, 0x108(sp)
-;   ld s1, 0x110(sp)
+;   ld s9, 0x90(sp)
+;   ld s7, 0x98(sp)
+;   ld s5, 0xa0(sp)
+;   ld s3, 0xa8(sp)
+;   ld a7, 0xb0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s4, 0xc0(sp)
+;   ld s6, 0xc8(sp)
+;   ld s8, 0xd0(sp)
+;   ld s10, 0xd8(sp)
+;   ld t3, 0xe0(sp)
+;   ld s11, 0xe8(sp)
+;   ld s1, 0xf0(sp)
+;   ld t2, 0xf8(sp)
+;   ld t1, 0x100(sp)
+;   ld t0, 0x108(sp)
+;   ld t4, 0x110(sp)
 ;   ld a1, 0x118(sp)
 ;   ld a2, 0x120(sp)
 ;   sd a3, 0(a0)
 ;   sd a4, 8(a0)
 ;   sd a5, 0x10(a0)
 ;   sd a6, 0x18(a0)
-;   ld a5, 0x10(sp)
-;   sd a5, 0x20(a0)
-;   sd s3, 0x28(a0)
-;   sd s5, 0x30(a0)
-;   sd s7, 0x38(a0)
-;   sd s9, 0x40(a0)
-;   sd s11, 0x48(a0)
-;   sd t1, 0x50(a0)
-;   sd t3, 0x58(a0)
-;   sd a7, 0x60(a0)
-;   sd t4, 0x68(a0)
-;   sd s2, 0x70(a0)
-;   sd s4, 0x78(a0)
-;   sd s6, 0x80(a0)
-;   sd s8, 0x88(a0)
-;   sd s10, 0x90(a0)
-;   sd t0, 0x98(a0)
-;   sd t2, 0xa0(a0)
-;   sd s1, 0xa8(a0)
+;   ld a3, 0x10(sp)
+;   sd a3, 0x20(a0)
+;   sd s9, 0x28(a0)
+;   sd s7, 0x30(a0)
+;   sd s5, 0x38(a0)
+;   sd s3, 0x40(a0)
+;   sd a7, 0x48(a0)
+;   sd s2, 0x50(a0)
+;   sd s4, 0x58(a0)
+;   sd s6, 0x60(a0)
+;   sd s8, 0x68(a0)
+;   sd s10, 0x70(a0)
+;   sd t3, 0x78(a0)
+;   sd s11, 0x80(a0)
+;   sd s1, 0x88(a0)
+;   sd t2, 0x90(a0)
+;   sd t1, 0x98(a0)
+;   sd t0, 0xa0(a0)
+;   sd t4, 0xa8(a0)
 ;   sd a1, 0xb0(a0)
 ;   sd a2, 0xb8(a0)
 ;   ld a0, 0(sp)
@@ -831,48 +831,48 @@ block0:
 ;   li a6,35
 ;   li a7,40
 ;   li a0,45
-;   li s11,50
-;   li t0,55
-;   li t1,60
-;   li t2,65
-;   li t3,70
-;   li t4,75
-;   li s1,80
-;   li s2,85
-;   li s3,90
-;   li s4,95
-;   li s5,100
-;   li s6,105
-;   li s7,110
-;   li s8,115
-;   li s9,120
-;   li s10,125
+;   li t0,50
+;   li t1,55
+;   li t2,60
+;   li s1,65
+;   li s2,70
+;   li s3,75
+;   li s4,80
+;   li s5,85
+;   li s6,90
+;   li s7,95
+;   li s8,100
+;   li s9,105
+;   li s10,110
+;   li s11,115
+;   li t3,120
+;   li t4,125
 ;   li a1,130
 ;   li a2,135
 ;   sd a0,0(sp)
-;   sd s11,8(sp)
-;   sd t0,16(sp)
-;   sd t1,24(sp)
-;   sd t2,32(sp)
-;   sd t3,40(sp)
-;   sd t4,48(sp)
-;   sd s1,56(sp)
-;   sd s2,64(sp)
-;   sd s3,72(sp)
-;   sd s4,80(sp)
-;   sd s5,88(sp)
-;   sd s6,96(sp)
-;   sd s7,104(sp)
-;   sd s8,112(sp)
-;   sd s9,120(sp)
-;   sd s10,128(sp)
+;   sd t0,8(sp)
+;   sd t1,16(sp)
+;   sd t2,24(sp)
+;   sd s1,32(sp)
+;   sd s2,40(sp)
+;   sd s3,48(sp)
+;   sd s4,56(sp)
+;   sd s5,64(sp)
+;   sd s6,72(sp)
+;   sd s7,80(sp)
+;   sd s8,88(sp)
+;   sd s9,96(sp)
+;   sd s10,104(sp)
+;   sd s11,112(sp)
+;   sd t3,120(sp)
+;   sd t4,128(sp)
 ;   sd a1,136(sp)
 ;   sd a2,144(sp)
 ;   load_addr a0,160(sp)
-;   load_ext_name_far t1,%tail_callee_stack_args_and_rets+0
+;   load_ext_name_far s2,%tail_callee_stack_args_and_rets+0
 ;   ld a1,0(slot)
 ;   ld a2,96(slot)
-;   callind t1
+;   callind s2
 ;   ld a0,96(slot)
 ;   ld s1,552(sp)
 ;   ld s2,544(sp)
@@ -920,52 +920,52 @@ block0:
 ;   addi a6, zero, 0x23
 ;   addi a7, zero, 0x28
 ;   addi a0, zero, 0x2d
-;   addi s11, zero, 0x32
-;   addi t0, zero, 0x37
-;   addi t1, zero, 0x3c
-;   addi t2, zero, 0x41
-;   addi t3, zero, 0x46
-;   addi t4, zero, 0x4b
-;   addi s1, zero, 0x50
-;   addi s2, zero, 0x55
-;   addi s3, zero, 0x5a
-;   addi s4, zero, 0x5f
-;   addi s5, zero, 0x64
-;   addi s6, zero, 0x69
-;   addi s7, zero, 0x6e
-;   addi s8, zero, 0x73
-;   addi s9, zero, 0x78
-;   addi s10, zero, 0x7d
+;   addi t0, zero, 0x32
+;   addi t1, zero, 0x37
+;   addi t2, zero, 0x3c
+;   addi s1, zero, 0x41
+;   addi s2, zero, 0x46
+;   addi s3, zero, 0x4b
+;   addi s4, zero, 0x50
+;   addi s5, zero, 0x55
+;   addi s6, zero, 0x5a
+;   addi s7, zero, 0x5f
+;   addi s8, zero, 0x64
+;   addi s9, zero, 0x69
+;   addi s10, zero, 0x6e
+;   addi s11, zero, 0x73
+;   addi t3, zero, 0x78
+;   addi t4, zero, 0x7d
 ;   addi a1, zero, 0x82
 ;   addi a2, zero, 0x87
 ;   sd a0, 0(sp)
-;   sd s11, 8(sp)
-;   sd t0, 0x10(sp)
-;   sd t1, 0x18(sp)
-;   sd t2, 0x20(sp)
-;   sd t3, 0x28(sp)
-;   sd t4, 0x30(sp)
-;   sd s1, 0x38(sp)
-;   sd s2, 0x40(sp)
-;   sd s3, 0x48(sp)
-;   sd s4, 0x50(sp)
-;   sd s5, 0x58(sp)
-;   sd s6, 0x60(sp)
-;   sd s7, 0x68(sp)
-;   sd s8, 0x70(sp)
-;   sd s9, 0x78(sp)
-;   sd s10, 0x80(sp)
+;   sd t0, 8(sp)
+;   sd t1, 0x10(sp)
+;   sd t2, 0x18(sp)
+;   sd s1, 0x20(sp)
+;   sd s2, 0x28(sp)
+;   sd s3, 0x30(sp)
+;   sd s4, 0x38(sp)
+;   sd s5, 0x40(sp)
+;   sd s6, 0x48(sp)
+;   sd s7, 0x50(sp)
+;   sd s8, 0x58(sp)
+;   sd s9, 0x60(sp)
+;   sd s10, 0x68(sp)
+;   sd s11, 0x70(sp)
+;   sd t3, 0x78(sp)
+;   sd t4, 0x80(sp)
 ;   sd a1, 0x88(sp)
 ;   sd a2, 0x90(sp)
 ;   addi a0, sp, 0xa0
-;   auipc t1, 0
-;   ld t1, 0xc(t1)
+;   auipc s2, 0
+;   ld s2, 0xc(s2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld a1, 0x160(sp)
 ;   ld a2, 0x1c0(sp)
-;   jalr t1
+;   jalr s2
 ;   addi sp, sp, -0xa0
 ;   ld a2, 0xa0(sp)
 ;   sd a2, 0x160(sp)
@@ -991,17 +991,17 @@ block0:
 ;   sd a2, 0x1b0(sp)
 ;   ld a2, 0xf8(sp)
 ;   sd a2, 0x1b8(sp)
-;   ld s8, 0x100(sp)
-;   ld s9, 0x108(sp)
+;   ld s1, 0x100(sp)
+;   ld s11, 0x108(sp)
 ;   ld s10, 0x110(sp)
-;   ld s11, 0x118(sp)
-;   ld s7, 0x120(sp)
-;   ld s6, 0x128(sp)
-;   ld s5, 0x130(sp)
-;   ld s4, 0x138(sp)
-;   ld s3, 0x140(sp)
-;   ld s2, 0x148(sp)
-;   ld s1, 0x150(sp)
+;   ld s9, 0x118(sp)
+;   ld s2, 0x120(sp)
+;   ld s3, 0x128(sp)
+;   ld s4, 0x130(sp)
+;   ld s5, 0x138(sp)
+;   ld s6, 0x140(sp)
+;   ld s7, 0x148(sp)
+;   ld s8, 0x150(sp)
 ;   ld a2, 0x158(sp)
 ;   sd a2, 0x1c0(sp)
 ;   ld a0, 0x1c0(sp)

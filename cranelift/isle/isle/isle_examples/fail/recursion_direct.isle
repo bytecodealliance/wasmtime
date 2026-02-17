@@ -1,0 +1,5 @@
+; Expected error: term A that is directly recursive (calls itself), but is not
+; permitted to do so with the `rec` attribute.
+
+(decl A (bool) bool)
+(rule (A x) (A x))

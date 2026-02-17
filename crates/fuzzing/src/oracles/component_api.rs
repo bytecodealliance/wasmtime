@@ -27,6 +27,9 @@ const MIN_LIST_LENGTH: u32 = 0;
 /// Maximum length of an arbitrary list value generated for a test case
 const MAX_LIST_LENGTH: u32 = 10;
 
+/// Maximum number of invocations of one fuzz case.
+const MAX_ITERS: usize = 1_000;
+
 /// Generate an arbitrary instance of the specified type.
 fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::Result<Val> {
     use component::Type;
@@ -158,8 +161,11 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
         set_min(&mut p.total_component_instances, 5);
         set_min(&mut p.total_core_instances, 5);
         set_min(&mut p.total_memories, 2);
+        set_min(&mut p.total_stacks, 4);
         set_min(&mut p.max_memories_per_component, 2);
         set_min(&mut p.max_memories_per_module, 2);
+        set_min(&mut p.component_instance_size, 64 << 10);
+        set_min(&mut p.core_instance_size, 64 << 10);
         p.memory_protection_keys = Enabled::No;
         p.max_memory_size = 10 << 20; // 10 MiB
     }
@@ -220,7 +226,7 @@ where
     fn host_function<P, R>(
         cx: StoreContextMut<'_, Box<dyn Any + Send>>,
         params: P,
-    ) -> anyhow::Result<R>
+    ) -> wasmtime::Result<R>
     where
         P: Debug + PartialEq + 'static,
         R: Debug + Clone + 'static,
@@ -260,7 +266,8 @@ where
             .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
             .unwrap();
 
-        while input.arbitrary()? {
+        let mut iters = 0..MAX_ITERS;
+        while iters.next().is_some() && input.arbitrary()? {
             let params = input.arbitrary::<P>()?;
             let result = input.arbitrary::<R>()?;
             *store.data_mut() = Box::new((params.clone(), result.clone()));
@@ -271,9 +278,7 @@ where
                     .await
                     .unwrap()
             } else {
-                let result = func.call_async(&mut store, params).await.unwrap();
-                func.post_return_async(&mut store).await.unwrap();
-                result
+                func.call_async(&mut store, params).await.unwrap()
             };
             log::trace!("got result {actual:?}");
             assert_eq!(actual, result);
@@ -349,7 +354,8 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
         let ty = func.ty(&store);
 
-        while input.arbitrary()? {
+        let mut iters = 0..MAX_ITERS;
+        while iters.next().is_some() && input.arbitrary()? {
             let params = ty
                 .params()
                 .map(|(_, ty)| arbitrary_val(&ty, input))
@@ -374,7 +380,6 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
                 func.call_async(&mut store, &params, &mut actual)
                     .await
                     .unwrap();
-                func.post_return_async(&mut store).await.unwrap();
             }
             log::trace!("received results {actual:?}");
             assert_eq!(actual, results);

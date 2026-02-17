@@ -203,10 +203,10 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block0:
 ;   imull $0x2a, %edi, %eax
-;   movl $0x7, %r11d
+;   movl $0x7, %r8d
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   divl %r11d ;; implicit: %eax, %edx, trap=254
+;   divl %r8d ;; implicit: %eax, %edx, trap=254
 ;   andl $0x3, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -218,10 +218,11 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   imull $0x2a, %edi, %eax
-;   movl $7, %r11d
+;   movl $7, %r8d
 ;   xorq %rdx, %rdx
-;   divl %r11d ; trap: int_divz
+;   divl %r8d ; trap: int_divz
 ;   andl $3, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+

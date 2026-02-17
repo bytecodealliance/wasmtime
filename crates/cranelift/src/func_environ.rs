@@ -11,10 +11,12 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
-use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
+use cranelift_codegen::ir::{
+    self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
+};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::ir::{Block, types::*};
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
@@ -22,16 +24,16 @@ use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::{SmallVec, smallvec};
 use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
+use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets,
-    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmValType,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
+    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
-use wasmtime_math::f64_cvt_to_int_bounds;
 
 #[derive(Debug)]
 pub(crate) enum Extension {
@@ -45,6 +47,7 @@ pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
     builtins: [Option<ir::FuncRef>; BuiltinFunctionIndex::len() as usize],
+    breakpoint_trampoline: Option<ir::FuncRef>,
 }
 
 impl BuiltinFunctions {
@@ -52,6 +55,7 @@ impl BuiltinFunctions {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::len() as usize],
+            breakpoint_trampoline: None,
         }
     }
 
@@ -70,9 +74,31 @@ impl BuiltinFunctions {
             name,
             signature,
             colocated: true,
+            patchable: false,
         });
         *cache = Some(f);
         f
+    }
+
+    pub(crate) fn patchable_breakpoint(&mut self, func: &mut Function) -> ir::FuncRef {
+        *self.breakpoint_trampoline.get_or_insert_with(|| {
+            let mut signature = ir::Signature::new(CallConv::PreserveAll);
+            signature
+                .params
+                .push(ir::AbiParam::new(self.types.pointer_type));
+            let signature = func.import_signature(signature);
+            let key = FuncKey::PatchableToBuiltinTrampoline(BuiltinFunctionIndex::breakpoint());
+            let (namespace, index) = key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
+            func.import_function(ir::ExtFuncData {
+                name,
+                signature,
+                colocated: true,
+                patchable: true,
+            })
+        })
     }
 }
 
@@ -85,6 +111,7 @@ macro_rules! declare_function_signatures {
     )*) => {
         $(impl BuiltinFunctions {
             $( #[$attr] )*
+            #[allow(dead_code, reason = "debug breakpoint libcall not used in host ABI, only patchable ABI")]
             pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
                 self.load_builtin(func, BuiltinFunctionIndex::$name())
             }
@@ -1214,6 +1241,26 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    fn memflags_for_debug_slot_value_wasm_ty(&self, ty: WasmValType) -> MemFlags {
+        // Store vectors in little-endian format: this is
+        // universally supported, while native or
+        // big-endian formats may not be in all cases
+        // (e.g. Pulley on s390x).
+        let mut flags = MemFlags::trusted();
+        if ty == WasmValType::V128 {
+            flags.set_endianness(Endianness::Little);
+        }
+        flags
+    }
+
+    fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlags {
+        let mut flags = MemFlags::trusted();
+        if ty.is_vector() {
+            flags.set_endianness(Endianness::Little);
+        }
+        flags
+    }
+
     /// Update the state slot layout with a new layout given a local.
     pub(crate) fn add_state_slot_local(
         &mut self,
@@ -1224,7 +1271,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         if let Some((slot, b)) = &mut self.state_slot {
             let offset = b.add_local(FrameValType::from(ty));
             if let Some(init) = init {
-                builder.ins().stack_store(init, *slot, offset.offset());
+                let slot = *slot;
+                let address = builder
+                    .ins()
+                    .stack_addr(self.pointer_type(), slot, offset.offset());
+                builder.ins().store(
+                    self.memflags_for_debug_slot_value_wasm_ty(ty),
+                    init,
+                    address,
+                    0,
+                );
             }
         }
     }
@@ -1268,7 +1324,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     self.stacks.stack_shape.push(this_shape);
 
                     let value = self.stacks.stack[i];
-                    builder.ins().stack_store(value, slot, offset.offset());
+                    let address =
+                        builder
+                            .ins()
+                            .stack_addr(self.pointer_type(), slot, offset.offset());
+                    builder.ins().store(
+                        self.memflags_for_debug_slot_value_wasm_ty(wasm_ty),
+                        value,
+                        address,
+                        0,
+                    );
                 } else {
                     // Unreachable code with unknown type -- no
                     // flushes for this or later-pushed values.
@@ -1317,7 +1382,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) {
         if let Some((slot, b)) = &self.state_slot {
             let offset = b.local_offset(local);
-            builder.ins().stack_store(value, *slot, offset.offset());
+            let address = builder
+                .ins()
+                .stack_addr(self.pointer_type(), *slot, offset.offset());
+            let ty = builder.func.dfg.value_type(value);
+            builder.ins().store(
+                self.memflags_for_debug_slot_value_clif_ty(ty),
+                value,
+                address,
+                0,
+            );
         }
     }
 
@@ -1328,6 +1402,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // slot. This is relied upon in
             // crates/wasmtime/src/runtime/debug.rs in
             // `raw_instance()`. See also the slot layout computation in crates/environ/src/
+            //
+            // This is a native-endian store (the only mode for
+            // `stack_store`) because it is read by host code directly
+            // as a pointer.
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }
@@ -1401,6 +1479,15 @@ impl FuncEnvironment<'_> {
             return GlobalVariable::Custom;
         }
 
+        if !self.module.globals[index].mutability {
+            if let Some(index) = self.module.defined_global_index(index) {
+                let init = &self.module.global_initializers[index];
+                if let Some(value) = init.const_eval() {
+                    return GlobalVariable::Constant { value };
+                }
+            }
+        }
+
         let (gv, offset) = self.get_global_location(func, index);
         GlobalVariable::Memory {
             gv,
@@ -1452,6 +1539,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -1492,6 +1580,7 @@ impl FuncEnvironment<'_> {
             name,
             signature,
             colocated: true,
+            patchable: false,
         })
     }
 
@@ -3101,6 +3190,21 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { value } => match value {
+                GlobalConstValue::I32(x) => Ok(builder.ins().iconst(ir::types::I32, i64::from(x))),
+                GlobalConstValue::I64(x) => Ok(builder.ins().iconst(ir::types::I64, x)),
+                GlobalConstValue::F32(x) => {
+                    Ok(builder.ins().f32const(ir::immediates::Ieee32::with_bits(x)))
+                }
+                GlobalConstValue::F64(x) => {
+                    Ok(builder.ins().f64const(ir::immediates::Ieee64::with_bits(x)))
+                }
+                GlobalConstValue::V128(x) => {
+                    let data = x.to_le_bytes().to_vec().into();
+                    let handle = builder.func.dfg.constants.insert(data);
+                    Ok(builder.ins().vconst(ir::types::I8X16, handle))
+                }
+            },
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
@@ -3151,6 +3255,9 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
+            GlobalVariable::Constant { .. } => {
+                unreachable!("validation checks that Wasm cannot `global.set` constant globals")
+            }
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
                 let mut flags = ir::MemFlags::trusted();
@@ -3741,7 +3848,9 @@ impl FuncEnvironment<'_> {
             self.fuel_before_op(op, builder, self.is_reachable());
         }
         if self.is_reachable() && self.state_slot.is_some() {
-            let inst = builder.ins().sequence_point();
+            let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let inst = builder.ins().call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }
@@ -3906,22 +4015,16 @@ impl FuncEnvironment<'_> {
 
     pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
         let idx = self.module.types[index].unwrap_module_type_index();
-        self.types[self.types[idx]
-            .unwrap_cont()
-            .clone()
-            .unwrap_module_type_index()]
-        .unwrap_func()
-        .params()
+        self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
+            .unwrap_func()
+            .params()
     }
 
     pub fn continuation_returns(&self, index: TypeIndex) -> &[WasmValType] {
         let idx = self.module.types[index].unwrap_module_type_index();
-        self.types[self.types[idx]
-            .unwrap_cont()
-            .clone()
-            .unwrap_module_type_index()]
-        .unwrap_func()
-        .returns()
+        self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
+            .unwrap_func()
+            .returns()
     }
 
     pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
@@ -3938,8 +4041,8 @@ impl FuncEnvironment<'_> {
             .returns()
     }
 
-    pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
-        self.isa.has_x86_blendv_lowering(ty)
+    pub fn use_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        self.isa.has_blendv_lowering(ty)
     }
 
     pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {

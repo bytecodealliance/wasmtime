@@ -12,10 +12,10 @@ block0(v1: i32, v2: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl (%rsi), %edx
-;   cmpl %edi, %edx
+;   movl (%rsi), %esi
+;   cmpl %edi, %esi
 ;   movq %rdi, %rax
-;   cmovael %edx, %eax
+;   cmovael %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -25,10 +25,10 @@ block0(v1: i32, v2: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl (%rsi), %edx
-;   cmpl %edi, %edx
+;   movl (%rsi), %esi
+;   cmpl %edi, %esi
 ;   movq %rdi, %rax
-;   cmovael %edx, %eax
+;   cmovael %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

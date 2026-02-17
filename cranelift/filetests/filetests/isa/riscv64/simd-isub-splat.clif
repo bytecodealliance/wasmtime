@@ -17,9 +17,9 @@ block0(v0: i8x16, v1: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vx v13,v9,a1 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vx v8,v8,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -34,9 +34,9 @@ block0(v0: i8x16, v1: i8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
-;   .byte 0xd7, 0xc6, 0x95, 0x0e
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0xc4, 0x85, 0x0e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -55,9 +55,9 @@ block0(v0: i16x8, v1: i16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vx v13,v9,a1 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vx v8,v8,a1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -72,11 +72,11 @@ block0(v0: i16x8, v1: i16):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0xc6, 0x95, 0x0e
+;   .byte 0x57, 0xc4, 0x85, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -95,9 +95,9 @@ block0(v0: i32x4, v1: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vx v13,v9,a1 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vx v8,v8,a1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -112,11 +112,11 @@ block0(v0: i32x4, v1: i32):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0xc6, 0x95, 0x0e
+;   .byte 0x57, 0xc4, 0x85, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -135,9 +135,9 @@ block0(v0: i64x2, v1: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vx v13,v9,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vx v8,v8,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -152,11 +152,11 @@ block0(v0: i64x2, v1: i64):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0xc6, 0x95, 0x0e
+;   .byte 0x57, 0xc4, 0x85, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -175,9 +175,9 @@ block0(v0: i8x16, v1: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vsub.vx v13,v9,a1 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vsub.vx v8,v8,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -192,9 +192,9 @@ block0(v0: i8x16, v1: i8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
-;   .byte 0xd7, 0xc6, 0x95, 0x0a
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0xc4, 0x85, 0x0a
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -213,9 +213,9 @@ block0(v0: i16x8, v1: i16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vsub.vx v13,v9,a1 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vsub.vx v8,v8,a1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -230,11 +230,11 @@ block0(v0: i16x8, v1: i16):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0xc6, 0x95, 0x0a
+;   .byte 0x57, 0xc4, 0x85, 0x0a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -253,9 +253,9 @@ block0(v0: i32x4, v1: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vsub.vx v13,v9,a1 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vsub.vx v8,v8,a1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -270,11 +270,11 @@ block0(v0: i32x4, v1: i32):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0xc6, 0x95, 0x0a
+;   .byte 0x57, 0xc4, 0x85, 0x0a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -293,9 +293,9 @@ block0(v0: i64x2, v1: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vsub.vx v13,v9,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vsub.vx v8,v8,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -310,11 +310,11 @@ block0(v0: i64x2, v1: i64):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0xc6, 0x95, 0x0a
+;   .byte 0x57, 0xc4, 0x85, 0x0a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -334,9 +334,9 @@ block0(v0: i8x16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vadd.vi v12,v9,-5 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vi v8,v8,-5 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -351,9 +351,9 @@ block0(v0: i8x16):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
-;   .byte 0x57, 0xb6, 0x9d, 0x02
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0xb4, 0x8d, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -373,10 +373,10 @@ block0(v0: i16x8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   li a5,-16
-;   vsub.vx v13,v9,a5 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a1,-16
+;   vsub.vx v8,v8,a1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -391,12 +391,12 @@ block0(v0: i16x8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
-;   addi a5, zero, -0x10
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   addi a1, zero, -0x10
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0xc6, 0x97, 0x0a
+;   .byte 0x57, 0xc4, 0x85, 0x0a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -416,9 +416,9 @@ block0(v0: i32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vadd.vi v12,v9,-15 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vi v8,v8,-15 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -433,11 +433,11 @@ block0(v0: i32x4):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0x57, 0xb6, 0x98, 0x02
+;   .byte 0x57, 0xb4, 0x88, 0x02
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -457,9 +457,9 @@ block0(v0: i64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vadd.vi v12,v9,5 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vi v8,v8,5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -474,11 +474,11 @@ block0(v0: i64x2):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0xb6, 0x92, 0x02
+;   .byte 0x57, 0xb4, 0x82, 0x02
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -498,9 +498,9 @@ block0(v0: i8x16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vi v12,v9,5 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vi v8,v8,5 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -515,9 +515,9 @@ block0(v0: i8x16):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
-;   .byte 0x57, 0xb6, 0x92, 0x0e
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0xb4, 0x82, 0x0e
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -537,9 +537,9 @@ block0(v0: i16x8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vi v12,v9,-16 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vi v8,v8,-16 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -554,11 +554,11 @@ block0(v0: i16x8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0x57, 0x36, 0x98, 0x0e
+;   .byte 0x57, 0x34, 0x88, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -578,9 +578,9 @@ block0(v0: i32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vi v12,v9,15 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vi v8,v8,15 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -595,11 +595,11 @@ block0(v0: i32x4):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0x57, 0xb6, 0x97, 0x0e
+;   .byte 0x57, 0xb4, 0x87, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -619,9 +619,9 @@ block0(v0: i64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vrsub.vi v12,v9,-5 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vi v8,v8,-5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -636,11 +636,11 @@ block0(v0: i64x2):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0x57, 0xb6, 0x9d, 0x0e
+;   .byte 0x57, 0xb4, 0x8d, 0x0e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -661,8 +661,8 @@ block0(v0: i16x8, v1: i8):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsub.wx v13,v9,a1 #avl=8, #vtype=(e8, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsub.wx v8,v9,a1 #avl=8, #vtype=(e8, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -679,9 +679,9 @@ block0(v0: i16x8, v1: i8):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x74, 0xcc
-;   .byte 0xd7, 0xe6, 0x95, 0xde
+;   .byte 0x57, 0xe4, 0x95, 0xde
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -702,8 +702,8 @@ block0(v0: i32x4, v1: i16):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsub.wx v13,v9,a1 #avl=4, #vtype=(e16, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsub.wx v8,v9,a1 #avl=4, #vtype=(e16, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -720,9 +720,9 @@ block0(v0: i32x4, v1: i16):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0xf2, 0xcc
-;   .byte 0xd7, 0xe6, 0x95, 0xde
+;   .byte 0x57, 0xe4, 0x95, 0xde
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -743,8 +743,8 @@ block0(v0: i64x2, v1: i32):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsub.wx v13,v9,a1 #avl=2, #vtype=(e32, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsub.wx v8,v9,a1 #avl=2, #vtype=(e32, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -761,9 +761,9 @@ block0(v0: i64x2, v1: i32):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x71, 0xcd
-;   .byte 0xd7, 0xe6, 0x95, 0xde
+;   .byte 0x57, 0xe4, 0x95, 0xde
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -784,8 +784,8 @@ block0(v0: i16x8, v1: i8):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsubu.wx v13,v9,a1 #avl=8, #vtype=(e8, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsubu.wx v8,v9,a1 #avl=8, #vtype=(e8, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -802,9 +802,9 @@ block0(v0: i16x8, v1: i8):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x74, 0xcc
-;   .byte 0xd7, 0xe6, 0x95, 0xda
+;   .byte 0x57, 0xe4, 0x95, 0xda
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -825,8 +825,8 @@ block0(v0: i32x4, v1: i16):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsubu.wx v13,v9,a1 #avl=4, #vtype=(e16, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsubu.wx v8,v9,a1 #avl=4, #vtype=(e16, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -843,9 +843,9 @@ block0(v0: i32x4, v1: i16):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0xf2, 0xcc
-;   .byte 0xd7, 0xe6, 0x95, 0xda
+;   .byte 0x57, 0xe4, 0x95, 0xda
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -866,8 +866,8 @@ block0(v0: i64x2, v1: i32):
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vwsubu.wx v13,v9,a1 #avl=2, #vtype=(e32, mf2, ta, ma)
-;   vse8.v v13,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vwsubu.wx v8,v9,a1 #avl=2, #vtype=(e32, mf2, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -884,9 +884,9 @@ block0(v0: i64x2, v1: i32):
 ;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x71, 0xcd
-;   .byte 0xd7, 0xe6, 0x95, 0xda
+;   .byte 0x57, 0xe4, 0x95, 0xda
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x06, 0x05, 0x02
+;   .byte 0x27, 0x04, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

@@ -302,7 +302,7 @@ pub fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
-) -> anyhow::Result<*mut VMContRef> {
+) -> crate::Result<*mut VMContRef> {
     let instance = store.instance_mut(instance);
     let caller_vmctx = instance.vmctx();
 

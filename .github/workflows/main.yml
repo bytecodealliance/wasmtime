@@ -261,7 +261,7 @@ jobs:
     env:
       MDBOOK_VERSION: 0.4.37
       MDBOOK_LANGTABS_VERSION: 0.1.1
-      RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
+      RUSTDOCFLAGS: -Dwarnings --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v4
@@ -304,11 +304,7 @@ jobs:
           --exclude wasm-spec-interpreter \
           --exclude calculator \
           --all-features
-      env:
-        RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
-      env:
-        RUSTDOCFLAGS: --cfg=docsrs
 
     # Assemble the documentation, and always upload it as an artifact for
     # inspection on PRs and such.
@@ -366,6 +362,9 @@ jobs:
               -p wasmtime --no-default-features --features stack-switching
               -p wasmtime --no-default-features --features cranelift,stack-switching
               -p wasmtime --no-default-features --features runtime,stack-switching
+              -p wasmtime --no-default-features --features debug
+              -p wasmtime --no-default-features --features debug,gc
+              -p wasmtime --no-default-features --features runtime,cache
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
@@ -414,6 +413,8 @@ jobs:
           - name: wasmtime-wasi-http
             checks: |
               -p wasmtime-wasi-http --no-default-features
+              -p wasmtime-wasi-http --no-default-features --features p3
+              -p wasmtime-wasi-http --no-default-features --features p3 --all-targets
 
           - name: wasmtime-wasi
             checks: |
@@ -429,6 +430,7 @@ jobs:
               -p wasmtime-wizer --no-default-features --features wasmtime
               -p wasmtime-wizer --no-default-features --features wasmprinter
               -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --features rayon
               -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
@@ -505,6 +507,10 @@ jobs:
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
+    - name: Install wkg
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+        cargo binstall --no-confirm wkg@0.15.0
     - name: Re-vendor WIT
       run: ./ci/vendor-wit.sh
     - run: git diff --exit-code
@@ -548,6 +554,7 @@ jobs:
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
             cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async,debug-builtins &&
             cargo check -p cranelift-control --no-default-features &&
+            cargo check -p cranelift-assembler-x64 --lib &&
             cargo check -p pulley-interpreter --features encode,decode,disas,interp &&
             cargo check -p wasmtime-wasi-io --no-default-features
         # Use `cross` for illumos to have a C compiler/linker available.
@@ -608,11 +615,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    # Note that nightly is pinned here to insulate us from breakage that might
-    # happen upstream. This is periodically updated through a PR.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: wasmtime-ci-pinned-nightly
+        # This is pinned to match the version of Rust used on OSS-Fuzz to build
+        # Wasmtime. Do not change this `toolchain` version.
+        toolchain: wasmtime-ci-oss-fuzz-pin
 
     # Check that `pulley-interpreter` works with tail calls enabled.
     - run: cargo test -p pulley-interpreter --all-features
@@ -625,6 +632,11 @@ jobs:
       env:
         RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
 
+    # Run OOM tests with `Arc::try_new` usage enabled.
+    - run: cargo test -p wasmtime-fuzzing --test oom
+      env:
+        RUSTFLAGS: "--cfg arc_try_new"
+
     # Ensure that fuzzers still build.
     #
     # Install the OCaml packages necessary for fuzz targets that use the
@@ -633,11 +645,11 @@ jobs:
     - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
-    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
+    - run: cargo fuzz check --dev
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz check --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
@@ -875,7 +887,7 @@ jobs:
     # Install VTune, see `cli_tests::profile_with_vtune`.
     - name: Install VTune
       if: matrix.filter == 'linux-x64' && contains(matrix.bucket, 'wasmtime-cli')
-      uses: abrown/install-vtune-action@v1
+      uses: abrown/install-vtune-action@v3
 
     # Build and test all features.
     #
@@ -929,10 +941,17 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
-  # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
-  # depends on OpenSSL, which is not easily available on all platforms.
-  test_wasi_tls_nativetls:
-    name: Test wasi-tls using native-tls provider
+  # Test `wasmtime-wasi-tls-nativetls` & `wasmtime-wasi-tls-openssl` in their
+  # own job. This is because they depends on OpenSSL, which is not easily
+  # available on all platforms.
+  #
+  # The Windows base image has OpenSSL installed by default, but not in a way
+  # that is automatically discoverable by `openssl-sys`. We need to configure
+  # the OPENSSL_DIR & OPENSSL_LIB_DIR paths manually.
+  # Additionally, the GH actions Windows image does not ship with a CA cert
+  # bundle, so we use the one from cUrl.
+  test_wasi_tls:
+    name: Test wasi-tls using native-tls & openssl providers
     needs: determine
     if: needs.determine.outputs.run-full
     runs-on: ${{ matrix.os }}
@@ -944,6 +963,19 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - name: Configure OpenSSL (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        mkdir "C:\Program Files\OpenSSL\certs"
+        $sslCertFile = "C:\Program Files\OpenSSL\certs\cacert.pem"
+        $opensslDir = "C:\Program Files\OpenSSL"
+        $opensslLibDir = "C:\Program Files\OpenSSL\lib\VC\x64\MD"
+        curl.exe -o $sslCertFile https://curl.se/ca/cacert.pem
+        "SSL_CERT_FILE=$sslCertFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_DIR=$opensslDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: cargo test -p wasmtime-wasi-tls-openssl
     - run: cargo test -p wasmtime-wasi-tls-nativetls
 
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
@@ -978,9 +1010,9 @@ jobs:
     - run: |
         rustup target add wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
-        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-28/wasi-sdk-28.0-x86_64-linux.tar.gz
-        tar -xzf wasi-sdk-28.0-x86_64-linux.tar.gz
-        mv wasi-sdk-28.0-x86_64-linux wasi-sdk
+        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-30.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-30.0-x86_64-linux.tar.gz
+        mv wasi-sdk-30.0-x86_64-linux wasi-sdk
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
@@ -1142,6 +1174,8 @@ jobs:
           - crate: "wasmtime-cli"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
+          - crate: "wasmtime-internal-core"
+          - crate: "wasmtime-internal-core --all-features"
           - script: ./ci/miri-provenance-test.sh
           - script: ./ci/miri-wast.sh ./tests/spec_testsuite/table.wast
     needs: determine
@@ -1254,7 +1288,7 @@ jobs:
       - doc
       - micro_checks
       - special_tests
-      - test_wasi_tls_nativetls
+      - test_wasi_tls
       - clippy
       - monolith_checks
       - platform_checks

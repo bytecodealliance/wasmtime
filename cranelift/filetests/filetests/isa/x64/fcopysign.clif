@@ -11,8 +11,8 @@ block0(v0: f32, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl $0x80000000, %ecx
-;   movd %ecx, %xmm7
+;   movl $0x80000000, %esi
+;   movd %esi, %xmm7
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm7, %xmm0
 ;   andnps %xmm2, %xmm0
@@ -27,8 +27,8 @@ block0(v0: f32, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x80000000, %ecx
-;   movd %ecx, %xmm7
+;   movl $0x80000000, %esi
+;   movd %esi, %xmm7
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm7, %xmm0
 ;   andnps %xmm2, %xmm0
@@ -48,8 +48,8 @@ block0(v0: f64, v1: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $0x8000000000000000, %rcx
-;   movq %rcx, %xmm7
+;   movabsq $0x8000000000000000, %rsi
+;   movq %rsi, %xmm7
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm7, %xmm0
 ;   andnpd %xmm2, %xmm0
@@ -64,8 +64,8 @@ block0(v0: f64, v1: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $9223372036854775808, %rcx
-;   movq %rcx, %xmm7
+;   movabsq $9223372036854775808, %rsi
+;   movq %rsi, %xmm7
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm7, %xmm0
 ;   andnpd %xmm2, %xmm0

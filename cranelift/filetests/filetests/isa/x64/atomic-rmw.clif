@@ -446,9 +446,9 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -475,9 +475,9 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -504,9 +504,9 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -533,9 +533,9 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -662,10 +662,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   notq %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   notq %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -692,10 +692,10 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   notq %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   notq %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -722,10 +722,10 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   notq %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   notq %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -752,10 +752,10 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   andq %rsi, %rdx
-;   notq %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   andq %rsi, %r8
+;   notq %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -782,9 +782,9 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   orq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   orq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -811,9 +811,9 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   orq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   orq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -840,9 +840,9 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   orq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   orq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -869,9 +869,9 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   orq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   orq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -998,9 +998,9 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   xorq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   xorq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1027,9 +1027,9 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   xorq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   xorq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1056,9 +1056,9 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   xorq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   xorq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1085,9 +1085,9 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   xorq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   xorq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1322,10 +1322,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpq %rdx, %rsi
-;   cmovbeq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpq %r8, %rsi
+;   cmovbeq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1352,10 +1352,10 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpl %edx, %esi
-;   cmovbeq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpl %r8d, %esi
+;   cmovbeq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1382,10 +1382,10 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpw %dx, %si
-;   cmovbeq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpw %r8w, %si
+;   cmovbeq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1412,10 +1412,10 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpb %dl, %sil
-;   cmovbeq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpb %r8b, %sil
+;   cmovbeq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1442,10 +1442,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpq %rdx, %rsi
-;   cmovaeq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpq %r8, %rsi
+;   cmovaeq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1472,10 +1472,10 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpl %edx, %esi
-;   cmovaeq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpl %r8d, %esi
+;   cmovaeq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1502,10 +1502,10 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpw %dx, %si
-;   cmovaeq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpw %r8w, %si
+;   cmovaeq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1532,10 +1532,10 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpb %dl, %sil
-;   cmovaeq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpb %r8b, %sil
+;   cmovaeq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1562,10 +1562,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpq %rdx, %rsi
-;   cmovleq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpq %r8, %rsi
+;   cmovleq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1592,10 +1592,10 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpl %edx, %esi
-;   cmovleq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpl %r8d, %esi
+;   cmovleq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1622,10 +1622,10 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpw %dx, %si
-;   cmovleq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpw %r8w, %si
+;   cmovleq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1652,10 +1652,10 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpb %dl, %sil
-;   cmovleq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpb %r8b, %sil
+;   cmovleq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1682,10 +1682,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpq %rdx, %rsi
-;   cmovgeq %rsi, %rdx
-;   lock cmpxchgq %rdx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpq %r8, %rsi
+;   cmovgeq %rsi, %r8
+;   lock cmpxchgq %r8, (%rdi) ; trap: heap_oob
 ;   jne 7
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1712,10 +1712,10 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl (%rdi), %eax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpl %edx, %esi
-;   cmovgeq %rsi, %rdx
-;   lock cmpxchgl %edx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpl %r8d, %esi
+;   cmovgeq %rsi, %r8
+;   lock cmpxchgl %r8d, (%rdi) ; trap: heap_oob
 ;   jne 6
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1742,10 +1742,10 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzwq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpw %dx, %si
-;   cmovgeq %rsi, %rdx
-;   lock cmpxchgw %dx, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpw %r8w, %si
+;   cmovgeq %rsi, %r8
+;   lock cmpxchgw %r8w, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1772,10 +1772,10 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movq %rax, %rdx
-;   cmpb %dl, %sil
-;   cmovgeq %rsi, %rdx
-;   lock cmpxchgb %dl, (%rdi) ; trap: heap_oob
+;   movq %rax, %r8
+;   cmpb %r8b, %sil
+;   cmovgeq %rsi, %r8
+;   lock cmpxchgb %r8b, (%rdi) ; trap: heap_oob
 ;   jne 8
 ;   movq %rbp, %rsp
 ;   popq %rbp

@@ -4,7 +4,6 @@ use crate::{
     wasm_val_t, wasm_val_vec_t, wasmtime_error_t, wasmtime_extern_t, wasmtime_val_t,
     wasmtime_val_union,
 };
-use anyhow::{Error, Result};
 use std::any::Any;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
@@ -12,8 +11,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
 use wasmtime::{
-    AsContext, AsContextMut, Extern, Func, RootScope, StoreContext, StoreContextMut, Trap, Val,
-    ValRaw,
+    AsContext, AsContextMut, Error, Extern, Func, Result, RootScope, StoreContext, StoreContextMut,
+    Trap, Val, ValRaw,
 };
 
 #[derive(Clone)]
@@ -325,12 +324,17 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
     callback: wasmtime_func_unchecked_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> impl Fn(WasmtimeCaller<'_>, &mut [ValRaw]) -> Result<()> {
+) -> impl Fn(WasmtimeCaller<'_>, &mut [MaybeUninit<ValRaw>]) -> Result<()> {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, values| {
         let _ = &foreign; // move entire foreign into this closure
         let mut caller = wasmtime_caller_t { caller };
-        match callback(foreign.data, &mut caller, values.as_mut_ptr(), values.len()) {
+        match callback(
+            foreign.data,
+            &mut caller,
+            values.as_mut_ptr().cast(),
+            values.len(),
+        ) {
             None => Ok(()),
             Some(trap) => Err(trap.error),
         }

@@ -192,7 +192,7 @@ impl Val {
             Val::ExnRef(Some(e)) => ValType::Ref(RefType::new(false, e._ty(store)?.into())),
             Val::ContRef(_) => {
                 // TODO(#10248): Return proper continuation reference type when available
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "continuation references not yet supported in embedder API"
                 ));
             }
@@ -290,7 +290,7 @@ impl Val {
             })),
             Val::ContRef(_) => {
                 // TODO(#10248): Implement proper continuation reference to_raw conversion
-                Err(anyhow::anyhow!(
+                Err(crate::format_err!(
                     "continuation references not yet supported in to_raw conversion"
                 ))
             }

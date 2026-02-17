@@ -1,9 +1,8 @@
 use {
     super::util::{config, make_component},
-    anyhow::Result,
     component_async_tests::{
         Ctx, closed_streams,
-        util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
+        util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer, yield_times},
     },
     futures::{
         FutureExt, Sink, SinkExt, Stream, StreamExt,
@@ -16,10 +15,9 @@ use {
         pin::Pin,
         sync::{Arc, Mutex},
         task::{self, Context, Poll},
-        time::Duration,
     },
     wasmtime::{
-        Engine, Store, StoreContextMut,
+        Engine, Result, Store, StoreContextMut,
         component::{
             Destination, FutureReader, Lift, Linker, ResourceTable, Source, StreamConsumer,
             StreamProducer, StreamReader, StreamResult, VecBuffer,
@@ -120,7 +118,6 @@ pub async fn async_closed_streams() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -164,7 +161,7 @@ pub async fn async_closed_streams() -> Result<()> {
                                 input_tx.send(value).await?;
                             }
                             drop(input_tx);
-                            anyhow::Ok(())
+                            wasmtime::error::Ok(())
                         },
                         async {
                             for &value in &values {
@@ -193,7 +190,7 @@ pub async fn async_closed_streams() -> Result<()> {
             .run_concurrent(async |_| {
                 _ = input_tx.send(value);
                 assert_eq!(value, output_rx.await?);
-                anyhow::Ok(())
+                wasmtime::error::Ok(())
             })
             .await??;
     }
@@ -281,7 +278,6 @@ pub async fn async_closed_stream() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -302,15 +298,15 @@ pub async fn async_closed_stream() -> Result<()> {
 
 struct VecProducer<T> {
     source: Vec<T>,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<T> VecProducer<T> {
     fn new(source: Vec<T>, delay: bool) -> Self {
         Self {
             source,
-            sleep: if delay {
-                tokio::time::sleep(Duration::from_millis(10)).boxed()
+            maybe_yield: if delay {
+                yield_times(5).boxed()
             } else {
                 async {}.boxed()
             },
@@ -329,9 +325,9 @@ impl<D, T: Lift + Unpin + 'static> StreamProducer<D> for VecProducer<T> {
         mut destination: Destination<Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        let sleep = &mut self.as_mut().get_mut().sleep;
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = &mut self.as_mut().get_mut().maybe_yield;
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         destination.set_buffer(mem::take(&mut self.get_mut().source).into());
         Poll::Ready(Ok(StreamResult::Dropped))
@@ -340,15 +336,15 @@ impl<D, T: Lift + Unpin + 'static> StreamProducer<D> for VecProducer<T> {
 
 struct OneAtATime<T> {
     destination: Arc<Mutex<Vec<T>>>,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<T> OneAtATime<T> {
     fn new(destination: Arc<Mutex<Vec<T>>>, delay: bool) -> Self {
         Self {
             destination,
-            sleep: if delay {
-                tokio::time::sleep(Duration::from_millis(10)).boxed()
+            maybe_yield: if delay {
+                yield_times(5).boxed()
             } else {
                 async {}.boxed()
             },
@@ -366,9 +362,9 @@ impl<D, T: Lift + 'static> StreamConsumer<D> for OneAtATime<T> {
         mut source: Source<Self::Item>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        let sleep = &mut self.as_mut().get_mut().sleep;
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = &mut self.as_mut().get_mut().maybe_yield;
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         let value = &mut None;
         source.read(store, value)?;
@@ -416,7 +412,6 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -464,7 +459,7 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
                     .collect::<Vec<_>>()
             );
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await?
 }

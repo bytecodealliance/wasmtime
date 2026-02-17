@@ -11,6 +11,7 @@
 //! panicking.
 
 pub mod component_api;
+pub mod component_async;
 #[cfg(feature = "fuzz-spec-interpreter")]
 pub mod diff_spec;
 pub mod diff_wasmi;
@@ -22,10 +23,10 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
-use crate::block_on;
 use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
+use crate::{YieldN, block_on};
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
 use std::future::Future;
@@ -57,13 +58,16 @@ pub fn log_wasm(wasm: &[u8]) {
     log::debug!("wrote wasm file to `{name}`");
     let wat = format!("testcase{i}.wat");
     match wasmprinter::print_bytes(wasm) {
-        Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
+        Ok(s) => {
+            std::fs::write(&wat, s).expect("failed to write wat file");
+            log::debug!("wrote wat file to `{wat}`");
+        }
         // If wasmprinter failed remove a `*.wat` file, if any, to avoid
         // confusing a preexisting one with this wasm which failed to get
         // printed.
         Err(e) => {
             log::debug!("failed to print to wat: {e}");
-            drop(std::fs::remove_file(&wat))
+            drop(std::fs::remove_file(&wat));
         }
     }
 }
@@ -320,7 +324,7 @@ fn compile_module(
 ) -> Option<Module> {
     log_wasm(bytes);
 
-    fn is_pcc_error(e: &anyhow::Error) -> bool {
+    fn is_pcc_error(e: &wasmtime::Error) -> bool {
         // NOTE: please keep this predicate in sync with the display format of CodegenError,
         // defined in `wasmtime/cranelift/codegen/src/result.rs`
         e.to_string().to_lowercase().contains("proof-carrying-code")
@@ -399,7 +403,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
 
 fn unwrap_instance(
     store: &Store<StoreLimits>,
-    instance: anyhow::Result<Instance>,
+    instance: wasmtime::Result<Instance>,
 ) -> Option<Instance> {
     let e = match instance {
         Ok(i) => return Some(i),
@@ -459,7 +463,7 @@ pub fn differential(
     name: &str,
     args: &[DiffValue],
     result_tys: &[DiffValueType],
-) -> anyhow::Result<bool> {
+) -> wasmtime::Result<bool> {
     log::debug!("Evaluating: `{name}` with {args:?}");
     let lhs_results = match lhs.evaluate(name, args, result_tys) {
         Ok(Some(results)) => Ok(results),
@@ -709,6 +713,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     crate::init_fuzzing();
 
     let mut fuzz_config: generators::Config = u.arbitrary()?;
+    fuzz_config.module_config.shared_memory = true;
     let test: generators::WastTest = u.arbitrary()?;
 
     let test = &test.test;
@@ -820,7 +825,7 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             move |mut caller: Caller<'_, StoreLimits>, _params, results| {
                 log::info!("gc_ops: GC");
                 if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
-                    caller.gc(None);
+                    caller.gc(None)?;
                 }
 
                 let a = ExternRef::new(
@@ -925,13 +930,13 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         let func_ty = FuncType::new(
             store.engine(),
-            vec![ValType::Ref(RefType::new(false, HeapType::Any))],
+            vec![ValType::Ref(RefType::new(true, HeapType::Struct))],
             vec![],
         );
 
         let func = Func::new(&mut store, func_ty, {
             move |_caller: Caller<'_, StoreLimits>, _params, _results| {
-                log::info!("gc_ops: take_struct(<ref any>)");
+                log::info!("gc_ops: take_struct(<ref null struct>)");
                 Ok(())
             }
         });
@@ -998,7 +1003,7 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
         }
 
         // Do a final GC after running the Wasm.
-        store.gc(None);
+        store.gc(None)?;
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));
@@ -1205,23 +1210,6 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
         }
     }
 
-    /// Helper future to yield N times before resolving.
-    struct YieldN(u32);
-
-    impl Future for YieldN {
-        type Output = ();
-
-        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-            if self.0 == 0 {
-                Poll::Ready(())
-            } else {
-                self.0 -= 1;
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
-        }
-    }
-
     /// Helper future for applying a timeout to `future` up to either when `end`
     /// is the current time or `polls` polls happen.
     ///
@@ -1310,7 +1298,6 @@ mod tests {
             | WasmFeatures::SIMD
             | WasmFeatures::MULTI_MEMORY
             | WasmFeatures::RELAXED_SIMD
-            | WasmFeatures::THREADS
             | WasmFeatures::TAIL_CALL
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::MEMORY64
@@ -1340,7 +1327,7 @@ mod tests {
                 let ok =
                     Validator::new_with_features(WasmFeatures::all() ^ feature).validate_all(&wasm);
                 if ok.is_err() {
-                    anyhow::bail!("generated a module with {feature:?} but that wasn't expected");
+                    wasmtime::bail!("generated a module with {feature:?} but that wasn't expected");
                 }
             }
 

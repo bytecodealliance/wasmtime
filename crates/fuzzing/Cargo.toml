@@ -15,7 +15,7 @@ workspace = true
 wasmtime-test-util = { workspace = true, features = ['wast'] }
 
 [dependencies]
-anyhow = { workspace = true }
+backtrace = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }
 log = { workspace = true }
@@ -28,15 +28,20 @@ wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime = { workspace = true, features = ['default', 'winch'] }
+wasmtime-core = { workspace = true, features = ['backtrace'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
+wasm-compose = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = { version = "0.51.1", default-features = false, features = ["std", "simd"] }
-futures = { workspace = true }
+wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }
+futures = { workspace = true, features = ['async-await'] }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 serde_json = { workspace = true }
 serde = { workspace = true }
+test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true }
+indexmap = { workspace = true }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true
@@ -65,6 +70,8 @@ v8 = "139.0.0"
 [dev-dependencies]
 wat = { workspace = true }
 rand = { version = "0.8.0", features = ["small_rng"] }
+wasmtime-environ = { workspace = true }
+cranelift-bitset = { workspace = true }
 
 # Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
 # commands like `cargo test --workspace` or similar to not need an ocaml

@@ -52,7 +52,6 @@ pub unsafe fn slice_to_storage_mut<T>(slice: &mut [MaybeUninit<ValRaw>]) -> &mut
 }
 
 /// Same as `storage_as_slice`, but in reverse
-#[cfg(feature = "component-model-async")]
 pub unsafe fn slice_to_storage<T>(slice: &[ValRaw]) -> &T {
     assert_raw_slice_compat::<T>();
 

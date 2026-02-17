@@ -18,6 +18,7 @@
 //! backend pipeline.
 
 use crate::CodegenError;
+use crate::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
 use crate::ranges::Ranges;
@@ -29,15 +30,14 @@ use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, Operand,
     OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
-use rustc_hash::FxHashMap;
 
+use crate::HashMap;
+use crate::hash_map::Entry;
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
 use core::ops::Range;
 use cranelift_entity::{Keys, entity_impl};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
@@ -808,7 +808,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut cur_srcloc = None;
         let mut last_offset = None;
         let mut inst_offsets = vec![];
-        let mut state = I::State::new(&self.abi, std::mem::take(ctrl_plane));
+        let mut state = I::State::new(&self.abi, core::mem::take(ctrl_plane));
 
         let mut disasm = String::new();
 
@@ -1253,36 +1253,44 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 inst.index()
             };
+            let inst_to_offset = |inst_index: usize| {
+                // Skip over cold blocks.
+                for offset in &inst_offsets[inst_index..] {
+                    if *offset != NO_INST_OFFSET {
+                        return *offset;
+                    }
+                }
+                func_body_len
+            };
             let from_inst_index = prog_point_to_inst(from);
             let to_inst_index = prog_point_to_inst(to);
-            let from_offset = inst_offsets[from_inst_index];
-            let to_offset = if to_inst_index == inst_offsets.len() {
-                func_body_len
-            } else {
-                inst_offsets[to_inst_index]
-            };
+            let from_offset = inst_to_offset(from_inst_index);
+            let to_offset = inst_to_offset(to_inst_index);
 
             // Empty ranges or unavailable offsets can happen
             // due to cold blocks and branch removal (see above).
-            if from_offset == NO_INST_OFFSET
-                || to_offset == NO_INST_OFFSET
-                || from_offset == to_offset
-            {
+            if from_offset == to_offset {
                 continue;
             }
 
             let loc = if let Some(preg) = alloc.as_reg() {
                 LabelValueLoc::Reg(Reg::from(preg))
             } else {
-                let slot = alloc.as_stack().unwrap();
-                let slot_offset = self.abi.get_spillslot_offset(slot);
-                let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
-                let caller_sp_to_cfa_offset =
-                    crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
-                // NOTE: this is a negative offset because it's relative to the caller's SP
-                let cfa_to_sp_offset =
-                    -((slot_base_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
-                LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
+                #[cfg(not(feature = "unwind"))]
+                continue;
+
+                #[cfg(feature = "unwind")]
+                {
+                    let slot = alloc.as_stack().unwrap();
+                    let slot_offset = self.abi.get_spillslot_offset(slot);
+                    let slot_base_to_caller_sp_offset = self.abi.slot_base_to_caller_sp_offset();
+                    let caller_sp_to_cfa_offset =
+                        crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
+                    // NOTE: this is a negative offset because it's relative to the caller's SP
+                    let cfa_to_sp_offset =
+                        -((slot_base_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
+                    LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
+                }
             };
 
             // Coalesce adjacent ranges that for the same location
@@ -1552,7 +1560,7 @@ impl<I: VCodeInst> VCode<I> {
     }
 }
 
-impl<I: VCodeInst> std::ops::Index<InsnIndex> for VCode<I> {
+impl<I: VCodeInst> core::ops::Index<InsnIndex> for VCode<I> {
     type Output = I;
     fn index(&self, idx: InsnIndex) -> &Self::Output {
         &self.insts[idx.index()]
@@ -2040,7 +2048,7 @@ impl VCodeConstantData {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::mem::size_of;
+    use core::mem::size_of;
 
     #[test]
     fn size_of_constant_structs() {

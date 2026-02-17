@@ -351,15 +351,15 @@ block0:
 ; VCode:
 ; block0:
 ;   li a0,0
-;   lui a2,16383
-;   slli a1,a2,36
+;   lui a1,16383
+;   slli a1,a1,36
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   lui a2, 0x3fff
-;   slli a1, a2, 0x24
+;   lui a1, 0x3fff
+;   slli a1, a1, 0x24
 ;   ret
 
 function %f() -> f64 {
@@ -371,15 +371,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,1023
-;   slli a2,a0,40
-;   fmv.d.x fa0,a2
+;   slli a0,a0,40
+;   fmv.d.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0x3ff
-;   slli a2, a0, 0x28
-;   fmv.d.x fa0, a2
+;   slli a0, a0, 0x28
+;   fmv.d.x fa0, a0
 ;   ret
 
 function %f() -> f32 {
@@ -409,15 +409,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,-12
-;   addi a2,a0,-1024
-;   fmv.w.x fa0,a2
+;   addi a0,a0,-1024
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xffff4
-;   addi a2, a0, -0x400
-;   fmv.w.x fa0, a2
+;   addi a0, a0, -0x400
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f128 {
@@ -429,15 +429,15 @@ block0:
 ; VCode:
 ; block0:
 ;   li a0,0
-;   lui a2,262217
-;   slli a1,a2,32
+;   lui a1,262217
+;   slli a1,a1,32
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   lui a2, 0x40049
-;   slli a1, a2, 0x20
+;   lui a1, 0x40049
+;   slli a1, a1, 0x20
 ;   ret
 
 function %f() -> f64 {
@@ -449,15 +449,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,16457
-;   slli a2,a0,36
-;   fmv.d.x fa0,a2
+;   slli a0,a0,36
+;   fmv.d.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0x4049
-;   slli a2, a0, 0x24
-;   fmv.d.x fa0, a2
+;   slli a0, a0, 0x24
+;   fmv.d.x fa0, a0
 ;   ret
 
 function %f() -> f32 {
@@ -487,15 +487,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,-11
-;   addi a2,a0,576
-;   fmv.w.x fa0,a2
+;   addi a0,a0,576
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xffff5
-;   addi a2, a0, 0x240
-;   fmv.w.x fa0, a2
+;   addi a0, a0, 0x240
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f128 {
@@ -575,15 +575,15 @@ block0:
 ; VCode:
 ; block0:
 ;   li a0,0
-;   lui a2,49155
-;   slli a1,a2,36
+;   lui a1,49155
+;   slli a1,a1,36
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   lui a2, 0xc003
-;   slli a1, a2, 0x24
+;   lui a1, 0xc003
+;   slli a1, a1, 0x24
 ;   ret
 
 function %f() -> f64 {
@@ -595,15 +595,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,3075
-;   slli a2,a0,40
-;   fmv.d.x fa0,a2
+;   slli a0,a0,40
+;   fmv.d.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xc03
-;   slli a2, a0, 0x28
-;   fmv.d.x fa0, a2
+;   slli a0, a0, 0x28
+;   fmv.d.x fa0, a0
 ;   ret
 
 function %f() -> f32 {
@@ -633,15 +633,15 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,-3
-;   addi a2,a0,-1024
-;   fmv.w.x fa0,a2
+;   addi a0,a0,-1024
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xffffd
-;   addi a2, a0, -0x400
-;   fmv.w.x fa0, a2
+;   addi a0, a0, -0x400
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f128 {

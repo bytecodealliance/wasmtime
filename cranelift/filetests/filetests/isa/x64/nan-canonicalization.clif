@@ -14,8 +14,8 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   addps %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm1
-;   movl $0x7fc00000, %esi
-;   movd %esi, %xmm5
+;   movl $0x7fc00000, %r9d
+;   movd %r9d, %xmm5
 ;   shufps $0x0, (%rip), %xmm5
 ;   cmpunordps %xmm1, %xmm0
 ;   andps %xmm0, %xmm5
@@ -32,9 +32,9 @@ block0(v0: f32x4, v1: f32x4):
 ; block1: ; offset 0x4
 ;   addps %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm1
-;   movl $0x7fc00000, %esi
-;   movd %esi, %xmm5
-;   shufps $0, 0x14(%rip), %xmm5
+;   movl $0x7fc00000, %r9d
+;   movd %r9d, %xmm5
+;   shufps $0, 0x12(%rip), %xmm5
 ;   cmpunordps %xmm1, %xmm0
 ;   andps %xmm0, %xmm5
 ;   andnps %xmm1, %xmm0
@@ -42,7 +42,6 @@ block0(v0: f32x4, v1: f32x4):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   sarb $0, (%rdi)
 ;   addb %al, (%rax)
@@ -62,18 +61,18 @@ block0(v0: f64, v1: f64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   addsd %xmm1, %xmm0
-;   movabsq $0x7ff8000000000000, %r8
-;   movq %r8, %xmm1
+;   movabsq $0x7ff8000000000000, %rax
+;   movq %rax, %xmm1
 ;   uninit  %xmm6
 ;   xorpd %xmm6, %xmm6
 ;   movsd %xmm1, %xmm6
-;   uninit  %xmm7
-;   xorpd %xmm7, %xmm7
-;   movsd %xmm0, %xmm7
-;   movdqa %xmm7, %xmm0
-;   cmpunordpd %xmm7, %xmm0
+;   uninit  %xmm1
+;   xorpd %xmm1, %xmm1
+;   movsd %xmm0, %xmm1
+;   movdqa %xmm1, %xmm0
+;   cmpunordpd %xmm1, %xmm0
 ;   andpd %xmm0, %xmm6
-;   andnpd %xmm7, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   orpd %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -85,16 +84,16 @@ block0(v0: f64, v1: f64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   addsd %xmm1, %xmm0
-;   movabsq $0x7ff8000000000000, %r8
-;   movq %r8, %xmm1
+;   movabsq $0x7ff8000000000000, %rax
+;   movq %rax, %xmm1
 ;   xorpd %xmm6, %xmm6
 ;   movsd %xmm1, %xmm6
-;   xorpd %xmm7, %xmm7
-;   movsd %xmm0, %xmm7
-;   movdqa %xmm7, %xmm0
-;   cmpunordpd %xmm7, %xmm0
+;   xorpd %xmm1, %xmm1
+;   movsd %xmm0, %xmm1
+;   movdqa %xmm1, %xmm0
+;   cmpunordpd %xmm1, %xmm0
 ;   andpd %xmm0, %xmm6
-;   andnpd %xmm7, %xmm0
+;   andnpd %xmm1, %xmm0
 ;   orpd %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -111,18 +110,18 @@ block0(v0: f32, v1: f32):
 ;   movq %rsp, %rbp
 ; block0:
 ;   addss %xmm1, %xmm0
-;   movl $0x7fc00000, %r8d
-;   movd %r8d, %xmm1
+;   movl $0x7fc00000, %eax
+;   movd %eax, %xmm1
 ;   uninit  %xmm6
 ;   xorps %xmm6, %xmm6
 ;   movss %xmm1, %xmm6
-;   uninit  %xmm7
-;   xorps %xmm7, %xmm7
-;   movss %xmm0, %xmm7
-;   movdqa %xmm7, %xmm0
-;   cmpunordps %xmm7, %xmm0
+;   uninit  %xmm1
+;   xorps %xmm1, %xmm1
+;   movss %xmm0, %xmm1
+;   movdqa %xmm1, %xmm0
+;   cmpunordps %xmm1, %xmm0
 ;   andps %xmm0, %xmm6
-;   andnps %xmm7, %xmm0
+;   andnps %xmm1, %xmm0
 ;   orps %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -134,16 +133,16 @@ block0(v0: f32, v1: f32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   addss %xmm1, %xmm0
-;   movl $0x7fc00000, %r8d
-;   movd %r8d, %xmm1
+;   movl $0x7fc00000, %eax
+;   movd %eax, %xmm1
 ;   xorps %xmm6, %xmm6
 ;   movss %xmm1, %xmm6
-;   xorps %xmm7, %xmm7
-;   movss %xmm0, %xmm7
-;   movdqa %xmm7, %xmm0
-;   cmpunordps %xmm7, %xmm0
+;   xorps %xmm1, %xmm1
+;   movss %xmm0, %xmm1
+;   movdqa %xmm1, %xmm0
+;   cmpunordps %xmm1, %xmm0
 ;   andps %xmm0, %xmm6
-;   andnps %xmm7, %xmm0
+;   andnps %xmm1, %xmm0
 ;   orps %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

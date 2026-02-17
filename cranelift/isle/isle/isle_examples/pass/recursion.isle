@@ -1,0 +1,15 @@
+; Cyclic terms are allowed when explicitly annotated with `rec`.
+
+(decl rec A (bool) bool)
+(decl rec B (bool) bool)
+(decl rec C (bool) bool)
+
+(rule (A x) (B x))
+(rule (B x) (C x))
+(rule (C x) (A x))
+
+; Referencing a term that is cyclic is allowed, and does not require `rec` on
+; the referencing term.
+
+(decl D (bool) bool)
+(rule (D x) (A x))

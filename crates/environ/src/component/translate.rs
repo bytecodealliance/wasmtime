@@ -7,10 +7,6 @@ use crate::{
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex, Tunables, TypeConvert,
     WasmHeapType, WasmResult, WasmValType,
 };
-use anyhow::Context;
-use anyhow::anyhow;
-use anyhow::ensure;
-use anyhow::{Result, bail};
 use core::str::FromStr;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;
@@ -199,9 +195,6 @@ enum LocalInitializer<'data> {
     ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
-    BackpressureSet {
-        func: ModuleInternedTypeIndex,
-    },
     BackpressureInc {
         func: ModuleInternedTypeIndex,
     },
@@ -326,7 +319,7 @@ enum LocalInitializer<'data> {
         start_func_ty: ComponentTypeIndex,
         start_func_table_index: TableIndex,
     },
-    ThreadSwitchTo {
+    ThreadSuspendToSuspended {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
@@ -334,10 +327,14 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
-    ThreadResumeLater {
+    ThreadSuspendTo {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadUnsuspend {
         func: ModuleInternedTypeIndex,
     },
-    ThreadYieldTo {
+    ThreadYieldToSuspended {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
@@ -558,7 +555,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             PrimaryMap::<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>::new();
         for init in &translation.component.initializers {
             match init {
-                GlobalInitializer::InstantiateModule(instantiation) => match instantiation {
+                GlobalInitializer::InstantiateModule(instantiation, _) => match instantiation {
                     InstantiateModule::Static(module, args) => {
                         instantiations[*module].join(AbstractInstantiations::One(&*args));
                         instance_to_module.push(Some(*module).into());
@@ -609,6 +606,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                 let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
 
                     // We could in theory inline these trampolines, so it could
                     // potentially make sense to record that we know this
@@ -869,11 +867,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                         | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
                             bail!("unsupported intrinsic")
-                        }
-                        wasmparser::CanonicalFunction::BackpressureSet => {
-                            let core_type = self.core_func_signature(core_func_index)?;
-                            core_func_index += 1;
-                            LocalInitializer::BackpressureSet { func: core_type }
                         }
                         wasmparser::CanonicalFunction::BackpressureInc => {
                             let core_type = self.core_func_signature(core_func_index)?;
@@ -1161,25 +1154,30 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 start_func_table_index: TableIndex::from_u32(table_index),
                             }
                         }
-                        wasmparser::CanonicalFunction::ThreadSwitchTo { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadSuspendToSuspended { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSwitchTo { func, cancellable }
+                            LocalInitializer::ThreadSuspendToSuspended { func, cancellable }
                         }
                         wasmparser::CanonicalFunction::ThreadSuspend { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadSuspend { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadResumeLater => {
+                        wasmparser::CanonicalFunction::ThreadSuspendTo { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadResumeLater { func }
+                            LocalInitializer::ThreadSuspendTo { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldTo { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadUnsuspend => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYieldTo { func, cancellable }
+                            LocalInitializer::ThreadUnsuspend { func }
+                        }
+                        wasmparser::CanonicalFunction::ThreadYieldToSuspended { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadYieldToSuspended { func, cancellable }
                         }
                     };
                     self.result.initializers.push(init);
@@ -1212,7 +1210,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     component
                         .get(unchecked_range.start..unchecked_range.end)
                         .ok_or_else(|| {
-                            anyhow!(
+                            format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
                                 unchecked_range.start,
                                 unchecked_range.end,
@@ -1394,7 +1392,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = match export.kind {
-                wasmparser::ExternalKind::Func => {
+                wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
                     let index = FuncIndex::from_u32(export.index);
                     EntityIndex::Function(index)
                 }
@@ -1491,7 +1489,9 @@ impl<'a, 'data> Translator<'a, 'data> {
         name: &'data str,
     ) -> LocalInitializer<'data> {
         match kind {
-            wasmparser::ExternalKind::Func => LocalInitializer::AliasExportFunc(instance, name),
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => {
+                LocalInitializer::AliasExportFunc(instance, name)
+            }
             wasmparser::ExternalKind::Memory => LocalInitializer::AliasExportMemory(instance, name),
             wasmparser::ExternalKind::Table => LocalInitializer::AliasExportTable(instance, name),
             wasmparser::ExternalKind::Global => LocalInitializer::AliasExportGlobal(instance, name),
@@ -1687,7 +1687,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 kind: &str,
                 import: &str,
                 name: &str,
-            ) -> core::result::Result<(), anyhow::Error> {
+            ) -> Result<()> {
                 let expected_len = expected.len();
                 let actual_len = actual.len();
                 ensure!(

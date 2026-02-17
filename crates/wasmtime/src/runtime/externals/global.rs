@@ -63,7 +63,7 @@ impl Global {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -286,7 +286,7 @@ impl Global {
                 }
                 Val::ContRef(Some(_)) => {
                     // TODO(#10248): Implement non-null global continuation reference handling
-                    return Err(anyhow::anyhow!(
+                    return Err(crate::format_err!(
                         "setting non-null continuation references in globals not yet supported"
                     ));
                 }
@@ -338,6 +338,17 @@ impl Global {
         }
     }
 
+    #[cfg(feature = "component-model")]
+    pub(crate) fn from_task_may_block(
+        instance: crate::component::store::StoreComponentInstanceId,
+    ) -> Global {
+        Global {
+            store: instance.store_id(),
+            instance: instance.instance().as_u32(),
+            kind: VMGlobalKind::TaskMayBlock,
+        }
+    }
+
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Global {
         self.store.assert_belongs_to(store.id());
         match self.kind {
@@ -349,7 +360,7 @@ impl Global {
             }
             VMGlobalKind::Host(index) => unsafe { &store.host_globals()[index].get().as_ref().ty },
             #[cfg(feature = "component-model")]
-            VMGlobalKind::ComponentFlags(_) => {
+            VMGlobalKind::ComponentFlags(_) | VMGlobalKind::TaskMayBlock => {
                 const TY: wasmtime_environ::Global = wasmtime_environ::Global {
                     mutability: true,
                     wasm_ty: wasmtime_environ::WasmValType::I32,
@@ -367,7 +378,7 @@ impl Global {
             }
             VMGlobalKind::Host(_) => None,
             #[cfg(feature = "component-model")]
-            VMGlobalKind::ComponentFlags(_) => {
+            VMGlobalKind::ComponentFlags(_) | VMGlobalKind::TaskMayBlock => {
                 let instance = crate::component::ComponentInstanceId::from_u32(self.instance);
                 Some(
                     VMOpaqueContext::from_vmcomponent(store.component_instance(instance).vmctx())
@@ -414,6 +425,12 @@ impl Global {
                     .instance_flags(index)
                     .as_raw()
             }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::TaskMayBlock => store
+                .component_instance(crate::component::ComponentInstanceId::from_u32(
+                    self.instance,
+                ))
+                .task_may_block(),
         }
     }
 }

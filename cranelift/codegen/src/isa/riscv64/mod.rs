@@ -13,10 +13,10 @@ use crate::machinst::{
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use crate::{CodegenError, ir};
+use alloc::string::String;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
@@ -205,7 +205,7 @@ impl TargetIsa for Riscv64Backend {
         true
     }
 
-    fn has_x86_blendv_lowering(&self, _: Type) -> bool {
+    fn has_blendv_lowering(&self, _: Type) -> bool {
         false
     }
 

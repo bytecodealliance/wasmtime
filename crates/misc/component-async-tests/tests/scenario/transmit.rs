@@ -1,15 +1,12 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::task::{self, Context, Poll};
-use std::time::Duration;
 
 use super::util::{config, make_component, test_run, test_run_with_count};
-use anyhow::{Result, anyhow};
 use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
 use component_async_tests::util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer};
-use component_async_tests::{Ctx, sleep, transmit};
+use component_async_tests::{Ctx, transmit, yield_};
 use futures::{
     FutureExt, SinkExt, StreamExt, TryStreamExt,
     channel::{mpsc, oneshot},
@@ -20,7 +17,7 @@ use wasmtime::component::{
     Instance, Linker, ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader,
     StreamResult, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
+use wasmtime::{AsContextMut, Engine, Result, Store, StoreContextMut, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 struct BufferStreamProducer {
@@ -122,7 +119,7 @@ impl<D> FutureConsumer<D> for ValueFutureConsumer {
 
 struct DelayedStreamProducer<P> {
     inner: P,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<D, P: StreamProducer<D>> StreamProducer<D> for DelayedStreamProducer<P> {
@@ -137,9 +134,9 @@ impl<D, P: StreamProducer<D>> StreamProducer<D> for DelayedStreamProducer<P> {
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         // SAFETY: We never move out of `self`.
-        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = unsafe { &mut self.as_mut().get_unchecked_mut().maybe_yield };
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         // SAFETY: This is a standard pin-projection, and we never move out
         // of `self`.
@@ -150,7 +147,7 @@ impl<D, P: StreamProducer<D>> StreamProducer<D> for DelayedStreamProducer<P> {
 
 struct DelayedStreamConsumer<C> {
     inner: C,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<D, C: StreamConsumer<D>> StreamConsumer<D> for DelayedStreamConsumer<C> {
@@ -164,9 +161,9 @@ impl<D, C: StreamConsumer<D>> StreamConsumer<D> for DelayedStreamConsumer<C> {
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         // SAFETY: We never move out of `self`.
-        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = unsafe { &mut self.as_mut().get_unchecked_mut().maybe_yield };
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         // SAFETY: This is a standard pin-projection, and we never move out
         // of `self`.
@@ -177,7 +174,7 @@ impl<D, C: StreamConsumer<D>> StreamConsumer<D> for DelayedStreamConsumer<C> {
 
 struct DelayedFutureProducer<P> {
     inner: P,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<D, P: FutureProducer<D>> FutureProducer<D> for DelayedFutureProducer<P> {
@@ -190,9 +187,9 @@ impl<D, P: FutureProducer<D>> FutureProducer<D> for DelayedFutureProducer<P> {
         finish: bool,
     ) -> Poll<Result<Option<Self::Item>>> {
         // SAFETY: We never move out of `self`.
-        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = unsafe { &mut self.as_mut().get_unchecked_mut().maybe_yield };
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         // SAFETY: This is a standard pin-projection, and we never move out
         // of `self`.
@@ -203,7 +200,7 @@ impl<D, P: FutureProducer<D>> FutureProducer<D> for DelayedFutureProducer<P> {
 
 struct DelayedFutureConsumer<C> {
     inner: C,
-    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+    maybe_yield: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl<D, C: FutureConsumer<D>> FutureConsumer<D> for DelayedFutureConsumer<C> {
@@ -217,9 +214,9 @@ impl<D, C: FutureConsumer<D>> FutureConsumer<D> for DelayedFutureConsumer<C> {
         finish: bool,
     ) -> Poll<Result<()>> {
         // SAFETY: We never move out of `self`.
-        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
-        task::ready!(sleep.as_mut().poll(cx));
-        *sleep = async {}.boxed();
+        let maybe_yield = unsafe { &mut self.as_mut().get_unchecked_mut().maybe_yield };
+        task::ready!(maybe_yield.as_mut().poll(cx));
+        *maybe_yield = async {}.boxed();
 
         // SAFETY: This is a standard pin-projection, and we never move out
         // of `self`.
@@ -320,8 +317,10 @@ impl<D, C: FutureConsumer<D>> FutureConsumer<D> for ProcrastinatingFutureConsume
     }
 }
 
-fn sleep() -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    component_async_tests::util::sleep(Duration::from_millis(delay_millis())).boxed()
+async fn yield_times(n: usize) {
+    for _ in 0..n {
+        tokio::task::yield_now().await;
+    }
 }
 
 mod readiness {
@@ -350,7 +349,6 @@ pub async fn async_readiness() -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -363,7 +361,7 @@ pub async fn async_readiness() -> Result<()> {
             inner: BufferStreamProducer {
                 buffer: expected.clone(),
             },
-            sleep: sleep(),
+            maybe_yield: yield_times(10).boxed(),
         },
     );
     store
@@ -378,7 +376,7 @@ pub async fn async_readiness() -> Result<()> {
                     access,
                     DelayedStreamConsumer {
                         inner: BufferStreamConsumer { expected },
-                        sleep: sleep(),
+                        maybe_yield: yield_times(10).boxed(),
                     },
                 )
             });
@@ -404,7 +402,7 @@ mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
     });
 }
 
@@ -450,16 +448,6 @@ pub async fn async_trap_cancel_host_after_return() -> Result<()> {
     test_cancel_trap(Mode::TrapCancelHostAfterReturn).await
 }
 
-fn delay_millis() -> u64 {
-    // Miri-based builds are much slower to run, so we delay longer in that case
-    // to ensure that async calls which the test expects to return `BLOCKED`
-    // actually do so.
-    //
-    // TODO: Make this test (more) deterministic so that such tuning is not
-    // necessary.
-    if cfg!(miri) { 1000 } else { 10 }
-}
-
 async fn test_cancel_trap(mode: Mode) -> Result<()> {
     let message = "`subtask.cancel` called after terminal status delivered";
     let trap = test_cancel(mode).await.unwrap_err();
@@ -485,7 +473,7 @@ async fn test_cancel(mode: Mode) -> Result<()> {
     let mut linker = Linker::new(&engine);
 
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    sleep::local::local::sleep::add_to_linker::<_, Ctx>(&mut linker, |ctx| ctx)?;
+    yield_::local::local::yield_::add_to_linker::<_, Ctx>(&mut linker, |ctx| ctx)?;
 
     let mut store = Store::new(
         &engine,
@@ -493,7 +481,6 @@ async fn test_cancel(mode: Mode) -> Result<()> {
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -501,10 +488,12 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         cancel::CancelHost::instantiate_async(&mut store, &component, &linker).await?;
     store
         .run_concurrent(async move |accessor| {
-            cancel_host
+            let ((), task) = cancel_host
                 .local_local_cancel()
-                .call_run(accessor, mode, delay_millis())
-                .await
+                .call_run(accessor, mode, 100)
+                .await?;
+            task.block(accessor).await;
+            Ok::<_, wasmtime::Error>(())
         })
         .await??;
 
@@ -552,6 +541,7 @@ pub trait TransmitTest {
     ) -> impl Future<Output = Result<Self::Result>> + Send + 'a;
 
     fn into_params(
+        store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
@@ -603,6 +593,7 @@ impl TransmitTest for StaticTransmitTest {
     }
 
     fn into_params(
+        _store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
@@ -646,13 +637,13 @@ impl TransmitTest for DynamicTransmitTest {
         let exchange_function = accessor.with(|mut store| {
             let transmit_instance = instance
                 .get_export_index(store.as_context_mut(), None, "local:local/transmit")
-                .ok_or_else(|| anyhow!("can't find `local:local/transmit` in instance"))?;
+                .ok_or_else(|| format_err!("can't find `local:local/transmit` in instance"))?;
             let exchange_function = instance
                 .get_export_index(store.as_context_mut(), Some(&transmit_instance), "exchange")
-                .ok_or_else(|| anyhow!("can't find `exchange` in instance"))?;
+                .ok_or_else(|| format_err!("can't find `exchange` in instance"))?;
             instance
                 .get_func(store.as_context_mut(), exchange_function)
-                .ok_or_else(|| anyhow!("can't find `exchange` in instance"))
+                .ok_or_else(|| format_err!("can't find `exchange` in instance"))
         })?;
 
         let mut results = vec![Val::Bool(false)];
@@ -663,21 +654,31 @@ impl TransmitTest for DynamicTransmitTest {
     }
 
     fn into_params(
+        mut store: impl AsContextMut<Data = Ctx>,
         control: StreamReader<Control>,
         caller_stream: StreamReader<String>,
         caller_future1: FutureReader<String>,
         caller_future2: FutureReader<String>,
     ) -> Self::Params {
         vec![
-            control.into_val(),
-            caller_stream.into_val(),
-            caller_future1.into_val(),
-            caller_future2.into_val(),
+            control.try_into_stream_any(&mut store).unwrap().into(),
+            caller_stream
+                .try_into_stream_any(&mut store)
+                .unwrap()
+                .into(),
+            caller_future1
+                .try_into_future_any(&mut store)
+                .unwrap()
+                .into(),
+            caller_future2
+                .try_into_future_any(&mut store)
+                .unwrap()
+                .into(),
         ]
     }
 
     fn from_result(
-        mut store: impl AsContextMut<Data = Ctx>,
+        _store: impl AsContextMut<Data = Ctx>,
         result: Self::Result,
     ) -> Result<(
         StreamReader<String>,
@@ -687,9 +688,19 @@ impl TransmitTest for DynamicTransmitTest {
         let Val::Tuple(fields) = result else {
             unreachable!()
         };
-        let stream = StreamReader::from_val(store.as_context_mut(), &fields[0])?;
-        let future1 = FutureReader::from_val(store.as_context_mut(), &fields[1])?;
-        let future2 = FutureReader::from_val(store.as_context_mut(), &fields[2])?;
+        let mut fields = fields.into_iter();
+        let Val::Stream(stream) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let Val::Future(future1) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let Val::Future(future2) = fields.next().unwrap() else {
+            unreachable!()
+        };
+        let stream = StreamReader::try_from_stream_any(stream).unwrap();
+        let future1 = FutureReader::try_from_future_any(future1).unwrap();
+        let future2 = FutureReader::try_from_future_any(future2).unwrap();
         Ok((stream, future1, future2))
     }
 }
@@ -714,7 +725,6 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -770,19 +780,20 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                 .boxed(),
             );
 
-            futures.push(
-                Test::call(
-                    accessor,
-                    &test,
-                    Test::into_params(
-                        control_rx,
-                        caller_stream_rx,
-                        caller_future1_rx,
-                        caller_future2_rx,
-                    ),
+            let params = accessor.with(|s| {
+                Test::into_params(
+                    s,
+                    control_rx,
+                    caller_stream_rx,
+                    caller_future1_rx,
+                    caller_future2_rx,
                 )
-                .map(|v| v.map(Event::Result))
-                .boxed(),
+            });
+
+            futures.push(
+                Test::call(accessor, &test, params)
+                    .map(|v| v.map(Event::Result))
+                    .boxed(),
             );
 
             while let Some(event) = futures.try_next().await? {
@@ -799,7 +810,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                                 &mut store,
                                 OneshotConsumer::new(callee_future1_tx.take().unwrap()),
                             );
-                            anyhow::Ok(())
+                            wasmtime::error::Ok(())
                         })?;
                     }
                     Event::ControlWriteA(mut control_tx) => {
@@ -869,7 +880,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
             assert!(complete);
 
-            anyhow::Ok(())
+            wasmtime::error::Ok(())
         })
         .await??;
     Ok(())
@@ -916,7 +927,6 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             table: ResourceTable::default(),
             continue_: false,
-            wakers: Arc::new(Mutex::new(None)),
         },
     );
 
@@ -927,7 +937,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         inner: BufferStreamProducer {
             buffer: stream_expected.clone(),
         },
-        sleep: sleep(),
+        maybe_yield: yield_times(10).boxed(),
     };
     let stream = if procrastinate {
         StreamReader::new(&mut store, ProcrastinatingStreamProducer(producer))
@@ -939,7 +949,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         inner: ValueFutureProducer {
             value: future_expected,
         },
-        sleep: sleep(),
+        maybe_yield: yield_times(10).boxed(),
     };
     let future = if procrastinate {
         FutureReader::new(&mut store, ProcrastinatingFutureProducer(producer))
@@ -958,7 +968,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                     inner: BufferStreamConsumer {
                         expected: stream_expected,
                     },
-                    sleep: sleep(),
+                    maybe_yield: yield_times(10).boxed(),
                 };
                 if procrastinate {
                     stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer));
@@ -969,7 +979,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                     inner: ValueFutureConsumer {
                         expected: future_expected,
                     },
-                    sleep: sleep(),
+                    maybe_yield: yield_times(10).boxed(),
                 };
                 if procrastinate {
                     future.pipe(access, ProcrastinatingFutureConsumer(consumer));

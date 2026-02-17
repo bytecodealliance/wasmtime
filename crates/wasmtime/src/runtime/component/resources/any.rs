@@ -101,7 +101,7 @@ impl ResourceAny {
         let store = store.as_context_mut();
         let mut tables = HostResourceTables::new_host(store.0);
         let ResourceAny { idx, ty, owned } = self;
-        let ty = T::typecheck(ty).ok_or_else(|| anyhow::anyhow!("resource type mismatch"))?;
+        let ty = T::typecheck(ty).ok_or_else(|| crate::format_err!("resource type mismatch"))?;
         if owned {
             let rep = tables.host_resource_lift_own(idx)?;
             Ok(HostResource::new_own(rep, ty))
@@ -148,22 +148,15 @@ impl ResourceAny {
     /// if one was specified).
     pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            !store.0.async_support(),
-            "must use `resource_drop_async` when async support is enabled on the config"
-        );
-        self.resource_drop_impl(&mut store.as_context_mut())
+        store.0.validate_sync_call()?;
+        self.resource_drop_impl(&mut store)
     }
 
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores
-    /// to execute the destructor asynchronously.
+    /// to execute the destructor [asynchronously](crate#async).
     #[cfg(feature = "async")]
     pub async fn resource_drop_async(self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `resource_drop_async` without enabling async support in the config"
-        );
         store
             .on_fiber(|store| self.resource_drop_impl(store))
             .await?
@@ -192,11 +185,9 @@ impl ResourceAny {
         // Note that this should be safe because the raw pointer access in
         // `flags` is valid due to `store` being the owner of the flags and
         // flags are never destroyed within the store.
-        if let Some(flags) = slot.flags {
-            unsafe {
-                if !flags.may_enter() {
-                    bail!(Trap::CannotEnterComponent);
-                }
+        if let Some(instance) = slot.instance {
+            if !store.0.may_enter(instance) {
+                bail!(Trap::CannotEnterComponent);
             }
         }
 
@@ -206,12 +197,30 @@ impl ResourceAny {
         };
         let mut args = [ValRaw::u32(rep)];
 
+        // Setup async-level task infrastructure for this call. This, for
+        // example, prevents the destructor from blocking.
+        //
+        // Note that if `slot.instance` is `None` then this is skipped. That
+        // means that this is a host resource being destroyed by the host. In
+        // that case restrictions around blocking and such are exempt.
+        if let Some(instance) = slot.instance {
+            store.0.enter_guest_sync_call(None, false, instance)?;
+        }
+
         // This should be safe because `dtor` has been checked to belong to the
         // `store` provided which means it's valid and still alive. Additionally
         // destructors have al been previously type-checked and are guaranteed
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
-        unsafe { crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args)) }
+        unsafe {
+            crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args))?;
+        }
+
+        if slot.instance.is_some() {
+            store.0.exit_guest_sync_call(false)?;
+        }
+
+        Ok(())
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {

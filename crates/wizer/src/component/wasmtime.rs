@@ -1,10 +1,12 @@
 use crate::Wizer;
 use crate::component::ComponentInstanceState;
-use anyhow::{Context, anyhow};
 use wasmtime::component::{
     Component, ComponentExportIndex, Instance, Lift, WasmList, types::ComponentItem,
 };
-use wasmtime::{Result, Store};
+use wasmtime::{Result, Store, error::Context as _, format_err};
+
+#[cfg(feature = "wasmprinter")]
+use wasmtime::ToWasmtimeResult as _;
 
 impl Wizer {
     /// Same as [`Wizer::run`], except for components.
@@ -13,13 +15,13 @@ impl Wizer {
         store: &mut Store<T>,
         wasm: &[u8],
         instantiate: impl AsyncFnOnce(&mut Store<T>, &Component) -> Result<Instance>,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> wasmtime::Result<Vec<u8>> {
         let (cx, instrumented_wasm) = self.instrument_component(wasm)?;
 
         #[cfg(feature = "wasmprinter")]
         log::debug!(
             "instrumented wasm: {}",
-            wasmprinter::print_bytes(&instrumented_wasm)?,
+            wasmprinter::print_bytes(&instrumented_wasm).to_wasmtime_result()?,
         );
 
         let engine = store.engine();
@@ -36,19 +38,19 @@ impl Wizer {
     fn validate_component_init_func(
         &self,
         component: &Component,
-    ) -> anyhow::Result<ComponentExportIndex> {
+    ) -> wasmtime::Result<ComponentExportIndex> {
         let init_func = self.get_init_func();
         let (ty, index) = component
             .get_export(None, init_func)
-            .ok_or_else(|| anyhow!("the component does export the function `{init_func}`"))?;
+            .ok_or_else(|| format_err!("the component does export the function `{init_func}`"))?;
 
         let ty = match ty {
             ComponentItem::ComponentFunc(ty) => ty,
-            _ => anyhow::bail!("the component's `{init_func}` export is not a function",),
+            _ => wasmtime::bail!("the component's `{init_func}` export is not a function",),
         };
 
         if ty.params().len() != 0 || ty.results().len() != 0 {
-            anyhow::bail!(
+            wasmtime::bail!(
                 "the component's `{init_func}` function export does not have type `[] -> []`",
             );
         }
@@ -60,7 +62,7 @@ impl Wizer {
         store: &mut Store<T>,
         instance: &Instance,
         index: ComponentExportIndex,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         let init_func = instance
             .get_typed_func::<(), ()>(&mut *store, index)
             .expect("checked by `validate_init_func`");
@@ -68,16 +70,12 @@ impl Wizer {
             .call_async(&mut *store, ())
             .await
             .with_context(|| format!("the initialization function trapped"))?;
-        init_func
-            .post_return_async(&mut *store)
-            .await
-            .context("failed to call post-return")?;
 
         Ok(())
     }
 }
 
-/// Impementation of [`InstanceState`] backed by Wasmtime.
+/// Impementation of [`ComponentInstanceState`] backed by Wasmtime.
 pub struct WasmtimeWizerComponent<'a, T: 'static> {
     /// The Wasmtime-based store that owns the `instance` field.
     pub store: &'a mut Store<T>,
@@ -109,9 +107,7 @@ impl<T: Send> WasmtimeWizerComponent<'_, T> {
             .get_typed_func::<(), (R,)>(&mut *self.store, func_export)
             .unwrap();
         let ret = func.call_async(&mut *self.store, ()).await.unwrap().0;
-        let ret = use_ret(&mut *self.store, ret);
-        func.post_return_async(&mut *self.store).await.unwrap();
-        ret
+        use_ret(&mut *self.store, ret)
     }
 }
 

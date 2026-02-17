@@ -49,23 +49,23 @@
   )
 )
 ;; wasm[0]::function[0]::fib:
-;;       push_frame_save 32, x17, x24, x29
+;;       push_frame_save 16, x16, x22
 ;;       br_if_xeq32_i8 x2, 0, 0x47    // target = 0x4c
 ;;       br_if_xeq32_i8 x2, 1, 0x39    // target = 0x45
 ;;   13: xsub32_u8 x14, x2, 1
-;;       xmov x24, x0
-;;       xmov x29, x2
-;;       call3 x24, x24, x14, -0x1d    // target = 0x0
-;;       xmov x17, x0
-;;       xmov x2, x29
-;;       xmov x0, x24
+;;       xmov x16, x2
+;;       xmov x22, x0
+;;       call3 x22, x22, x14, -0x1d    // target = 0x0
+;;       xmov x2, x16
+;;       xmov x16, x0
+;;       xmov x0, x22
 ;;       xsub32_u8 x14, x2, 2
 ;;       call3 x0, x0, x14, -0x32    // target = 0x0
-;;       xmov x5, x17
-;;       xadd32 x0, x5, x0
+;;       xmov x1, x16
+;;       xadd32 x0, x1, x0
 ;;       jump 0xe    // target = 0x4e
 ;;   45: xone x0
 ;;       jump 0x7    // target = 0x4e
 ;;   4c: xone x0
-;;       pop_frame_restore 32, x17, x24, x29
+;;       pop_frame_restore 16, x16, x22
 ;;       ret

@@ -26,7 +26,6 @@ use wasmtime::component::Linker;
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
-///     config.async_support(true);
 ///     config.wasm_component_model_async(true);
 ///     let engine = Engine::new(&config)?;
 ///
@@ -71,7 +70,7 @@ where
 pub fn add_to_linker_with_options<T>(
     linker: &mut Linker<T>,
     exit_options: &exit::LinkOptions,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     T: WasiCliView + 'static,
 {

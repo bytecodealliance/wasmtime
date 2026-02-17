@@ -24,9 +24,8 @@ pub async fn create_table(
     let table_id = module.tables.push(wasmtime_table);
 
     // TODO: can this `exports.insert` get removed?
-    module
-        .exports
-        .insert(String::new(), EntityIndex::Table(table_id));
+    let name = module.strings.insert("")?;
+    module.exports.insert(name, EntityIndex::Table(table_id))?;
 
     let imports = Imports::default();
 
@@ -43,7 +42,7 @@ pub async fn create_table(
                 &ModuleRuntimeInfo::bare_with_registered_type(
                     module,
                     table.element().clone().into_registered_type(),
-                ),
+                )?,
                 imports,
             )
             .await

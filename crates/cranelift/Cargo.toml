@@ -15,7 +15,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 log = { workspace = true }
 wasmtime-environ = { workspace = true, features = ['compile'] }
 cranelift-codegen = { workspace = true, features = ["host-arch", "timing"] }
@@ -33,7 +32,7 @@ cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 itertools = { workspace = true }
 pulley-interpreter = { workspace = true, optional = true }
-wasmtime-math = { workspace = true }
+wasmtime-core = { workspace = true }
 wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
 
 [features]

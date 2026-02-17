@@ -23,7 +23,7 @@ fn main() {
 }
 
 async fn read_dir(dir: &Descriptor) -> Vec<DirectoryEntry> {
-    let (dirs, result) = dir.read_directory().await;
+    let (dirs, result) = dir.read_directory();
     let mut dirs = dirs.collect().await;
     result.await.unwrap();
     dirs.sort_by_key(|d| d.name.clone());

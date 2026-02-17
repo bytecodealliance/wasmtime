@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::records::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod records {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -346,6 +344,48 @@ pub mod foo {
                 );
                 assert!(
                     4 == < TupleTypedef2 as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(record)]
+            pub struct FuturesAndStreams {
+                #[component(name = "a")]
+                pub a: wasmtime::component::FutureReader<u8>,
+                #[component(name = "b")]
+                pub b: wasmtime::component::StreamReader<u8>,
+                #[component(name = "c")]
+                pub c: wasmtime::component::StreamReader<
+                    wasmtime::component::FutureReader<
+                        wasmtime::component::StreamReader<()>,
+                    >,
+                >,
+                #[component(name = "d")]
+                pub d: wasmtime::component::FutureReader<
+                    wasmtime::component::StreamReader<
+                        wasmtime::component::FutureReader<()>,
+                    >,
+                >,
+            }
+            impl core::fmt::Debug for FuturesAndStreams {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct("FuturesAndStreams")
+                        .field("a", &self.a)
+                        .field("b", &self.b)
+                        .field("c", &self.c)
+                        .field("d", &self.d)
+                        .finish()
+                }
+            }
+            const _: () = {
+                assert!(
+                    16 == < FuturesAndStreams as wasmtime::component::ComponentType
+                    >::SIZE32
+                );
+                assert!(
+                    4 == < FuturesAndStreams as wasmtime::component::ComponentType
+                    >::ALIGN32
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
@@ -767,7 +807,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod records {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -952,6 +992,52 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(wasmtime::component::ComponentType)]
+                #[derive(wasmtime::component::Lift)]
+                #[derive(wasmtime::component::Lower)]
+                #[component(record)]
+                pub struct FuturesAndStreams {
+                    #[component(name = "a")]
+                    pub a: wasmtime::component::FutureReader<u8>,
+                    #[component(name = "b")]
+                    pub b: wasmtime::component::StreamReader<u8>,
+                    #[component(name = "c")]
+                    pub c: wasmtime::component::StreamReader<
+                        wasmtime::component::FutureReader<
+                            wasmtime::component::StreamReader<()>,
+                        >,
+                    >,
+                    #[component(name = "d")]
+                    pub d: wasmtime::component::FutureReader<
+                        wasmtime::component::StreamReader<
+                            wasmtime::component::FutureReader<()>,
+                        >,
+                    >,
+                }
+                impl core::fmt::Debug for FuturesAndStreams {
+                    fn fmt(
+                        &self,
+                        f: &mut core::fmt::Formatter<'_>,
+                    ) -> core::fmt::Result {
+                        f.debug_struct("FuturesAndStreams")
+                            .field("a", &self.a)
+                            .field("b", &self.b)
+                            .field("c", &self.c)
+                            .field("d", &self.d)
+                            .finish()
+                    }
+                }
+                const _: () = {
+                    assert!(
+                        16 == < FuturesAndStreams as wasmtime::component::ComponentType
+                        >::SIZE32
+                    );
+                    assert!(
+                        4 == < FuturesAndStreams as wasmtime::component::ComponentType
+                        >::ALIGN32
+                    );
+                };
+                #[derive(Clone)]
                 pub struct Guest {
                     tuple_arg: wasmtime::component::Func,
                     tuple_result: wasmtime::component::Func,
@@ -993,7 +1079,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/records")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/records`"
                                 )
                             })?;
@@ -1002,7 +1088,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/records` does \
                                       not have export `{name}`"
                                     )
@@ -1146,10 +1232,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_tuple_result<S: wasmtime::AsContextMut>(
@@ -1173,10 +1255,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -1203,10 +1281,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_empty_result<S: wasmtime::AsContextMut>(
@@ -1230,10 +1304,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -1260,10 +1330,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_scalar_result<S: wasmtime::AsContextMut>(
@@ -1287,10 +1353,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -1317,10 +1379,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_flags_result<S: wasmtime::AsContextMut>(
@@ -1344,10 +1402,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -1374,10 +1428,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     pub async fn call_aggregate_result<S: wasmtime::AsContextMut>(
@@ -1401,10 +1451,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }
@@ -1430,10 +1476,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }

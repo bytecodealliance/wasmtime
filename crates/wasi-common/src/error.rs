@@ -1,5 +1,5 @@
 //! wasi-common uses an [`Error`] type which represents either a preview 1 [`Errno`] enum, on
-//! [`anyhow::Error`] for trapping execution.
+//! [`wasmtime_environ::error::Error`] for trapping execution.
 //!
 //! The user can construct an [`Error`] out of an [`Errno`] using the `From`/`Into` traits.
 //! They may also use [`Error::trap`] to construct an error that traps execution. The contents

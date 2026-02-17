@@ -409,6 +409,7 @@ pub(crate) fn emit(
         }
 
         Inst::CallKnown { info: call_info } => {
+            let start = sink.cur_offset();
             let stack_map = state.take_stack_map();
 
             asm::inst::callq_d::new(0).emit(sink, info, state);
@@ -444,12 +445,16 @@ pub(crate) fn emit(
                 Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
-            // Load any stack-carried return values.
-            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
-                state.frame_layout().stackslots_size,
-                |inst| inst.emit(sink, info, state),
-                |_space_needed| None,
-            );
+            if call_info.patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
+            } else {
+                // Load any stack-carried return values.
+                call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, info, state),
+                    |_space_needed| None,
+                );
+            }
 
             // If this is a try-call, jump to the continuation
             // (normal-return) block.
@@ -730,7 +735,7 @@ pub(crate) fn emit(
             // Emit jump table (table of 32-bit offsets).
             sink.bind_label(start_of_jumptable, state.ctrl_plane_mut());
             let jt_off = sink.cur_offset();
-            for &target in targets.iter().chain(std::iter::once(default_target)) {
+            for &target in targets.iter().chain(core::iter::once(default_target)) {
                 let word_off = sink.cur_offset();
                 // off_into_table is an addend here embedded in the label to be later patched at
                 // the end of codegen. The offset is initially relative to this jump table entry;

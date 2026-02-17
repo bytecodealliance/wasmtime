@@ -6,7 +6,6 @@ use crate::p3::bindings::http::types::{
 };
 use crate::p3::body::{Body, HostBodyStreamProducer};
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
-use anyhow::Context as _;
 use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -16,6 +15,7 @@ use tokio::sync::oneshot;
 use wasmtime::component::{
     Access, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
+use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
 
 fn get_fields<'a>(
@@ -514,8 +514,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = connect_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("connect timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
@@ -540,8 +539,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = first_byte_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("first byte timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
@@ -566,8 +564,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
             return Ok(None);
         };
         let ns = between_bytes_timeout.as_nanos();
-        let ns = ns
-            .try_into()
+        let ns = Duration::try_from(ns)
             .context("between bytes timeout duration nanoseconds do not fit in u64")?;
         Ok(Some(ns))
     }
@@ -679,11 +676,13 @@ impl HostResponse for WasiHttpCtxView<'_> {
         status_code: StatusCode,
     ) -> wasmtime::Result<Result<(), ()>> {
         let res = get_response_mut(self.table, &res)?;
-        let Ok(status) = http::StatusCode::from_u16(status_code) else {
-            return Ok(Err(()));
-        };
-        res.status = status;
-        Ok(Ok(()))
+        match http::StatusCode::from_u16(status_code) {
+            Ok(status) if matches!(status_code, 100..=599) => {
+                res.status = status;
+                Ok(Ok(()))
+            }
+            _ => Ok(Err(())),
+        }
     }
 
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {

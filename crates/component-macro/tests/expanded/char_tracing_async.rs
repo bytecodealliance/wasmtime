@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::chars::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod chars {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -295,7 +293,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod chars {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     take_char: wasmtime::component::Func,
                     return_char: wasmtime::component::Func,
@@ -319,7 +318,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/chars")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/chars`"
                                 )
                             })?;
@@ -328,7 +327,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/chars` does \
                     not have export `{name}`"
                                     )
@@ -389,10 +388,6 @@ pub mod exports {
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
                     }
                     /// A function that returns a character
@@ -417,10 +412,6 @@ pub mod exports {
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }

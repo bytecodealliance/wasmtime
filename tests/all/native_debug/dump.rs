@@ -1,6 +1,6 @@
-use anyhow::{Context, Result, bail};
 use std::env;
 use std::process::Command;
+use wasmtime::{Result, bail, error::Context as _};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DwarfDumpSection {
@@ -15,7 +15,7 @@ pub fn get_dwarfdump(obj: &str, section: DwarfDumpSection) -> Result<String> {
     let output = Command::new(&dwarfdump)
         .args(&[section_flag, obj])
         .output()
-        .context(format!("failed to spawn `{dwarfdump}`"))?;
+        .with_context(|| format!("failed to spawn `{dwarfdump}`"))?;
     if !output.status.success() {
         bail!(
             "failed to execute {}: {}",

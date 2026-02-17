@@ -1072,6 +1072,31 @@ fn enc_vri_c(opcode: u16, v1: Reg, i2: u16, v3: Reg, m4: u8) -> [u8; 6] {
     enc
 }
 
+/// VRIk-type instructions.
+///
+///   47      39 35 31 27 23 15 11  7
+///   opcode1 v1 v2 v3 -  i5 v4 rxb opcode2
+///        40 36 32 28 24 16 12   8       0
+///
+fn enc_vri_k(opcode: u16, i5: u8, v1: Reg, v2: Reg, v3: Reg, v4: Reg) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), Some(v4));
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let v4 = machreg_to_vr(v4) & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = v3 << 4;
+    enc[3] = i5;
+    enc[4] = v4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
 /// VRRa-type instructions.
 ///
 ///   47      39 35 31 23 19 15 11  7
@@ -1147,6 +1172,33 @@ fn enc_vrr_c(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8, m6: u8) -> 
     enc[2] = v3 << 4;
     enc[3] = m6 << 4 | m5;
     enc[4] = m4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRRd-type instructions.
+///
+///   47      39 35 31 27 23 19 15 11  7
+///   opcode1 v1 v2 v3 m5 m6 -  v4 rxb opcode2
+///        40 36 32 28 24 20 16 12   8       0
+///
+fn enc_vrr_d(opcode: u16, v1: Reg, v2: Reg, v3: Reg, v4: Reg, m5: u8, m6: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), Some(v4));
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let v4 = machreg_to_vr(v4) & 0x0f;
+    let m5 = m5 & 0x0f;
+    let m6 = m6 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = v3 << 4 | m5;
+    enc[3] = m6 << 4;
+    enc[4] = v4 << 4 | rxb;
     enc[5] = opcode2;
     enc
 }
@@ -1437,8 +1489,12 @@ impl Inst {
                 InstructionSet::Base => true,
                 // Miscellaneous-Instruction-Extensions Facility 3 (z15)
                 InstructionSet::MIE3 => emit_info.isa_flags.has_mie3(),
+                // Miscellaneous-Instruction-Extensions Facility 4 (z17)
+                InstructionSet::MIE4 => emit_info.isa_flags.has_mie4(),
                 // Vector-Enhancements Facility 2 (z15)
                 InstructionSet::VXRS_EXT2 => emit_info.isa_flags.has_vxrs_ext2(),
+                // Vector-Enhancements Facility 3 (z17)
+                InstructionSet::VXRS_EXT3 => emit_info.isa_flags.has_vxrs_ext3(),
             }
         };
         let isa_requirements = self.available_in_isa();
@@ -1882,6 +1938,14 @@ impl Inst {
                     }
                     UnaryOp::BSwap64 => {
                         let opcode = 0xb90f; // LRVRG
+                        put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                    }
+                    UnaryOp::Clz64 => {
+                        let opcode = 0xb968; // CLZG
+                        put(sink, &enc_rre(opcode, rd.to_reg(), rn));
+                    }
+                    UnaryOp::Ctz64 => {
+                        let opcode = 0xb969; // CTZG
                         put(sink, &enc_rre(opcode, rd.to_reg(), rn));
                     }
                 }
@@ -2663,48 +2727,76 @@ impl Inst {
                     VecBinaryOp::Mul8x16 => (0xe7a2, 0),       // VMLB
                     VecBinaryOp::Mul16x8 => (0xe7a2, 1),       // VMLHW
                     VecBinaryOp::Mul32x4 => (0xe7a2, 2),       // VMLF
+                    VecBinaryOp::Mul64x2 => (0xe7a2, 3),       // VMLG
+                    VecBinaryOp::Mul128 => (0xe7a2, 4),        // VMLQ
                     VecBinaryOp::UMulHi8x16 => (0xe7a1, 0),    // VMLHB
                     VecBinaryOp::UMulHi16x8 => (0xe7a1, 1),    // VMLHH
                     VecBinaryOp::UMulHi32x4 => (0xe7a1, 2),    // VMLHF
+                    VecBinaryOp::UMulHi64x2 => (0xe7a1, 3),    // VMLHG
+                    VecBinaryOp::UMulHi128 => (0xe7a1, 4),     // VMLHQ
                     VecBinaryOp::SMulHi8x16 => (0xe7a3, 0),    // VMHB
                     VecBinaryOp::SMulHi16x8 => (0xe7a3, 1),    // VMHH
                     VecBinaryOp::SMulHi32x4 => (0xe7a3, 2),    // VMHF
+                    VecBinaryOp::SMulHi64x2 => (0xe7a3, 3),    // VMHG
+                    VecBinaryOp::SMulHi128 => (0xe7a3, 4),     // VMHQ
                     VecBinaryOp::UMulEven8x16 => (0xe7a4, 0),  // VMLEB
                     VecBinaryOp::UMulEven16x8 => (0xe7a4, 1),  // VMLEH
                     VecBinaryOp::UMulEven32x4 => (0xe7a4, 2),  // VMLEF
+                    VecBinaryOp::UMulEven64x2 => (0xe7a4, 3),  // VMLEG
                     VecBinaryOp::SMulEven8x16 => (0xe7a6, 0),  // VMEB
                     VecBinaryOp::SMulEven16x8 => (0xe7a6, 1),  // VMEH
                     VecBinaryOp::SMulEven32x4 => (0xe7a6, 2),  // VMEF
+                    VecBinaryOp::SMulEven64x2 => (0xe7a6, 3),  // VMEG
                     VecBinaryOp::UMulOdd8x16 => (0xe7a5, 0),   // VMLOB
                     VecBinaryOp::UMulOdd16x8 => (0xe7a5, 1),   // VMLOH
                     VecBinaryOp::UMulOdd32x4 => (0xe7a5, 2),   // VMLOF
+                    VecBinaryOp::UMulOdd64x2 => (0xe7a5, 3),   // VMLOG
                     VecBinaryOp::SMulOdd8x16 => (0xe7a7, 0),   // VMOB
                     VecBinaryOp::SMulOdd16x8 => (0xe7a7, 1),   // VMOH
                     VecBinaryOp::SMulOdd32x4 => (0xe7a7, 2),   // VMOF
+                    VecBinaryOp::SMulOdd64x2 => (0xe7a7, 3),   // VMOG
+                    VecBinaryOp::UDiv32x4 => (0xe7b0, 2),      // VDLF
+                    VecBinaryOp::UDiv64x2 => (0xe7b0, 3),      // VDLG
+                    VecBinaryOp::UDiv128 => (0xe7b0, 4),       // VDLQ
+                    VecBinaryOp::SDiv32x4 => (0xe7b2, 2),      // VDF
+                    VecBinaryOp::SDiv64x2 => (0xe7b2, 3),      // VDG
+                    VecBinaryOp::SDiv128 => (0xe7b2, 4),       // VDQ
+                    VecBinaryOp::URem32x4 => (0xe7b1, 2),      // VRLF
+                    VecBinaryOp::URem64x2 => (0xe7b1, 3),      // VRLG
+                    VecBinaryOp::URem128 => (0xe7b1, 4),       // VRLQ
+                    VecBinaryOp::SRem32x4 => (0xe7b3, 2),      // VRF
+                    VecBinaryOp::SRem64x2 => (0xe7b3, 3),      // VRG
+                    VecBinaryOp::SRem128 => (0xe7b3, 4),       // VRQ
                     VecBinaryOp::UMax8x16 => (0xe7fd, 0),      // VMXLB
                     VecBinaryOp::UMax16x8 => (0xe7fd, 1),      // VMXLH
                     VecBinaryOp::UMax32x4 => (0xe7fd, 2),      // VMXLF
                     VecBinaryOp::UMax64x2 => (0xe7fd, 3),      // VMXLG
+                    VecBinaryOp::UMax128 => (0xe7fd, 4),       // VMXLQ
                     VecBinaryOp::SMax8x16 => (0xe7ff, 0),      // VMXB
                     VecBinaryOp::SMax16x8 => (0xe7ff, 1),      // VMXH
                     VecBinaryOp::SMax32x4 => (0xe7ff, 2),      // VMXF
                     VecBinaryOp::SMax64x2 => (0xe7ff, 3),      // VMXG
+                    VecBinaryOp::SMax128 => (0xe7ff, 4),       // VMXQ
                     VecBinaryOp::UMin8x16 => (0xe7fc, 0),      // VMNLB
                     VecBinaryOp::UMin16x8 => (0xe7fc, 1),      // VMNLH
                     VecBinaryOp::UMin32x4 => (0xe7fc, 2),      // VMNLF
                     VecBinaryOp::UMin64x2 => (0xe7fc, 3),      // VMNLG
+                    VecBinaryOp::UMin128 => (0xe7fc, 4),       // VMNLQ
                     VecBinaryOp::SMin8x16 => (0xe7fe, 0),      // VMNB
                     VecBinaryOp::SMin16x8 => (0xe7fe, 1),      // VMNH
                     VecBinaryOp::SMin32x4 => (0xe7fe, 2),      // VMNF
                     VecBinaryOp::SMin64x2 => (0xe7fe, 3),      // VMNG
+                    VecBinaryOp::SMin128 => (0xe7fe, 4),       // VMNQ
                     VecBinaryOp::UAvg8x16 => (0xe7f0, 0),      // VAVGLB
                     VecBinaryOp::UAvg16x8 => (0xe7f0, 1),      // VAVGLH
                     VecBinaryOp::UAvg32x4 => (0xe7f0, 2),      // VAVGLF
                     VecBinaryOp::UAvg64x2 => (0xe7f0, 3),      // VAVGLG
+                    VecBinaryOp::UAvg128 => (0xe7f0, 4),       // VAVGLQ
                     VecBinaryOp::SAvg8x16 => (0xe7f2, 0),      // VAVGB
                     VecBinaryOp::SAvg16x8 => (0xe7f2, 1),      // VAVGH
                     VecBinaryOp::SAvg32x4 => (0xe7f2, 2),      // VAVGF
                     VecBinaryOp::SAvg64x2 => (0xe7f2, 3),      // VAVGG
+                    VecBinaryOp::SAvg128 => (0xe7f2, 4),       // VAVGQ
                     VecBinaryOp::And128 => (0xe768, 0),        // VN
                     VecBinaryOp::Orr128 => (0xe76a, 0),        // VO
                     VecBinaryOp::Xor128 => (0xe76d, 0),        // VX
@@ -2739,7 +2831,27 @@ impl Inst {
                     VecBinaryOp::MergeHigh64x2 => (0xe761, 3), // VMRHG
                 };
 
-                put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, 0));
+                let enc = &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, 0);
+                let may_trap = match op {
+                    VecBinaryOp::UDiv32x4
+                    | VecBinaryOp::UDiv64x2
+                    | VecBinaryOp::UDiv128
+                    | VecBinaryOp::SDiv32x4
+                    | VecBinaryOp::SDiv64x2
+                    | VecBinaryOp::SDiv128
+                    | VecBinaryOp::URem32x4
+                    | VecBinaryOp::URem64x2
+                    | VecBinaryOp::URem128
+                    | VecBinaryOp::SRem32x4
+                    | VecBinaryOp::SRem64x2
+                    | VecBinaryOp::SRem128 => true,
+                    _ => false,
+                };
+                if may_trap {
+                    put_with_trap(sink, enc, TrapCode::INTEGER_DIVISION_BY_ZERO);
+                } else {
+                    put(sink, enc);
+                }
             }
             &Inst::VecRR { op, rd, rn } => {
                 let (opcode, m3) = match op {
@@ -2747,10 +2859,12 @@ impl Inst {
                     VecUnaryOp::Abs16x8 => (0xe7df, 1),         // VLPH
                     VecUnaryOp::Abs32x4 => (0xe7df, 2),         // VLPF
                     VecUnaryOp::Abs64x2 => (0xe7df, 3),         // VLPG
+                    VecUnaryOp::Abs128 => (0xe7df, 4),          // VLPQ
                     VecUnaryOp::Neg8x16 => (0xe7de, 0),         // VLCB
                     VecUnaryOp::Neg16x8 => (0xe7de, 1),         // VLCH
                     VecUnaryOp::Neg32x4 => (0xe7de, 2),         // VLCF
                     VecUnaryOp::Neg64x2 => (0xe7de, 3),         // VLCG
+                    VecUnaryOp::Neg128 => (0xe7de, 4),          // VLCQ
                     VecUnaryOp::Popcnt8x16 => (0xe750, 0),      // VPOPCTB
                     VecUnaryOp::Popcnt16x8 => (0xe750, 1),      // VPOPCTH
                     VecUnaryOp::Popcnt32x4 => (0xe750, 2),      // VPOPCTF
@@ -2759,22 +2873,28 @@ impl Inst {
                     VecUnaryOp::Clz16x8 => (0xe753, 1),         // VCLZH
                     VecUnaryOp::Clz32x4 => (0xe753, 2),         // VCLZF
                     VecUnaryOp::Clz64x2 => (0xe753, 3),         // VCLZG
+                    VecUnaryOp::Clz128 => (0xe753, 4),          // VCLZQ
                     VecUnaryOp::Ctz8x16 => (0xe752, 0),         // VCTZB
                     VecUnaryOp::Ctz16x8 => (0xe752, 1),         // VCTZH
                     VecUnaryOp::Ctz32x4 => (0xe752, 2),         // VCTZF
                     VecUnaryOp::Ctz64x2 => (0xe752, 3),         // VCTZG
+                    VecUnaryOp::Ctz128 => (0xe752, 4),          // VCTZQ
                     VecUnaryOp::UnpackULow8x16 => (0xe7d4, 0),  // VUPLLB
                     VecUnaryOp::UnpackULow16x8 => (0xe7d4, 1),  // VUPLLH
                     VecUnaryOp::UnpackULow32x4 => (0xe7d4, 2),  // VUPLLF
+                    VecUnaryOp::UnpackULow64x2 => (0xe7d4, 3),  // VUPLLG
                     VecUnaryOp::UnpackUHigh8x16 => (0xe7d5, 0), // VUPLHB
                     VecUnaryOp::UnpackUHigh16x8 => (0xe7d5, 1), // VUPLHH
                     VecUnaryOp::UnpackUHigh32x4 => (0xe7d5, 2), // VUPLHF
+                    VecUnaryOp::UnpackUHigh64x2 => (0xe7d5, 3), // VUPLHG
                     VecUnaryOp::UnpackSLow8x16 => (0xe7d6, 0),  // VUPLB
                     VecUnaryOp::UnpackSLow16x8 => (0xe7d6, 1),  // VUPLH
                     VecUnaryOp::UnpackSLow32x4 => (0xe7d6, 2),  // VUPLF
+                    VecUnaryOp::UnpackSLow64x2 => (0xe7d6, 3),  // VUPLG
                     VecUnaryOp::UnpackSHigh8x16 => (0xe7d7, 0), // VUPHB
                     VecUnaryOp::UnpackSHigh16x8 => (0xe7d7, 1), // VUPHH
                     VecUnaryOp::UnpackSHigh32x4 => (0xe7d7, 2), // VUPHF
+                    VecUnaryOp::UnpackSHigh64x2 => (0xe7d7, 3), // VUPHG
                 };
 
                 put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 0, 0));
@@ -2817,6 +2937,20 @@ impl Inst {
                 let opcode = 0xe78c; // VPERM
                 put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
             }
+            &Inst::VecBlend { rd, rn, rm, ra } => {
+                let opcode = 0xe789; // VBLEND
+                put(sink, &enc_vrr_d(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
+            }
+            &Inst::VecEvaluate {
+                imm,
+                rd,
+                rn,
+                rm,
+                ra,
+            } => {
+                let opcode = 0xe788; //VEVAL
+                put(sink, &enc_vri_k(opcode, imm, rd.to_reg(), rn, rm, ra));
+            }
             &Inst::VecPermuteDWImm {
                 rd,
                 rn,
@@ -2835,14 +2969,17 @@ impl Inst {
                     VecIntCmpOp::CmpEq16x8 => (0xe7f8, 1),  // VCEQH
                     VecIntCmpOp::CmpEq32x4 => (0xe7f8, 2),  // VCEQF
                     VecIntCmpOp::CmpEq64x2 => (0xe7f8, 3),  // VCEQG
+                    VecIntCmpOp::CmpEq128 => (0xe7f8, 4),   // VCEQQ
                     VecIntCmpOp::SCmpHi8x16 => (0xe7fb, 0), // VCHB
                     VecIntCmpOp::SCmpHi16x8 => (0xe7fb, 1), // VCHH
                     VecIntCmpOp::SCmpHi32x4 => (0xe7fb, 2), // VCHG
                     VecIntCmpOp::SCmpHi64x2 => (0xe7fb, 3), // VCHG
+                    VecIntCmpOp::SCmpHi128 => (0xe7fb, 4),  // VCHQ
                     VecIntCmpOp::UCmpHi8x16 => (0xe7f9, 0), // VCHLB
                     VecIntCmpOp::UCmpHi16x8 => (0xe7f9, 1), // VCHLH
                     VecIntCmpOp::UCmpHi32x4 => (0xe7f9, 2), // VCHLG
                     VecIntCmpOp::UCmpHi64x2 => (0xe7f9, 3), // VCHLG
+                    VecIntCmpOp::UCmpHi128 => (0xe7f9, 4),  // VCHLQ
                 };
                 let m5 = match self {
                     &Inst::VecIntCmp { .. } => 0,
@@ -2868,6 +3005,14 @@ impl Inst {
                 };
 
                 put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, m6));
+            }
+            &Inst::VecIntEltCmp { op, rn, rm } => {
+                let (opcode, m3) = match op {
+                    VecIntEltCmpOp::SCmp128 => (0xe7db, 4), // VECQ
+                    VecIntEltCmpOp::UCmp128 => (0xe7d9, 4), // VECLQ
+                };
+
+                put(sink, &enc_vrr_a(opcode, rn, rm, m3, 0, 0));
             }
             &Inst::VecInt128SCmpHi { tmp, rn, rm } | &Inst::VecInt128UCmpHi { tmp, rn, rm } => {
                 // Synthetic instruction to compare 128-bit values.
@@ -3298,6 +3443,8 @@ impl Inst {
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
+                let start = sink.cur_offset();
+
                 let enc: &[u8] = match &info.dest {
                     CallInstDest::Direct { name } => {
                         let offset = sink.cur_offset() + 2;
@@ -3328,11 +3475,15 @@ impl Inst {
                 state.nominal_sp_offset -= info.callee_pop_size;
                 assert_eq!(state.nominal_sp_offset, 0);
 
-                state.outgoing_sp_offset = info.callee_pop_size;
-                for inst in S390xMachineDeps::gen_retval_loads(info) {
-                    inst.emit(sink, emit_info, state);
+                if info.patchable {
+                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                } else {
+                    state.outgoing_sp_offset = info.callee_pop_size;
+                    for inst in S390xMachineDeps::gen_retval_loads(info) {
+                        inst.emit(sink, emit_info, state);
+                    }
+                    state.outgoing_sp_offset = 0;
                 }
-                state.outgoing_sp_offset = 0;
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

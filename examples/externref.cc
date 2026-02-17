@@ -50,5 +50,10 @@ int main() {
             << "\n";
 
   std::cout << "Running a gc..\n";
-  store.context().gc();
+  if (!store.context().gc()) {
+    std::cerr << "> Error while collecting garbage\n";
+    return 1;
+  }
+
+  return 0;
 }

@@ -19,9 +19,9 @@
 ;; wasm[0]::function[0]::punpckhbw:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r9d
-;;       addq    0x38(%rdi), %r9
-;;       movdqu  1(%r9), %xmm6
+;;       movl    %edx, %esi
+;;       addq    0x38(%rdi), %rsi
+;;       movdqu  1(%rsi), %xmm6
 ;;       punpckhbw %xmm6, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp

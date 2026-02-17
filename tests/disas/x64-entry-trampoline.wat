@@ -13,13 +13,13 @@
 ;;       movq    %r13, 0x10(%rsp)
 ;;       movq    %r14, 0x18(%rsp)
 ;;       movq    %r15, 0x20(%rsp)
-;;       movq    8(%rdi), %rcx
-;;       movq    %rbp, %rdx
-;;       movq    %rdx, 0x40(%rcx)
-;;       movq    %rsp, %rdx
-;;       movq    %rdx, 0x38(%rcx)
-;;       leaq    0x2f(%rip), %r8
-;;       movq    %r8, 0x48(%rcx)
+;;       movq    8(%rdi), %rax
+;;       movq    %rbp, %rcx
+;;       movq    %rcx, 0x48(%rax)
+;;       movq    %rsp, %rcx
+;;       movq    %rcx, 0x40(%rax)
+;;       leaq    0x2f(%rip), %rcx
+;;       movq    %rcx, 0x50(%rax)
 ;;       callq   0
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
 ;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x71

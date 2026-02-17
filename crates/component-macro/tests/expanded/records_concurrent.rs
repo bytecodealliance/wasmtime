@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::records::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod records {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -348,43 +346,85 @@ pub mod foo {
                     4 == < TupleTypedef2 as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(record)]
+            pub struct FuturesAndStreams {
+                #[component(name = "a")]
+                pub a: wasmtime::component::FutureReader<u8>,
+                #[component(name = "b")]
+                pub b: wasmtime::component::StreamReader<u8>,
+                #[component(name = "c")]
+                pub c: wasmtime::component::StreamReader<
+                    wasmtime::component::FutureReader<
+                        wasmtime::component::StreamReader<()>,
+                    >,
+                >,
+                #[component(name = "d")]
+                pub d: wasmtime::component::FutureReader<
+                    wasmtime::component::StreamReader<
+                        wasmtime::component::FutureReader<()>,
+                    >,
+                >,
+            }
+            impl core::fmt::Debug for FuturesAndStreams {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct("FuturesAndStreams")
+                        .field("a", &self.a)
+                        .field("b", &self.b)
+                        .field("c", &self.c)
+                        .field("d", &self.d)
+                        .finish()
+                }
+            }
+            const _: () = {
+                assert!(
+                    16 == < FuturesAndStreams as wasmtime::component::ComponentType
+                    >::SIZE32
+                );
+                assert!(
+                    4 == < FuturesAndStreams as wasmtime::component::ComponentType
+                    >::ALIGN32
+                );
+            };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn tuple_arg<T>(
+                fn tuple_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: (char, u32),
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn tuple_result<T>(
+                fn tuple_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = (char, u32)> + Send;
-                fn empty_arg<T>(
+                fn empty_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Empty,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn empty_result<T>(
+                fn empty_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Empty> + Send;
-                fn scalar_arg<T>(
+                fn scalar_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Scalars,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn scalar_result<T>(
+                fn scalar_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Scalars> + Send;
-                fn flags_arg<T>(
+                fn flags_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: ReallyFlags,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn flags_result<T>(
+                fn flags_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ReallyFlags> + Send;
-                fn aggregate_arg<T>(
+                fn aggregate_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Aggregates,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn aggregate_result<T>(
+                fn aggregate_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Aggregates> + Send;
-                fn typedef_inout<T>(
+                fn typedef_inout<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     e: TupleTypedef2,
                 ) -> impl ::core::future::Future<Output = i32> + Send;
@@ -539,7 +579,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod records {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -724,6 +764,52 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(wasmtime::component::ComponentType)]
+                #[derive(wasmtime::component::Lift)]
+                #[derive(wasmtime::component::Lower)]
+                #[component(record)]
+                pub struct FuturesAndStreams {
+                    #[component(name = "a")]
+                    pub a: wasmtime::component::FutureReader<u8>,
+                    #[component(name = "b")]
+                    pub b: wasmtime::component::StreamReader<u8>,
+                    #[component(name = "c")]
+                    pub c: wasmtime::component::StreamReader<
+                        wasmtime::component::FutureReader<
+                            wasmtime::component::StreamReader<()>,
+                        >,
+                    >,
+                    #[component(name = "d")]
+                    pub d: wasmtime::component::FutureReader<
+                        wasmtime::component::StreamReader<
+                            wasmtime::component::FutureReader<()>,
+                        >,
+                    >,
+                }
+                impl core::fmt::Debug for FuturesAndStreams {
+                    fn fmt(
+                        &self,
+                        f: &mut core::fmt::Formatter<'_>,
+                    ) -> core::fmt::Result {
+                        f.debug_struct("FuturesAndStreams")
+                            .field("a", &self.a)
+                            .field("b", &self.b)
+                            .field("c", &self.c)
+                            .field("d", &self.d)
+                            .finish()
+                    }
+                }
+                const _: () = {
+                    assert!(
+                        16 == < FuturesAndStreams as wasmtime::component::ComponentType
+                        >::SIZE32
+                    );
+                    assert!(
+                        4 == < FuturesAndStreams as wasmtime::component::ComponentType
+                        >::ALIGN32
+                    );
+                };
+                #[derive(Clone)]
                 pub struct Guest {
                     tuple_arg: wasmtime::component::Func,
                     tuple_result: wasmtime::component::Func,
@@ -765,7 +851,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/records")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/records`"
                                 )
                             })?;
@@ -774,7 +860,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/records` does \
                 not have export `{name}`"
                                     )

@@ -1,0 +1,28 @@
+test compile precise-output
+set opt_level=speed
+target aarch64
+
+function %fneg_chain(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v4 = fneg v0
+    v5 = fneg v4
+    v6 = fneg v5
+    v7 = fneg v6
+    v8 = fma v7, v1, v2
+    return v8
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.2d, v0.2d, v5.2d, v1.2d
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.2d, v5.2d, v1.2d
+;   ret
+

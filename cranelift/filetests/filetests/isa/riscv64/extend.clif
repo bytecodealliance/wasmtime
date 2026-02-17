@@ -45,14 +45,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srli a0,a2,48
+;   slli a0,a0,48
+;   srli a0,a0,48
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srli a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srli a0, a0, 0x30
 ;   ret
 
 function %uextend8_64(i8) -> i64 {
@@ -79,14 +79,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srli a0,a2,48
+;   slli a0,a0,48
+;   srli a0,a0,48
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srli a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srli a0, a0, 0x30
 ;   ret
 
 function %uextend32_64(i32) -> i64 {
@@ -97,14 +97,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,32
-;   srli a0,a2,32
+;   slli a0,a0,32
+;   srli a0,a0,32
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x20
-;   srli a0, a2, 0x20
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
 ;   ret
 
 ;;;; Sextend Rules
@@ -117,14 +117,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,56
-;   srai a0,a2,56
+;   slli a0,a0,56
+;   srai a0,a0,56
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x38
-;   srai a0, a2, 0x38
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
 ;   ret
 
 function %sextend8_32(i8) -> i32 {
@@ -135,14 +135,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,56
-;   srai a0,a2,56
+;   slli a0,a0,56
+;   srai a0,a0,56
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x38
-;   srai a0, a2, 0x38
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
 ;   ret
 
 function %sextend16_32(i16) -> i32 {
@@ -153,14 +153,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srai a0,a2,48
+;   slli a0,a0,48
+;   srai a0,a0,48
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srai a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srai a0, a0, 0x30
 ;   ret
 
 function %sextend8_64(i8) -> i64 {
@@ -171,14 +171,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,56
-;   srai a0,a2,56
+;   slli a0,a0,56
+;   srai a0,a0,56
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x38
-;   srai a0, a2, 0x38
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
 ;   ret
 
 function %sextend16_64(i16) -> i64 {
@@ -189,14 +189,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli a2,a0,48
-;   srai a0,a2,48
+;   slli a0,a0,48
+;   srai a0,a0,48
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x30
-;   srai a0, a2, 0x30
+;   slli a0, a0, 0x30
+;   srai a0, a0, 0x30
 ;   ret
 
 function %sextend32_64(i32) -> i64 {
@@ -225,16 +225,16 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   slli a3,a0,56
-;   srai a5,a3,56
-;   addi a0,a5,42
+;   slli a0,a0,56
+;   srai a0,a0,56
+;   addi a0,a0,42
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a3, a0, 0x38
-;   srai a5, a3, 0x38
-;   addi a0, a5, 0x2a
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
+;   addi a0, a0, 0x2a
 ;   ret
 
 function %f2(i8, i64) -> i64 {
@@ -246,18 +246,17 @@ block0(v0: i8, v1: i64):
 
 ; VCode:
 ; block0:
-;   slli a4,a0,56
-;   srai a0,a4,56
+;   slli a0,a0,56
+;   srai a0,a0,56
 ;   add a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a4, a0, 0x38
-;   srai a0, a4, 0x38
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
 ;   add a0, a0, a1
 ;   ret
-
 
 function %extend_fcmp(f64, f64) -> i64 {
 block0(v0: f64, v1: f64):

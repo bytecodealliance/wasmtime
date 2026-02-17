@@ -1,8 +1,10 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::{self, ExportMemory, VMStore};
+use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
@@ -106,8 +108,7 @@ impl core::error::Error for MemoryAccessError {}
 /// **unsafe** usages of `Memory`. Do not do these things!
 ///
 /// ```rust
-/// # use anyhow::Result;
-/// use wasmtime::{Memory, Store};
+/// use wasmtime::{Memory, Result, Store};
 ///
 /// // NOTE: All code in this function is not safe to execute and may cause
 /// // segfaults/undefined behavior at runtime. Do not copy/paste these examples
@@ -246,7 +247,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -260,9 +261,11 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
-            .expect("must use `new_async` when async resource limiters are in use")
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new(store, limiter.as_mut(), ty))
     }
 
     /// Async variant of [`Memory::new`]. You must use this variant with
@@ -304,7 +307,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1))")?;
@@ -574,20 +577,20 @@ impl Memory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     ///
+    /// This function will return an error if the [`Store`](`crate::Store`) has
+    /// a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
+    /// async resource limiter, use [`Memory::grow_async`] instead.
+    ///
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    ///
-    /// This function will panic if the [`Store`](`crate::Store`) has a
-    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
-    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
-    /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
     /// # Examples
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1 2))")?;
@@ -605,9 +608,8 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
-            .expect("must use `grow_async` if an async resource limiter is used")
+        let (mut limiter, store) = store.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(self._grow(store, limiter.as_mut(), delta))
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a
@@ -777,8 +779,9 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// used concurrently by multiple agents. Because these agents may execute in
 /// different threads, [`SharedMemory`] must be thread-safe.
 ///
-/// When the threads proposal is enabled, there are multiple ways to construct
-/// shared memory:
+/// When the [threads proposal is enabled](crate::Config::wasm_threads) and the
+/// [the creation of shared memories is enabled](crate::Config::shared_memory),
+/// there are multiple ways to construct shared memory:
 ///  1. for imported shared memory, e.g., `(import "env" "memory" (memory 1 1
 ///     shared))`, the user must supply a [`SharedMemory`] with the
 ///     externally-created memory as an import to the instance--e.g.,
@@ -794,9 +797,10 @@ pub unsafe trait MemoryCreator: Send + Sync {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
+/// config.shared_memory(true);
 /// # if Engine::new(&config).is_err() { return Ok(()); }
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
@@ -825,9 +829,8 @@ impl SharedMemory {
         }
         debug_assert!(ty.maximum().is_some());
 
-        let tunables = engine.tunables();
         let ty = ty.wasmtime_memory();
-        let memory = crate::runtime::vm::SharedMemory::new(ty, tunables)?;
+        let memory = crate::runtime::vm::SharedMemory::new(engine, ty)?;
 
         Ok(Self {
             vm: memory,

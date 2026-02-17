@@ -93,9 +93,7 @@ fn test_limits() -> Result<()> {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn test_limits_async() -> Result<()> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config).unwrap();
+    let engine = Engine::default();
     let module = Module::new(
         &engine,
         r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
@@ -544,9 +542,7 @@ impl ResourceLimiterAsync for MemoryContext {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn test_custom_memory_limiter_async() -> Result<()> {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config).unwrap();
+    let engine = Engine::default();
     let mut linker = Linker::new(&engine);
 
     // This approximates a function that would "allocate" resources that the host tracks.
@@ -726,7 +722,7 @@ impl ResourceLimiter for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn memory_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
         Ok(())
     }
@@ -740,7 +736,7 @@ impl ResourceLimiter for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn table_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
         Ok(())
     }
@@ -835,7 +831,7 @@ impl ResourceLimiterAsync for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn memory_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
         Ok(())
     }
@@ -850,7 +846,7 @@ impl ResourceLimiterAsync for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
+    fn table_grow_failed(&mut self, err: wasmtime::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
         Ok(())
     }
@@ -865,7 +861,6 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(10 << 16).table_elements(10);
     let mut config = Config::new();
-    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::<FailureDetector>::new(&engine);
@@ -1046,9 +1041,7 @@ fn panic_in_table_limiter() {
 #[should_panic(expected = "async resource limiter memory growing")]
 #[cfg_attr(miri, ignore)]
 async fn panic_in_async_memory_limiter() {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config).unwrap();
+    let engine = Engine::default();
     let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
@@ -1068,9 +1061,7 @@ async fn panic_in_async_memory_limiter() {
 async fn panic_in_async_memory_limiter_wasm_stack() {
     // Like the test above, except the memory.grow happens in
     // wasm code instead of a host function call.
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config).unwrap();
+    let engine = Engine::default();
     let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(
@@ -1098,9 +1089,7 @@ async fn panic_in_async_memory_limiter_wasm_stack() {
 #[should_panic(expected = "async resource limiter table growing")]
 #[cfg_attr(miri, ignore)]
 async fn panic_in_async_table_limiter() {
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config).unwrap();
+    let engine = Engine::default();
     let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();

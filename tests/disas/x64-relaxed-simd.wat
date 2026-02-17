@@ -52,15 +52,15 @@
 ;;       maxps   %xmm7, %xmm0
 ;;       pcmpeqd %xmm7, %xmm7
 ;;       psrld   $1, %xmm7
-;;       cvtdq2ps %xmm7, %xmm1
-;;       cvttps2dq %xmm0, %xmm7
-;;       subps   %xmm1, %xmm0
-;;       cmpleps %xmm0, %xmm1
+;;       cvtdq2ps %xmm7, %xmm2
+;;       cvttps2dq %xmm0, %xmm1
+;;       subps   %xmm2, %xmm0
+;;       cmpleps %xmm0, %xmm2
 ;;       cvttps2dq %xmm0, %xmm0
-;;       pxor    %xmm1, %xmm0
+;;       pxor    %xmm2, %xmm0
 ;;       pxor    %xmm2, %xmm2
 ;;       pmaxsd  %xmm2, %xmm0
-;;       paddd   %xmm7, %xmm0
+;;       paddd   %xmm1, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

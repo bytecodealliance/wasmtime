@@ -43,8 +43,8 @@
 //! virtual filesystem.
 //!
 //! Implementations of the `WasiFile` and `WasiDir` traits are provided
-//! for synchronous embeddings (i.e. Config::async_support(false)) in
-//! `wasi_common::sync` and for Tokio embeddings in `wasi_common::tokio`.
+//! for synchronous embeddings in `wasi_common::sync` and for Tokio embeddings
+//! in `wasi_common::tokio`.
 //!
 //! ## Traits for the rest of WASI's features
 //!
@@ -98,6 +98,8 @@ pub use sched::{Poll, WasiSched};
 pub use string_array::{StringArray, StringArrayError};
 pub use table::Table;
 
+pub(crate) use wasmtime_environ::error::Error as EnvError;
+
 // The only difference between these definitions for sync vs async is whether
 // the wasmtime::Funcs generated are async (& therefore need an async Store and an executor to run)
 // or whether they have an internal "dummy executor" that expects the implementation of all
@@ -109,11 +111,12 @@ macro_rules! define_wasi {
     ($async_mode:tt $($bounds:tt)*) => {
 
     use wasmtime::Linker;
+    use wasmtime_environ::error::Result as EnvResult;
 
     pub fn add_to_linker<T, U>(
         linker: &mut Linker<T>,
         get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-    ) -> anyhow::Result<()>
+    ) -> EnvResult<()>
         where U: Send
                 + crate::snapshots::preview_0::wasi_unstable::WasiUnstable
                 + crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1,
@@ -156,7 +159,7 @@ macro_rules! define_wasi {
 /// CLI; this would not be suitable for use in multi-tenant embeddings.
 #[cfg_attr(docsrs, doc(cfg(feature = "exit")))]
 #[cfg(feature = "exit")]
-pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
+pub fn maybe_exit_on_error(e: EnvError) -> EnvError {
     use std::process;
     use wasmtime::Trap;
 

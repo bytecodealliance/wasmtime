@@ -8,7 +8,7 @@ mod tcp;
 mod udp;
 
 impl Host for WasiSocketsCtxView<'_> {
-    fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
+    fn convert_error_code(&mut self, error: SocketError) -> wasmtime::Result<ErrorCode> {
         error.downcast()
     }
 }

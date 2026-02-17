@@ -11,7 +11,7 @@ macro_rules! foreach_builtin_function {
             // Returns an index for wasm's `table.init`.
             table_init(vmctx: vmctx, table: u32, elem: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `elem.drop`.
-            elem_drop(vmctx: vmctx, elem: u32);
+            elem_drop(vmctx: vmctx, elem: u32) -> bool;
             // Returns an index for wasm's `memory.copy`
             memory_copy(vmctx: vmctx, dst_index: u32, dst: u64, src_index: u32, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `memory.fill` instruction.
@@ -21,7 +21,7 @@ macro_rules! foreach_builtin_function {
             // Returns a value for wasm's `ref.func` instruction.
             ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns an index for wasm's `data.drop` instruction.
-            data_drop(vmctx: vmctx, data: u32);
+            data_drop(vmctx: vmctx, data: u32) -> bool;
             // Returns a table entry after lazily initializing it.
             table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
             // Returns an index for Wasm's `table.grow` instruction for `funcref`s.
@@ -247,6 +247,9 @@ macro_rules! foreach_builtin_function {
             // Throw an exception.
             #[cfg(feature = "gc")]
             throw_ref(vmctx: vmctx, exnref: u32) -> bool;
+
+            // Process a debug breakpoint.
+            breakpoint(vmctx: vmctx) -> bool;
         }
     };
 }
@@ -436,15 +439,10 @@ impl BuiltinFunctionIndex {
             (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);
 
-            // Atomics-related functions return a negative value indicating trap
-            // indicate a trap.
+            // Atomics-related functions return a negative value to indicate a trap.
             (@get memory_atomic_notify u64) => (TrapSentinel::Negative);
             (@get memory_atomic_wait32 u64) => (TrapSentinel::Negative);
             (@get memory_atomic_wait64 u64) => (TrapSentinel::Negative);
-
-            // GC returns an optional GC ref, encoded as a `u64` with a negative
-            // value indicating a trap.
-            (@get gc u64) => (TrapSentinel::Negative);
 
             // GC allocation functions return a u32 which is zero to indicate a
             // trap.

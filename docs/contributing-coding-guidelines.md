@@ -262,6 +262,41 @@ crates to the repository and where to place/name them:
   workspace-local usage, meaning that the "internal" part is only relevant on
   crates.io.
 
+### Adding Crates
+
+Adding a new crate to the Wasmtime workspace takes a bit of care. Wasmtime uses
+crates.io trusted publishing meaning that all crates are published from CI in a
+specific workflow. This means that crates must exist on crates.io prior to their
+first publication from the Wasmtime workspace and be configured for trusted
+publishing.
+
+The process for adding a new crate to the workspace looks like:
+
+1. In a PR a new crate is added and this documentation probably isn't read to
+   start out with.
+2. CI will fail in the "verify-publish" job because this crate doesn't exist on
+   crates.io.
+3. The PR author should publish a placeholder crate to crates.io.
+4. The PR author should go to "Settings" on crates.io, click on "Add" under
+   "Trusted Publishing", and enter the following:
+   fields:
+   * Publisher: `GitHub`
+   * Repository Owner: `bytecodealliance`
+   * Repository name: `wasmtime`
+   * Workflow filename: `publish-to-cratesio.yml`
+   * Environment name: `publish`
+5. The PR author should then check the box for requiring all publishes to use
+   the trusted publishing workflow.
+6. The PR author should invite the `wasmtime-publish` user to this crate.
+7. A Wasmtime maintainer, with access to the BA 1password vault, will log in to
+   crates.io as the `wasmtime-publish` user to accept the invite. Wasmtime
+   maintainers should double-check all of the settings and remove the original
+   owner of the crate so just `wasmtime-publish` owns the crate.
+
+This ensures that when publication time rolls around the crate is already
+reserved on GitHub and the publication workflow will succeed. After the initial
+publication the crate is managed by Wasmtime maintainers.
+
 ### Use of `unsafe`
 
 Wasmtime is a project that contains `unsafe` Rust code. Wasmtime is also used in

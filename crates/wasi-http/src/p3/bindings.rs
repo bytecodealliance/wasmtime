@@ -4,9 +4,9 @@
 mod generated {
     wasmtime::component::bindgen!({
         path: "src/p3/wit",
-        world: "wasi:http/proxy",
+        world: "wasi:http/service",
         imports: {
-            "wasi:http/handler.handle": store | trappable | tracing,
+            "wasi:http/client.send": store | trappable | tracing,
             "wasi:http/types.[drop]request": store | trappable | tracing,
             "wasi:http/types.[drop]response": store | trappable | tracing,
             "wasi:http/types.[static]request.consume-body": store | trappable | tracing,
@@ -37,8 +37,8 @@ mod generated {
 
 pub use self::generated::wasi::*;
 
-/// Raw bindings to the `wasi:http/proxy` exports.
+/// Raw bindings to the `wasi:http/service` exports.
 pub use self::generated::exports;
 
-/// Bindings to the `wasi:http/proxy` world.
-pub use self::generated::{Proxy, ProxyIndices, ProxyPre};
+/// Bindings to the `wasi:http/service` world.
+pub use self::generated::{Service, ServiceIndices, ServicePre};

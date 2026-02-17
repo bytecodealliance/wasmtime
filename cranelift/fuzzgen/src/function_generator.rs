@@ -119,7 +119,6 @@ fn insert_call(
 ) -> Result<()> {
     assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
     let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
-
     insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
 }
 
@@ -200,10 +199,14 @@ fn insert_cmp(
             // https://github.com/bytecodealliance/wasmtime/issues/4850
             (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
             (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
-            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
+
+            // Not implemented on aarch64 for vectors
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan)
+            | (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => {
+                args[0].is_vector()
+            }
 
             // These are not implemented on x86_64, for vectors.
             (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
@@ -917,7 +920,7 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::GetFramePointer),
                 (Opcode::GetStackPointer),
                 (Opcode::GetReturnAddress),
-                (Opcode::X86Blendv),
+                (Opcode::Blendv),
                 (Opcode::IcmpImm),
                 (Opcode::X86Pmulhrsw),
                 (Opcode::IaddImm),
@@ -1617,6 +1620,7 @@ where
                 // time cranelift-jit puts all functions in their own mmap so
                 // they also cannot be colocated.
                 colocated: false,
+                patchable: false,
             });
 
             self.resources

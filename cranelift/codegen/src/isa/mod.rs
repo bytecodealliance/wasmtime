@@ -23,7 +23,7 @@
 //! # #[macro_use] extern crate target_lexicon;
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
-//! use std::str::FromStr;
+//! use core::str::FromStr;
 //! use target_lexicon::Triple;
 //!
 //! let shared_builder = settings::builder();
@@ -50,16 +50,16 @@ use crate::CodegenResult;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::{UnwindInfoKind, systemv::RegisterMappingError};
-use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
+use crate::machinst::{CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
 use crate::{Reg, flowgraph};
+use alloc::string::String;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
-use std::string::String;
 use target_lexicon::{Architecture, PointerWidth, Triple, triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -146,7 +146,7 @@ pub enum LookupError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for LookupError {}
+impl core::error::Error for LookupError {}
 
 impl fmt::Display for LookupError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -329,7 +329,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &CompiledCode,
+        result: &crate::machinst::CompiledCode,
         kind: UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
 
@@ -391,9 +391,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns whether this ISA has instructions for `ceil`, `floor`, etc.
     fn has_round(&self) -> bool;
 
-    /// Returns whether the CLIF `x86_blendv` instruction is implemented for
+    /// Returns whether the CLIF `blendv` instruction is implemented for
     /// this ISA for the specified type.
-    fn has_x86_blendv_lowering(&self, ty: Type) -> bool;
+    fn has_blendv_lowering(&self, ty: Type) -> bool;
 
     /// Returns whether the CLIF `x86_pshufb` instruction is implemented for
     /// this ISA.

@@ -1,9 +1,8 @@
 use crate::prelude::*;
-use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
+use crate::store::{AsStoreOpaque, Asyncness, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
 use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
-use anyhow::{Result, anyhow};
 use core::mem;
 use core::ops::Range;
 use core::pin::Pin;
@@ -85,6 +84,12 @@ pub(crate) struct AsyncState {
     // be multiple concurrent fibers in play; consider caching more than one
     // stack at a time and making the number tunable via `Config`.
     last_fiber_stack: Option<wasmtime_fiber::FiberStack>,
+
+    /// Whether or not this store has async host functions defined somewhere
+    /// within it or some other store-related configuration (e.g. epochs
+    /// yielding) which requires that wasm is executed on a fiber, thus async
+    /// entrypoints are required.
+    pub(crate) async_required: bool,
 }
 
 // SAFETY: it's known that `std::task::Context` is neither `Send` nor `Sync`,
@@ -103,6 +108,7 @@ impl Default for AsyncState {
             current_suspend: None,
             current_future_cx: None,
             last_fiber_stack: None,
+            async_required: false,
         }
     }
 }
@@ -110,6 +116,12 @@ impl Default for AsyncState {
 impl AsyncState {
     pub(crate) fn last_fiber_stack(&mut self) -> &mut Option<wasmtime_fiber::FiberStack> {
         &mut self.last_fiber_stack
+    }
+
+    /// Returns whether `block_on` will succeed or panic.
+    #[inline]
+    pub(crate) fn can_block(&mut self) -> bool {
+        self.current_future_cx.is_some()
     }
 }
 
@@ -322,6 +334,7 @@ impl<T> StoreContextMut<'_, T> {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
+    #[cfg(feature = "component-model")]
     pub(crate) fn block_on<R>(
         self,
         f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
@@ -357,10 +370,24 @@ impl StoreOpaque {
         BlockingContext::with(self, |store, cx| f(store, cx))
     }
 
-    /// Returns whether `block_on` will succeed or panic.
-    #[cfg(feature = "call-hook")]
-    pub(crate) fn can_block(&mut self) -> bool {
-        self.fiber_async_state_mut().current_future_cx.is_some()
+    /// Used when any configuration option that affects a store, as a side
+    /// effect, disallows further use of sync APIs in Wasmtime.
+    ///
+    /// For example enabling async yielding epochs, async yielding fuel, or
+    /// async resource limiters all require that wasm is invoked on fibers.
+    /// These options, when enabled, will all set this flag.
+    ///
+    /// Note that this specifically only models the transition from "some
+    /// previous state" to "async is now required". There's no reasonable way to
+    /// iterate through a store and recompute this if epoch settings, for
+    /// example, are dynamically changed.
+    pub(crate) fn set_async_required(&mut self, asyncness: Asyncness) {
+        match asyncness {
+            Asyncness::Yes => {
+                self.fiber_async_state_mut().async_required = true;
+            }
+            Asyncness::No => {}
+        }
     }
 }
 
@@ -421,7 +448,7 @@ impl<'a> StoreFiber<'a> {
     pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
         if let Some(fiber) = self.fiber() {
             if !fiber.done() {
-                let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
+                let result = resume_fiber(store, self, Err(format_err!("future dropped")));
                 debug_assert!(result.is_ok());
             }
         }
@@ -756,7 +783,7 @@ where
 {
     let opaque = store.as_store_opaque();
     let engine = opaque.engine().clone();
-    let executor = Executor::new(&engine);
+    let executor = Executor::new(&engine)?;
     let id = opaque.id();
     let stack = opaque.allocate_fiber_stack()?;
     let track_pkey_context_switch = opaque.has_pkey();
@@ -855,7 +882,6 @@ where
 {
     let opaque = store.as_store_opaque();
     let config = opaque.engine().config();
-    debug_assert!(opaque.async_support());
     debug_assert!(config.async_stack_size > 0);
 
     let mut result = None;

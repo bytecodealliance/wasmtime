@@ -1,6 +1,6 @@
 use super::{DOWNLOAD_LOCK, artifacts_dir, download};
-use anyhow::{Context, Result, bail};
 use std::fs;
+use wasmtime::{Result, bail, error::Context as _};
 
 /// Return `Ok` if we find a working OpenVINO installation.
 pub fn is_installed() -> Result<()> {

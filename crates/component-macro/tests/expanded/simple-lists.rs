@@ -103,8 +103,6 @@ pub struct MyWorld {
     interface0: exports::foo::foo::simple_lists::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl MyWorldIndices {
         /// Creates a new copy of `MyWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple_lists {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -326,7 +324,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple_lists {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     simple_list1: wasmtime::component::Func,
                     simple_list2: wasmtime::component::Func,
@@ -354,7 +353,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple-lists")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple-lists`"
                                 )
                             })?;
@@ -363,7 +362,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple-lists` does \
                         not have export `{name}`"
                                     )
@@ -445,7 +444,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list1)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_simple_list2<S: wasmtime::AsContextMut>(
@@ -459,7 +457,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list2)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_simple_list3<S: wasmtime::AsContextMut>(
@@ -485,7 +482,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list3)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_simple_list4<S: wasmtime::AsContextMut>(
@@ -508,7 +504,6 @@ pub mod exports {
                             >::new_unchecked(self.simple_list4)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

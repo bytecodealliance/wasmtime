@@ -188,8 +188,8 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl $0xffff, %ecx
-;   movd %ecx, %xmm1
+;   movl $0xffff, %esi
+;   movd %esi, %xmm1
 ;   pshuflw $0x0, %xmm1, %xmm3
 ;   pshufd $0x0, %xmm3, %xmm0
 ;   movq %rbp, %rsp
@@ -201,8 +201,8 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0xffff, %ecx
-;   movd %ecx, %xmm1
+;   movl $0xffff, %esi
+;   movd %esi, %xmm1
 ;   pshuflw $0, %xmm1, %xmm3
 ;   pshufd $0, %xmm3, %xmm0
 ;   movq %rbp, %rsp

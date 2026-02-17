@@ -139,6 +139,14 @@ pub(crate) fn do_inlining(
             debug_assert_eq!(Some(block), cursor.func.layout.inst_block(inst));
 
             match cursor.func.dfg.insts[inst] {
+                ir::InstructionData::Call { func_ref, .. }
+                    if cursor.func.dfg.ext_funcs[func_ref].patchable =>
+                {
+                    // Can't inline patchable calls; they need to
+                    // remain patchable and inlining the whole body is
+                    // decidedly *not* patchable!
+                }
+
                 ir::InstructionData::Call {
                     opcode: opcode @ ir::Opcode::Call | opcode @ ir::Opcode::ReturnCall,
                     args: _,
@@ -1471,6 +1479,7 @@ fn create_func_refs(
         name,
         signature,
         colocated,
+        patchable,
     } in callee.dfg.ext_funcs.values()
     {
         func.dfg.ext_funcs.push(ir::ExtFuncData {
@@ -1487,6 +1496,7 @@ fn create_func_refs(
             },
             signature: entity_map.inlined_sig_ref(*signature),
             colocated: *colocated,
+            patchable: *patchable,
         });
     }
 

@@ -3,13 +3,13 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::append_vmctx_info;
 use crate::debug::Compilation;
 use crate::translate::get_vmctx_value_label;
-use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::LineEncoding;
 use gimli::write;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasmtime_environ::error::{Context, Error};
 use wasmtime_environ::{
     DebugInfoData, EntityRef, FunctionMetadata, PrimaryMap, StaticModuleIndex, WasmFileInfo,
     WasmValType,
@@ -196,7 +196,7 @@ fn generate_vars(
     addr_tr: &AddressTransform,
     frame_info: &FunctionFrameInfo,
     scope_ranges: &[(u64, u64)],
-    vmctx_ptr_die_ref: write::Reference,
+    vmctx_ptr_die_ref: write::DebugInfoRef,
     wasm_types: &WasmTypesDieRefs,
     func_meta: &FunctionMetadata,
     locals_names: Option<&HashMap<u32, &str>>,
@@ -290,7 +290,7 @@ pub fn generate_simulated_dwarf(
     addr_tr: &PrimaryMap<StaticModuleIndex, AddressTransform>,
     translated: &HashSet<usize>,
     out_encoding: gimli::Encoding,
-    vmctx_ptr_die_refs: &PrimaryMap<StaticModuleIndex, write::Reference>,
+    vmctx_ptr_die_refs: &PrimaryMap<StaticModuleIndex, write::DebugInfoRef>,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,

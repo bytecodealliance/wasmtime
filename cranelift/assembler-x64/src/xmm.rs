@@ -2,6 +2,8 @@
 
 use crate::{AsReg, CodeSink, rex::encode_modrm};
 
+use alloc::string::String;
+
 /// An x64 SSE register (e.g., `%xmm0`).
 #[derive(Clone, Copy, Debug)]
 pub struct Xmm<R: AsReg = u8>(pub(crate) R);

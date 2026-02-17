@@ -1,7 +1,9 @@
 //! Working with GC `array` objects.
 
-use crate::runtime::vm::{VMGcRef, VMStore};
-use crate::store::{StoreId, StoreResourceLimiter};
+use crate::runtime::vm::VMGcRef;
+use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::vm::{self, VMArrayRef, VMGcHeader};
 use crate::{AnyRef, FieldType};
 use crate::{
@@ -148,7 +150,7 @@ impl ArrayRefPre {
 ///             Ok(oom) => {
 ///                 // Do a GC! Note: in an async context, you'd want to do
 ///                 // `scope.as_context_mut().gc_async().await`.
-///                 scope.as_context_mut().gc(Some(&oom));
+///                 scope.as_context_mut().gc(Some(&oom))?;
 ///
 ///                 // Try again. If the GC heap is still out of memory, then we
 ///                 // weren't able to free up resources for this allocation, so
@@ -283,11 +285,11 @@ impl ArrayRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error will
+    /// be returned because [`ArrayRef::new_async`] should be used instead.
     ///
-    /// Panics if the `store` is configured for async; use
-    /// [`ArrayRef::new_async`][crate::ArrayRef::new_async] to perform
-    /// asynchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if either the allocator or the `elem` value is not associated
     /// with the given store.
@@ -297,14 +299,17 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
         vm::assert_ready(Self::_new_async(
             store,
             limiter.as_mut(),
             allocator,
             elem,
             len,
+            Asyncness::No,
         ))
     }
 
@@ -348,7 +353,15 @@ impl ArrayRef {
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), allocator, elem, len).await
+        Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elem,
+            len,
+            Asyncness::Yes,
+        )
+        .await
     }
 
     pub(crate) async fn _new_async(
@@ -357,9 +370,10 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elem: &Val,
         len: u32,
+        asyncness: Asyncness,
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
             .await
@@ -440,11 +454,12 @@ impl ArrayRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error
+    /// will be returned because [`ArrayRef::new_fixed_async`] should be used
+    /// instead.
     ///
-    /// Panics if the `store` is configured for async; use
-    /// [`ArrayRef::new_fixed_async`][crate::ArrayRef::new_fixed_async] to
-    /// perform asynchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if the allocator or any of the `elems` values are not associated
     /// with the given store.
@@ -453,13 +468,16 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
         vm::assert_ready(Self::_new_fixed_async(
             store,
             limiter.as_mut(),
             allocator,
             elems,
+            Asyncness::No,
         ))
     }
 
@@ -505,7 +523,7 @@ impl ArrayRef {
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_fixed_async(store, limiter.as_mut(), allocator, elems).await
+        Self::_new_fixed_async(store, limiter.as_mut(), allocator, elems, Asyncness::Yes).await
     }
 
     pub(crate) async fn _new_fixed_async(
@@ -513,9 +531,10 @@ impl ArrayRef {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ArrayRefPre,
         elems: &[Val],
+        asyncness: Asyncness,
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_from_iter(store, allocator, elems.iter())
             })
             .await

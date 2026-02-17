@@ -15,10 +15,10 @@ block0(v0: i16x8, v1: i16x8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vnclip.wi v8,v9,0 #avl=8, #vtype=(e8, mf2, ta, ma)
-;   vnclip.wi v9,v11,0 #avl=8, #vtype=(e8, mf2, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vnclip.wi v8,v8,0 #avl=8, #vtype=(e8, mf2, ta, ma)
+;   vnclip.wi v9,v9,0 #avl=8, #vtype=(e8, mf2, ta, ma)
 ;   vslideup.vi v8,v9,8 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
@@ -35,12 +35,12 @@ block0(v0: i16x8, v1: i16x8):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x74, 0xcc
-;   .byte 0x57, 0x34, 0x90, 0xbe
-;   .byte 0xd7, 0x34, 0xb0, 0xbe
+;   .byte 0x57, 0x34, 0x80, 0xbe
+;   .byte 0xd7, 0x34, 0x90, 0xbe
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   .byte 0x57, 0x34, 0x94, 0x3a
 ;   .byte 0x27, 0x04, 0x05, 0x02
@@ -61,10 +61,10 @@ block0(v0: i32x4, v1: i32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vnclip.wi v8,v9,0 #avl=4, #vtype=(e16, mf2, ta, ma)
-;   vnclip.wi v9,v11,0 #avl=4, #vtype=(e16, mf2, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vnclip.wi v8,v8,0 #avl=4, #vtype=(e16, mf2, ta, ma)
+;   vnclip.wi v9,v9,0 #avl=4, #vtype=(e16, mf2, ta, ma)
 ;   vslideup.vi v8,v9,4 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
@@ -81,12 +81,12 @@ block0(v0: i32x4, v1: i32x4):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0xf2, 0xcc
-;   .byte 0x57, 0x34, 0x90, 0xbe
-;   .byte 0xd7, 0x34, 0xb0, 0xbe
+;   .byte 0x57, 0x34, 0x80, 0xbe
+;   .byte 0xd7, 0x34, 0x90, 0xbe
 ;   .byte 0x57, 0x70, 0x84, 0xcc
 ;   .byte 0x57, 0x34, 0x92, 0x3a
 ;   .byte 0x57, 0x70, 0x08, 0xcc
@@ -108,10 +108,10 @@ block0(v0: i64x2, v1: i64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vnclip.wi v8,v9,0 #avl=2, #vtype=(e32, mf2, ta, ma)
-;   vnclip.wi v9,v11,0 #avl=2, #vtype=(e32, mf2, ta, ma)
+;   vle8.v v8,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vnclip.wi v8,v8,0 #avl=2, #vtype=(e32, mf2, ta, ma)
+;   vnclip.wi v9,v9,0 #avl=2, #vtype=(e32, mf2, ta, ma)
 ;   vslideup.vi v8,v9,2 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
@@ -128,12 +128,12 @@ block0(v0: i64x2, v1: i64x2):
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, sp, 0x10
-;   .byte 0x87, 0x84, 0x0f, 0x02
+;   .byte 0x07, 0x84, 0x0f, 0x02
 ;   addi t6, sp, 0x20
-;   .byte 0x87, 0x85, 0x0f, 0x02
+;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x71, 0xcd
-;   .byte 0x57, 0x34, 0x90, 0xbe
-;   .byte 0xd7, 0x34, 0xb0, 0xbe
+;   .byte 0x57, 0x34, 0x80, 0xbe
+;   .byte 0xd7, 0x34, 0x90, 0xbe
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x34, 0x91, 0x3a
 ;   .byte 0x57, 0x70, 0x08, 0xcc

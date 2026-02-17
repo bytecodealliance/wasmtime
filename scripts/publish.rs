@@ -17,9 +17,9 @@ use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
-    // pulley
+    "wasmtime-internal-core",
     "cranelift-bitset",
-    "wasmtime-internal-math",
+    // pulley
     "pulley-macros",
     "pulley-interpreter",
     // cranelift
@@ -31,7 +31,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
-    "cranelift-egraph",
     "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
@@ -41,6 +40,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
+    "wasmtime-internal-component-util",
+    "wasmtime-environ",
     "wasmtime-internal-jit-icache-coherence",
     // Wasmtime unwinder, used by both `cranelift-jit` (optionally) and filetests, and by Wasmtime.
     "wasmtime-internal-unwinder",
@@ -50,17 +51,12 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
-    // winch
-    "winch",
     // wasmtime
     "wasmtime-internal-versioned-export-macros",
-    "wasmtime-internal-slab",
-    "wasmtime-internal-component-util",
     "wasmtime-internal-wit-bindgen",
     "wasmtime-internal-component-macro",
     "wasmtime-internal-jit-debug",
     "wasmtime-internal-fiber",
-    "wasmtime-environ",
     "wasmtime-internal-wmemcheck",
     "wasmtime-internal-cranelift",
     "wasmtime-internal-cache",
@@ -80,12 +76,14 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-threads",
     "wasmtime-wasi-tls",
     "wasmtime-wasi-tls-nativetls",
+    "wasmtime-wasi-tls-openssl",
     "wasmtime-wast",
     "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
     "wasmtime-wizer",
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
+    "wasmtime-internal-debugger",
     "wasmtime-cli",
 ];
 
@@ -101,6 +99,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi",
     "wasmtime-wasi-tls",
     "wasmtime-wasi-tls-nativetls",
+    "wasmtime-wasi-tls-openssl",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
@@ -248,11 +247,7 @@ fn run_cmd(cmd: &mut Command) {
 fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
     if dir.join("Cargo.toml").exists() {
         let krate = read_crate(Some(ws), &dir.join("Cargo.toml"));
-        if !krate.publish || CRATES_TO_PUBLISH.iter().any(|c| krate.name == *c) {
-            dst.push(krate);
-        } else {
-            panic!("failed to find {:?} in whitelist or blacklist", krate.name);
-        }
+        dst.push(krate);
     }
 
     for entry in dir.read_dir().unwrap() {
@@ -295,6 +290,11 @@ fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
     }
     let name = name.unwrap();
     let version = version.unwrap();
+    assert!(
+        !publish || CRATES_TO_PUBLISH.contains(&&name[..]),
+        "a crate must either be listed in `CRATES_TO_PUBLISH` or have `publish = false` \
+         in its `Cargo.toml`"
+    );
     Crate {
         manifest: manifest.to_path_buf(),
         name,
@@ -304,9 +304,10 @@ fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
 }
 
 fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
+    println!("bumping `{}`...", krate.name);
     let contents = fs::read_to_string(&krate.manifest).unwrap();
     let next_version = |krate: &Crate| -> String {
-        if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
+        if krate.publish {
             bump(&krate.version, patch)
         } else {
             krate.version.clone()
@@ -318,13 +319,8 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
     for line in contents.lines() {
         let mut rewritten = false;
         if !is_deps && line.starts_with("version =") {
-            if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
-                println!(
-                    "bump `{}` {} => {}",
-                    krate.name,
-                    krate.version,
-                    next_version(krate),
-                );
+            if krate.publish {
+                println!("  {} => {}", krate.version, next_version(krate));
                 new_manifest.push_str(&line.replace(&krate.version, &next_version(krate)));
                 rewritten = true;
             }
@@ -345,7 +341,8 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
             }
             if !is_deps
                 || (!line.starts_with(&format!("{} ", other.name))
-                    && !line.contains(&format!("package = '{}'", other.name)))
+                    && !(line.contains(&format!("package = '{}'", other.name))
+                        || line.contains(&format!("package = \"{}\"", other.name))))
             {
                 continue;
             }
@@ -441,7 +438,7 @@ fn bump(version: &str, patch_bump: bool) -> String {
 }
 
 fn publish(krate: &Crate) -> bool {
-    if !CRATES_TO_PUBLISH.iter().any(|s| *s == krate.name) {
+    if !krate.publish {
         return true;
     }
 
@@ -471,34 +468,6 @@ fn publish(krate: &Crate) -> bool {
         println!("FAIL: failed to publish `{}`: {}", krate.name, status);
         return false;
     }
-
-    // After we've published then make sure that the `wasmtime-publish` group is
-    // added to this crate for future publications. If it's already present
-    // though we can skip the `cargo owner` modification.
-    let Some(output) = curl(&format!(
-        "https://crates.io/api/v1/crates/{}/owners",
-        krate.name
-    )) else {
-        return false;
-    };
-    if output.contains("wasmtime-publish") {
-        println!(
-            "wasmtime-publish already listed as an owner of {}",
-            krate.name
-        );
-        return true;
-    }
-
-    // Note that the status is ignored here. This fails most of the time because
-    // the owner is already set and present, so we only want to add this to
-    // crates which haven't previously been published.
-    run_cmd(
-        Command::new("cargo")
-            .arg("owner")
-            .arg("-a")
-            .arg("github:bytecodealliance:wasmtime-publish")
-            .arg(&krate.name),
-    );
 
     true
 }
@@ -614,26 +583,47 @@ fn verify(crates: &[Crate]) {
     fn verify_crates_io(krate: &Crate) {
         let name = &krate.name;
         let Some(owners) = curl(&format!("https://crates.io/api/v1/crates/{name}/owners")) else {
-            panic!("failed to get owners for {name}", name = name);
-        };
+            panic!(
+                "
+failed to get owners for {name}
 
-        let assert_owner = |owner: &str| {
-            let owner_json = format!("\"{owner}\"");
-            if !owners.contains(&owner_json) {
-                panic!(
-                    "
-crate {name} is not owned by {owner}, please run:
+If this crate does not exist on crates.io yet please visit
 
-    cargo owner -a {owner} {name}
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
 ",
-                    name = name
-                );
-            }
+                name = name,
+            );
         };
 
-        // the wasmtime-publish github user
-        assert_owner("wasmtime-publish");
-        // the BA team which can publish crates
-        assert_owner("github:bytecodealliance:wasmtime-publish");
+        // This is the id of the `wasmtime-publish` user on crates.io
+        if !owners.contains("\"id\":73222,") {
+            panic!(
+                "
+crate {name} is not owned by wasmtime-publish, please visit:
+
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
+",
+                name = name,
+            );
+        }
+
+        // TODO: waiting for trusted publishing to be proven to work before
+        // activating this.
+        if false && owners.split("\"id\"").count() != 2 {
+            panic!(
+                "
+crate {name} is not exclusively owned by wasmtime-publish, please visit:
+
+  https://docs.wasmtime.dev/contributing-coding-guidelines.html#adding-crates
+
+and follow the instructions there
+",
+                name = name,
+            );
+        }
     }
 }

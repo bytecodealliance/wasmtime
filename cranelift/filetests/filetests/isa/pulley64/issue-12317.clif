@@ -1,0 +1,19 @@
+test compile
+target pulley64
+
+function %trigger_bug(i32) -> i32 {
+    sig0 = (i32) -> i32 winch
+    fn0 = %callee(i32) -> i32 winch
+
+    block0(v0: i32):
+        ; try_call triggers the bug by invoking exception handling codegen
+        ; Note: We omit exn0 because exception_payload_types is empty
+        try_call fn0(v0), sig0, block1(ret0), [ default: block2 ]
+
+    block1(v1: i32):
+        return v1
+
+    block2:
+        v3 = iconst.i32 -1
+        return v3
+}

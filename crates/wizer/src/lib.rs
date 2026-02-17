@@ -19,11 +19,14 @@ pub use wasmtime::*;
 mod component;
 #[cfg(feature = "component-model")]
 pub use component::*;
+#[cfg(not(feature = "rayon"))]
+mod rayoff;
 
 pub use crate::info::ModuleContext;
 pub use crate::snapshot::SnapshotVal;
-use anyhow::Context;
+use ::wasmtime::{Result, bail, error::Context as _};
 use std::collections::{HashMap, HashSet};
+pub use wasmparser::ValType;
 
 const DEFAULT_KEEP_INIT_FUNC: bool = false;
 
@@ -98,10 +101,10 @@ pub struct Wizer {
 }
 
 #[cfg(feature = "clap")]
-fn parse_rename(s: &str) -> anyhow::Result<(String, String)> {
+fn parse_rename(s: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
-        anyhow::bail!("must contain exactly one equals character ('=')");
+        bail!("must contain exactly one equals character ('=')");
     }
     Ok((parts[0].into(), parts[1].into()))
 }
@@ -117,7 +120,7 @@ struct FuncRenames {
 }
 
 impl FuncRenames {
-    fn parse(renames: &[(String, String)]) -> anyhow::Result<FuncRenames> {
+    fn parse(renames: &[(String, String)]) -> Result<FuncRenames> {
         let mut ret = FuncRenames {
             rename_src_to_dst: HashMap::new(),
             rename_dsts: HashSet::new(),
@@ -128,10 +131,10 @@ impl FuncRenames {
 
         for (dst, src) in renames {
             if ret.rename_dsts.contains(dst) {
-                anyhow::bail!("Duplicated function rename dst {dst}");
+                bail!("Duplicated function rename dst {dst}");
             }
             if ret.rename_src_to_dst.contains_key(src) {
-                anyhow::bail!("Duplicated function rename src {src}");
+                bail!("Duplicated function rename src {src}");
             }
             ret.rename_dsts.insert(dst.clone());
             ret.rename_src_to_dst.insert(src.clone(), dst.clone());
@@ -186,7 +189,7 @@ impl Wizer {
     ///
     /// After the returned wasm is executed the context returned here and the
     /// state of the instance should be passed to [`Self::snapshot`].
-    pub fn instrument<'a>(&self, wasm: &'a [u8]) -> anyhow::Result<(ModuleContext<'a>, Vec<u8>)> {
+    pub fn instrument<'a>(&self, wasm: &'a [u8]) -> Result<(ModuleContext<'a>, Vec<u8>)> {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
@@ -197,15 +200,16 @@ impl Wizer {
         for import in cx.imports() {
             match import.ty {
                 wasmparser::TypeRef::Global(_) => {
-                    anyhow::bail!("imported globals are not supported")
+                    bail!("imported globals are not supported")
                 }
                 wasmparser::TypeRef::Table(_) => {
-                    anyhow::bail!("imported tables are not supported")
+                    bail!("imported tables are not supported")
                 }
                 wasmparser::TypeRef::Memory(_) => {
-                    anyhow::bail!("imported memories are not supported")
+                    bail!("imported memories are not supported")
                 }
                 wasmparser::TypeRef::Func(_) => {}
+                wasmparser::TypeRef::FuncExact(_) => {}
                 wasmparser::TypeRef::Tag(_) => {}
             }
         }
@@ -226,12 +230,12 @@ impl Wizer {
         &self,
         mut cx: ModuleContext<'_>,
         instance: &mut impl InstanceState,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         // Parse rename spec.
         let renames = FuncRenames::parse(&self.func_renames)?;
 
         let snapshot = snapshot::snapshot(&cx, instance).await;
-        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
+        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames, true);
 
         self.debug_assert_valid_wasm(&rewritten_wasm);
 
@@ -252,7 +256,7 @@ impl Wizer {
         }
     }
 
-    fn wasm_validate(&self, wasm: &[u8]) -> anyhow::Result<()> {
+    fn wasm_validate(&self, wasm: &[u8]) -> Result<()> {
         log::debug!("Validating input Wasm");
 
         wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
@@ -278,19 +282,19 @@ impl Wizer {
                             // mutated, allowing these instructions, but that's
                             // also not possible at this time.
                             wasmparser::Operator::TableCopy { .. } => {
-                                anyhow::bail!("unsupported `table.copy` instruction")
+                                bail!("unsupported `table.copy` instruction")
                             }
                             wasmparser::Operator::TableInit { .. } => {
-                                anyhow::bail!("unsupported `table.init` instruction")
+                                bail!("unsupported `table.init` instruction")
                             }
                             wasmparser::Operator::TableSet { .. } => {
-                                anyhow::bail!("unsupported `table.set` instruction")
+                                bail!("unsupported `table.set` instruction")
                             }
                             wasmparser::Operator::TableGrow { .. } => {
-                                anyhow::bail!("unsupported `table.grow` instruction")
+                                bail!("unsupported `table.grow` instruction")
                             }
                             wasmparser::Operator::TableFill { .. } => {
-                                anyhow::bail!("unsupported `table.fill` instruction")
+                                bail!("unsupported `table.fill` instruction")
                             }
 
                             // Wizer has no way of dynamically determining which
@@ -301,10 +305,10 @@ impl Wizer {
                             // initialization function, but that can't be done
                             // easily at this time.
                             wasmparser::Operator::ElemDrop { .. } => {
-                                anyhow::bail!("unsupported `elem.drop` instruction")
+                                bail!("unsupported `elem.drop` instruction")
                             }
                             wasmparser::Operator::DataDrop { .. } => {
-                                anyhow::bail!("unsupported `data.drop` instruction")
+                                bail!("unsupported `data.drop` instruction")
                             }
 
                             // Wizer can't snapshot GC references, so disallow
@@ -312,22 +316,22 @@ impl Wizer {
                             // example, reading something from a table and then
                             // mutating it.
                             wasmparser::Operator::StructSet { .. } => {
-                                anyhow::bail!("unsupported `struct.set` instruction")
+                                bail!("unsupported `struct.set` instruction")
                             }
                             wasmparser::Operator::ArraySet { .. } => {
-                                anyhow::bail!("unsupported `array.set` instruction")
+                                bail!("unsupported `array.set` instruction")
                             }
                             wasmparser::Operator::ArrayFill { .. } => {
-                                anyhow::bail!("unsupported `array.fill` instruction")
+                                bail!("unsupported `array.fill` instruction")
                             }
                             wasmparser::Operator::ArrayCopy { .. } => {
-                                anyhow::bail!("unsupported `array.copy` instruction")
+                                bail!("unsupported `array.copy` instruction")
                             }
                             wasmparser::Operator::ArrayInitData { .. } => {
-                                anyhow::bail!("unsupported `array.init_data` instruction")
+                                bail!("unsupported `array.init_data` instruction")
                             }
                             wasmparser::Operator::ArrayInitElem { .. } => {
-                                anyhow::bail!("unsupported `array.init_elem` instruction")
+                                bail!("unsupported `array.init_elem` instruction")
                             }
 
                             _ => continue,
@@ -347,9 +351,7 @@ impl Wizer {
                             | wasmparser::ValType::F64
                             | wasmparser::ValType::V128 => {}
                             wasmparser::ValType::Ref(_) => {
-                                anyhow::bail!(
-                                    "unsupported mutable global containing a reference type"
-                                )
+                                bail!("unsupported mutable global containing a reference type")
                             }
                         }
                     }
@@ -378,7 +380,11 @@ pub trait InstanceState {
     ///
     /// This function panics if `name` isn't an exported global or if the type
     /// of the global doesn't fit in `SnapshotVal`.
-    fn global_get(&mut self, name: &str) -> impl Future<Output = SnapshotVal> + Send;
+    fn global_get(
+        &mut self,
+        name: &str,
+        type_hint: ValType,
+    ) -> impl Future<Output = SnapshotVal> + Send;
 
     /// Loads the contents of the memory specified by `name`, returning the
     /// entier contents as a `Vec<u8>`.

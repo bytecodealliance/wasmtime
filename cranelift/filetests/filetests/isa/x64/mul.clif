@@ -495,8 +495,8 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movzwq (%rdi), %rcx
-;   imulw $0x3fd, %cx, %ax
+;   movzwq (%rdi), %rsi
+;   imulw $0x3fd, %si, %ax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -506,8 +506,8 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movzwq (%rdi), %rcx ; trap: heap_oob
-;   imulw $0x3fd, %cx, %ax
+;   movzwq (%rdi), %rsi ; trap: heap_oob
+;   imulw $0x3fd, %si, %ax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

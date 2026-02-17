@@ -19,11 +19,6 @@ use crate::{
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_config_async_support_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.async_support(enable);
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, size: usize) {
     c.config.async_stack_size(size);
 }

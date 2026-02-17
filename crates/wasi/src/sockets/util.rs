@@ -6,7 +6,7 @@ use core::time::Duration;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
 use rustix::fd::AsFd;
 use rustix::io::Errno;
-use rustix::net::{bind, connect_unspec, sockopt};
+use rustix::net::{bind, connect, connect_unspec, sockopt};
 use tracing::debug;
 
 use crate::sockets::SocketAddressFamily;
@@ -337,13 +337,15 @@ pub fn tcp_bind(
     socket: &tokio::net::TcpSocket,
     local_address: SocketAddr,
 ) -> Result<(), ErrorCode> {
-    // Automatically bypass the TIME_WAIT state when binding to a specific port
-    // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-    // This ensures we're not accidentally affected by any socket option
-    // state left behind by a previous failed call to this method.
+    // From the WASI spec:
+    // > The bind operation shouldn't be affected by the TIME_WAIT state of a
+    // > recently closed socket on the same local address. In practice this
+    // > means that the SO_REUSEADDR socket option should be set implicitly on
+    // > all platforms, except on Windows where this is the default behavior
+    // > and SO_REUSEADDR performs something different.
     #[cfg(not(windows))]
-    if let Err(err) = sockopt::set_socket_reuseaddr(&socket, local_address.port() > 0) {
-        return Err(err.into());
+    {
+        _ = sockopt::set_socket_reuseaddr(&socket, true);
     }
 
     // Perform the OS bind call.
@@ -394,7 +396,27 @@ pub fn udp_bind(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), ErrorCode> {
     })
 }
 
-pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), ErrorCode> {
+pub fn udp_connect(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), Errno> {
+    match connect(sockfd.as_fd(), &addr) {
+        // When connecting a UDP socket, the OS looks up the best route to the
+        // remote address and selects an appropriate outgoing interface.
+        // If the new destination routes through an interface different than the
+        // previously selected interface, most operating systems will
+        // automatically update the socket's local address to match that route.
+        //
+        // Linux however doesn't do that automatically and we manually
+        // dissolve the existing association and then connect again to the
+        // new destination.
+        #[cfg(target_os = "linux")]
+        Err(Errno::INVAL) => {
+            _ = udp_disconnect(sockfd.as_fd());
+            return connect(sockfd.as_fd(), &addr);
+        }
+        r => r,
+    }
+}
+
+pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), Errno> {
     match connect_unspec(sockfd) {
         // BSD platforms return an error even if the UDP socket was disconnected successfully.
         //
@@ -409,8 +431,7 @@ pub fn udp_disconnect(sockfd: impl AsFd) -> Result<(), ErrorCode> {
         // address family of the socket.
         #[cfg(target_os = "macos")]
         Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
-        Err(err) => Err(err.into()),
-        Ok(()) => Ok(()),
+        r => r,
     }
 }
 
@@ -430,4 +451,13 @@ pub fn parse_host(name: &str) -> Result<url::Host, ErrorCode> {
             }
         }
     }
+}
+
+#[cfg(feature = "p3")]
+pub fn implicit_bind_addr(family: SocketAddressFamily) -> SocketAddr {
+    let ip = match family {
+        SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+    SocketAddr::new(ip, 0)
 }

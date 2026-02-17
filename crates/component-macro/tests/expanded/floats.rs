@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::floats::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -192,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod floats {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -271,7 +269,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod floats {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     f32_param: wasmtime::component::Func,
                     f64_param: wasmtime::component::Func,
@@ -299,7 +298,7 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/floats")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/floats`"
                                 )
                             })?;
@@ -308,7 +307,7 @@ pub mod exports {
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/floats` does \
                         not have export `{name}`"
                                     )
@@ -369,7 +368,6 @@ pub mod exports {
                             >::new_unchecked(self.f32_param)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f64_param<S: wasmtime::AsContextMut>(
@@ -384,7 +382,6 @@ pub mod exports {
                             >::new_unchecked(self.f64_param)
                         };
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
@@ -398,7 +395,6 @@ pub mod exports {
                             >::new_unchecked(self.f32_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
@@ -412,7 +408,6 @@ pub mod exports {
                             >::new_unchecked(self.f64_result)
                         };
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

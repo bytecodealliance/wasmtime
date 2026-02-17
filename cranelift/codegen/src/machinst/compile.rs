@@ -82,7 +82,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     // Run the regalloc checker, if requested.
     if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
-        let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.abi.machine_env());
+        let mut checker = regalloc2::checker::Checker::new(&vcode, &vcode.abi.machine_env());
         checker.prepare(&regalloc_result);
         checker
             .run()

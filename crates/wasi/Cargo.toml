@@ -18,12 +18,11 @@ workspace = true
 [dependencies]
 wasmtime = { workspace = true, features = ["runtime", "std"] }
 wasmtime-wasi-io = { workspace = true, features = ["std"] }
-anyhow = { workspace = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
 bytes = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
+tracing = { workspace = true, features = ["std", "attributes"] }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 cap-fs-ext = { workspace = true }
@@ -43,7 +42,7 @@ test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache'] }
+wasmtime = { workspace = true, features = ['default', 'incremental-cache'] }
 wasmtime-test-util = { workspace = true }
 env_logger = { workspace = true }
 

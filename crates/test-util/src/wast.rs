@@ -1,10 +1,10 @@
-use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use wasmtime_environ::prelude::*;
 
 /// Limits for running wast tests.
 ///
@@ -52,6 +52,22 @@ pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
         &FindConfig::Infer(component_test_config),
     )
     .with_context(|| format!("failed to add tests from `{}`", cm_tests.display()))?;
+
+    // Temporarily work around upstream tests that fail in unexpected ways (e.g.
+    // panics, loops, etc).
+    {
+        let skip_list = &[
+            // .. empty currently ..
+        ];
+        tests.retain(|test| {
+            test.path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| !skip_list.contains(&name))
+                .unwrap_or(true)
+        });
+    }
+
     Ok(tests)
 }
 
@@ -164,9 +180,19 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.multi_memory = Some(true);
 
     if let Some(parent) = test.parent() {
-        if parent.ends_with("async") {
+        if parent.ends_with("async")
+            || [
+                "trap-in-post-return.wast",
+                "resources.wast",
+                "multiple-resources.wast",
+            ]
+            .into_iter()
+            .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
+        {
             ret.component_model_async = Some(true);
+            ret.component_model_async_stackful = Some(true);
             ret.component_model_async_builtins = Some(true);
+            ret.component_model_threading = Some(true);
         }
         if parent.ends_with("wasm-tools") {
             ret.memory64 = Some(true);
@@ -242,6 +268,7 @@ macro_rules! foreach_config_option {
             component_model_threading
             component_model_error_context
             component_model_gc
+            component_model_fixed_length_lists
             simd
             gc_types
             exceptions
@@ -411,6 +438,17 @@ impl WastTest {
     /// configuration.
     pub fn should_fail(&self, config: &WastConfig) -> bool {
         if !config.compiler.supports_host() {
+            return true;
+        }
+
+        // These tests in the `component-model` submodule have not yet been
+        // updated to account for the recent threading-related intrinsic
+        // changes
+        let unsupported = [
+            "test/async/same-component-stream-future.wast",
+            "test/async/trap-if-block-and-sync.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
         }
 
@@ -672,19 +710,6 @@ impl WastTest {
                     }
                 }
             }
-        }
-
-        let failing_component_model_tests = [
-            // FIXME(#11683)
-            "component-model/test/values/trap-in-post-return.wast",
-            "component-model/test/wasmtime/resources.wast",
-            "component-model/test/wasm-tools/naming.wast",
-        ];
-        if failing_component_model_tests
-            .iter()
-            .any(|part| self.path.ends_with(part))
-        {
-            return true;
         }
 
         // Not implemented in Wasmtime anywhere yet.

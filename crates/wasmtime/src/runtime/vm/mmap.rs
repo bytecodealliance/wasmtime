@@ -91,13 +91,13 @@ impl Mmap<AlignedLength> {
         } else if accessible_size == mapping_size {
             Ok(Mmap {
                 sys: mmap::Mmap::new(mapping_size)
-                    .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
+                    .with_context(|| format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             })
         } else {
             let result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
-                    .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
+                    .with_context(|| format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             };
             if !accessible_size.is_zero() {
@@ -105,9 +105,9 @@ impl Mmap<AlignedLength> {
                 unsafe {
                     result
                         .make_accessible(HostAlignedByteCount::ZERO, accessible_size)
-                        .context(format!(
-                            "mmap failed to allocate {accessible_size:#x} bytes"
-                        ))?;
+                        .with_context(|| {
+                            format!("mmap failed to allocate {accessible_size:#x} bytes")
+                        })?;
                 }
             }
             Ok(result)
@@ -347,6 +347,30 @@ impl<T> Mmap<T> {
             self.sys
                 .make_readonly(range)
                 .context("failed to make memory readonly")
+        }
+    }
+
+    /// Makes the specified `range` within this `Mmap` to be read-write.
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        assert!(range.start <= self.len());
+        assert!(range.end <= self.len());
+        assert!(range.start <= range.end);
+        assert!(
+            range.start % crate::runtime::vm::host_page_size() == 0,
+            "changing of protections isn't page-aligned",
+        );
+
+        if range.start == range.end {
+            // A zero-sized mprotect (or equivalent) is allowed on some
+            // platforms but not others (notably Windows). Treat it as a no-op
+            // everywhere.
+            return Ok(());
+        }
+
+        unsafe {
+            self.sys
+                .make_readwrite(range)
+                .context("failed to make memory read-write")
         }
     }
 }

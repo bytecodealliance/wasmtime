@@ -1,8 +1,8 @@
-use anyhow::{Result, anyhow};
 use test_programs_artifacts::{KEYVALUE_MAIN_COMPONENT, foreach_keyvalue};
 use wasmtime::{
-    Store,
+    Result, Store,
     component::{Component, Linker, ResourceTable},
+    format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
@@ -23,9 +23,7 @@ impl WasiView for Ctx {
 }
 
 async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
-    let engine = test_programs_artifacts::engine(|config| {
-        config.async_support(true);
-    });
+    let engine = test_programs_artifacts::engine(|_config| {});
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
 
@@ -40,7 +38,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
         .wasi_cli_run()
         .call_run(&mut store)
         .await?
-        .map_err(|()| anyhow!("command returned with failing exit status"))
+        .map_err(|()| format_err!("command returned with failing exit status"))
 }
 
 macro_rules! assert_test_exists {

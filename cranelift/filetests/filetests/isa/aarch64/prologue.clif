@@ -83,15 +83,6 @@ block0(v0: f64):
 ;   stp d10, d11, [sp, #-16]!
 ;   stp d8, d9, [sp, #-16]!
 ; block0:
-;   fadd d23, d0, d0
-;   fadd d24, d0, d0
-;   fadd d25, d0, d0
-;   fadd d26, d0, d0
-;   fadd d27, d0, d0
-;   fadd d28, d0, d0
-;   fadd d29, d0, d0
-;   fadd d30, d0, d0
-;   fadd d31, d0, d0
 ;   fadd d1, d0, d0
 ;   fadd d2, d0, d0
 ;   fadd d3, d0, d0
@@ -106,7 +97,15 @@ block0(v0: f64):
 ;   fadd d20, d0, d0
 ;   fadd d21, d0, d0
 ;   fadd d22, d0, d0
-;   fadd d15, d0, d0
+;   fadd d23, d0, d0
+;   fadd d24, d0, d0
+;   fadd d25, d0, d0
+;   fadd d26, d0, d0
+;   fadd d27, d0, d0
+;   fadd d28, d0, d0
+;   fadd d29, d0, d0
+;   fadd d30, d0, d0
+;   fadd d31, d0, d0
 ;   fadd d8, d0, d0
 ;   fadd d9, d0, d0
 ;   fadd d10, d0, d0
@@ -114,37 +113,38 @@ block0(v0: f64):
 ;   fadd d12, d0, d0
 ;   fadd d13, d0, d0
 ;   fadd d14, d0, d0
-;   fadd d23, d0, d23
-;   fadd d24, d24, d25
-;   fadd d25, d26, d27
-;   fadd d26, d28, d29
-;   fadd d27, d30, d31
-;   fadd d28, d1, d2
-;   fadd d29, d3, d4
-;   fadd d30, d5, d6
-;   fadd d31, d7, d16
-;   fadd d0, d17, d18
-;   fadd d1, d19, d20
-;   fadd d2, d21, d22
-;   fadd d3, d15, d8
-;   fadd d4, d9, d10
-;   fadd d5, d11, d12
-;   fadd d6, d13, d14
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d25, d27, d28
-;   fadd d26, d29, d30
-;   fadd d27, d31, d0
-;   fadd d28, d1, d2
-;   fadd d29, d3, d4
-;   fadd d30, d5, d6
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d25, d27, d28
-;   fadd d26, d29, d30
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d0, d23, d24
+;   fadd d15, d0, d0
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d4, d16, d17
+;   fadd d5, d18, d19
+;   fadd d6, d20, d21
+;   fadd d7, d22, d23
+;   fadd d16, d24, d25
+;   fadd d17, d26, d27
+;   fadd d18, d28, d29
+;   fadd d19, d30, d31
+;   fadd d20, d8, d9
+;   fadd d21, d10, d11
+;   fadd d22, d12, d13
+;   fadd d23, d14, d15
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d4, d16, d17
+;   fadd d5, d18, d19
+;   fadd d6, d20, d21
+;   fadd d7, d22, d23
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d0, d0, d1
 ;   ldp d8, d9, [sp], #16
 ;   ldp d10, d11, [sp], #16
 ;   ldp d12, d13, [sp], #16
@@ -161,15 +161,6 @@ block0(v0: f64):
 ;   stp d10, d11, [sp, #-0x10]!
 ;   stp d8, d9, [sp, #-0x10]!
 ; block1: ; offset 0x18
-;   fadd d23, d0, d0
-;   fadd d24, d0, d0
-;   fadd d25, d0, d0
-;   fadd d26, d0, d0
-;   fadd d27, d0, d0
-;   fadd d28, d0, d0
-;   fadd d29, d0, d0
-;   fadd d30, d0, d0
-;   fadd d31, d0, d0
 ;   fadd d1, d0, d0
 ;   fadd d2, d0, d0
 ;   fadd d3, d0, d0
@@ -184,7 +175,15 @@ block0(v0: f64):
 ;   fadd d20, d0, d0
 ;   fadd d21, d0, d0
 ;   fadd d22, d0, d0
-;   fadd d15, d0, d0
+;   fadd d23, d0, d0
+;   fadd d24, d0, d0
+;   fadd d25, d0, d0
+;   fadd d26, d0, d0
+;   fadd d27, d0, d0
+;   fadd d28, d0, d0
+;   fadd d29, d0, d0
+;   fadd d30, d0, d0
+;   fadd d31, d0, d0
 ;   fadd d8, d0, d0
 ;   fadd d9, d0, d0
 ;   fadd d10, d0, d0
@@ -192,37 +191,38 @@ block0(v0: f64):
 ;   fadd d12, d0, d0
 ;   fadd d13, d0, d0
 ;   fadd d14, d0, d0
-;   fadd d23, d0, d23
-;   fadd d24, d24, d25
-;   fadd d25, d26, d27
-;   fadd d26, d28, d29
-;   fadd d27, d30, d31
-;   fadd d28, d1, d2
-;   fadd d29, d3, d4
-;   fadd d30, d5, d6
-;   fadd d31, d7, d16
-;   fadd d0, d17, d18
-;   fadd d1, d19, d20
-;   fadd d2, d21, d22
-;   fadd d3, d15, d8
-;   fadd d4, d9, d10
-;   fadd d5, d11, d12
-;   fadd d6, d13, d14
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d25, d27, d28
-;   fadd d26, d29, d30
-;   fadd d27, d31, d0
-;   fadd d28, d1, d2
-;   fadd d29, d3, d4
-;   fadd d30, d5, d6
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d25, d27, d28
-;   fadd d26, d29, d30
-;   fadd d23, d23, d24
-;   fadd d24, d25, d26
-;   fadd d0, d23, d24
+;   fadd d15, d0, d0
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d4, d16, d17
+;   fadd d5, d18, d19
+;   fadd d6, d20, d21
+;   fadd d7, d22, d23
+;   fadd d16, d24, d25
+;   fadd d17, d26, d27
+;   fadd d18, d28, d29
+;   fadd d19, d30, d31
+;   fadd d20, d8, d9
+;   fadd d21, d10, d11
+;   fadd d22, d12, d13
+;   fadd d23, d14, d15
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d4, d16, d17
+;   fadd d5, d18, d19
+;   fadd d6, d20, d21
+;   fadd d7, d22, d23
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d2, d4, d5
+;   fadd d3, d6, d7
+;   fadd d0, d0, d1
+;   fadd d1, d2, d3
+;   fadd d0, d0, d1
 ;   ldp d8, d9, [sp], #0x10
 ;   ldp d10, d11, [sp], #0x10
 ;   ldp d12, d13, [sp], #0x10
@@ -279,10 +279,14 @@ block0(v0: i64):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x28, [sp, #-16]!
-;   stp x21, x27, [sp, #-16]!
+;   str x21, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
 ; block0:
-;   add x5, x0, x0
+;   add x1, x0, x0
+;   add x2, x0, x1
+;   add x3, x0, x2
+;   add x4, x0, x3
+;   add x5, x0, x4
 ;   add x6, x0, x5
 ;   add x7, x0, x6
 ;   add x8, x0, x7
@@ -293,33 +297,29 @@ block0(v0: i64):
 ;   add x13, x0, x12
 ;   add x14, x0, x13
 ;   add x15, x0, x14
-;   add x1, x0, x15
-;   add x2, x0, x1
-;   add x3, x0, x2
-;   add x4, x0, x3
-;   add x27, x0, x4
-;   add x28, x0, x27
-;   add x21, x0, x28
-;   add x5, x0, x5
-;   add x6, x6, x7
-;   add x7, x8, x9
-;   add x8, x10, x11
-;   add x9, x12, x13
-;   add x10, x14, x15
-;   add x11, x1, x2
-;   add x12, x3, x4
-;   add x13, x27, x28
-;   add x5, x21, x5
-;   add x6, x6, x7
-;   add x7, x8, x9
-;   add x8, x10, x11
-;   add x9, x12, x13
-;   add x5, x5, x6
-;   add x6, x7, x8
-;   add x5, x9, x5
-;   add x0, x6, x5
-;   ldp x21, x27, [sp], #16
-;   ldr x28, [sp], #16
+;   add x19, x0, x15
+;   add x20, x0, x19
+;   add x21, x0, x20
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x5, x10, x11
+;   add x6, x12, x13
+;   add x7, x14, x15
+;   add x8, x19, x20
+;   add x0, x21, x0
+;   add x1, x1, x2
+;   add x2, x3, x4
+;   add x3, x5, x6
+;   add x4, x7, x8
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x0, x4, x0
+;   add x0, x1, x0
+;   ldp x19, x20, [sp], #16
+;   ldr x21, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -327,10 +327,14 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   str x28, [sp, #-0x10]!
-;   stp x21, x27, [sp, #-0x10]!
+;   str x21, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
 ; block1: ; offset 0x10
-;   add x5, x0, x0
+;   add x1, x0, x0
+;   add x2, x0, x1
+;   add x3, x0, x2
+;   add x4, x0, x3
+;   add x5, x0, x4
 ;   add x6, x0, x5
 ;   add x7, x0, x6
 ;   add x8, x0, x7
@@ -341,33 +345,29 @@ block0(v0: i64):
 ;   add x13, x0, x12
 ;   add x14, x0, x13
 ;   add x15, x0, x14
-;   add x1, x0, x15
-;   add x2, x0, x1
-;   add x3, x0, x2
-;   add x4, x0, x3
-;   add x27, x0, x4
-;   add x28, x0, x27
-;   add x21, x0, x28
-;   add x5, x0, x5
-;   add x6, x6, x7
-;   add x7, x8, x9
-;   add x8, x10, x11
-;   add x9, x12, x13
-;   add x10, x14, x15
-;   add x11, x1, x2
-;   add x12, x3, x4
-;   add x13, x27, x28
-;   add x5, x21, x5
-;   add x6, x6, x7
-;   add x7, x8, x9
-;   add x8, x10, x11
-;   add x9, x12, x13
-;   add x5, x5, x6
-;   add x6, x7, x8
-;   add x5, x9, x5
-;   add x0, x6, x5
-;   ldp x21, x27, [sp], #0x10
-;   ldr x28, [sp], #0x10
+;   add x19, x0, x15
+;   add x20, x0, x19
+;   add x21, x0, x20
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x2, x4, x5
+;   add x3, x6, x7
+;   add x4, x8, x9
+;   add x5, x10, x11
+;   add x6, x12, x13
+;   add x7, x14, x15
+;   add x8, x19, x20
+;   add x0, x21, x0
+;   add x1, x1, x2
+;   add x2, x3, x4
+;   add x3, x5, x6
+;   add x4, x7, x8
+;   add x0, x0, x1
+;   add x1, x2, x3
+;   add x0, x4, x0
+;   add x0, x1, x0
+;   ldp x19, x20, [sp], #0x10
+;   ldr x21, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

@@ -1,8 +1,8 @@
 use {
     test_programs::p3::{
-        proxy::exports::wasi::http::handler::Guest as Handler,
+        service::exports::wasi::http::handler::Guest as Handler,
         wasi::http::{
-            handler,
+            client,
             types::{ErrorCode, Fields, Request, Response, Scheme},
         },
         wit_future,
@@ -12,7 +12,7 @@ use {
 
 struct Component;
 
-test_programs::p3::proxy::export!(Component);
+test_programs::p3::service::export!(Component);
 
 impl Handler for Component {
     // Forward the request body and trailers to a URL specified in a header.
@@ -42,7 +42,7 @@ impl Handler for Component {
                 outgoing_request
                     .set_authority(Some(url.authority()))
                     .unwrap();
-                handler::handle(outgoing_request).await?
+                client::send(outgoing_request).await?
             } else {
                 bad_request()
             },

@@ -5,7 +5,7 @@ proposals in Wasmtime. For information about implementing a proposal in Wasmtime
 see the [associated
 documentation](./contributing-implementing-wasm-proposals.md).
 
-WebAssembly proposals that want to be [tier 2 or above](./stability-tiers.md)
+WebAssembly proposals that want to be [tier 1](./stability-tiers.md)
 are required to check all boxes in this matrix. An explanation of each matrix
 column is below.
 
@@ -15,7 +15,7 @@ The emoji legend is:
 * 🚧 - work-in-progress
 * ❌ - not supported yet
 
-## On-by-default proposals
+## Tier 1 WebAssembly Proposals
 
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
 |--------------------------|---------|-------|----------|--------|-----|-------|
@@ -26,10 +26,9 @@ The emoji legend is:
 | [`bulk-memory`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`reference-types`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`simd`]                 | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | 🚧[^5]|
+| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | 🚧[^3]|
 | [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
 | [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`extended-const`]       | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`memory64`]             | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
@@ -38,49 +37,58 @@ The emoji legend is:
     process but it is still enabled-by-default in Wasmtime.
 [^2]: Various shapes of components are fuzzed but full-on fuzzing along the
     lines of `wasm-smith` are not implemented for components.
-[^3]: Fuzzing with threads is an open implementation question that is expected
-    to get fleshed out as the [`shared-everything-threads`] proposal advances.
-[^5]: The component model is mostly supported in the C API but [gaps
+[^3]: The component model is mostly supported in the C API but [gaps
     remain][cm-capi-gaps].
-[^9]: There are [known
+
+[cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
+
+## Tier 2 WebAssembly Proposals
+
+|  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
+|--------------------------|---------|-------|----------|--------|-----|--------|
+| [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
+| [`exception-handling`]   | ✅      | ✅    | ✅       | 🚧[^9] | ✅  | 🚧[^10]|
+| [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
+| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ❌     |
+| [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
+| [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
+
+[^4]: Fuzzing with threads is an open implementation question that is expected
+    to get fleshed out as the [`shared-everything-threads`] proposal advances.
+[^5]: There is also a [tracking
+    issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
+    GC proposal.
+[^6]: The implementation of Wasm GC is feature complete from a specification
+    perspective, however a number of quality-of-implementation tasks
+    [remain](https://github.com/bytecodealliance/wasmtime/issues/5032), notably
+    a tracing collector that can reclaim garbage cycles.
+[^7]: The GC proposal is lightly fuzzed via `wasm-smith` and our usual
+    whole-module fuzz targets like `differential`, but we would like to
+    additionally [extend the `table_ops` fuzz target to exercise more of the GC
+    proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
+[^8]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
+[^9]: The exception-handling proposal is fuzzed by our whole-module fuzzer,
+      but we do not have an exception-specific fuzzer that attempts to create
+      interesting throw/catch patterns or payloads.
+[^10]: The exception-handling proposal can be enabled for exceptions in the guest
+       via the C API, but exception objects have no C API to examine, clone,
+       rethrow, or drop exceptions that propagate to the host.
 
 [cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 
-## Off-by-default proposals
+## Tier 3 WebAssembly Proposals
 
-|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
-|-----------------------------|---------|-------|----------|--------|-----|--------|
-| [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
-| [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌     |
-| [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]      | ✅      | ✅    | ✅       | 🚧[^11]| ✅  | 🚧[^12]|
-| [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌     |
+|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
+|-----------------------------|---------|-------|----------|--------|-----|-------|
+| [`stack-switching`] [^11]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
-[^6]: There is also a [tracking
-    issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
-    GC proposal.
-[^7]: The implementation of Wasm GC is feature complete from a specification
-    perspective, however a number of quality-of-implementation tasks
-    [remain](https://github.com/bytecodealliance/wasmtime/issues/5032), notably
-    a tracing collector that can reclaim garbage cycles.
-[^8]: The GC proposal is lightly fuzzed via `wasm-smith` and our usual
-    whole-module fuzz targets like `differential`, but we would like to
-    additionally [extend the `table_ops` fuzz target to exercise more of the GC
-    proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
-[^10]: The stack-switching proposal is a work-in-progress being tracked
+[^11]: The stack-switching proposal is a work-in-progress being tracked
     at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
     Currently the implementation is only for x86\_64 Linux.
-[^11]: The exception-handling proposal is fuzzed by our whole-module fuzzer,
-       but we do not have an exception-specific fuzzer that attempts to create
-       interesting throw/catch patterns or payloads.
-[^12]: The exception-handling proposal can be enabled for exceptions in the guest
-       via the C API, but exception objects have no C API to examine, clone,
-       rethrow, or drop exceptions that propagate to the host.
 
 ## Unimplemented proposals
 
@@ -108,7 +116,7 @@ The emoji legend is:
 [`shared-everything-threads`]: https://github.com/WebAssembly/shared-everything-threads
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
-[`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[`threads`]: https://github.com/WebAssembly/threads
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
@@ -155,5 +163,9 @@ For each column in the above tables, this is a further explanation of its meanin
   [`gc`] also add new types to the API.
 
 * **C API** - The proposal's functionality is exposed in the C API.
+
+* **Enabled** - Whether or not this feature is on-by-default. Off-by-default
+  features require an opt-in on the CLI or via the embedding API to use, but
+  on-by-default features require no explicit action to use the feature.
 
 [phases]: https://github.com/WebAssembly/meetings/blob/master/process/phases.md

@@ -38,7 +38,7 @@ Rust code.
 The C API can also be installed through `*-c-api-*` [release artifacts].
 
 [README of the C API]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/README.md
-[release artifacts]: github.com/bytecodealliance/wasmtime/releases/latest
+[release artifacts]: https://github.com/bytecodealliance/wasmtime/releases/latest
 
 ## C++
 

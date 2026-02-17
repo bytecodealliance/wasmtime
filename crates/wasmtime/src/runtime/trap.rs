@@ -20,22 +20,26 @@ use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_o
 /// # Errors in Wasmtime
 ///
 /// Error-handling in Wasmtime is primarily done through the
-/// [`anyhow`][mod@anyhow] crate where most results are a
-/// [`Result<T>`](anyhow::Result) which is an alias for [`Result<T,
-/// anyhow::Error>`](std::result::Result). Errors in Wasmtime are represented
-/// with [`anyhow::Error`] which acts as a container for any type of error in
+/// [`wasmtime::Error`] type where most results are a
+/// [`wasmtime::Result<T>`] which is an alias for [`Result<T,
+/// wasmtime::Error>`](std::result::Result). Errors in Wasmtime are represented
+/// with [`wasmtime::Error`] which acts as a container for any type of error in
 /// addition to optional context for this error. The "base" error or
-/// [`anyhow::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
+/// [`wasmtime::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
 /// trap, or otherwise it's whatever the host created the error with when
 /// returning an error for a host call.
 ///
 /// Any error which happens while WebAssembly is executing will also, by
 /// default, capture a backtrace of the wasm frames while executing. This
 /// backtrace is represented with a [`WasmBacktrace`] instance and is attached
-/// to the [`anyhow::Error`] return value as a
-/// [`context`](anyhow::Error::context). Inspecting a [`WasmBacktrace`] can be
-/// done with the [`downcast_ref`](anyhow::Error::downcast_ref) function. For
+/// to the [`wasmtime::Error`] return value as a
+/// [`context`](crate::Error::context). Inspecting a [`WasmBacktrace`] can be
+/// done with the [`downcast_ref`](crate::Error::downcast_ref) function. For
 /// information on this see the [`WasmBacktrace`] documentation.
+///
+/// [`wasmtime::Error`]: crate::Error
+/// [`wasmtime::Result<T>`]: crate::Result
+/// [`wasmtime::Error::root_cause`]: crate::Error::root_cause
 ///
 /// # Examples
 ///
@@ -83,7 +87,7 @@ pub(crate) fn from_runtime_box(
     let (mut error, pc) = match reason {
         #[cfg(feature = "gc")]
         crate::runtime::vm::TrapReason::Exception => (ThrownException.into(), None),
-        // For user-defined errors they're already an `anyhow::Error` so no
+        // For user-defined errors they're already an `crate::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
         // been captured so it's attempted to get inserted here.
         //
@@ -137,12 +141,13 @@ pub(crate) fn from_runtime_box(
 /// Representation of a backtrace of function frames in a WebAssembly module for
 /// where an error happened.
 ///
-/// This structure is attached to the [`anyhow::Error`] returned from many
+/// This structure is attached to the [`wasmtime::Error`] returned from many
 /// Wasmtime functions that execute WebAssembly such as [`Instance::new`] or
-/// [`Func::call`]. This can be acquired with the [`anyhow::Error::downcast`]
-/// family of methods to programmatically inspect the backtrace. Otherwise since
-/// it's part of the error returned this will get printed along with the rest of
-/// the error when the error is logged.
+/// [`Func::call`]. This can be acquired with the
+/// [`Error::downcast`](crate::Error::downcast) family of methods to
+/// programmatically inspect the backtrace. Otherwise since it's part of the
+/// error returned this will get printed along with the rest of the error when
+/// the error is logged.
 ///
 /// Capturing of wasm backtraces can be configured through the
 /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) method.
@@ -152,6 +157,7 @@ pub(crate) fn from_runtime_box(
 ///
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
+/// [`wasmtime::Error`]: crate::Error
 ///
 /// # Examples
 ///
@@ -325,7 +331,8 @@ impl WasmBacktrace {
                 // do this then we will print out a helpful note in
                 // `Display` to indicate that more detailed information
                 // in a trap may be available.
-                let has_unparsed_debuginfo = module.compiled_module().has_unparsed_debuginfo();
+                let has_unparsed_debuginfo =
+                    module.module().compiled_module().has_unparsed_debuginfo();
                 if has_unparsed_debuginfo
                     && wasm_backtrace_details_env_used
                     && cfg!(feature = "addr2line")
@@ -439,10 +446,8 @@ impl FrameInfo {
         let compiled_module = module.compiled_module();
         let index = compiled_module.func_by_text_offset(text_offset)?;
         let func_start = compiled_module.func_start_srcloc(index);
-        let instr = wasmtime_environ::lookup_file_pos(
-            compiled_module.code_memory().address_map_data(),
-            text_offset,
-        );
+        let instr =
+            wasmtime_environ::lookup_file_pos(module.engine_code().address_map_data(), text_offset);
         let index = compiled_module.module().func_index(index);
         let func_index = index.as_u32();
         let func_name = compiled_module.func_name(index).map(|s| s.to_string());

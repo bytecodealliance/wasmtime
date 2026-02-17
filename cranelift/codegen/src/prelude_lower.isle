@@ -987,7 +987,7 @@
 
 ;; Accessor for `FuncRef`.
 
-(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(decl func_ref_data (SigRef ExternalName RelocDistance bool) FuncRef)
 (extern extractor infallible func_ref_data func_ref_data)
 
 ;; Accessor for `ExceptionTable`.
@@ -1172,6 +1172,9 @@
 
 (decl gen_try_call_rets (Sig) CallRetList)
 (extern constructor gen_try_call_rets gen_try_call_rets)
+
+(decl gen_patchable_call_rets () CallRetList)
+(extern constructor gen_patchable_call_rets gen_patchable_call_rets)
 
 (type OptionTryCallInfo (primitive OptionTryCallInfo))
 (decl try_call_info (ExceptionTable MachLabelSlice) OptionTryCallInfo)

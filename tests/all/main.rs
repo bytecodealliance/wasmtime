@@ -13,6 +13,7 @@ mod coredump;
 mod custom_code_memory;
 mod debug;
 mod defaults;
+mod engine;
 mod epoch_interruption;
 mod eqref;
 mod exceptions;
@@ -35,6 +36,7 @@ mod limits;
 mod linker;
 mod memory;
 mod memory_creator;
+mod missing_async;
 mod module;
 mod module_serialize;
 mod name;
@@ -42,6 +44,7 @@ mod native_debug;
 mod noextern;
 mod piped_tests;
 mod pooling_allocator;
+mod profiling;
 mod pulley;
 mod relocs;
 mod stack_creator;
@@ -61,7 +64,7 @@ mod winch_engine_features;
 pub(crate) fn ref_types_module(
     use_epochs: bool,
     source: &str,
-) -> anyhow::Result<(wasmtime::Store<()>, wasmtime::Module)> {
+) -> wasmtime::Result<(wasmtime::Store<()>, wasmtime::Module)> {
     use wasmtime::*;
 
     let _ = env_logger::try_init();
@@ -130,7 +133,7 @@ trait ErrorExt {
     fn assert_contains(&self, msg: &str);
 }
 
-impl ErrorExt for anyhow::Error {
+impl ErrorExt for wasmtime::Error {
     fn assert_contains(&self, msg: &str) {
         if self.chain().any(|e| e.to_string().contains(msg)) {
             return;

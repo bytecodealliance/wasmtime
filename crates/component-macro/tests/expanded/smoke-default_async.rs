@@ -103,8 +103,6 @@ pub struct TheWorld {
     y: wasmtime::component::Func,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -119,16 +117,16 @@ const _: () = {
             let y = {
                 let (item, index) = _component
                     .get_export(None, "y")
-                    .ok_or_else(|| anyhow::anyhow!("no export `y` found"))?;
+                    .ok_or_else(|| wasmtime::format_err!("no export `y` found"))?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
-                        anyhow::Context::context(
+                        wasmtime::error::Context::context(
                             func.typecheck::<(), ()>(&_instance_type),
                             "type-checking export func `y`",
                         )?;
                         index
                     }
-                    _ => Err(anyhow::anyhow!("export `y` is not a function"))?,
+                    _ => Err(wasmtime::format_err!("export `y` is not a function"))?,
                 }
             };
             Ok(TheWorldIndices { y })
@@ -193,7 +191,6 @@ const _: () = {
                 wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
             };
             let () = callee.call_async(store.as_context_mut(), ()).await?;
-            callee.post_return_async(store.as_context_mut()).await?;
             Ok(())
         }
     }

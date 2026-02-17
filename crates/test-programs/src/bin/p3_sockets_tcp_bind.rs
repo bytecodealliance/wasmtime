@@ -56,31 +56,43 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
     let bind_addr = {
         let listener1 = TcpSocket::create(ip.family()).unwrap();
 
-        let bind_addr = attempt_random_port(ip, |bind_addr| listener1.bind(bind_addr)).unwrap();
+        listener1
+            .bind(IpSocketAddress::new(
+                IpAddress::new_loopback(ip.family()),
+                0,
+            ))
+            .unwrap();
 
-        let mut accept = listener1.listen().unwrap();
+        let bind_addr = listener1.get_local_address().unwrap();
 
-        let connect_addr =
-            IpSocketAddress::new(IpAddress::new_loopback(ip.family()), bind_addr.port());
-        join!(
-            async {
-                client.connect(connect_addr).await.unwrap();
-            },
-            async {
-                let sock = accept.next().await.unwrap();
-                let (mut data_tx, data_rx) = wit_stream::new();
-                join!(
-                    async {
-                        sock.send(data_rx).await.unwrap();
-                    },
-                    async {
-                        let remaining = data_tx.write_all(vec![0; 10]).await;
-                        assert!(remaining.is_empty());
-                        drop(data_tx);
-                    }
-                );
-            },
-        );
+        // The listener socket must have at least one connection for the TIME_WAIT
+        // mechanism to kick in. So we'll create & accept a dummy connection
+        // before closing the listener:
+        {
+            let mut accept = listener1.listen().unwrap();
+
+            let connect_addr =
+                IpSocketAddress::new(IpAddress::new_loopback(ip.family()), bind_addr.port());
+            join!(
+                async {
+                    client.connect(connect_addr).await.unwrap();
+                },
+                async {
+                    let sock = accept.next().await.unwrap();
+                    let (mut data_tx, data_rx) = wit_stream::new();
+                    join!(
+                        async {
+                            sock.send(data_rx).await.unwrap();
+                        },
+                        async {
+                            let remaining = data_tx.write_all(vec![0; 10]).await;
+                            assert!(remaining.is_empty());
+                            drop(data_tx);
+                        }
+                    );
+                },
+            );
+        }
 
         bind_addr
     };

@@ -116,7 +116,7 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -129,7 +129,7 @@
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
@@ -140,13 +140,13 @@
 ;;                                     v48 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v48  ; v48 = 8
 ;; @0048                               v17 = load.i64 user5 aligned table v14
-;; @004a                               v18 = load.i64 user16 aligned readonly v17+8
+;; @004a                               v18 = load.i64 user15 aligned readonly v17+8
 ;; @004a                               v19 = load.i64 notrap aligned readonly v17+24
 ;; @004a                               v20 = call_indirect sig0, v18(v19, v0, v2, v3, v4, v5)
 ;;                                     v56 = iconst.i64 16
 ;; @005b                               v28 = iadd v12, v56  ; v56 = 16
 ;; @005b                               v31 = load.i64 user5 aligned table v28
-;; @005d                               v32 = load.i64 user16 aligned readonly v31+8
+;; @005d                               v32 = load.i64 user15 aligned readonly v31+8
 ;; @005d                               v33 = load.i64 notrap aligned readonly v31+24
 ;; @005d                               v34 = call_indirect sig0, v32(v33, v0, v2, v3, v4, v5)
 ;; @0066                               jump block1
@@ -159,7 +159,7 @@
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
@@ -189,18 +189,18 @@
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @009e                               v9 = load.i64 notrap aligned table v0+64
-;; @00a0                               v10 = load.i64 user16 aligned readonly v9+8
+;; @00a0                               v10 = load.i64 user15 aligned readonly v9+8
 ;; @00a0                               v11 = load.i64 notrap aligned readonly v9+24
 ;; @00a0                               v12 = call_indirect sig0, v10(v11, v0, v2, v3, v4, v5)
 ;; @00af                               v15 = load.i64 notrap aligned table v0+80
-;; @00b1                               v16 = load.i64 user16 aligned readonly v15+8
+;; @00b1                               v16 = load.i64 user15 aligned readonly v15+8
 ;; @00b1                               v17 = load.i64 notrap aligned readonly v15+24
 ;; @00b1                               v18 = call_indirect sig0, v16(v17, v0, v2, v3, v4, v5)
 ;; @00ba                               jump block1

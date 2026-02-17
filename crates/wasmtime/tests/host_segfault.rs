@@ -155,9 +155,7 @@ fn main() {
         (
             "hit async stack guard page",
             || {
-                let mut config = Config::default();
-                config.async_support(true);
-                let engine = Engine::new(&config).unwrap();
+                let engine = Engine::default();
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
@@ -189,7 +187,6 @@ fn main() {
             "hit async stack guard page with pooling allocator",
             || {
                 let mut config = Config::default();
-                config.async_support(true);
                 let mut cfg = PoolingAllocationConfig::default();
                 cfg.total_memories(1);
                 cfg.max_memory_size(1 << 16);

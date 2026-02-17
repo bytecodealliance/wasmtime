@@ -53,6 +53,13 @@ interface records {
   type int-typedef = s32;
   type tuple-typedef2 = tuple<int-typedef>;
   typedef-inout: func(e: tuple-typedef2) -> s32;
+
+  record futures-and-streams {
+    a: future<u8>,
+    b: stream<u8>,
+    c: stream<future<stream>>,
+    d: future<stream<future>>,
+  }
 }
 
 world the-world {

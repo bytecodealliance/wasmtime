@@ -1,11 +1,12 @@
 use crate::Config;
+use crate::RRConfig;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
-use crate::runtime::vm::GcRuntime;
+use crate::runtime::vm::{GcRuntime, ModuleRuntimeInfo};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -51,7 +52,7 @@ struct EngineInner {
     features: WasmFeatures,
     tunables: Tunables,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compiler: Box<dyn wasmtime_environ::Compiler>,
+    compiler: Option<Box<dyn wasmtime_environ::Compiler>>,
     #[cfg(feature = "runtime")]
     allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
@@ -66,6 +67,12 @@ struct EngineInner {
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
+
+    /// The canonical empty `ModuleRuntimeInfo`, so that each store doesn't need
+    /// allocate its own copy when creating its default caller instance or GC
+    /// heap.
+    #[cfg(feature = "runtime")]
+    empty_module_runtime_info: ModuleRuntimeInfo,
 }
 
 impl core::fmt::Debug for Engine {
@@ -113,12 +120,22 @@ impl Engine {
         }
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+        let (config, compiler) = if config.has_compiler() {
+            let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+            (config, Some(compiler))
+        } else {
+            (config.clone(), None)
+        };
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
+        #[cfg(feature = "runtime")]
+        let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(
+            wasmtime_environ::Module::new(wasmtime_environ::StaticModuleIndex::from_u32(0)),
+        )?)?;
+
         Ok(Engine {
-            inner: Arc::new(EngineInner {
+            inner: try_new::<Arc<_>>(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
@@ -145,7 +162,9 @@ impl Engine {
                 config,
                 tunables,
                 features,
-            }),
+                #[cfg(feature = "runtime")]
+                empty_module_runtime_info,
+            })?,
         })
     }
 
@@ -246,11 +265,28 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    /// Returns whether the engine is configured to support async functions.
-    #[cfg(feature = "async")]
+    /// Returns whether the engine is configured to support execution recording
     #[inline]
-    pub fn is_async(&self) -> bool {
-        self.config().async_support
+    pub fn is_recording(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => false,
+            RRConfig::None => false,
+        }
+    }
+
+    /// Returns whether the engine is configured to support execution replaying
+    #[inline]
+    pub fn is_replaying(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => false,
+            RRConfig::None => false,
+        }
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by
@@ -297,7 +333,7 @@ impl Engine {
             .compatible_with_native_host
             .get_or_init(|| self._check_compatible_with_native_host())
             .clone()
-            .map_err(anyhow::Error::msg)
+            .map_err(crate::Error::msg)
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -335,13 +371,14 @@ impl Engine {
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
-            let compiler = self.compiler();
-            // Also double-check all compiler settings
-            for (key, value) in compiler.flags().iter() {
-                self.check_compatible_with_shared_flag(key, value)?;
-            }
-            for (key, value) in compiler.isa_flags().iter() {
-                self.check_compatible_with_isa_flag(key, value)?;
+            if let Some(compiler) = self.compiler() {
+                // Also double-check all compiler settings
+                for (key, value) in compiler.flags().iter() {
+                    self.check_compatible_with_shared_flag(key, value)?;
+                }
+                for (key, value) in compiler.isa_flags().iter() {
+                    self.check_compatible_with_isa_flag(key, value)?;
+                }
             }
         }
 
@@ -621,12 +658,22 @@ information about this check\
     pub fn is_pulley(&self) -> bool {
         self.target().is_pulley()
     }
+
+    #[cfg(feature = "runtime")]
+    pub(crate) fn empty_module_runtime_info(&self) -> &ModuleRuntimeInfo {
+        &self.inner.empty_module_runtime_info
+    }
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 impl Engine {
-    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
-        &*self.inner.compiler
+    pub(crate) fn compiler(&self) -> Option<&dyn wasmtime_environ::Compiler> {
+        self.inner.compiler.as_deref()
+    }
+
+    pub(crate) fn try_compiler(&self) -> Result<&dyn wasmtime_environ::Compiler> {
+        self.compiler()
+            .ok_or_else(|| format_err!("Engine was not configured with a compiler"))
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.
@@ -672,8 +719,9 @@ impl Engine {
     ///
     /// The blob of bytes is inserted into the object file specified to become part
     /// of the final compiled artifact.
-    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
-        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) -> Result<()> {
+        serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self)?);
+        Ok(())
     }
 
     #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -683,7 +731,10 @@ impl Engine {
             wasmtime_environ::obj::ELF_WASM_BTI.as_bytes().to_vec(),
             object::SectionKind::ReadOnlyData,
         );
-        let contents = if self.compiler().is_branch_protection_enabled() {
+        let contents = if self
+            .compiler()
+            .is_some_and(|c| c.is_branch_protection_enabled())
+        {
             1
         } else {
             0
@@ -733,7 +784,9 @@ impl Engine {
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
-        self.inner.allocator.as_ref()
+        let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
+            self.inner.allocator.as_ref();
+        &*r
     }
 
     pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {

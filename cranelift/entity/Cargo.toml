@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-entity"
-version = "0.127.0"
+version = "0.130.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-entity"
@@ -19,6 +19,7 @@ workspace = true
 cranelift-bitset = { workspace=true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
+wasmtime-core = { workspace = true }
 
 [features]
 enable-serde = ["serde", "serde_derive", "cranelift-bitset/enable-serde"]

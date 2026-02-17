@@ -1,7 +1,9 @@
-use anyhow::{Context, bail};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
-use wasmtime::{Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig};
+use wasmtime::{
+    Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, bail,
+    error::Context as _,
+};
 use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
 
@@ -118,7 +120,7 @@ fn main() {
 // Each of the tests included from `wast_testsuite_tests` will call this
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
-fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
+fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
     let test_config = test.config.clone();
 
     // Determine whether this test is expected to fail or pass. Regardless the
@@ -140,7 +142,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     };
 
     let mut cfg = Config::new();
-    cfg.async_support(true);
+    cfg.shared_memory(true);
     wasmtime_test_util::wasmtime_wast::apply_test_config(&mut cfg, &test_config);
     wasmtime_test_util::wasmtime_wast::apply_wast_config(&mut cfg, &config);
 

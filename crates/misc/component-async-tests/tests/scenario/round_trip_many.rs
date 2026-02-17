@@ -1,20 +1,15 @@
 use std::iter;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU32, Ordering::Relaxed},
-};
-use std::time::Duration;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
 use super::util::{config, make_component};
-use anyhow::{Result, anyhow};
 use component_async_tests::Ctx;
-use component_async_tests::util::sleep;
+use component_async_tests::util::yield_times;
 use futures::{
     FutureExt,
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{Linker, ResourceTable, Val};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
@@ -209,7 +204,6 @@ async fn test_round_trip_many(
                 wasi: WasiCtxBuilder::new().inherit_stdio().build(),
                 table: ResourceTable::default(),
                 continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
             },
         )
     };
@@ -288,7 +282,7 @@ async fn test_round_trip_many(
                             );
                         }
 
-                        anyhow::Ok(())
+                        wasmtime::error::Ok(())
                     }
                 })
                 .await??;
@@ -343,7 +337,7 @@ async fn test_round_trip_many(
             .instance("local:local/many")?
             .func_new_concurrent("foo", |_, _, params, results| {
                 Box::pin(async move {
-                    sleep(Duration::from_millis(10)).await;
+                    yield_times(5).await;
                     let mut params = params.into_iter();
                     let Some(Val::String(s)) = params.next() else {
                         unreachable!()
@@ -362,13 +356,13 @@ async fn test_round_trip_many(
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let baz_instance = instance
             .get_export_index(&mut store, None, "local:local/many")
-            .ok_or_else(|| anyhow!("can't find `local:local/many` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `local:local/many` in instance"))?;
         let foo_function = instance
             .get_export_index(&mut store, Some(&baz_instance), "foo")
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| format_err!("can't find `foo` in instance"))?;
 
         let make = |input: &str| {
             let stuff = Val::Record(vec![
@@ -402,7 +396,7 @@ async fn test_round_trip_many(
                             foo_function
                                 .call_concurrent(store, &make(input), &mut result)
                                 .await?;
-                            anyhow::Ok((result, output))
+                            wasmtime::error::Ok((result, output))
                         });
                     }
 
@@ -430,7 +424,6 @@ async fn test_round_trip_many(
                     unreachable!()
                 };
                 assert_eq!(&make(expected), actual);
-                foo_function.post_return_async(&mut store).await?;
             }
 
             store.assert_concurrent_state_empty();

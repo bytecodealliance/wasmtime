@@ -1,20 +1,24 @@
-use test_programs::p3::wasi::sockets::types::{
-    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, UdpSocket,
+use test_programs::{
+    p3::wasi::sockets::types::{
+        ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv6Address, UdpSocket,
+    },
+    sockets::supports_ipv6,
 };
 
 struct Component;
 
 test_programs::p3::export!(Component);
 
-const SOME_PORT: u16 = 47; // If the tests pass, this will never actually be connected to.
+// If the tests work as expected, these will never actually be connected to:
+const SOME_PORT: u16 = 47;
+const SOME_PUBLIC_IPV4: Ipv4Address = (123, 234, 12, 34);
+const SOME_PUBLIC_IPV6: Ipv6Address = (123, 234, 0, 0, 0, 0, 0, 34);
 
 fn test_udp_connect_disconnect_reconnect(family: IpAddressFamily) {
-    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
     let remote1 = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
     let remote2 = IpSocketAddress::new(IpAddress::new_loopback(family), 4320);
 
     let client = UdpSocket::create(family).unwrap();
-    client.bind(unspecified_addr).unwrap();
 
     assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
     assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
@@ -43,7 +47,6 @@ fn test_udp_connect_unspec(family: IpAddressFamily) {
     let ip = IpAddress::new_unspecified(family);
     let addr = IpSocketAddress::new(ip, SOME_PORT);
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(addr),
@@ -51,11 +54,42 @@ fn test_udp_connect_unspec(family: IpAddressFamily) {
     ));
 }
 
+/// If not explicitly bound, connecting a UDP socket should update the local
+/// address to reflect the best network path.
+fn test_udp_connect_local_address_change(family: IpAddressFamily) {
+    fn connect(sock: &UdpSocket, ip: IpAddress, port: u16) -> IpSocketAddress {
+        let remote = IpSocketAddress::new(ip, port);
+        sock.connect(remote).unwrap();
+        let local = sock.get_local_address().unwrap();
+        println!("connect({remote:?}) changed local address to: {local:?}",);
+        local
+    }
+
+    if !has_public_interface(family) {
+        println!("No public interface detected, skipping test");
+        return;
+    }
+
+    let loopback_ip = IpAddress::new_loopback(family);
+    let public_ip = some_public_ip(family);
+
+    let client = UdpSocket::create(family).unwrap();
+
+    let loopback_if1 = connect(&client, loopback_ip, 4321);
+    let loopback_if2 = connect(&client, loopback_ip, 4322);
+    let public_if = connect(&client, public_ip, 4323);
+
+    // Note: these assertions are based on observed behavior on Linux, MacOS and
+    // Windows, but there is nothing in their official documentation to
+    // corroborate this.
+    assert_eq!(loopback_if1, loopback_if2);
+    assert_ne!(loopback_if1, public_if);
+}
+
 /// 0 is not a valid remote port.
 fn test_udp_connect_port_0(family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(addr),
@@ -72,12 +106,35 @@ fn test_udp_connect_wrong_family(family: IpAddressFamily) {
     let remote_addr = IpSocketAddress::new(wrong_ip, SOME_PORT);
 
     let sock = UdpSocket::create(family).unwrap();
-    sock.bind_unspecified().unwrap();
 
     assert!(matches!(
         sock.connect(remote_addr),
         Err(ErrorCode::InvalidArgument)
     ));
+}
+
+/// Connect should perform implicit bind.
+fn test_udp_connect_without_bind(family: IpAddressFamily) {
+    let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
+
+    let sock = UdpSocket::create(family).unwrap();
+
+    assert!(matches!(sock.get_local_address(), Err(_)));
+    assert!(matches!(sock.connect(remote_addr), Ok(_)));
+    assert!(matches!(sock.get_local_address(), Ok(_)));
+}
+
+/// Connect should work in combination with an explicit bind.
+fn test_udp_connect_with_bind(family: IpAddressFamily) {
+    let remote_addr = IpSocketAddress::new(IpAddress::new_loopback(family), SOME_PORT);
+
+    let sock = UdpSocket::create(family).unwrap();
+
+    sock.bind_unspecified().unwrap();
+
+    assert!(matches!(sock.get_local_address(), Ok(_)));
+    assert!(matches!(sock.connect(remote_addr), Ok(_)));
+    assert!(matches!(sock.get_local_address(), Ok(_)));
 }
 
 fn test_udp_connect_dual_stack() {
@@ -112,20 +169,38 @@ fn test_udp_connect_dual_stack() {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv4);
-        test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv6);
-
         test_udp_connect_unspec(IpAddressFamily::Ipv4);
-        test_udp_connect_unspec(IpAddressFamily::Ipv6);
-
+        test_udp_connect_local_address_change(IpAddressFamily::Ipv4);
         test_udp_connect_port_0(IpAddressFamily::Ipv4);
-        test_udp_connect_port_0(IpAddressFamily::Ipv6);
-
         test_udp_connect_wrong_family(IpAddressFamily::Ipv4);
-        test_udp_connect_wrong_family(IpAddressFamily::Ipv6);
+        test_udp_connect_without_bind(IpAddressFamily::Ipv4);
+        test_udp_connect_with_bind(IpAddressFamily::Ipv4);
 
-        test_udp_connect_dual_stack();
+        if supports_ipv6() {
+            test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv6);
+            test_udp_connect_unspec(IpAddressFamily::Ipv6);
+            test_udp_connect_local_address_change(IpAddressFamily::Ipv6);
+            test_udp_connect_port_0(IpAddressFamily::Ipv6);
+            test_udp_connect_wrong_family(IpAddressFamily::Ipv6);
+            test_udp_connect_without_bind(IpAddressFamily::Ipv6);
+            test_udp_connect_with_bind(IpAddressFamily::Ipv6);
+            test_udp_connect_dual_stack();
+        }
         Ok(())
     }
+}
+
+fn some_public_ip(family: IpAddressFamily) -> IpAddress {
+    match family {
+        IpAddressFamily::Ipv4 => IpAddress::Ipv4(SOME_PUBLIC_IPV4),
+        IpAddressFamily::Ipv6 => IpAddress::Ipv6(SOME_PUBLIC_IPV6),
+    }
+}
+
+fn has_public_interface(family: IpAddressFamily) -> bool {
+    let sock = UdpSocket::create(family).unwrap();
+    sock.connect(IpSocketAddress::new(some_public_ip(family), SOME_PORT))
+        .is_ok()
 }
 
 fn main() {}

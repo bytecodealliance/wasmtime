@@ -14,9 +14,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   fmv.d.x fa1,zero
-;   fle.d a1,fa1,fa1
-;   beq a1,zero,taken(label1),not_taken(label2)
+;   fmv.d.x fa0,zero
+;   fle.d a0,fa0,fa0
+;   beq a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -26,8 +26,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.d.x fa1, zero
-;   fle.d a1, fa1, fa1
+;   fmv.d.x fa0, zero
+;   fle.d a0, fa0, fa0
 ; block1: ; offset 0x8
 ;   ret
 
@@ -43,9 +43,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   fmv.d.x fa1,zero
-;   fle.d a1,fa1,fa1
-;   beq a1,zero,taken(label1),not_taken(label2)
+;   fmv.d.x fa0,zero
+;   fle.d a0,fa0,fa0
+;   beq a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -55,8 +55,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmv.d.x fa1, zero
-;   fle.d a1, fa1, fa1
+;   fmv.d.x fa0, zero
+;   fle.d a0, fa0, fa0
 ; block1: ; offset 0x8
 ;   ret
 
@@ -68,16 +68,16 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a3,fa0,fa0
-;   feq.s a5,fa1,fa1
-;   and a0,a3,a5
+;   feq.s a0,fa0,fa0
+;   feq.s a1,fa1,fa1
+;   and a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a3, fa0, fa0
-;   feq.s a5, fa1, fa1
-;   and a0, a3, a5
+;   feq.s a0, fa0, fa0
+;   feq.s a1, fa1, fa1
+;   and a0, a0, a1
 ;   ret
 
 function %uno(f32, f32) -> i8 {
@@ -88,18 +88,18 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a3,fa0,fa0
-;   feq.s a5,fa1,fa1
-;   and a1,a3,a5
-;   seqz a0,a1
+;   feq.s a0,fa0,fa0
+;   feq.s a1,fa1,fa1
+;   and a0,a0,a1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a3, fa0, fa0
-;   feq.s a5, fa1, fa1
-;   and a1, a3, a5
-;   seqz a0, a1
+;   feq.s a0, fa0, fa0
+;   feq.s a1, fa1, fa1
+;   and a0, a0, a1
+;   seqz a0, a0
 ;   ret
 
 function %eq(f32, f32) -> i8 {
@@ -126,14 +126,14 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   feq.s a3,fa0,fa1
-;   seqz a0,a3
+;   feq.s a0,fa0,fa1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a3, fa0, fa1
-;   seqz a0, a3
+;   feq.s a0, fa0, fa1
+;   seqz a0, a0
 ;   ret
 
 function %one(f32, f32) -> i8 {
@@ -144,16 +144,16 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   flt.s a3,fa0,fa1
-;   flt.s a5,fa1,fa0
-;   or a0,a3,a5
+;   flt.s a0,fa0,fa1
+;   flt.s a1,fa1,fa0
+;   or a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a3, fa0, fa1
-;   flt.s a5, fa1, fa0
-;   or a0, a3, a5
+;   flt.s a0, fa0, fa1
+;   flt.s a1, fa1, fa0
+;   or a0, a0, a1
 ;   ret
 
 function %ueq(f32, f32) -> i8 {
@@ -164,18 +164,18 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   flt.s a3,fa0,fa1
-;   flt.s a5,fa1,fa0
-;   or a1,a3,a5
-;   seqz a0,a1
+;   flt.s a0,fa0,fa1
+;   flt.s a1,fa1,fa0
+;   or a0,a0,a1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a3, fa0, fa1
-;   flt.s a5, fa1, fa0
-;   or a1, a3, a5
-;   seqz a0, a1
+;   flt.s a0, fa0, fa1
+;   flt.s a1, fa1, fa0
+;   or a0, a0, a1
+;   seqz a0, a0
 ;   ret
 
 function %lt(f64, f64) -> i8 {
@@ -250,14 +250,14 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   fle.d a3,fa1,fa0
-;   seqz a0,a3
+;   fle.d a0,fa1,fa0
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.d a3, fa1, fa0
-;   seqz a0, a3
+;   fle.d a0, fa1, fa0
+;   seqz a0, a0
 ;   ret
 
 function %ule(f64, f64) -> i8 {
@@ -268,14 +268,14 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   flt.d a3,fa1,fa0
-;   seqz a0,a3
+;   flt.d a0,fa1,fa0
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.d a3, fa1, fa0
-;   seqz a0, a3
+;   flt.d a0, fa1, fa0
+;   seqz a0, a0
 ;   ret
 
 function %ugt(f64, f64) -> i8 {
@@ -286,14 +286,14 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   fle.d a3,fa0,fa1
-;   seqz a0,a3
+;   fle.d a0,fa0,fa1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.d a3, fa0, fa1
-;   seqz a0, a3
+;   fle.d a0, fa0, fa1
+;   seqz a0, a0
 ;   ret
 
 function %uge(f64, f64) -> i8 {
@@ -304,14 +304,14 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   flt.d a3,fa0,fa1
-;   seqz a0,a3
+;   flt.d a0,fa0,fa1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.d a3, fa0, fa1
-;   seqz a0, a3
+;   flt.d a0, fa0, fa1
+;   seqz a0, a0
 ;   ret
 
 function %br_ord(f32, f32) -> i8 {
@@ -328,10 +328,10 @@ block2:
 
 ; VCode:
 ; block0:
-;   feq.s a5,fa0,fa0
+;   feq.s a0,fa0,fa0
 ;   feq.s a1,fa1,fa1
-;   and a3,a5,a1
-;   bne a3,zero,taken(label2),not_taken(label1)
+;   and a0,a0,a1
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -341,10 +341,10 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a5, fa0, fa0
+;   feq.s a0, fa0, fa0
 ;   feq.s a1, fa1, fa1
-;   and a3, a5, a1
-;   bnez a3, 0xc
+;   and a0, a0, a1
+;   bnez a0, 0xc
 ; block1: ; offset 0x10
 ;   mv a0, zero
 ;   ret
@@ -366,10 +366,10 @@ block2:
 
 ; VCode:
 ; block0:
-;   feq.s a5,fa0,fa0
+;   feq.s a0,fa0,fa0
 ;   feq.s a1,fa1,fa1
-;   and a3,a5,a1
-;   beq a3,zero,taken(label2),not_taken(label1)
+;   and a0,a0,a1
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -379,10 +379,10 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a5, fa0, fa0
+;   feq.s a0, fa0, fa0
 ;   feq.s a1, fa1, fa1
-;   and a3, a5, a1
-;   beqz a3, 0xc
+;   and a0, a0, a1
+;   beqz a0, 0xc
 ; block1: ; offset 0x10
 ;   mv a0, zero
 ;   ret
@@ -404,8 +404,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   feq.s a5,fa0,fa1
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   feq.s a0,fa0,fa1
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -415,8 +415,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a5, fa0, fa1
-;   bnez a5, 0xc
+;   feq.s a0, fa0, fa1
+;   bnez a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -438,8 +438,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   feq.s a5,fa0,fa1
-;   beq a5,zero,taken(label2),not_taken(label1)
+;   feq.s a0,fa0,fa1
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -449,8 +449,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   feq.s a5, fa0, fa1
-;   beqz a5, 0xc
+;   feq.s a0, fa0, fa1
+;   beqz a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -472,10 +472,10 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa0,fa1
+;   flt.s a0,fa0,fa1
 ;   flt.s a1,fa1,fa0
-;   or a3,a5,a1
-;   bne a3,zero,taken(label2),not_taken(label1)
+;   or a0,a0,a1
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -485,10 +485,10 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa0, fa1
+;   flt.s a0, fa0, fa1
 ;   flt.s a1, fa1, fa0
-;   or a3, a5, a1
-;   bnez a3, 0xc
+;   or a0, a0, a1
+;   bnez a0, 0xc
 ; block1: ; offset 0x10
 ;   mv a0, zero
 ;   ret
@@ -510,10 +510,10 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa0,fa1
+;   flt.s a0,fa0,fa1
 ;   flt.s a1,fa1,fa0
-;   or a3,a5,a1
-;   beq a3,zero,taken(label2),not_taken(label1)
+;   or a0,a0,a1
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -523,10 +523,10 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa0, fa1
+;   flt.s a0, fa0, fa1
 ;   flt.s a1, fa1, fa0
-;   or a3, a5, a1
-;   beqz a3, 0xc
+;   or a0, a0, a1
+;   beqz a0, 0xc
 ; block1: ; offset 0x10
 ;   mv a0, zero
 ;   ret
@@ -548,8 +548,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa0,fa1
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   flt.s a0,fa0,fa1
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -559,8 +559,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa0, fa1
-;   bnez a5, 0xc
+;   flt.s a0, fa0, fa1
+;   bnez a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -582,8 +582,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa1,fa0
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   flt.s a0,fa1,fa0
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -593,8 +593,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa1, fa0
-;   bnez a5, 0xc
+;   flt.s a0, fa1, fa0
+;   bnez a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -616,8 +616,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   fle.s a5,fa0,fa1
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   fle.s a0,fa0,fa1
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -627,8 +627,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.s a5, fa0, fa1
-;   bnez a5, 0xc
+;   fle.s a0, fa0, fa1
+;   bnez a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -650,8 +650,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   fle.s a5,fa1,fa0
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   fle.s a0,fa1,fa0
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -661,8 +661,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.s a5, fa1, fa0
-;   bnez a5, 0xc
+;   fle.s a0, fa1, fa0
+;   bnez a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -684,8 +684,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   fle.s a5,fa1,fa0
-;   beq a5,zero,taken(label2),not_taken(label1)
+;   fle.s a0,fa1,fa0
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -695,8 +695,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.s a5, fa1, fa0
-;   beqz a5, 0xc
+;   fle.s a0, fa1, fa0
+;   beqz a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -718,8 +718,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   fle.s a5,fa0,fa1
-;   beq a5,zero,taken(label2),not_taken(label1)
+;   fle.s a0,fa0,fa1
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -729,8 +729,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fle.s a5, fa0, fa1
-;   beqz a5, 0xc
+;   fle.s a0, fa0, fa1
+;   beqz a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -752,8 +752,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa1,fa0
-;   beq a5,zero,taken(label2),not_taken(label1)
+;   flt.s a0,fa1,fa0
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -763,8 +763,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa1, fa0
-;   beqz a5, 0xc
+;   flt.s a0, fa1, fa0
+;   beqz a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret
@@ -786,8 +786,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   flt.s a5,fa0,fa1
-;   beq a5,zero,taken(label2),not_taken(label1)
+;   flt.s a0,fa0,fa1
+;   beq a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,0
 ;   ret
@@ -797,8 +797,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   flt.s a5, fa0, fa1
-;   beqz a5, 0xc
+;   flt.s a0, fa0, fa1
+;   beqz a0, 0xc
 ; block1: ; offset 0x8
 ;   mv a0, zero
 ;   ret

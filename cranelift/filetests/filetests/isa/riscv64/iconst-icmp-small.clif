@@ -13,25 +13,25 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,-2
-;   addi a2,a0,-564
-;   slli a3,a2,48
-;   srai a4,a3,48
-;   slli a0,a2,48
-;   srai a2,a0,48
-;   xor a4,a4,a2
-;   sltu a0,zero,a4
+;   addi a0,a0,-564
+;   slli a1,a0,48
+;   srai a1,a1,48
+;   slli a0,a0,48
+;   srai a0,a0,48
+;   xor a0,a1,a0
+;   sltu a0,zero,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xffffe
-;   addi a2, a0, -0x234
-;   slli a3, a2, 0x30
-;   srai a4, a3, 0x30
-;   slli a0, a2, 0x30
-;   srai a2, a0, 0x30
-;   xor a4, a4, a2
-;   snez a0, a4
+;   addi a0, a0, -0x234
+;   slli a1, a0, 0x30
+;   srai a1, a1, 0x30
+;   slli a0, a0, 0x30
+;   srai a0, a0, 0x30
+;   xor a0, a1, a0
+;   snez a0, a0
 ;   ret
 
 function %seq_const0(i64) -> i8 system_v {
@@ -138,14 +138,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xori a2,a0,1
-;   seqz a0,a2
+;   xori a0,a0,1
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xori a2, a0, 1
-;   seqz a0, a2
+;   xori a0, a0, 1
+;   seqz a0, a0
 ;   ret
 
 function %sne_const1(i64) -> i8 system_v {
@@ -156,14 +156,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xori a2,a0,1
-;   sltu a0,zero,a2
+;   xori a0,a0,1
+;   sltu a0,zero,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xori a2, a0, 1
-;   snez a0, a2
+;   xori a0, a0, 1
+;   snez a0, a0
 ;   ret
 
 function %slt_const1(i64) -> i8 system_v {
@@ -190,14 +190,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,1
-;   slt a0,a3,a0
+;   li a1,1
+;   slt a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 1
-;   slt a0, a3, a0
+;   addi a1, zero, 1
+;   slt a0, a1, a0
 ;   ret
 
 function %ult_const1(i64) -> i8 system_v {
@@ -224,14 +224,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,1
-;   sltu a0,a3,a0
+;   li a1,1
+;   sltu a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 1
-;   sltu a0, a3, a0
+;   addi a1, zero, 1
+;   sltu a0, a1, a0
 ;   ret
 
 function %seq_const2(i64) -> i8 system_v {
@@ -242,14 +242,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xori a2,a0,2
-;   seqz a0,a2
+;   xori a0,a0,2
+;   seqz a0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xori a2, a0, 2
-;   seqz a0, a2
+;   xori a0, a0, 2
+;   seqz a0, a0
 ;   ret
 
 function %sne_const2(i64) -> i8 system_v {
@@ -260,14 +260,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xori a2,a0,2
-;   sltu a0,zero,a2
+;   xori a0,a0,2
+;   sltu a0,zero,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xori a2, a0, 2
-;   snez a0, a2
+;   xori a0, a0, 2
+;   snez a0, a0
 ;   ret
 
 function %slt_const2(i64) -> i8 system_v {
@@ -294,14 +294,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,2
-;   slt a0,a3,a0
+;   li a1,2
+;   slt a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 2
-;   slt a0, a3, a0
+;   addi a1, zero, 2
+;   slt a0, a1, a0
 ;   ret
 
 function %ult_const2(i64) -> i8 system_v {
@@ -328,14 +328,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,2
-;   sltu a0,a3,a0
+;   li a1,2
+;   sltu a0,a1,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 2
-;   sltu a0, a3, a0
+;   addi a1, zero, 2
+;   sltu a0, a1, a0
 ;   ret
 
 function %sle_const2(i64) -> i8 system_v {
@@ -346,16 +346,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2
-;   slt a3,a4,a0
-;   xori a0,a3,1
+;   li a1,2
+;   slt a0,a1,a0
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 2
-;   slt a3, a4, a0
-;   xori a0, a3, 1
+;   addi a1, zero, 2
+;   slt a0, a1, a0
+;   xori a0, a0, 1
 ;   ret
 
 function %sle_const_2046(i64) -> i8 system_v {
@@ -366,16 +366,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2046
-;   slt a3,a4,a0
-;   xori a0,a3,1
+;   li a1,2046
+;   slt a0,a1,a0
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 0x7fe
-;   slt a3, a4, a0
-;   xori a0, a3, 1
+;   addi a1, zero, 0x7fe
+;   slt a0, a1, a0
+;   xori a0, a0, 1
 ;   ret
 
 function %sle_const_2047(i64) -> i8 system_v {
@@ -386,16 +386,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2047
-;   slt a3,a4,a0
-;   xori a0,a3,1
+;   li a1,2047
+;   slt a0,a1,a0
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 0x7ff
-;   slt a3, a4, a0
-;   xori a0, a3, 1
+;   addi a1, zero, 0x7ff
+;   slt a0, a1, a0
+;   xori a0, a0, 1
 ;   ret
 
 function %sge_const2(i64) -> i8 system_v {
@@ -406,14 +406,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   slti a2,a0,2
-;   xori a0,a2,1
+;   slti a0,a0,2
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slti a2, a0, 2
-;   xori a0, a2, 1
+;   slti a0, a0, 2
+;   xori a0, a0, 1
 ;   ret
 
 function %ule_const2(i64) -> i8 system_v {
@@ -424,16 +424,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2
-;   sltu a3,a4,a0
-;   xori a0,a3,1
+;   li a1,2
+;   sltu a0,a1,a0
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 2
-;   sltu a3, a4, a0
-;   xori a0, a3, 1
+;   addi a1, zero, 2
+;   sltu a0, a1, a0
+;   xori a0, a0, 1
 ;   ret
 
 function %uge_const2(i64) -> i8 system_v {
@@ -444,13 +444,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   sltiu a2,a0,2
-;   xori a0,a2,1
+;   sltiu a0,a0,2
+;   xori a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sltiu a2, a0, 2
-;   xori a0, a2, 1
+;   sltiu a0, a0, 2
+;   xori a0, a0, 1
 ;   ret
 
