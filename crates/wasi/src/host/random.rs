@@ -1,5 +1,6 @@
 use crate::bindings::random::{insecure, insecure_seed, random};
 use crate::{WasiImpl, WasiView};
+use anyhow::bail;
 use cap_rand::{distributions::Standard, Rng};
 
 impl<T> random::Host for WasiImpl<T>
@@ -7,6 +8,12 @@ where
     T: WasiView,
 {
     fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        if len > self.ctx().max_random_size {
+            bail!(
+                "requested len {len:?} exceeds limit {}",
+                self.ctx().max_random_size
+            );
+        }
         Ok((&mut self.ctx().random)
             .sample_iter(Standard)
             .take(len as usize)
@@ -23,6 +30,12 @@ where
     T: WasiView,
 {
     fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        if len > self.ctx().max_random_size {
+            bail!(
+                "requested len {len:?} exceeds limit {}",
+                self.ctx().max_random_size
+            );
+        }
         Ok((&mut self.ctx().insecure_random)
             .sample_iter(Standard)
             .take(len as usize)

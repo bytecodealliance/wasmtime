@@ -689,7 +689,7 @@ impl HostInputStream for TcpReadStream {
             return Ok(bytes::Bytes::new());
         }
 
-        let mut buf = bytes::BytesMut::with_capacity(size);
+        let mut buf = bytes::BytesMut::with_capacity(size.min(crate::MAX_READ_SIZE_ALLOC));
         let n = match self.stream.try_read_buf(&mut buf) {
             // A 0-byte read indicates that the stream has closed.
             Ok(0) => {

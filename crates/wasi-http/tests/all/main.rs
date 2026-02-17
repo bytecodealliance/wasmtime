@@ -16,7 +16,10 @@ use wasmtime_wasi_http::{
     bindings::http::types::{ErrorCode, Scheme},
     body::HyperOutgoingBody,
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    types::{
+        self, FieldSizeLimitError, HostFutureIncomingResponse, IncomingResponse,
+        OutgoingRequestConfig,
+    },
     HttpResult, WasiHttpCtx, WasiHttpView,
 };
 
@@ -131,6 +134,7 @@ async fn run_wasi_http(
     req: hyper::Request<BoxBody<Bytes, hyper::Error>>,
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
+    field_size_limit: Option<usize>,
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -148,7 +152,10 @@ async fn run_wasi_http(
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();
-    let http = WasiHttpCtx::new();
+    let mut http = WasiHttpCtx::new();
+    if let Some(limit) = field_size_limit {
+        http.set_field_size_limit(limit);
+    }
     let ctx = Ctx {
         table,
         wasi,
@@ -212,6 +219,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         req.body(body::empty())?,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -220,7 +228,79 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         Err(e) => panic!("Error given in response: {e:?}"),
     };
 
-    Ok(())
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        request_with_header_size("http://host/new_fields/50", 0),
+        None,
+        None,
+        Some(500),
+    )
+    .await
+    .context("new_fields with size matching the size limit")??;
+    assert_eq!(resp.status(), 200);
+
+    let err = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        request_with_header_size("http://host/new_fields/500", 0),
+        None,
+        None,
+        Some(500),
+    )
+    .await
+    .err()
+    .expect("new_fields exceeding the size limit");
+    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        request_with_header_size("http://host/modify_fields/50", 10),
+        None,
+        None,
+        Some(500),
+    )
+    .await??;
+    assert_eq!(resp.status(), 200);
+
+    let err = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        request_with_header_size("http://host/modify_fields/50", 100),
+        None,
+        None,
+        Some(500),
+    )
+    .await
+    .err()
+    .expect("run_wasi_http should give error");
+    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+
+    return Ok(());
+
+    fn request_with_header_size(
+        uri: &str,
+        total: usize,
+    ) -> hyper::Request<BoxBody<Bytes, hyper::Error>> {
+        let mut builder = hyper::Request::builder().uri(uri).method(http::Method::GET);
+
+        let headers = builder.headers_mut().expect("builder error");
+        let chunks = total / 10;
+        let remainder = total % 10;
+        for chunk in 0..chunks {
+            let mut v = format!("v{chunk:04}");
+            if chunk == 0 {
+                for _ in 0..remainder {
+                    v.push('x');
+                }
+            }
+            headers.insert(
+                http::HeaderName::from_bytes(format!("k{chunk:04}").as_bytes())
+                    .expect("valid header name"),
+                http::HeaderValue::from_str(&v).expect("valid header value"),
+            );
+        }
+        builder
+            .body(body::empty())
+            .expect("complete building request")
+    }
 }
 
 #[test_log::test(tokio::test)]
@@ -343,6 +423,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         request,
         send_request,
         None,
+        None,
     )
     .await??;
 
@@ -390,6 +471,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
         request,
         None,
         Some("forbidden.com".to_string()),
+        None,
     )
     .await??;
 
@@ -509,6 +591,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         request,
         None,
         None,
+        None,
     )
     .await??;
 
@@ -540,6 +623,7 @@ async fn wasi_http_without_port() -> Result<()> {
     let _response: hyper::Response<_> = run_wasi_http(
         test_programs_artifacts::API_PROXY_FORWARD_REQUEST_COMPONENT,
         req.body(body::empty())?,
+        None,
         None,
         None,
     )

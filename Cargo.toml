@@ -315,7 +315,7 @@ libc = { version = "0.2.112", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.30.0", features = [ "rt", "time" ] }
 hyper = "1.0.1"
-http = "1.0.0"
+http = "1.4.0"
 http-body = "1.0.0"
 http-body-util = "0.1.0"
 bytes = "1.4"

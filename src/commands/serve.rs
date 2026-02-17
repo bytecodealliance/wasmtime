@@ -148,10 +148,14 @@ impl ServeCommand {
             Output::Stderr,
         ));
 
+        let mut table = wasmtime::component::ResourceTable::new();
+        if let Some(max) = self.run.common.wasi.max_resources {
+            table.set_max_capacity(max);
+        }
         let mut host = Host {
-            table: wasmtime::component::ResourceTable::new(),
+            table,
             ctx: builder.build(),
-            http: WasiHttpCtx::new(),
+            http: self.run.wasi_http_ctx()?,
 
             limits: StoreLimits::default(),
 
@@ -215,6 +219,9 @@ impl ServeCommand {
 
         if self.run.common.wasm.timeout.is_some() {
             store.set_epoch_deadline(u64::from(EPOCH_PRECISION) + 1);
+        }
+        if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
+            store.set_hostcall_fuel(fuel);
         }
 
         store.data_mut().limits = self.run.store_limits();

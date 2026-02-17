@@ -2,7 +2,7 @@
 # cargo-vet config file
 
 [cargo-vet]
-version = "0.9"
+version = "0.10"
 
 [imports.embark-studios]
 url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
@@ -308,11 +308,6 @@ criteria = "safe-to-deploy"
 [[exemptions.hermit-abi]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.http]]
-version = "0.2.9"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
 [[exemptions.httparse]]
 version = "1.8.0"

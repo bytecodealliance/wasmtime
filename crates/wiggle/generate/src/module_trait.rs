@@ -84,6 +84,13 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
         #[wiggle::async_trait]
         pub trait #traitname {
             #(#traitmethods)*
+
+            /// Indicates, if this implementation supports it, that the
+            /// specified amount of fuel should be the maximal spent for the
+            /// upcoming function call.
+            fn set_hostcall_fuel(&mut self, fuel: usize) {
+                let _ = fuel;
+            }
         }
     }
 }

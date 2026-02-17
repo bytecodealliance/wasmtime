@@ -4,13 +4,13 @@ use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
     types::{
-        is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
+        is_forbidden_header, remove_forbidden_headers, FieldMap, FieldSizeLimitError, HostFields,
         HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
         HostOutgoingResponse, HostResponseOutparam,
     },
     WasiHttpImpl, WasiHttpView,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
@@ -40,7 +40,7 @@ where
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`
 /// header.
 fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
-    let header_val = match fields.get(hyper::header::CONTENT_LENGTH) {
+    let header_val = match fields.as_ref().get(hyper::header::CONTENT_LENGTH) {
         Some(val) => val,
         None => return Ok(None),
     };
@@ -106,10 +106,11 @@ where
     T: WasiHttpView,
 {
     fn new(&mut self) -> wasmtime::Result<Resource<HostFields>> {
+        let limit = self.ctx().field_size_limit;
         let id = self
             .table()
             .push(HostFields::Owned {
-                fields: hyper::HeaderMap::new(),
+                fields: FieldMap::empty(limit),
             })
             .context("[new_fields] pushing fields")?;
 
@@ -140,6 +141,14 @@ where
             fields.append(header, value);
         }
 
+        let size = FieldMap::content_size(&fields);
+        if size > self.ctx().field_size_limit {
+            bail!(FieldSizeLimitError {
+                size,
+                limit: self.ctx().field_size_limit,
+            });
+        }
+        let fields = FieldMap::new(fields, self.ctx().field_size_limit);
         let id = self
             .table()
             .push(HostFields::Owned { fields })
@@ -167,11 +176,12 @@ where
             Err(_) => return Ok(vec![]),
         };
 
-        if !fields.contains_key(&header) {
+        if !fields.as_ref().contains_key(&header) {
             return Ok(vec![]);
         }
 
         let res = fields
+            .as_ref()
             .get_all(&header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
@@ -183,7 +193,7 @@ where
         let fields = get_fields(self.table(), &fields).context("[fields_get] getting fields")?;
 
         match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => Ok(fields.contains_key(&header)),
+            Ok(header) => Ok(fields.as_ref().contains_key(&header)),
             Err(_) => Ok(false),
         }
     }
@@ -211,14 +221,18 @@ where
             }
         }
 
-        Ok(get_fields_mut(self.table(), &fields)
+        match get_fields_mut(self.table(), &fields)
             .context("[fields_set] getting mutable fields")?
-            .map(|fields| {
-                fields.remove(&header);
+        {
+            Ok(fields) => {
+                fields.remove_all(&header);
                 for value in values {
-                    fields.append(&header, value);
+                    fields.append(&header, value)?;
                 }
-            }))
+                Ok(Ok(()))
+            }
+            Err(e) => Ok(Err(e)),
+        }
     }
 
     fn delete(
@@ -236,7 +250,7 @@ where
         }
 
         Ok(get_fields_mut(self.table(), &fields)?.map(|fields| {
-            fields.remove(header);
+            fields.remove_all(&header);
         }))
     }
 
@@ -260,11 +274,15 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        Ok(get_fields_mut(self.table(), &fields)
+        match get_fields_mut(self.table(), &fields)
             .context("[fields_append] getting mutable fields")?
-            .map(|fields| {
-                fields.append(header, value);
-            }))
+        {
+            Ok(fields) => {
+                fields.append(&header, value)?;
+                Ok(Ok(()))
+            }
+            Err(e) => Ok(Err(e)),
+        }
     }
 
     fn entries(
@@ -272,6 +290,7 @@ where
         fields: Resource<HostFields>,
     ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
         Ok(get_fields(self.table(), &fields)?
+            .as_ref()
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
             .collect())
@@ -296,7 +315,7 @@ where
     T: WasiHttpView,
 {
     fn method(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Method> {
-        let method = self.table().get(&id)?.parts.method.clone();
+        let method = self.table().get(&id)?.method.clone();
         Ok(method.into())
     }
     fn path_with_query(
@@ -305,7 +324,6 @@ where
     ) -> wasmtime::Result<Option<String>> {
         let req = self.table().get(&id)?;
         Ok(req
-            .parts
             .uri
             .path_and_query()
             .map(|path_and_query| path_and_query.as_str().to_owned()))
@@ -326,11 +344,7 @@ where
         let _ = self.table().get(&id)?;
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            &mut elem
-                .downcast_mut::<HostIncomingRequest>()
-                .unwrap()
-                .parts
-                .headers
+            &mut elem.downcast_mut::<HostIncomingRequest>().unwrap().headers
         }
 
         let headers = self.table().push_child(
@@ -670,7 +684,7 @@ where
     {
         let trailers = self.table().get_mut(&id)?;
         match trailers {
-            HostFutureTrailers::Waiting(_) => return Ok(None),
+            HostFutureTrailers::Waiting { .. } => return Ok(None),
             HostFutureTrailers::Consumed => return Ok(Some(Err(()))),
             HostFutureTrailers::Done(_) => {}
         };
@@ -835,6 +849,7 @@ where
     ) -> wasmtime::Result<
         Option<Result<Result<Resource<HostIncomingResponse>, types::ErrorCode>, ()>>,
     > {
+        let field_size_limit = self.ctx().field_size_limit;
         let resp = self.table().get_mut(&id)?;
 
         match resp {
@@ -855,15 +870,17 @@ where
                 Ok(Err(e)) => return Ok(Some(Ok(Err(e)))),
             };
 
-        let (mut parts, body) = resp.resp.into_parts();
+        let (parts, body) = resp.resp.into_parts();
 
-        remove_forbidden_headers(self, &mut parts.headers);
+        let mut headers = FieldMap::new(parts.headers, field_size_limit);
+        remove_forbidden_headers(self, &mut headers);
 
         let resp = self.table().push(HostIncomingResponse {
             status: parts.status.as_u16(),
-            headers: parts.headers,
+            headers,
             body: Some({
-                let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
+                let mut body =
+                    HostIncomingBody::new(body, resp.between_bytes_timeout, field_size_limit);
                 if let Some(worker) = resp.worker {
                     body.retain_worker(worker);
                 }
