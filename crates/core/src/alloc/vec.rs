@@ -288,6 +288,11 @@ impl<T> Vec<T> {
         // use `std`'s `into_boxed_slice` without fear of `realloc`.
         Ok(self.inner.into_boxed_slice())
     }
+
+    /// Same as [`std::vec::Vec::clear`].
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
 }
 
 impl<T> Deref for Vec<T> {
