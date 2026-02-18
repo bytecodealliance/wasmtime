@@ -10,7 +10,9 @@ pub fn check_stacks(stacks: Stacks) -> usize {
     let wasm = stacks.wasm();
     crate::oracles::log_wasm(&wasm);
 
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.wasm_backtrace_max_frames(stacks.limit);
+    let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, &wasm).expect("should compile okay");
 
     let mut linker = Linker::new(&engine);
@@ -79,7 +81,15 @@ pub fn check_stacks(stacks: Stacks) -> usize {
             let host_trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
             let trap = trap.downcast_ref::<Trap>().unwrap();
             max_stack_depth = max_stack_depth.max(host_trace.len());
-            assert_stack_matches(&mut store, memory, ptr, len, host_trace, *trap);
+            assert_stack_matches(
+                &mut store,
+                memory,
+                ptr,
+                len,
+                host_trace,
+                *trap,
+                stacks.limit,
+            );
         }
     }
     max_stack_depth
@@ -93,6 +103,7 @@ fn assert_stack_matches(
     len: u32,
     host_trace: &[FrameInfo],
     trap: Trap,
+    limit: Option<std::num::NonZeroUsize>,
 ) {
     let mut data = vec![0; len as usize];
     memory
@@ -107,8 +118,14 @@ fn assert_stack_matches(
         wasm_trace.push(entry);
     }
 
-    // Default configuration will only allow the host to see at most 20 frames.
-    let trace_limit = 20;
+    let trace_limit = match limit {
+        Some(n) => n.get(),
+        None => {
+            // Backtraces are disabled; the host trace should be empty.
+            assert!(host_trace.is_empty());
+            return;
+        }
+    };
 
     // If the test case here trapped due to stack overflow then the host trace
     // will have one more frame than the wasm trace. The wasm didn't actually
