@@ -1,8 +1,9 @@
 use crate::{
-    ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PrimaryMap, TypeTrace, WasmSubType,
+    ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PanicOnOom as _, TypeTrace, WasmSubType,
+    collections::{PrimaryMap, SecondaryMap},
+    packed_option::PackedOption,
 };
 use core::ops::{Index, Range};
-use cranelift_entity::{SecondaryMap, packed_option::PackedOption};
 use serde_derive::{Deserialize, Serialize};
 
 /// All types used in a core wasm module.
@@ -77,7 +78,7 @@ impl ModuleTypes {
 
     /// Adds a new type to this interned list of types.
     pub fn push(&mut self, ty: WasmSubType) -> ModuleInternedTypeIndex {
-        self.wasm_types.push(ty)
+        self.wasm_types.push(ty).panic_on_oom()
     }
 
     /// Iterate over the trampoline function types that this module requires.
@@ -131,7 +132,9 @@ impl ModuleTypes {
                 .is_trampoline_type()
         );
 
-        self.trampoline_types[for_ty] = Some(trampoline_ty).into();
+        self.trampoline_types
+            .insert(for_ty, Some(trampoline_ty).into())
+            .panic_on_oom();
     }
 
     /// Adds a new rec group to this interned list of types.
@@ -139,12 +142,12 @@ impl ModuleTypes {
         &mut self,
         range: Range<ModuleInternedTypeIndex>,
     ) -> ModuleInternedRecGroupIndex {
-        self.rec_groups.push(range)
+        self.rec_groups.push(range).panic_on_oom()
     }
 
     /// Reserves space for `amt` more types.
     pub fn reserve(&mut self, amt: usize) {
-        self.wasm_types.reserve(amt)
+        self.wasm_types.reserve(amt).panic_on_oom()
     }
 
     /// Returns the next return value of `push_rec_group`.
