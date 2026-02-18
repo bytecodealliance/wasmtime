@@ -955,7 +955,9 @@ impl TypeRegistryInner {
     fn remove_entry_rec_groups(&mut self, entry: &RecGroupEntry) {
         for &ty in &entry.0.shared_type_indices {
             debug_assert!(ty.index() < self.type_to_rec_group.capacity());
-            self.type_to_rec_group.remove(ty);
+            self.type_to_rec_group
+                .remove(ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
@@ -995,7 +997,9 @@ impl TypeRegistryInner {
         }
 
         for &ty in &entry.0.shared_type_indices {
-            self.type_to_supertypes.remove(ty);
+            self.type_to_supertypes
+                .remove(ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
@@ -1075,7 +1079,12 @@ impl TypeRegistryInner {
         }
 
         for &ty in &entry.0.shared_type_indices {
-            if let Some(tramp_ty) = self.type_to_trampoline.remove(ty).and_then(|x| x.expand()) {
+            if let Some(tramp_ty) = self
+                .type_to_trampoline
+                .remove(ty)
+                .expect("`PackedOption::default().try_clone()` cannot fail")
+                .and_then(|x| x.expand())
+            {
                 self.debug_assert_registered(tramp_ty);
                 let tramp_entry = self.type_to_rec_group[tramp_ty].as_ref().unwrap();
                 if tramp_entry.decref("dropping rec group's trampoline-type references") {
@@ -1150,7 +1159,9 @@ impl TypeRegistryInner {
         }
 
         for ty in &entry.0.shared_type_indices {
-            self.type_to_gc_layout.remove(*ty);
+            self.type_to_gc_layout
+                .remove(*ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
