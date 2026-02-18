@@ -2,11 +2,13 @@
 //! with `bincode` as part of a module's compilation process.
 
 use crate::prelude::*;
-use crate::{FilePos, FuncIndex, FuncKey, FuncKeyIndex, FuncKeyKind, FuncKeyNamespace, Module};
+use crate::{
+    EntityRef, FilePos, FuncIndex, FuncKey, FuncKeyIndex, FuncKeyKind, FuncKeyNamespace, Module,
+    PanicOnOom as _, collections::PrimaryMap,
+};
 use core::ops::Range;
 use core::{fmt, u32};
 use core::{iter, str};
-use cranelift_entity::{EntityRef, PrimaryMap};
 use serde_derive::{Deserialize, Serialize};
 #[cfg(feature = "rr")]
 use sha2::{Digest, Sha256};
@@ -158,16 +160,18 @@ impl CompiledFunctionsTableBuilder {
             })
             .unwrap_or_else(|| {
                 let start = self.inner.func_locs.next_key();
-                let ns_idx = self.inner.namespaces.push(key_ns);
-                let ns_idx2 = self.inner.func_loc_starts.push(start);
+                let ns_idx = self.inner.namespaces.push(key_ns).panic_on_oom();
+                let ns_idx2 = self.inner.func_loc_starts.push(start).panic_on_oom();
                 let ns_idx3 = self
                     .inner
                     .sparse_starts
-                    .push(self.inner.sparse_indices.next_key());
+                    .push(self.inner.sparse_indices.next_key())
+                    .panic_on_oom();
                 let ns_idx4 = self
                     .inner
                     .src_loc_starts
-                    .push(self.inner.src_locs.next_key());
+                    .push(self.inner.src_locs.next_key())
+                    .panic_on_oom();
                 debug_assert_eq!(ns_idx, ns_idx2);
                 debug_assert_eq!(ns_idx, ns_idx3);
                 debug_assert_eq!(ns_idx, ns_idx4);
@@ -197,26 +201,28 @@ impl CompiledFunctionsTableBuilder {
             let gap = index.index() - self.inner.func_locs.len();
             self.inner
                 .func_locs
-                .extend(iter::repeat(null_func_loc).take(gap));
+                .try_extend(iter::repeat(null_func_loc).take(gap))
+                .panic_on_oom();
             debug_assert_eq!(index, self.inner.func_locs.next_key());
 
             if CompiledFunctionsTable::has_src_locs(key_ns.kind()) {
                 self.inner
                     .src_locs
-                    .extend(iter::repeat(FilePos::none()).take(gap));
+                    .try_extend(iter::repeat(FilePos::none()).take(gap))
+                    .panic_on_oom();
             }
         } else {
             debug_assert!(
                 src_loc.is_none(),
                 "sparse keys do not have source locations"
             );
-            self.inner.sparse_indices.push(key_index);
+            self.inner.sparse_indices.push(key_index).panic_on_oom();
         }
 
         // And finally, we push this entry.
-        self.inner.func_locs.push(func_loc);
+        self.inner.func_locs.push(func_loc).panic_on_oom();
         if CompiledFunctionsTable::has_src_locs(key_ns.kind()) {
-            self.inner.src_locs.push(src_loc);
+            self.inner.src_locs.push(src_loc).panic_on_oom();
         } else {
             debug_assert!(src_loc.is_none());
         }
