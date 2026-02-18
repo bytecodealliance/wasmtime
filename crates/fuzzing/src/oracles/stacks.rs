@@ -10,7 +10,9 @@ pub fn check_stacks(stacks: Stacks) -> usize {
     let wasm = stacks.wasm();
     crate::oracles::log_wasm(&wasm);
 
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.wasm_backtrace_max_frames(stacks.limit);
+    let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, &wasm).expect("should compile okay");
 
     let mut linker = Linker::new(&engine);
@@ -79,7 +81,15 @@ pub fn check_stacks(stacks: Stacks) -> usize {
             let host_trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
             let trap = trap.downcast_ref::<Trap>().unwrap();
             max_stack_depth = max_stack_depth.max(host_trace.len());
-            assert_stack_matches(&mut store, memory, ptr, len, host_trace, *trap);
+            assert_stack_matches(
+                &mut store,
+                memory,
+                ptr,
+                len,
+                host_trace,
+                *trap,
+                stacks.limit,
+            );
         }
     }
     max_stack_depth
@@ -93,6 +103,7 @@ fn assert_stack_matches(
     len: u32,
     host_trace: &[FrameInfo],
     trap: Trap,
+    limit: Option<std::num::NonZeroUsize>,
 ) {
     let mut data = vec![0; len as usize];
     memory
@@ -107,17 +118,41 @@ fn assert_stack_matches(
         wasm_trace.push(entry);
     }
 
+    let trace_limit = match limit {
+        Some(n) => n.get(),
+        None => {
+            // Backtraces are disabled; the host trace should be empty.
+            assert!(host_trace.is_empty());
+            return;
+        }
+    };
+
     // If the test case here trapped due to stack overflow then the host trace
     // will have one more frame than the wasm trace. The wasm didn't actually
     // get to the point of pushing onto its own trace stack where the host will
     // be able to see the exact function that triggered the stack overflow. In
     // this situation the host trace is asserted to be one larger and then the
     // top frame (first) of the host trace is discarded.
-    let host_trace = if trap == Trap::StackOverflow {
-        assert_eq!(host_trace.len(), wasm_trace.len() + 1);
-        &host_trace[1..]
+    let (host_trace, wasm_trace) = if trap == Trap::StackOverflow {
+        if host_trace.len() == trace_limit {
+            assert!(
+                trace_limit <= wasm_trace.len() + 1,
+                "Host trace size {} is larger than expected {}",
+                trace_limit,
+                wasm_trace.len() + 1
+            );
+        } else {
+            assert_eq!(host_trace.len(), wasm_trace.len() + 1);
+        }
+        (
+            &host_trace[1..],
+            &wasm_trace.get(..trace_limit - 1).unwrap_or(&wasm_trace),
+        )
     } else {
-        host_trace
+        (
+            host_trace,
+            &wasm_trace.get(..trace_limit).unwrap_or(&wasm_trace),
+        )
     };
 
     log::debug!("Wasm thinks its stack is: {wasm_trace:?}");
@@ -131,7 +166,7 @@ fn assert_stack_matches(
 
     assert_eq!(wasm_trace.len(), host_trace.len());
     for (wasm_entry, host_entry) in wasm_trace.into_iter().zip(host_trace) {
-        assert_eq!(wasm_entry, host_entry.func_index());
+        assert_eq!(wasm_entry, &host_entry.func_index());
     }
 }
 

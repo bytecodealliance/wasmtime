@@ -6,6 +6,7 @@ use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
 use core::fmt;
+use core::num::NonZeroUsize;
 use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_or_index};
 
 /// Representation of a WebAssembly trap and what caused it to occur.
@@ -121,7 +122,12 @@ pub(crate) fn from_runtime_box(
     };
 
     if let Some(bt) = backtrace {
-        let bt = WasmBacktrace::from_captured(store, bt, pc);
+        let bt = WasmBacktrace::from_captured(
+            store,
+            bt,
+            pc,
+            store.engine().config().wasm_backtrace_max_frames,
+        );
         if !bt.wasm_trace.is_empty() {
             error = error.context(bt);
         }
@@ -130,7 +136,12 @@ pub(crate) fn from_runtime_box(
     let _ = &coredumpstack;
     #[cfg(feature = "coredump")]
     if let Some(coredump) = coredumpstack {
-        let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
+        let bt = WasmBacktrace::from_captured(
+            store,
+            coredump.bt,
+            pc,
+            store.engine().config().wasm_backtrace_max_frames,
+        );
         let cd = WasmCoreDump::new(store, bt);
         error = error.context(cd);
     }
@@ -150,7 +161,7 @@ pub(crate) fn from_runtime_box(
 /// the error is logged.
 ///
 /// Capturing of wasm backtraces can be configured through the
-/// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) method.
+/// [`Config::wasm_backtrace_max_frames`](crate::Config::wasm_backtrace_max_frames) method.
 ///
 /// For more information about errors in wasmtime see the documentation of the
 /// [`Trap`] type.
@@ -206,16 +217,16 @@ impl WasmBacktrace {
     /// current thread. If no WebAssembly is on the stack then the returned
     /// backtrace will have no frames in it.
     ///
-    /// Note that this function will respect the [`Config::wasm_backtrace`]
-    /// configuration option and will return an empty backtrace if that is
-    /// disabled. To always capture a backtrace use the
-    /// [`WasmBacktrace::force_capture`] method.
+    /// Note that this function will respect the
+    /// [`Config::wasm_backtrace_max_frames`] configuration option and will
+    /// return an empty backtrace if that is set to `None`. To always capture a
+    /// backtrace use the [`WasmBacktrace::force_capture`] method.
     ///
     /// Also note that this function will only capture frames from the
     /// specified `store` on the stack, ignoring frames from other stores if
     /// present.
     ///
-    /// [`Config::wasm_backtrace`]: crate::Config::wasm_backtrace
+    /// [`Config::wasm_backtrace_max_frames`]: crate::Config::wasm_backtrace_max_frames
     ///
     /// # Example
     ///
@@ -247,8 +258,13 @@ impl WasmBacktrace {
     /// ```
     pub fn capture(store: impl AsContext) -> WasmBacktrace {
         let store = store.as_context();
-        if store.engine().config().wasm_backtrace {
-            Self::force_capture(store)
+        if let Some(max_frames) = store.engine().config().wasm_backtrace_max_frames {
+            Self::from_captured(
+                store.0,
+                crate::runtime::vm::Backtrace::new(store.0),
+                None,
+                Some(max_frames),
+            )
         } else {
             WasmBacktrace {
                 wasm_trace: Vec::new(),
@@ -262,24 +278,46 @@ impl WasmBacktrace {
     /// for the provided store.
     ///
     /// Same as [`WasmBacktrace::capture`] except that it disregards the
-    /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) setting and
-    /// always captures a backtrace.
+    /// [`Config::wasm_backtrace_max_frames`](crate::Config::wasm_backtrace_max_frames)
+    /// setting and always captures a backtrace.
     pub fn force_capture(store: impl AsContext) -> WasmBacktrace {
         let store = store.as_context();
-        Self::from_captured(store.0, crate::runtime::vm::Backtrace::new(store.0), None)
+        let max_frames = store
+            .engine()
+            .config()
+            .wasm_backtrace_max_frames
+            .unwrap_or(crate::config::DEFAULT_WASM_BACKTRACE_MAX_FRAMES);
+        Self::from_captured(
+            store.0,
+            crate::runtime::vm::Backtrace::new(store.0),
+            None,
+            Some(max_frames),
+        )
     }
 
     fn from_captured(
         store: &StoreOpaque,
         runtime_trace: crate::runtime::vm::Backtrace,
         trap_pc: Option<usize>,
+        max_frames: Option<NonZeroUsize>,
     ) -> Self {
-        let mut wasm_trace = Vec::<FrameInfo>::with_capacity(runtime_trace.frames().len());
+        let Some(max_frames) = max_frames else {
+            return WasmBacktrace {
+                wasm_trace: Vec::new(),
+                hint_wasm_backtrace_details_env: false,
+                _runtime_trace: crate::runtime::vm::Backtrace::empty(),
+            };
+        };
+        let mut wasm_trace = Vec::<FrameInfo>::with_capacity(max_frames.get());
         let mut hint_wasm_backtrace_details_env = false;
         let wasm_backtrace_details_env_used =
             store.engine().config().wasm_backtrace_details_env_used;
 
         for frame in runtime_trace.frames() {
+            if wasm_trace.len() >= max_frames.get() {
+                break;
+            }
+
             debug_assert!(frame.pc() != 0);
 
             // Note that we need to be careful about the pc we pass in
