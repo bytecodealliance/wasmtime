@@ -11,6 +11,7 @@ use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
 };
 use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
+use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -563,7 +564,7 @@ impl ExnRef {
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
