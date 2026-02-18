@@ -26,7 +26,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone as _, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -285,6 +285,12 @@ impl Clone for RegisteredType {
     }
 }
 
+impl TryClone for RegisteredType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
+
 impl Drop for RegisteredType {
     fn drop(&mut self) {
         self.engine.signatures().debug_assert_contains(self.index);
@@ -456,6 +462,12 @@ impl RegisteredType {
 /// implement `Borrow<U>` when `T: Borrow<U>`).
 #[derive(Clone)]
 struct RecGroupEntry(Arc<RecGroupEntryInner>);
+
+impl TryClone for RecGroupEntry {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
 
 impl Debug for RecGroupEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
