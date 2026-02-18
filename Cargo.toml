@@ -360,6 +360,7 @@ json-from-wast = "0.245.0"
 # --------------------------
 arbitrary = "1.4.2"
 backtrace = "0.3.75"
+bumpalo = "3.20.0"
 mutatis = "0.3.2"
 cc = "1.2.41"
 object = { version = "0.38.1", default-features = false, features = ['read_core', 'elf'] }
