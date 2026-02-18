@@ -12,6 +12,7 @@ use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
 };
+use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
@@ -515,7 +516,7 @@ impl StructRef {
         Ok(gc_ref.as_structref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
