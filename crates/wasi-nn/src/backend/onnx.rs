@@ -437,19 +437,13 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
 }
 
 pub fn f32_vec_to_bytes(data: Vec<f32>) -> Vec<u8> {
-    let chunks: Vec<[u8; 4]> = data.into_iter().map(|f| f.to_le_bytes()).collect();
-    let result: Vec<u8> = chunks.iter().flatten().copied().collect();
-    result
+    data.into_iter().flat_map(f32::to_le_bytes).collect()
 }
 
 pub fn bytes_to_f32_vec(data: Vec<u8>) -> Vec<f32> {
-    let chunks: Vec<&[u8]> = data.chunks(4).collect();
-    let v: Vec<f32> = chunks
-        .into_iter()
+    data.chunks(4)
         .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
-        .collect();
-
-    v.into_iter().collect()
+        .collect()
 }
 
 /// Returns whether the dimension is dynamic.
