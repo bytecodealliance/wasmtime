@@ -7,8 +7,8 @@
 //! This module provides a `PackedOption<T>` for types that have a reserved value that can be used
 //! to represent `None`.
 
-use core::fmt;
-use core::mem;
+use core::{fmt, mem};
+use wasmtime_core::{alloc::TryClone, error::OutOfMemory};
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -29,6 +29,15 @@ pub trait ReservedValue {
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
 pub struct PackedOption<T: ReservedValue>(T);
+
+impl<T> TryClone for PackedOption<T>
+where
+    T: ReservedValue + TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self(self.0.try_clone()?))
+    }
+}
 
 impl<T: ReservedValue> PackedOption<T> {
     /// Returns `true` if the packed option is a `None` value.
