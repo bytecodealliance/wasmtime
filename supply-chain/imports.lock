@@ -566,8 +566,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.bumpalo]]
-version = "3.16.0"
-when = "2024-04-08"
+version = "3.20.0"
+when = "2026-02-18"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
