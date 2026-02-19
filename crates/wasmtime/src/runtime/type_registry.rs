@@ -26,7 +26,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone as _, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -285,6 +285,12 @@ impl Clone for RegisteredType {
     }
 }
 
+impl TryClone for RegisteredType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
+
 impl Drop for RegisteredType {
     fn drop(&mut self) {
         self.engine.signatures().debug_assert_contains(self.index);
@@ -456,6 +462,12 @@ impl RegisteredType {
 /// implement `Borrow<U>` when `T: Borrow<U>`).
 #[derive(Clone)]
 struct RecGroupEntry(Arc<RecGroupEntryInner>);
+
+impl TryClone for RecGroupEntry {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
 
 impl Debug for RecGroupEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -943,7 +955,9 @@ impl TypeRegistryInner {
     fn remove_entry_rec_groups(&mut self, entry: &RecGroupEntry) {
         for &ty in &entry.0.shared_type_indices {
             debug_assert!(ty.index() < self.type_to_rec_group.capacity());
-            self.type_to_rec_group.remove(ty);
+            self.type_to_rec_group
+                .remove(ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
@@ -983,7 +997,9 @@ impl TypeRegistryInner {
         }
 
         for &ty in &entry.0.shared_type_indices {
-            self.type_to_supertypes.remove(ty);
+            self.type_to_supertypes
+                .remove(ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
@@ -1063,7 +1079,12 @@ impl TypeRegistryInner {
         }
 
         for &ty in &entry.0.shared_type_indices {
-            if let Some(tramp_ty) = self.type_to_trampoline.remove(ty).and_then(|x| x.expand()) {
+            if let Some(tramp_ty) = self
+                .type_to_trampoline
+                .remove(ty)
+                .expect("`PackedOption::default().try_clone()` cannot fail")
+                .and_then(|x| x.expand())
+            {
                 self.debug_assert_registered(tramp_ty);
                 let tramp_entry = self.type_to_rec_group[tramp_ty].as_ref().unwrap();
                 if tramp_entry.decref("dropping rec group's trampoline-type references") {
@@ -1107,10 +1128,10 @@ impl TypeRegistryInner {
                     gc_runtime.layouts().array_layout(a).into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Struct(s) => {
-                    gc_runtime.layouts().struct_layout(s).into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().struct_layout(s))?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Exn(e) => {
-                    gc_runtime.layouts().exn_layout(e).into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().exn_layout(e))?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Cont(_) => continue, // FIXME: #10248 stack switching support.
             };
@@ -1138,7 +1159,9 @@ impl TypeRegistryInner {
         }
 
         for ty in &entry.0.shared_type_indices {
-            self.type_to_gc_layout.remove(*ty);
+            self.type_to_gc_layout
+                .remove(*ty)
+                .expect("`None.try_clone()` cannot fail");
         }
     }
 
