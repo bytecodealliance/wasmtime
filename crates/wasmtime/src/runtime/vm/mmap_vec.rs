@@ -1,3 +1,5 @@
+#[cfg(not(has_virtual_memory))]
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(has_virtual_memory)]
@@ -64,14 +66,16 @@ impl MmapVec {
     }
 
     #[cfg(not(has_virtual_memory))]
-    fn new_alloc(len: usize, alignment: usize) -> MmapVec {
+    fn new_alloc(len: usize, alignment: usize) -> Result<MmapVec, OutOfMemory> {
         let layout = Layout::from_size_align(len, alignment)
             .expect("Invalid size or alignment for MmapVec allocation");
-        let base = SendSyncPtr::new(
-            NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) })
-                .expect("Allocation of MmapVec storage failed"),
-        );
-        MmapVec::Alloc { base, layout }
+        match NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) }) {
+            Some(ptr) => {
+                let base = SendSyncPtr::new(ptr);
+                Ok(MmapVec::Alloc { base, layout })
+            }
+            None => return Err(OutOfMemory::new(layout.size())),
+        }
     }
 
     fn new_externally_owned(memory: NonNull<[u8]>) -> MmapVec {
@@ -93,7 +97,7 @@ impl MmapVec {
         }
         #[cfg(not(has_virtual_memory))]
         {
-            return Ok(MmapVec::new_alloc(size, alignment));
+            return Ok(MmapVec::new_alloc(size, alignment)?);
         }
     }
 
