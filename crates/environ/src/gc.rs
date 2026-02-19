@@ -16,10 +16,13 @@ pub mod drc;
 pub mod null;
 
 use crate::{
-    WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmStorageType, WasmStructType,
-    WasmValType,
+    WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmExnType, WasmStorageType,
+    WasmStructType, WasmValType,
+    collections::{self, TryClone},
+    error::OutOfMemory,
+    prelude::*,
 };
-use crate::{WasmExnType, prelude::*};
+use alloc::sync::Arc;
 use core::alloc::Layout;
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
@@ -122,7 +125,9 @@ fn common_struct_or_exn_layout(
     fields: &[crate::WasmFieldType],
     header_size: u32,
     header_align: u32,
-) -> (u32, u32, Vec<GcStructLayoutField>) {
+) -> (u32, u32, collections::Vec<GcStructLayoutField>) {
+    use crate::PanicOnOom as _;
+
     // Process each field, aligning it to its natural alignment.
     //
     // We don't try and do any fancy field reordering to minimize padding (yet?)
@@ -143,7 +148,8 @@ fn common_struct_or_exn_layout(
             let is_gc_ref = f.element_type.is_vmgcref_type_and_not_i31();
             GcStructLayoutField { offset, is_gc_ref }
         })
-        .collect();
+        .try_collect::<collections::Vec<_>, _>()
+        .panic_on_oom();
 
     // Ensure that the final size is a multiple of the alignment, for
     // simplicity.
@@ -228,12 +234,12 @@ pub trait GcTypeLayouts {
         assert!(!ty.shared);
         match &ty.inner {
             WasmCompositeInnerType::Array(ty) => Some(self.array_layout(ty).into()),
-            WasmCompositeInnerType::Struct(ty) => Some(self.struct_layout(ty).into()),
+            WasmCompositeInnerType::Struct(ty) => Some(Arc::new(self.struct_layout(ty)).into()),
             WasmCompositeInnerType::Func(_) => None,
             WasmCompositeInnerType::Cont(_) => {
                 unimplemented!("Stack switching feature not compatible with GC, yet")
             }
-            WasmCompositeInnerType::Exn(ty) => Some(self.exn_layout(ty).into()),
+            WasmCompositeInnerType::Exn(ty) => Some(Arc::new(self.exn_layout(ty)).into()),
         }
     }
 
@@ -254,7 +260,7 @@ pub enum GcLayout {
     Array(GcArrayLayout),
 
     /// The layout of a GC-managed struct or exception object.
-    Struct(GcStructLayout),
+    Struct(Arc<GcStructLayout>),
 }
 
 impl From<GcArrayLayout> for GcLayout {
@@ -263,16 +269,22 @@ impl From<GcArrayLayout> for GcLayout {
     }
 }
 
-impl From<GcStructLayout> for GcLayout {
-    fn from(layout: GcStructLayout) -> Self {
+impl From<Arc<GcStructLayout>> for GcLayout {
+    fn from(layout: Arc<GcStructLayout>) -> Self {
         Self::Struct(layout)
+    }
+}
+
+impl TryClone for GcLayout {
+    fn try_clone(&self) -> core::result::Result<Self, wasmtime_core::error::OutOfMemory> {
+        Ok(self.clone())
     }
 }
 
 impl GcLayout {
     /// Get the underlying `GcStructLayout`, or panic.
     #[track_caller]
-    pub fn unwrap_struct(&self) -> &GcStructLayout {
+    pub fn unwrap_struct(&self) -> &Arc<GcStructLayout> {
         match self {
             Self::Struct(s) => s,
             _ => panic!("GcLayout::unwrap_struct on non-struct GC layout"),
@@ -368,10 +380,21 @@ pub struct GcStructLayout {
 
     /// The fields of this struct. The `i`th entry contains information about
     /// the `i`th struct field's layout.
-    pub fields: Vec<GcStructLayoutField>,
+    pub fields: collections::Vec<GcStructLayoutField>,
 
     /// Whether this is an exception object layout.
     pub is_exception: bool,
+}
+
+impl TryClone for GcStructLayout {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(GcStructLayout {
+            size: self.size,
+            align: self.align,
+            fields: self.fields.try_clone()?,
+            is_exception: self.is_exception,
+        })
+    }
 }
 
 impl GcStructLayout {
@@ -395,6 +418,12 @@ pub struct GcStructLayoutField {
     /// Note: it is okay for this to be `false` for `i31ref`s, since they never
     /// actually reference another GC object.
     pub is_gc_ref: bool,
+}
+
+impl TryClone for GcStructLayoutField {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 /// The kind of an object in a GC heap.
