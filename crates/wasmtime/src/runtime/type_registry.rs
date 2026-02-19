@@ -24,8 +24,8 @@ use core::{
 };
 use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
-    Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes,
+    PanicOnOom as _, TypeTrace, Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
     collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
@@ -273,21 +273,21 @@ impl Debug for RegisteredType {
 
 impl Clone for RegisteredType {
     fn clone(&self) -> Self {
-        self.engine.signatures().debug_assert_contains(self.index);
-        self.entry.incref("RegisteredType::clone");
-        RegisteredType {
-            engine: self.engine.clone(),
-            entry: self.entry.clone(),
-            ty: self.ty.clone(),
-            index: self.index,
-            layout: self.layout.clone(),
-        }
+        self.try_clone().panic_on_oom()
     }
 }
 
 impl TryClone for RegisteredType {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(self.clone())
+        self.engine.signatures().debug_assert_contains(self.index);
+        self.entry.incref("RegisteredType::try_clone");
+        Ok(RegisteredType {
+            engine: self.engine.clone(),
+            entry: self.entry.clone(),
+            ty: self.ty.clone(),
+            index: self.index,
+            layout: self.layout.clone(),
+        })
     }
 }
 
