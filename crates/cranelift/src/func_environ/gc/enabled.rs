@@ -2,6 +2,7 @@ use super::{ArrayInit, GcCompiler};
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{BlockArg, ExceptionTableData, ExceptionTableItem};
