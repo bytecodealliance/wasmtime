@@ -16,21 +16,22 @@ get_github() {
   local repo=$1
   local tag=$2
   local path=$3
+  local prefix=${4:-wit}
 
   rm -rf "$path"
   mkdir -p "$path"
 
-  cached_extracted_dir="$cache_dir/$repo-$tag"
+  cached_extracted_dir="$cache_dir/$prefix/$repo-$tag"
 
   if [[ ! -d $cached_extracted_dir ]]; then
     mkdir -p $cached_extracted_dir
     curl --retry 5 --retry-all-errors -sLO https://github.com/WebAssembly/$repo/archive/$tag.tar.gz
     tar xzf $tag.tar.gz --strip-components=1 -C $cached_extracted_dir
     rm $tag.tar.gz
-    rm -rf $cached_extracted_dir/wit/deps*
+    rm -rf $cached_extracted_dir/${prefix}/deps*
   fi
 
-  cp -r $cached_extracted_dir/wit/* $path
+  cp -r $cached_extracted_dir/${prefix}/* $path
 }
 
 p2=0.2.6
@@ -65,8 +66,7 @@ mkdir -p crates/wasi-tls/wit/deps
 wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-tls/wit/deps/io.wit"
 get_github wasi-tls v0.2.0-draft+505fc98 crates/wasi-tls/wit/deps/tls
 
-# TODO: Use the tag when released
-#get_github wasi-tls v0.3.0-draft crates/wasi-tls/src/p3/wit/deps/tls
+get_github wasi-tls v0.2.0-draft+6781ae2 crates/wasi-tls/src/p3/wit/deps/tls wit-0.3.0-draft
 
 rm -rf crates/wasi-config/wit/deps
 mkdir -p crates/wasi-config/wit/deps
