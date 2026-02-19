@@ -226,6 +226,9 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
                             Poll::Pending => return Poll::Pending,
                         }
                     }
+                    Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => {
+                        break 'result Ok(());
+                    }
                     Err(err) => break 'result Err(err.into()),
                 }
             }
@@ -286,12 +289,11 @@ impl HostTcpSocketWithStore for WasiSockets {
         mut store: Access<'_, T, Self>,
         socket: Resource<TcpSocket>,
         mut data: StreamReader<u8>,
-    ) -> FutureReader<Result<(), ErrorCode>> {
-        let (result_tx, result_rx) = oneshot::channel();
-        match get_socket(store.get().table, &socket)
-            .and_then(|sock| sock.tcp_stream_arc().map(Arc::clone).map_err(Into::into))
-        {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
+        let socket = get_socket_mut(store.get().table, &socket)?;
+        match socket.take_send_stream() {
             Ok(stream) => {
+                let (result_tx, result_rx) = oneshot::channel();
                 data.pipe(
                     &mut store,
                     SendStreamConsumer {
@@ -299,13 +301,15 @@ impl HostTcpSocketWithStore for WasiSockets {
                         result: Some(result_tx),
                     },
                 );
+                Ok(FutureReader::new(&mut store, result_rx))
             }
             Err(err) => {
                 data.close(&mut store);
-                let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Unknown)));
+                Ok(FutureReader::new(&mut store, async {
+                    wasmtime::error::Ok(Err(err.into()))
+                }))
             }
         }
-        FutureReader::new(&mut store, result_rx)
     }
 
     fn receive<T: 'static>(
@@ -313,9 +317,8 @@ impl HostTcpSocketWithStore for WasiSockets {
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let socket = get_socket_mut(store.get().table, &socket)?;
-        match socket.start_receive() {
-            Some(stream) => {
-                let stream = Arc::clone(stream);
+        match socket.take_receive_stream() {
+            Ok(stream) => {
                 let (result_tx, result_rx) = oneshot::channel();
                 Ok((
                     StreamReader::new(
@@ -328,11 +331,9 @@ impl HostTcpSocketWithStore for WasiSockets {
                     FutureReader::new(&mut store, result_rx),
                 ))
             }
-            None => Ok((
+            Err(err) => Ok((
                 StreamReader::new(&mut store, iter::empty()),
-                FutureReader::new(&mut store, async {
-                    wasmtime::error::Ok(Err(ErrorCode::InvalidState))
-                }),
+                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) }),
             )),
         }
     }

@@ -87,7 +87,7 @@ mod generated {
             "wasi:filesystem/types.[method]descriptor.read-directory": store | tracing,
             "wasi:sockets/types.[method]tcp-socket.bind": async | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.listen":  store | tracing | trappable,
-            "wasi:sockets/types.[method]tcp-socket.send": store | tracing,
+            "wasi:sockets/types.[method]tcp-socket.send": store | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.receive": store | tracing | trappable,
             "wasi:sockets/types.[method]udp-socket.bind": async | tracing | trappable,
             "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
