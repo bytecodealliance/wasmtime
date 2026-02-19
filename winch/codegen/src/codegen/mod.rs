@@ -1343,16 +1343,7 @@ where
         // potential optimization is to designate a register as non-allocatable,
         // when fuel consumption is enabled, effectively using it as a local
         // fuel cache.
-        self.fuel_consumed += match op {
-            Operator::Nop | Operator::Drop => 0,
-            Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Return
-            | Operator::Else
-            | Operator::End => 0,
-            _ => 1,
-        };
+        self.fuel_consumed += self.tunables.operator_cost.cost(op);
 
         match op {
             Operator::Unreachable
