@@ -341,6 +341,7 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
                     return Ok(count);
                 }
                 Err(e) if matches!(e.downcast_ref(), Some(ErrorCode::WouldBlock)) => {
+                    debug_assert!(count == 0);
                     return Ok(0);
                 }
                 Err(e) => {
