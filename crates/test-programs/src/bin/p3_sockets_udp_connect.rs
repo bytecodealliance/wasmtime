@@ -166,8 +166,24 @@ fn test_udp_connect_dual_stack() {
     ));
 }
 
+/// A UDP socket should be immediately writable
+async fn test_udp_connect_and_send(family: IpAddressFamily) {
+    let unspecified_port = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
+    let remote = IpSocketAddress::new(IpAddress::new_loopback(family), 4320);
+
+    let client = UdpSocket::create(family).unwrap();
+    client.bind(unspecified_port).unwrap();
+
+    client.connect(remote).unwrap();
+    assert_eq!(client.get_remote_address(), Ok(remote));
+
+    assert_eq!(client.send(b"hello".into(), None).await, Ok(()));
+}
+
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
+        let supports_ipv6 = supports_ipv6();
+
         test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv4);
         test_udp_connect_unspec(IpAddressFamily::Ipv4);
         test_udp_connect_local_address_change(IpAddressFamily::Ipv4);
@@ -175,8 +191,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         test_udp_connect_wrong_family(IpAddressFamily::Ipv4);
         test_udp_connect_without_bind(IpAddressFamily::Ipv4);
         test_udp_connect_with_bind(IpAddressFamily::Ipv4);
+        test_udp_connect_and_send(IpAddressFamily::Ipv4).await;
 
-        if supports_ipv6() {
+        if supports_ipv6 {
             test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv6);
             test_udp_connect_unspec(IpAddressFamily::Ipv6);
             test_udp_connect_local_address_change(IpAddressFamily::Ipv6);
@@ -184,8 +201,10 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             test_udp_connect_wrong_family(IpAddressFamily::Ipv6);
             test_udp_connect_without_bind(IpAddressFamily::Ipv6);
             test_udp_connect_with_bind(IpAddressFamily::Ipv6);
+            test_udp_connect_and_send(IpAddressFamily::Ipv6).await;
             test_udp_connect_dual_stack();
         }
+
         Ok(())
     }
 }

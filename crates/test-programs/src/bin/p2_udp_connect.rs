@@ -1,7 +1,7 @@
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
-use test_programs::wasi::sockets::udp::UdpSocket;
+use test_programs::wasi::sockets::udp::{OutgoingDatagram, UdpSocket};
 
 const SOME_PORT: u16 = 47; // If the tests pass, this will never actually be connected to.
 
@@ -117,6 +117,30 @@ fn test_udp_connect_dual_stack(net: &Network) {
     ));
 }
 
+/// If `pollable.block` says a `OutgoingDatagramStream` is ready, it better be
+/// ready.
+fn test_udp_connect_and_send(net: &Network, family: IpAddressFamily) {
+    let unspecified_port = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
+    let remote = IpSocketAddress::new(IpAddress::new_loopback(family), 4320);
+
+    let client = UdpSocket::new(family).unwrap();
+    client.blocking_bind(&net, unspecified_port).unwrap();
+
+    let (_, tx) = client.stream(Some(remote)).unwrap();
+    assert_eq!(client.remote_address(), Ok(remote));
+
+    tx.subscribe().block();
+
+    assert!(matches!(tx.check_send(), Ok(n) if n > 0));
+    assert!(matches!(
+        tx.send(&[OutgoingDatagram {
+            data: b"hello".into(),
+            remote_address: None
+        }]),
+        Ok(1)
+    ));
+}
+
 fn main() {
     let net = Network::default();
 
@@ -136,4 +160,11 @@ fn main() {
     test_udp_connect_without_bind(IpAddressFamily::Ipv6);
 
     test_udp_connect_dual_stack(&net);
+
+    // `wasmtime-wasi`'s use of Tokio was once flaky such that these tests would
+    // _usually_, but not always, pass, so we run them a bunch of times here:
+    for _ in 0..256 {
+        test_udp_connect_and_send(&net, IpAddressFamily::Ipv4);
+        test_udp_connect_and_send(&net, IpAddressFamily::Ipv6);
+    }
 }
