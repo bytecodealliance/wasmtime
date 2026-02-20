@@ -1,6 +1,6 @@
 ## 42.0.0
 
-Unreleased.
+Released 2026-02-20.
 
 ### Added
 
