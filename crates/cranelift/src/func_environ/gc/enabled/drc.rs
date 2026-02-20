@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::translate::TargetEnvironment;
+use crate::trap::TranslateTrap;
 use crate::{TRAP_INTERNAL_ASSERT, func_environ::FuncEnvironment};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};

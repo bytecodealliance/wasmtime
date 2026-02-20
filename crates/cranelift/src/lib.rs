@@ -43,6 +43,7 @@ mod compiler;
 mod debug;
 mod func_environ;
 mod translate;
+mod trap;
 
 use self::compiler::Compiler;
 

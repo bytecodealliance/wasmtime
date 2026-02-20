@@ -1,6 +1,7 @@
 use cranelift_codegen::ir::BlockArg;
 use itertools::{Either, Itertools};
 
+use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, MemFlags};

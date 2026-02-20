@@ -1,4 +1,5 @@
 use crate::func_environ::FuncEnvironment;
+use crate::trap::TranslateTrap;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder, condcodes::IntCC, immediates::Imm64};
 use cranelift_codegen::isa::TargetIsa;
