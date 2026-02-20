@@ -141,9 +141,9 @@ impl streams::HostOutputStream for ResourceTable {
         stream: Resource<DynOutputStream>,
         bytes: Vec<u8>,
     ) -> StreamResult<()> {
-        if bytes.len() > 4096 {
+        if bytes.len() > 65536 {
             return Err(StreamError::trap(
-                "Buffer too large for blocking-write-and-flush (expected at most 4096)",
+                "Buffer too large for blocking-write-and-flush (expected at most 65536)",
             ));
         }
 
@@ -157,9 +157,9 @@ impl streams::HostOutputStream for ResourceTable {
         stream: Resource<DynOutputStream>,
         len: u64,
     ) -> StreamResult<()> {
-        if len > 4096 {
+        if len > 65536 {
             return Err(StreamError::trap(
-                "Buffer too large for blocking-write-zeroes-and-flush (expected at most 4096)",
+                "Buffer too large for blocking-write-zeroes-and-flush (expected at most 65536)",
             ));
         }
 
