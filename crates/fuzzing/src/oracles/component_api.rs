@@ -118,8 +118,13 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
                 .collect::<arbitrary::Result<_>>()?,
         ),
 
-        // Resources, futures, streams, and error contexts aren't fuzzed at this time.
-        Type::Own(_) | Type::Borrow(_) | Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
+        // Resources, futures, streams, error contexts, and maps aren't fuzzed at this time.
+        Type::Own(_)
+        | Type::Borrow(_)
+        | Type::Future(_)
+        | Type::Stream(_)
+        | Type::ErrorContext
+        | Type::Map(_) => {
             unreachable!()
         }
     })

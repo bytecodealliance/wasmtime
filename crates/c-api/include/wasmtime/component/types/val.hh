@@ -179,6 +179,19 @@ class StreamType {
 };
 
 /**
+ * \brief Represents a component map type.
+ */
+class MapType {
+  WASMTIME_CLONE_EQUAL_WRAPPER(MapType, wasmtime_component_map_type);
+
+  /// Returns the key type of this map type.
+  ValType key() const;
+
+  /// Returns the value type of this map type.
+  ValType value() const;
+};
+
+/**
  * \brief Represents a component value type.
  */
 class ValType {
@@ -382,6 +395,12 @@ public:
     ty.of.stream = stream.capi_release();
   }
 
+  /// Creates a map value type.
+  ValType(MapType map) {
+    ty.kind = WASMTIME_COMPONENT_VALTYPE_MAP;
+    ty.of.map = map.capi_release();
+  }
+
   /// Returns the kind of this value type.
   wasmtime_component_valtype_kind_t kind() const { return ty.kind; }
 
@@ -481,6 +500,9 @@ public:
     return ty.kind == WASMTIME_COMPONENT_VALTYPE_ERROR_CONTEXT;
   }
 
+  /// Returns true if this is a map type.
+  bool is_map() const { return ty.kind == WASMTIME_COMPONENT_VALTYPE_MAP; }
+
   /// Returns the list type, asserting that this is indeed a list.
   const ListType &list() const {
     assert(is_list());
@@ -551,6 +573,12 @@ public:
   const StreamType &stream() const {
     assert(is_stream());
     return *StreamType::from_capi(&ty.of.stream);
+  }
+
+  /// Returns the map type, asserting that this is indeed a map.
+  const MapType &map() const {
+    assert(is_map());
+    return *MapType::from_capi(&ty.of.map);
   }
 
   /// \brief Returns the underlying C API pointer.
@@ -638,6 +666,18 @@ inline std::optional<ValType> StreamType::ty() const {
     return ValType(std::move(type_ret));
   }
   return std::nullopt;
+}
+
+inline ValType MapType::key() const {
+  wasmtime_component_valtype_t type_ret;
+  wasmtime_component_map_type_key(ptr.get(), &type_ret);
+  return ValType(std::move(type_ret));
+}
+
+inline ValType MapType::value() const {
+  wasmtime_component_valtype_t type_ret;
+  wasmtime_component_map_type_value(ptr.get(), &type_ret);
+  return ValType(std::move(type_ret));
 }
 
 } // namespace component

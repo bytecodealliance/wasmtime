@@ -27,6 +27,16 @@ pub fn engine() -> Engine {
     Engine::new(&config()).unwrap()
 }
 
+pub fn map_config() -> Config {
+    let mut config = config();
+    config.wasm_component_model_map(true);
+    config
+}
+
+pub fn map_engine() -> Engine {
+    Engine::new(&map_config()).unwrap()
+}
+
 pub fn async_engine() -> Engine {
     Engine::default()
 }

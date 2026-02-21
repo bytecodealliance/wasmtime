@@ -7,8 +7,8 @@ use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, TypeEnum, TypeFlags, TypeListIndex, TypeOption, TypeResult,
-    TypeVariant, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, TypeEnum, TypeFlags, TypeListIndex, TypeMapIndex, TypeOption,
+    TypeResult, TypeVariant, VariantInfo,
 };
 
 /// Represents possible runtime values which a component function can either
@@ -79,6 +79,9 @@ pub enum Val {
     Char(char),
     String(String),
     List(Vec<Val>),
+    /// A map type represented as a list of key-value pairs.
+    /// Duplicate keys are allowed and follow "last value wins" semantics.
+    Map(Vec<(Val, Val)>),
     Record(Vec<(String, Val)>),
     Tuple(Vec<Val>),
     Variant(String, Option<Box<Val>>),
@@ -125,6 +128,13 @@ impl Val {
                 let ptr = u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))? as usize;
                 let len = u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))? as usize;
                 load_list(cx, i, ptr, len)?
+            }
+            InterfaceType::Map(i) => {
+                // FIXME(#4311): needs memory64 treatment
+                // Maps are represented as list<tuple<k, v>> in canonical ABI
+                let ptr = u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))? as usize;
+                let len = u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))? as usize;
+                load_map(cx, i, ptr, len)?
             }
             InterfaceType::Record(i) => Val::Record(
                 cx.types[i]
@@ -243,6 +253,12 @@ impl Val {
                 let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
                 let len = u32::from_le_bytes(bytes[4..].try_into().unwrap()) as usize;
                 load_list(cx, i, ptr, len)?
+            }
+            InterfaceType::Map(i) => {
+                // FIXME(#4311): needs memory64 treatment
+                let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
+                let len = u32::from_le_bytes(bytes[4..].try_into().unwrap()) as usize;
+                load_map(cx, i, ptr, len)?
             }
 
             InterfaceType::Record(i) => {
@@ -425,6 +441,18 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::List(_), _) => unexpected(ty, self),
+            (InterfaceType::Map(ty), Val::Map(map)) => {
+                // Maps are stored as list<tuple<k, v>> in canonical ABI
+                let map_ty = &cx.types[ty];
+                // Convert HashMap to Vec<(Val, Val)> for lowering
+                let pairs: Vec<(Val, Val)> =
+                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, &pairs)?;
+                next_mut(dst).write(ValRaw::i64(ptr as i64));
+                next_mut(dst).write(ValRaw::i64(len as i64));
+                Ok(())
+            }
+            (InterfaceType::Map(_), _) => unexpected(ty, self),
             (InterfaceType::Record(ty), Val::Record(values)) => {
                 let ty = &cx.types[ty];
                 if ty.fields.len() != values.len() {
@@ -554,6 +582,15 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::List(_), _) => unexpected(ty, self),
+            (InterfaceType::Map(ty_idx), Val::Map(values)) => {
+                let map_ty = &cx.types[ty_idx];
+                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, values)?;
+                // FIXME(#4311): needs memory64 handling
+                *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
+                *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
+                Ok(())
+            }
+            (InterfaceType::Map(_), _) => unexpected(ty, self),
             (InterfaceType::Record(ty), Val::Record(values)) => {
                 let ty = &cx.types[ty];
                 if ty.fields.len() != values.len() {
@@ -666,6 +703,7 @@ impl Val {
             Val::Float64(_) => "f64",
             Val::Char(_) => "char",
             Val::List(_) => "list",
+            Val::Map(_) => "map",
             Val::String(_) => "string",
             Val::Record(_) => "record",
             Val::Enum(_) => "enum",
@@ -740,6 +778,8 @@ impl PartialEq for Val {
             (Self::String(_), _) => false,
             (Self::List(l), Self::List(r)) => l == r,
             (Self::List(_), _) => false,
+            (Self::Map(l), Self::Map(r)) => l == r,
+            (Self::Map(_), _) => false,
             (Self::Record(l), Self::Record(r)) => l == r,
             (Self::Record(_), _) => false,
             (Self::Tuple(l), Self::Tuple(r)) => l == r,
@@ -939,6 +979,57 @@ fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize
     ))
 }
 
+fn load_map(cx: &mut LiftContext<'_>, ty: TypeMapIndex, ptr: usize, len: usize) -> Result<Val> {
+    // Maps are stored as list<tuple<k, v>> in canonical ABI
+    let map_ty = &cx.types[ty];
+    let key_ty = map_ty.key;
+    let value_ty = map_ty.value;
+
+    // Calculate tuple layout using canonical ABI alignment rules
+    let key_abi = cx.types.canonical_abi(&key_ty);
+    let value_abi = cx.types.canonical_abi(&value_ty);
+    let key_size = usize::try_from(key_abi.size32).unwrap();
+    let value_size = usize::try_from(value_abi.size32).unwrap();
+
+    // Calculate value offset: align key_size to value alignment
+    let mut offset = u32::try_from(key_size).unwrap();
+    let value_offset = value_abi.next_field32(&mut offset);
+    let value_offset = usize::try_from(value_offset).unwrap();
+
+    // Tuple size is the final offset aligned to max alignment
+    let tuple_alignment = key_abi.align32.max(value_abi.align32);
+    let tuple_size = usize::try_from(offset).unwrap();
+    let tuple_size = (tuple_size + usize::try_from(tuple_alignment)? - 1)
+        & !(usize::try_from(tuple_alignment)? - 1);
+
+    // Bounds check
+    match len
+        .checked_mul(tuple_size)
+        .and_then(|len| ptr.checked_add(len))
+    {
+        Some(n) if n <= cx.memory().len() => {}
+        _ => bail!("map pointer/length out of bounds of memory"),
+    }
+    if ptr % usize::try_from(tuple_alignment)? != 0 {
+        bail!("map pointer is not aligned")
+    }
+
+    // Load each tuple (key, value) into a Vec
+    let mut map = Vec::with_capacity(len);
+    for index in 0..len {
+        let tuple_ptr = ptr + (index * tuple_size);
+        let key = Val::load(cx, key_ty, &cx.memory()[tuple_ptr..][..key_size])?;
+        let value = Val::load(
+            cx,
+            value_ty,
+            &cx.memory()[tuple_ptr + value_offset..][..value_size],
+        )?;
+        map.push((key, value));
+    }
+
+    Ok(Val::Map(map))
+}
+
 fn load_variant(
     cx: &mut LiftContext<'_>,
     info: &VariantInfo,
@@ -1027,6 +1118,47 @@ fn lower_list<T>(
         element_ptr += elt_size;
     }
     Ok((ptr, items.len()))
+}
+
+/// Lower a map as list<tuple<k, v>> with the specified key and value types.
+fn lower_map<T>(
+    cx: &mut LowerContext<'_, T>,
+    key_type: InterfaceType,
+    value_type: InterfaceType,
+    pairs: &[(Val, Val)],
+) -> Result<(usize, usize)> {
+    // Calculate tuple layout using canonical ABI alignment rules
+    let key_abi = cx.types.canonical_abi(&key_type);
+    let value_abi = cx.types.canonical_abi(&value_type);
+    let key_size = usize::try_from(key_abi.size32)?;
+
+    // Calculate value offset: align key_size to value alignment
+    let mut offset = u32::try_from(key_size).unwrap();
+    let value_offset = value_abi.next_field32(&mut offset);
+    let value_offset = usize::try_from(value_offset).unwrap();
+
+    // Tuple size is the final offset aligned to max alignment
+    let tuple_align = key_abi.align32.max(value_abi.align32);
+    let tuple_size = usize::try_from(offset).unwrap();
+    let tuple_size =
+        (tuple_size + usize::try_from(tuple_align)? - 1) & !(usize::try_from(tuple_align)? - 1);
+
+    let size = pairs
+        .len()
+        .checked_mul(tuple_size)
+        .ok_or_else(|| crate::format_err!("size overflow copying a map"))?;
+    let ptr = cx.realloc(0, 0, tuple_align, size)?;
+
+    let mut tuple_ptr = ptr;
+    for (key, value) in pairs {
+        // Store key at tuple_ptr
+        key.store(cx, key_type, tuple_ptr)?;
+        // Store value at tuple_ptr + value_offset (properly aligned)
+        value.store(cx, value_type, tuple_ptr + value_offset)?;
+        tuple_ptr += tuple_size;
+    }
+
+    Ok((ptr, pairs.len()))
 }
 
 fn push_flags(ty: &TypeFlags, flags: &mut Vec<String>, mut offset: u32, mut bits: u32) {

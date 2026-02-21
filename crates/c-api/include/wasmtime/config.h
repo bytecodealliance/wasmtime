@@ -824,6 +824,15 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model, bool)
 
+/**
+ * \brief Configures whether the WebAssembly component-model map type will be
+ * enabled for compilation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_map.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_map, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef __cplusplus
