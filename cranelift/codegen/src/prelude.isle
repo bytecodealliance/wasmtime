@@ -527,6 +527,22 @@
 (decl u64_from_ieee64 (u64) Ieee64)
 (extern extractor infallible u64_from_ieee64 u64_from_ieee64)
 
+;; Construct Ieee* from raw low bits of an Imm64.
+(decl ieee16_from_imm64 (Imm64) Ieee16)
+(extern constructor ieee16_from_imm64 ieee16_from_imm64)
+(decl ieee32_from_imm64 (Imm64) Ieee32)
+(extern constructor ieee32_from_imm64 ieee32_from_imm64)
+(decl ieee64_from_imm64 (Imm64) Ieee64)
+(extern constructor ieee64_from_imm64 ieee64_from_imm64)
+
+;; Construct Imm64 from Ieee* by taking their raw low bits.
+(decl imm64_from_ieee16 (Ieee16) Imm64)
+(extern constructor imm64_from_ieee16 imm64_from_ieee16)
+(decl imm64_from_ieee32 (Ieee32) Imm64)
+(extern constructor imm64_from_ieee32 imm64_from_ieee32)
+(decl imm64_from_ieee64 (Ieee64) Imm64)
+(extern constructor imm64_from_ieee64 imm64_from_ieee64)
+
 ;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
 ;; type. Will only match when there is more than one lane.
 (decl multi_lane (u32 u32) Type)

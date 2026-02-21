@@ -167,6 +167,21 @@ block0:
 ;     return v3  ; v3 = const0
 ; }
 
+function %f16x8() -> f16x8 {
+block0:
+    v1 = f16const 0x1.0p0
+    v2 = splat.f16x8 v1
+    return v2
+}
+
+; function %f16x8() -> f16x8 fast {
+;     const0 = 0x3c003c003c003c003c003c003c003c00
+;
+; block0:
+;     v3 = vconst.f16x8 const0
+;     return v3  ; v3 = const0
+; }
+
 function %i8x8() -> i8x8 {
 block0:
     v1 = iconst.i8 0

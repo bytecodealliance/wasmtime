@@ -478,6 +478,16 @@ block0:
 ; check: v3 = f16const -0.0
 ; check: return v3  ; v3 = -0.0
 
+function %f16_fneg_const() -> f16 {
+block0:
+    v1 = f16const 0x1.5p2
+    v2 = fneg v1
+    return v2
+}
+
+; check: v3 = f16const -0x1.500p2
+; check: return v3  ; v3 = -0x1.500p2
+
 function %f16_fabs() -> f16 {
 block0:
     v1 = f16const -0.0
@@ -880,6 +890,16 @@ block0:
 
 ; check: v4 = f64const -NaN
 ; check: return v4  ; v4 = -NaN
+
+function %u64_to_f64_const() -> f64 {
+block0:
+    v1 = iconst.i64 42
+    v2 = fcvt_from_uint.f64 v1
+    return v2
+}
+
+; check: v3 = f64const 0x1.5000000000000p5
+; check: return v3  ; v3 = 0x1.5000000000000p5
 
 function %f128_fmin() -> f128 {
 block0:
