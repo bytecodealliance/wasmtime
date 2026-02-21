@@ -21,7 +21,7 @@ doctest = false
 
 [dependencies]
 env_logger = { workspace = true, optional = true }
-wasmtime = { workspace = true, features = ['runtime', 'std'] }
+wasmtime = { workspace = true, features = ['runtime', 'gc', 'std'] }
 wasmtime-c-api-macros = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
