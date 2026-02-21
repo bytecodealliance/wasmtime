@@ -21,7 +21,7 @@ cranelift-entity = { workspace = true }
 cranelift-control = { workspace = true }
 wasmtime-unwinder = { workspace = true, optional = true, features = ["cranelift"] }
 anyhow = { workspace = true }
-region = "3.0.2"
+region = { git = "https://github.com/RossComputerGuy/region-rs", branch = "fix/uefi" }
 libc = { workspace = true }
 target-lexicon = { workspace = true }
 memmap2 = { version = "0.2.1", optional = true }
