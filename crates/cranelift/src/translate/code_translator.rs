@@ -3966,9 +3966,22 @@ fn translate_br_if(
     builder: &mut FunctionBuilder,
     env: &mut FuncEnvironment<'_>,
 ) {
+    // Get branch hint before `translate_br_if_args` borrows env mutably.
+    let offset = builder.srcloc().bits() as usize;
+    let branch_hint = env.get_branch_hint(offset);
+
     let val = env.stacks.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);
     let next_block = builder.create_block();
+
+    if let Some(likely) = branch_hint {
+        if likely {
+            builder.set_cold_block(next_block);
+        } else {
+            builder.set_cold_block(br_destination);
+        }
+    }
+
     canonicalise_brif(builder, val, br_destination, inputs, next_block, &[]);
 
     builder.seal_block(next_block); // The only predecessor is the current block.

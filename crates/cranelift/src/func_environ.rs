@@ -223,6 +223,13 @@ pub struct FuncEnvironment<'module_environment> {
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
     pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
+
+    /// The byte offset of the current function body in the wasm module.
+    /// Used to convert absolute srcloc offsets to relative offsets for branch hint lookup.
+    pub(crate) func_body_offset: usize,
+
+    /// Branch hints for the current function (offset -> likely taken).
+    branch_hints: Option<&'module_environment std::collections::HashMap<u32, bool>>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -284,6 +291,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             stack_switching_values_buffer: None,
 
             state_slot: None,
+
+            func_body_offset: 0,
+            branch_hints: None,
         }
     }
 
@@ -1158,6 +1168,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Does this function need a GC heap?
     pub fn needs_gc_heap(&self) -> bool {
         self.needs_gc_heap
+    }
+
+    /// Returns branch hint at `absolute_offset`: `Some(true)` = likely, `Some(false)` = unlikely.
+    pub fn get_branch_hint(&self, absolute_offset: usize) -> Option<bool> {
+        let hints = self.branch_hints?;
+        let relative_offset = absolute_offset.checked_sub(self.func_body_offset)? as u32;
+        hints.get(&relative_offset).copied()
+    }
+
+    pub(crate) fn set_branch_hints(
+        &mut self,
+        hints: &'module_environment std::collections::HashMap<u32, bool>,
+    ) {
+        self.branch_hints = Some(hints);
     }
 
     /// Get the number of Wasm parameters for the given function.
