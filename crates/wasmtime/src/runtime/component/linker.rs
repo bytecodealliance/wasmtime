@@ -1,6 +1,6 @@
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::Accessor;
-use crate::component::func::HostFunc;
+use crate::component::func::{HostFunc, Witness};
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
 use crate::component::types;
@@ -64,6 +64,7 @@ pub struct Linker<T: 'static> {
     map: NameMap<usize, Definition>,
     path: Vec<usize>,
     allow_shadowing: bool,
+    witness: Option<Witness<T>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -75,6 +76,7 @@ impl<T: 'static> Clone for Linker<T> {
             map: self.map.clone(),
             path: self.path.clone(),
             allow_shadowing: self.allow_shadowing,
+            witness: self.witness.as_ref().map(|w| w.clone()),
             _marker: self._marker,
         }
     }
@@ -98,6 +100,7 @@ pub struct LinkerInstance<'a, T: 'static> {
     strings: &'a mut Strings,
     map: &'a mut NameMap<usize, Definition>,
     allow_shadowing: bool,
+    witness: Option<Witness<T>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -109,7 +112,7 @@ pub(crate) enum Definition {
     Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
-impl<T: 'static> Linker<T> {
+impl<T: Send + Sync + 'static> Linker<T> {
     /// Creates a new linker for the [`Engine`] specified with no items defined
     /// within it.
     pub fn new(engine: &Engine) -> Linker<T> {
@@ -119,6 +122,7 @@ impl<T: 'static> Linker<T> {
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
+            witness: None,
             _marker: marker::PhantomData,
         }
     }
@@ -147,8 +151,15 @@ impl<T: 'static> Linker<T> {
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
+            witness: self.witness.clone(),
             _marker: self._marker,
         }
+    }
+
+    /// Set a `Witness` that will be applied to all functions defined in this
+    /// linker.
+    pub fn set_instance(&mut self, witness: Option<Witness<T>>) {
+        self.witness = witness;
     }
 
     /// Returns a builder for the named instance specified.
@@ -314,7 +325,7 @@ impl<T: 'static> Linker<T> {
         use wasmtime_environ::component::ComponentTypes;
         use wasmtime_environ::component::TypeDef;
         // Recursively stub out all imports of the component with a function that traps.
-        fn stub_item<T>(
+        fn stub_item<T: Send + Sync>(
             linker: &mut LinkerInstance<T>,
             item_name: &str,
             item_def: &TypeDef,
@@ -374,7 +385,7 @@ impl<T: 'static> Linker<T> {
     }
 }
 
-impl<T: 'static> LinkerInstance<'_, T> {
+impl<T: Send + Sync + 'static> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine,
@@ -383,6 +394,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
+            witness: self.witness.as_ref().map(|w| w.clone()),
             _marker: self._marker,
         }
     }
@@ -422,7 +434,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_wrap(func)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_wrap(
+                func,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -469,7 +487,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_wrap_async(
+                f,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -534,7 +558,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
         if !self.engine.tunables().concurrency_support {
             bail!("concurrent host functions require `Config::concurrency_support`");
         }
-        self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_wrap_concurrent(
+                f,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -645,7 +675,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
         + Sync
         + 'static,
     ) -> Result<()> {
-        self.insert(name, Definition::Func(HostFunc::func_new(func)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_new(
+                func,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -668,7 +704,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_new_async(func)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_new_async(
+                func,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -696,7 +738,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
         if !self.engine.tunables().concurrency_support {
             bail!("concurrent host functions require `Config::concurrency_support`");
         }
-        self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)))?;
+        self.insert(
+            name,
+            Definition::Func(HostFunc::func_new_concurrent(
+                f,
+                self.witness.as_ref().map(|w| w.in_instance(name)),
+            )),
+        )?;
         Ok(())
     }
 
@@ -814,6 +862,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
+        let n = name;
         let name = self.insert(name, Definition::Instance(NameMap::default()))?;
         self.map = match self.map.raw_get_mut(&name) {
             Some(Definition::Instance(map)) => map,
@@ -822,6 +871,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         self.path.truncate(self.path_len);
         self.path.push(name);
         self.path_len += 1;
+        self.witness.as_mut().map(|w| w.in_instance(n));
         Ok(self)
     }
 
