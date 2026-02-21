@@ -29,6 +29,7 @@ use std::collections::{HashMap, HashSet};
 pub use wasmparser::ValType;
 
 const DEFAULT_KEEP_INIT_FUNC: bool = false;
+const DEFAULT_KEEP_INSTRUMENTATION: bool = false;
 
 /// Wizer: the WebAssembly pre-initializer!
 ///
@@ -98,6 +99,18 @@ pub struct Wizer {
         arg(long, require_equals = true, value_name = "true|false")
     )]
     keep_init_func: Option<Option<bool>>,
+
+    /// After initialization, should the Wasm module still contain the
+    /// instrumentation needed for further snapshotting?
+    ///
+    /// This is `false` by default, meaning that instrumentation is stripped
+    /// from the output module. Set to `true` to enable incremental
+    /// snapshotting (savestate) workflows.
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, require_equals = true, value_name = "true|false")
+    )]
+    keep_instrumentation: Option<Option<bool>>,
 }
 
 #[cfg(feature = "clap")]
@@ -151,6 +164,7 @@ impl Wizer {
             init_func: "wizer-initialize".to_string(),
             func_renames: vec![],
             keep_init_func: None,
+            keep_instrumentation: None,
         }
     }
 
@@ -184,6 +198,17 @@ impl Wizer {
         self
     }
 
+    /// After initialization, should the Wasm module still contain the
+    /// instrumentation needed for further snapshotting?
+    ///
+    /// This is `false` by default, meaning that instrumentation is stripped
+    /// from the output module. Set to `true` to enable incremental
+    /// snapshotting (savestate) workflows.
+    pub fn keep_instrumentation(&mut self, keep: bool) -> &mut Self {
+        self.keep_instrumentation = Some(Some(keep));
+        self
+    }
+
     /// First half of [`Self::run`] which instruments the provided `wasm` and
     /// produces a new wasm module which should be run by a runtime.
     ///
@@ -193,7 +218,7 @@ impl Wizer {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
-        let mut cx = parse::parse(wasm)?;
+        let mut cx = parse::parse(wasm, false)?;
 
         // When wizening core modules directly some imports aren't supported,
         // so check for those here.
@@ -220,6 +245,17 @@ impl Wizer {
         Ok((cx, instrumented_wasm))
     }
 
+    /// Parse a previously instrumented Wasm module, returning its
+    /// [`ModuleContext`].
+    ///
+    /// This is used in incremental snapshotting workflows where the module
+    /// was already instrumented by a prior call to [`Self::instrument`] or
+    /// [`Self::snapshot`] (with [`Self::keep_instrumentation`] enabled). The returned context can be
+    /// passed to [`Self::snapshot`] to produce a new snapshot.
+    pub fn parse_instrumented<'a>(&self, wasm: &'a [u8]) -> Result<ModuleContext<'a>> {
+        parse::parse(wasm, true)
+    }
+
     /// Second half of [`Self::run`] which takes the [`ModuleContext`] returned
     /// by [`Self::instrument`] and the state of the `instance` after it has
     /// possibly executed its initialization function.
@@ -233,12 +269,16 @@ impl Wizer {
     ) -> Result<Vec<u8>> {
         // Parse rename spec.
         let renames = FuncRenames::parse(&self.func_renames)?;
-
         let snapshot = snapshot::snapshot(&cx, instance).await;
-        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames, true);
+        let rewritten_wasm = self.rewrite(
+            &mut cx,
+            &snapshot,
+            &renames,
+            true,
+            self.get_keep_instrumentation(),
+        );
 
         self.debug_assert_valid_wasm(&rewritten_wasm);
-
         Ok(rewritten_wasm)
     }
 
@@ -367,6 +407,13 @@ impl Wizer {
         match self.keep_init_func {
             Some(keep) => keep.unwrap_or(true),
             None => DEFAULT_KEEP_INIT_FUNC,
+        }
+    }
+
+    fn get_keep_instrumentation(&self) -> bool {
+        match self.keep_instrumentation {
+            Some(keep) => keep.unwrap_or(true),
+            None => DEFAULT_KEEP_INSTRUMENTATION,
         }
     }
 }

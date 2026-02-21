@@ -10,12 +10,15 @@ impl Wizer {
     /// Given the initialized snapshot, rewrite the Wasm so that it is already
     /// initialized.
     ///
+    /// When `preserve_instrumentation` is true, the `__wizer_*` exports are
+    /// preserved so the output can be snapshotted again.
     pub(crate) fn rewrite(
         &self,
         module: &mut ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
         remove_wasi_initialize: bool,
+        preserve_instrumentation: bool,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
@@ -154,6 +157,24 @@ impl Wizer {
                         let kind = RoundtripReencoder.export_kind(export.kind).unwrap();
                         exports.export(field, kind, export.index);
                     }
+
+                    // Re-add __wizer_* exports so the output remains
+                    // instrumentable for future snapshots.
+                    if preserve_instrumentation {
+                        if let Some(ref global_exports) = module.defined_global_exports {
+                            for (idx, name) in global_exports {
+                                exports.export(name, wasm_encoder::ExportKind::Global, *idx);
+                            }
+                        }
+                        if let Some(ref memory_exports) = module.defined_memory_exports {
+                            for ((mem_idx, _), name) in
+                                module.defined_memories().zip(memory_exports)
+                            {
+                                exports.export(name, wasm_encoder::ExportKind::Memory, mem_idx);
+                            }
+                        }
+                    }
+
                     encoder.section(&exports);
                 }
 
