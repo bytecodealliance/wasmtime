@@ -1201,3 +1201,172 @@ async fn sync_lower_async_host_does_not_leak() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for a bug where a stale `on_complete` from a cancelled
+/// host task could corrupt a new host task that reuses the same table slot.
+///
+/// Single host import `echo(u32) -> u32` that yields once and echoes back.
+/// The guest starts echo(0) as a trigger, then echo(111). Both yield once
+/// and complete in the same FuturesUnordered poll cycle (trigger is pushed
+/// first so LIFO polls echo(111) first). Their on_complete closures end up
+/// in the same high_priority work-item batch.
+///
+/// Trigger's on_complete fires first → ResumeFiber wakes the guest. The
+/// guest cancels+drops echo(111) (freeing table slot 2), then starts
+/// echo(222) which reuses slot 2.
+///
+/// The stale on_complete for echo(111) then runs. Without the epoch guard,
+/// `state.get_mut(old_id)` would return echo(222)'s entry (same slot),
+/// steal its join_handle, write 111 to the OLD retptr=100, and fire a
+/// spurious `Returned` event — leaving retptr=200 unwritten. The epoch
+/// guard detects the slot reuse and bails out.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stale_on_complete_corrupts_reused_slot() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_builtins(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        // Guest exports run() -> u32, returns mem[200] after echo(222)
+        // completes. Should be 222.
+        r#"(component
+            (import "echo" (func $echo async (param "val" u32) (result u32)))
+            (import "assert" (func $assert (param "tag" u32) (param "got" u32) (param "expected" u32)))
+
+            (core module $Mem (memory (export "mem") 1))
+            (core instance $mem (instantiate $Mem))
+
+            (core module $m
+                (import "" "mem" (memory 1))
+                ;; echo: (val, retptr) → status|handle
+                (import "" "echo" (func $echo (param i32 i32) (result i32)))
+                (import "" "assert" (func $assert (param i32 i32 i32)))
+                (import "" "cancel" (func $cancel (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (import "" "waitable.join" (func $join (param i32 i32)))
+                (import "" "waitable-set.new" (func $ws-new (result i32)))
+                (import "" "waitable-set.wait" (func $ws-wait (param i32 i32) (result i32)))
+                (import "" "waitable-set.drop" (func $ws-drop (param i32)))
+
+                (func (export "run")
+                    (local $s1 i32) (local $t i32) (local $s2 i32)
+                    (local $ws i32) (local $tmp i32)
+
+                    ;; Start echo(0) as trigger (pushed to FuturesUnordered first).
+                    ;; Expect: status=STARTED(1), handle=1 → raw=(1<<4)|1=17
+                    (call $echo (i32.const 0) (i32.const 0))
+                    local.set $tmp
+                    (call $assert (i32.const 1) (local.get $tmp) (i32.const 17))
+                    (i32.shr_u (local.get $tmp) (i32.const 4))
+                    local.set $t
+
+                    ;; Start echo(111) at retptr=100 (pushed second, polled first).
+                    ;; Expect: status=STARTED(1), handle=2 → raw=(2<<4)|1=33
+                    (call $echo (i32.const 111) (i32.const 100))
+                    local.set $tmp
+                    (call $assert (i32.const 2) (local.get $tmp) (i32.const 33))
+                    (i32.shr_u (local.get $tmp) (i32.const 4))
+                    local.set $s1
+
+                    ;; Wait for trigger → expect handle 1.
+                    call $ws-new
+                    local.set $ws
+                    (call $join (local.get $t) (local.get $ws))
+                    (call $ws-wait (local.get $ws) (i32.const 0))
+                    local.set $tmp
+                    (call $assert (i32.const 3) (local.get $tmp) (i32.const 1))
+
+                    ;; Cancel echo(111) → expect RETURN_CANCELLED (4).
+                    ;; This frees the join_handle via abort().
+                    (call $cancel (local.get $s1))
+                    local.set $tmp
+                    (call $assert (i32.const 4) (local.get $tmp) (i32.const 4))
+                    ;; Drop echo(111) — frees table slot 2.
+                    ;; The stale on_complete for echo(111) is still queued.
+                    (call $drop (local.get $s1))
+
+                    ;; Start echo(222) at retptr=200.
+                    ;; Reuses table slot 2 (same handle) → raw=33
+                    (call $echo (i32.const 222) (i32.const 200))
+                    local.set $tmp
+                    (call $assert (i32.const 5) (local.get $tmp) (i32.const 33))
+                    (i32.shr_u (local.get $tmp) (i32.const 4))
+                    local.set $s2
+
+                    ;; Wait for echo(222).
+                    (call $join (local.get $s2) (local.get $ws))
+                    (call $ws-wait (local.get $ws) (i32.const 0))
+                    drop
+
+                    ;; retptr=100: should be 0 (cancelled, never written).
+                    (call $assert (i32.const 7) (i32.load (i32.const 100)) (i32.const 0))
+                    ;; retptr=200: should be 222.
+                    (call $assert (i32.const 8) (i32.load (i32.const 200)) (i32.const 222))
+
+                    ;; Cleanup.
+                    (call $drop (local.get $s2))
+                    (call $drop (local.get $t))
+                    (call $ws-drop (local.get $ws))
+                )
+            )
+            (core func $echo (canon lower (func $echo) async (memory $mem "mem")))
+            (core func $assert (canon lower (func $assert)))
+            (core func $cancel (canon subtask.cancel async))
+            (core func $drop (canon subtask.drop))
+            (core func $ws-new (canon waitable-set.new))
+            (core func $join (canon waitable.join))
+            (core func $ws-wait (canon waitable-set.wait (memory $mem "mem")))
+            (core func $ws-drop (canon waitable-set.drop))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "mem" (memory $mem "mem"))
+                    (export "echo" (func $echo))
+                    (export "assert" (func $assert))
+                    (export "cancel" (func $cancel))
+                    (export "drop" (func $drop))
+                    (export "waitable.join" (func $join))
+                    (export "waitable-set.new" (func $ws-new))
+                    (export "waitable-set.wait" (func $ws-wait))
+                    (export "waitable-set.drop" (func $ws-drop))
+                ))
+            ))
+
+            (func (export "run") async
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+
+    linker
+        .root()
+        .func_wrap_concurrent("echo", |_, (val,): (u32,)| {
+            Box::pin(async move {
+                tokio::task::yield_now().await;
+                Ok((val,))
+            })
+        })?;
+
+    linker.root().func_wrap(
+        "assert",
+        move |_store: wasmtime::StoreContextMut<'_, ()>,
+              (tag, got, expected): (u32, u32, u32)|
+              -> Result<()> {
+            assert_eq!(got, expected, "tag={tag}: got={got} expected={expected}");
+            Ok(())
+        },
+    )?;
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async |store| func.call_concurrent(store, ()).await)
+        .await
+        .unwrap()?;
+
+    Ok(())
+}
