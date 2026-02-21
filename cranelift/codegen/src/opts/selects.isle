@@ -22,6 +22,24 @@
                         (iconst_s _ 0)))
     (bmask ty cmp))
 
+;; bmask of a truthy scalar integer creates a mask that causes bitselect to
+;; select values fully from one input or the other, same as select.
+(rule (simplify (bitselect ty (bmask ty c) x y)) (select ty c x y))
+
+;; bmask and negation both preserve truthiness, so they can be removed from any
+;; instruction that only considers truthiness.
+(rule (simplify (bmask ty (bmask ty c))) (bmask ty c))
+(rule (simplify (bmask ty (ineg ty c))) (bmask ty c))
+(rule (simplify (select ty (bmask ty c) x y)) (select ty c x y))
+(rule (simplify (select ty (ineg ty c) x y)) (select ty c x y))
+(rule (simplify (select_spectre_guard ty (bmask ty c) x y)) (select_spectre_guard ty c x y))
+(rule (simplify (select_spectre_guard ty (ineg ty c) x y)) (select_spectre_guard ty c x y))
+
+;; bitwise-not of bmask inverts truthiness, swapping branches
+(rule (simplify (select ty (bnot ty (bmask ty c)) x y)) (select ty c y x))
+(rule (simplify (select_spectre_guard ty (bnot ty (bmask ty c)) x y)) (select_spectre_guard ty c y x))
+(rule (simplify (bitselect ty (bnot ty c) x y)) (bitselect ty c y x))
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
