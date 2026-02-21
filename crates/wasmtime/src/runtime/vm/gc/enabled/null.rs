@@ -299,7 +299,12 @@ unsafe impl GcHeap for NullHeap {
         self.alloc(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())
     }
 
-    fn dealloc_uninit_struct_or_exn(&mut self, _struct_ref: VMGcRef) {}
+    fn dealloc_uninit_struct_or_exn(
+        &mut self,
+        _host_data_table: &mut ExternRefHostDataTable,
+        _struct_ref: VMGcRef,
+    ) {
+    }
 
     fn alloc_uninit_array(
         &mut self,
@@ -320,7 +325,12 @@ unsafe impl GcHeap for NullHeap {
         })
     }
 
-    fn dealloc_uninit_array(&mut self, _array_ref: VMArrayRef) {}
+    fn dealloc_uninit_array(
+        &mut self,
+        _host_data_table: &mut ExternRefHostDataTable,
+        _array_ref: VMArrayRef,
+    ) {
+    }
 
     fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
         let arrayref = VMNullArrayHeader::typed_ref(self, arrayref);
