@@ -74,6 +74,8 @@ use wasmtime::component::{HasData, ResourceTable};
 pub mod bindings;
 mod host;
 mod io;
+#[cfg(feature = "p3")]
+pub mod p3;
 mod rustls;
 
 pub use bindings::types::LinkOptions;

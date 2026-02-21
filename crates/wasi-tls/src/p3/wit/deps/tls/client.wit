@@ -1,0 +1,22 @@
+interface client {
+    use types.{error};
+
+    resource connector {
+        constructor();
+
+        /// Set up the encryption stream transform.
+        /// This takes an unprotected `cleartext` application data stream and
+        /// returns an encrypted data stream, ready to be sent out over the network.
+        /// Closing the `cleartext` stream will cause a `close_notify` packet to be emitted on the returned output stream.
+        send: func(cleartext: stream<u8>) -> tuple<stream<u8>, future<result<_, error>>>;
+
+        /// Set up the decryption stream transform.
+        /// This takes an encrypted data stream, as received via e.g. the network,
+        /// and returns a decrypted application data stream.
+        receive: func(ciphertext: stream<u8>) -> tuple<stream<u8>, future<result<_, error>>>;
+
+        /// Perform the handshake.
+        /// The `send` & `receive` streams must be set up before calling this method.
+        connect: static async func(this: connector, server-name: string) -> result<_, error>;
+    }
+}
