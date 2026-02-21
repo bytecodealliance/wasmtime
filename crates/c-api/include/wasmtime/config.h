@@ -190,6 +190,14 @@ WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
 WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
 
 /**
+ * \brief Enables or disables GC support in Wasmtime entirely.
+ *
+ * This setting defaults to whether the `gc` feature was enabled at compile
+ * time.
+ */
+WASMTIME_CONFIG_PROP(void, gc_support, bool)
+
+/**
  * \brief Configures whether the WebAssembly SIMD proposal is
  * enabled.
  *
