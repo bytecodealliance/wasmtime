@@ -844,7 +844,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
     } else {

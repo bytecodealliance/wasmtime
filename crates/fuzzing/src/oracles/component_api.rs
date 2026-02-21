@@ -274,7 +274,7 @@ where
             log::trace!("passing in parameters {params:?}");
             let actual = if declarations.options.guest_caller_async {
                 store
-                    .run_concurrent(async |a| func.call_concurrent(a, params).await.unwrap().0)
+                    .run_concurrent(async |a| func.call_concurrent(a, params).await.unwrap())
                     .await
                     .unwrap()
             } else {

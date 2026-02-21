@@ -143,7 +143,6 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
-        .0
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
@@ -168,36 +167,24 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
         .context("failed to link `wasi:http@0.3.x`")?;
     let service = Service::instantiate_async(&mut store, &component, &linker).await?;
     let (req, io) = Request::from_http(req);
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let ((handle_result, ()), res) = try_join!(
-        async move {
-            store
-                .run_concurrent(async |store| {
-                    try_join!(
-                        async {
-                            let (res, task) = match service.handle(store, req).await? {
-                                Ok(pair) => pair,
-                                Err(err) => return Ok(Err(Some(err))),
-                            };
-                            _ = tx
-                                .send(store.with(|store| res.into_http(store, async { Ok(()) }))?);
-                            task.block(store).await;
-                            Ok(Ok(()))
-                        },
-                        async { io.await.context("failed to consume request body") }
-                    )
-                })
-                .await?
-        },
-        async move {
-            let res = rx.await?;
-            let (parts, body) = res.into_parts();
-            let body = body.collect().await.context("failed to collect body")?;
-            wasmtime::error::Ok(http::Response::from_parts(parts, body))
-        }
-    )?;
-
-    Ok(handle_result.map(|()| res))
+    store
+        .run_concurrent(async |store| {
+            let (res, ()) = try_join!(
+                async {
+                    let res = match service.handle(store, req).await? {
+                        Ok(res) => res,
+                        Err(err) => return Ok(Err(Some(err))),
+                    };
+                    let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                    let (parts, body) = res.into_parts();
+                    let body = body.collect().await.context("failed to collect body")?;
+                    wasmtime::error::Ok(Ok(http::Response::from_parts(parts, body)))
+                },
+                async { io.await.context("failed to consume request body") }
+            )?;
+            Ok(res)
+        })
+        .await?
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

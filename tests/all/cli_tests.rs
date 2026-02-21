@@ -2175,7 +2175,7 @@ start a print 1234
         ]);
         if cfg!(feature = "component-model-async") {
             let output = output?;
-            assert_eq!(output, "hello, world\nhello again, after return\n");
+            assert_eq!(output, "hello, world\n");
         } else {
             assert!(output.is_err());
         }
@@ -2194,7 +2194,7 @@ start a print 1234
         ]);
         if cfg!(feature = "component-model-async") {
             let output = output?;
-            assert_eq!(output, "hello, world\nhello again, after return\nok\n");
+            assert_eq!(output, "hello, world\nok\n");
         } else {
             assert!(output.is_err());
         }

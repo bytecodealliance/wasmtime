@@ -124,8 +124,6 @@ pub use self::concurrent::{
     GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny, StreamConsumer, StreamProducer,
     StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
-#[cfg(feature = "component-model-async")]
-pub use self::func::TaskExit;
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };

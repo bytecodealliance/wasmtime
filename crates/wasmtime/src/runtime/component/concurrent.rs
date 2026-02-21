@@ -80,7 +80,6 @@ use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ops::DerefMut;
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
-use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{TableDebug, TableId};
@@ -1076,7 +1075,7 @@ impl<T> StoreContextMut<'_, T> {
     /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
     /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
     ///    let resource = accessor.with(|mut access| access.get().table.push(MyResource(42)))?;
-    ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?.0;
+    ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?;
     ///    let value = accessor.with(|mut access| access.get().table.delete(another_resource))?;
     ///    bar.call_concurrent(accessor, (value.0,)).await?;
     ///    Ok(())
@@ -1469,7 +1468,6 @@ impl StoreOpaque {
             } else {
                 Caller::Host {
                     tx: None,
-                    exit_tx: Arc::new(oneshot::channel().0),
                     host_future_present: false,
                     caller: thread,
                 }
@@ -1490,10 +1488,6 @@ impl StoreOpaque {
 
         let state = self.concurrent_state_mut();
         state.get_mut(guest_task)?.threads.insert(guest_thread);
-        if guest_caller.is_some() {
-            let thread = thread.guest().unwrap();
-            state.get_mut(thread.task)?.subtasks.insert(guest_task);
-        }
 
         self.set_thread(QualifiedThreadId {
             task: guest_task,
@@ -1534,7 +1528,7 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
         let task = state.get_mut(thread.task)?;
         if task.ready_to_delete() {
-            state.delete(thread.task)?.dispose(state, thread.task)?;
+            state.delete(thread.task)?.dispose(state)?;
         }
 
         Ok(())
@@ -1952,17 +1946,12 @@ impl Instance {
                 if task.threads.is_empty() && !task.returned_or_cancelled() {
                     bail!(Trap::NoAsyncResult);
                 }
-                match &task.caller {
-                    Caller::Host { .. } => {
-                        if task.ready_to_delete() {
-                            Waitable::Guest(guest_thread.task)
-                                .delete_from(store.concurrent_state_mut())?;
-                        }
-                    }
-                    Caller::Guest { .. } => {
-                        task.exited = true;
-                        task.callback = None;
-                    }
+                if let Caller::Guest { .. } = task.caller {
+                    task.exited = true;
+                    task.callback = None;
+                }
+                if task.ready_to_delete() {
+                    Waitable::Guest(guest_thread.task).delete_from(store.concurrent_state_mut())?;
                 }
                 None
             }
@@ -2505,13 +2494,6 @@ impl Instance {
         let new_thread = GuestThread::new_implicit(guest_task);
         let guest_thread = state.push(new_thread)?;
         state.get_mut(guest_task)?.threads.insert(guest_thread);
-
-        store
-            .0
-            .concurrent_state_mut()
-            .get_mut(old_thread.task)?
-            .subtasks
-            .insert(guest_task);
 
         // Make the new thread the current one so that `Self::start_call` knows
         // which one to start.
@@ -4183,13 +4165,6 @@ enum Caller {
     Host {
         /// If present, may be used to deliver the result.
         tx: Option<oneshot::Sender<LiftedResult>>,
-        /// Channel to notify once all subtasks spawned by this caller have
-        /// completed.
-        ///
-        /// Note that we'll never actually send anything to this channel;
-        /// dropping it when the refcount goes to zero is sufficient to notify
-        /// the receiver.
-        exit_tx: Arc<oneshot::Sender<()>>,
         /// If true, there's a host future that must be dropped before the task
         /// can be deleted.
         host_future_present: bool,
@@ -4372,11 +4347,6 @@ pub(crate) struct GuestTask {
     /// Whether or not we've sent a `Status::Starting` event to any current or
     /// future waiters for this waitable.
     starting_sent: bool,
-    /// Pending guest subtasks created by this task (directly or indirectly).
-    ///
-    /// This is used to re-parent subtasks which are still running when their
-    /// parent task is disposed.
-    subtasks: HashSet<TableId<GuestTask>>,
     /// Scratch waitable set used to watch subtasks during synchronous calls.
     sync_call_set: TableId<WaitableSet>,
     /// The runtime instance to which the exported function for this guest task
@@ -4469,7 +4439,6 @@ impl GuestTask {
             sync_result: SyncResult::NotProduced,
             cancel_sent: false,
             starting_sent: false,
-            subtasks: HashSet::new(),
             sync_call_set,
             instance,
             event: None,
@@ -4482,7 +4451,7 @@ impl GuestTask {
 
     /// Dispose of this guest task, reparenting any pending subtasks to the
     /// caller.
-    fn dispose(self, state: &mut ConcurrentState, me: TableId<GuestTask>) -> Result<()> {
+    fn dispose(self, state: &mut ConcurrentState) -> Result<()> {
         // If there are not-yet-delivered completion events for subtasks in
         // `self.sync_call_set`, recursively dispose of those subtasks as well.
         for waitable in mem::take(&mut state.get_mut(self.sync_call_set)?.ready) {
@@ -4497,45 +4466,6 @@ impl GuestTask {
         assert!(self.threads.is_empty());
 
         state.delete(self.sync_call_set)?;
-
-        // Reparent any pending subtasks to the caller.
-        match &self.caller {
-            Caller::Guest { thread } => {
-                let task_mut = state.get_mut(thread.task)?;
-                let present = task_mut.subtasks.remove(&me);
-                assert!(present);
-
-                for subtask in &self.subtasks {
-                    task_mut.subtasks.insert(*subtask);
-                }
-
-                for subtask in &self.subtasks {
-                    state.get_mut(*subtask)?.caller = Caller::Guest { thread: *thread };
-                }
-            }
-            Caller::Host {
-                exit_tx, caller, ..
-            } => {
-                for subtask in &self.subtasks {
-                    state.get_mut(*subtask)?.caller = Caller::Host {
-                        tx: None,
-                        // Clone `exit_tx` to ensure that it is only dropped
-                        // once all transitive subtasks of the host call have
-                        // exited:
-                        exit_tx: exit_tx.clone(),
-                        host_future_present: false,
-                        caller: *caller,
-                    };
-                }
-            }
-        }
-
-        for subtask in self.subtasks {
-            let task = state.get_mut(subtask)?;
-            if task.exited && task.ready_to_delete() {
-                Waitable::Guest(subtask).delete_from(state)?;
-            }
-        }
 
         Ok(())
     }
@@ -4699,7 +4629,7 @@ impl Waitable {
             }
             Self::Guest(task) => {
                 log::trace!("delete guest task {task:?}");
-                state.delete(*task)?.dispose(state, *task)?;
+                state.delete(*task)?.dispose(state)?;
             }
             Self::Transmit(task) => {
                 state.delete(*task)?;
@@ -5226,9 +5156,6 @@ pub(crate) struct PreparedCall<R> {
     /// The `oneshot::Receiver` to which the result of the call will be
     /// delivered when it is available.
     rx: oneshot::Receiver<LiftedResult>,
-    /// The `oneshot::Receiver` which will resolve when the task -- and any
-    /// transitive subtasks -- have all exited.
-    exit_rx: oneshot::Receiver<()>,
     _phantom: PhantomData<R>,
 }
 
@@ -5303,7 +5230,6 @@ pub(crate) fn prepare_call<T, R>(
     let state = store.0.concurrent_state_mut();
 
     let (tx, rx) = oneshot::channel();
-    let (exit_tx, exit_rx) = oneshot::channel();
 
     let instance = RuntimeInstance {
         instance: handle.instance().id().instance(),
@@ -5325,7 +5251,6 @@ pub(crate) fn prepare_call<T, R>(
         },
         Caller::Host {
             tx: Some(tx),
-            exit_tx: Arc::new(exit_tx),
             host_future_present,
             caller,
         },
@@ -5356,7 +5281,6 @@ pub(crate) fn prepare_call<T, R>(
         thread: QualifiedThreadId { task, thread },
         param_count,
         rx,
-        exit_rx,
         _phantom: PhantomData,
     })
 }
@@ -5370,13 +5294,12 @@ pub(crate) fn prepare_call<T, R>(
 pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
     mut store: StoreContextMut<T>,
     prepared: PreparedCall<R>,
-) -> Result<impl Future<Output = Result<(R, oneshot::Receiver<()>)>> + Send + 'static + use<T, R>> {
+) -> Result<impl Future<Output = Result<R>> + Send + 'static + use<T, R>> {
     let PreparedCall {
         handle,
         thread,
         param_count,
         rx,
-        exit_rx,
         ..
     } = prepared;
 
@@ -5386,7 +5309,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
         store.0.id(),
         rx.map(move |result| {
             result
-                .map(|v| (*v.downcast().unwrap(), exit_rx))
+                .map(|v| *v.downcast().unwrap())
                 .map_err(crate::Error::from)
         }),
     ))
