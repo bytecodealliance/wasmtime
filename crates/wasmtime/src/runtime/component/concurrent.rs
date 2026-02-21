@@ -3540,6 +3540,14 @@ impl Instance {
         if let Waitable::Host(host_task) = waitable {
             if let Some(handle) = concurrent_state.get_mut(host_task)?.join_handle.take() {
                 handle.abort();
+
+                // Undo any outstanding resource lends recorded in this
+                // host task's `CallContext` so the owned resources remain
+                // droppable.
+                let scope_id = ConcurrentState::host_task_scope_id(host_task);
+                store
+                    .component_resource_tables(Some(self))
+                    .cancel_scope(scope_id);
                 return Ok(Status::ReturnCancelled as u32);
             }
         } else {
@@ -5110,6 +5118,13 @@ impl ConcurrentState {
             let task: TableId<GuestTask> = TableId::new(task);
             &mut self.get_mut(task).unwrap().call_context
         }
+    }
+
+    /// Build a scope ID for a host task, for use with `call_context`.
+    fn host_task_scope_id(task: TableId<HostTask>) -> u32 {
+        let bits = task.rep();
+        assert_eq!((bits << 1) >> 1, bits);
+        (bits << 1) | 1
     }
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone

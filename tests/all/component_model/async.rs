@@ -964,6 +964,128 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
     Ok(())
 }
 
+/// Test that cancelling a host task releases borrows on resources.
+///
+/// When a component calls an async-lowered host function that borrows a
+/// resource, then cancels the resulting subtask before it completes,
+/// the borrow must be released so the owned resource can be dropped.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_host_task_releases_borrow() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (import "f" (func $f async (param "x" (borrow $r))))
+            (import "new" (func $new (result (own $r))))
+
+            (core module $m
+                (import "" "f" (func $f (param i32) (result i32)))
+                (import "" "new" (func $new (result i32)))
+                (import "" "cancel" (func $cancel (param i32) (result i32)))
+                (import "" "drop-subtask" (func $drop-subtask (param i32)))
+                (import "" "drop-resource" (func $drop-resource (param i32)))
+
+                (func (export "run")
+                    (local $handle i32)
+                    (local $subtask i32)
+
+                    ;; Create an owned resource
+                    call $new
+                    local.set $handle
+
+                    ;; Call async function with a borrow of the resource.
+                    ;; This returns STARTED (1) | (subtask_id << 4).
+                    (call $f (local.get $handle))
+                    local.tee $subtask
+
+                    ;; Check status is STARTED (lower 4 bits = 1)
+                    i32.const 0xf
+                    i32.and
+                    i32.const 1 ;; STARTED
+                    i32.ne
+                    if unreachable end
+
+                    ;; Extract subtask id
+                    local.get $subtask
+                    i32.const 4
+                    i32.shr_u
+                    local.set $subtask
+
+                    ;; Cancel the subtask — should release the borrow
+                    (call $cancel (local.get $subtask))
+                    i32.const 4 ;; RETURN_CANCELLED
+                    i32.ne
+                    if unreachable end
+
+                    ;; Drop the subtask
+                    (call $drop-subtask (local.get $subtask))
+
+                    ;; Drop the owned resource
+                    (call $drop-resource (local.get $handle))
+                )
+            )
+            (core func $f (canon lower (func $f) async))
+            (core func $new (canon lower (func $new)))
+            (core func $cancel (canon subtask.cancel))
+            (core func $drop-subtask (canon subtask.drop))
+            (core func $drop-resource (canon resource.drop $r))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "f" (func $f))
+                    (export "new" (func $new))
+                    (export "cancel" (func $cancel))
+                    (export "drop-subtask" (func $drop-subtask))
+                    (export "drop-resource" (func $drop-resource))
+                ))
+            ))
+
+            (func (export "f") async
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+    linker
+        .root()
+        .func_wrap_concurrent("f", |_, (_,): (Resource<u32>,)| {
+            // Host function that borrows the resource and blocks forever.
+            Box::pin(async move {
+                std::future::pending::<()>().await;
+                Ok(())
+            })
+        })?;
+    linker
+        .root()
+        .func_wrap("new", |mut store: StoreContextMut<'_, ()>, ()| {
+            Ok((Resource::<u32>::new_own(store.data_mut() as *mut () as u32),))
+        })?;
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    store
+        .run_concurrent(async |store| -> wasmtime::Result<()> {
+            func.call_concurrent(store, ()).await?;
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+            Ok(())
+        })
+        .await??;
+
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn sync_lower_async_host_does_not_leak() -> Result<()> {

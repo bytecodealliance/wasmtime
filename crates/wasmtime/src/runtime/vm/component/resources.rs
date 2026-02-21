@@ -321,6 +321,20 @@ impl ResourceTables<'_> {
         }
         Ok(())
     }
+
+    /// Releases resource lends for a cancelled scope.
+    ///
+    /// This decrements the lend counts on owned resources that were lent
+    /// to the specified scope, allowing them to be dropped by the caller.
+    #[cfg(feature = "component-model-async")]
+    pub fn cancel_scope(&mut self, scope_id: u32) {
+        let cx = self.task_state.call_context(scope_id);
+        for lender in mem::take(&mut cx.lenders) {
+            self.table_for_index(&lender)
+                .resource_undo_lend(lender)
+                .unwrap();
+        }
+    }
 }
 
 #[derive(Debug)]
