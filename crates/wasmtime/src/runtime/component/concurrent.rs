@@ -1550,7 +1550,9 @@ impl StoreOpaque {
     pub fn enter_host_call(&mut self) -> Result<()> {
         let state = self.concurrent_state_mut();
         let caller = state.unwrap_current_guest_thread();
-        let task = state.push(HostTask::new(caller))?;
+        let epoch = state.host_task_epoch;
+        state.host_task_epoch += 1;
+        let task = state.push(HostTask::new(caller, epoch))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task);
         Ok(())
@@ -2750,11 +2752,12 @@ impl Instance {
         // Create an abortable future which hooks calls to poll and manages call
         // context state for the future.
         let (join_handle, future) = JoinHandle::run(future);
-        {
+        let epoch = {
             let task = state.get_mut(task)?;
             assert!(task.join_handle.is_none());
             task.join_handle = Some(join_handle);
-        }
+            task.epoch
+        };
 
         let mut future = Box::pin(future);
 
@@ -2802,6 +2805,16 @@ impl Instance {
                 // to check.
                 let mut store = token.as_context_mut(store);
                 let state = store.0.concurrent_state_mut();
+
+                // Check if this on_complete is stale. The table slot may
+                // have been freed and reused by a different HostTask since
+                // this closure was created. Compare epochs to detect this.
+                match state.get_mut(task) {
+                    Ok(t) if t.epoch != epoch => return Ok(()),
+                    Err(_) => return Ok(()),
+                    Ok(_) => {}
+                }
+
                 assert!(state.current_thread.is_none());
                 store.0.set_thread(task);
 
@@ -4155,16 +4168,22 @@ struct HostTask {
 
     /// Box<Any> of the result of this host task.
     result: Option<LiftedResult>,
+
+    /// Monotonic epoch identifying this specific HostTask instance.
+    /// Used to detect stale `on_complete` closures that reference a
+    /// reused table slot.
+    epoch: u64,
 }
 
 impl HostTask {
-    fn new(caller: QualifiedThreadId) -> Self {
+    fn new(caller: QualifiedThreadId, epoch: u64) -> Self {
         Self {
             common: WaitableCommon::default(),
             call_context: CallContext::default(),
             caller,
             join_handle: None,
             result: None,
+            epoch,
         }
     }
 }
@@ -4851,6 +4870,10 @@ pub struct ConcurrentState {
     /// as a `TableId<ErrorContextState>`.
     global_error_context_ref_counts:
         BTreeMap<TypeComponentGlobalErrorContextTableIndex, GlobalErrorContextRefCount>,
+
+    /// Monotonic counter for HostTask epochs, used to detect stale
+    /// `on_complete` closures after table slot reuse.
+    host_task_epoch: u64,
 }
 
 impl Default for ConcurrentState {
@@ -4865,6 +4888,7 @@ impl Default for ConcurrentState {
             worker: None,
             worker_item: None,
             global_error_context_ref_counts: BTreeMap::new(),
+            host_task_epoch: 0,
         }
     }
 }
