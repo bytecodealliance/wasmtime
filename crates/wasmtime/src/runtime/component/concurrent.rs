@@ -2802,6 +2802,18 @@ impl Instance {
                 // to check.
                 let mut store = token.as_context_mut(store);
                 let state = store.0.concurrent_state_mut();
+
+                // Check if the task was already cancelled and/or dropped.
+                // `subtask.cancel` takes the join_handle, and `subtask.drop`
+                // deletes the task entirely.  In either case, this on_complete
+                // is stale because the guest already observed the cancellation
+                // and cleaned up.
+                match state.get_mut(task) {
+                    Ok(t) if t.join_handle.is_none() => return Ok(()),
+                    Err(_) => return Ok(()),
+                    Ok(_) => {}
+                }
+
                 assert!(state.current_thread.is_none());
                 store.0.set_thread(task);
 

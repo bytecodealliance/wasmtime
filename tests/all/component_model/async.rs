@@ -964,6 +964,161 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
     Ok(())
 }
 
+/// Test that the `on_complete` work item for a host task is a no-op when the
+/// guest has already cancelled and dropped the subtask.
+///
+/// Per the spec (CanonicalABI.md), `subtask.cancel` on a subtask that has
+/// already resolved collects the pending event and returns `RETURNED`.  A
+/// subsequent `subtask.drop` is valid because `resolve_delivered` is true.
+///
+/// In the implementation, the host function's future completing and the
+/// `on_complete` work item that lowers the result are two separate phases.
+/// Between them, a guest work item (e.g. a `ResumeFiber` delivering a
+/// different subtask's event) may run and cancel+drop this subtask.  The
+/// `on_complete` must detect that the task no longer exists and bail out.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_completed_host_task_does_not_crash() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "f1" (func $f1 async))
+            (import "f2" (func $f2 async))
+
+            (core module $Mem (memory (export "mem") 1))
+            (core instance $mem (instantiate $Mem))
+
+            (core module $m
+                (import "" "mem" (memory 1))
+                (import "" "f1" (func $f1 (result i32)))
+                (import "" "f2" (func $f2 (result i32)))
+                (import "" "cancel" (func $cancel (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (import "" "waitable.join" (func $join (param i32 i32)))
+                (import "" "waitable-set.new" (func $ws-new (result i32)))
+                (import "" "waitable-set.wait" (func $ws-wait (param i32 i32) (result i32)))
+                (import "" "waitable-set.drop" (func $ws-drop (param i32)))
+                (func (export "run")
+                    (local $s1 i32) (local $s2 i32) (local $ws i32) (local $tmp i32)
+
+                    ;; Start f1, expect STARTED
+                    call $f1
+                    local.tee $tmp
+                    i32.const 0xf
+                    i32.and
+                    i32.const 1 ;; STARTED
+                    i32.ne
+                    if unreachable end
+                    local.get $tmp
+                    i32.const 4
+                    i32.shr_u
+                    local.set $s1
+
+                    ;; Start f2, expect STARTED
+                    call $f2
+                    local.tee $tmp
+                    i32.const 0xf
+                    i32.and
+                    i32.const 1 ;; STARTED
+                    i32.ne
+                    if unreachable end
+                    local.get $tmp
+                    i32.const 4
+                    i32.shr_u
+                    local.set $s2
+
+                    ;; Wait for f1 to complete via waitable-set
+                    call $ws-new
+                    local.set $ws
+                    local.get $s1
+                    local.get $ws
+                    call $join
+                    local.get $ws
+                    i32.const 0 ;; payload ptr
+                    call $ws-wait
+                    drop
+
+                    ;; f1 returned. Cancel f2 (whose on_complete is queued
+                    ;; but hasn't run yet) and drop both subtasks.
+                    local.get $s2
+                    call $cancel
+                    drop
+                    local.get $s2
+                    call $drop
+                    local.get $s1
+                    call $drop
+
+                    ;; Clean up the waitable-set.
+                    local.get $ws
+                    call $ws-drop
+                )
+            )
+            (core func $f1 (canon lower (func $f1) async))
+            (core func $f2 (canon lower (func $f2) async))
+            (core func $cancel (canon subtask.cancel))
+            (core func $drop (canon subtask.drop))
+            (core func $ws-new (canon waitable-set.new))
+            (core func $join (canon waitable.join))
+            (core func $ws-wait (canon waitable-set.wait (memory $mem "mem")))
+            (core func $ws-drop (canon waitable-set.drop))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "mem" (memory $mem "mem"))
+                    (export "f1" (func $f1))
+                    (export "f2" (func $f2))
+                    (export "cancel" (func $cancel))
+                    (export "drop" (func $drop))
+                    (export "waitable.join" (func $join))
+                    (export "waitable-set.new" (func $ws-new))
+                    (export "waitable-set.wait" (func $ws-wait))
+                    (export "waitable-set.drop" (func $ws-drop))
+                ))
+            ))
+
+            (func (export "run") async
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    // Both host functions yield once then complete. This means first_poll
+    // returns STARTED, and on the next poll they return Ready — pushing
+    // their on_complete WorkerFunction into the high-priority queue.
+    linker.root().func_wrap_concurrent("f1", |_, ()| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    })?;
+    linker.root().func_wrap_concurrent("f2", |_, ()| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async |store| -> wasmtime::Result<()> {
+            func.call_concurrent(store, ()).await?;
+
+            for _ in 0..10 {
+                tokio::task::yield_now().await;
+            }
+            Ok(())
+        })
+        .await??;
+
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn sync_lower_async_host_does_not_leak() -> Result<()> {
