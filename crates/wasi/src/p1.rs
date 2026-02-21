@@ -94,6 +94,7 @@ use crate::p2::bindings::cli::environment::Host as _;
 use crate::p2::bindings::filesystem::types::HostDescriptor as _;
 use crate::p2::bindings::random::random::Host as _;
 use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
+use wasmtime_wasi_io::bindings::wasi::io::poll::HostPollable as _;
 
 /// Structure containing state for WASIp1.
 ///
@@ -2317,119 +2318,133 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
 
         let n = usize::try_from(nsubscriptions).unwrap_or(usize::MAX);
         let mut pollables = Vec::with_capacity(n);
-        for sub in subs.iter() {
-            let sub = memory.read(sub?)?;
-            let p = match sub.u {
-                types::SubscriptionU::Clock(types::SubscriptionClock {
-                    id,
-                    timeout,
-                    flags,
-                    ..
-                }) => {
-                    let absolute = flags.contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME);
-                    let (timeout, absolute) = match id {
-                        types::Clockid::Monotonic => (timeout, absolute),
-                        types::Clockid::Realtime if !absolute => (timeout, false),
-                        types::Clockid::Realtime => {
-                            let now = wall_clock::Host::now(&mut self.clocks())
-                                .context("failed to call `wall_clock::now`")
-                                .map_err(types::Error::trap)?;
+        let ready_result = async {
+            for sub in subs.iter() {
+                let sub = memory.read(sub?)?;
+                let p = match sub.u {
+                    types::SubscriptionU::Clock(types::SubscriptionClock {
+                        id,
+                        timeout,
+                        flags,
+                        ..
+                    }) => {
+                        let absolute =
+                            flags.contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME);
+                        let (timeout, absolute) = match id {
+                            types::Clockid::Monotonic => (timeout, absolute),
+                            types::Clockid::Realtime if !absolute => (timeout, false),
+                            types::Clockid::Realtime => {
+                                let now = wall_clock::Host::now(&mut self.clocks())
+                                    .context("failed to call `wall_clock::now`")
+                                    .map_err(types::Error::trap)?;
 
-                            // Convert `timeout` to `Datetime` format.
-                            let seconds = timeout / 1_000_000_000;
-                            let nanoseconds = timeout % 1_000_000_000;
+                                // Convert `timeout` to `Datetime` format.
+                                let seconds = timeout / 1_000_000_000;
+                                let nanoseconds = timeout % 1_000_000_000;
 
-                            let timeout = if now.seconds < seconds
-                                || now.seconds == seconds
-                                    && u64::from(now.nanoseconds) < nanoseconds
-                            {
-                                // `now` is less than `timeout`, which is expressible as u64,
-                                // subtract the nanosecond counts directly
-                                now.seconds * 1_000_000_000 + u64::from(now.nanoseconds) - timeout
-                            } else {
-                                0
-                            };
-                            (timeout, false)
+                                let timeout = if now.seconds < seconds
+                                    || now.seconds == seconds
+                                        && u64::from(now.nanoseconds) < nanoseconds
+                                {
+                                    // `now` is less than `timeout`, which is expressible as u64,
+                                    // subtract the nanosecond counts directly
+                                    now.seconds * 1_000_000_000 + u64::from(now.nanoseconds)
+                                        - timeout
+                                } else {
+                                    0
+                                };
+                                (timeout, false)
+                            }
+                            _ => return Err(types::Errno::Inval.into()),
+                        };
+                        if absolute {
+                            monotonic_clock::Host::subscribe_instant(&mut self.clocks(), timeout)
+                                .context("failed to call `monotonic_clock::subscribe_instant`")
+                                .map_err(types::Error::trap)?
+                        } else {
+                            monotonic_clock::Host::subscribe_duration(&mut self.clocks(), timeout)
+                                .context("failed to call `monotonic_clock::subscribe_duration`")
+                                .map_err(types::Error::trap)?
                         }
-                        _ => return Err(types::Errno::Inval.into()),
-                    };
-                    if absolute {
-                        monotonic_clock::Host::subscribe_instant(&mut self.clocks(), timeout)
-                            .context("failed to call `monotonic_clock::subscribe_instant`")
-                            .map_err(types::Error::trap)?
-                    } else {
-                        monotonic_clock::Host::subscribe_duration(&mut self.clocks(), timeout)
-                            .context("failed to call `monotonic_clock::subscribe_duration`")
+                    }
+                    types::SubscriptionU::FdRead(types::SubscriptionFdReadwrite {
+                        file_descriptor,
+                    }) => {
+                        let stream = {
+                            let t = self.transact()?;
+                            let desc = t.get_descriptor(file_descriptor)?;
+                            match desc {
+                                Descriptor::Stdin { stream, .. } => stream.borrowed(),
+                                Descriptor::File(File { fd, position, .. }) => {
+                                    let pos = position.load(Ordering::Relaxed);
+                                    let fd = fd.borrowed();
+                                    drop(t);
+                                    self.filesystem().read_via_stream(fd, pos)?
+                                }
+                                // TODO: Support sockets
+                                _ => return Err(types::Errno::Badf.into()),
+                            }
+                        };
+                        streams::HostInputStream::subscribe(&mut self.table, stream)
+                            .context("failed to call `subscribe` on `input-stream`")
                             .map_err(types::Error::trap)?
                     }
-                }
-                types::SubscriptionU::FdRead(types::SubscriptionFdReadwrite {
-                    file_descriptor,
-                }) => {
-                    let stream = {
-                        let t = self.transact()?;
-                        let desc = t.get_descriptor(file_descriptor)?;
-                        match desc {
-                            Descriptor::Stdin { stream, .. } => stream.borrowed(),
-                            Descriptor::File(File { fd, position, .. }) => {
-                                let pos = position.load(Ordering::Relaxed);
-                                let fd = fd.borrowed();
-                                drop(t);
-                                self.filesystem().read_via_stream(fd, pos)?
-                            }
-                            // TODO: Support sockets
-                            _ => return Err(types::Errno::Badf.into()),
-                        }
-                    };
-                    streams::HostInputStream::subscribe(&mut self.table, stream)
-                        .context("failed to call `subscribe` on `input-stream`")
-                        .map_err(types::Error::trap)?
-                }
-                types::SubscriptionU::FdWrite(types::SubscriptionFdReadwrite {
-                    file_descriptor,
-                }) => {
-                    let stream = {
-                        let t = self.transact()?;
-                        let desc = t.get_descriptor(file_descriptor)?;
-                        match desc {
-                            Descriptor::Stdout { stream, .. }
-                            | Descriptor::Stderr { stream, .. } => stream.borrowed(),
-                            Descriptor::File(File {
-                                fd,
-                                position,
-                                append,
-                                ..
-                            }) => {
-                                let fd = fd.borrowed();
-                                let position = position.clone();
-                                let append = *append;
-                                drop(t);
-                                if append {
-                                    self.filesystem().append_via_stream(fd)?
-                                } else {
-                                    let pos = position.load(Ordering::Relaxed);
-                                    self.filesystem().write_via_stream(fd, pos)?
+                    types::SubscriptionU::FdWrite(types::SubscriptionFdReadwrite {
+                        file_descriptor,
+                    }) => {
+                        let stream = {
+                            let t = self.transact()?;
+                            let desc = t.get_descriptor(file_descriptor)?;
+                            match desc {
+                                Descriptor::Stdout { stream, .. }
+                                | Descriptor::Stderr { stream, .. } => stream.borrowed(),
+                                Descriptor::File(File {
+                                    fd,
+                                    position,
+                                    append,
+                                    ..
+                                }) => {
+                                    let fd = fd.borrowed();
+                                    let position = position.clone();
+                                    let append = *append;
+                                    drop(t);
+                                    if append {
+                                        self.filesystem().append_via_stream(fd)?
+                                    } else {
+                                        let pos = position.load(Ordering::Relaxed);
+                                        self.filesystem().write_via_stream(fd, pos)?
+                                    }
                                 }
+                                // TODO: Support sockets
+                                _ => return Err(types::Errno::Badf.into()),
                             }
-                            // TODO: Support sockets
-                            _ => return Err(types::Errno::Badf.into()),
-                        }
-                    };
-                    streams::HostOutputStream::subscribe(&mut self.table, stream)
-                        .context("failed to call `subscribe` on `output-stream`")
-                        .map_err(types::Error::trap)?
-                }
-            };
-            pollables.push(p);
+                        };
+                        streams::HostOutputStream::subscribe(&mut self.table, stream)
+                            .context("failed to call `subscribe` on `output-stream`")
+                            .map_err(types::Error::trap)?
+                    }
+                };
+                pollables.push(p);
+            }
+            self.table
+                .poll(pollables.iter().map(ResourceExt::borrowed).collect())
+                .await
+                .context("failed to call `poll-oneoff`")
+                .map_err(types::Error::trap)
         }
-        let ready: HashSet<_> = self
-            .table
-            .poll(pollables)
-            .await
-            .context("failed to call `poll-oneoff`")
-            .map_err(types::Error::trap)?
-            .into_iter()
-            .collect();
+        .await;
+
+        let mut drop_error = None;
+        for pollable in pollables.drain(..) {
+            if let Err(err) = self.table.drop(pollable) {
+                drop_error.get_or_insert(err);
+            }
+        }
+        if let Some(err) = drop_error {
+            return Err(types::Error::trap(err));
+        }
+
+        let ready: HashSet<_> = ready_result?.into_iter().collect();
 
         let mut count: types::Size = 0;
         for (sub, event) in (0..)
