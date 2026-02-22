@@ -54,12 +54,28 @@ const REG_SPILLSLOT_MASK: u32 = !REG_SPILLSLOT_BIT;
 impl Reg {
     /// Const constructor: create a new Reg from a regalloc2 VReg.
     pub const fn from_virtual_reg(vreg: regalloc2::VReg) -> Reg {
-        Reg(vreg.bits() as u32)
+        let bits = vreg.bits() as u32;
+        debug_assert!(bits <= REG_SPILLSLOT_MASK);
+        Reg(bits)
     }
 
     /// Const constructor: create a new Reg from a regalloc2 PReg.
     pub const fn from_real_reg(preg: regalloc2::PReg) -> Reg {
-        Reg(preg_to_pinned_vreg(preg).bits() as u32)
+        let vreg = preg_to_pinned_vreg(preg);
+        let bits = vreg.bits() as u32;
+        debug_assert!(bits <= REG_SPILLSLOT_MASK);
+        Reg(bits)
+    }
+
+    /// Maybe construct from a `regalloc2::VReg`, checking if the
+    /// index is in-range for our bit-packing.
+    pub fn from_virtual_reg_checked(vreg: regalloc2::VReg) -> Option<Reg> {
+        let bits = vreg.bits() as u32;
+        if bits <= REG_SPILLSLOT_MASK {
+            Some(Reg(bits))
+        } else {
+            None
+        }
     }
 
     /// Get the physical register (`RealReg`), if this register is

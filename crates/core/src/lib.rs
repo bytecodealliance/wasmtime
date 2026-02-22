@@ -21,5 +21,6 @@ extern crate std;
 pub mod alloc;
 pub mod error;
 pub mod math;
+pub mod non_max;
 pub mod slab;
 pub mod undo;

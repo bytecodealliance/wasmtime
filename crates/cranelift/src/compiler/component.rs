@@ -1,14 +1,18 @@
 //! Compilation support for the component model.
 
+use crate::func_environ::BuiltinFunctions;
+use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
-    Abi, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PtrSize, TrapSentinel, Tunables,
-    WasmFuncType, WasmValType, component::*, fact::PREPARE_CALL_FIXED_PARAMS,
+    Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PtrSize,
+    TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
+    fact::PREPARE_CALL_FIXED_PARAMS,
 };
 
 struct TrampolineCompiler<'a> {
@@ -20,6 +24,7 @@ struct TrampolineCompiler<'a> {
     offsets: VMComponentOffsets<u8>,
     block0: ir::Block,
     signature: &'a WasmFuncType,
+    builtins: BuiltinFunctions,
 }
 
 /// What host functions can be called, used in `translate_hostcall` below.
@@ -112,6 +117,7 @@ impl<'a> TrampolineCompiler<'a> {
             offsets: VMComponentOffsets::new(isa.pointer_bytes(), component),
             block0,
             signature,
+            builtins: BuiltinFunctions::new(compiler),
         }
     }
 
@@ -1412,8 +1418,12 @@ impl<'a> TrampolineCompiler<'a> {
         self.builder.ins().return_(results);
     }
 
+    fn caller_vmctx(&self) -> ir::Value {
+        self.builder.func.dfg.block_params(self.block0)[1]
+    }
+
     fn raise_if_host_trapped(&mut self, succeeded: ir::Value) {
-        let caller_vmctx = self.builder.func.dfg.block_params(self.block0)[1];
+        let caller_vmctx = self.caller_vmctx();
         self.compiler
             .raise_if_host_trapped(&mut self.builder, caller_vmctx, succeeded);
     }
@@ -1533,9 +1543,45 @@ impl<'a> TrampolineCompiler<'a> {
             .builder
             .ins()
             .band_imm(flags, i64::from(FLAG_MAY_LEAVE));
-        self.builder
-            .ins()
-            .trapz(may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
+        let (mut traps, builder) = self.traps();
+        traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
+    }
+
+    fn traps(&mut self) -> (TrapTranslator<'_>, &mut FunctionBuilder<'a>) {
+        (
+            TrapTranslator {
+                compiler: self.compiler,
+                vmctx: self.builder.func.dfg.block_params(self.block0)[0],
+                builtins: &mut self.builtins,
+            },
+            &mut self.builder,
+        )
+    }
+}
+
+// Helper structure to implement `TranslateTrap`. This isn't possible to do
+// natively for `TrampolineCompiler` because it stores `FunctionBuilder`
+// internally. This differs from `FuncEnvironment` for core wasm which stores it
+// externally, hence the slightly different idioms to bridge here.
+struct TrapTranslator<'a> {
+    compiler: &'a Compiler,
+    vmctx: ir::Value,
+    builtins: &'a mut BuiltinFunctions,
+}
+
+impl TranslateTrap for TrapTranslator<'_> {
+    fn compiler(&self) -> &Compiler {
+        self.compiler
+    }
+    fn vmctx_val(&mut self, _: &mut FuncCursor<'_>) -> ir::Value {
+        self.vmctx
+    }
+    fn builtin_funcref(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        index: BuiltinFunctionIndex,
+    ) -> ir::FuncRef {
+        self.builtins.load_builtin(builder.func, index)
     }
 }
 

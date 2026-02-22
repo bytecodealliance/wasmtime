@@ -1,10 +1,10 @@
+use crate::{collections::TryExtend, error::OutOfMemory};
 use core::{
     fmt,
     ops::{Index, IndexMut},
 };
 use cranelift_entity::EntityRef;
 use serde::{Serialize, ser::SerializeSeq};
-use wasmtime_core::error::OutOfMemory;
 
 /// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
 /// all methods that allocate.
@@ -217,6 +217,25 @@ where
     }
 }
 
+impl<K, V> TryExtend<V> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn try_extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
+    where
+        I: IntoIterator<Item = V>,
+    {
+        let iter = iter.into_iter();
+        let (min, max) = iter.size_hint();
+        let cap = max.unwrap_or(min);
+        self.reserve(cap)?;
+        for v in iter {
+            self.push(v)?;
+        }
+        Ok(())
+    }
+}
+
 impl<K, V> Index<K> for PrimaryMap<K, V>
 where
     K: EntityRef,
@@ -234,5 +253,38 @@ where
 {
     fn index_mut(&mut self, k: K) -> &mut V {
         &mut self.inner[k]
+    }
+}
+
+impl<K, V> IntoIterator for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, V);
+    type IntoIter = cranelift_entity::IntoIter<K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a V);
+    type IntoIter = cranelift_entity::Iter<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a mut V);
+    type IntoIter = cranelift_entity::IterMut<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }

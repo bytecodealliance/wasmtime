@@ -15,11 +15,9 @@ use wasmtime::Result;
 
 impl TcpSocket {
     pub(crate) fn p2_streams(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
-        let client = self.tcp_stream_arc()?;
-        let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
-        let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
+        let reader = Arc::new(Mutex::new(TcpReader::new(self.take_receive_stream()?)));
+        let writer = Arc::new(Mutex::new(TcpWriter::new(self.take_send_stream()?)));
         self.set_p2_streaming_state(P2TcpStreamingState {
-            stream: client.clone(),
             reader: reader.clone(),
             writer: writer.clone(),
         })?;
@@ -30,7 +28,6 @@ impl TcpSocket {
 }
 
 pub(crate) struct P2TcpStreamingState {
-    pub(crate) stream: Arc<tokio::net::TcpStream>,
     reader: Arc<Mutex<TcpReader>>,
     writer: Arc<Mutex<TcpWriter>>,
 }

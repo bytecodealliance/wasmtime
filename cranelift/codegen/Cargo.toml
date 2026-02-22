@@ -22,7 +22,7 @@ features = ["all-arch"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true, features = ['std'] }
-bumpalo = "3"
+bumpalo = { workspace = true }
 capstone = { workspace = true, optional = true }
 cranelift-assembler-x64 = { workspace = true }
 cranelift-codegen-shared = { path = "./shared", version = "0.130.0" }
@@ -83,7 +83,7 @@ trace-log = ["regalloc2/trace-log"]
 
 # By default, an ISLE term is compiled into a single Rust function, but it can be
 # significantly inefficient for large terms (e.g. `simplify` with hundreds of rules).
-# This is because the generated Rust code for such terms is large, and `rustc` takes quadratically longer to compile huge functions. 
+# This is because the generated Rust code for such terms is large, and `rustc` takes quadratically longer to compile huge functions.
 # This feature splits large match arms in such ISLE terms into closures, for compiling ISLE terms more efficiently.
 # However, this can degrade Cranelift compilation times, introducing ABI boundaries between the closures.
 # Therefore, we recommend enabling this feature only for debugging/development purposes.

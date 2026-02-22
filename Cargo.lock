@@ -281,9 +281,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.16.0"
+version = "3.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
+checksum = "c81d250916401487680ed13b8b675660281dcfc3ab0121fe44c94bcab9eae2fb"
 dependencies = [
  "allocator-api2",
 ]
@@ -3005,9 +3005,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d56c86aa200e0d597422a1099f82b38577ec52c660f32d3af3a9c4fd4f2891f2"
+checksum = "952ddbfc6f9f64d006c3efd8c9851a6ba2f2b944ba94730db255d55006e0ffda"
 dependencies = [
  "allocator-api2",
  "bumpalo",

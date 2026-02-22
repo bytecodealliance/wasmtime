@@ -1,5 +1,6 @@
 use crate::error::OutOfMemory;
 use core::mem;
+use std_alloc::sync::Arc;
 
 /// A trait for values that can be cloned, but contain owned, heap-allocated
 /// values whose allocations may fail during cloning.
@@ -36,6 +37,40 @@ where
     #[inline]
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(*self)
+    }
+}
+
+impl<T, E> TryClone for Result<T, E>
+where
+    T: TryClone,
+    E: TryClone,
+{
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        match self {
+            Ok(x) => Ok(Ok(x.try_clone()?)),
+            Err(e) => Ok(Err(e.try_clone()?)),
+        }
+    }
+}
+
+impl<T> TryClone for Option<T>
+where
+    T: TryClone,
+{
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        match self {
+            Some(x) => Ok(Some(x.try_clone()?)),
+            None => Ok(None),
+        }
+    }
+}
+
+impl<T> TryClone for Arc<T> {
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
     }
 }
 

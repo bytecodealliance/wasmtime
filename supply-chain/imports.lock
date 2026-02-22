@@ -566,8 +566,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.bumpalo]]
-version = "3.16.0"
-when = "2024-04-08"
+version = "3.20.0"
+when = "2026-02-18"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
@@ -1112,8 +1112,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.14.0"
-when = "2026-02-14"
+version = "0.15.0"
+when = "2026-02-17"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"

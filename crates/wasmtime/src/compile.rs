@@ -27,19 +27,16 @@ use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use std::{any::Any, borrow::Cow, collections::BTreeMap, mem, ops::Range};
-
-use call_graph::CallGraph;
 use wasmtime_environ::{
     Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
     CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
     FunctionBodyData, InliningCompiler, IntraModuleInlining, ModuleEnvironment, ModuleTranslation,
     ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex, Tunables,
+    graphs::{EntityGraph, Graph as _},
 };
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{WasmChecksum, component::Translator};
 
-mod call_graph;
-mod scc;
 mod stratify;
 
 mod code_builder;
@@ -598,60 +595,10 @@ the use case.
         compiler: &dyn Compiler,
         inlining_compiler: &dyn InliningCompiler,
     ) -> Result<Vec<CompileOutput<'a>>, Error> {
-        /// The index of a function (of any kind: Wasm function, trampoline, or
-        /// etc...) in our list of unlinked outputs.
-        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        struct OutputIndex(u32);
-        wasmtime_environ::entity_impl!(OutputIndex);
-
         // Our list of unlinked outputs.
         let mut outputs = PrimaryMap::<OutputIndex, Option<CompileOutput<'_>>>::from(
             engine.run_maybe_parallel(self.inputs, |f| f(compiler).map(Some))?,
         );
-
-        /// Whether a function (as described by the given `FuncKey`) can
-        /// participate in inlining or not (either as a candidate for being
-        /// inlined into a caller or having a callee inlined into a callsite
-        /// within itself).
-        fn is_inlining_function(key: FuncKey) -> bool {
-            match key {
-                // Wasm functions can both be inlined into other functions and
-                // have other functions inlined into them.
-                FuncKey::DefinedWasmFunction(..) => true,
-
-                // Intrinsics can be inlined into other functions.
-                #[cfg(feature = "component-model")]
-                FuncKey::UnsafeIntrinsic(..) => true,
-
-                // Trampolines cannot participate in inlining since our
-                // unwinding and exceptions infrastructure relies on them being
-                // in their own call frames.
-                FuncKey::ArrayToWasmTrampoline(..)
-                | FuncKey::WasmToArrayTrampoline(..)
-                | FuncKey::WasmToBuiltinTrampoline(..)
-                | FuncKey::PatchableToBuiltinTrampoline(..) => false,
-                #[cfg(feature = "component-model")]
-                FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
-
-                FuncKey::PulleyHostCall(_) => {
-                    unreachable!("we don't compile artifacts for Pulley host calls")
-                }
-            }
-        }
-
-        /// Get just the output indices of the functions that can participate in
-        /// inlining from our unlinked outputs.
-        fn inlining_functions<'a>(
-            outputs: &'a PrimaryMap<OutputIndex, Option<CompileOutput<'_>>>,
-        ) -> impl Iterator<Item = OutputIndex> + 'a {
-            outputs.iter().filter_map(|(index, output)| {
-                if is_inlining_function(output.as_ref().unwrap().key) {
-                    Some(index)
-                } else {
-                    None
-                }
-            })
-        }
 
         // A map from a `FuncKey` to its index in our unlinked outputs.
         //
@@ -672,13 +619,11 @@ the use case.
         // We only inline Wasm functions, not trampolines, because we rely on
         // trampolines being in their own stack frame when we save the entry and
         // exit SP, FP, and PC for backtraces in trampolines.
-        let call_graph = CallGraph::<OutputIndex>::new(inlining_functions(&outputs), {
+        let call_graph = EntityGraph::<OutputIndex>::new(inlining_functions(&outputs), {
             let mut func_keys = IndexSet::default();
             let outputs = &outputs;
             let key_to_output = &key_to_output;
             move |output_index, calls| {
-                debug_assert!(calls.is_empty());
-
                 let output = outputs[output_index].as_ref().unwrap();
                 debug_assert!(is_inlining_function(output.key));
 
@@ -688,18 +633,20 @@ the use case.
 
                 // Translate each of those to keys to output indices, which is
                 // what we actually need.
+                debug_assert!(calls.is_empty());
                 calls.extend(
                     func_keys
                         .iter()
                         .copied()
-                        .filter_map(|key| key_to_output.get(&key)),
+                        .filter_map(|key| key_to_output.get(&key).copied()),
                 );
 
                 log::trace!(
                     "call graph edges for {output_index:?} = {:?}: {calls:?}",
                     output.key
                 );
-                Ok(())
+
+                crate::error::Ok(())
             }
         })?;
 
@@ -708,8 +655,10 @@ the use case.
         // (because they either do not call each other or are part of a
         // mutual-recursion cycle; either way we won't inline members of the
         // same layer into each other).
-        let strata =
-            stratify::Strata::<OutputIndex>::new(inlining_functions(&outputs), &call_graph);
+        let strata = stratify::Strata::<OutputIndex>::new(&call_graph.filter_nodes(|f| {
+            let key = outputs[*f].as_ref().unwrap().key;
+            is_inlining_function(key)
+        }));
         let mut layer_outputs = vec![];
         for layer in strata.layers() {
             // Temporarily take this layer's outputs out of our unlinked outputs
@@ -913,6 +862,56 @@ the use case.
         log::trace!("  --> inlining: did not find a reason we should not");
         true
     }
+}
+
+/// The index of a function (of any kind: Wasm function, trampoline, or
+/// etc...) in our list of unlinked outputs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct OutputIndex(u32);
+wasmtime_environ::entity_impl!(OutputIndex);
+
+/// Whether a function (as described by the given `FuncKey`) can
+/// participate in inlining or not (either as a candidate for being
+/// inlined into a caller or having a callee inlined into a callsite
+/// within itself).
+fn is_inlining_function(key: FuncKey) -> bool {
+    match key {
+        // Wasm functions can both be inlined into other functions and
+        // have other functions inlined into them.
+        FuncKey::DefinedWasmFunction(..) => true,
+
+        // Intrinsics can be inlined into other functions.
+        #[cfg(feature = "component-model")]
+        FuncKey::UnsafeIntrinsic(..) => true,
+
+        // Trampolines cannot participate in inlining since our
+        // unwinding and exceptions infrastructure relies on them being
+        // in their own call frames.
+        FuncKey::ArrayToWasmTrampoline(..)
+        | FuncKey::WasmToArrayTrampoline(..)
+        | FuncKey::WasmToBuiltinTrampoline(..)
+        | FuncKey::PatchableToBuiltinTrampoline(..) => false,
+        #[cfg(feature = "component-model")]
+        FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
+
+        FuncKey::PulleyHostCall(_) => {
+            unreachable!("we don't compile artifacts for Pulley host calls")
+        }
+    }
+}
+
+/// Get just the output indices of the functions that can participate in
+/// inlining from our unlinked outputs.
+fn inlining_functions<'a>(
+    outputs: &'a PrimaryMap<OutputIndex, Option<CompileOutput<'_>>>,
+) -> impl Iterator<Item = OutputIndex> + 'a {
+    outputs.iter().filter_map(|(index, output)| {
+        if is_inlining_function(output.as_ref().unwrap().key) {
+            Some(index)
+        } else {
+            None
+        }
+    })
 }
 
 fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {

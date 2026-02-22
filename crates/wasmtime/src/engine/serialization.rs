@@ -34,8 +34,7 @@ use object::{
     read::elf::{ElfFile64, FileHeader, SectionHeader},
 };
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+use wasmtime_environ::{FlagValue, ObjectKind, OperatorCostStrategy, Tunables, collections, obj};
 
 const VERSION: u8 = 0;
 
@@ -180,11 +179,11 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 
 #[derive(Serialize, Deserialize)]
 pub struct Metadata<'a> {
-    target: String,
+    target: collections::String,
     #[serde(borrow)]
-    shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    shared_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
     #[serde(borrow)]
-    isa_flags: Vec<(&'a str, FlagValue<'a>)>,
+    isa_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: u64,
 }
@@ -194,9 +193,9 @@ impl Metadata<'_> {
     pub fn new(engine: &Engine) -> Result<Metadata<'static>> {
         let compiler = engine.try_compiler()?;
         Ok(Metadata {
-            target: compiler.triple().to_string(),
-            shared_flags: compiler.flags(),
-            isa_flags: compiler.isa_flags(),
+            target: compiler.triple().to_string().into(),
+            shared_flags: compiler.flags().into(),
+            isa_flags: compiler.isa_flags().into(),
             tunables: engine.tunables().clone(),
             features: engine.features().bits(),
         })
@@ -276,6 +275,22 @@ impl Metadata<'_> {
         );
     }
 
+    fn check_cost(
+        consume_fuel: bool,
+        found: &OperatorCostStrategy,
+        expected: &OperatorCostStrategy,
+    ) -> Result<()> {
+        if !consume_fuel {
+            return Ok(());
+        }
+
+        if found != expected {
+            bail!("Module costs are incompatible");
+        }
+
+        Ok(())
+    }
+
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             collector,
@@ -285,6 +300,7 @@ impl Metadata<'_> {
             debug_guest,
             parse_wasm_debuginfo,
             consume_fuel,
+            ref operator_cost,
             epoch_interruption,
             memory_may_move,
             guard_before_linear_memory,
@@ -336,6 +352,7 @@ impl Metadata<'_> {
             "WebAssembly backtrace support",
         )?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
+        Self::check_cost(consume_fuel, operator_cost, &other.operator_cost)?;
         Self::check_bool(
             epoch_interruption,
             other.epoch_interruption,
@@ -463,7 +480,7 @@ mod test {
     fn test_architecture_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine)?;
-        metadata.target = "unknown-generic-linux".to_string();
+        metadata.target = "unknown-generic-linux".to_string().into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -486,7 +503,8 @@ mod test {
         metadata.target = format!(
             "{}-generic-unknown",
             target_lexicon::Triple::host().architecture
-        );
+        )
+        .into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -515,7 +533,7 @@ mod test {
 
         metadata
             .shared_flags
-            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -541,7 +559,7 @@ mod test {
 
         metadata
             .isa_flags
-            .push(("not_a_flag", FlagValue::Bool(true)));
+            .push(("not_a_flag", FlagValue::Bool(true)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),

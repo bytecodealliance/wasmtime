@@ -24,9 +24,9 @@ use core::{
 };
 use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
-    Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone as _, Vec},
+    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes,
+    PanicOnOom as _, TypeTrace, Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -273,15 +273,21 @@ impl Debug for RegisteredType {
 
 impl Clone for RegisteredType {
     fn clone(&self) -> Self {
+        self.try_clone().panic_on_oom()
+    }
+}
+
+impl TryClone for RegisteredType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
         self.engine.signatures().debug_assert_contains(self.index);
-        self.entry.incref("RegisteredType::clone");
-        RegisteredType {
+        self.entry.incref("RegisteredType::try_clone");
+        Ok(RegisteredType {
             engine: self.engine.clone(),
             entry: self.entry.clone(),
             ty: self.ty.clone(),
             index: self.index,
             layout: self.layout.clone(),
-        }
+        })
     }
 }
 
@@ -456,6 +462,12 @@ impl RegisteredType {
 /// implement `Borrow<U>` when `T: Borrow<U>`).
 #[derive(Clone)]
 struct RecGroupEntry(Arc<RecGroupEntryInner>);
+
+impl TryClone for RecGroupEntry {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
+}
 
 impl Debug for RecGroupEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1107,10 +1119,10 @@ impl TypeRegistryInner {
                     gc_runtime.layouts().array_layout(a).into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Struct(s) => {
-                    gc_runtime.layouts().struct_layout(s).into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().struct_layout(s))?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Exn(e) => {
-                    gc_runtime.layouts().exn_layout(e).into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().exn_layout(e))?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Cont(_) => continue, // FIXME: #10248 stack switching support.
             };

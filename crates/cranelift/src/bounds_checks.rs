@@ -23,6 +23,7 @@ use crate::{
     Reachability,
     func_environ::FuncEnvironment,
     translate::{HeapData, TargetEnvironment},
+    trap::TranslateTrap,
 };
 use Reachability::*;
 use cranelift_codegen::{

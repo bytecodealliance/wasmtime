@@ -1780,13 +1780,23 @@ impl<I: VCodeInst> VRegAllocator<I> {
         }
         let v = self.vreg_types.len();
         let (regclasses, tys) = I::rc_for_type(ty)?;
-        if v + regclasses.len() >= VReg::MAX {
+
+        // Check that new indices are in-bounds for regalloc2's
+        // VReg/Operand representation.
+        if v + regclasses.len() > VReg::MAX {
             return Err(CodegenError::CodeTooLarge);
         }
 
+        // Check that new indices are in-bounds for our Reg
+        // bit-packing on top of the RA2 types, which represents
+        // spillslots as well.
+        let check = |vreg: regalloc2::VReg| -> CodegenResult<Reg> {
+            Reg::from_virtual_reg_checked(vreg).ok_or(CodegenError::CodeTooLarge)
+        };
+
         let regs: ValueRegs<Reg> = match regclasses {
-            &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
-            &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
+            &[rc0] => ValueRegs::one(check(VReg::new(v, rc0))?),
+            &[rc0, rc1] => ValueRegs::two(check(VReg::new(v, rc0))?, check(VReg::new(v + 1, rc1))?),
             // We can extend this if/when we support 32-bit targets; e.g.,
             // an i128 on a 32-bit machine will need up to four machine regs
             // for a `Value`.

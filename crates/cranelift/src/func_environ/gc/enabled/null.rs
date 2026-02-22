@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::func_environ::FuncEnvironment;
+use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;

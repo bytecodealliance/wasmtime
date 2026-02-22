@@ -26,7 +26,7 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
     let tag_id = module.tags.push(Tag {
         signature: EngineOrModuleTypeIndex::Engine(func_ty.index()),
         exception: EngineOrModuleTypeIndex::Engine(exn_ty.index()),
-    });
+    })?;
 
     let name = module.strings.insert("")?;
     module.exports.insert(name, EntityIndex::Tag(tag_id))?;

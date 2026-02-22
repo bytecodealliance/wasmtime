@@ -1,12 +1,13 @@
 mod gc;
 pub(crate) mod stack_switching;
 
+use crate::BuiltinFunctionSignatures;
 use crate::compiler::Compiler;
 use crate::translate::{
     FuncTranslationStacks, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
     TargetEnvironment,
 };
-use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
+use crate::trap::TranslateTrap;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
@@ -29,9 +30,9 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
     IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert,
-    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
-    WasmRefType, WasmResult, WasmValType,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables, TypeConvert, TypeIndex,
+    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
+    WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -51,7 +52,7 @@ pub(crate) struct BuiltinFunctions {
 }
 
 impl BuiltinFunctions {
-    fn new(compiler: &Compiler) -> Self {
+    pub(crate) fn new(compiler: &Compiler) -> Self {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::len() as usize],
@@ -59,7 +60,11 @@ impl BuiltinFunctions {
         }
     }
 
-    fn load_builtin(&mut self, func: &mut Function, builtin: BuiltinFunctionIndex) -> ir::FuncRef {
+    pub(crate) fn load_builtin(
+        &mut self,
+        func: &mut Function,
+        builtin: BuiltinFunctionIndex,
+    ) -> ir::FuncRef {
         let cache = &mut self.builtins[builtin.index() as usize];
         if let Some(f) = cache {
             return *f;
@@ -312,12 +317,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    pub(crate) fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(&mut pos.func);
-        pos.ins().global_value(pointer_type, vmctx)
-    }
-
     fn get_table_copy_func(
         &mut self,
         func: &mut Function,
@@ -420,23 +419,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += match op {
-            // Nop and drop generate no code, so don't consume fuel for them.
-            Operator::Nop | Operator::Drop => 0,
-
-            // Control flow may create branches, but is generally cheap and
-            // free, so don't consume fuel. Note the lack of `if` since some
-            // cost is incurred with the conditional check.
-            Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Return
-            | Operator::Else
-            | Operator::End => 0,
-
-            // everything else, just call it one operation.
-            _ => 1,
-        };
+        self.fuel_consumed += self.tunables.operator_cost.cost(op);
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
@@ -1050,34 +1033,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.global_load_with_memory_type(func, vmctx, offset, flags, self.pcc_vmctx_memtype)
     }
 
-    /// Helper to emit a conditional trap based on `trap_cond`.
-    ///
-    /// This should only be used if `self.clif_instruction_traps_enabled()` is
-    /// false, otherwise native CLIF instructions should be used instead.
-    pub fn conditionally_trap(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        trap_cond: ir::Value,
-        trap: ir::TrapCode,
-    ) {
-        assert!(!self.clif_instruction_traps_enabled());
-
-        let trap_block = builder.create_block();
-        builder.set_cold_block(trap_block);
-        let continuation_block = builder.create_block();
-
-        builder
-            .ins()
-            .brif(trap_cond, trap_block, &[], continuation_block, &[]);
-
-        builder.seal_block(trap_block);
-        builder.seal_block(continuation_block);
-
-        builder.switch_to_block(trap_block);
-        self.trap(builder, trap);
-        builder.switch_to_block(continuation_block);
-    }
-
     /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
     /// test whether the divisor is zero.
     fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
@@ -1408,6 +1363,26 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // as a pointer.
             builder.ins().stack_store(vmctx, slot, 0);
         }
+    }
+}
+
+impl TranslateTrap for FuncEnvironment<'_> {
+    fn compiler(&self) -> &Compiler {
+        &self.compiler
+    }
+
+    fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
+        let pointer_type = self.pointer_type();
+        let vmctx = self.vmctx(&mut pos.func);
+        pos.ins().global_value(pointer_type, vmctx)
+    }
+
+    fn builtin_funcref(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        index: BuiltinFunctionIndex,
+    ) -> ir::FuncRef {
+        self.builtin_functions.load_builtin(builder.func, index)
     }
 }
 
@@ -4447,70 +4422,6 @@ impl FuncEnvironment<'_> {
         &*self.isa
     }
 
-    pub fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
-        match (
-            self.clif_instruction_traps_enabled(),
-            crate::clif_trap_to_env_trap(trap),
-        ) {
-            // If libcall traps are disabled or there's no wasmtime-defined trap
-            // code for this, then emit a native trap instruction.
-            (true, _) | (_, None) => {
-                builder.ins().trap(trap);
-            }
-            // ... otherwise with libcall traps explicitly enabled and a
-            // wasmtime-based trap code invoke the libcall to raise a trap and
-            // pass in our trap code. Leave a debug `unreachable` in place
-            // afterwards as a defense-in-depth measure.
-            (false, Some(trap)) => {
-                let libcall = self.builtin_functions.trap(&mut builder.func);
-                let vmctx = self.vmctx_val(&mut builder.cursor());
-                let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
-                builder.ins().call(libcall, &[vmctx, trap_code]);
-                let raise = self.builtin_functions.raise(&mut builder.func);
-                builder.ins().call(raise, &[vmctx]);
-                builder.ins().trap(TRAP_INTERNAL_ASSERT);
-            }
-        }
-    }
-
-    pub fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.clif_instruction_traps_enabled() {
-            builder.ins().trapz(value, trap);
-        } else {
-            let ty = builder.func.dfg.value_type(value);
-            let zero = builder.ins().iconst(ty, 0);
-            let cmp = builder.ins().icmp(IntCC::Equal, value, zero);
-            self.conditionally_trap(builder, cmp, trap);
-        }
-    }
-
-    pub fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.clif_instruction_traps_enabled() {
-            builder.ins().trapnz(value, trap);
-        } else {
-            let ty = builder.func.dfg.value_type(value);
-            let zero = builder.ins().iconst(ty, 0);
-            let cmp = builder.ins().icmp(IntCC::NotEqual, value, zero);
-            self.conditionally_trap(builder, cmp, trap);
-        }
-    }
-
-    pub fn uadd_overflow_trap(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        lhs: ir::Value,
-        rhs: ir::Value,
-        trap: ir::TrapCode,
-    ) -> ir::Value {
-        if self.clif_instruction_traps_enabled() {
-            builder.ins().uadd_overflow_trap(lhs, rhs, trap)
-        } else {
-            let (ret, overflow) = builder.ins().uadd_overflow(lhs, rhs);
-            self.conditionally_trap(builder, overflow, trap);
-            ret
-        }
-    }
-
     pub fn translate_sdiv(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -4588,19 +4499,6 @@ impl FuncEnvironment<'_> {
         self.tunables.signals_based_traps && !self.is_pulley()
     }
 
-    /// Returns whether it's acceptable to have CLIF instructions natively trap,
-    /// such as division-by-zero.
-    ///
-    /// This is enabled if `signals_based_traps` is `true` or on
-    /// Pulley unconditionally since Pulley doesn't use hardware-based
-    /// traps in its runtime. However, if guest debugging is enabled,
-    /// then we cannot rely on Pulley traps and still need a libcall
-    /// to gain proper ownership of the store in the runtime's
-    /// debugger hooks.
-    pub fn clif_instruction_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps || (self.is_pulley() && !self.tunables.debug_guest)
-    }
-
     /// Returns whether loads from the null address are allowed as signals of
     /// whether to trap or not.
     pub fn load_from_zero_allowed(&self) -> bool {
@@ -4608,11 +4506,6 @@ impl FuncEnvironment<'_> {
         // traps + spectre mitigations.
         self.is_pulley()
             || (self.clif_memory_traps_enabled() && self.heap_access_spectre_mitigation())
-    }
-
-    /// Returns whether translation is happening for Pulley bytecode.
-    pub fn is_pulley(&self) -> bool {
-        self.isa.triple().is_pulley()
     }
 
     /// Returns whether the current location is reachable.

@@ -6,6 +6,7 @@
 //! walker.
 
 use std::mem;
+use std::num::NonZeroUsize;
 
 use arbitrary::{Arbitrary, Result, Unstructured};
 use wasm_encoder::{Instruction, ValType};
@@ -20,6 +21,9 @@ const MAX_PARAMS: usize = 10;
 pub struct Stacks {
     funcs: Vec<Function>,
     inputs: Vec<u8>,
+    /// The maximum number of backtrace frames to collect, or `None` to disable
+    /// backtrace collection.
+    pub limit: Option<NonZeroUsize>,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +46,12 @@ impl<'a> Arbitrary<'a> for Stacks {
         let funcs = Self::arbitrary_funcs(u)?;
         let n = u.len().min(200);
         let inputs = u.bytes(n)?.to_vec();
-        Ok(Stacks { funcs, inputs })
+        let limit = NonZeroUsize::new(u.int_in_range(0..=256)?);
+        Ok(Stacks {
+            funcs,
+            inputs,
+            limit,
+        })
     }
 }
 

@@ -157,16 +157,18 @@ mod tests {
     };
 
     // Valid tunables that can be used to create a `MallocMemory`.
-    const TUNABLES: Tunables = Tunables {
-        memory_reservation: 0,
-        memory_guard_size: 0,
-        memory_init_cow: false,
-        ..Tunables::default_miri()
-    };
+    fn tunables() -> Tunables {
+        Tunables {
+            memory_reservation: 0,
+            memory_guard_size: 0,
+            memory_init_cow: false,
+            ..Tunables::default_miri()
+        }
+    }
 
     #[test]
     fn simple() {
-        let mut memory = MallocMemory::new(&TY, &TUNABLES, 10).unwrap();
+        let mut memory = MallocMemory::new(&TY, &tunables(), 10).unwrap();
         assert_eq!(memory.storage.len(), 1);
         assert_valid(&memory);
 
@@ -191,7 +193,7 @@ mod tests {
     fn reservation_not_initialized() {
         let tunables = Tunables {
             memory_reservation_for_growth: 1 << 20,
-            ..TUNABLES
+            ..tunables()
         };
         let mut memory = MallocMemory::new(&TY, &tunables, 10).unwrap();
         assert_eq!(memory.storage.len(), 1);

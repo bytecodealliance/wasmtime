@@ -33,7 +33,7 @@ pub async fn create_memory(
     // Create a memory, though it will never be used for constructing a memory
     // with an allocator: instead the memories are either preallocated (i.e.,
     // shared memory) or allocated manually below.
-    let memory_id = module.memories.push(*memory_ty.wasmtime_memory());
+    let memory_id = module.memories.push(*memory_ty.wasmtime_memory())?;
 
     // Since we have only associated a single memory with the "frankenstein"
     // instance, it will be exported at index 0.
