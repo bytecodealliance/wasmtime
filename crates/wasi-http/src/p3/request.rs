@@ -465,8 +465,15 @@ pub async fn default_send_request(
             match res {
                 // `hyper` connection has successfully completed, optimistically poll for response
                 Ok(()) => send.as_mut().poll(cx),
-                // `hyper` connection has failed, return the error
-                Err(err) => Poll::Ready(Err(ErrorCode::from_hyper_request_error(err))),
+                // `hyper` connection has failed. However, the error may have happened after the
+                // response was fully received. That can happen when a server sends a body for a
+                // 204 or 304 response, in violation of the HTTP spec.
+                // In that case, do what browsers do* and ignore the connection error.
+                // *: https://github.com/web-platform-tests/wpt/blob/master/fetch/api/basic/response-null-body.any.js
+                Err(err) => match send.as_mut().poll(cx) {
+                    Poll::Ready(Ok(res)) => Poll::Ready(Ok(res)),
+                    _ => Poll::Ready(Err(ErrorCode::from_hyper_request_error(err))),
+                },
             }
         }
     })
