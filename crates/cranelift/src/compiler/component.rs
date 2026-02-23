@@ -1551,7 +1551,7 @@ impl<'a> TrampolineCompiler<'a> {
         (
             TrapTranslator {
                 compiler: self.compiler,
-                vmctx: self.builder.func.dfg.block_params(self.block0)[0],
+                vmctx: self.caller_vmctx(),
                 builtins: &mut self.builtins,
             },
             &mut self.builder,

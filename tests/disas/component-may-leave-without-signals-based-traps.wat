@@ -45,11 +45,11 @@
 ;;  129: movq    %rbx, %rsi
 ;;  12c: movq    0x10(%rsi), %rax
 ;;  130: movq    0x198(%rax), %rax
-;;  137: movq    %rsi, %rdi
+;;  137: movq    %rbx, %rdi
 ;;  13a: callq   *%rax
 ;;  13c: ud2
-;;  13e: movq    %rdi, %rbx
-;;  141: movl    $0x17, %esi
+;;  13e: movl    $0x17, %esi
+;;  143: movq    %rbx, %rdi
 ;;  146: callq   0x6a
 ;;  14b: movq    %rbx, %rdi
 ;;  14e: callq   0x9b
