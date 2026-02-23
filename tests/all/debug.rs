@@ -1118,6 +1118,7 @@ async fn invalidated_frame_handles_in_dropped_future() -> wasmtime::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn module_bytecode() -> wasmtime::Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -1143,6 +1144,7 @@ fn module_bytecode() -> wasmtime::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn module_bytecode_absent_without_debug() -> wasmtime::Result<()> {
     let wasm = wat::parse_str("(module)").unwrap();
 
@@ -1157,6 +1159,7 @@ fn module_bytecode_absent_without_debug() -> wasmtime::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn component_bytecode() -> wasmtime::Result<()> {
     use wasmtime::component::{Component, Linker};
 
