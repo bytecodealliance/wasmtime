@@ -688,6 +688,18 @@ impl Module {
         Some(&module.strings[name])
     }
 
+    /// Returns the original Wasm bytecode for this module, if it is
+    /// available.
+    ///
+    /// Bytecode is only retained when the [`Engine`] was configured with
+    /// `guest-debug` support enabled (see [`Config::guest_debug`]). Returns
+    /// `None` when the module was compiled without that option.
+    ///
+    /// [`Config::guest_debug`]: crate::Config::guest_debug
+    pub fn bytecode(&self) -> Option<&[u8]> {
+        self.compiled_module().bytecode()
+    }
+
     /// Returns the list of imports that this [`Module`] has and must be
     /// satisfied.
     ///

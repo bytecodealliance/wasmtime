@@ -245,6 +245,32 @@ impl<'a> ObjectBuilder<'a> {
         dwarf.push((T::id() as u8, offset..offset + data.len() as u64));
     }
 
+    /// Appends the original Wasm bytecode for one or more core modules as a
+    /// pair of new ELF sections.
+    ///
+    /// `modules` is an iterator of raw Wasm binary slices, one per core
+    /// module, in `StaticModuleIndex` order.
+    pub fn append_wasm_bytecode<'b>(&mut self, modules: impl IntoIterator<Item = &'b [u8]>) {
+        let bytecode_id = self.obj.add_section(
+            self.obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASMTIME_WASM_BYTECODE.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let ends_id = self.obj.add_section(
+            self.obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASMTIME_WASM_BYTECODE_ENDS.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let mut end: u32 = 0;
+        for wasm in modules {
+            self.obj.append_section_data(bytecode_id, wasm, 1);
+            end = end
+                .checked_add(u32::try_from(wasm.len()).expect("module bytecode exceeds 4 GiB"))
+                .expect("total bytecode exceeds 4 GiB");
+            self.obj.append_section_data(ends_id, &end.to_le_bytes(), 1);
+        }
+    }
+
     /// Creates the `ELF_WASMTIME_INFO` section from the given serializable data
     /// structure.
     pub fn serialize_info<T>(&mut self, info: &T)

@@ -10,6 +10,7 @@ use alloc::sync::Arc;
 use core::ops::{Add, Range, Sub};
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::ModuleTypes;
+use wasmtime_environ::StaticModuleIndex;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
 
@@ -225,6 +226,13 @@ impl EngineCode {
     #[inline]
     pub fn wasm_dwarf(&self) -> &[u8] {
         self.original_code.wasm_dwarf()
+    }
+
+    /// Returns the original Wasm bytecode section if preserved in the
+    /// compiled artifact.
+    #[inline]
+    pub fn wasm_bytecode_for_module(&self, module: StaticModuleIndex) -> Option<&[u8]> {
+        self.original_code.wasm_bytecode_for_module(module)
     }
 
     /// Returns the raw image as bytes (in our internal image format).

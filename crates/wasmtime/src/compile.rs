@@ -119,6 +119,10 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
         dwarf_package,
     )?;
 
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(std::iter::once(wasm));
+    }
+
     let (info, index) = compilation_artifacts.unwrap_as_module_info();
     let types = types.finish();
     object.serialize_info(&(&info, &index, &types));
@@ -181,6 +185,16 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         t.module.needs_gc_heap |= needs_gc_heap
     }
 
+    // Collect bytecode slices here before moving `module_translations` below.
+    let module_wasms = if tunables.debug_guest {
+        module_translations
+            .values()
+            .map(|t| t.wasm)
+            .collect::<Vec<_>>()
+    } else {
+        vec![]
+    };
+
     let mut object = compiler.object(ObjectKind::Component)?;
     engine.append_compiler_info(&mut object)?;
     engine.append_bti(&mut object);
@@ -192,6 +206,11 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         module_translations,
         None, // TODO: Support dwarf packages for components.
     )?;
+
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(module_wasms);
+    }
+
     let (types, ty) = types.finish(&component.component);
 
     let info = CompiledComponentInfo {

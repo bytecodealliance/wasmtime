@@ -12,6 +12,7 @@ use object::{
     endian::Endianness,
     read::elf::{FileHeader as _, SectionHeader as _},
 };
+use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::{Trap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
@@ -45,6 +46,8 @@ pub struct CodeMemory {
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
+    wasm_bytecode: Range<usize>,
+    wasm_bytecode_ends: Range<usize>,
 }
 
 impl Drop for CodeMemory {
@@ -153,6 +156,8 @@ impl CodeMemory {
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
+        let mut wasm_bytecode = 0..0;
+        let mut wasm_bytecode_ends = 0..0;
         for section_header in sections.iter() {
             let data = section_header
                 .data(endian, mmap_data)
@@ -212,6 +217,8 @@ impl CodeMemory {
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE => wasm_bytecode = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE_ENDS => wasm_bytecode_ends = range,
 
                 #[cfg(feature = "debug-builtins")]
                 ".debug_info" => has_native_debug_info = true,
@@ -269,6 +276,8 @@ impl CodeMemory {
             wasm_dwarf,
             info_data,
             wasm_data,
+            wasm_bytecode,
+            wasm_bytecode_ends,
         })
     }
 
@@ -332,6 +341,17 @@ impl CodeMemory {
         &self.mmap[self.frame_tables_data.clone()]
     }
 
+    /// Returns the concatenated Wasm bytecode section, or an empty slice if
+    /// the artifact was not compiled with `guest-debug` enabled.
+    pub fn wasm_bytecode(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode.clone()]
+    }
+
+    /// Returns the Wasm bytecode section end-offset array.
+    pub fn wasm_bytecode_ends(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode_ends.clone()]
+    }
+
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
     /// slice if it wasn't found.
     #[inline]
@@ -344,6 +364,36 @@ impl CodeMemory {
     #[inline]
     pub fn trap_data(&self) -> &[u8] {
         &self.mmap[self.trap_data.clone()]
+    }
+
+    /// Returns the Wasm bytecode section end-offset for a given core
+    /// module, or `None` if no bytecode is present.
+    ///
+    /// # Panics
+    ///
+    /// Panics if index is out-of-range.
+    pub fn wasm_bytecode_end_for_module(&self, index: StaticModuleIndex) -> Option<usize> {
+        if self.wasm_bytecode_ends().is_empty() {
+            return None;
+        }
+        let array_offset = usize::try_from(index.as_u32())
+            .unwrap()
+            .checked_mul(4)
+            .unwrap();
+        let value = &self.wasm_bytecode_ends()[array_offset..(array_offset + 4)];
+        Some(usize::try_from(u32::from_le_bytes([value[0], value[1], value[2], value[3]])).unwrap())
+    }
+
+    /// Returns the Wasm bytecode for the a core module in this
+    /// artifact, or `None` if bytecode was not preserved.
+    pub fn wasm_bytecode_for_module(&self, index: StaticModuleIndex) -> Option<&[u8]> {
+        let start = if index.as_u32() == 0 {
+            0
+        } else {
+            self.wasm_bytecode_end_for_module(StaticModuleIndex::from_u32(index.as_u32() - 1))?
+        };
+        let end = self.wasm_bytecode_end_for_module(index)?;
+        Some(&self.wasm_bytecode()[start..end])
     }
 
     /// Publishes the internal ELF image to be ready for execution.
