@@ -499,6 +499,40 @@ fn private_entity_access_shared_memory() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[test]
+fn all_instances_and_modules_in_store() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let m1 = Module::new(
+        &engine,
+        r#"
+        (module (func (param i32) (result i32) (local.get 0)))
+        "#,
+    )?;
+    let m2 = Module::new(
+        &engine,
+        r#"
+        (module (func (param i32) (result i32) (local.get 0)))
+        "#,
+    )?;
+    let i1 = Instance::new(&mut store, &m1, &[])?;
+    let i2 = Instance::new(&mut store, &m2, &[])?;
+
+    let instances = store.debug_all_instances();
+    let modules = store.debug_all_modules();
+    assert_eq!(instances.len(), 2);
+    assert_eq!(modules.len(), 2);
+    assert!(
+        (Module::same(&modules[0], &m1) && Module::same(&modules[1], &m2))
+            || (Module::same(&modules[1], &m1) && Module::same(&modules[0], &m2))
+    );
+    assert!(instances[0] == i1);
+    assert!(instances[1] == i2);
+    Ok(())
+}
+
 macro_rules! debug_event_checker {
     ($ty:tt,
      $store:tt,

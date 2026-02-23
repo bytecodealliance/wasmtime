@@ -47,6 +47,86 @@ impl<T> Store<T> {
     pub fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointEdit<'a>> {
         self.as_store_opaque().edit_breakpoints()
     }
+
+    /// Get a vector of all Instances held in the Store, for debug
+    /// purposes.
+    ///
+    /// Guest debugging must be enabled for this accessor to return
+    /// any instances. If it is not, an empty vector is returend.
+    pub fn debug_all_instances(&mut self) -> Vec<Instance> {
+        self.as_store_opaque().debug_all_instances()
+    }
+
+    /// Get a vector of all Modules held in the Store, for debug
+    /// purposes.
+    ///
+    /// Guest debugging must be enabled for this accessor to return
+    /// any modules. If it is not, an empty vector is returend.
+    pub fn debug_all_modules(&mut self) -> Vec<Module> {
+        self.as_store_opaque().debug_all_modules()
+    }
+}
+
+impl<'a, T> StoreContextMut<'a, T> {
+    /// Provide a frame handle for all activations, in order from
+    /// innermost (most recently called) to outermost on the stack.
+    ///
+    /// See [`Store::debug_exit_frames`] for more details.
+    pub fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
+        self.0.as_store_opaque().debug_exit_frames()
+    }
+
+    /// Start an edit session to update breakpoints.
+    pub fn edit_breakpoints(self) -> Option<BreakpointEdit<'a>> {
+        self.0.as_store_opaque().edit_breakpoints()
+    }
+
+    /// Get a vector of all Instances held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_instances`] for more details.
+    pub fn debug_all_instances(self) -> Vec<Instance> {
+        self.0.as_store_opaque().debug_all_instances()
+    }
+
+    /// Get a vector of all Modules held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_modules`] for more details.
+    pub fn debug_all_modules(self) -> Vec<Module> {
+        self.0.as_store_opaque().debug_all_modules()
+    }
+}
+
+impl<'a, T> Caller<'a, T> {
+    /// Provide a frame handle for all activations, in order from
+    /// innermost (most recently called) to outermost on the stack.
+    ///
+    /// See [`Store::debug_exit_frames`] for more details.
+    pub fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
+        self.store.0.as_store_opaque().debug_exit_frames()
+    }
+
+    /// Start an edit session to update breakpoints.
+    pub fn edit_breakpoints<'b>(&'b mut self) -> Option<BreakpointEdit<'b>> {
+        self.store.0.as_store_opaque().edit_breakpoints()
+    }
+
+    /// Get a vector of all Instances held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_instances`] for more details.
+    pub fn debug_all_instances(&mut self) -> Vec<Instance> {
+        self.store.0.as_store_opaque().debug_all_instances()
+    }
+
+    /// Get a vector of all Modules held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_modules`] for more details.
+    pub fn debug_all_modules(&mut self) -> Vec<Module> {
+        self.store.0.as_store_opaque().debug_all_modules()
+    }
 }
 
 impl StoreOpaque {
@@ -72,30 +152,21 @@ impl StoreOpaque {
         let (breakpoints, registry) = self.breakpoints_and_registry_mut();
         Some(breakpoints.edit(registry))
     }
-}
 
-impl<'a, T> StoreContextMut<'a, T> {
-    /// Provide a frame handle for all activations, in order from
-    /// innermost (most recently called) to outermost on the stack.
-    ///
-    /// See [`Store::debug_exit_frames`] for more details.
-    pub fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
-        self.0.as_store_opaque().debug_exit_frames()
+    fn debug_all_instances(&mut self) -> Vec<Instance> {
+        if !self.engine().tunables().debug_guest {
+            return vec![];
+        }
+
+        self.all_instances().collect()
     }
 
-    /// Start an edit session to update breakpoints.
-    pub fn edit_breakpoints(self) -> Option<BreakpointEdit<'a>> {
-        self.0.as_store_opaque().edit_breakpoints()
-    }
-}
+    fn debug_all_modules(&self) -> Vec<Module> {
+        if !self.engine().tunables().debug_guest {
+            return vec![];
+        }
 
-impl<'a, T> Caller<'a, T> {
-    /// Provide a frame handle for all activations, in order from
-    /// innermost (most recently called) to outermost on the stack.
-    ///
-    /// See [`Store::debug_exit_frames`] for more details.
-    pub fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
-        self.store.0.as_store_opaque().debug_exit_frames()
+        self.modules().all_modules().cloned().collect()
     }
 }
 
