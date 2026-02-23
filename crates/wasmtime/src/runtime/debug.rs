@@ -1017,6 +1017,11 @@ impl<'a> BreakpointEdit<'a> {
             "single_step({enabled}) with breakpoint set {:?}",
             self.state.breakpoints
         );
+        if self.state.single_step == enabled {
+            // No change to current state; don't go through the effort of re-patching and
+            // re-publishing code.
+            return Ok(());
+        }
         let modules = self.registry.all_modules().cloned().collect::<Vec<_>>();
         for module in modules {
             let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, &module)?;
