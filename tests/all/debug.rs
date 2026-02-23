@@ -500,6 +500,7 @@ fn private_entity_access_shared_memory() -> wasmtime::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn all_instances_and_modules_in_store() -> wasmtime::Result<()> {
     let mut config = Config::default();
     config.guest_debug(true);
