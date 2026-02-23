@@ -85,6 +85,7 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
             remote_address,
             family: socket.address_family(),
             socket_addr_check: socket.socket_addr_check().cloned(),
+            check_send_permit_count: 0,
         };
 
         Ok((
@@ -264,20 +265,22 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let stream = self.table.get_mut(&this)?;
 
-        Ok(
-            if let Poll::Ready(_) =
-                pin!(stream.inner.ready(Interest::WRITABLE.add(Interest::ERROR)))
-                    .poll(&mut Context::from_waker(Waker::noop()))
-            {
-                // We don't know how many Tokio will accept, so we make up a
-                // reasonable number here.  If we're wrong and `send` returns
-                // `Ok(0)`, the guest will just have to deal with that, e.g. by
-                // looping or returning `EWOULDBLOCK`.
-                16
-            } else {
-                0
-            },
-        )
+        let count = if let Poll::Ready(_) =
+            pin!(stream.inner.ready(Interest::WRITABLE.add(Interest::ERROR)))
+                .poll(&mut Context::from_waker(Waker::noop()))
+        {
+            // We don't know how many Tokio will accept, so we make up a
+            // reasonable number here.  If we're wrong and `send` returns
+            // `Ok(0)`, the guest will just have to deal with that, e.g. by
+            // looping or returning `EWOULDBLOCK`.
+            16
+        } else {
+            0
+        };
+
+        stream.check_send_permit_count = count;
+
+        Ok(count.try_into().unwrap())
     }
 
     async fn send(
@@ -330,6 +333,14 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
         if datagrams.is_empty() {
             return Ok(0);
         }
+
+        if datagrams.len() > stream.check_send_permit_count {
+            return Err(SocketError::trap(wasmtime::format_err!(
+                "unpermitted: argument exceeds permitted size"
+            )));
+        }
+
+        stream.check_send_permit_count -= datagrams.len();
 
         let mut count = 0;
 

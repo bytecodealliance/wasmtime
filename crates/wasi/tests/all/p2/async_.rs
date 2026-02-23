@@ -361,6 +361,16 @@ async fn p2_adapter_badfd() {
 async fn p2_file_read_write() {
     run(P2_FILE_READ_WRITE_COMPONENT, false).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_udp_send_too_much() {
+    let e = run(P2_UDP_SEND_TOO_MUCH_COMPONENT, false)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "unpermitted: argument exceeds permitted size"
+    )
+}
 #[expect(
     dead_code,
     reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
