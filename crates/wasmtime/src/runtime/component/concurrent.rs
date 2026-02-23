@@ -756,7 +756,9 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
         let result = future.await?;
         tls::get(move |store| {
             let state = store.concurrent_state_mut();
-            state.get_mut(task)?.result = Some(Box::new(result) as _);
+            let host_state = &mut state.get_mut(task)?.state;
+            assert!(matches!(host_state, HostTaskState::CalleeStarted));
+            *host_state = HostTaskState::CalleeFinished(Box::new(result));
 
             Waitable::Host(task).set_event(
                 state,
@@ -808,14 +810,11 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     }
 
     // Retrieve and return the result.
-    Ok(*store
-        .concurrent_state_mut()
-        .get_mut(task)?
-        .result
-        .take()
-        .unwrap()
-        .downcast()
-        .unwrap())
+    let host_state = &mut store.concurrent_state_mut().get_mut(task)?.state;
+    match mem::replace(host_state, HostTaskState::CalleeDone) {
+        HostTaskState::CalleeFinished(result) => Ok(*result.downcast().unwrap()),
+        _ => panic!("unexpected host task state after completion"),
+    }
 }
 
 /// Execute the specified guest call.
@@ -1550,7 +1549,7 @@ impl StoreOpaque {
     pub fn enter_host_call(&mut self) -> Result<()> {
         let state = self.concurrent_state_mut();
         let caller = state.unwrap_current_guest_thread();
-        let task = state.push(HostTask::new(caller))?;
+        let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task);
         Ok(())
@@ -2736,12 +2735,13 @@ impl Instance {
     ///
     /// Whether the future returns `Ready` immediately or later, the `lower`
     /// function will be used to lower the result, if any, into the guest caller's
-    /// stack and linear memory unless the task has been cancelled.
+    /// stack and linear memory. The `lower` function is invoked with `None` if
+    /// the future is cancelled.
     pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<'_, T>,
         future: impl Future<Output = Result<R>> + Send + 'static,
-        lower: impl FnOnce(StoreContextMut<T>, R) -> Result<()> + Send + 'static,
+        lower: impl FnOnce(StoreContextMut<T>, Option<R>) -> Result<()> + Send + 'static,
     ) -> Result<Option<u32>> {
         let token = StoreToken::new(store.as_context_mut());
         let state = store.0.concurrent_state_mut();
@@ -2751,9 +2751,9 @@ impl Instance {
         // context state for the future.
         let (join_handle, future) = JoinHandle::run(future);
         {
-            let task = state.get_mut(task)?;
-            assert!(task.join_handle.is_none());
-            task.join_handle = Some(join_handle);
+            let state = &mut state.get_mut(task)?.state;
+            assert!(matches!(state, HostTaskState::CalleeStarted));
+            *state = HostTaskState::CalleeRunning(join_handle);
         }
 
         let mut future = Box::pin(future);
@@ -2771,7 +2771,7 @@ impl Instance {
         match poll {
             // It finished immediately; lower the result and delete the task.
             Poll::Ready(Some(result)) => {
-                lower(store.as_context_mut(), result?)?;
+                lower(store.as_context_mut(), Some(result?))?;
                 return Ok(None);
             }
 
@@ -2792,9 +2792,8 @@ impl Instance {
         // the task returned.
         let future = Box::pin(async move {
             let result = match future.await {
-                Some(result) => result?,
-                // Task was cancelled; nothing left to do.
-                None => return Ok(()),
+                Some(result) => Some(result?),
+                None => None,
             };
             let on_complete = move |store: &mut dyn VMStore| {
                 // Restore the `current_thread` to be the host so `lower` knows
@@ -2805,15 +2804,16 @@ impl Instance {
                 assert!(state.current_thread.is_none());
                 store.0.set_thread(task);
 
+                let status = if result.is_some() {
+                    Status::Returned
+                } else {
+                    Status::ReturnCancelled
+                };
+
                 lower(store.as_context_mut(), result)?;
                 let state = store.0.concurrent_state_mut();
-                state.get_mut(task)?.join_handle.take();
-                Waitable::Host(task).set_event(
-                    state,
-                    Some(Event::Subtask {
-                        status: Status::Returned,
-                    }),
-                )?;
+                state.get_mut(task)?.state = HostTaskState::CalleeDone;
+                Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
 
                 // Go back to "no current thread" at the end.
                 store.0.set_thread(CurrentThread::None);
@@ -3059,8 +3059,12 @@ impl Instance {
         let (waitable, expected_caller, delete) = if is_host {
             let id = TableId::<HostTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
-            if task.join_handle.is_some() {
-                bail!("cannot drop a subtask which has not yet resolved");
+            match &task.state {
+                HostTaskState::CalleeRunning(_) => {
+                    bail!("cannot drop a subtask which has not yet resolved");
+                }
+                HostTaskState::CalleeDone => {}
+                HostTaskState::CalleeStarted | HostTaskState::CalleeFinished(_) => unreachable!(),
             }
             (Waitable::Host(id), task.caller, true)
         } else {
@@ -3537,11 +3541,30 @@ impl Instance {
 
         log::trace!("subtask_cancel {waitable:?} (handle {task_id})");
 
+        let needs_block;
         if let Waitable::Host(host_task) = waitable {
-            if let Some(handle) = concurrent_state.get_mut(host_task)?.join_handle.take() {
-                handle.abort();
-                return Ok(Status::ReturnCancelled as u32);
+            let state = &mut concurrent_state.get_mut(host_task)?.state;
+            match mem::replace(state, HostTaskState::CalleeDone) {
+                // If the callee is still running, signal an abort is requested.
+                // Then fall through to determine what to do next.
+                HostTaskState::CalleeRunning(handle) => handle.abort(),
+
+                // Cancellation was already requested, so fail as the task can't
+                // be cancelled twice.
+                HostTaskState::CalleeDone => {
+                    bail!("`subtask.cancel` called after terminal status delivered");
+                }
+
+                // These states should not be possible for a subtask that's
+                // visible from the guest, so panic here.
+                HostTaskState::CalleeStarted | HostTaskState::CalleeFinished(_) => unreachable!(),
             }
+
+            // Cancelling host tasks always needs to block on them to await the
+            // result of the completion set up in `first_poll`. This'll resolve
+            // the race of `handle.abort()` above to see if it actually
+            // cancelled something or if the future ended up finishing.
+            needs_block = true;
         } else {
             let caller = concurrent_state.unwrap_current_guest_thread();
             let guest_task = TableId::<GuestTask>::new(rep);
@@ -3622,16 +3645,31 @@ impl Instance {
                     }
                 }
 
-                let concurrent_state = store.concurrent_state_mut();
-                let task = concurrent_state.get_mut(guest_task)?;
-                if !task.returned_or_cancelled() {
-                    if async_ {
-                        return Ok(BLOCKED);
-                    } else {
-                        store.wait_for_event(Waitable::Guest(guest_task))?;
-                    }
-                }
+                // Guest tasks need to block if they have not yet returned or
+                // cancelled, even as a result of the event delivery above.
+                needs_block = !store
+                    .concurrent_state_mut()
+                    .get_mut(guest_task)?
+                    .returned_or_cancelled()
+            } else {
+                needs_block = false;
             }
+        };
+
+        // If we need to block waiting on the terminal status of this subtask
+        // then return immediately in `async` mode, or otherwise wait for the
+        // event to get signaled through the store.
+        if needs_block {
+            if async_ {
+                return Ok(BLOCKED);
+            }
+
+            // Wait for this waitable to get signaled with its terminal status
+            // from the completion callback enqueued by `first_poll`. Once
+            // that's done fall through to the sahred
+            store.wait_for_event(waitable)?;
+
+            // .. fall through to determine what event's in store for us.
         }
 
         let event = waitable.take_event(store.concurrent_state_mut())?;
@@ -4147,24 +4185,39 @@ struct HostTask {
     /// borrows to the host, for example.
     call_context: CallContext,
 
-    /// For host tasks which end up doing some asynchronous work (e.g.
-    /// async-lowered and didn't complete on the first poll) this handle is used
-    /// as a signal to cancel the future as it resides in the store's
-    /// `FuturesUnordered`.
-    join_handle: Option<JoinHandle>,
+    state: HostTaskState,
+}
 
-    /// Box<Any> of the result of this host task.
-    result: Option<LiftedResult>,
+enum HostTaskState {
+    /// A host task has been created and it's considered "started".
+    ///
+    /// The host task has yet to enter `first_poll` or `poll_and_block` which
+    /// is where this will get updated further.
+    CalleeStarted,
+
+    /// State used for tasks in `first_poll` meaning that the guest did an async
+    /// lower of a host async function which is blocked. The specified handle is
+    /// linked to the future in the main `FuturesUnordered` of a store which is
+    /// used to cancel it if the guest requests cancellation.
+    CalleeRunning(JoinHandle),
+
+    /// Terminal state used for tasks in `poll_and_block` to store the result of
+    /// their computation. Note that this state is not used for tasks in
+    /// `first_poll`.
+    CalleeFinished(LiftedResult),
+
+    /// Terminal state for host tasks meaning that the task was cancelled or the
+    /// result was taken.
+    CalleeDone,
 }
 
 impl HostTask {
-    fn new(caller: QualifiedThreadId) -> Self {
+    fn new(caller: QualifiedThreadId, state: HostTaskState) -> Self {
         Self {
             common: WaitableCommon::default(),
             call_context: CallContext::default(),
             caller,
-            join_handle: None,
-            result: None,
+            state,
         }
     }
 }

@@ -197,5 +197,26 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Ok(())
         },
     )?;
+    i.func_wrap_concurrent("never-return", |_, _: ()| {
+        Box::pin(async move { std::future::pending::<Result<()>>().await })
+    })?;
+    i.func_wrap_concurrent("return-two-slowly", |_, _: ()| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok((2,))
+        })
+    })?;
+    i.func_wrap_concurrent("echo-slowly", |_, (a,): (u32,)| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok((a,))
+        })
+    })?;
+    i.func_wrap_concurrent(
+        "[method]resource1.never-return",
+        |_, (_,): (Resource<Resource1>,)| {
+            Box::pin(async move { std::future::pending::<Result<()>>().await })
+        },
+    )?;
     Ok(())
 }

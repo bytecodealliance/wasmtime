@@ -447,7 +447,7 @@ where
                 ptr,
             )?)
         };
-        Self::lower_result_and_exit_call(&mut lower, ty, ret, dst)
+        Self::lower_result_and_exit_call(&mut lower, ty, Some(ret), dst)
     }
 
     /// Implementation of the "async" ABI of the component model.
@@ -499,7 +499,7 @@ where
                 Self::lower_result_and_exit_call(
                     &mut LowerContext::new(store, options, instance),
                     ty,
-                    result?,
+                    Some(result?),
                     Destination::Memory(retptr),
                 )?;
                 None
@@ -568,17 +568,19 @@ where
     fn lower_result_and_exit_call(
         lower: &mut LowerContext<'_, T>,
         ty: TypeFuncIndex,
-        ret: R,
+        ret: Option<R>,
         dst: Destination<'_>,
     ) -> Result<()> {
-        let caller_instance = lower.options().instance;
-        let mut flags = lower.instance_mut().instance_flags(caller_instance);
-        unsafe {
-            flags.set_may_leave(false);
-        }
-        Self::lower_result(lower, ty, ret, dst)?;
-        unsafe {
-            flags.set_may_leave(true);
+        if let Some(ret) = ret {
+            let caller_instance = lower.options().instance;
+            let mut flags = lower.instance_mut().instance_flags(caller_instance);
+            unsafe {
+                flags.set_may_leave(false);
+            }
+            Self::lower_result(lower, ty, ret, dst)?;
+            unsafe {
+                flags.set_may_leave(true);
+            }
         }
         lower.validate_scope_exit()?;
         Ok(())
