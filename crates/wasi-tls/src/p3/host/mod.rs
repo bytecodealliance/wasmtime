@@ -132,7 +132,6 @@ where
             conn,
             ciphertext_consumer,
             ciphertext_producer,
-            plaintext_consumer,
             plaintext_producer,
             ..
         } = stream.as_deref_mut().unwrap();
@@ -157,15 +156,12 @@ where
             Err(err) => {
                 _ = error_tx.take().unwrap().send(format!("{err}"));
                 ciphertext_producer.take().map(Waker::wake);
-                plaintext_consumer.take().map(Waker::wake);
-                plaintext_producer.take().map(Waker::wake);
                 return Poll::Ready(Ok(StreamResult::Dropped));
             }
         };
         if state.plaintext_bytes_to_read() > 0 {
             plaintext_producer.take().map(Waker::wake);
         }
-
         if state.tls_bytes_to_write() > 0 {
             ciphertext_producer.take().map(Waker::wake);
         }
