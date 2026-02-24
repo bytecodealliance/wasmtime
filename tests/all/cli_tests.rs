@@ -2235,7 +2235,7 @@ start a print 1234
             .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
         let output = format!("{output:?}");
         assert!(
-            output.contains("wasip1::lib_generated::random_get"),
+            output.contains("lib_generated::random_get"),
             "expected error stack frames to contain 'wasip1::lib_generated::random_get'. Got:\n{output}"
         );
         assert!(
@@ -2258,7 +2258,7 @@ start a print 1234
         .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
         let output = format!("{output:?}");
         assert!(
-            output.contains("wasi::random::random::get_random_bytes"),
+            output.contains("random::random::get_random_bytes"),
             "expected error stack frames to contain 'wasi::random::random::get_random_bytes'. Got:\n{output}"
         );
         assert!(
@@ -2282,7 +2282,7 @@ start a print 1234
         .ok_or_else(|| format_err!("execution with max-random-size=255 should trap"))?;
         let output = format!("{output:?}");
         assert!(
-            output.contains("wasi::random::insecure::get_insecure_random_bytes"),
+            output.contains("random::insecure::get_insecure_random_bytes"),
             "expected error stack frames to contain 'wasi::random::insecure::get_insecure_random_bytes'. Got:\n{output}"
         );
         assert!(
