@@ -1,3 +1,29 @@
+## 24.0.6
+
+Released 2026-02-24.
+
+### Changed
+
+* Wasmtime's implementation of WASI now has the ability to limit resource
+  consumption on behalf of the guest, such as host-allocated memory. This means
+  that some behaviors previously allowed by Wasmtime can now disallowed, such as
+  transferring excessive data from the guest to the host. Additionally calls to
+  `wasi:random/random.get-random-bytes`, for example, can have limits in place
+  to avoid allocating too much memory on the host. To preserve
+  backwards-compatible behavior these limits are NOT set by default. Embedders
+  must opt-in to configuring these knobs as appropriate for their embeddings.
+  For more information on this see the related security advisory with further
+  details on knobs added and what behaviors can be restricted.
+  [GHSA-852m-cvvp-9p4w](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-852m-cvvp-9p4w)
+
+### Fixed
+
+* Panics when adding too many headers to a `wasi:http/types.fields` has been
+  resolved
+  [GHSA-243v-98vx-264h](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-243v-98vx-264h)
+
+--------------------------------------------------------------------------------
+
 ## 24.0.5
 
 Released 2025-11-11.

@@ -344,10 +344,12 @@ where
         }
 
         let mut datagrams = vec![];
+        let mut sum = 0;
 
-        while datagrams.len() < max_results {
+        while datagrams.len() < max_results && sum < crate::MAX_READ_SIZE_ALLOC {
             match recv_one(stream) {
                 Ok(Some(datagram)) => {
+                    sum += 1 + datagram.data.len();
                     datagrams.push(datagram);
                 }
                 Ok(None) => {

@@ -140,6 +140,12 @@ pub trait HostOutputStream: Subscribe {
     /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
+        let n = self.check_write()?;
+        if nelem > n {
+            return Err(StreamError::trap(
+                "cannot write more zeroes than `check_write` allows",
+            ));
+        };
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));

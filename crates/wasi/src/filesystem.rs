@@ -252,7 +252,7 @@ impl FileInputStream {
         let (r, mut buf) = self
             .file
             .spawn_blocking(move |f| {
-                let mut buf = BytesMut::zeroed(size);
+                let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
                 let r = f.read_at(&mut buf, p);
                 (r, buf)
             })

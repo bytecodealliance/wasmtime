@@ -26,6 +26,7 @@ pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
 #[derive(Debug)]
 pub struct HostIncomingBody {
     body: IncomingBodyState,
+    field_size_limit: usize,
     /// An optional worker task to keep alive while this body is being read.
     /// This ensures that if the parent of this body is dropped before the body
     /// then the backing data behind this worker is kept alive.
@@ -34,10 +35,15 @@ pub struct HostIncomingBody {
 
 impl HostIncomingBody {
     /// Create a new `HostIncomingBody` with the given `body` and a per-frame timeout
-    pub fn new(body: HyperIncomingBody, between_bytes_timeout: Duration) -> HostIncomingBody {
+    pub fn new(
+        body: HyperIncomingBody,
+        between_bytes_timeout: Duration,
+        field_size_limit: usize,
+    ) -> HostIncomingBody {
         let body = BodyWithTimeout::new(body, between_bytes_timeout);
         HostIncomingBody {
             body: IncomingBodyState::Start(body),
+            field_size_limit,
             worker: None,
         }
     }
@@ -157,7 +163,7 @@ enum StreamEnd {
 
     /// Body was completely read and trailers were read. Here are the trailers.
     /// Note that `None` means that the body finished without trailers.
-    Trailers(Option<FieldMap>),
+    Trailers(Option<http::HeaderMap>),
 }
 
 /// The concrete type behind the `wasi:io/streams/input-stream` resource returned
@@ -341,8 +347,13 @@ impl Subscribe for HostFutureTrailers {
             match rx.await {
                 // Trailers were read for us and here they are, so store the
                 // result.
-                Ok(StreamEnd::Trailers(t)) => *self = Self::Done(Ok(t)),
-
+                Ok(StreamEnd::Trailers(Some(t))) => {
+                    *self = Self::Done(Ok(Some(FieldMap::new(t, body.field_size_limit))));
+                }
+                // This means there were no trailers present.
+                Ok(StreamEnd::Trailers(None)) => {
+                    *self = HostFutureTrailers::Done(Ok(None));
+                }
                 // The body wasn't fully read and was dropped before trailers
                 // were reached. It's up to us now to complete the body.
                 Ok(StreamEnd::Remaining(b)) => body.body = IncomingBodyState::Start(b),
@@ -375,8 +386,8 @@ impl Subscribe for HostFutureTrailers {
                 Some(Ok(frame)) => {
                     // If this frame is a data frame ignore it as we're only
                     // interested in trailers.
-                    if let Ok(headers) = frame.into_trailers() {
-                        break Ok(Some(headers));
+                    if let Ok(header_map) = frame.into_trailers() {
+                        break Ok(Some(FieldMap::new(header_map, body.field_size_limit)));
                     }
                 }
             }
@@ -520,7 +531,7 @@ impl HostOutgoingBody {
         }
 
         let message = if let Some(ts) = trailers {
-            FinishMessage::Trailers(ts)
+            FinishMessage::Trailers(ts.into_inner())
         } else {
             FinishMessage::Finished
         };

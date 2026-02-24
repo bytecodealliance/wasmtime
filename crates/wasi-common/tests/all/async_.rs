@@ -293,3 +293,7 @@ async fn preview1_file_write() {
 async fn preview1_path_open_lots() {
     run(PREVIEW1_PATH_OPEN_LOTS, true).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_sleep_quickly_but_lots() {
+    run(PREVIEW1_SLEEP_QUICKLY_BUT_LOTS, true).await.unwrap()
+}

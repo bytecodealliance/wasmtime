@@ -309,11 +309,6 @@ criteria = "safe-to-deploy"
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.http]]
-version = "0.2.9"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
 [[exemptions.httparse]]
 version = "1.8.0"
 criteria = "safe-to-deploy"

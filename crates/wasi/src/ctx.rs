@@ -53,8 +53,13 @@ pub struct WasiCtxBuilder {
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
     allow_blocking_current_thread: bool,
+    max_random_size: u64,
     built: bool,
 }
+
+/// Default largest length accepted by wasi 0.2 `get-random-bytes` and
+/// `get-insecure-random-bytes` methods.
+const DEFAULT_MAX_RANDOM_SIZE: u64 = 2 << 30;
 
 impl WasiCtxBuilder {
     /// Creates a builder for a new context with default parameters set.
@@ -102,6 +107,7 @@ impl WasiCtxBuilder {
             monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
             allow_blocking_current_thread: false,
+            max_random_size: DEFAULT_MAX_RANDOM_SIZE,
             built: false,
         }
     }
@@ -385,6 +391,20 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Configures the maximum len accepted by
+    /// `wasi:random/random.get-random-bytes` and
+    /// `wasi:random/insecure.get-insecure-random-bytes`. Calls with a len
+    /// larger than this limit will trap.
+    ///
+    /// This limit protects the host implementation from memory exhaustion from
+    /// untrusted guest input. A limit of `u64::MAX` is equivalent to no limit,
+    /// but note that this enables a guest to also force the host to attempt an
+    /// allocation of that size.
+    pub fn max_random_size(&mut self, max_size: u64) -> &mut Self {
+        self.max_random_size = max_size;
+        self
+    }
+
     /// Configures `wasi:clocks/wall-clock` to use the `clock` specified.
     ///
     /// By default the host's wall clock is used.
@@ -481,6 +501,7 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
             allow_blocking_current_thread,
+            max_random_size,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -500,6 +521,7 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
             allow_blocking_current_thread,
+            max_random_size,
         }
     }
 
@@ -654,6 +676,7 @@ pub struct WasiCtx {
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
     pub(crate) allow_blocking_current_thread: bool,
+    pub(crate) max_random_size: u64,
 }
 
 impl WasiCtx {
