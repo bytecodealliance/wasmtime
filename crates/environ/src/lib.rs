@@ -82,11 +82,9 @@ pub mod fact;
 pub use cranelift_entity::*;
 
 // Reexport the error module for convenience.
+pub use self::error::ToWasmtimeResult;
 #[doc(inline)]
 pub use wasmtime_core::error;
-
-#[cfg(feature = "anyhow")]
-pub use self::error::ToWasmtimeResult;
 
 pub use wasmtime_core::{alloc::PanicOnOom, undo::Undo};
 
