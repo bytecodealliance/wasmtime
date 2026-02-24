@@ -671,7 +671,7 @@ impl WasmtimeConfig {
                 // config features are enabled based on the compiler strategy, and we
                 // don't want to make the same fuzz input DNA generate different test
                 // cases on different targets.
-                if cfg!(not(target_arch = "x86_64")) {
+                if cfg!(not(any(target_arch = "x86_64", target_arch = "aarch64"))) {
                     log::warn!(
                         "want to compile with Winch but host architecture does not support it"
                     );
@@ -698,6 +698,14 @@ impl WasmtimeConfig {
                         .is_some_and(|value| value == "false")
                 {
                     config.config.simd_enabled = false;
+                }
+
+                // Account for the proposals that are currently only
+                // supported on x64.
+                if cfg!(target_arch = "aarch64") {
+                    config.config.simd_enabled = false;
+                    config.config.wide_arithmetic_enabled = false;
+                    config.config.threads_enabled = false;
                 }
 
                 // Tuning  the following engine options is currently not supported

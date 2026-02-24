@@ -271,7 +271,7 @@ impl RuntimeStats {
         let total = v8 + spec + wasmi + wasmtime + winch + pulley;
         println!(
             "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%, \
-             winch: {:.02}, \
+             winch: {:.02}%, \
              pulley: {:.02}%",
             wasmi as f64 / total as f64 * 100f64,
             spec as f64 / total as f64 * 100f64,

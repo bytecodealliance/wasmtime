@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn smoke_winch() {
-        if !cfg!(target_arch = "x86_64") {
+        if !cfg!(target_arch = "x86_64") || !cfg!(target_arch = "aarch64") {
             return;
         }
         crate::oracles::engine::smoke_test_engine(|u, config| {

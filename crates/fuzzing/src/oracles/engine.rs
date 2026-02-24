@@ -28,9 +28,9 @@ pub fn build(
         )?),
         "wasmi" => Box::new(WasmiEngine::new(config)),
 
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         "winch" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Winch)?),
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         "winch" => return Ok(None),
 
         #[cfg(feature = "fuzz-spec-interpreter")]
