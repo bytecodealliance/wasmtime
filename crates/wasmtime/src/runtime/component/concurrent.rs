@@ -1542,6 +1542,7 @@ impl StoreOpaque {
     /// situations.
     pub fn enter_host_call(&mut self) -> Result<()> {
         if !self.concurrency_support() {
+            self.enter_call_not_concurrent();
             return Ok(());
         }
         let state = self.concurrent_state_mut();
@@ -1560,6 +1561,7 @@ impl StoreOpaque {
     /// and will be cleaned up separately.
     pub fn exit_host_call(&mut self) -> Result<()> {
         if !self.concurrency_support() {
+            self.exit_call_not_concurrent();
             return Ok(());
         }
         let task = self.concurrent_state_mut().unwrap_current_host_thread();

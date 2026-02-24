@@ -1,7 +1,10 @@
 #![cfg(not(miri))]
 
 use super::{ApiStyle, REALLOC_AND_FREE};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering::SeqCst},
+};
 use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
@@ -3771,5 +3774,75 @@ async fn drop_call_async_future() -> Result<()> {
             _ = result;
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn host_call_with_concurrency_disabled() -> Result<()> {
+    let mut config = Config::default();
+    config.concurrency_support(false);
+
+    struct MyResource;
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker
+        .root()
+        .resource("r", ResourceType::host::<MyResource>(), |_, _| Ok(()))?;
+
+    let f_called = Arc::new(AtomicBool::new(false));
+    linker.root().func_wrap("f", {
+        let f_called = f_called.clone();
+        move |_ctx, _: (Resource<MyResource>,)| -> Result<()> {
+            f_called.store(true, SeqCst);
+            Ok(())
+        }
+    })?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "r" (type $r (sub resource)))
+                (import "f" (func $f (param "r" (borrow $r))))
+
+                (core func $f' (canon lower (func $f)))
+                (core func $drop (canon resource.drop $r))
+
+                (core module $m
+                    (import "" "f" (func $f (param i32)))
+                    (import "" "drop" (func $drop (param i32)))
+                    (func (export "g") (param i32)
+                        (call $f (local.get 0))
+                        (call $drop (local.get 0))
+                    )
+                )
+
+                (core instance $i (instantiate $m (with
+                    "" (instance
+                           (export "f" (func $f'))
+                           (export "drop" (func $drop))
+                       )
+                )))
+
+                (func (export "g") (param "r" (borrow $r))
+                    (canon lift (core func $i "g"))
+                )
+            )
+        "#
+        .as_bytes(),
+    )?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let g = instance.get_typed_func::<(&Resource<MyResource>,), ()>(&mut store, "g")?;
+
+    let resource = Resource::new_own(100);
+    g.call(&mut store, (&resource,))?;
+
+    assert!(f_called.load(SeqCst));
+
     Ok(())
 }
