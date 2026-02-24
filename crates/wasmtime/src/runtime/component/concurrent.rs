@@ -5024,13 +5024,11 @@ impl TaskId {
     /// and delete the task when all threads are done.
     pub(crate) fn host_future_dropped<T>(&self, store: StoreContextMut<T>) -> Result<()> {
         let task = store.0.concurrent_state_mut().get_mut(self.task)?;
-        if !task.already_lowered_parameters() {
-            Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
-        } else {
+        if task.already_lowered_parameters() {
             task.host_future_state = HostFutureState::Dropped;
-            if task.ready_to_delete() {
-                Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
-            }
+        }
+        if task.ready_to_delete() {
+            Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
         }
         Ok(())
     }
@@ -5072,8 +5070,6 @@ pub(crate) fn prepare_call<T, R>(
     let string_encoding = options.string_encoding;
     let token = StoreToken::new(store.as_context_mut());
     let state = store.0.concurrent_state_mut();
-
-    assert!(state.guest_thread.is_none());
 
     let (tx, rx) = oneshot::channel();
     let (exit_tx, exit_rx) = oneshot::channel();

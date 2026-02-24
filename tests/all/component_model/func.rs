@@ -3316,3 +3316,51 @@ fn run_export_with_internal_adapter() -> Result<()> {
     assert_eq!(run.call(&mut store, ())?, (5,));
     Ok(())
 }
+
+#[tokio::test]
+async fn drop_call_async_future() -> Result<()> {
+    let component = r#"
+(component
+  (import "foo" (func $f))
+  (core module $m
+    (func $f (import "" "foo"))
+    (func (export "foo") call $f)
+  )
+  (core func $f (canon lower (func $f)))
+  (core instance $m (instantiate $m (with "" (instance
+     (export "foo" (func $f))
+  ))))
+  (func (export "foo") (canon lift (core func $m "foo")))
+)
+"#;
+
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = &Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_async("foo", |_, _: ()| {
+        Box::new(async {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+    // Here we'll use `call_async` a few times but only poll each returned
+    // future once.  This will put the instance in a weird state but shouldn't
+    // cause a panic.
+    for _ in 0..5 {
+        let mut future = std::pin::pin!(async {
+            foo.call_async(&mut store, ()).await?;
+            foo.post_return_async(&mut store).await
+        });
+        if let std::task::Poll::Ready(result) =
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx))).await
+        {
+            _ = result;
+        }
+    }
+    Ok(())
+}
