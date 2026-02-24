@@ -316,7 +316,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    /// Codegens a reference to the VMContext, and return it as well.
+    /// Codegens a reference to the VMContext and returns it as well.
     pub(crate) fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);

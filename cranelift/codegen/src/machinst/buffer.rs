@@ -1685,7 +1685,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         });
     }
 
-    /// Add a patchable call record at the current offset The actual
+    /// Add a patchable call record at the current offset. The actual
     /// call is expected to have been emitted; the VCodeInst trait
     /// specifies how to NOP it out, and we carry that information to
     /// the finalized Machbuffer.

@@ -126,7 +126,7 @@ pub(crate) struct InstructionBuilder {
     operands_in: Option<Vec<Operand>>,
     operands_out: Option<Vec<Operand>>,
 
-    // See Instruction comments for the meaning of these fields.
+    // See InstructionContent comments for the meaning of these fields.
     is_terminator: bool,
     is_branch: bool,
     is_call: bool,
