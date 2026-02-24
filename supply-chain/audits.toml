@@ -2197,7 +2197,7 @@ delta = "0.3.27 -> 0.3.31"
 who = "Pat Hickey <pat@moreproductive.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.27 -> 0.3.31"
-notes = 'New waker_ref module contains "FIXME: panics on Arc::clone / refcount changes could wreak havoc..." comment, but this corner case feels low risk.'
+notes = "New waker_ref module contains \"FIXME: panics on Arc::clone / refcount changes could wreak havoc...\" comment, but this corner case feels low risk."
 
 [[audits.fxprof-processed-profile]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -2205,7 +2205,7 @@ criteria = "safe-to-deploy"
 version = "0.6.0"
 notes = """
 No unsafe code, I/O, or powerful imports. This is a straightforward set of data
-structures representing the Firefox "processed" profile format, with serde
+structures representing the Firefox \"processed\" profile format, with serde
 serialization support. All logic is trivial: either unit conversion, or
 hash-consing to support de-duplication required by the format.
 """
@@ -4824,7 +4824,7 @@ end = "2025-12-02"
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
 start = "2019-04-05"
-end = "2027-02-20"
+end = "2027-02-24"
 
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
