@@ -49,3 +49,10 @@ impl<T> ToWasmtimeResult<T> for anyhow::Result<T> {
         }
     }
 }
+
+impl<T> ToWasmtimeResult<T> for Result<T> {
+    #[inline]
+    fn to_wasmtime_result(self) -> Result<T> {
+        self
+    }
+}

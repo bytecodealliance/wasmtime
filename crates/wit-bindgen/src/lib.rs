@@ -1534,7 +1534,9 @@ impl Wasmtime {
                         move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {wt}::component::__internal::Box::pin(async move {{
                                 let accessor = &caller.with_getter(host_getter);
-                                Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                {wt}::ToWasmtimeResult::to_wasmtime_result(
+                                    Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                )
                             }})
                         }},
                     )?;"
@@ -1547,7 +1549,9 @@ impl Wasmtime {
                         {wt}::component::ResourceType::host::<{camel}>(),
                         move |mut store, rep| {{
                             {wt}::component::__internal::Box::new(async move {{
-                                Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                                {wt}::ToWasmtimeResult::to_wasmtime_result(
+                                    Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                                )
                             }})
                         }},
                     )?;"
@@ -1570,7 +1574,9 @@ impl Wasmtime {
                     move |mut store, rep| -> {wt}::Result<()> {{
 
                         let resource = {wt}::component::Resource::new_own(rep);
-                        Host{camel}{trait_suffix}::drop({first_arg}, resource)
+                        {wt}::ToWasmtimeResult::to_wasmtime_result(
+                            Host{camel}{trait_suffix}::drop({first_arg}, resource)
+                        )
                     }},
                 )?;",
             )
@@ -2589,31 +2595,27 @@ impl<'a> InterfaceGenerator<'a> {
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if flags.contains(FunctionFlags::STORE) {
                 if flags.contains(FunctionFlags::ASYNC) {
-                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))?")
+                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
                 } else {
-                    format!("{convert}(&mut host_getter(caller.data_mut()), e)?")
+                    format!("{convert}(&mut host_getter(caller.data_mut()), e)")
                 }
             } else {
-                format!("{convert}(host, e)?")
+                format!("{convert}(host, e)")
             };
             uwrite!(
                 self.src,
                 "Ok((match r {{
                     Ok(a) => Ok(a),
-                    Err(e) => Err({convert}),
+                    Err(e) => Err({wt}::ToWasmtimeResult::to_wasmtime_result({convert})?),
                 }},))"
             );
         } else if func.result.is_some() {
-            if self.generator.opts.anyhow {
-                uwrite!(
-                    self.src,
-                    "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
-                );
-            } else {
-                uwrite!(self.src, "Ok((r?,))\n");
-            }
+            uwrite!(
+                self.src,
+                "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
+            );
         } else {
-            uwrite!(self.src, "r\n");
+            uwrite!(self.src, "{wt}::ToWasmtimeResult::to_wasmtime_result(r)\n");
         }
 
         if flags.contains(FunctionFlags::ASYNC) {
