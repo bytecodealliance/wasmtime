@@ -7,10 +7,15 @@ impl HasData for WasiRandom {
     type Data<'a> = &'a mut WasiRandomCtx;
 }
 
+/// Default largest length accepted by wasi 0.2 `get-random-bytes` and
+/// `get-insecure-random-bytes` methods.
+pub const DEFAULT_MAX_SIZE: u64 = 2 << 30;
+
 pub struct WasiRandomCtx {
     pub random: Box<dyn RngCore + Send>,
     pub insecure_random: Box<dyn RngCore + Send>,
     pub insecure_random_seed: u128,
+    pub(crate) max_size: u64,
 }
 
 impl Default for WasiRandomCtx {
@@ -26,10 +31,12 @@ impl Default for WasiRandomCtx {
         // API.
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).r#gen::<u128>();
+        let max_size = DEFAULT_MAX_SIZE;
         Self {
             random: thread_rng(),
             insecure_random,
             insecure_random_seed,
+            max_size,
         }
     }
 }

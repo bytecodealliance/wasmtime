@@ -82,6 +82,7 @@ impl Artifacts {
                 s if s.starts_with("p3_http_") => "p3_http",
                 s if s.starts_with("p3_api_") => "p3_api",
                 s if s.starts_with("p3_") => "p3",
+
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that
@@ -256,7 +257,7 @@ impl Artifacts {
                 // Prevent stray files for now that we don't understand.
                 Some(_) => panic!("unknown file extension on {path:?}"),
 
-                None => unreachable!(),
+                None => unreachable!("no extension in path {path:?}"),
             }
         }
     }

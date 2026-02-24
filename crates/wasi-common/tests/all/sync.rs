@@ -281,3 +281,7 @@ fn preview1_file_write() {
 fn preview1_path_open_lots() {
     run(PREVIEW1_PATH_OPEN_LOTS, true).unwrap()
 }
+#[test_log::test]
+fn preview1_sleep_quickly_but_lots() {
+    run(PREVIEW1_SLEEP_QUICKLY_BUT_LOTS, true).unwrap()
+}

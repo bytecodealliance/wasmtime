@@ -79,7 +79,7 @@ where
 
         builder = builder.uri(uri.build().map_err(http_request_error)?);
 
-        for (k, v) in req.headers.iter() {
+        for (k, v) in req.headers.as_ref().iter() {
             builder = builder.header(k, v);
         }
 

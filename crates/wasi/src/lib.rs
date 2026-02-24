@@ -12,6 +12,24 @@
 //!
 //! For WASIp3, see [`p3`]. WASIp3 support is experimental, unstable and incomplete.
 
+/// The maximum size, in bytes, that this crate will allocate on the host on a
+/// per-read basis.
+///
+/// This is used to limit the size of `wasi:io/streams.input-stream#read`, for
+/// example, along with a variety of other read-style APIs. All of these APIs
+/// have the shape where the guest asks the host to read some data for it, and
+/// then it's returned. The data is allocated on the host, however, meaning that
+/// when the guest asks for an extremely large read that could cause a very
+/// large allocations on the host. For now this constant serves as a hard limit
+/// on the size of the allocation a host will make.
+///
+/// TODO: make this configurable per-I/O? Per-WASI? It's not great that this
+/// just a hard and unconfigurable limit. There are probably situations where
+/// performance will be improved if this limit were higher or removed. Doing so
+/// without exposing hosts to guest-controlled resource exhaustion is the
+/// important part, though.
+const MAX_READ_SIZE_ALLOC: usize = 64 * 1024;
+
 pub mod cli;
 pub mod clocks;
 mod ctx;
