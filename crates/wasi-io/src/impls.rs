@@ -4,6 +4,7 @@ use crate::streams::{DynInputStream, DynOutputStream, StreamError, StreamResult}
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use bytes::Bytes;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -163,9 +164,10 @@ impl streams::HostOutputStream for ResourceTable {
             ));
         }
 
-        self.get_mut(&stream)?
-            .blocking_write_zeroes_and_flush(len as usize)
-            .await
+        // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
+        // repeatedly from a 'static buffer of zeros.
+        let bs = Bytes::from_iter(core::iter::repeat(0).take(len as usize));
+        self.get_mut(&stream)?.blocking_write_and_flush(bs).await
     }
 
     fn write_zeroes(&mut self, stream: Resource<DynOutputStream>, len: u64) -> StreamResult<()> {

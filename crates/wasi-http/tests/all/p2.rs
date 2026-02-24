@@ -124,6 +124,7 @@ async fn run_wasi_http(
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
     early_drop: bool,
+    field_size_limit: Option<usize>,
 ) -> wasmtime::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -132,15 +133,19 @@ async fn run_wasi_http(
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
     config.wasm_component_model(true);
-    let engine = Engine::new(&config)?;
-    let component = Component::from_file(&engine, component_filename)?;
+    let engine = Engine::new(&config).context("creating engine")?;
+    let component =
+        Component::from_file(&engine, component_filename).context("loading component")?;
 
     // Create our wasi context.
     let mut builder = WasiCtx::builder();
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();
-    let http = WasiHttpCtx::new();
+    let mut http = WasiHttpCtx::new();
+    if let Some(limit) = field_size_limit {
+        http.set_field_size_limit(limit);
+    }
     let ctx = Ctx {
         table,
         wasi,
@@ -153,15 +158,22 @@ async fn run_wasi_http(
     let mut store = Store::new(&engine, ctx);
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi_http::add_to_linker_async(&mut linker).context("add crate to linker")?;
     let proxy =
         wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
-            .await?;
+            .await
+            .context("instantiate proxy")?;
 
-    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
+    let req = store
+        .data_mut()
+        .new_incoming_request(Scheme::Http, req)
+        .context("new incoming request")?;
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    let out = store.data_mut().new_response_outparam(sender)?;
+    let out = store
+        .data_mut()
+        .new_response_outparam(sender)
+        .context("new response outparam")?;
 
     let receiver = if early_drop {
         // Drop the receiver early, emulating a host event like
@@ -176,7 +188,8 @@ async fn run_wasi_http(
         proxy
             .wasi_http_incoming_handler()
             .call_handle(&mut store, req, out)
-            .await?;
+            .await
+            .context("calling incoming handler")?;
 
         Ok::<_, wasmtime::Error>(())
     });
@@ -185,7 +198,7 @@ async fn run_wasi_http(
         let resp = match r.await {
             Ok(Ok(resp)) => {
                 let (parts, body) = resp.into_parts();
-                let collected = BodyExt::collect(body).await?;
+                let collected = BodyExt::collect(body).await.context("collecting body")?;
                 Some(Ok(hyper::Response::from_parts(parts, collected)))
             }
             Ok(Err(e)) => Some(Err(e)),
@@ -197,9 +210,9 @@ async fn run_wasi_http(
 
         // Now that the response has been processed, we can wait on the wasm to
         // finish without deadlocking.
-        handle.await.context("Component execution")?;
+        handle.await.context("awaiting execution")?;
 
-        Ok(resp.expect("wasm never called set-response-outparam"))
+        Ok(resp.context("wasm never called set-response-outparam")?)
     } else {
         handle.await.context("Component execution")?;
         Ok(Err(ErrorCode::HttpResponseTimeout))
@@ -219,6 +232,7 @@ async fn wasi_http_proxy_tests() -> wasmtime::Result<()> {
         None,
         None,
         false,
+        None,
     )
     .await?;
 
@@ -351,6 +365,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         send_request,
         None,
         false,
+        None,
     )
     .await??;
 
@@ -399,6 +414,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
         None,
         Some("forbidden.com".to_string()),
         false,
+        None,
     )
     .await??;
 
@@ -519,6 +535,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         None,
         None,
         false,
+        None,
     )
     .await??;
 
@@ -551,6 +568,7 @@ async fn wasi_http_without_port() -> Result<()> {
         None,
         None,
         false,
+        None,
     )
     .await??;
 
@@ -574,6 +592,7 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
         None,
         None,
         true,
+        None,
     )
     .await?;
 
@@ -582,4 +601,99 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
     } else {
         panic!("test expects an error");
     }
+}
+
+#[test_log::test(tokio::test)]
+async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
+    use crate::p2::types::FieldSizeLimitError;
+    use http::{HeaderName, HeaderValue, Request};
+    use http_body_util::combinators::BoxBody;
+    use hyper::Error;
+
+    fn request_with_header_size(uri: &str, total: usize) -> Request<BoxBody<Bytes, Error>> {
+        let mut builder = hyper::Request::builder().uri(uri).method(http::Method::GET);
+
+        let headers = builder.headers_mut().expect("builder error");
+        let chunks = total / 10;
+        let remainder = total % 10;
+        for chunk in 0..chunks {
+            let mut v = format!("v{chunk:04}");
+            if chunk == 0 {
+                for _ in 0..remainder {
+                    v.push('x');
+                }
+            }
+            headers.insert(
+                HeaderName::from_bytes(format!("k{chunk:04}").as_bytes())
+                    .expect("valid header name"),
+                HeaderValue::from_str(&v).expect("valid header value"),
+            );
+        }
+        builder
+            .body(body::empty())
+            .expect("complete building request")
+    }
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
+        request_with_header_size("http://host/", 256),
+        None,
+        None,
+        false,
+        Some(255),
+    )
+    .await
+    .context("request with headers on wire over the size limit")??;
+    assert_eq!(resp.status(), 200);
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
+        request_with_header_size("http://host/new_fields/50", 0),
+        None,
+        None,
+        false,
+        Some(500),
+    )
+    .await
+    .context("new_fields with size matching the size limit")??;
+    assert_eq!(resp.status(), 200);
+
+    let err = run_wasi_http(
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
+        request_with_header_size("http://host/new_fields/500", 0),
+        None,
+        None,
+        false,
+        Some(500),
+    )
+    .await
+    .err()
+    .expect("new_fields exceeding the size limit");
+    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
+        request_with_header_size("http://host/modify_fields/50", 10),
+        None,
+        None,
+        false,
+        Some(500),
+    )
+    .await??;
+    assert_eq!(resp.status(), 200);
+
+    let err = run_wasi_http(
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
+        request_with_header_size("http://host/modify_fields/50", 100),
+        None,
+        None,
+        false,
+        Some(500),
+    )
+    .await
+    .err()
+    .expect("run_wasi_http should give error");
+    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+
+    Ok(())
 }

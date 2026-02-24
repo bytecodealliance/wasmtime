@@ -86,7 +86,7 @@ impl FileInputStream {
     fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
 
-        let mut buf = BytesMut::zeroed(size);
+        let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
         loop {
             match file.read_at(&mut buf, offset) {
                 Ok(0) => return ReadState::Closed,

@@ -349,6 +349,20 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Configures the maximum len accepted by
+    /// `wasi:random/random.get-random-bytes` and
+    /// `wasi:random/insecure.get-insecure-random-bytes`. Calls with a len
+    /// larger than this limit will trap.
+    ///
+    /// Limited to 64M by default. This limit protects the host implementation
+    /// from memory exhaustion from untrusted guest input. A limit of `u64::MAX`
+    /// is equivalent to no limit, but note that this enables a guest to also
+    /// force the host to attempt an allocation of that size.
+    pub fn max_random_size(&mut self, max_size: u64) -> &mut Self {
+        self.random.max_size = max_size;
+        self
+    }
+
     /// Configures `wasi:clocks/wall-clock` to use the `clock` specified.
     ///
     /// By default the host's wall clock is used.

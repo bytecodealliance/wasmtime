@@ -50,6 +50,17 @@ Unreleased.
   platforms.
   [#12506](https://github.com/bytecodealliance/wasmtime/pull/12506)
 
+* Wasmtime's implementation of WASI now correctly limits resource consumption on
+  behalf of the guest, such as host-allocated memory, by default. This means
+  that some behaviors previously allowed by Wasmtime are now disallowed by
+  default if they rely on transferring a large amount of data from the guest to
+  the host. Additionally calls to `wasi:random/random.get-random-bytes`, for
+  example, now have limits in place by default to avoid allocating too much
+  memory on the host. For more information on this see the related security
+  advisory with further details on knobs added and what behaviors are now
+  restricted by default.
+  [GHSA-852m-cvvp-9p4w](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-852m-cvvp-9p4w)
+
 ### Changed
 
 * Reentrance rules for WebAssembly components have changed in accordance with
@@ -130,6 +141,10 @@ Unreleased.
 
 * Debug value locations around cold blocks have been improved.
   [#12484](https://github.com/bytecodealliance/wasmtime/pull/12484)
+
+* Panics when adding too many headers to a `wasi:http/types.fields` has been
+  resolved
+  [GHSA-243v-98vx-264h](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-243v-98vx-264h)
 
 --------------------------------------------------------------------------------
 
