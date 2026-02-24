@@ -15,6 +15,7 @@ use http_body_util::BodyExt;
 use hyper::body::Body;
 use std::any::Any;
 use std::fmt;
+use std::mem::size_of;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;

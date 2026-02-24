@@ -6,7 +6,7 @@ use crate::{
     Error,
 };
 use std::future::{self, Future};
-use std::pin::{Pin, pin};
+use std::pin::{pin, Pin};
 use std::task::{Context, Poll as FPoll};
 
 struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + Send + 'a>>>);
