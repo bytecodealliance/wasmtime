@@ -2332,6 +2332,47 @@
 (rule 0 (do_ctz ty orig_ty src)
       (bsf_or_else ty src (imm $I64 (ty_bits_u64 orig_ty))))
 
+;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (has_type (ty_32_or_64 ty) (cls src)))
+      (do_cls ty src))
+
+(rule 1 (lower (has_type (ty_8_or_16 ty) (cls src)))
+      (let ((extended Gpr (extend_to_gpr src $I32 (ExtendKind.Sign)))
+            (cls Gpr (do_cls $I32 extended)))
+        (x64_sub $I32 cls (RegMemImm.Imm (u32_wrapping_sub 32 (ty_bits ty))))))
+
+(rule 0 (lower
+       (has_type $I128
+                 (cls src)))
+      (let ((upper Gpr (do_cls $I64 (value_regs_get_gpr src 1)))
+            (sign_fill Gpr (x64_sarq_mi (value_regs_get_gpr src 1) 63))
+            (xored Gpr (x64_xor $I64 (value_regs_get_gpr src 0) sign_fill))
+            (lower Gpr (x64_add $I64
+                            (do_clz $I64 $I64 xored)
+                            (RegMemImm.Imm 63)))
+            (result_lo Gpr
+              (with_flags_reg
+               (x64_cmpq_mi_sxb upper 63)
+               (cmove $I64 (CC.NZ) upper lower))))
+        (value_regs result_lo (imm $I64 0))))
+
+;; Implementation helper for cls; operates on 32 or 64-bit units.
+(decl do_cls (Type Gpr) Gpr)
+
+;; cls is implemented via clz using the identity: cls(x) = clz(x ^ (x >> 1)) - 1
+(rule 1 (do_cls $I64 src)
+      (let ((shifted Gpr (x64_sarq_mi src 1))
+            (xored Gpr (x64_xor $I64 src (RegMemImm.Reg shifted)))
+            (clz Gpr (do_clz $I64 $I64 xored)))
+        (x64_sub $I64 clz (RegMemImm.Imm 1))))
+
+(rule 0 (do_cls $I32 src)
+      (let ((shifted Gpr (x64_sarl_mi src 1))
+            (xored Gpr (x64_xor $I32 src (RegMemImm.Reg shifted)))
+            (clz Gpr (do_clz $I32 $I32 xored)))
+        (x64_sub $I32 clz (RegMemImm.Imm 1))))
+
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 4 (lower (has_type (ty_32_or_64 ty) (popcnt src)))

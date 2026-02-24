@@ -1,0 +1,53 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target x86_64
+
+function %a(i64) -> i64 {
+block0(v0: i64):
+    v1 = cls.i64 v0
+    return v1
+}
+
+; run: %a(1) == 62
+; run: %a(0) == 63        ;; all zeros, 63 matching sign bits
+; run: %a(-1) == 63       ;; all ones, 63 matching sign bits
+; run: %a(1) == 62        ;; already in the issue
+; run: %a(-2) == 62       ;; 1111...1110, one bit differs
+
+function %b(i32) -> i32 {
+block0(v0: i32):
+    v1 = cls.i32 v0
+    return v1
+}
+; run: %b(1) == 30
+; run: %b(0) == 31
+; run: %b(-1) == 31
+; run: %b(-2) == 30
+
+function %c(i16) -> i16 {
+block0(v0: i16):
+    v1 = cls.i16 v0
+    return v1
+}
+; run: %c(1) == 14
+; run: %c(0) == 15
+; run: %c(-1) == 15
+
+function %d(i8) -> i8 {
+block0(v0: i8):
+    v1 = cls.i8 v0
+    return v1
+}
+; run: %d(1) == 6
+; run: %d(0) == 7
+; run: %d(-1) == 7
+
+function %e(i128) -> i128 {
+block0(v0: i128):
+    v1 = cls.i128 v0
+    return v1
+}
+; run: %e(1) == 126
+; run: %e(0) == 127
+; run: %e(-1) == 127
