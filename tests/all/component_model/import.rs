@@ -1253,7 +1253,6 @@ fn hostcall_fuel_limits_val() -> Result<()> {
     let instance = linker.instantiate(&mut store, &component)?;
     let run = instance.get_func(&mut store, "run").unwrap();
     run.call(&mut store, &[], &mut [])?;
-    run.post_return(&mut store)?;
 
     store.set_hostcall_fuel(100);
     assert!(run.call(&mut store, &[], &mut []).is_err());
