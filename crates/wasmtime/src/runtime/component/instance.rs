@@ -724,8 +724,8 @@ impl<'a> Instantiator<'a> {
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        let (modules, engine) = store.modules_and_engine_mut();
-        modules.register_component(component, engine)?;
+        let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+        modules.register_component(component, engine, breakpoints)?;
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 

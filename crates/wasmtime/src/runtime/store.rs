@@ -84,7 +84,7 @@ use crate::ThrownException;
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
-use crate::module::RegisteredModuleId;
+use crate::module::{RegisterBreakpointState, RegisteredModuleId};
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
@@ -1670,8 +1670,15 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub(crate) fn modules_and_engine_mut(&mut self) -> (&mut ModuleRegistry, &Engine) {
-        (&mut self.modules, &self.engine)
+    pub(crate) fn modules_and_engine_and_breakpoints_mut(
+        &mut self,
+    ) -> (&mut ModuleRegistry, &Engine, RegisterBreakpointState<'_>) {
+        #[cfg(feature = "debug")]
+        let breakpoints = RegisterBreakpointState(&self.breakpoints);
+        #[cfg(not(feature = "debug"))]
+        let breakpoints = RegisterBreakpointState(core::marker::PhantomData);
+
+        (&mut self.modules, &self.engine, breakpoints)
     }
 
     pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {

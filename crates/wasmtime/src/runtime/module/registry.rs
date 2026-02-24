@@ -10,6 +10,8 @@ use crate::{Engine, prelude::*};
 use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
+#[cfg(not(feature = "debug"))]
+use core::marker::PhantomData;
 use core::ops::Range;
 use core::ptr::NonNull;
 use wasmtime_environ::VMSharedTypeIndex;
@@ -100,6 +102,22 @@ fn assert_no_overlap(loaded_code: &BTreeMap<StoreCodePC, LoadedCode>, range: Ran
     }
 }
 
+#[cfg(feature = "debug")]
+pub struct RegisterBreakpointState<'a>(pub(crate) &'a crate::runtime::debug::BreakpointState);
+#[cfg(not(feature = "debug"))]
+pub struct RegisterBreakpointState<'a>(pub(crate) PhantomData<&'a ()>);
+
+impl<'a> RegisterBreakpointState<'a> {
+    #[cfg(feature = "debug")]
+    fn update(&self, code: &mut StoreCode, module: &Module) -> Result<()> {
+        self.0.patch_new_module(code, module)
+    }
+    #[cfg(not(feature = "debug"))]
+    fn update(&self, _code: &mut StoreCode, _module: &Module) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl ModuleRegistry {
     /// Get a previously-registered module by id.
     pub fn module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
@@ -140,11 +158,15 @@ impl ModuleRegistry {
 
     /// Fetches the base `StoreCodePC` for a given `EngineCode` with
     /// `Module`, registering the module if not already registered.
-    pub fn store_code_base_or_register(&mut self, module: &Module) -> Result<StoreCodePC> {
+    pub fn store_code_base_or_register(
+        &mut self,
+        module: &Module,
+        breakpoint_state: RegisterBreakpointState,
+    ) -> Result<StoreCodePC> {
         let key = module.engine_code().text_range().start;
         if !self.store_code.contains_key(&key) {
             let engine = module.engine().clone();
-            self.register_module(module, &engine)?;
+            self.register_module(module, &engine, breakpoint_state)?;
         }
         Ok(*self.store_code.get(&key).unwrap())
     }
@@ -167,14 +189,32 @@ impl ModuleRegistry {
         &mut self,
         module: &Module,
         engine: &Engine,
+        breakpoint_state: RegisterBreakpointState,
     ) -> Result<RegisteredModuleId> {
-        self.register(module.id(), module.engine_code(), Some(module), engine)
-            .map(|id| id.unwrap())
+        self.register(
+            module.id(),
+            module.engine_code(),
+            Some(module),
+            engine,
+            breakpoint_state,
+        )
+        .map(|id| id.unwrap())
     }
 
     #[cfg(feature = "component-model")]
-    pub fn register_component(&mut self, component: &Component, engine: &Engine) -> Result<()> {
-        self.register(component.id(), component.engine_code(), None, engine)?;
+    pub fn register_component(
+        &mut self,
+        component: &Component,
+        engine: &Engine,
+        breakpoint_state: RegisterBreakpointState,
+    ) -> Result<()> {
+        self.register(
+            component.id(),
+            component.engine_code(),
+            None,
+            engine,
+            breakpoint_state,
+        )?;
         Ok(())
     }
 
@@ -185,6 +225,7 @@ impl ModuleRegistry {
         code: &Arc<EngineCode>,
         module: Option<&Module>,
         engine: &Engine,
+        breakpoint_state: RegisterBreakpointState,
     ) -> Result<Option<RegisteredModuleId>> {
         // Register the module, if any.
         let id = module.map(|module| {
@@ -219,6 +260,7 @@ impl ModuleRegistry {
                     .get_mut(&store_code_pc)
                     .expect("loaded_code must have entry for StoreCodePC");
                 loaded_code.modules.insert(range.start, id);
+                breakpoint_state.update(&mut loaded_code.code, module)?;
             }
         }
 

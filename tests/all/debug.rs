@@ -1318,3 +1318,57 @@ fn debug_ids() -> wasmtime::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn single_step_before_instantiation() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+
+    // Enable single-stepping *before* instantiation. The module has not
+    // been registered with this store yet.
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    assert!(store.is_single_step());
+
+    #[derive(Clone)]
+    struct CountingHandler(Arc<AtomicUsize>);
+    impl DebugHandler for CountingHandler {
+        type Data = ();
+        async fn handle(&self, _store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            match event {
+                DebugEvent::Breakpoint => {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    store.set_debug_handler(CountingHandler(counter.clone()));
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+    Ok(())
+}

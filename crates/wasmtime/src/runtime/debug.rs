@@ -1,6 +1,8 @@
 //! Debugging API.
 
 use super::store::AsStoreOpaque;
+use crate::code::StoreCode;
+use crate::module::RegisterBreakpointState;
 use crate::store::StoreId;
 use crate::vm::{Activation, Backtrace};
 use crate::{
@@ -1007,15 +1009,34 @@ impl BreakpointState {
     pub(crate) fn is_single_step(&self) -> bool {
         self.single_step
     }
+
+    /// Internal helper to patch a new module for
+    /// single-stepping. When a module is newly registered in a
+    /// `Store`, we need to patch all breakpoints into the copy for
+    /// this `Store` if single-stepping is currently enabled.
+    pub(crate) fn patch_new_module(&self, code: &mut StoreCode, module: &Module) -> Result<()> {
+        // Apply single-step state if single-stepping is enabled. Note
+        // that no other individual breakpoints will exist yet (as
+        // this is a newly registered module).
+        if self.single_step {
+            let mem = code.code_memory_mut().unwrap();
+            mem.unpublish()?;
+            BreakpointEdit::apply_single_step(mem, module, true, |_key| false)?;
+            mem.publish()?;
+        }
+        Ok(())
+    }
 }
 
 impl<'a> BreakpointEdit<'a> {
     fn get_code_memory<'b>(
+        breakpoints: &BreakpointState,
         registry: &'b mut ModuleRegistry,
         dirty_modules: &mut BTreeSet<StoreCodePC>,
         module: &Module,
     ) -> Result<&'b mut CodeMemory> {
-        let store_code_pc = registry.store_code_base_or_register(module)?;
+        let store_code_pc =
+            registry.store_code_base_or_register(module, RegisterBreakpointState(breakpoints))?;
         let code_memory = registry
             .store_code_mut(store_code_pc)
             .expect("Just checked presence above")
@@ -1052,7 +1073,8 @@ impl<'a> BreakpointEdit<'a> {
         let key = BreakpointKey::from_raw(module, pc);
         self.state.breakpoints.insert(key);
         log::trace!("patching in breakpoint {key:?}");
-        let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+        let mem =
+            Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
         let frame_table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
@@ -1069,12 +1091,33 @@ impl<'a> BreakpointEdit<'a> {
         let key = BreakpointKey::from_raw(module, pc);
         self.state.breakpoints.remove(&key);
         if !self.state.single_step {
-            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, module)?;
+            let mem =
+                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
             let frame_table = module
                 .frame_table()
                 .expect("Frame table must be present when guest-debug is enabled");
             let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
             Self::patch(patches, mem, false);
+        }
+        Ok(())
+    }
+
+    fn apply_single_step<F: Fn(&BreakpointKey) -> bool>(
+        mem: &mut CodeMemory,
+        module: &Module,
+        enabled: bool,
+        key_enabled: F,
+    ) -> Result<()> {
+        let table = module
+            .frame_table()
+            .expect("Frame table must be present when guest-debug is enabled");
+        for (wasm_pc, patch) in table.breakpoint_patches() {
+            let key = BreakpointKey::from_raw(&module, wasm_pc);
+            let this_enabled = enabled || key_enabled(&key);
+            log::trace!(
+                "single_step: enabled {enabled} key {key:?} -> this_enabled {this_enabled}"
+            );
+            Self::patch(core::iter::once(patch), mem, this_enabled);
         }
         Ok(())
     }
@@ -1095,18 +1138,11 @@ impl<'a> BreakpointEdit<'a> {
         }
         let modules = self.registry.all_modules().cloned().collect::<Vec<_>>();
         for module in modules {
-            let mem = Self::get_code_memory(self.registry, &mut self.dirty_modules, &module)?;
-            let table = module
-                .frame_table()
-                .expect("Frame table must be present when guest-debug is enabled");
-            for (wasm_pc, patch) in table.breakpoint_patches() {
-                let key = BreakpointKey::from_raw(&module, wasm_pc);
-                let this_enabled = enabled || self.state.breakpoints.contains(&key);
-                log::trace!(
-                    "single_step: enabled {enabled} key {key:?} -> this_enabled {this_enabled}"
-                );
-                Self::patch(core::iter::once(patch), mem, this_enabled);
-            }
+            let mem =
+                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, &module)?;
+            Self::apply_single_step(mem, &module, enabled, |key| {
+                self.state.breakpoints.contains(key)
+            })?;
         }
 
         self.state.single_step = enabled;
