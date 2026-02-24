@@ -59,15 +59,12 @@ async fn run_test(path: &str) -> Result<()> {
     let command = Command::instantiate_async(&mut store, &component, &linker)
         .await
         .context("failed to instantiate `wasi:cli/command`")?;
-    let (res, task) = store
+    let res = store
         .run_concurrent(async move |store| command.wasi_cli_run().call_run(store).await)
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?;
-    res.map_err(|()| format_err!("`wasi:cli/run#run` failed"))?;
-    store
-        .run_concurrent(async move |store| task.block(store).await)
-        .await
+    res.map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
 macro_rules! assert_test_exists {

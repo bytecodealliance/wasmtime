@@ -113,14 +113,14 @@ pub struct Connector {
     pub(crate) receive_tx: Option<(
         oneshot::Sender<PlaintextProducer<rustls::ClientConnection>>,
         oneshot::Sender<CiphertextConsumer<rustls::ClientConnection>>,
-        oneshot::Sender<rustls::Error>,
+        oneshot::Sender<String>,
     )>,
     pub(crate) send_tx: Option<(
         oneshot::Sender<CiphertextProducer<rustls::ClientConnection>>,
         oneshot::Sender<
             PlaintextConsumer<rustls::ClientConnection, rustls::client::ClientConnectionData>,
         >,
-        oneshot::Sender<rustls::Error>,
+        oneshot::Sender<String>,
     )>,
 }
 

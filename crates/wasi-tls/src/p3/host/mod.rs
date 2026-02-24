@@ -14,81 +14,8 @@ use wasmtime::component::{
 mod client;
 mod types;
 
-macro_rules! mk_push {
-    ($t:ty, $f:ident, $desc:literal) => {
-        #[track_caller]
-        #[inline]
-        pub fn $f(
-            table: &mut wasmtime::component::ResourceTable,
-            value: $t,
-        ) -> wasmtime::Result<wasmtime::component::Resource<$t>> {
-            use wasmtime::error::Context as _;
-
-            table
-                .push(value)
-                .context(concat!("failed to push ", $desc, " resource to table"))
-        }
-    };
-}
-
-macro_rules! mk_get {
-    ($t:ty, $f:ident, $desc:literal) => {
-        #[track_caller]
-        #[inline]
-        pub fn $f<'a>(
-            table: &'a wasmtime::component::ResourceTable,
-            resource: &'a wasmtime::component::Resource<$t>,
-        ) -> wasmtime::Result<&'a $t> {
-            use wasmtime::error::Context as _;
-
-            table
-                .get(resource)
-                .context(concat!("failed to get ", $desc, " resource from table"))
-        }
-    };
-}
-
-macro_rules! mk_get_mut {
-    ($t:ty, $f:ident, $desc:literal) => {
-        #[track_caller]
-        #[inline]
-        pub fn $f<'a>(
-            table: &'a mut wasmtime::component::ResourceTable,
-            resource: &'a wasmtime::component::Resource<$t>,
-        ) -> wasmtime::Result<&'a mut $t> {
-            use wasmtime::error::Context as _;
-
-            table.get_mut(resource).context(concat!(
-                "failed to get ",
-                $desc,
-                " resource from table"
-            ))
-        }
-    };
-}
-
-macro_rules! mk_delete {
-    ($t:ty, $f:ident, $desc:literal) => {
-        #[track_caller]
-        #[inline]
-        pub fn $f(
-            table: &mut wasmtime::component::ResourceTable,
-            resource: wasmtime::component::Resource<$t>,
-        ) -> wasmtime::Result<$t> {
-            use wasmtime::error::Context as _;
-
-            table.delete(resource).context(concat!(
-                "failed to delete ",
-                $desc,
-                " resource from table"
-            ))
-        }
-    };
-}
-
-pub(crate) use {mk_delete, mk_get, mk_get_mut, mk_push};
-
-mk_push!(Error, push_error, "error");
+// Default buffer capacity to use for reads of byte-sized values.
+const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 
 struct Pending<T> {
     inner_rx: oneshot::Receiver<T>,
@@ -163,7 +90,8 @@ where
 
 pub struct CiphertextConsumer<T> {
     stream: TlsStreamArc<T>,
-    error_tx: Arc<Mutex<Option<oneshot::Sender<rustls::Error>>>>,
+    error_tx: Arc<Mutex<Option<oneshot::Sender<String>>>>,
+    handshake_tx: Option<oneshot::Sender<()>>,
 }
 
 impl<T> Drop for CiphertextConsumer<T> {
@@ -188,7 +116,7 @@ where
     type Item = u8;
 
     fn poll_consume(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
         src: Source<Self::Item>,
@@ -227,14 +155,13 @@ where
         let state = match conn.process_new_packets() {
             Ok(state) => state,
             Err(err) => {
-                _ = error_tx.take().unwrap().send(err);
+                _ = error_tx.take().unwrap().send(format!("{err}"));
                 ciphertext_producer.take().map(Waker::wake);
                 plaintext_consumer.take().map(Waker::wake);
                 plaintext_producer.take().map(Waker::wake);
                 return Poll::Ready(Ok(StreamResult::Dropped));
             }
         };
-
         if state.plaintext_bytes_to_read() > 0 {
             plaintext_producer.take().map(Waker::wake);
         }
@@ -242,7 +169,14 @@ where
         if state.tls_bytes_to_write() > 0 {
             ciphertext_producer.take().map(Waker::wake);
         }
-
+        let is_handshaking = conn.is_handshaking();
+        drop(stream);
+        drop(error_tx);
+        if !is_handshaking {
+            if let Some(tx) = self.handshake_tx.take() {
+                _ = tx.send(());
+            };
+        }
         if state.peer_has_closed() {
             Poll::Ready(Ok(StreamResult::Dropped))
         } else {
@@ -253,7 +187,7 @@ where
 
 pub struct PlaintextProducer<T> {
     stream: TlsStreamArc<T>,
-    error_tx: Arc<Mutex<Option<oneshot::Sender<rustls::Error>>>>,
+    error_tx: Arc<Mutex<Option<oneshot::Sender<String>>>>,
 }
 
 impl<T, U, D> StreamProducer<D> for PlaintextProducer<T>
@@ -280,45 +214,39 @@ where
             conn,
             ciphertext_consumer_dropped,
             ciphertext_consumer,
-            ciphertext_producer,
-            plaintext_consumer,
             plaintext_producer,
             ..
         } = stream.as_deref_mut().unwrap();
 
-        let state = match conn.process_new_packets() {
-            Ok(state) => state,
-            Err(err) => {
-                _ = error_tx.take().unwrap().send(err);
-                ciphertext_consumer.take().map(Waker::wake);
-                ciphertext_producer.take().map(Waker::wake);
-                plaintext_consumer.take().map(Waker::wake);
-                return Poll::Ready(Ok(StreamResult::Dropped));
-            }
-        };
-
-        if state.plaintext_bytes_to_read() == 0 {
-            if state.peer_has_closed() || *ciphertext_consumer_dropped {
-                return Poll::Ready(Ok(StreamResult::Dropped));
-            } else if finish {
-                return Poll::Ready(Ok(StreamResult::Cancelled));
-            }
-            *plaintext_producer = Some(cx.waker().clone());
-            return Poll::Pending;
-        }
-
-        let mut dst = dst.as_direct(store, state.plaintext_bytes_to_read());
+        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
         let buf = dst.remaining();
         if buf.is_empty() {
             return Poll::Ready(Ok(StreamResult::Completed));
         }
-        let n = conn.reader().read(buf)?;
-        debug_assert_ne!(n, 0);
-        dst.mark_written(n);
-        if conn.wants_read() {
-            ciphertext_consumer.take().map(Waker::wake);
+        match conn.reader().read(buf) {
+            Ok(0) => Poll::Ready(Ok(StreamResult::Dropped)),
+            Ok(n) => {
+                dst.mark_written(n);
+                if conn.wants_read() {
+                    ciphertext_consumer.take().map(Waker::wake);
+                }
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                if *ciphertext_consumer_dropped {
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                if finish {
+                    return Poll::Ready(Ok(StreamResult::Cancelled));
+                }
+                *plaintext_producer = Some(cx.waker().clone());
+                Poll::Pending
+            }
+            Err(err) => {
+                _ = error_tx.take().unwrap().send(format!("{err}"));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
         }
-        Poll::Ready(Ok(StreamResult::Completed))
     }
 }
 
@@ -327,7 +255,6 @@ where
     T: DerefMut<Target = rustls::ConnectionCommon<U>> + Send + 'static,
 {
     stream: TlsStreamArc<T>,
-    error_tx: Arc<Mutex<Option<oneshot::Sender<rustls::Error>>>>,
 }
 
 impl<T, U> Drop for PlaintextConsumer<T, U>
@@ -337,12 +264,14 @@ where
     fn drop(&mut self) {
         let mut stream = self.stream.lock();
         let TlsStream {
+            conn,
             plaintext_consumer_dropped,
             ciphertext_producer,
             ..
         } = stream.as_deref_mut().unwrap();
         *plaintext_consumer_dropped = true;
         ciphertext_producer.take().map(Waker::wake);
+        conn.send_close_notify();
     }
 }
 
@@ -360,11 +289,6 @@ where
         src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let error_tx = self.error_tx.lock().unwrap();
-        if error_tx.is_none() {
-            return Poll::Ready(Ok(StreamResult::Dropped));
-        }
-
         let mut stream = self.stream.lock();
         let TlsStream {
             conn,
@@ -398,7 +322,6 @@ where
 
 pub struct CiphertextProducer<T> {
     stream: TlsStreamArc<T>,
-    error_tx: Arc<Mutex<Option<oneshot::Sender<rustls::Error>>>>,
 }
 
 impl<T, U, D> StreamProducer<D> for CiphertextProducer<T>
@@ -415,11 +338,6 @@ where
         dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut error_tx = self.error_tx.lock().unwrap();
-        if error_tx.is_none() {
-            return Poll::Ready(Ok(StreamResult::Dropped));
-        }
-
         let mut stream = self.stream.lock();
         let TlsStream {
             conn,
@@ -428,7 +346,7 @@ where
             ciphertext_consumer,
             ciphertext_producer,
             plaintext_consumer,
-            plaintext_producer,
+            ..
         } = stream.as_deref_mut().unwrap();
 
         if !conn.wants_write() {
@@ -441,19 +359,7 @@ where
             plaintext_consumer.take().map(Waker::wake);
             return Poll::Pending;
         }
-
-        let state = match conn.process_new_packets() {
-            Ok(state) => state,
-            Err(err) => {
-                _ = error_tx.take().unwrap().send(err);
-                ciphertext_consumer.take().map(Waker::wake);
-                plaintext_consumer.take().map(Waker::wake);
-                plaintext_producer.take().map(Waker::wake);
-                return Poll::Ready(Ok(StreamResult::Dropped));
-            }
-        };
-
-        let mut dst = dst.as_direct(store, state.tls_bytes_to_write());
+        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
         if dst.remaining().is_empty() {
             return Poll::Ready(Ok(StreamResult::Completed));
         }
@@ -467,7 +373,7 @@ where
 }
 
 pub struct ResultProducer<T> {
-    rx: oneshot::Receiver<rustls::Error>,
+    rx: oneshot::Receiver<String>,
     getter: for<'a> fn(&'a mut T) -> WasiTlsCtxView<'a>,
 }
 
@@ -486,7 +392,7 @@ where
         match Pin::new(&mut self.rx).poll(cx) {
             Poll::Ready(Ok(err)) => {
                 let WasiTlsCtxView { table, .. } = (self.getter)(store.data_mut());
-                let err = push_error(table, format!("{err}"))?;
+                let err = table.push(err)?;
                 Poll::Ready(Ok(Some(Err(err))))
             }
             Poll::Ready(Err(..)) => Poll::Ready(Ok(Some(Ok(())))),
