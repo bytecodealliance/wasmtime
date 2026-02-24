@@ -1138,7 +1138,7 @@ fn module_bytecode() -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
 
-    assert_eq!(module.bytecode(), Some(&wasm[..]));
+    assert_eq!(module.debug_bytecode(), Some(&wasm[..]));
 
     Ok(())
 }
@@ -1153,7 +1153,7 @@ fn module_bytecode_absent_without_debug() -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
 
-    assert_eq!(module.bytecode(), None);
+    assert_eq!(module.debug_bytecode(), None);
 
     Ok(())
 }
@@ -1195,8 +1195,8 @@ fn component_bytecode() -> wasmtime::Result<()> {
 
     // Modules should be registered in offset order. The API doesn't
     // guarantee this, but this suffices for a test.
-    assert_eq!(modules[0].bytecode().unwrap(), &m1_wasm[..]);
-    assert_eq!(modules[1].bytecode().unwrap(), &m2_wasm[..]);
+    assert_eq!(modules[0].debug_bytecode().unwrap(), &m1_wasm[..]);
+    assert_eq!(modules[1].debug_bytecode().unwrap(), &m2_wasm[..]);
 
     Ok(())
 }

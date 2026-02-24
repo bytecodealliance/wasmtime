@@ -696,7 +696,7 @@ impl Module {
     /// `None` when the module was compiled without that option.
     ///
     /// [`Config::guest_debug`]: crate::Config::guest_debug
-    pub fn bytecode(&self) -> Option<&[u8]> {
+    pub fn debug_bytecode(&self) -> Option<&[u8]> {
         self.compiled_module().bytecode()
     }
 

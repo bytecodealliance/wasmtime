@@ -5,8 +5,8 @@ use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
-use object::SectionIndex;
 use object::read::elf::SectionTable;
+use object::{LittleEndian, SectionIndex, U32Bytes};
 use object::{
     elf::{FileHeader64, SectionHeader64},
     endian::Endianness,
@@ -372,21 +372,21 @@ impl CodeMemory {
     /// # Panics
     ///
     /// Panics if index is out-of-range.
-    pub fn wasm_bytecode_end_for_module(&self, index: StaticModuleIndex) -> Option<usize> {
+    fn wasm_bytecode_end_for_module(&self, index: StaticModuleIndex) -> Option<usize> {
         if self.wasm_bytecode_ends().is_empty() {
             return None;
         }
-        let array_offset = usize::try_from(index.as_u32())
-            .unwrap()
-            .checked_mul(4)
-            .unwrap();
-        let value = &self.wasm_bytecode_ends()[array_offset..(array_offset + 4)];
-        Some(usize::try_from(u32::from_le_bytes([value[0], value[1], value[2], value[3]])).unwrap())
+        let ends = self.wasm_bytecode_ends();
+        let count = ends.len() / core::mem::size_of::<u32>();
+        let (ends, _) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(ends, count)
+            .expect("Invalid alignment of `ends` section");
+        let index = usize::try_from(index.as_u32()).unwrap();
+        Some(usize::try_from(ends[index].get(LittleEndian)).unwrap())
     }
 
     /// Returns the Wasm bytecode for the a core module in this
     /// artifact, or `None` if bytecode was not preserved.
-    pub fn wasm_bytecode_for_module(&self, index: StaticModuleIndex) -> Option<&[u8]> {
+    pub(crate) fn wasm_bytecode_for_module(&self, index: StaticModuleIndex) -> Option<&[u8]> {
         let start = if index.as_u32() == 0 {
             0
         } else {

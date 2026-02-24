@@ -267,7 +267,7 @@ impl<'a> ObjectBuilder<'a> {
             end = end
                 .checked_add(u32::try_from(wasm.len()).expect("module bytecode exceeds 4 GiB"))
                 .expect("total bytecode exceeds 4 GiB");
-            self.obj.append_section_data(ends_id, &end.to_le_bytes(), 1);
+            self.obj.append_section_data(ends_id, &end.to_le_bytes(), 4);
         }
     }
 
