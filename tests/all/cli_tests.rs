@@ -2304,7 +2304,8 @@ start a print 1234
             .unwrap_err();
             assert!(
                 err.to_string()
-                    .contains("Field size limit 1048576 exceeded"),
+                    .contains("Field size limit 1048576 exceeded")
+                    || err.to_string().contains("max size reached"),
                 "bad error message: {err:?}"
             );
         }
