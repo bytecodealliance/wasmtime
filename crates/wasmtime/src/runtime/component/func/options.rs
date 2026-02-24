@@ -334,6 +334,12 @@ pub struct LiftContext<'a> {
         allow(unused, reason = "easier to not #[cfg] away")
     )]
     concurrent_state: &'a mut ConcurrentState,
+
+    /// Remaining fuel for this hostcall/lift operation.
+    ///
+    /// This is decremented for strings/lists, for example, to cap the size of
+    /// data the host allocates on behalf of the guest.
+    hostcall_fuel: usize,
 }
 
 #[doc(hidden)]
@@ -346,6 +352,7 @@ impl<'a> LiftContext<'a> {
         instance_handle: Instance,
     ) -> LiftContext<'a> {
         let store_id = store.id();
+        let hostcall_fuel = store.hostcall_fuel();
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that
@@ -369,6 +376,7 @@ impl<'a> LiftContext<'a> {
             host_table,
             host_resource_data,
             concurrent_state,
+            hostcall_fuel,
         }
     }
 
@@ -489,5 +497,22 @@ impl<'a> LiftContext<'a> {
     #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
+    }
+
+    /// Consumes `amt` units of fuel, typically a number of bytes, from this
+    /// context.
+    ///
+    /// Returns an error if the fuel is exhausted which will cause a trap in the
+    /// guest. Note that this is distinct from Wasm's fuel, this is just for
+    /// keeping track of data flowing from the guest to the host.
+    pub fn consume_fuel(&mut self, amt: usize) -> Result<()> {
+        match self.hostcall_fuel.checked_sub(amt) {
+            Some(new) => self.hostcall_fuel = new,
+            None => bail!(
+                "too much data is being copied between the host and the guest: \
+                 fuel allocated for hostcalls has been exhausted"
+            ),
+        }
+        Ok(())
     }
 }
