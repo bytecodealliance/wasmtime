@@ -131,6 +131,7 @@ pulley-interpreter = { workspace = true, features = ["disas"] }
 wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
 futures = { workspace = true }
+rand = { workspace = true }
 
 # Should only be used for tests that are explicitly testing `anyhow::Error` and
 # `wasmtime::Error` integration and conversion. Otherwise, always prefer to use
@@ -624,6 +625,10 @@ required-features = ["wasi-common/tokio"]
 
 [[bench]]
 name = "compile"
+harness = false
+
+[[bench]]
+name = "compile_time_builtins"
 harness = false
 
 [[bench]]
