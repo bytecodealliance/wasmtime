@@ -1541,6 +1541,9 @@ impl StoreOpaque {
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
     pub fn enter_host_call(&mut self) -> Result<()> {
+        if !self.concurrency_support() {
+            return Ok(());
+        }
         let state = self.concurrent_state_mut();
         let caller = state.unwrap_current_guest_thread();
         let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
@@ -1556,6 +1559,9 @@ impl StoreOpaque {
     /// the host isn't complete yet. In that situation the host task persists
     /// and will be cleaned up separately.
     pub fn exit_host_call(&mut self) -> Result<()> {
+        if !self.concurrency_support() {
+            return Ok(());
+        }
         let task = self.concurrent_state_mut().unwrap_current_host_thread();
         log::trace!("delete host task {task:?}");
         let task = self.concurrent_state_mut().delete(task)?;
