@@ -1113,6 +1113,15 @@ impl Module {
         &self.inner.offsets
     }
 
+    /// Return the unique-within-Engine ID for this module.
+    ///
+    /// Allows distinguishing module identities when introspecting
+    /// modules, e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_engine(&self) -> u64 {
+        self.id().as_u64()
+    }
+
     /// Return the address, in memory, of the trampoline that allows Wasm to
     /// call a array function of the given signature.
     ///

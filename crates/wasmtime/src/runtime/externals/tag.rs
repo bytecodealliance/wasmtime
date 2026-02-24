@@ -60,6 +60,15 @@ impl Tag {
         store.id() == self.instance.store_id()
     }
 
+    /// Returns a stable identifier for this tag within its store.
+    ///
+    /// This allows distinguishing tags when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::from(self.instance.instance().as_u32()) << 32 | u64::from(self.index.as_u32())
+    }
+
     /// Determines whether this tag is reference equal to the other
     /// given tag in the given store.
     ///

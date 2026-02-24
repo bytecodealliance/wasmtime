@@ -671,6 +671,15 @@ impl Memory {
         store.id() == self.instance.store_id()
     }
 
+    /// Returns a stable identifier for this memory within its store.
+    ///
+    /// This allows distinguishing memories when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::from(self.instance.instance().as_u32()) << 32 | u64::from(self.index.as_u32())
+    }
+
     /// Get a stable hash key for this memory.
     ///
     /// Even if the same underlying memory definition is added to the

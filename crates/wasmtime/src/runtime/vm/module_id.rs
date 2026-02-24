@@ -16,4 +16,9 @@ impl CompiledModuleId {
         // uniqueness.
         CompiledModuleId(crate::store::StoreId::allocate().as_raw())
     }
+
+    /// Returns the inner unique integer contained in this ID.
+    pub fn as_u64(self) -> u64 {
+        self.0.get()
+    }
 }

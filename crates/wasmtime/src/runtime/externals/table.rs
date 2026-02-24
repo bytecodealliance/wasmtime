@@ -571,6 +571,15 @@ impl Table {
         store.id() == self.instance.store_id()
     }
 
+    /// Returns a stable identifier for this table within its store.
+    ///
+    /// This allows distinguishing tables when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::from(self.instance.instance().as_u32()) << 32 | u64::from(self.index.as_u32())
+    }
+
     /// Get a stable hash key for this table.
     ///
     /// Even if the same underlying table definition is added to the

@@ -611,6 +611,18 @@ impl Instance {
         self.id.instance()
     }
 
+    /// Return a unique-within-Store index for this `Instance`.
+    ///
+    /// Allows distinguishing instance identities when introspecting
+    /// the `Store`, e.g. via debug APIs.
+    ///
+    /// This index will match the instance's position in the sequence
+    /// returned by `Store::debug_all_instances()`.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u32 {
+        self.id.instance().as_u32()
+    }
+
     /// Get all globals within this instance.
     ///
     /// Returns both import and defined globals.

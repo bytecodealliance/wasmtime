@@ -397,6 +397,24 @@ impl Global {
         store.id() == self.store
     }
 
+    /// Returns a stable identifier for this global within its store.
+    ///
+    /// This allows distinguishing globals when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        match self.kind {
+            VMGlobalKind::Instance(idx) => u64::from(self.instance) << 32 | u64::from(idx.as_u32()),
+            VMGlobalKind::Host(idx) => u64::from(u32::MAX) << 32 | u64::from(idx.as_u32()),
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::ComponentFlags(idx) => {
+                u64::from(self.instance) << 32 | u64::from(idx.as_u32())
+            }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::TaskMayBlock => u64::from(self.instance) << 32 | u64::from(u32::MAX),
+        }
+    }
+
     /// Get a stable hash key for this global.
     ///
     /// Even if the same underlying global definition is added to the

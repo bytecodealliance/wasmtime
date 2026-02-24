@@ -1200,3 +1200,121 @@ fn component_bytecode() -> wasmtime::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn debug_ids() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module1 = Module::new(
+        &engine,
+        r#"
+        (module
+          (memory 1 1)
+          (memory 1 1)
+          (global (mut i32) (i32.const 0))
+          (global (mut i32) (i32.const 1))
+          (table 1 1 funcref)
+          (table 1 1 funcref)
+          (tag (param i32))
+          (tag (param i64)))
+        "#,
+    )?;
+
+    let module2 = Module::new(
+        &engine,
+        r#"
+        (module
+          (memory (export "m") 1 1))
+        "#,
+    )?;
+
+    let instance1 = Instance::new(&mut store, &module1, &[])?;
+    let instance2 = Instance::new(&mut store, &module2, &[])?;
+    let instance3 = Instance::new(&mut store, &module1, &[])?;
+
+    assert_ne!(
+        module1.debug_index_in_engine(),
+        module2.debug_index_in_engine()
+    );
+    assert_ne!(
+        instance1.debug_index_in_store(),
+        instance2.debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance1
+            .debug_memory(&mut store, 1)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance2
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_global(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_global(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_table(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_table(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_tag(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_tag(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+
+    let m_via_export = instance2
+        .get_export(&mut store, "m")
+        .unwrap()
+        .into_memory()
+        .unwrap();
+    let m_via_introspection = instance2.debug_memory(&mut store, 0).unwrap();
+    assert_eq!(
+        m_via_export.debug_index_in_store(),
+        m_via_introspection.debug_index_in_store()
+    );
+
+    Ok(())
+}
