@@ -9,7 +9,7 @@ use std::{
 use wasmtime::{error::OutOfMemory, *};
 use wasmtime_core::alloc::TryCollect;
 use wasmtime_environ::{
-    PrimaryMap, SecondaryMap,
+    EntityRef, PrimaryMap,
     collections::{self, *},
 };
 use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
@@ -169,27 +169,51 @@ fn primary_map_try_reserve_exact() -> Result<()> {
 }
 
 #[test]
-fn secondary_map_try_with_capacity() -> Result<()> {
+fn secondary_map_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
-        let _map = SecondaryMap::<Key, u32>::try_with_capacity(32)?;
+        let _map = SecondaryMap::<Key, u32>::with_capacity(32)?;
         Ok(())
     })
 }
 
 #[test]
-fn secondary_map_try_resize() -> Result<()> {
+fn secondary_map_resize() -> Result<()> {
     OomTest::new().test(|| {
         let mut map = SecondaryMap::<Key, u32>::new();
-        map.try_resize(100)?;
+        map.resize(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn secondary_map_try_insert() -> Result<()> {
+fn secondary_map_insert() -> Result<()> {
     OomTest::new().test(|| {
         let mut map = SecondaryMap::<Key, u32>::new();
-        map.try_insert(Key::from_u32(42), 100)?;
+        map.insert(Key::from_u32(42), 100)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn secondary_map_remove() -> Result<()> {
+    OomTest::new().test(|| {
+        let mut default = Vec::new();
+        default.push(3)?;
+        default.push(3)?;
+        default.push(3)?;
+
+        let mut map = collections::SecondaryMap::<Key, Vec<u32>>::with_default(default);
+        assert_eq!(&*map[Key::new(0)], &[3, 3, 3]);
+
+        map.insert(Key::new(0), Vec::new())?;
+        assert!(map[Key::new(0)].is_empty());
+
+        // This may fail because it requires `TryClone`ing the default value.
+        let old = map.remove(Key::new(0))?;
+
+        assert!(old.unwrap().is_empty());
+        assert_eq!(&*map[Key::new(0)], &[3, 3, 3]);
+
         Ok(())
     })
 }
