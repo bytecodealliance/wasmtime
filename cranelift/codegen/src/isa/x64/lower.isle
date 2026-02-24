@@ -2361,17 +2361,11 @@
 (decl do_cls (Type Gpr) Gpr)
 
 ;; cls is implemented via clz using the identity: cls(x) = clz(x ^ (x >> 1)) - 1
-(rule 1 (do_cls $I64 src)
-      (let ((shifted Gpr (x64_sarq_mi src 1))
-            (xored Gpr (x64_xor $I64 src (RegMemImm.Reg shifted)))
-            (clz Gpr (do_clz $I64 $I64 xored)))
-        (x64_sub $I64 clz (RegMemImm.Imm 1))))
-
-(rule 0 (do_cls $I32 src)
-      (let ((shifted Gpr (x64_sarl_mi src 1))
-            (xored Gpr (x64_xor $I32 src (RegMemImm.Reg shifted)))
-            (clz Gpr (do_clz $I32 $I32 xored)))
-        (x64_sub $I32 clz (RegMemImm.Imm 1))))
+(rule (do_cls ty src)
+      (let ((shifted Gpr (x64_sar ty src (Imm8Gpr.Imm8 1)))
+            (xored Gpr (x64_xor ty src (RegMemImm.Reg shifted)))
+            (clz Gpr (do_clz ty ty xored)))
+        (x64_sub ty clz (RegMemImm.Imm 1))))
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
