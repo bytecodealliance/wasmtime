@@ -40,6 +40,8 @@ class Component {
   WASMTIME_CLONE_WRAPPER(Component, wasmtime_component);
 
 #ifdef WASMTIME_FEATURE_COMPILER
+
+#ifdef WASMTIME_FEATURE_WAT
   /**
    * \brief Compiles a component from the WebAssembly text format.
    *
@@ -54,6 +56,7 @@ class Component {
     auto bytes = wasm.ok();
     return compile(engine, bytes);
   }
+#endif // WASMTIME_FEATURE_WAT
 
   /**
    * \brief Compiles a component from the WebAssembly binary format.
