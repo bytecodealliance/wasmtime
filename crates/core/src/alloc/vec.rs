@@ -1,5 +1,6 @@
 use crate::alloc::{TryClone, try_realloc};
 use crate::error::OutOfMemory;
+use core::borrow::Borrow;
 use core::{
     cmp::Ordering,
     fmt,
@@ -306,6 +307,18 @@ impl<T> Deref for Vec<T> {
 impl<T> DerefMut for Vec<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl<T> AsRef<[T]> for Vec<T> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<T> Borrow<[T]> for Vec<T> {
+    fn borrow(&self) -> &[T] {
+        self
     }
 }
 

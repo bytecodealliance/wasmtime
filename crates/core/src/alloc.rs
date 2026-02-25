@@ -5,6 +5,7 @@ mod boxed;
 mod string;
 mod try_clone;
 mod try_collect;
+mod try_cow;
 mod try_new;
 mod vec;
 
@@ -16,6 +17,7 @@ pub use boxed::{
 pub use string::String;
 pub use try_clone::TryClone;
 pub use try_collect::{TryCollect, TryExtend, TryFromIterator};
+pub use try_cow::{TryCow, TryToOwned};
 pub use try_new::{TryNew, try_new};
 pub use vec::Vec;
 

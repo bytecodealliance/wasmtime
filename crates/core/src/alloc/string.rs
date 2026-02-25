@@ -2,7 +2,7 @@ use crate::{
     alloc::{TryClone, str_ptr_from_raw_parts, try_realloc},
     error::OutOfMemory,
 };
-use core::{fmt, mem, ops};
+use core::{borrow::Borrow, fmt, mem, ops};
 use std_alloc::{alloc::Layout, boxed::Box, string as inner};
 
 /// A newtype wrapper around [`std::string::String`] that only exposes
@@ -45,6 +45,18 @@ impl ops::DerefMut for String {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl AsRef<str> for String {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+impl Borrow<str> for String {
+    fn borrow(&self) -> &str {
+        self
     }
 }
 
