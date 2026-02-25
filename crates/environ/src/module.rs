@@ -237,7 +237,7 @@ pub struct TableInitialization {
 }
 
 /// Initial value for all elements in a table.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TableInitialValue {
     /// Initialize each table element to null, optionally setting some elements
     /// to non-null given the precomputed image.

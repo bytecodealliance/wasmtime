@@ -370,7 +370,7 @@ impl GcArrayLayout {
 /// tuples of typed fields with a certain size. The only difference in
 /// practice is that an exception object also carries a tag reference
 /// (at a fixed offset as per `GcTypeLayouts::exception_tag_offset`).
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct GcStructLayout {
     /// The size (in bytes) of this struct.
     pub size: u32,

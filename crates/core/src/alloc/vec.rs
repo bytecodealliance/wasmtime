@@ -48,7 +48,7 @@ macro_rules! private_len {
 
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
 /// failure.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Vec<T> {
     inner: StdVec<T>,
 }
