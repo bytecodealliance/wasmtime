@@ -12,7 +12,7 @@ use wasmtime_environ::{
     PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
     WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
     WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
-    collections::Vec as FallibleVec,
+    collections::{TryClone as _, Vec as FallibleVec},
 };
 
 pub(crate) mod matching;
@@ -1509,7 +1509,7 @@ impl ExternType {
                         engine,
                         subty.is_final,
                         subty.supertype,
-                        subty.unwrap_func().clone(),
+                        subty.unwrap_func().try_clone().panic_on_oom(),
                     )
                     .panic_on_oom()
                     .into()
@@ -2493,7 +2493,7 @@ impl FuncType {
         let results: Box<[_]> = results
             .map(|p| to_wasm_type(p, &mut wasmtime_results))
             .try_collect()?;
-        let wasm_func_ty = WasmFuncType::new(params, results);
+        let wasm_func_ty = WasmFuncType::new(params, results)?;
 
         if let Some(supertype) = supertype {
             assert!(supertype.comes_from_same_engine(engine));
@@ -2591,7 +2591,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
@@ -2602,7 +2602,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .iter()
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }

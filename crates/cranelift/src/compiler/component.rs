@@ -10,8 +10,8 @@ use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
-    Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PtrSize,
-    TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
+    Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PanicOnOom as _,
+    PtrSize, TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
     fact::PREPARE_CALL_FIXED_PARAMS,
 };
 
@@ -177,7 +177,7 @@ impl<'a> TrampolineCompiler<'a> {
             }
             Trampoline::ResourceRep { instance, ty } => {
                 // Currently this only supports resources represented by `i32`
-                assert_eq!(self.signature.returns()[0], WasmValType::I32);
+                assert_eq!(self.signature.results()[0], WasmValType::I32);
                 self.translate_libcall(
                     host::resource_rep32,
                     TrapSentinel::NegativeOne,
@@ -639,10 +639,7 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::SyncStartCall { callback } => {
                 let pointer_type = self.isa.pointer_type();
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
-                    &WasmFuncType::new(
-                        Box::new([]),
-                        self.signature.returns().iter().copied().collect(),
-                    ),
+                    &WasmFuncType::new([], self.signature.results().iter().copied()).panic_on_oom(),
                     &mut self.builder,
                     &[],
                 );
@@ -972,10 +969,8 @@ impl<'a> TrampolineCompiler<'a> {
             // A mixture of the above two.
             WasmArgs::InRegistersUpTo(n) => {
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
-                    &WasmFuncType::new(
-                        self.signature.params().iter().skip(n).copied().collect(),
-                        Box::new([]),
-                    ),
+                    &WasmFuncType::new(self.signature.params().iter().skip(n).copied(), [])
+                        .panic_on_oom(),
                     &mut self.builder,
                     &wasm_params[n..],
                 );
@@ -1026,7 +1021,7 @@ impl<'a> TrampolineCompiler<'a> {
         // accounts for the ABI of this function when storing results.
         let result = self.builder.func.dfg.inst_results(call).get(0).copied();
         let result_ty = result.map(|v| self.builder.func.dfg.value_type(v));
-        let expected = self.signature.returns();
+        let expected = self.signature.results();
         match host_result.into() {
             HostResult::Sentinel(TrapSentinel::NegativeOne) => {
                 assert_eq!(expected.len(), 1);
@@ -1054,7 +1049,7 @@ impl<'a> TrampolineCompiler<'a> {
                 let len = len.or(val_raw_len).unwrap();
                 self.raise_if_host_trapped(result.unwrap());
                 let results = self.compiler.load_values_from_array(
-                    self.signature.returns(),
+                    self.signature.results(),
                     &mut self.builder,
                     ptr,
                     len,
@@ -1671,9 +1666,10 @@ impl ComponentCompiler for Compiler {
         symbol: &str,
     ) -> Result<CompiledFunctionBody> {
         let wasm_func_ty = WasmFuncType::new(
-            intrinsic.core_params().into(),
-            intrinsic.core_results().into(),
-        );
+            intrinsic.core_params().iter().copied(),
+            intrinsic.core_results().iter().copied(),
+        )
+        .panic_on_oom();
 
         match abi {
             // Fall through to the trampoline compiler.

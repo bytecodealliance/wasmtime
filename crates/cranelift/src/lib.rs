@@ -203,7 +203,7 @@ fn wasm_call_signature(
     let mut sig = blank_sig(isa, call_conv);
     let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm_func_ty.params().iter().map(&cvt));
-    sig.returns.extend(wasm_func_ty.returns().iter().map(&cvt));
+    sig.returns.extend(wasm_func_ty.results().iter().map(&cvt));
     sig
 }
 

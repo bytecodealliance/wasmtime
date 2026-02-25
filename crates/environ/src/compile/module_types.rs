@@ -1,16 +1,16 @@
 use crate::{
     EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
-    ModuleTypes, TypeConvert, TypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
-    WasmExnType, WasmFieldType, WasmFuncType, WasmHeapType, WasmResult, WasmStorageType,
-    WasmStructType, WasmSubType, wasm_unsupported,
+    ModuleTypes, PanicOnOom as _, TypeConvert, TypeIndex, WasmArrayType, WasmCompositeInnerType,
+    WasmCompositeType, WasmExnType, WasmFieldType, WasmFuncType, WasmHeapType, WasmResult,
+    WasmStorageType, WasmStructType, WasmSubType,
+    collections::{TryClone as _, TryCow},
+    wasm_unsupported,
 };
 use std::{
-    borrow::Cow,
     collections::{HashMap, hash_map::Entry},
     ops::Index,
 };
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
-use wasmtime_core::alloc::PanicOnOom as _;
 
 /// A type marking the start of a recursion group's definition.
 ///
@@ -166,19 +166,20 @@ impl ModuleTypesBuilder {
                 // type. We can reuse the definition and its index, but still
                 // need to intern the type into our `trampoline_types` map so we
                 // can reuse it in the future.
-                Cow::Borrowed(f) => {
-                    self.trampoline_types.insert(f.clone(), for_func_ty);
+                TryCow::Borrowed(f) => {
+                    self.trampoline_types
+                        .insert(f.try_clone().panic_on_oom(), for_func_ty);
                     for_func_ty
                 }
                 // The trampoline type is different from the original function
                 // type. Define the trampoline type and then intern it in
                 // `trampoline_types` so we can reuse it in the future.
-                Cow::Owned(f) => {
+                TryCow::Owned(f) => {
                     let idx = self.types.push(WasmSubType {
                         is_final: true,
                         supertype: None,
                         composite_type: WasmCompositeType {
-                            inner: WasmCompositeInnerType::Func(f.clone()),
+                            inner: WasmCompositeInnerType::Func(f.try_clone().panic_on_oom()),
                             shared: sub_ty.composite_type.shared,
                         },
                     });

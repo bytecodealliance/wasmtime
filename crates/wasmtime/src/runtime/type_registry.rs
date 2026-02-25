@@ -8,7 +8,6 @@ use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::GcRuntime;
-use alloc::borrow::Cow;
 use alloc::sync::Arc;
 use core::cell::Cell;
 use core::iter;
@@ -26,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes,
     PanicOnOom as _, TypeTrace, Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, TryCow, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -703,7 +702,7 @@ impl TypeRegistryInner {
                 gc_runtime,
                 &map,
                 module_group.clone(),
-                iter_entity_range(module_group.clone()).map(|ty| types[ty].clone()),
+                iter_entity_range(module_group.clone()).map(|ty| types[ty].try_clone()),
             )?;
 
             // Update the module-to-engine map with this rec group's
@@ -754,7 +753,7 @@ impl TypeRegistryInner {
         gc_runtime: Option<&dyn GcRuntime>,
         map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
-        types: impl ExactSizeIterator<Item = WasmSubType>,
+        types: impl ExactSizeIterator<Item = Result<WasmSubType, OutOfMemory>>,
     ) -> Result<RecGroupEntry, OutOfMemory> {
         log::trace!("registering rec group of length {}", types.len());
         debug_assert_eq!(iter_entity_range(range.clone()).len(), types.len());
@@ -771,7 +770,8 @@ impl TypeRegistryInner {
         let hash_consing_key = WasmRecGroup {
             types: types
                 .zip(iter_entity_range(range.clone()))
-                .map(|(mut ty, module_index)| {
+                .map(|(ty, module_index)| {
+                    let mut ty = ty?;
                     non_canon_types
                         .push((module_index, ty.try_clone()?))
                         .expect("reserved capacity");
@@ -1016,11 +1016,11 @@ impl TypeRegistryInner {
             };
 
             let trampoline_ty = match func_ty.trampoline_type()? {
-                Cow::Owned(ty) => ty,
-                Cow::Borrowed(ty) if !sub_ty.is_final || sub_ty.supertype.is_some() => {
+                TryCow::Owned(ty) => ty,
+                TryCow::Borrowed(ty) if !sub_ty.is_final || sub_ty.supertype.is_some() => {
                     ty.try_clone()?
                 }
-                Cow::Borrowed(_) => {
+                TryCow::Borrowed(_) => {
                     // The function type is its own trampoline type. Leave its entry
                     // in `type_to_trampoline` empty to signal this.
                     debug_assert!(func_ty.is_trampoline_type());
@@ -1354,7 +1354,7 @@ impl TypeRegistryInner {
         let range = ModuleInternedTypeIndex::from_bits(u32::MAX - 1)
             ..ModuleInternedTypeIndex::from_bits(u32::MAX);
 
-        self.register_rec_group(gc_runtime, &map, range, iter::once(ty))
+        self.register_rec_group(gc_runtime, &map, range, iter::once(Ok(ty)))
     }
 
     /// Unregister all of a type collection's rec groups.

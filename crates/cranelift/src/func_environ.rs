@@ -2594,7 +2594,7 @@ impl FuncEnvironment<'_> {
 
     pub fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool {
         let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
-        wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
+        wasm_func_ty.results()[index].is_vmgcref_type_and_not_i31()
     }
 
     pub fn translate_table_grow(
@@ -3999,7 +3999,7 @@ impl FuncEnvironment<'_> {
         let idx = self.module.types[index].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
             .unwrap_func()
-            .returns()
+            .results()
     }
 
     pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
@@ -4013,7 +4013,7 @@ impl FuncEnvironment<'_> {
         let idx = self.module.tags[tag_index].signature;
         self.types[idx.unwrap_module_type_index()]
             .unwrap_func()
-            .returns()
+            .results()
     }
 
     pub fn use_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {

@@ -14,7 +14,10 @@ pub use index_map::IndexMap;
 pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;
 pub use wasmtime_core::{
-    alloc::{String, TryClone, TryCollect, TryExtend, TryFromIterator, TryNew, Vec, try_new},
+    alloc::{
+        String, TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryToOwned, Vec,
+        try_new,
+    },
     vec,
 };
 

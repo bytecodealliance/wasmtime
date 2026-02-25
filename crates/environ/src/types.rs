@@ -1,10 +1,14 @@
-use crate::{Tunables, WasmResult, error::OutOfMemory, wasm_unsupported};
-use alloc::borrow::Cow;
+use crate::{
+    PanicOnOom as _, Tunables, WasmResult,
+    collections::{TryClone, TryCollect as _, TryCow, TryExtend},
+    error::OutOfMemory,
+    prelude::*,
+    wasm_unsupported,
+};
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use wasmtime_core::alloc::{TryClone, TryCollect as _};
 
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
@@ -683,21 +687,21 @@ pub enum WasmHeapBottomType {
 }
 
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
-    params: Box<[WasmValType]>,
-    non_i31_gc_ref_params_count: usize,
-    returns: Box<[WasmValType]>,
-    non_i31_gc_ref_returns_count: usize,
+    params_results: Box<[WasmValType]>,
+    params_len: u32,
+    non_i31_gc_ref_params_count: u32,
+    non_i31_gc_ref_results_count: u32,
 }
 
 impl TryClone for WasmFuncType {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(WasmFuncType {
-            params: TryClone::try_clone(&self.params)?,
+        Ok(Self {
+            params_results: TryClone::try_clone(&self.params_results)?,
+            params_len: self.params_len,
             non_i31_gc_ref_params_count: self.non_i31_gc_ref_params_count,
-            returns: TryClone::try_clone(&self.returns)?,
-            non_i31_gc_ref_returns_count: self.non_i31_gc_ref_returns_count,
+            non_i31_gc_ref_results_count: self.non_i31_gc_ref_results_count,
         })
     }
 }
@@ -705,16 +709,16 @@ impl TryClone for WasmFuncType {
 impl fmt::Display for WasmFuncType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(func")?;
-        if !self.params.is_empty() {
+        if !self.params().is_empty() {
             write!(f, " (param")?;
-            for p in self.params.iter() {
+            for p in self.params() {
                 write!(f, " {p}")?;
             }
             write!(f, ")")?;
         }
-        if !self.returns.is_empty() {
+        if !self.results().is_empty() {
             write!(f, " (result")?;
-            for r in self.returns.iter() {
+            for r in self.results() {
                 write!(f, " {r}")?;
             }
             write!(f, ")")?;
@@ -728,11 +732,8 @@ impl TypeTrace for WasmFuncType {
     where
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        for p in self.params.iter() {
-            p.trace(func)?;
-        }
-        for r in self.returns.iter() {
-            r.trace(func)?;
+        for ty in self.params_results.iter() {
+            ty.trace(func)?;
         }
         Ok(())
     }
@@ -741,11 +742,8 @@ impl TypeTrace for WasmFuncType {
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        for p in self.params.iter_mut() {
-            p.trace_mut(func)?;
-        }
-        for r in self.returns.iter_mut() {
-            r.trace_mut(func)?;
+        for ty in self.params_results.iter_mut() {
+            ty.trace_mut(func)?;
         }
         Ok(())
     }
@@ -754,51 +752,68 @@ impl TypeTrace for WasmFuncType {
 impl WasmFuncType {
     /// Creates a new function type from the provided `params` and `returns`.
     #[inline]
-    pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
-        let non_i31_gc_ref_params_count = params
+    pub fn new(
+        params: impl IntoIterator<Item = WasmValType>,
+        results: impl IntoIterator<Item = WasmValType>,
+    ) -> Result<Self, OutOfMemory> {
+        let mut params_results: crate::collections::Vec<_> = params.into_iter().try_collect()?;
+        let non_i31_gc_ref_params_count = params_results
             .iter()
             .filter(|p| p.is_vmgcref_type_and_not_i31())
             .count();
-        let non_i31_gc_ref_returns_count = returns
+
+        let params_len = params_results.len();
+        params_results.try_extend(results)?;
+        let non_i31_gc_ref_results_count = params_results[params_len..]
             .iter()
             .filter(|r| r.is_vmgcref_type_and_not_i31())
             .count();
-        WasmFuncType {
-            params,
+
+        let params_results = params_results.into_boxed_slice()?;
+        let params_len = u32::try_from(params_len).unwrap();
+        let non_i31_gc_ref_params_count = u32::try_from(non_i31_gc_ref_params_count).unwrap();
+        let non_i31_gc_ref_results_count = u32::try_from(non_i31_gc_ref_results_count).unwrap();
+
+        Ok(Self {
+            params_results,
+            params_len,
             non_i31_gc_ref_params_count,
-            returns,
-            non_i31_gc_ref_returns_count,
-        }
+            non_i31_gc_ref_results_count,
+        })
+    }
+
+    fn results_start(&self) -> usize {
+        usize::try_from(self.params_len).unwrap()
     }
 
     /// Function params types.
     #[inline]
     pub fn params(&self) -> &[WasmValType] {
-        &self.params
+        &self.params_results[..self.results_start()]
     }
 
     /// How many `externref`s are in this function's params?
     #[inline]
     pub fn non_i31_gc_ref_params_count(&self) -> usize {
-        self.non_i31_gc_ref_params_count
+        usize::try_from(self.non_i31_gc_ref_params_count).unwrap()
     }
 
     /// Returns params types.
     #[inline]
-    pub fn returns(&self) -> &[WasmValType] {
-        &self.returns
+    pub fn results(&self) -> &[WasmValType] {
+        &self.params_results[self.results_start()..]
     }
 
     /// How many `externref`s are in this function's returns?
     #[inline]
-    pub fn non_i31_gc_ref_returns_count(&self) -> usize {
-        self.non_i31_gc_ref_returns_count
+    pub fn non_i31_gc_ref_results_count(&self) -> usize {
+        usize::try_from(self.non_i31_gc_ref_results_count).unwrap()
     }
 
     /// Is this function type compatible with trampoline usage in Wasmtime?
     pub fn is_trampoline_type(&self) -> bool {
         self.params().iter().all(|p| *p == p.trampoline_type())
-            && self.returns().iter().all(|r| *r == r.trampoline_type())
+            && self.results().iter().all(|r| *r == r.trampoline_type())
     }
 
     /// Get the version of this function type that is suitable for usage as a
@@ -826,21 +841,15 @@ impl WasmFuncType {
     /// references themselves (unless the trampolines start doing explicit,
     /// fallible downcasts, but if we ever need that, then we might want to
     /// redesign this stuff).
-    pub fn trampoline_type(&self) -> Result<Cow<'_, Self>, OutOfMemory> {
+    pub fn trampoline_type(&self) -> Result<TryCow<'_, Self>, OutOfMemory> {
         if self.is_trampoline_type() {
-            return Ok(Cow::Borrowed(self));
+            return Ok(TryCow::Borrowed(self));
         }
 
-        Ok(Cow::Owned(Self::new(
-            self.params()
-                .iter()
-                .map(|p| p.trampoline_type())
-                .try_collect()?,
-            self.returns()
-                .iter()
-                .map(|r| r.trampoline_type())
-                .try_collect()?,
-        )))
+        Ok(TryCow::Owned(Self::new(
+            self.params().iter().map(|p| p.trampoline_type()),
+            self.results().iter().map(|r| r.trampoline_type()),
+        )?))
     }
 }
 
@@ -1140,7 +1149,7 @@ impl TypeTrace for WasmStructType {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "self-describing type")]
 pub struct WasmCompositeType {
     /// The type defined inside the composite type.
@@ -1173,7 +1182,7 @@ impl fmt::Display for WasmCompositeType {
 }
 
 /// A function, array, or struct type.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub enum WasmCompositeInnerType {
     Array(WasmArrayType),
@@ -1329,7 +1338,7 @@ impl TypeTrace for WasmCompositeType {
 }
 
 /// A concrete, user-defined (or host-defined) Wasm type.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmSubType {
     /// Whether this type is forbidden from being the supertype of any other
     /// type.
@@ -1507,7 +1516,7 @@ impl TypeTrace for WasmSubType {
 /// (rec (type (func $f (result (ref null $g))))
 ///      (type (func $g (result (ref null $f)))))
 /// ```
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmRecGroup {
     /// The types inside of this recgroup.
     pub types: Box<[WasmSubType]>,
@@ -2472,13 +2481,13 @@ pub trait TypeConvert {
             .params()
             .iter()
             .map(|t| self.convert_valtype(*t))
-            .collect::<WasmResult<_>>()?;
+            .collect::<WasmResult<Vec<_>>>()?;
         let results = ty
             .results()
             .iter()
             .map(|t| self.convert_valtype(*t))
-            .collect::<WasmResult<_>>()?;
-        Ok(WasmFuncType::new(params, results))
+            .collect::<WasmResult<Vec<_>>>()?;
+        Ok(WasmFuncType::new(params, results).panic_on_oom())
     }
 
     /// Converts a wasmparser value type to a wasmtime type
@@ -2532,4 +2541,24 @@ pub trait TypeConvert {
     /// Converts the specified type index from a heap type into a canonicalized
     /// heap type.
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wasm_func_type_new() -> Result<()> {
+        let i32 = WasmValType::I32;
+        let anyref = WasmValType::Ref(WasmRefType {
+            nullable: true,
+            heap_type: WasmHeapType::Any,
+        });
+        let ty = WasmFuncType::new([i32, i32, anyref, anyref], [i32, anyref])?;
+        assert_eq!(ty.params(), &[i32, i32, anyref, anyref]);
+        assert_eq!(ty.non_i31_gc_ref_params_count(), 2);
+        assert_eq!(ty.results(), &[i32, anyref]);
+        assert_eq!(ty.non_i31_gc_ref_results_count(), 1);
+        Ok(())
+    }
 }

@@ -14,7 +14,7 @@ use wasmtime_environ::component::{
     TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex, TypeStreamIndex,
     TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
-use wasmtime_environ::{PanicOnOom, PrimaryMap};
+use wasmtime_environ::{PanicOnOom as _, PrimaryMap, collections::TryClone as _};
 
 pub use crate::component::resources::ResourceType;
 
@@ -1104,7 +1104,7 @@ impl ComponentItem {
                         engine,
                         subty.is_final,
                         subty.supertype,
-                        subty.unwrap_func().clone(),
+                        subty.unwrap_func().try_clone().panic_on_oom(),
                     )
                     .panic_on_oom(),
                 )

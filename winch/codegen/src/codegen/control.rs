@@ -16,10 +16,10 @@ use crate::{
     stack::Val,
 };
 use cranelift_codegen::MachLabel;
-use wasmtime_environ::{WasmFuncType, WasmValType};
+use wasmtime_environ::{PanicOnOom as _, WasmFuncType, WasmValType, collections::TryClone as _};
 
 /// Categorization of the type of the block.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum BlockType {
     /// Doesn't produce or consume any values.
     Void,
@@ -29,6 +29,17 @@ pub(crate) enum BlockType {
     Func(WasmFuncType),
     /// An already resolved ABI signature.
     ABISig(ABISig),
+}
+
+impl Clone for BlockType {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Void => Self::Void,
+            Self::Single(x) => Self::Single(x.clone()),
+            Self::ABISig(x) => Self::ABISig(x.clone()),
+            Self::Func(f) => Self::Func(f.try_clone().panic_on_oom()),
+        }
+    }
 }
 
 /// Holds all the information about the signature of the block.
@@ -84,7 +95,7 @@ impl BlockSig {
                 <M::ABI as ABI>::abi_results(&[*ty], &CallingConvention::Default)
             }
             BlockType::Func(f) => {
-                <M::ABI as ABI>::abi_results(f.returns(), &CallingConvention::Default)
+                <M::ABI as ABI>::abi_results(f.results(), &CallingConvention::Default)
             }
             BlockType::ABISig(_) => unreachable!(),
         };
@@ -136,7 +147,7 @@ impl BlockSig {
         match &self.ty {
             BlockType::Void => 0,
             BlockType::Single(_) => 1,
-            BlockType::Func(f) => f.returns().len(),
+            BlockType::Func(f) => f.results().len(),
             BlockType::ABISig(sig) => sig.results().len(),
         }
     }

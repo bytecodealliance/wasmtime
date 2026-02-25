@@ -33,7 +33,7 @@ impl ComponentTypesBuilder {
             .unwrap_func();
         Signature {
             params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
-            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
+            results: f.results().iter().map(|ty| self.val_type(ty)).collect(),
         }
     }
 

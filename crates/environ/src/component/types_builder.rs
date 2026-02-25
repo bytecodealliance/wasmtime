@@ -173,7 +173,7 @@ impl ComponentTypesBuilder {
             .find(|(_, ty)| {
                 ty.as_func().map_or(false, |sig| {
                     sig.params().len() == 1
-                        && sig.returns().len() == 0
+                        && sig.results().len() == 0
                         && sig.params()[0] == WasmValType::I32
                 })
             })

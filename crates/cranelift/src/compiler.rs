@@ -465,7 +465,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         // Return results from the array as native return values.
         let results =
-            self.load_values_from_array(wasm_func_ty.returns(), &mut builder, args_base, args_len);
+            self.load_values_from_array(wasm_func_ty.results(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);
         builder.finalize();
 
@@ -1068,7 +1068,7 @@ impl Compiler {
 
         // Compute the size of the values vector.
         let value_size = mem::size_of::<u128>();
-        let values_vec_len = cmp::max(ty.params().len(), ty.returns().len());
+        let values_vec_len = cmp::max(ty.params().len(), ty.results().len());
         let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
         let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
@@ -1419,7 +1419,7 @@ impl Compiler {
         builder.switch_to_block(normal_return);
         self.store_values_to_array(
             &mut builder,
-            callee_sig.returns(),
+            callee_sig.results(),
             &normal_return_values,
             values_vec_ptr,
             values_vec_len,

@@ -13,8 +13,9 @@ use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
-    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, PtrSize,
+    Table, TableIndex, TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    collections::TryClone as _,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -194,7 +195,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)]
                     .unwrap_module_type_index();
                 let sig = self.types[sig_index].unwrap_func();
-                BlockSig::new(control::BlockType::func(sig.clone()))
+                BlockSig::new(control::BlockType::func(sig.try_clone().panic_on_oom()))
             }
         })
     }
