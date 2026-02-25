@@ -55,7 +55,7 @@ impl CompiledModule {
         let mut ret = Self {
             unique_id: CompiledModuleId::new(),
             engine_code,
-            module: Arc::new(info.module),
+            module: try_new::<Arc<_>>(info.module)?,
             meta: info.meta,
             index,
             func_names: info.func_names,
