@@ -268,7 +268,7 @@ impl HostFunc {
 }
 
 /// Argument to [`HostFn::lift_params`]
-enum Source<'a> {
+pub(super) enum Source<'a> {
     /// The parameters come from flat wasm arguments which are provided here.
     Flat(&'a [ValRaw]),
     /// The parameters come from linear memory at the provided offset, which is
