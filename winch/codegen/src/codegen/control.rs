@@ -35,7 +35,7 @@ impl Clone for BlockType {
     fn clone(&self) -> Self {
         match self {
             Self::Void => Self::Void,
-            Self::Single(x) => Self::Single(x.clone()),
+            Self::Single(x) => Self::Single(*x),
             Self::ABISig(x) => Self::ABISig(x.clone()),
             Self::Func(f) => Self::Func(f.try_clone().panic_on_oom()),
         }
