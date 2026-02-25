@@ -28,6 +28,8 @@ where
     V: Clone,
 {
     /// Same as [`cranelift_entity::SecondaryMap::new`].
+    ///
+    /// XXX: `Clone::clone(&<V as Default>::default())` should never allocate.
     pub fn new() -> Self
     where
         V: Default,
@@ -38,6 +40,8 @@ where
     }
 
     /// Same as [`cranelift_entity::SecondaryMap::try_with_capacity`].
+    ///
+    /// XXX: `Clone::clone(&<V as Default>::default())` should never allocate.
     pub fn with_capacity(capacity: usize) -> Result<Self, OutOfMemory>
     where
         V: Default,
@@ -48,6 +52,8 @@ where
     }
 
     /// Same as [`cranelift_entity::SecondaryMap::with_default`].
+    ///
+    /// XXX: `Clone::clone(&default)` should never allocate.
     pub fn with_default(default: V) -> Self {
         Self {
             inner: Inner::with_default(default),
