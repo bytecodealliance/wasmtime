@@ -1,6 +1,17 @@
+## 42.0.1
+
+Released 2026-02-25.
+
+### Fixed
+
+* Fix some minor `bindgen!` issues with `anyhow: true`
+  [#12658](https://github.com/bytecodealliance/wasmtime/pull/12658)
+
+--------------------------------------------------------------------------------
+
 ## 42.0.0
 
-Released 2026-02-20.
+Released 2026-02-24.
 
 ### Added
 
