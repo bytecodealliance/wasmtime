@@ -302,11 +302,13 @@ const _: () = {
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |mut store, rep| {
                                 wasmtime::component::__internal::Box::new(async move {
-                                    HostBaz::drop(
-                                            &mut host_getter(store.data_mut()),
-                                            wasmtime::component::Resource::new_own(rep),
-                                        )
-                                        .await
+                                    wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                        HostBaz::drop(
+                                                &mut host_getter(store.data_mut()),
+                                                wasmtime::component::Resource::new_own(rep),
+                                            )
+                                            .await,
+                                    )
                                 })
                             },
                         )?;
@@ -501,11 +503,13 @@ pub mod foo {
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |mut store, rep| {
                                 wasmtime::component::__internal::Box::new(async move {
-                                    HostBar::drop(
-                                            &mut host_getter(store.data_mut()),
-                                            wasmtime::component::Resource::new_own(rep),
-                                        )
-                                        .await
+                                    wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                        HostBar::drop(
+                                                &mut host_getter(store.data_mut()),
+                                                wasmtime::component::Resource::new_own(rep),
+                                            )
+                                            .await,
+                                    )
                                 })
                             },
                         )?;
