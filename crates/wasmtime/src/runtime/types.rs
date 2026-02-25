@@ -12,7 +12,7 @@ use wasmtime_environ::{
     PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
     WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
     WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
-    collections::{TryClone as _, Vec as FallibleVec},
+    collections::Vec as FallibleVec,
 };
 
 pub(crate) mod matching;
