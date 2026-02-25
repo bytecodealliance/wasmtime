@@ -19,7 +19,9 @@
 //!
 //! and then `use crate::*` works as usual.
 
-pub use crate::collections::{EntitySet, TryNew, try_new};
+pub use crate::collections::{
+    EntitySet, TryClone, TryCollect, TryExtend, TryFromIterator, TryNew, TryToOwned, try_new,
+};
 pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
 pub use alloc::borrow::ToOwned;
 pub use alloc::boxed::Box;
@@ -28,4 +30,3 @@ pub use alloc::string::{String, ToString};
 pub use alloc::vec;
 pub use alloc::vec::Vec;
 pub use wasmparser::collections::{IndexMap, IndexSet};
-pub use wasmtime_core::alloc::{TryCollect, TryExtend, TryFromIterator};
