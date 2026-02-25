@@ -1372,3 +1372,51 @@ async fn single_step_before_instantiation() -> wasmtime::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn early_epoch_yield_still_has_vmctx() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_async_yield_and_update(1);
+    engine.increment_epoch();
+
+    #[derive(Clone)]
+    struct H;
+    impl DebugHandler for H {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, _event: DebugEvent<'_>) {
+            // Ensure we can access the instance (which accesses the
+            // vmctx slot in the frame's debug info).
+            let frame = store.debug_exit_frames().next().unwrap();
+            let _instance = frame.instance(&mut store);
+        }
+    }
+
+    store.set_debug_handler(H);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}

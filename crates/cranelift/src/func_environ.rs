@@ -3865,6 +3865,8 @@ impl FuncEnvironment<'_> {
             self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW);
         }
 
+        self.update_state_slot_vmctx(builder);
+
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {
             self.fuel_function_entry(builder);
@@ -3884,8 +3886,6 @@ impl FuncEnvironment<'_> {
                 self.check_free_start(builder);
             }
         }
-
-        self.update_state_slot_vmctx(builder);
 
         Ok(())
     }
