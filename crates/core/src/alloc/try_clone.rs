@@ -8,6 +8,12 @@ pub trait TryClone: Sized {
     /// Attempt to clone `self`, returning an error if any allocation fails
     /// during cloning.
     fn try_clone(&self) -> Result<Self, OutOfMemory>;
+
+    /// Clone `self`, panicking on allocation failure.
+    fn clone_panic_on_oom(&self) -> Self {
+        use super::PanicOnOom as _;
+        self.try_clone().panic_on_oom()
+    }
 }
 
 impl<T> TryClone for *mut T
