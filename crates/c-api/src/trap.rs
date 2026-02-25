@@ -40,6 +40,17 @@ const _: () = {
     assert!(Trap::ListOutOfBounds as u8 == 31);
     assert!(Trap::InvalidDiscriminant as u8 == 32);
     assert!(Trap::UnalignedPointer as u8 == 33);
+    assert!(Trap::TaskCancelNotCancelled as u8 == 34);
+    assert!(Trap::TaskCancelOrReturnTwice as u8 == 35);
+    assert!(Trap::SubtaskCancelAfterTerminal as u8 == 36);
+    assert!(Trap::TaskReturnInvalid as u8 == 37);
+    assert!(Trap::WaitableSetDropHasWaiters as u8 == 38);
+    assert!(Trap::SubtaskDropNotResolved as u8 == 39);
+    assert!(Trap::ThreadNewIndirectInvalidType as u8 == 40);
+    assert!(Trap::ThreadNewIndirectUninitialized as u8 == 41);
+    assert!(Trap::BackpressureOverflow as u8 == 42);
+    assert!(Trap::UnsupportedCallbackCode as u8 == 43);
+    assert!(Trap::CannotResumeThread as u8 == 44);
 };
 
 #[repr(C)]

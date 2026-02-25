@@ -734,7 +734,7 @@ async fn cancel_host_future() -> Result<()> {
         .instantiate_async(&mut store, &component)
         .await?;
     let func = instance.get_typed_func::<(FutureReader<u32>,), ()>(&mut store, "run")?;
-    let reader = FutureReader::new(&mut store, MyFutureReader);
+    let reader = FutureReader::new(&mut store, MyFutureReader)?;
     func.call_async(&mut store, (reader,)).await?;
 
     return Ok(());
@@ -844,15 +844,8 @@ async fn require_concurrency_support() -> Result<()> {
             .is_err()
     );
 
-    let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        StreamReader::<u32>::new(&mut store, Vec::new());
-    }));
-    assert!(ok.is_err());
-
-    let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        FutureReader::new(&mut store, async { wasmtime::error::Ok(0) })
-    }));
-    assert!(ok.is_err());
+    assert!(StreamReader::<u32>::new(&mut store, Vec::new()).is_err());
+    assert!(FutureReader::new(&mut store, async { wasmtime::error::Ok(0) }).is_err());
 
     let mut linker = Linker::<()>::new(&engine);
     let mut root = linker.root();

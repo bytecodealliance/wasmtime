@@ -8,19 +8,23 @@ fn simple_type_conversions() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) });
+    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) })?;
     let f = f.try_into_future_any(&mut store).unwrap();
     assert!(f.clone().try_into_future_reader::<()>().is_err());
     assert!(f.clone().try_into_future_reader::<u64>().is_err());
     let f = f.try_into_future_reader::<u32>().unwrap();
-    f.try_into_future_any(&mut store).unwrap().close(&mut store);
+    f.try_into_future_any(&mut store)
+        .unwrap()
+        .close(&mut store)?;
 
-    let s = StreamReader::new(&mut store, vec![10_u32]);
+    let s = StreamReader::new(&mut store, vec![10_u32])?;
     let s = s.try_into_stream_any(&mut store).unwrap();
     assert!(s.clone().try_into_stream_reader::<()>().is_err());
     assert!(s.clone().try_into_stream_reader::<u64>().is_err());
     let s = s.try_into_stream_reader::<u32>().unwrap();
-    s.try_into_stream_any(&mut store).unwrap().close(&mut store);
+    s.try_into_stream_any(&mut store)
+        .unwrap()
+        .close(&mut store)?;
 
     Ok(())
 }
@@ -139,11 +143,11 @@ fn simple_type_assertions() -> Result<()> {
         let (f,) = f_t_a.call(&mut *store, (f,))?;
         let (f,) = f_a_a.call(&mut *store, (f,))?;
         let (mut f,) = f_a_t.call(&mut *store, (f,))?;
-        f.close(&mut *store);
+        f.close(&mut *store)?;
         Ok(())
     };
 
-    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) });
+    let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(10_u32) })?;
     roundtrip(&mut store, f)?;
 
     let (f,) = mk_f_t.call(&mut store, ())?;
@@ -158,11 +162,11 @@ fn simple_type_assertions() -> Result<()> {
         let (s,) = s_t_a.call(&mut *store, (s,))?;
         let (s,) = s_a_a.call(&mut *store, (s,))?;
         let (mut s,) = s_a_t.call(&mut *store, (s,))?;
-        s.close(&mut *store);
+        s.close(&mut *store)?;
         Ok(())
     };
 
-    let s = StreamReader::new(&mut store, vec![10_u32]);
+    let s = StreamReader::new(&mut store, vec![10_u32])?;
     roundtrip(&mut store, s)?;
 
     let (s,) = mk_s_t.call(&mut store, ())?;

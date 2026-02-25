@@ -502,10 +502,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         let file = get_file(store.get().table, &fd)?;
         if !file.perms.contains(FilePerms::READ) {
             return Ok((
-                StreamReader::new(&mut store, iter::empty()),
+                StreamReader::new(&mut store, iter::empty())?,
                 FutureReader::new(&mut store, async {
                     wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
-                }),
+                })?,
             ));
         }
 
@@ -520,8 +520,8 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     result: Some(result_tx),
                     task: None,
                 },
-            ),
-            FutureReader::new(&mut store, result_rx),
+            )?,
+            FutureReader::new(&mut store, result_rx)?,
         ))
     }
 
@@ -530,7 +530,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
         offset: Filesize,
-    ) -> FutureReader<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
@@ -543,10 +543,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 data.pipe(
                     &mut store,
                     WriteStreamConsumer::new_at(file, offset, result_tx),
-                );
+                )?;
             }
             Err(err) => {
-                data.close(&mut store);
+                data.close(&mut store)?;
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
             }
         }
@@ -557,7 +557,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
-    ) -> FutureReader<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
@@ -567,10 +567,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             }
         }) {
             Ok(file) => {
-                data.pipe(&mut store, WriteStreamConsumer::new_append(file, result_tx));
+                data.pipe(&mut store, WriteStreamConsumer::new_append(file, result_tx))?;
             }
             Err(err) => {
-                data.close(&mut store);
+                data.close(&mut store)?;
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
             }
         }
@@ -642,10 +642,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
     fn read_directory<U>(
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
-    ) -> (
+    ) -> wasmtime::Result<(
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
-    ) {
+    )> {
         let (result_tx, result_rx) = oneshot::channel();
         let stream = match get_dir(store.get().table, &fd).and_then(|dir| {
             if !dir.perms.contains(DirPerms::READ) {
@@ -665,22 +665,22 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                                 readdir.filter_map(|e| map_dir_entry(e).transpose()),
                                 result_tx,
                             ),
-                        ),
+                        )?,
                         Err(e) => {
                             let _ = result_tx.send(Err(e.into()));
-                            StreamReader::new(&mut store, iter::empty())
+                            StreamReader::new(&mut store, iter::empty())?
                         }
                     }
                 } else {
-                    StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))
+                    StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))?
                 }
             }
             Err(err) => {
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
-                StreamReader::new(&mut store, iter::empty())
+                StreamReader::new(&mut store, iter::empty())?
             }
         };
-        (stream, FutureReader::new(&mut store, result_rx))
+        Ok((stream, FutureReader::new(&mut store, result_rx)?))
     }
 
     async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {

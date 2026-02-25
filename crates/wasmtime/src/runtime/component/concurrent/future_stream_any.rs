@@ -126,11 +126,14 @@ impl FutureAny {
     /// This will close this future and cause any write that happens later to
     /// returned `DROPPED`.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if this future has already been closed.
+    ///
     /// # Panics
     ///
-    /// Panics if the `store` does not own this future. Usage of this future
-    /// after calling `close` will also cause a panic.
-    pub fn close(&mut self, mut store: impl AsContextMut) {
+    /// Panics if the `store` does not own this future.
+    pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
         futures_and_streams::future_close(store.as_context_mut().0, &mut self.id)
     }
 }
@@ -293,11 +296,14 @@ impl StreamAny {
     /// This will close this stream and cause any write that happens later to
     /// returned `DROPPED`.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if this stream has already been closed.
+    ///
     /// # Panics
     ///
-    /// Panics if the `store` does not own this stream. Usage of this stream
-    /// after calling `close` will also cause a panic.
-    pub fn close(&mut self, mut store: impl AsContextMut) {
+    /// Panics if the `store` does not own this stream.
+    pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
         futures_and_streams::future_close(store.as_context_mut().0, &mut self.id)
     }
 }

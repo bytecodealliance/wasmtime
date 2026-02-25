@@ -682,7 +682,7 @@ fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
     store
         .component_resource_tables(Some(instance))
         .validate_scope_exit()?;
-    store.exit_guest_sync_call(true)
+    store.exit_guest_sync_call()
 }
 
 #[cfg(feature = "component-model-async")]
@@ -864,13 +864,15 @@ unsafe fn prepare_call(
         store.component_async_store().prepare_call(
             instance,
             memory.cast::<crate::vm::VMMemoryDefinition>(),
-            start.cast::<crate::vm::VMFuncRef>(),
-            return_.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(start).unwrap().cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(return_)
+                .unwrap()
+                .cast::<crate::vm::VMFuncRef>(),
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             RuntimeComponentInstanceIndex::from_u32(callee_instance),
             TypeTupleIndex::from_u32(task_return_type),
             callee_async != 0,
-            u8::try_from(string_encoding).unwrap(),
+            StringEncoding::from_u8(u8::try_from(string_encoding).unwrap()).unwrap(),
             result_count_or_max_if_async,
             storage.cast::<crate::ValRaw>(),
             storage_len,
@@ -892,7 +894,7 @@ unsafe fn sync_start(
         store.component_async_store().sync_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
-            callee.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(callee).unwrap().cast::<crate::vm::VMFuncRef>(),
             param_count,
             storage.cast::<std::mem::MaybeUninit<crate::ValRaw>>(),
             storage_len,
@@ -916,7 +918,7 @@ unsafe fn async_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
             post_return.cast::<crate::vm::VMFuncRef>(),
-            callee.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(callee).unwrap().cast::<crate::vm::VMFuncRef>(),
             param_count,
             result_count,
             flags,

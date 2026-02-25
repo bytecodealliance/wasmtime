@@ -355,7 +355,7 @@ impl HostRequestWithStore for WasiHttp {
         let req = table.push(req).context("failed to push request to table")?;
         Ok((
             req,
-            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
+            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx))?,
         ))
     }
 
@@ -373,7 +373,7 @@ impl HostRequestWithStore for WasiHttp {
             .table
             .delete(req)
             .context("failed to delete request from table")?;
-        Ok(body.consume(store, fut, getter))
+        body.consume(store, fut, getter)
     }
 
     fn drop<T>(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
@@ -382,7 +382,7 @@ impl HostRequestWithStore for WasiHttp {
             .table
             .delete(req)
             .context("failed to delete request from table")?;
-        body.drop(store);
+        body.drop(store)?;
         Ok(())
     }
 }
@@ -632,7 +632,7 @@ impl HostResponseWithStore for WasiHttp {
             .context("failed to push response to table")?;
         Ok((
             res,
-            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
+            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx))?,
         ))
     }
 
@@ -650,7 +650,7 @@ impl HostResponseWithStore for WasiHttp {
             .table
             .delete(res)
             .context("failed to delete response from table")?;
-        Ok(body.consume(store, fut, getter))
+        body.consume(store, fut, getter)
     }
 
     fn drop<T>(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
@@ -659,7 +659,7 @@ impl HostResponseWithStore for WasiHttp {
             .table
             .delete(res)
             .context("failed to delete response from table")?;
-        body.drop(store);
+        body.drop(store)?;
         Ok(())
     }
 }

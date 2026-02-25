@@ -44,7 +44,7 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
                 tx.try_send(access.get().table.push(ResourceStreamX)?)
                     .unwrap()
             }
-            Ok(StreamReader::new(access, PipeProducer::new(rx)))
+            StreamReader::new(access, PipeProducer::new(rx))
         })
     }
 }

@@ -74,17 +74,17 @@ impl Body {
         mut store: Access<'_, T, WasiHttp>,
         fut: FutureReader<Result<(), ErrorCode>>,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> (
+    ) -> wasmtime::Result<(
         StreamReader<u8>,
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-    ) {
-        match self {
+    )> {
+        Ok(match self {
             Body::Guest {
                 contents_rx: Some(contents_rx),
                 trailers_rx,
                 result_tx,
             } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
                 (contents_rx, trailers_rx)
             }
             Body::Guest {
@@ -92,11 +92,11 @@ impl Body {
                 trailers_rx,
                 result_tx,
             } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                (StreamReader::new(&mut store, iter::empty()), trailers_rx)
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
+                (StreamReader::new(&mut store, iter::empty())?, trailers_rx)
             }
             Body::Host { body, result_tx } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
                 let (trailers_tx, trailers_rx) = oneshot::channel();
                 (
                     StreamReader::new(
@@ -106,15 +106,15 @@ impl Body {
                             trailers: Some(trailers_tx),
                             getter,
                         },
-                    ),
-                    FutureReader::new(&mut store, trailers_rx),
+                    )?,
+                    FutureReader::new(&mut store, trailers_rx)?,
                 )
             }
-        }
+        })
     }
 
     /// Implementation of `drop` shared between requests and responses
-    pub(crate) fn drop(self, mut store: impl AsContextMut) {
+    pub(crate) fn drop(self, mut store: impl AsContextMut) -> wasmtime::Result<()> {
         if let Body::Guest {
             contents_rx,
             mut trailers_rx,
@@ -122,10 +122,11 @@ impl Body {
         } = self
         {
             if let Some(mut contents_rx) = contents_rx {
-                contents_rx.close(&mut store);
+                contents_rx.close(&mut store)?;
             }
-            trailers_rx.close(store);
+            trailers_rx.close(store)?;
         }
+        Ok(())
     }
 }
 
@@ -273,7 +274,7 @@ impl GuestBody {
         content_length: Option<u64>,
         make_error: fn(Option<u64>) -> ErrorCode,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> Self {
+    ) -> wasmtime::Result<Self> {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe(
             &mut store,
@@ -281,7 +282,7 @@ impl GuestBody {
                 tx: Some(trailers_http_tx),
                 getter,
             },
-        );
+        )?;
 
         let contents_rx = if let Some(rx) = contents_rx {
             let (http_tx, http_rx) = mpsc::channel(1);
@@ -304,21 +305,21 @@ impl GuestBody {
                         sent: 0,
                         closed: false,
                     },
-                );
+                )?;
             } else {
                 _ = result_tx.send(Box::new(result_fut));
-                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx));
+                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx))?;
             };
             Some(http_rx)
         } else {
             _ = result_tx.send(Box::new(result_fut));
             None
         };
-        Self {
+        Ok(Self {
             trailers_rx: Some(trailers_http_rx),
             contents_rx,
             content_length,
-        }
+        })
     }
 }
 

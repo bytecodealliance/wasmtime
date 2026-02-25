@@ -79,7 +79,7 @@ impl Response {
                     content_length,
                     ErrorCode::HttpResponseBodySize,
                     getter,
-                )
+                )?
                 .boxed_unsync()
             }
             Body::Host { body, result_tx } => {

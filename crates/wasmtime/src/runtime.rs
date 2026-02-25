@@ -26,6 +26,8 @@
 // situation should be pretty rare though.
 #![warn(clippy::cast_possible_truncation)]
 
+mod bug;
+
 #[macro_use]
 pub(crate) mod func;
 
@@ -74,6 +76,8 @@ cfg_if::cfg_if! {
     }
 }
 
+pub use bug::WasmtimeBug;
+pub(crate) use bug::bail_bug;
 pub use code_memory::CodeMemory;
 #[cfg(feature = "debug")]
 pub use debug::*;
