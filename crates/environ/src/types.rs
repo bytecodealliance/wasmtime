@@ -687,12 +687,182 @@ pub enum WasmHeapBottomType {
 }
 
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct WasmFuncType {
     params_results: Box<[WasmValType]>,
     params_len: u32,
     non_i31_gc_ref_params_count: u32,
     non_i31_gc_ref_results_count: u32,
+}
+
+impl serde::Serialize for WasmFuncType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct as _;
+        let mut s = serializer.serialize_struct("WasmFuncType", 2)?;
+        s.serialize_field("params_results", &self.params_results)?;
+        s.serialize_field("params_len", &self.params_len)?;
+        s.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for WasmFuncType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            ParamsResults,
+            ParamsLen,
+        }
+
+        const FIELDS: &[&str] = &["params_results", "params_len"];
+
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        f.write_str("`params_results` or `params_len`")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "params_results" => Ok(Field::ParamsResults),
+                            "params_len" => Ok(Field::ParamsLen),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct Visitor;
+
+        fn from_params_results_and_params_len<E>(
+            params_results: crate::collections::Vec<WasmValType>,
+            params_len: u64,
+        ) -> Result<WasmFuncType, E>
+        where
+            E: serde::de::Error,
+        {
+            let params_results = params_results
+                .into_boxed_slice()
+                .map_err(|oom| serde::de::Error::custom(oom))?;
+
+            struct ExpectedLen(usize);
+            impl serde::de::Expected for ExpectedLen {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    write!(f, "<= {}", self.0)
+                }
+            }
+
+            let params_len = u32::try_from(params_len).map_err(|_| {
+                serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Unsigned(params_len),
+                    &ExpectedLen(params_results.len()),
+                )
+            })?;
+
+            let (non_i31_gc_ref_params_count, non_i31_gc_ref_results_count) = {
+                let params_len = usize::try_from(params_len).unwrap();
+                if params_len > params_results.len() {
+                    return Err(serde::de::Error::invalid_length(
+                        params_len,
+                        &ExpectedLen(params_results.len()),
+                    ));
+                }
+                (
+                    u32::try_from(
+                        params_results[..params_len]
+                            .iter()
+                            .filter(|p| p.is_vmgcref_type_and_not_i31())
+                            .count(),
+                    )
+                    .unwrap(),
+                    u32::try_from(
+                        params_results[params_len..]
+                            .iter()
+                            .filter(|p| p.is_vmgcref_type_and_not_i31())
+                            .count(),
+                    )
+                    .unwrap(),
+                )
+            };
+
+            Ok(WasmFuncType {
+                params_results,
+                params_len,
+                non_i31_gc_ref_params_count,
+                non_i31_gc_ref_results_count,
+            })
+        }
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = WasmFuncType;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("struct WasmFuncType")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            where
+                V: serde::de::SeqAccess<'de>,
+            {
+                let params_results: crate::collections::Vec<WasmValType> = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let params_len: u64 = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                from_params_results_and_params_len(params_results, params_len)
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut params_results: Option<crate::collections::Vec<WasmValType>> = None;
+                let mut params_len: Option<u64> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::ParamsResults => {
+                            if params_results.is_some() {
+                                return Err(serde::de::Error::duplicate_field("params_results"));
+                            }
+                            params_results = Some(map.next_value()?);
+                        }
+                        Field::ParamsLen => {
+                            if params_len.is_some() {
+                                return Err(serde::de::Error::duplicate_field("params_len"));
+                            }
+                            params_len = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let params_results = params_results
+                    .ok_or_else(|| serde::de::Error::missing_field("params_results"))?;
+                let params_len =
+                    params_len.ok_or_else(|| serde::de::Error::missing_field("params_len"))?;
+                from_params_results_and_params_len(params_results, params_len)
+            }
+        }
+
+        deserializer.deserialize_struct("WasmFuncType", FIELDS, Visitor)
+    }
 }
 
 impl TryClone for WasmFuncType {
