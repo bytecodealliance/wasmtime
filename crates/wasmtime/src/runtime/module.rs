@@ -752,56 +752,17 @@ impl Module {
     pub fn imports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
-        struct ImportsIter<'a> {
-            module: &'a Arc<wasmtime_environ::Module>,
-            types: &'a ModuleTypes,
-            engine: &'a Engine,
-            i: usize,
-            len: usize,
-        }
-
-        impl<'a> Iterator for ImportsIter<'a> {
-            type Item = ImportType<'a>;
-
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.i >= self.len {
-                    return None;
-                }
-
-                let (imp_mod, imp_field, ty) = self.module.import(self.i).unwrap();
-                debug_assert!(ty.is_canonicalized_for_runtime_usage());
-                self.i += 1;
-
-                Some(ImportType::new(
-                    imp_mod,
-                    imp_field,
-                    ty,
-                    self.types,
-                    self.engine,
-                ))
-            }
-
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let n = self.len - self.i;
-                (n, Some(n))
-            }
-        }
-
-        impl ExactSizeIterator for ImportsIter<'_> {}
-
         let module = self.compiled_module().module();
         let types = self.types();
         let engine = self.engine();
-        let i = 0;
-        let len = module.imports().len();
-        ImportsIter {
-            module,
-            types,
-            engine,
-            i,
-            len,
-        }
+        module
+            .imports()
+            .map(move |(imp_mod, imp_field, ty)| {
+                debug_assert!(ty.is_canonicalized_for_runtime_usage());
+                ImportType::new(imp_mod, imp_field, ty, types, engine)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
