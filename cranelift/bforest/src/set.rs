@@ -7,6 +7,7 @@ use alloc::string::String;
 #[cfg(test)]
 use core::fmt;
 use core::marker::PhantomData;
+use wasmtime_core::{alloc::PanicOnOom, error::OutOfMemory};
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K>(PhantomData<K>);
@@ -110,6 +111,16 @@ where
         comp: &C,
     ) -> bool {
         self.cursor(forest, comp).insert(key)
+    }
+
+    /// Like `insert` but returns an error on allocation failure.
+    pub fn try_insert<C: Comparator<K>>(
+        &mut self,
+        key: K,
+        forest: &mut SetForest<K>,
+        comp: &C,
+    ) -> Result<bool, OutOfMemory> {
+        self.cursor(forest, comp).try_insert(key)
     }
 
     /// Remove `key` from the set and return true.
@@ -277,20 +288,25 @@ where
     /// If `elem` is already present, don't change the set, place the cursor at `goto(elem)`, and
     /// return false.
     pub fn insert(&mut self, elem: K) -> bool {
+        self.try_insert(elem).panic_on_oom()
+    }
+
+    /// Like `insert` but returns an error on allocation failure.
+    pub fn try_insert(&mut self, elem: K) -> Result<bool, OutOfMemory> {
         match self.root.expand() {
             None => {
-                let root = self.pool.alloc_node(NodeData::leaf(elem, SetValue()));
+                let root = self.pool.alloc_node(NodeData::leaf(elem, SetValue()))?;
                 *self.root = root.into();
                 self.path.set_root_node(root);
-                true
+                Ok(true)
             }
             Some(root) => {
                 // TODO: Optimize the case where `self.path` is already at the correct insert pos.
                 if self.path.find(elem, root, self.pool, self.comp).is_none() {
-                    *self.root = self.path.insert(elem, SetValue(), self.pool).into();
-                    true
+                    *self.root = self.path.insert(elem, SetValue(), self.pool)?.into();
+                    Ok(true)
                 } else {
-                    false
+                    Ok(false)
                 }
             }
         }

@@ -734,6 +734,7 @@ name = "cranelift-bforest"
 version = "0.130.0"
 dependencies = [
  "cranelift-entity",
+ "wasmtime-internal-core",
 ]
 
 [[package]]
@@ -4789,6 +4790,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "backtrace",
+ "cranelift-bforest",
  "cranelift-bitset",
  "env_logger 0.11.5",
  "futures",
