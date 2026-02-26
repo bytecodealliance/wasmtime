@@ -9,14 +9,11 @@
 //! In the future, this crate will also provide a WIT-level API and
 //! world in which to run debugger components.
 
-use std::{any::Any, sync::Arc};
-use tokio::{
-    sync::{Mutex, mpsc},
-    task::JoinHandle,
-};
+use std::{any::Any, future::Future, pin::Pin, sync::Arc};
+use tokio::sync::{Mutex, mpsc};
 use wasmtime::{
-    AsContextMut, DebugEvent, DebugHandler, ExnRef, OwnedRooted, Result, Store, StoreContextMut,
-    Trap,
+    AsContextMut, DebugEvent, DebugHandler, Engine, ExnRef, OwnedRooted, Result, Store,
+    StoreContextMut, Trap,
 };
 
 /// A `Debugger` wraps up state associated with debugging the code
@@ -31,13 +28,15 @@ use wasmtime::{
 /// state. One runs until the next event suspends execution by
 /// invoking `Debugger::run`.
 pub struct Debugger<T: Send + 'static> {
-    /// The inner task that this debugger wraps.
-    inner: Option<JoinHandle<Result<Store<T>>>>,
+    /// A handle to the Engine that the debuggee store lives within.
+    engine: Engine,
     /// State: either a task handle or the store when passed out of
     /// the complete task.
     state: DebuggerState,
+    /// The store, once complete.
+    store: Option<Store<T>>,
     in_tx: mpsc::Sender<Command<T>>,
-    out_rx: mpsc::Receiver<Response>,
+    out_rx: mpsc::Receiver<Response<T>>,
 }
 
 /// State machine from the perspective of the outer logic.
@@ -75,6 +74,8 @@ pub struct Debugger<T: Send + 'static> {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DebuggerState {
+    /// Inner body has just been started.
+    Initial,
     /// Inner body is running in an async task and not in a debugger
     /// callback. Outer logic is waiting for a `Response::Paused` or
     /// `Response::Complete`.
@@ -128,15 +129,15 @@ enum Command<T: 'static> {
     Query(Box<dyn FnOnce(StoreContextMut<'_, T>) -> Box<dyn Any + Send> + Send>),
 }
 
-enum Response {
+enum Response<T: 'static> {
     Paused(DebugRunResult),
     QueryResponse(Box<dyn Any + Send>),
-    Finished,
+    Finished(Store<T>),
 }
 
 struct HandlerInner<T: Send + 'static> {
     in_rx: Mutex<mpsc::Receiver<Command<T>>>,
-    out_tx: mpsc::Sender<Response>,
+    out_tx: mpsc::Sender<Response<T>>,
 }
 
 struct Handler<T: Send + 'static>(Arc<HandlerInner<T>>);
@@ -201,40 +202,47 @@ impl<T: Send + 'static> Debugger<T> {
     ///
     /// When paused, the holder of this object can access the `Store`
     /// indirectly by providing a closure
-    pub fn new<F, I>(mut store: Store<T>, inner: F) -> Debugger<T>
+    pub fn new<F>(mut store: Store<T>, inner: F) -> Debugger<T>
     where
-        I: Future<Output = Result<Store<T>>> + Send + 'static,
-        F: for<'a> FnOnce(Store<T>) -> I + Send + 'static,
+        F: for<'a> FnOnce(
+                &'a mut Store<T>,
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+            + Send
+            + 'static,
     {
-        let (in_tx, mut in_rx) = mpsc::channel(1);
+        let engine = store.engine().clone();
+        let (in_tx, in_rx) = mpsc::channel(1);
         let (out_tx, out_rx) = mpsc::channel(1);
 
-        let inner = tokio::spawn(async move {
-            // Receive one "continue" command on the inbound channel
-            // before continuing.
-            match in_rx.recv().await {
-                Some(cmd) => {
-                    assert!(matches!(cmd, Command::Continue));
-                }
-                None => {
-                    // Premature exit due to closed channel. Just drop `inner`.
-                    wasmtime::bail!("Debugger channel dropped");
-                }
-            }
-
+        tokio::spawn(async move {
+            // Create the handler that's invoked from within the async
+            // debug-event callback.
             let out_tx_clone = out_tx.clone();
-            store.set_debug_handler(Handler(Arc::new(HandlerInner {
+            let handler = Handler(Arc::new(HandlerInner {
                 in_rx: Mutex::new(in_rx),
                 out_tx,
-            })));
-            let result = inner(store).await;
-            let _ = out_tx_clone.send(Response::Finished).await;
+            }));
+
+            // Emulate a breakpoint at startup.
+            log::trace!("inner debuggee task: first breakpoint");
+            handler
+                .handle(store.as_context_mut(), DebugEvent::Breakpoint)
+                .await;
+            log::trace!("inner debuggee task: first breakpoint resumed");
+
+            // Now invoke the actual inner body.
+            store.set_debug_handler(handler);
+            log::trace!("inner debuggee task: running `inner`");
+            let result = inner(&mut store).await;
+            log::trace!("inner debuggee task: done with `inner`");
+            let _ = out_tx_clone.send(Response::Finished(store)).await;
             result
         });
 
         Debugger {
-            inner: Some(inner),
-            state: DebuggerState::Paused,
+            engine,
+            state: DebuggerState::Initial,
+            store: None,
             in_tx,
             out_rx,
         }
@@ -248,12 +256,35 @@ impl<T: Send + 'static> Debugger<T> {
         }
     }
 
+    /// Get the Engine associated with the debuggee.
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
+    async fn wait_for_initial(&mut self) -> Result<()> {
+        if let DebuggerState::Initial = &self.state {
+            // Need to receive and discard first `Paused`.
+            let response = self
+                .out_rx
+                .recv()
+                .await
+                .ok_or_else(|| wasmtime::format_err!("Premature close of debugger channel"))?;
+            assert!(matches!(response, Response::Paused(_)));
+            self.state = DebuggerState::Paused;
+        }
+        Ok(())
+    }
+
     /// Run the inner body until the next debug event.
     ///
     /// This method is cancel-safe, and no events will be lost.
     pub async fn run(&mut self) -> Result<DebugRunResult> {
         log::trace!("running: state is {:?}", self.state);
+
+        self.wait_for_initial().await?;
+
         match self.state {
+            DebuggerState::Initial => unreachable!(),
             DebuggerState::Paused => {
                 log::trace!("sending Continue");
                 self.in_tx
@@ -311,9 +342,10 @@ impl<T: Send + 'static> Debugger<T> {
             .ok_or_else(|| wasmtime::format_err!("Premature close of debugger channel"))?;
 
         match response {
-            Response::Finished => {
+            Response::Finished(store) => {
                 log::trace!("got Finished");
                 self.state = DebuggerState::Complete;
+                self.store = Some(store);
                 Ok(DebugRunResult::Finished)
             }
             Response::Paused(result) => {
@@ -362,9 +394,14 @@ impl<T: Send + 'static> Debugger<T> {
         &mut self,
         f: F,
     ) -> Result<R> {
-        assert!(!self.is_complete());
+        if let Some(store) = self.store.as_mut() {
+            return Ok(f(store.as_context_mut()));
+        }
+
+        self.wait_for_initial().await?;
 
         match self.state {
+            DebuggerState::Initial => unreachable!(),
             DebuggerState::Queried => {
                 // Earlier query canceled; drop its response first.
                 let response =
@@ -387,6 +424,7 @@ impl<T: Send + 'static> Debugger<T> {
             }
         }
 
+        log::trace!("sending query in with_store");
         self.in_tx
             .send(Command::Query(Box::new(|store| Box::new(f(store)))))
             .await
@@ -404,29 +442,6 @@ impl<T: Send + 'static> Debugger<T> {
         self.state = DebuggerState::Paused;
 
         Ok(*resp.downcast::<R>().expect("type mismatch"))
-    }
-
-    /// Drop the Debugger once complete, returning the inner `Store`
-    /// around which it was wrapped.
-    ///
-    /// Only valid to invoke once `run()` returns
-    /// `DebugRunResult::Finished` or after calling `finish()` (which
-    /// finishes execution while dropping all further debug events).
-    ///
-    /// This is cancel-safe, but if canceled, the Store is lost.
-    pub async fn take_store(&mut self) -> Result<Option<Store<T>>> {
-        match self.state {
-            DebuggerState::Complete => {
-                let inner = match self.inner.take() {
-                    Some(inner) => inner,
-                    None => return Ok(None),
-                };
-                let mut store = inner.await??;
-                store.clear_debug_handler();
-                Ok(Some(store))
-            }
-            _ => panic!("Invalid state: debugger not yet complete"),
-        }
     }
 }
 
@@ -482,16 +497,18 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |mut store| async move {
-            let mut results = [Val::I32(0)];
-            store.edit_breakpoints().unwrap().single_step(true).unwrap();
-            main.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
-                .await?;
-            assert_eq!(results[0].unwrap_i32(), 3);
-            main.call_async(&mut store, &[Val::I32(3), Val::I32(4)], &mut results[..])
-                .await?;
-            assert_eq!(results[0].unwrap_i32(), 7);
-            Ok(store)
+        let mut debugger = Debugger::new(store, move |store| {
+            Box::pin(async move {
+                let mut results = [Val::I32(0)];
+                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+                    .await?;
+                assert_eq!(results[0].unwrap_i32(), 3);
+                main.call_async(&mut *store, &[Val::I32(3), Val::I32(4)], &mut results[..])
+                    .await?;
+                assert_eq!(results[0].unwrap_i32(), 7);
+                Ok(())
+            })
         });
 
         let event = debugger.run().await?;
@@ -642,14 +659,6 @@ mod test {
 
         assert!(debugger.is_complete());
 
-        // Ensure the store still works and the debug handler is
-        // removed.
-        let mut store = debugger.take_store().await?.unwrap();
-        let mut results = [Val::I32(0)];
-        main.call_async(&mut store, &[Val::I32(10), Val::I32(20)], &mut results[..])
-            .await?;
-        assert_eq!(results[0].unwrap_i32(), 30);
-
         Ok(())
     }
 
@@ -676,13 +685,15 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |mut store| async move {
-            let mut results = [Val::I32(0)];
-            store.edit_breakpoints().unwrap().single_step(true).unwrap();
-            main.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
-                .await?;
-            assert_eq!(results[0].unwrap_i32(), 3);
-            Ok(store)
+        let mut debugger = Debugger::new(store, move |store| {
+            Box::pin(async move {
+                let mut results = [Val::I32(0)];
+                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+                    .await?;
+                assert_eq!(results[0].unwrap_i32(), 3);
+                Ok(())
+            })
         });
 
         debugger.finish().await?;
@@ -714,13 +725,15 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |mut store| async move {
-            let mut results = [Val::I32(0)];
-            store.edit_breakpoints().unwrap().single_step(true).unwrap();
-            main.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
-                .await?;
-            assert_eq!(results[0].unwrap_i32(), 3);
-            Ok(store)
+        let mut debugger = Debugger::new(store, move |store| {
+            Box::pin(async move {
+                let mut results = [Val::I32(0)];
+                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+                    .await?;
+                assert_eq!(results[0].unwrap_i32(), 3);
+                Ok(())
+            })
         });
 
         // Step once, then drop everything at the end of this
