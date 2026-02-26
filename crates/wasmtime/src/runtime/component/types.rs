@@ -3,7 +3,7 @@
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentType;
 use crate::component::matching::InstanceType;
-use crate::{Engine, ExternType, FuncType};
+use crate::{Engine, ExternType, FuncType, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -14,7 +14,7 @@ use wasmtime_environ::component::{
     TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex, TypeStreamIndex,
     TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
-use wasmtime_environ::{PanicOnOom as _, PrimaryMap, collections::TryClone as _};
+use wasmtime_environ::{PanicOnOom as _, PrimaryMap};
 
 pub use crate::component::resources::ResourceType;
 

@@ -13,10 +13,7 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{
-    Atom, PanicOnOom as _, StringPool,
-    collections::{HashMap, TryClone},
-};
+use wasmtime_environ::{Atom, PanicOnOom as _, StringPool, collections::HashMap};
 
 /// Structure used to link wasm modules/instances together.
 ///

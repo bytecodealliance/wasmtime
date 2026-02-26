@@ -6,7 +6,6 @@ use crate::{
     prelude::*,
 };
 use core::{fmt, mem, num::NonZeroU32};
-use wasmtime_core::alloc::TryClone;
 
 /// An interned string associated with a particular string in a `StringPool`.
 ///

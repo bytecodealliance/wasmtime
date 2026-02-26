@@ -1,8 +1,5 @@
 use crate::{
-    PanicOnOom as _, Tunables, WasmResult,
-    collections::{TryClone, TryCollect as _, TryCow, TryExtend},
-    error::OutOfMemory,
-    prelude::*,
+    PanicOnOom as _, Tunables, WasmResult, collections::TryCow, error::OutOfMemory, prelude::*,
     wasm_unsupported,
 };
 use alloc::boxed::Box;

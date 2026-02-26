@@ -25,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes,
     PanicOnOom as _, TypeTrace, Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryClone, TryCow, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryCow, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };

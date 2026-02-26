@@ -17,10 +17,7 @@ pub mod null;
 
 use crate::{
     WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmExnType, WasmStorageType,
-    WasmStructType, WasmValType,
-    collections::{self, TryClone},
-    error::OutOfMemory,
-    prelude::*,
+    WasmStructType, WasmValType, collections, error::OutOfMemory, prelude::*,
 };
 use alloc::sync::Arc;
 use core::alloc::Layout;
