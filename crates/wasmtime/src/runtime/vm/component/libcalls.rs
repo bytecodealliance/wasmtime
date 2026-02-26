@@ -171,9 +171,9 @@ fn assert_no_overlap<T, U>(a: &[T], b: &[U]) {
     let b_end = b_start + (b.len() * core::mem::size_of::<U>());
 
     if a_start < b_start {
-        assert!(a_end < b_start);
+        assert!(a_end <= b_start);
     } else {
-        assert!(b_end < a_start);
+        assert!(b_end <= a_start);
     }
 }
 
@@ -1424,4 +1424,70 @@ fn thread_yield_to(
             Some(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::assert_no_overlap;
+
+    #[test]
+    fn non_overlapping_separate_regions() {
+        let a = vec![0u8; 100];
+        let b = vec![0u8; 100];
+        assert_no_overlap(&a, &b);
+    }
+
+    #[test]
+    fn non_overlapping_adjacent_regions() {
+        let buf = vec![0u8; 200];
+        let (a, b) = buf.split_at(100);
+        assert_no_overlap(a, b);
+    }
+
+    #[test]
+    fn non_overlapping_adjacent_regions_reversed() {
+        let buf = vec![0u8; 200];
+        let (a, b) = buf.split_at(100);
+        assert_no_overlap(b, a);
+    }
+
+    #[test]
+    fn non_overlapping_adjacent_u16() {
+        let buf = vec![0u16; 200];
+        let (a, b) = buf.split_at(100);
+        assert_no_overlap(a, b);
+    }
+
+    #[test]
+    fn non_overlapping_adjacent_mixed_types() {
+        let buf16 = vec![0u16; 100];
+        let buf8 = vec![0u8; 200];
+        assert_no_overlap(&buf16[..], &buf8[..]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn overlapping_regions_detected() {
+        let buf = vec![0u8; 200];
+        let a = &buf[0..150];
+        let b = &buf[100..200];
+        assert_no_overlap(a, b);
+    }
+
+    #[test]
+    #[should_panic]
+    fn overlapping_regions_reversed_detected() {
+        let buf = vec![0u8; 200];
+        let a = &buf[0..150];
+        let b = &buf[100..200];
+        assert_no_overlap(b, a);
+    }
+
+    #[test]
+    fn empty_slices_at_same_address() {
+        let buf = vec![0u8; 100];
+        let a: &[u8] = &buf[50..50];
+        let b: &[u8] = &buf[50..50];
+        assert_no_overlap(a, b);
+    }
 }
