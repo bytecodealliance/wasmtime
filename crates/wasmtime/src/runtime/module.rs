@@ -755,14 +755,10 @@ impl Module {
         let module = self.compiled_module().module();
         let types = self.types();
         let engine = self.engine();
-        module
-            .imports()
-            .map(move |(imp_mod, imp_field, ty)| {
-                debug_assert!(ty.is_canonicalized_for_runtime_usage());
-                ImportType::new(imp_mod, imp_field, ty, types, engine)
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
+        module.imports().map(move |(imp_mod, imp_field, ty)| {
+            debug_assert!(ty.is_canonicalized_for_runtime_usage());
+            ImportType::new(imp_mod, imp_field, ty, types, engine)
+        })
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
