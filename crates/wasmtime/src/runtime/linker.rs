@@ -13,7 +13,7 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{Atom, PanicOnOom as _, StringPool, collections::HashMap};
+use wasmtime_environ::{Atom, StringPool, collections::HashMap};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -100,8 +100,8 @@ impl<T> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
-            pool: self.pool.try_clone().panic_on_oom(),
-            map: self.map.try_clone().panic_on_oom(),
+            pool: self.pool.clone_panic_on_oom(),
+            map: self.map.clone_panic_on_oom(),
             allow_shadowing: self.allow_shadowing,
             allow_unknown_exports: self.allow_unknown_exports,
             _marker: self._marker,

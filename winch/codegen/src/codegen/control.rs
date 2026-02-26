@@ -16,7 +16,7 @@ use crate::{
     stack::Val,
 };
 use cranelift_codegen::MachLabel;
-use wasmtime_environ::{PanicOnOom as _, WasmFuncType, WasmValType, collections::TryClone as _};
+use wasmtime_environ::{WasmFuncType, WasmValType, collections::TryClone as _};
 
 /// Categorization of the type of the block.
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl Clone for BlockType {
             Self::Void => Self::Void,
             Self::Single(x) => Self::Single(*x),
             Self::ABISig(x) => Self::ABISig(x.clone()),
-            Self::Func(f) => Self::Func(f.try_clone().panic_on_oom()),
+            Self::Func(f) => Self::Func(f.clone_panic_on_oom()),
         }
     }
 }

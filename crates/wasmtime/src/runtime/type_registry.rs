@@ -23,8 +23,8 @@ use core::{
 };
 use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes,
-    PanicOnOom as _, TypeTrace, Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
+    Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
     collections::{HashSet, PrimaryMap, SecondaryMap, TryCow, Vec},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
@@ -272,7 +272,7 @@ impl Debug for RegisteredType {
 
 impl Clone for RegisteredType {
     fn clone(&self) -> Self {
-        self.try_clone().panic_on_oom()
+        self.clone_panic_on_oom()
     }
 }
 

@@ -168,7 +168,7 @@ impl ModuleTypesBuilder {
                 // can reuse it in the future.
                 TryCow::Borrowed(f) => {
                     self.trampoline_types
-                        .insert(f.try_clone().panic_on_oom(), for_func_ty);
+                        .insert(f.clone_panic_on_oom(), for_func_ty);
                     for_func_ty
                 }
                 // The trampoline type is different from the original function
@@ -179,7 +179,7 @@ impl ModuleTypesBuilder {
                         is_final: true,
                         supertype: None,
                         composite_type: WasmCompositeType {
-                            inner: WasmCompositeInnerType::Func(f.try_clone().panic_on_oom()),
+                            inner: WasmCompositeInnerType::Func(f.clone_panic_on_oom()),
                             shared: sub_ty.composite_type.shared,
                         },
                     });

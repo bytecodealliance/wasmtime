@@ -1509,7 +1509,7 @@ impl ExternType {
                         engine,
                         subty.is_final,
                         subty.supertype,
-                        subty.unwrap_func().try_clone().panic_on_oom(),
+                        subty.unwrap_func().clone_panic_on_oom(),
                     )
                     .panic_on_oom()
                     .into()
