@@ -8,6 +8,7 @@ use crate::runtime::HostFunc;
 use crate::runtime::vm::{AlwaysMut, SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
+use wasmtime_environ::collections;
 
 /// An arena of `VMFuncRef`s.
 ///
@@ -39,7 +40,7 @@ enum Storage {
     /// inside them, etc.
     InstancePreDefinitions {
         #[expect(dead_code, reason = "only here to keep the original value alive")]
-        defs: Arc<[Definition]>,
+        defs: Arc<collections::Vec<Definition>>,
     },
 
     /// Pinned `VMFuncRef`s that had their `wasm_call` field
@@ -47,7 +48,7 @@ enum Storage {
     /// keep alive for our owning store's lifetime.
     InstancePreFuncRefs {
         #[expect(dead_code, reason = "only here to keep the original value alive")]
-        funcs: Arc<[VMFuncRef]>,
+        funcs: Arc<collections::Vec<VMFuncRef>>,
     },
 
     /// A uniquely-owned host function within a `Store`. This comes about with
@@ -118,7 +119,7 @@ impl FuncRefs {
     ///
     /// This is used to ensure that the store itself persists the entire list of
     /// `funcs` for the entire lifetime of the store.
-    pub fn push_instance_pre_func_refs(&mut self, funcs: Arc<[VMFuncRef]>) {
+    pub fn push_instance_pre_func_refs(&mut self, funcs: Arc<collections::Vec<VMFuncRef>>) {
         self.storage.push(Storage::InstancePreFuncRefs { funcs });
     }
 
@@ -127,7 +128,7 @@ impl FuncRefs {
     ///
     /// This is used to keep linker-defined functions' vmctx values alive, for
     /// example.
-    pub fn push_instance_pre_definitions(&mut self, defs: Arc<[Definition]>) {
+    pub fn push_instance_pre_definitions(&mut self, defs: Arc<collections::Vec<Definition>>) {
         self.storage.push(Storage::InstancePreDefinitions { defs });
     }
 

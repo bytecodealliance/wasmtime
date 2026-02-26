@@ -13,7 +13,10 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{Atom, StringPool, collections::HashMap};
+use wasmtime_environ::{
+    Atom, StringPool,
+    collections::{HashMap, Vec},
+};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -633,7 +636,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let mut store = store.as_context_mut();
-        let exports = instance
+        let exports: Vec<_> = instance
             .exports(&mut store)
             .map(|e| {
                 Ok((
@@ -641,7 +644,7 @@ impl<T> Linker<T> {
                     e.into_extern(),
                 ))
             })
-            .collect::<Result<Vec<_>>>()?;
+            .try_collect::<_, Error>()?;
         for (key, export) in exports {
             self.insert(key, Definition::new(store.0, export))?;
         }
@@ -988,12 +991,12 @@ impl<T> Linker<T> {
     pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
         let module = self.pool.insert(module)?;
         let as_module = self.pool.insert(as_module)?;
-        let items = self
+        let items: Vec<_> = self
             .map
             .iter()
             .filter(|(key, _def)| key.module == module)
-            .map(|(key, def)| (key.name, def.clone()))
-            .collect::<Vec<_>>();
+            .map(|(key, def)| Ok((key.name, def.clone())))
+            .try_collect::<_, Error>()?;
         for (name, item) in items {
             self.insert(
                 ImportKey {
@@ -1177,10 +1180,10 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let mut imports = module
+        let mut imports: Vec<_> = module
             .imports()
-            .map(|import| self._get_by_import(&import))
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|import| Ok(self._get_by_import(&import)?))
+            .try_collect::<_, Error>()?;
         if let Some(store) = store {
             for import in imports.iter_mut() {
                 import.update_size(store);

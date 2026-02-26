@@ -17,7 +17,7 @@ use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TagIndex,
-    TypeTrace,
+    TypeTrace, collections,
 };
 
 /// An instantiated WebAssembly module.
@@ -787,10 +787,10 @@ pub struct InstancePre<T> {
     /// provided, passed to `Instance::new_started` after inserting them into a
     /// `Store`.
     ///
-    /// Note that this is stored as an `Arc<[T]>` to quickly move a strong
-    /// reference to everything internally into a `Store<T>` without having to
-    /// clone each individual item.
-    items: Arc<[Definition]>,
+    /// Note that this is stored as an `Arc` to quickly move a strong reference
+    /// to everything internally into a `Store<T>` without having to clone each
+    /// individual item.
+    items: Arc<collections::Vec<Definition>>,
 
     /// A count of `Definition::HostFunc` entries in `items` above to
     /// preallocate space in a `Store` up front for all entries to be inserted.
@@ -801,8 +801,8 @@ pub struct InstancePre<T> {
     /// `VMFuncRef`s so that we don't have to do it at
     /// instantiation time.
     ///
-    /// This is an `Arc<[T]>` for the same reason as `items`.
-    func_refs: Arc<[VMFuncRef]>,
+    /// This is an `Arc` for the same reason as `items`.
+    func_refs: Arc<collections::Vec<VMFuncRef>>,
 
     /// Whether or not any import in `items` is flagged as needing async.
     ///
@@ -836,10 +836,13 @@ impl<T: 'static> InstancePre<T> {
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(module: &Module, items: Vec<Definition>) -> Result<InstancePre<T>> {
+    pub(crate) unsafe fn new(
+        module: &Module,
+        items: collections::Vec<Definition>,
+    ) -> Result<InstancePre<T>> {
         typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
 
-        let mut func_refs = vec![];
+        let mut func_refs = collections::Vec::with_capacity(items.len())?;
         let mut host_funcs = 0;
         let mut asyncness = Asyncness::No;
         for item in &items {
@@ -853,7 +856,7 @@ impl<T: 'static> InstancePre<T> {
                                 .wasm_to_array_trampoline(f.sig_index())
                                 .map(|f| f.into()),
                             ..*f.func_ref()
-                        });
+                        })?;
                     }
                     asyncness = asyncness | f.asyncness();
                 }
@@ -862,9 +865,9 @@ impl<T: 'static> InstancePre<T> {
 
         Ok(InstancePre {
             module: module.clone(),
-            items: items.into(),
+            items: try_new::<Arc<_>>(items)?,
             host_funcs,
-            func_refs: func_refs.into(),
+            func_refs: try_new::<Arc<_>>(func_refs)?,
             asyncness,
             _marker: core::marker::PhantomData,
         })
@@ -959,9 +962,9 @@ impl<T: 'static> InstancePre<T> {
 fn pre_instantiate_raw(
     store: &mut StoreOpaque,
     module: &Module,
-    items: &Arc<[Definition]>,
+    items: &Arc<collections::Vec<Definition>>,
     host_funcs: usize,
-    func_refs: &Arc<[VMFuncRef]>,
+    func_refs: &Arc<collections::Vec<VMFuncRef>>,
     asyncness: Asyncness,
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
