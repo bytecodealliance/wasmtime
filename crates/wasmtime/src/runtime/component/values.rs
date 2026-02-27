@@ -441,13 +441,9 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::List(_), _) => unexpected(ty, self),
-            (InterfaceType::Map(ty), Val::Map(map)) => {
-                // Maps are stored as list<tuple<k, v>> in canonical ABI
+            (InterfaceType::Map(ty), Val::Map(pairs)) => {
                 let map_ty = &cx.types[ty];
-                // Convert HashMap to Vec<(Val, Val)> for lowering
-                let pairs: Vec<(Val, Val)> =
-                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, &pairs)?;
+                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, pairs)?;
                 next_mut(dst).write(ValRaw::i64(ptr as i64));
                 next_mut(dst).write(ValRaw::i64(len as i64));
                 Ok(())
