@@ -4064,6 +4064,9 @@
 (decl preg_rsp () PReg)
 (extern constructor preg_rsp preg_rsp)
 
+(decl preg_rdi () PReg)
+(extern constructor preg_rdi preg_rdi)
+
 (decl preg_pinned () PReg)
 (extern constructor preg_pinned preg_pinned)
 

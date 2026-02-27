@@ -304,9 +304,14 @@
 
 ;; `MemFlags::trusted`
 (spec (mem_flags_trusted)
-      (provide (= result #x0003)))
+      (provide (= result #x0003))) ;; Shouldn't this be 0001?
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
+
+(spec (mem_flags_aligned_read_only)
+      (provide (= result #x0003)))
+(decl pure mem_flags_aligned_read_only () MemFlags)
+(extern constructor mem_flags_aligned_read_only mem_flags_aligned_read_only)
 
 ;; Determine if flags specify little- or native-endian.
 (decl little_or_native_endian (MemFlags) MemFlags)

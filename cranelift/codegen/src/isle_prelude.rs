@@ -639,6 +639,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn mem_flags_aligned_read_only(&mut self) -> MemFlags {
+            MemFlags::new().with_aligned().with_readonly()
+        }
+
+        #[inline]
         fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
             match flags.explicit_endianness() {
                 Some(crate::ir::Endianness::Little) | None => Some(flags),

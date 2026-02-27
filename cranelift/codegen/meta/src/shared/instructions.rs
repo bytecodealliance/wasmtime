@@ -380,6 +380,36 @@ fn define_control_flow(
         .call()
         .branches(),
     );
+
+    ig.push(
+        Inst::new(
+            "dead_load_with_context",
+            r#"
+        Load 32 bits from memory at ``load_ptr`` while also keeping ``context``
+        in a fixed register and reserving a second as scratch space.
+
+        This is intended for implementing MMU-triggered jumps as in
+        epoch-interruption-via-mmu, where the load conditionally triggers a
+        segfault, which hands off control to a signal handler for further
+        action. The handler has access to ``context`` (typically the
+        ``VMContext``'s ``vm_store_context``) and can use the second
+        reserved register to store a temp value, as needed on platforms
+        where signal handlers cannot push stack frames.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![
+            Operand::new("load_ptr", iAddr).with_doc("memory location to load from"),
+            Operand::new("context", iAddr)
+                .with_doc("arbitrary address-sized context to pass to signal handler"),
+        ])
+        // Are we a call? stack_switch calls itself one "as it continues execution elsewhere".
+        // .is_call()
+        .can_load()
+        // Don't optimize me out just because I don't def anything. TODO: Can we use side_effects_idempotent()?
+        .other_side_effects(),
+        // If `load` is not can_trap(), this isn't either.
+    );
 }
 
 #[inline(never)]

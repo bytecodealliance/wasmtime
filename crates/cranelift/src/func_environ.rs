@@ -668,21 +668,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         builder.def_var(self.epoch_interrupt_page_ptr_var, epoch_interrupt_page_ptr);
 
-        Self::epoch_mmu_interruption_check(epoch_interrupt_page_ptr, builder);
+        self.epoch_mmu_interruption_check(epoch_interrupt_page_ptr, builder);
     }
 
     /// Codegens a dead load from the epoch interrupt page, which causes a trap
     /// if an interrupt is due.
     fn epoch_mmu_interruption_check(
+        &mut self,
         epoch_interrupt_page_ptr: ir::Value,
         builder: &mut FunctionBuilder<'_>,
     ) {
-        let _ = builder.ins().load(
-            ir::types::I32, // Arbitrary. Pick whatever works on all ISAs and is fastest.
-            ir::MemFlags::new().with_aligned().with_readonly(),
-            epoch_interrupt_page_ptr,
-            ir::immediates::Offset32::new(0),
-        );
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let _ = builder
+            .ins()
+            .dead_load_with_context(epoch_interrupt_page_ptr, vmctx);
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -3803,7 +3802,7 @@ impl FuncEnvironment<'_> {
         // it's time.
         if self.tunables.epoch_interruption_via_mmu {
             let page_ptr = builder.use_var(self.epoch_interrupt_page_ptr_var);
-            Self::epoch_mmu_interruption_check(page_ptr, builder);
+            self.epoch_mmu_interruption_check(page_ptr, builder);
         }
 
         Ok(())
