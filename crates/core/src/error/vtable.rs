@@ -45,6 +45,10 @@ pub(crate) struct Vtable {
     /// Upon successful return, a `T` will have been written to that memory
     /// block.
     pub(crate) downcast: unsafe fn(OwnedPtr<DynError>, TypeId, NonNull<u8>),
+
+    /// Conversion into `anyhow::Error` from `Box<Self>`.
+    #[cfg(feature = "anyhow")]
+    pub(crate) into_anyhow: unsafe fn(OwnedPtr<DynError>) -> anyhow::Error,
 }
 
 impl Vtable {
@@ -63,6 +67,8 @@ impl Vtable {
             into_boxed_dyn_core_error: into_boxed_dyn_core_error::<E>,
             drop_and_deallocate: drop_and_deallocate::<E>,
             downcast: downcast::<E>,
+            #[cfg(feature = "anyhow")]
+            into_anyhow: into_anyhow::<E>,
         }
     }
 }
@@ -173,4 +179,15 @@ where
             source.downcast(type_id, ret_ptr);
         }
     }
+}
+
+#[cfg(feature = "anyhow")]
+unsafe fn into_anyhow<E>(error: OwnedPtr<DynError>) -> anyhow::Error
+where
+    E: ErrorExt,
+{
+    let error = error.cast::<ConcreteError<E>>();
+    // Safety: implied by all vtable functions' safety contract.
+    let error = unsafe { error.into_box() };
+    error.error.ext_into_anyhow()
 }

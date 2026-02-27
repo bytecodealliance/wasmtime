@@ -64,6 +64,10 @@ pub(crate) unsafe trait ErrorExt: Send + Sync + 'static {
     /// Take the backtrace from this error, if any.
     #[cfg(feature = "backtrace")]
     fn take_backtrace(&mut self) -> Option<Backtrace>;
+
+    /// Conversion into an `anyhow::Error`.
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(self) -> anyhow::Error;
 }
 
 /// Morally a `dyn ErrorExt` trait object that holds its own vtable.
@@ -542,7 +546,7 @@ impl From<Error> for Box<dyn core::error::Error + 'static> {
 impl From<Error> for anyhow::Error {
     #[inline]
     fn from(e: Error) -> Self {
-        anyhow::Error::from_boxed(e.into_boxed_dyn_error())
+        e.inner.into_anyhow()
     }
 }
 
@@ -1241,6 +1245,11 @@ where
     fn take_backtrace(&mut self) -> Option<Backtrace> {
         None
     }
+
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(self) -> anyhow::Error {
+        anyhow::Error::new(self.0)
+    }
 }
 
 /// `ErrorExt` wrapper for types given to `Error::msg`.
@@ -1319,6 +1328,11 @@ where
     fn take_backtrace(&mut self) -> Option<Backtrace> {
         None
     }
+
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(self) -> anyhow::Error {
+        anyhow::Error::msg(self.0)
+    }
 }
 
 /// `ErrorExt` wrapper for `Box<dyn core::error::Error>`.
@@ -1373,6 +1387,11 @@ unsafe impl ErrorExt for BoxedError {
     #[cfg(feature = "backtrace")]
     fn take_backtrace(&mut self) -> Option<Backtrace> {
         None
+    }
+
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(self) -> anyhow::Error {
+        anyhow::Error::from_boxed(self.0)
     }
 }
 
@@ -1429,6 +1448,11 @@ unsafe impl ErrorExt for AnyhowError {
     #[cfg(feature = "backtrace")]
     fn take_backtrace(&mut self) -> Option<Backtrace> {
         None
+    }
+
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(self) -> anyhow::Error {
+        self.0
     }
 }
 
@@ -1751,6 +1775,23 @@ impl OomOrDynError {
             // Safety: the pointer is valid and the vtable is associated with
             // this pointer's concrete error type.
             unsafe { (vtable.into_boxed_dyn_core_error)(ptr) }
+        }
+    }
+
+    #[cfg(feature = "anyhow")]
+    pub(crate) fn into_anyhow(self) -> anyhow::Error {
+        if self.is_oom() {
+            // Safety: `self.is_oom()` is true.
+            anyhow::Error::from(unsafe { *self.unchecked_oom() })
+        } else {
+            debug_assert!(self.is_boxed_dyn_error());
+            // Safety: this is a boxed dyn error.
+            let ptr = unsafe { self.unchecked_into_dyn_error() };
+            // Safety: invariant of the type that the pointer is valid.
+            let vtable = unsafe { ptr.as_ref().vtable };
+            // Safety: the pointer is valid and the vtable is associated with
+            // this pointer's concrete error type.
+            unsafe { (vtable.into_anyhow)(ptr) }
         }
     }
 

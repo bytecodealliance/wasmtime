@@ -303,4 +303,12 @@ where
             }
         }
     }
+
+    #[cfg(feature = "anyhow")]
+    fn ext_into_anyhow(mut self) -> anyhow::Error {
+        match self.error.take() {
+            Some(error) => anyhow::Error::from(error).context(self.context),
+            None => anyhow::Error::msg(self),
+        }
+    }
 }
