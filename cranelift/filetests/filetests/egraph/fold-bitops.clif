@@ -86,7 +86,7 @@ block0(v0: i32, v1: i32):
 
 ; function %test_bor_band_bnot_bxor(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
-;     v3 = bxor v0, v1
-;     v4 = bnot v3
-;     return v4
+;     v6 = bxor v1, v0
+;     v7 = bnot v6
+;     return v7
 ; }
