@@ -925,3 +925,20 @@ fn anyhow_preserves_downcast() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "anyhow")]
+fn anyhow_source_loses_downcast() -> Result<()> {
+    let e: anyhow::Error = TestError(1).into();
+    assert!(e.downcast_ref::<TestError>().is_some());
+
+    let e: Error = Error::from_anyhow(e);
+    // FIXME: this should actually test for `is_some`
+    assert!(e.downcast_ref::<TestError>().is_none());
+
+    // Even while the above is broken, when going back to `anyhow` we should
+    // preserve the original error.
+    let e: anyhow::Error = e.into();
+    assert!(e.downcast_ref::<TestError>().is_some());
+    Ok(())
+}
