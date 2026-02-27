@@ -225,3 +225,9 @@
 (rule (simplify 
   (bxor ty (band ty z x) (band ty z y))) 
 	(band ty z (bxor ty x y)))
+
+; (x & y) | ~(x ^ y) => ~(x ^ y)
+(rule (simplify (bor ty (band ty x y) (bnot ty (bxor ty x y)))) (bnot ty (bxor ty x y)))
+(rule (simplify (bor ty (bnot ty (bxor ty x y)) (band ty x y))) (bnot ty (bxor ty x y)))
+(rule (simplify (bor ty (band ty y x) (bnot ty (bxor ty x y)))) (bnot ty (bxor ty x y)))
+(rule (simplify (bor ty (bnot ty (bxor ty x y)) (band ty y x))) (bnot ty (bxor ty x y)))

@@ -232,3 +232,16 @@ block0(v0: i32, v1: i32, v2: i32):
 
 ; run: %test_bxor_band_band(2, 1, 1) == 0
 
+function %test_bor_band_bnot_bxor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bxor v0, v1
+    v4 = bnot v3
+    v5 = bor v2, v4
+    return v5
+}
+
+; run: %test_bor_band_bnot_bxor(0, 0) == 0xffffffff
+; run: %test_bor_band_bnot_bxor(1, 1) == 0xffffffff
+; run: %test_bor_band_bnot_bxor(0, 1) == 0xfffffffe
+; run: %test_bor_band_bnot_bxor(2, 1) == 0xfffffffc

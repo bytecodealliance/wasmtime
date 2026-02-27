@@ -74,3 +74,19 @@ block0(v0: i32, v1: i32, v2: i32):
 ;     return v7
 ; }
 
+;; (bor ty (band ty x y) (bnot ty (bxor ty x y))) -> (bnot ty (bxor ty x y))
+function %test_bor_band_bnot_bxor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bxor v0, v1
+    v4 = bnot v3
+    v5 = bor v2, v4
+    return v5
+}
+
+; function %test_bor_band_bnot_bxor(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = bxor v0, v1
+;     v4 = bnot v3
+;     return v4
+; }
