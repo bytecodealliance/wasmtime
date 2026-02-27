@@ -148,10 +148,10 @@ impl RunCommand {
         Engine::new(&config)
     }
 
-    /// Populatse a new `Store` and `CliLinker` with the configuration in this
+    /// Populates a new `Store` and `CliLinker` with the configuration in this
     /// command.
     ///
-    /// The `engine` provided is used to for the store/linker and the `main`
+    /// The `engine` provided is used for the store/linker and the `main`
     /// provided is the module/component that is going to be run.
     pub fn new_store_and_linker(
         &mut self,
