@@ -26,6 +26,7 @@
 // situation should be pretty rare though.
 #![warn(clippy::cast_possible_truncation)]
 
+#[cfg(feature = "component-model-async")]
 mod bug;
 
 #[macro_use]
@@ -76,7 +77,9 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(feature = "component-model-async")]
 pub use bug::WasmtimeBug;
+#[cfg(feature = "component-model-async")]
 pub(crate) use bug::bail_bug;
 pub use code_memory::CodeMemory;
 #[cfg(feature = "debug")]
