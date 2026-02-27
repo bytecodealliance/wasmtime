@@ -2732,26 +2732,50 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let src_opts = src.opts();
         let dst_opts = dst.opts();
 
-        // Each map entry is a tuple<K, V> following record layout rules:
-        // key at offset 0, padding to value_align, value, trailing padding
-        // to entry_align.
-        let (src_key_size, src_key_align) = self.types.size_align(src_mem_opts, &src_map_ty.key);
-        let (src_value_size, src_value_align) =
-            self.types.size_align(src_mem_opts, &src_map_ty.value);
-        let src_entry_align = src_key_align.max(src_value_align);
-        let src_value_offset =
-            (src_key_size + src_value_align - 1) & !(src_value_align - 1);
-        let src_tuple_size =
-            (src_value_offset + src_value_size + src_entry_align - 1) & !(src_entry_align - 1);
+        // Each map entry is a tuple<K, V> following record layout rules.
+        let src_key_abi = self.types.canonical_abi(&src_map_ty.key);
+        let src_value_abi = self.types.canonical_abi(&src_map_ty.value);
+        let src_entry_abi =
+            CanonicalAbiInfo::record([src_key_abi, src_value_abi].into_iter());
+        let (_, src_key_align) = self.types.size_align(src_mem_opts, &src_map_ty.key);
+        let (_, src_value_align) = self.types.size_align(src_mem_opts, &src_map_ty.value);
+        let (src_tuple_size, src_entry_align) = if src_mem_opts.memory64 {
+            (src_entry_abi.size64, src_entry_abi.align64)
+        } else {
+            (src_entry_abi.size32, src_entry_abi.align32)
+        };
+        let src_value_offset = {
+            let mut offset = 0u32;
+            if src_mem_opts.memory64 {
+                src_key_abi.next_field64(&mut offset);
+                src_value_abi.next_field64(&mut offset)
+            } else {
+                src_key_abi.next_field32(&mut offset);
+                src_value_abi.next_field32(&mut offset)
+            }
+        };
 
-        let (dst_key_size, dst_key_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.key);
-        let (dst_value_size, dst_value_align) =
-            self.types.size_align(dst_mem_opts, &dst_map_ty.value);
-        let dst_entry_align = dst_key_align.max(dst_value_align);
-        let dst_value_offset =
-            (dst_key_size + dst_value_align - 1) & !(dst_value_align - 1);
-        let dst_tuple_size =
-            (dst_value_offset + dst_value_size + dst_entry_align - 1) & !(dst_entry_align - 1);
+        let dst_key_abi = self.types.canonical_abi(&dst_map_ty.key);
+        let dst_value_abi = self.types.canonical_abi(&dst_map_ty.value);
+        let dst_entry_abi =
+            CanonicalAbiInfo::record([dst_key_abi, dst_value_abi].into_iter());
+        let (_, dst_key_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.key);
+        let (_, dst_value_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.value);
+        let (dst_tuple_size, dst_entry_align) = if dst_mem_opts.memory64 {
+            (dst_entry_abi.size64, dst_entry_abi.align64)
+        } else {
+            (dst_entry_abi.size32, dst_entry_abi.align32)
+        };
+        let dst_value_offset = {
+            let mut offset = 0u32;
+            if dst_mem_opts.memory64 {
+                dst_key_abi.next_field64(&mut offset);
+                dst_value_abi.next_field64(&mut offset)
+            } else {
+                dst_key_abi.next_field32(&mut offset);
+                dst_value_abi.next_field32(&mut offset)
+            }
+        };
 
         let src_mem = self.memory_operand(src_opts, src_ptr, src_entry_align);
 
