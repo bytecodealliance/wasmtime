@@ -2241,15 +2241,18 @@ where
     }
 }
 
-fn lift_map<K, V>(
+/// Shared helper that validates a map's memory region and lifts each
+/// (key, value) pair, forwarding them to `insert`.
+fn lift_map_pairs<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
     ptr: usize,
     len: usize,
-) -> Result<HashMap<K, V>>
+    mut insert: impl FnMut(K, V) -> Result<()>,
+) -> Result<()>
 where
-    K: Lift + Eq + Hash,
+    K: Lift,
     V: Lift,
 {
     let tuple_abi = CanonicalAbiInfo::record_static(&[K::ABI, V::ABI]);
@@ -2267,7 +2270,6 @@ where
         bail!("map pointer is not aligned");
     }
 
-    let mut result = HashMap::with_capacity(len)?;
     for i in 0..len {
         let entry_base = ptr + (i * tuple_size);
 
@@ -2280,18 +2282,33 @@ where
         let value_bytes = &cx.memory()[entry_base + value_field..][..V::SIZE32];
         let value = V::linear_lift_from_memory(cx, value_ty, value_bytes)?;
 
-        result.insert(key, value)?;
+        insert(key, value)?;
     }
 
+    Ok(())
+}
+
+fn lift_map<K, V>(
+    cx: &mut LiftContext<'_>,
+    key_ty: InterfaceType,
+    value_ty: InterfaceType,
+    ptr: usize,
+    len: usize,
+) -> Result<HashMap<K, V>>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    let mut result = HashMap::with_capacity(len)?;
+    lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
+        result.insert(k, v)?;
+        Ok(())
+    })?;
     Ok(result)
 }
 
 // =============================================================================
 // std::collections::HashMap<K, V> support for component model `map<K, V>`
-//
-// This mirrors the wasmtime_environ::collections::HashMap implementation above
-// but works with the standard library HashMap type, which is what users will
-// naturally reach for.
 
 #[cfg(feature = "std")]
 unsafe impl<K, V> ComponentType for std::collections::HashMap<K, V>
@@ -2422,37 +2439,11 @@ where
     K: Lift + Eq + Hash,
     V: Lift,
 {
-    let tuple_abi = CanonicalAbiInfo::record_static(&[K::ABI, V::ABI]);
-    let tuple_size = tuple_abi.size32 as usize;
-    let tuple_align = tuple_abi.align32 as usize;
-
-    match len
-        .checked_mul(tuple_size)
-        .and_then(|total| ptr.checked_add(total))
-    {
-        Some(n) if n <= cx.memory().len() => {}
-        _ => bail!("map pointer/length out of bounds of memory"),
-    }
-    if ptr % tuple_align != 0 {
-        bail!("map pointer is not aligned");
-    }
-
     let mut result = std::collections::HashMap::with_capacity(len);
-    for i in 0..len {
-        let entry_base = ptr + (i * tuple_size);
-
-        let mut field_offset = 0usize;
-        let key_field = K::ABI.next_field32_size(&mut field_offset);
-        let key_bytes = &cx.memory()[entry_base + key_field..][..K::SIZE32];
-        let key = K::linear_lift_from_memory(cx, key_ty, key_bytes)?;
-
-        let value_field = V::ABI.next_field32_size(&mut field_offset);
-        let value_bytes = &cx.memory()[entry_base + value_field..][..V::SIZE32];
-        let value = V::linear_lift_from_memory(cx, value_ty, value_bytes)?;
-
-        result.insert(key, value);
-    }
-
+    lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
+        result.insert(k, v);
+        Ok(())
+    })?;
     Ok(result)
 }
 
