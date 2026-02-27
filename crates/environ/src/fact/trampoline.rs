@@ -2575,8 +2575,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // space for the sequence in the destination memory. This will also
         // internally insert checks that the returned pointer is aligned
         // correctly for the destination.
-        let dst_mem =
-            self.malloc(dst_opts, MallocSize::Local(dst_byte_len.idx), dst_element_align);
+        let dst_mem = self.malloc(
+            dst_opts,
+            MallocSize::Local(dst_byte_len.idx),
+            dst_element_align,
+        );
 
         // With all the pointers and byte lengths verify that both the source
         // and the destination buffers are in-bounds.
@@ -2642,11 +2645,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// If a loop was opened, emits: decrement remaining, BrIf to loop
     /// head, End loop, End block, and frees iteration locals. Then stores
     /// the ptr/len pair into the destination and frees all temporaries.
-    fn end_translate_sequence(
-        &mut self,
-        seq: SequenceTranslation<'_>,
-        dst: &Destination,
-    ) {
+    fn end_translate_sequence(&mut self, seq: SequenceTranslation<'_>, dst: &Destination) {
         if let Some(loop_state) = seq.loop_state {
             // Update the remaining count, falling through to break out if
             // it's zero now.
@@ -2781,8 +2780,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // Each map entry is a tuple<K, V> following record layout rules.
         let src_key_abi = self.types.canonical_abi(&src_map_ty.key);
         let src_value_abi = self.types.canonical_abi(&src_map_ty.value);
-        let src_entry_abi =
-            CanonicalAbiInfo::record([src_key_abi, src_value_abi].into_iter());
+        let src_entry_abi = CanonicalAbiInfo::record([src_key_abi, src_value_abi].into_iter());
         let (_, src_key_align) = self.types.size_align(src_mem_opts, &src_map_ty.key);
         let (_, src_value_align) = self.types.size_align(src_mem_opts, &src_map_ty.value);
         let (src_tuple_size, src_entry_align) = if src_mem_opts.memory64 {
@@ -2803,8 +2801,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         let dst_key_abi = self.types.canonical_abi(&dst_map_ty.key);
         let dst_value_abi = self.types.canonical_abi(&dst_map_ty.value);
-        let dst_entry_abi =
-            CanonicalAbiInfo::record([dst_key_abi, dst_value_abi].into_iter());
+        let dst_entry_abi = CanonicalAbiInfo::record([dst_key_abi, dst_value_abi].into_iter());
         let (_, dst_key_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.key);
         let (_, dst_value_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.value);
         let (dst_tuple_size, dst_entry_align) = if dst_mem_opts.memory64 {
