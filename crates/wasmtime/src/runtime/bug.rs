@@ -52,6 +52,9 @@ pub struct WasmtimeBug {
 impl WasmtimeBug {
     #[cold]
     pub(crate) fn new(message: fmt::Arguments<'_>, pos: &'static (&'static str, u32)) -> Self {
+        if cfg!(debug_assertions) {
+            panic!("BUG: {message}");
+        }
         Self {
             message: message.to_string(),
             file: pos.0,
