@@ -13929,6 +13929,50 @@ fn test_s390x_binemit() {
         "E7480001384D",
         "vrepg %v20, %v8, 1",
     ));
+    insns.push((
+        Inst::LoadIndexedAddr {
+            rd: writable_gpr(1),
+            base: gpr(2),
+            index: gpr(3),
+            offset: SImm20::maybe_from_i64(0x7ffff).unwrap(),
+            size: 3,
+        },
+        "E3132FFF7F66",
+        "lxag %r1, 524287(%r3,%r2)",
+    ));
+    insns.push((
+        Inst::LoadIndexedAddr {
+            rd: writable_gpr(1),
+            base: gpr(2),
+            index: gpr(3),
+            offset: SImm20::maybe_from_i64(-2).unwrap(),
+            size: 4,
+        },
+        "E3132FFEFF68",
+        "lxaq %r1, -2(%r3,%r2)",
+    ));
+    insns.push((
+        Inst::LoadLogicalIndexedAddr {
+            rd: writable_gpr(1),
+            base: gpr(2),
+            index: gpr(3),
+            offset: SImm20::maybe_from_i64(0x7ffff).unwrap(),
+            size: 2,
+        },
+        "E3132FFF7F65",
+        "llxaf %r1, 524287(%r3,%r2)",
+    ));
+    insns.push((
+        Inst::LoadLogicalIndexedAddr {
+            rd: writable_gpr(1),
+            base: gpr(2),
+            index: gpr(3),
+            offset: SImm20::maybe_from_i64(-2).unwrap(),
+            size: 1,
+        },
+        "E3132FFEFF63",
+        "llxah %r1, -2(%r3,%r2)",
+    ));
 
     let flags = settings::Flags::new(settings::builder());
 

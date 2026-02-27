@@ -1,0 +1,40 @@
+test interpret
+test run
+target pulley64
+target s390x arch15
+
+function %i64_i32_offset_mul_unsigned(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 0x7fff
+  v4 = iadd v1, v3
+  v5 = uextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  return v7
+}
+
+; run: %i64_i32_offset_mul_unsigned(0, 0) == 0x7fff0
+; run: %i64_i32_offset_mul_unsigned(0, -1) == 0x7ffe0
+; run: %i64_i32_offset_mul_unsigned(-1, -1) == 0x7ffdf
+; run: %i64_i32_offset_mul_unsigned(0, 0x7fff_ffff) == 0x8_0007ffe0
+; run: %i64_i32_offset_mul_unsigned(0x7fffffff_ffffffff, 0x7fff_ffff) == 0x80000008_0007ffdf
+; run: %i64_i32_offset_mul_unsigned(0x7fffffff_ffffffff, 0x8000_0000) == 0x80000008_0007ffef
+
+function %i64_i32_offset_mul_signed(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 0x7fff
+  v4 = iadd v1, v3
+  v5 = sextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  return v7
+}
+
+; run: %i64_i32_offset_mul_signed(0, 0) == 0x7fff0
+; run: %i64_i32_offset_mul_signed(0, -1) == 0x7ffe0
+; run: %i64_i32_offset_mul_signed(-1, -1) == 0x7ffdf
+; run: %i64_i32_offset_mul_signed(0, 0x7fff_ffff) == 0xfffffff8_0007ffe0
+; run: %i64_i32_offset_mul_signed(0x7fffffff_ffffffff, 0x7fff_ffff) == 0x7ffffff8_0007ffdf
+; run: %i64_i32_offset_mul_signed(0x7fffffff_ffffffff, 0x8000_0000) == 0x7ffffff8_0007ffef

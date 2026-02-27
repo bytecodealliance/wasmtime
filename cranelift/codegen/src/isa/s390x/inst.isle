@@ -1008,6 +1008,22 @@
       (rd WritableReg)
       (mem MemArg))
 
+    ;; Load address referenced by `mem` into `rd`.
+    (LoadIndexedAddr
+      (rd WritableReg)
+      (base Reg)
+      (index Reg)
+      (offset SImm20)
+      (size u8))
+
+    ;; Load address referenced by `mem` into `rd`.
+    (LoadLogicalIndexedAddr
+      (rd WritableReg)
+      (base Reg)
+      (index Reg)
+      (offset SImm20)
+      (size u8))
+
     ;; Meta-instruction to emit a loop around a sequence of instructions.
     ;; This control flow is not visible to the compiler core, in particular
     ;; the register allocator.  Therefore, instructions in the loop may not
@@ -1774,6 +1790,9 @@
 (decl uimm16shifted_from_value (UImm16Shifted) Value)
 (extern extractor uimm16shifted_from_value uimm16shifted_from_value)
 
+(decl simm20_from_value (SImm20) Value)
+(extern extractor simm20_from_value simm20_from_value)
+
 (decl uimm32shifted_from_value (UImm32Shifted) Value)
 (extern extractor uimm32shifted_from_value uimm32shifted_from_value)
 
@@ -1927,6 +1946,23 @@
       (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
       (memarg_symbol name final_offset flags))
 
+(rule 2 (lower_address flags (has_type (mie4_enabled)
+          (iadd $I64 (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
+                       (u8_from_value shift)) y)) (i64_from_offset offset))
+      (memarg_reg_plus_off (load_logical_indexed_addr x y z shift) offset 0 flags))
+
+(rule 3 (lower_address flags (has_type (mie4_enabled)
+          (iadd $I64 y (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
+                         (u8_from_value shift)))) (i64_from_offset offset))
+      (memarg_reg_plus_off (load_logical_indexed_addr y x z shift) offset 0 flags))
+
+(rule 4 (lower_address flags (has_type (mie4_enabled)
+          (iadd $I64 (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)) y)) (i64_from_offset offset))
+      (memarg_reg_plus_off (load_indexed_addr x y z shift) offset 0 flags))
+
+(rule 5 (lower_address flags (has_type (mie4_enabled)
+          (iadd $I64 y (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)))) (i64_from_offset offset))
+      (memarg_reg_plus_off (load_indexed_addr y x z shift) offset 0 flags))
 
 ;; Lower an address plus a small bias into a `MemArg`.
 
@@ -2815,6 +2851,20 @@
 (rule (load_addr mem)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAddr dst mem))))
+        dst))
+
+;; Helper for emitting `MInst.LoadIndexedAddr` instructions.
+(decl load_indexed_addr (Reg Reg SImm20 u8) Reg)
+(rule (load_indexed_addr base index offset size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadIndexedAddr dst base index offset size))))
+        dst))
+
+;; Helper for emitting `MInst.LoadLogicalIndexedAddr` instructions.
+(decl load_logical_indexed_addr (Reg Reg SImm20 u8) Reg)
+(rule (load_logical_indexed_addr base index offset size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadLogicalIndexedAddr dst base index offset size))))
         dst))
 
 ;; Helper for emitting `MInst.Call` instructions.

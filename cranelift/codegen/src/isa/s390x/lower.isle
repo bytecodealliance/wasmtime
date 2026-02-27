@@ -115,6 +115,21 @@
 (rule 1 (lower (has_type (vr128_ty ty) (iadd _ x y)))
       (vec_add ty x y))
 
+(rule 16 (lower (has_type (mie4_enabled)
+          (iadd $I64 (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)) y)))
+      (load_logical_indexed_addr x y z shift))
+
+(rule 17 (lower (has_type (mie4_enabled)
+          (iadd $I64 y (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)))))
+      (load_logical_indexed_addr y x z shift))
+
+(rule 18 (lower (has_type (and (ty_addr64 _) (mie4_enabled))
+          (iadd $I64 (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)) y)))
+      (load_indexed_addr x y z shift))
+
+(rule 19 (lower (has_type (and (ty_addr64 _) (mie4_enabled))
+          (iadd $I64 y (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)))))
+      (load_indexed_addr y x z shift))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
