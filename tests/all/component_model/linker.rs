@@ -182,3 +182,192 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn implements_full_encoded_name() -> Result<()> {
+    // Register using the full `[implements=<...>]label` name and verify
+    // that a component importing that name instantiates successfully.
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker
+        .root()
+        .instance("[implements=<a:b/c>]primary")?
+        .func_wrap(
+            "get",
+            |_: wasmtime::StoreContextMut<'_, ()>, (_key,): (String,)| Ok((String::new(),)),
+        )?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $store-type (instance
+                (export "get" (func (param "key" string) (result string)))
+            ))
+            (import "[implements=<a:b/c>]primary" (instance (type $store-type)))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+#[test]
+fn implements_label_fallback() -> Result<()> {
+    // Register using the plain label name and verify that a component
+    // importing via `[implements=<...>]label` matches via label fallback.
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker.root().instance("primary")?.func_wrap(
+        "get",
+        |_: wasmtime::StoreContextMut<'_, ()>, (_key,): (String,)| Ok((String::new(),)),
+    )?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $store-type (instance
+                (export "get" (func (param "key" string) (result string)))
+            ))
+            (import "[implements=<a:b/c>]primary" (instance (type $store-type)))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+#[test]
+fn implements_multiple_imports_same_interface() -> Result<()> {
+    // Two imports of the same interface type under different labels.
+    // Verify that each import binds to a distinct host implementation by
+    // wrapping each imported function through a core module and exporting them.
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker
+        .root()
+        .instance("primary")?
+        .func_wrap("id", |_: wasmtime::StoreContextMut<'_, ()>, (): ()| {
+            Ok((1u32,))
+        })?;
+
+    linker
+        .root()
+        .instance("secondary")?
+        .func_wrap("id", |_: wasmtime::StoreContextMut<'_, ()>, (): ()| {
+            Ok((2u32,))
+        })?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $store-type (instance
+                (export "id" (func (result u32)))
+            ))
+            (import "[implements=<test:kv/store>]primary" (instance $primary (type $store-type)))
+            (import "[implements=<test:kv/store>]secondary" (instance $secondary (type $store-type)))
+
+            (alias export $primary "id" (func $primary-id))
+            (alias export $secondary "id" (func $secondary-id))
+
+            (core func $primary-lowered (canon lower (func $primary-id)))
+            (core func $secondary-lowered (canon lower (func $secondary-id)))
+
+            (core module $m
+                (import "" "p" (func $p (result i32)))
+                (import "" "s" (func $s (result i32)))
+                (func (export "call-primary") (result i32) (call $p))
+                (func (export "call-secondary") (result i32) (call $s))
+            )
+
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "p" (func $primary-lowered))
+                    (export "s" (func $secondary-lowered))
+                ))
+            ))
+
+            (func $cp (result u32) (canon lift (core func $i "call-primary")))
+            (func $cs (result u32) (canon lift (core func $i "call-secondary")))
+
+            (export "call-primary" (func $cp))
+            (export "call-secondary" (func $cs))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let call_primary = instance.get_typed_func::<(), (u32,)>(&mut store, "call-primary")?;
+    let call_secondary = instance.get_typed_func::<(), (u32,)>(&mut store, "call-secondary")?;
+
+    let (result,) = call_primary.call(&mut store, ())?;
+    assert_eq!(result, 1);
+
+    let (result,) = call_secondary.call(&mut store, ())?;
+    assert_eq!(result, 2);
+
+    Ok(())
+}
+
+#[test]
+fn implements_semver_compat() -> Result<()> {
+    // Linker registers with `[implements=<a:b/c@1.0.1>]primary`, component
+    // imports `[implements=<a:b/c@1.0.0>]primary` — should match via semver.
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker
+        .root()
+        .instance("[implements=<a:b/c@1.0.1>]primary")?
+        .func_wrap(
+            "get",
+            |_: wasmtime::StoreContextMut<'_, ()>, (_key,): (String,)| Ok((String::new(),)),
+        )?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $store-type (instance
+                (export "get" (func (param "key" string) (result string)))
+            ))
+            (import "[implements=<a:b/c@1.0.0>]primary" (instance (type $store-type)))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+#[test]
+fn implements_missing_label_fails() -> Result<()> {
+    // Only "primary" is defined; "secondary" is missing.
+    // Instantiation should fail — the label fallback must not match
+    // a different label.
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker.root().instance("primary")?.func_wrap(
+        "get",
+        |_: wasmtime::StoreContextMut<'_, ()>, (_key,): (String,)| Ok((String::new(),)),
+    )?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $store-type (instance
+                (export "get" (func (param "key" string) (result string)))
+            ))
+            (import "[implements=<a:b/c>]primary" (instance (type $store-type)))
+            (import "[implements=<a:b/c>]secondary" (instance (type $store-type)))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    assert!(linker.instantiate(&mut store, &component).is_err());
+
+    Ok(())
+}

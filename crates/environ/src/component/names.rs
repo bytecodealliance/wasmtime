@@ -1,8 +1,10 @@
 use crate::error::{Result, bail};
 use crate::prelude::*;
+use alloc::borrow::Cow;
 use core::hash::Hash;
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
+use wasmparser::names::{ComponentName, ComponentNameKind};
 
 /// A semver-aware map for imports/exports of a component.
 ///
@@ -80,7 +82,7 @@ where
         //
         // This key is used during `get` later on.
         if let Some((alternate_key, version)) = alternate_lookup_key(name) {
-            let alternate_key = cx.intern(alternate_key);
+            let alternate_key = cx.intern(&alternate_key);
             if let Some((prev_key, prev_version)) = self
                 .alternate_lookups
                 .insert(alternate_key.clone(), (key.clone(), version.clone()))
@@ -119,10 +121,21 @@ where
         // if that was intern'd in `strings`. Given all that look to see if it
         // was defined in `alternate_lookups` and finally at the end that exact
         // key is then used to look up again in `self.definitions`.
-        let (alternate_name, _version) = alternate_lookup_key(name)?;
-        let alternate_key = cx.lookup(alternate_name)?;
-        let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(exact_key)
+        if let Some((alternate_name, _version)) = alternate_lookup_key(name) {
+            if let Some(alternate_key) = cx.lookup(&alternate_name) {
+                if let Some((exact_key, _version)) = self.alternate_lookups.get(&alternate_key) {
+                    return self.definitions.get(exact_key);
+                }
+            }
+        }
+
+        // Finally, if this is an `[implements=<I>]label` name, try falling
+        // back to just the plain `label`. This allows the linker to define
+        // entries by plain name and have them match implements-annotated
+        // imports.
+        let label = implements_label_key(name)?;
+        let label_key = cx.lookup(label)?;
+        self.definitions.get(&label_key)
     }
 
     /// Returns an iterator over inserted values in this map.
@@ -182,6 +195,16 @@ impl NameMapIntern for NameMapNoIntern {
     }
 }
 
+/// Parses `[implements=<...>]label` returning `Some("label")`.
+///
+/// Returns `None` if `name` does not have this format or if the label is empty.
+fn implements_label_key(name: &str) -> Option<&str> {
+    let rest = name.strip_prefix("[implements=<")?;
+    let end = rest.find(">]")?;
+    let label = &rest[end + 2..];
+    if label.is_empty() { None } else { Some(label) }
+}
+
 /// Determines a version-based "alternate lookup key" for the `name` specified.
 ///
 /// Some examples are:
@@ -192,11 +215,36 @@ impl NameMapIntern for NameMapNoIntern {
 /// * `foo:bar/baz@0.1.0` => `Some(foo:bar/baz@0.1)`
 /// * `foo:bar/baz@0.0.1` => `None`
 /// * `foo:bar/baz@0.1.0-rc.2` => `None`
+/// * `[implements=<a:b/c@1.1.2>]label` => `Some([implements=<a:b/c@1>]label)`
 ///
 /// This alternate lookup key is intended to serve the purpose where a
 /// semver-compatible definition can be located, if one is defined, at perhaps
 /// either a newer or an older version.
-fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
+fn alternate_lookup_key(name: &str) -> Option<(Cow<'_, str>, Version)> {
+    // Handle `[implements=<interface@version>]label` by performing semver
+    // lookup on the inner interface name. Guard with a prefix check to avoid
+    // full ComponentName parsing for the common non-implements case.
+    if name.starts_with("[implements=<") {
+        if let Ok(cn) = ComponentName::new(name, 0) {
+            if let ComponentNameKind::Implements(imp) = cn.kind() {
+                let inner = imp.interface();
+                let label = imp.label().as_str();
+                let (alt_inner, version) = alternate_lookup_key_inner(inner)?;
+                return Some((
+                    Cow::Owned(format!("[implements=<{alt_inner}>]{label}")),
+                    version,
+                ));
+            }
+        }
+    }
+
+    let (alt, version) = alternate_lookup_key_inner(name)?;
+    Some((Cow::Borrowed(alt), version))
+}
+
+/// Inner helper that computes the semver alternate key for a plain name
+/// (without any `[implements=...]` wrapper).
+fn alternate_lookup_key_inner(name: &str) -> Option<(&str, Version)> {
     let at = name.find('@')?;
     let version_string = &name[at + 1..];
     let version = Version::parse(version_string).ok()?;
@@ -226,28 +274,59 @@ fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
 #[cfg(test)]
 mod tests {
     use super::{NameMap, NameMapNoIntern};
+    use alloc::string::String;
+
+    #[test]
+    fn implements_label_key() {
+        assert_eq!(super::implements_label_key("plain"), None);
+        assert_eq!(super::implements_label_key("a:b/c@1.0.0"), None);
+        assert_eq!(
+            super::implements_label_key("[implements=<a:b/c>]primary"),
+            Some("primary")
+        );
+        assert_eq!(
+            super::implements_label_key("[implements=<a:b/c@1.0.0>]my-store"),
+            Some("my-store")
+        );
+        // Empty label should return None.
+        assert_eq!(super::implements_label_key("[implements=<a:b/c>]"), None);
+        // Malformed inputs.
+        assert_eq!(super::implements_label_key("[implements=<a:b/c"), None);
+        assert_eq!(super::implements_label_key("[implements=nope>]x"), None);
+    }
 
     #[test]
     fn alternate_lookup_key() {
-        fn alt(s: &str) -> Option<&str> {
-            super::alternate_lookup_key(s).map(|(s, _)| s)
+        fn alt(s: &str) -> Option<String> {
+            super::alternate_lookup_key(s).map(|(s, _)| s.into_owned())
         }
 
         assert_eq!(alt("x"), None);
         assert_eq!(alt("x:y/z"), None);
-        assert_eq!(alt("x:y/z@1.0.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.2"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@2.1.2"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@2.1.2+abc"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@0.1.2"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.1.3"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.2.3"), Some("x:y/z@0.2"));
-        assert_eq!(alt("x:y/z@0.2.3+abc"), Some("x:y/z@0.2"));
+        assert_eq!(alt("x:y/z@1.0.0"), Some("x:y/z@1".into()));
+        assert_eq!(alt("x:y/z@1.1.0"), Some("x:y/z@1".into()));
+        assert_eq!(alt("x:y/z@1.1.2"), Some("x:y/z@1".into()));
+        assert_eq!(alt("x:y/z@2.1.2"), Some("x:y/z@2".into()));
+        assert_eq!(alt("x:y/z@2.1.2+abc"), Some("x:y/z@2".into()));
+        assert_eq!(alt("x:y/z@0.1.2"), Some("x:y/z@0.1".into()));
+        assert_eq!(alt("x:y/z@0.1.3"), Some("x:y/z@0.1".into()));
+        assert_eq!(alt("x:y/z@0.2.3"), Some("x:y/z@0.2".into()));
+        assert_eq!(alt("x:y/z@0.2.3+abc"), Some("x:y/z@0.2".into()));
         assert_eq!(alt("x:y/z@0.0.1"), None);
         assert_eq!(alt("x:y/z@0.0.1-pre"), None);
         assert_eq!(alt("x:y/z@0.1.0-pre"), None);
         assert_eq!(alt("x:y/z@1.0.0-pre"), None);
+
+        // Implements names with semver.
+        assert_eq!(
+            alt("[implements=<x:y/z@1.0.0>]primary"),
+            Some("[implements=<x:y/z@1>]primary".into())
+        );
+        assert_eq!(
+            alt("[implements=<x:y/z@0.2.3>]label"),
+            Some("[implements=<x:y/z@0.2>]label".into())
+        );
+        assert_eq!(alt("[implements=<x:y/z>]label"), None);
     }
 
     #[test]
@@ -271,5 +350,72 @@ mod tests {
         assert_eq!(map.get("a:b/c@1.0.1", &intern), Some(&3));
         assert_eq!(map.get("a:b/c@1.0.2", &intern), Some(&3));
         assert_eq!(map.get("a:b/c@1.1.0", &intern), Some(&3));
+    }
+
+    #[test]
+    fn implements_label_fallback() {
+        let mut map = NameMap::default();
+        let mut intern = NameMapNoIntern;
+
+        // Define by plain label name.
+        map.insert("primary", &mut intern, false, 10).unwrap();
+        map.insert("secondary", &mut intern, false, 20).unwrap();
+
+        // Looking up with implements prefix falls back to plain label.
+        assert_eq!(map.get("[implements=<a:b/c>]primary", &intern), Some(&10));
+        assert_eq!(map.get("[implements=<a:b/c>]secondary", &intern), Some(&20));
+
+        // An exact implements definition takes priority over fallback.
+        map.insert("[implements=<a:b/c>]primary", &mut intern, false, 30)
+            .unwrap();
+        assert_eq!(map.get("[implements=<a:b/c>]primary", &intern), Some(&30));
+        // A different interface still falls back to "primary".
+        assert_eq!(map.get("[implements=<x:y/z>]primary", &intern), Some(&10));
+    }
+
+    #[test]
+    fn implements_semver_compat() {
+        let mut map = NameMap::default();
+        let mut intern = NameMapNoIntern;
+
+        // Define with a versioned implements name.
+        map.insert("[implements=<a:b/c@1.0.1>]primary", &mut intern, false, 42)
+            .unwrap();
+
+        // Exact match works.
+        assert_eq!(
+            map.get("[implements=<a:b/c@1.0.1>]primary", &intern),
+            Some(&42)
+        );
+
+        // Semver-compatible lookup within the implements prefix.
+        assert_eq!(
+            map.get("[implements=<a:b/c@1.0.0>]primary", &intern),
+            Some(&42)
+        );
+        assert_eq!(
+            map.get("[implements=<a:b/c@1.2.0>]primary", &intern),
+            Some(&42)
+        );
+
+        // Different major version doesn't match via semver.
+        assert_eq!(map.get("[implements=<a:b/c@2.0.0>]primary", &intern), None);
+    }
+
+    #[test]
+    fn implements_semver_miss_falls_through_to_label() {
+        let mut map = NameMap::default();
+        let mut intern = NameMapNoIntern;
+
+        // Only a plain label is defined — no versioned implements entry.
+        map.insert("primary", &mut intern, false, 99).unwrap();
+
+        // A versioned implements lookup has a semver alternate key, but it
+        // won't match anything.  The fallback to the plain label must still
+        // kick in instead of returning None.
+        assert_eq!(
+            map.get("[implements=<a:b/c@1.0.0>]primary", &intern),
+            Some(&99)
+        );
     }
 }
