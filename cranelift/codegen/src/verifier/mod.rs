@@ -381,11 +381,9 @@ impl<'a> Verifier<'a> {
                         let base_type = self.func.global_values[base].global_type(isa);
                         if global_type != base_type {
                             errors.report((
-                                gv,
-                                format!(
-                                    "iadd_imm type {global_type} differs from operand type {base_type}"
-                                ),
-                            ));
+                gv,
+                format!("iadd_imm type {global_type} differs from operand type {base_type}"),
+              ));
                         }
                     }
                 }
@@ -395,11 +393,11 @@ impl<'a> Verifier<'a> {
                         let pointer_type = isa.pointer_type();
                         if base_type != pointer_type {
                             errors.report((
-                                gv,
-                                format!(
-                                    "base {base} has type {base_type}, which is not the pointer type {pointer_type}"
-                                ),
-                            ));
+                gv,
+                format!(
+                  "base {base} has type {base_type}, which is not the pointer type {pointer_type}"
+                ),
+              ));
                         }
                     }
                 }
@@ -421,12 +419,12 @@ impl<'a> Verifier<'a> {
                     for field in fields {
                         if field.offset < last_offset {
                             errors.report((
-                                mt,
-                                format!(
-                                    "memory type {} has a field at offset {}, which is out-of-order",
-                                    mt, field.offset
-                                ),
-                            ));
+                mt,
+                format!(
+                  "memory type {} has a field at offset {}, which is out-of-order",
+                  mt, field.offset
+                ),
+              ));
                         }
                         last_offset = match field.offset.checked_add(u64::from(field.ty.bytes())) {
                             Some(o) => o,
@@ -695,6 +693,9 @@ impl<'a> Verifier<'a> {
             LoadNoOffset { opcode, arg, .. } if opcode.can_load() => {
                 self.verify_is_address(inst, arg, errors)?;
             }
+            AtomicLoad { opcode, arg: p, .. } if opcode.can_load() => {
+                self.verify_is_address(inst, p, errors)?;
+            }
             Load { opcode, arg, .. } if opcode.can_load() => {
                 self.verify_is_address(inst, arg, errors)?;
             }
@@ -712,6 +713,7 @@ impl<'a> Verifier<'a> {
             } if opcode.can_load() || opcode.can_store() => {
                 self.verify_is_address(inst, p, errors)?;
             }
+
             Store {
                 opcode,
                 args: [_, p],
@@ -719,7 +721,7 @@ impl<'a> Verifier<'a> {
             } if opcode.can_store() => {
                 self.verify_is_address(inst, p, errors)?;
             }
-            StoreNoOffset {
+            AtomicStore {
                 opcode,
                 args: [_, p],
                 ..
@@ -743,7 +745,7 @@ impl<'a> Verifier<'a> {
             AtomicCas { .. }
             | AtomicRmw { .. }
             | LoadNoOffset { .. }
-            | StoreNoOffset { .. }
+            | AtomicStore { .. }
             | Unary { .. }
             | UnaryConst { .. }
             | UnaryImm { .. }
@@ -764,7 +766,9 @@ impl<'a> Verifier<'a> {
             | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
-            | NullAry { .. } => {}
+            | NullAry { .. }
+            | AtomicFence { .. }
+            | AtomicLoad { .. } => {}
         }
 
         Ok(())
@@ -1085,7 +1089,9 @@ impl<'a> Verifier<'a> {
                         format!("{v} is defined by {block} which is not in the layout"),
                     ));
                 }
-                let user_block = self.func.layout.inst_block(loc_inst).expect("Expected instruction to be in a block as we're traversing code already in layout");
+                let user_block = self.func.layout.inst_block(loc_inst).expect(
+          "Expected instruction to be in a block as we're traversing code already in layout",
+        );
                 // The defining block dominates the instruction using this value.
                 if is_reachable && !self.expected_domtree.block_dominates(block, user_block) {
                     return errors.fatal((
@@ -1212,10 +1218,12 @@ impl<'a> Verifier<'a> {
             let value_width = value_type.bits();
             if expected_width != value_width {
                 errors.nonfatal((
-                    loc_inst,
-                    self.context(loc_inst),
-                    format!("invalid pointer width (got {value_width}, expected {expected_width}) encountered {v}"),
-                ))
+          loc_inst,
+          self.context(loc_inst),
+          format!(
+            "invalid pointer width (got {value_width}, expected {expected_width}) encountered {v}"
+          ),
+        ))
             } else {
                 Ok(())
             }
@@ -1320,12 +1328,10 @@ impl<'a> Verifier<'a> {
 
             if !value_typeset.contains(ctrl_type) {
                 errors.report((
-                    inst,
-                    self.context(inst),
-                    format!(
-                        "has an invalid controlling type {ctrl_type} (allowed set is {value_typeset:?})"
-                    ),
-                ));
+          inst,
+          self.context(inst),
+          format!("has an invalid controlling type {ctrl_type} (allowed set is {value_typeset:?})"),
+        ));
             }
 
             ctrl_type
@@ -1358,12 +1364,12 @@ impl<'a> Verifier<'a> {
             if let Some(expected_type) = expected_type {
                 if result_type != expected_type {
                     errors.report((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "expected result {i} ({result}) to have type {expected_type}, found {result_type}"
-                        ),
-                    ));
+            inst,
+            self.context(inst),
+            format!(
+              "expected result {i} ({result}) to have type {expected_type}, found {result_type}"
+            ),
+          ));
                 }
             } else {
                 return errors.nonfatal((
@@ -1411,12 +1417,12 @@ impl<'a> Verifier<'a> {
                 ResolvedConstraint::Free(type_set) => {
                     if !type_set.contains(arg_type) {
                         errors.report((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "arg {i} ({arg}) with type {arg_type} failed to satisfy type set {type_set:?}"
-                            ),
-                        ));
+              inst,
+              self.context(inst),
+              format!(
+                "arg {i} ({arg}) with type {arg_type} failed to satisfy type set {type_set:?}"
+              ),
+            ));
                     }
                 }
             }
@@ -1566,19 +1572,18 @@ impl<'a> Verifier<'a> {
             BlockArg::Value(v) => Ok(Some(self.func.dfg.value_type(v))),
             BlockArg::TryCallRet(_) | BlockArg::TryCallExn(_) => {
                 // Get the invoked signature.
-                let et = match self.func.dfg.insts[inst].exception_table() {
-                    Some(et) => et,
-                    None => {
-                        errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "`retN` block argument in block-call not on `try_call` instruction"
-                            ),
-                        ))?;
-                        unreachable!()
-                    }
-                };
+                let et =
+                    match self.func.dfg.insts[inst].exception_table() {
+                        Some(et) => et,
+                        None => {
+                            errors.fatal((
+              inst,
+              self.context(inst),
+              format!("`retN` block argument in block-call not on `try_call` instruction"),
+            ))?;
+                            unreachable!()
+                        }
+                    };
                 let exdata = &self.func.dfg.exception_tables[et];
                 let sig = &self.func.dfg.signatures[exdata.signature()];
 
@@ -1598,10 +1603,10 @@ impl<'a> Verifier<'a> {
                     }
                     (BlockArg::TryCallRet(_), _) => {
                         errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!("`retN` block argument used outside normal-return target of `try_call`"),
-                        ))?;
+              inst,
+              self.context(inst),
+              format!("`retN` block argument used outside normal-return target of `try_call`"),
+            ))?;
                         unreachable!()
                     }
                     (BlockArg::TryCallExn(i), BlockCallTargetType::Exception) => {
@@ -1627,10 +1632,10 @@ impl<'a> Verifier<'a> {
                     }
                     (BlockArg::TryCallExn(_), _) => {
                         errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!("`exnN` block argument used outside normal-return target of `try_call`"),
-                        ))?;
+              inst,
+              self.context(inst),
+              format!("`exnN` block argument used outside normal-return target of `try_call`"),
+            ))?;
                         unreachable!()
                     }
                     _ => unreachable!(),

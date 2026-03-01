@@ -3,8 +3,11 @@ use crate::shared::{entities::EntityRefs, immediates::Immediates};
 use std::rc::Rc;
 
 pub(crate) struct Formats {
+    pub(crate) atomic_load: Rc<InstructionFormat>,
     pub(crate) atomic_cas: Rc<InstructionFormat>,
     pub(crate) atomic_rmw: Rc<InstructionFormat>,
+    pub(crate) atomic_store: Rc<InstructionFormat>,
+    pub(crate) atomic_fence: Rc<InstructionFormat>,
     pub(crate) binary: Rc<InstructionFormat>,
     pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
@@ -31,7 +34,6 @@ pub(crate) struct Formats {
     pub(crate) dynamic_stack_load: Rc<InstructionFormat>,
     pub(crate) dynamic_stack_store: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
-    pub(crate) store_no_offset: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
     pub(crate) ternary_imm8: Rc<InstructionFormat>,
     pub(crate) trap: Rc<InstructionFormat>,
@@ -152,19 +154,38 @@ impl Formats {
 
             func_addr: Builder::new("FuncAddr").imm(&entities.func_ref).build(),
 
+            atomic_load: Builder::new("AtomicLoad")
+                .imm(&imm.memflags)
+                .imm(&imm.atomic_ordering)
+                .value()
+                .build(),
+
             atomic_rmw: Builder::new("AtomicRmw")
                 .imm(&imm.memflags)
                 .imm(&imm.atomic_rmw_op)
+                .imm(&imm.atomic_ordering)
                 .value()
                 .value()
                 .build(),
 
             atomic_cas: Builder::new("AtomicCas")
                 .imm(&imm.memflags)
+                .imm(&imm.atomic_ordering)
                 .value()
                 .value()
                 .value()
                 .typevar_operand(2)
+                .build(),
+
+            atomic_store: Builder::new("AtomicStore")
+                .imm(&imm.memflags)
+                .imm(&imm.atomic_ordering)
+                .value()
+                .value()
+                .build(),
+
+            atomic_fence: Builder::new("AtomicFence")
+                .imm(&imm.atomic_ordering)
                 .build(),
 
             load: Builder::new("Load")
@@ -183,12 +204,6 @@ impl Formats {
                 .value()
                 .value()
                 .imm(&imm.offset32)
-                .build(),
-
-            store_no_offset: Builder::new("StoreNoOffset")
-                .imm(&imm.memflags)
-                .value()
-                .value()
                 .build(),
 
             stack_load: Builder::new("StackLoad")

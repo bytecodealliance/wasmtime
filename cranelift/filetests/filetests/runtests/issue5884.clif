@@ -14,7 +14,7 @@ block0(v0: i64, v1: i16):
     store little v0, v2
 
     v3 = stack_addr.i64 ss0+6
-    v4 = atomic_rmw.i16 little or v3, v1
+    v4 = atomic_rmw.i16 little seq_cst or v3, v1
     return v4
 }
 

@@ -9,9 +9,9 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
-    types::*,
+    AliasRegion, AtomicOrdering, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness,
+    ExternalName, FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot,
+    UserExternalName, UserFuncName, Value, types::*,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -34,7 +34,10 @@ fn insert_opcode(
     args: &[Type],
     rets: &[Type],
 ) -> Result<()> {
+    let ordering = fgen.any_atomic_ordering();
+
     let mut vals = Vec::with_capacity(args.len());
+
     for &arg in args.into_iter() {
         let var = fgen.get_variable_of_type(arg)?;
         let val = builder.use_var(var);
@@ -55,6 +58,7 @@ fn insert_opcode(
     // Choose the appropriate instruction format for this opcode
     let (inst, dfg) = match opcode.format() {
         InstructionFormat::NullAry => builder.ins().NullAry(opcode, ctrl_type),
+        InstructionFormat::AtomicFence => builder.ins().AtomicFence(opcode, ctrl_type, ordering),
         InstructionFormat::Unary => builder.ins().Unary(opcode, ctrl_type, vals[0]),
         InstructionFormat::Binary => builder.ins().Binary(opcode, ctrl_type, vals[0], vals[1]),
         InstructionFormat::Ternary => builder
@@ -290,6 +294,8 @@ fn insert_load_store(
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
 
+    let ordering = fgen.any_atomic_ordering();
+
     match opcode.format() {
         InstructionFormat::LoadNoOffset => {
             let (inst, dfg) = builder
@@ -299,12 +305,20 @@ fn insert_load_store(
             let new_val = dfg.first_result(inst);
             builder.def_var(var, new_val);
         }
-        InstructionFormat::StoreNoOffset => {
+        InstructionFormat::AtomicLoad => {
+            let (inst, dfg) = builder
+                .ins()
+                .AtomicLoad(opcode, ctrl_type, flags, ordering, address);
+
+            let new_val = dfg.first_result(inst);
+            builder.def_var(var, new_val);
+        }
+        InstructionFormat::AtomicStore => {
             let val = builder.use_var(var);
 
             builder
                 .ins()
-                .StoreNoOffset(opcode, ctrl_type, flags, val, address);
+                .AtomicStore(opcode, ctrl_type, flags, ordering, val, address);
         }
         InstructionFormat::Store => {
             let val = builder.use_var(var);
@@ -338,6 +352,7 @@ fn insert_atomic_rmw(
     let type_size = ctrl_type.bytes();
 
     let rmw_op = *fgen.u.choose(AtomicRmwOp::all())?;
+    let ordering = fgen.any_atomic_ordering();
 
     let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
 
@@ -351,7 +366,7 @@ fn insert_atomic_rmw(
     let source_val = builder.use_var(source_var);
     let new_val = builder
         .ins()
-        .atomic_rmw(ctrl_type, flags, rmw_op, address, source_val);
+        .atomic_rmw(ctrl_type, flags, rmw_op, ordering, address, source_val);
 
     builder.def_var(target_var, new_val);
     Ok(())
@@ -366,6 +381,7 @@ fn insert_atomic_cas(
 ) -> Result<()> {
     let ctrl_type = *rets.first().unwrap();
     let type_size = ctrl_type.bytes();
+    let ordering = fgen.any_atomic_ordering();
 
     let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
 
@@ -381,7 +397,7 @@ fn insert_atomic_cas(
     let store_val = builder.use_var(store_var);
     let new_val = builder
         .ins()
-        .atomic_cas(flags, address, expected_val, store_val);
+        .atomic_cas(flags, ordering, address, expected_val, store_val);
 
     builder.def_var(loaded_var, new_val);
     Ok(())
@@ -1092,12 +1108,14 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::IntCompareImm => todo!(),
         InstructionFormat::Load => insert_load_store,
         InstructionFormat::LoadNoOffset => insert_load_store,
+        InstructionFormat::AtomicLoad => insert_load_store,
         InstructionFormat::NullAry => insert_opcode,
+        InstructionFormat::AtomicFence => insert_opcode,
         InstructionFormat::Shuffle => insert_shuffle,
         InstructionFormat::StackLoad => insert_stack_load,
         InstructionFormat::StackStore => insert_stack_store,
         InstructionFormat::Store => insert_load_store,
-        InstructionFormat::StoreNoOffset => insert_load_store,
+        InstructionFormat::AtomicStore => insert_load_store,
         InstructionFormat::Ternary => insert_opcode,
         InstructionFormat::TernaryImm8 => insert_ins_ext_lane,
         InstructionFormat::Trap => todo!(),
@@ -1396,6 +1414,18 @@ where
         .into();
 
         Ok((address, flags, offset))
+    }
+
+    /// Generates a random atomic memory ordering.
+    pub fn any_atomic_ordering(&mut self) -> AtomicOrdering {
+        let options = [
+            AtomicOrdering::Relaxed,
+            AtomicOrdering::Acquire,
+            AtomicOrdering::Release,
+            AtomicOrdering::AcqRel,
+            AtomicOrdering::SeqCst,
+        ];
+        *self.u.choose(&options).unwrap()
     }
 
     /// Get a variable of type `ty` from the current function

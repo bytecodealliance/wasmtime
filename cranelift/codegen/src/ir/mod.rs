@@ -1,5 +1,6 @@
 //! Representation of Cranelift IR functions.
 
+mod atomic_ordering;
 mod atomic_rmw_op;
 mod builder;
 pub mod condcodes;
@@ -32,6 +33,7 @@ mod user_stack_maps;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
+pub use crate::ir::atomic_ordering::AtomicOrdering;
 pub use crate::ir::atomic_rmw_op::AtomicRmwOp;
 pub use crate::ir::builder::{
     InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,

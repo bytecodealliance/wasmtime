@@ -11,6 +11,6 @@ block0:
 
     v21 = iconst.i64 0
     v22 = iconst.i32 2
-    v23 = atomic_rmw.i32 xchg v21, v22  ; v21 = 0, v22 = 2
+    v23 = atomic_rmw.i32 seq_cst xchg v21, v22  ; v21 = 0, v22 = 2
     trap user1
 }

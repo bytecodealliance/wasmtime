@@ -11,7 +11,7 @@ target riscv64 has_c has_zcb
 
 function %fence() -> i8 {
 block0:
-    fence
+    fence seq_cst
 
     v0 = iconst.i8 0
     return v0

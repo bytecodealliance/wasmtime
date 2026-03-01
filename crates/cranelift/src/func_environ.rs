@@ -1541,9 +1541,11 @@ impl FuncEnvironment<'_> {
                 panic!("unexpected kind of known-import function: {key:?}")
             }
 
-            None => panic!(
-                "cannot make an `ir::FuncRef` for a function import that is not statically known"
-            ),
+            None => {
+                panic!(
+                    "cannot make an `ir::FuncRef` for a function import that is not statically known"
+                )
+            }
         };
 
         let (namespace, index) = key.into_raw_parts();
@@ -3498,6 +3500,7 @@ impl FuncEnvironment<'_> {
                     pos.ins().atomic_load(
                         pointer_type,
                         ir::MemFlags::trusted(),
+                        ir::AtomicOrdering::default(),
                         vmmemory_definition_ptr,
                     )
                 } else {
@@ -3524,6 +3527,7 @@ impl FuncEnvironment<'_> {
                     pos.ins().atomic_load(
                         pointer_type,
                         ir::MemFlags::trusted(),
+                        ir::AtomicOrdering::default(),
                         vmmemory_definition_ptr,
                     )
                 } else {

@@ -20,8 +20,8 @@ function %error_i64_atomic_store_load(i64) -> i64 {
 
 block0(v0: i64):
     v1 = stack_addr.i64 ss0
-    atomic_store.i64 v0, v1; error: invalid pointer width (got 64, expected 32) encountered v1
-    v2 = atomic_load.i64 v1; error: invalid pointer width (got 64, expected 32) encountered v1
+    atomic_store.i64 seq_cst v0, v1; error: invalid pointer width (got 64, expected 32) encountered v1
+    v2 = atomic_load.i64 seq_cst v1; error: invalid pointer width (got 64, expected 32) encountered v1
     return v2
 }
 
@@ -31,7 +31,7 @@ function %error_atomic_cas(i128, i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128, v2: i128):
     stack_store.i128 v0, ss0
     v3 = stack_addr.i64 ss0
-    v4 = atomic_cas.i128 v3, v1, v2; error: invalid pointer width (got 64, expected 32) encountered v3
+    v4 = atomic_cas.i128 seq_cst v3, v1, v2; error: invalid pointer width (got 64, expected 32) encountered v3
     v5 = stack_load.i128 ss0
     return v5, v4
 }
@@ -43,7 +43,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2 ; error: invalid pointer width (got 64, expected 32) encountered v2
 
-    v3 = atomic_rmw.i64 little add v2, v1; error: invalid pointer width (got 64, expected 32) encountered v2
+    v3 = atomic_rmw.i64 little seq_cst add v2, v1; error: invalid pointer width (got 64, expected 32) encountered v2
 
     v4 = load.i64 little v2 ; error: invalid pointer width (got 64, expected 32) encountered v2
     return v3, v4

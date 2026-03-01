@@ -19,7 +19,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little add v4, v2
+    v5 = atomic_rmw.i16 little seq_cst add v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -37,7 +37,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little add v4, v2
+    v5 = atomic_rmw.i16 little seq_cst add v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -55,7 +55,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little add v4, v2
+    v5 = atomic_rmw.i8 little seq_cst add v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -77,7 +77,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little add v4, v2
+    v5 = atomic_rmw.i8 little seq_cst add v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -99,7 +99,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little sub v4, v2
+    v5 = atomic_rmw.i16 little seq_cst sub v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -117,7 +117,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little sub v4, v2
+    v5 = atomic_rmw.i16 little seq_cst sub v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -135,7 +135,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little sub v4, v2
+    v5 = atomic_rmw.i8 little seq_cst sub v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -157,7 +157,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little sub v4, v2
+    v5 = atomic_rmw.i8 little seq_cst sub v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -179,7 +179,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little and v4, v2
+    v5 = atomic_rmw.i16 little seq_cst and v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -197,7 +197,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little and v4, v2
+    v5 = atomic_rmw.i16 little seq_cst and v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -215,7 +215,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little and v4, v2
+    v5 = atomic_rmw.i8 little seq_cst and v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -237,7 +237,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little and v4, v2
+    v5 = atomic_rmw.i8 little seq_cst and v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -260,7 +260,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little or v4, v2
+    v5 = atomic_rmw.i16 little seq_cst or v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -278,7 +278,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little or v4, v2
+    v5 = atomic_rmw.i16 little seq_cst or v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -296,7 +296,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little or v4, v2
+    v5 = atomic_rmw.i8 little seq_cst or v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -318,7 +318,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little or v4, v2
+    v5 = atomic_rmw.i8 little seq_cst or v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -340,7 +340,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little xor v4, v2
+    v5 = atomic_rmw.i16 little seq_cst xor v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -358,7 +358,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little xor v4, v2
+    v5 = atomic_rmw.i16 little seq_cst xor v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -376,7 +376,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little xor v4, v2
+    v5 = atomic_rmw.i8 little seq_cst xor v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -398,7 +398,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little xor v4, v2
+    v5 = atomic_rmw.i8 little seq_cst xor v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -421,7 +421,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little nand v4, v2
+    v5 = atomic_rmw.i16 little seq_cst nand v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -439,7 +439,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little nand v4, v2
+    v5 = atomic_rmw.i16 little seq_cst nand v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -457,7 +457,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little nand v4, v2
+    v5 = atomic_rmw.i8 little seq_cst nand v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -479,7 +479,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little nand v4, v2
+    v5 = atomic_rmw.i8 little seq_cst nand v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -502,7 +502,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little umin v4, v2
+    v5 = atomic_rmw.i16 little seq_cst umin v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -520,7 +520,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little umin v4, v2
+    v5 = atomic_rmw.i16 little seq_cst umin v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -538,7 +538,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little umin v4, v2
+    v5 = atomic_rmw.i8 little seq_cst umin v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -560,7 +560,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little umin v4, v2
+    v5 = atomic_rmw.i8 little seq_cst umin v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -583,7 +583,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little umax v4, v2
+    v5 = atomic_rmw.i16 little seq_cst umax v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -601,7 +601,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little umax v4, v2
+    v5 = atomic_rmw.i16 little seq_cst umax v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -619,7 +619,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little umax v4, v2
+    v5 = atomic_rmw.i8 little seq_cst umax v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -641,7 +641,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little umax v4, v2
+    v5 = atomic_rmw.i8 little seq_cst umax v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -664,7 +664,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little smin v4, v2
+    v5 = atomic_rmw.i16 little seq_cst smin v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -682,7 +682,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little smin v4, v2
+    v5 = atomic_rmw.i16 little seq_cst smin v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -701,7 +701,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little smin v4, v2
+    v5 = atomic_rmw.i8 little seq_cst smin v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -723,7 +723,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little smin v4, v2
+    v5 = atomic_rmw.i8 little seq_cst smin v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -746,7 +746,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little smax v4, v2
+    v5 = atomic_rmw.i16 little seq_cst smax v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -764,7 +764,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little smax v4, v2
+    v5 = atomic_rmw.i16 little seq_cst smax v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -783,7 +783,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little smax v4, v2
+    v5 = atomic_rmw.i8 little seq_cst smax v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -805,7 +805,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little smax v4, v2
+    v5 = atomic_rmw.i8 little seq_cst smax v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -828,7 +828,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little xchg v4, v2
+    v5 = atomic_rmw.i16 little seq_cst xchg v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -846,7 +846,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 little xchg v4, v2
+    v5 = atomic_rmw.i16 little seq_cst xchg v4, v2
 
     v6 = load.i32 little v3
     return v6
@@ -865,7 +865,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little xchg v4, v2
+    v5 = atomic_rmw.i8 little seq_cst xchg v4, v2
 
     v6 = load.i32 little v3
     return v5, v6
@@ -887,7 +887,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 little v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 little xchg v4, v2
+    v5 = atomic_rmw.i8 little seq_cst xchg v4, v2
 
     v6 = load.i32 little v3
     return v6

@@ -15,27 +15,27 @@ block0(v0: i64, v1: i32):
     v3 = load.i32 v2+8
     v4 = load.i32 vmctx v0+16
 
-    atomic_store.i32 v1, v0
+    atomic_store.i32 seq_cst v1, v0
 
     v5 = load.i32 vmctx v0+16
     ; check: v5 = load.i32 vmctx v0+16
 
-    v6 = atomic_cas.i32 v0, v1, v1
+    v6 = atomic_cas.i32 seq_cst v0, v1, v1
 
     v7 = load.i32 vmctx v0+16
     ; check: v7 = load.i32 vmctx v0+16
 
-    fence
+    fence seq_cst
 
     v8 = load.i32 vmctx v0+16
     ; check: v8 = load.i32 vmctx v0+16
 
-    v9 = atomic_rmw.i32 add v0, v1
+    v9 = atomic_rmw.i32 seq_cst add v0, v1
 
     v10 = load.i32 vmctx v0+16
     ; check: v10 = load.i32 vmctx v0+16
 
-    v11 = atomic_load.i32 v0
+    v11 = atomic_load.i32 seq_cst v0
 
     v12 = load.i32 vmctx v0+16
     ; check: v12 = load.i32 vmctx v0+16

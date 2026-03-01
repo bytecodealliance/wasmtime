@@ -1597,7 +1597,7 @@ pub fn translate_operator(
         }
 
         Operator::AtomicFence { .. } => {
-            builder.ins().fence();
+            builder.ins().fence(ir::AtomicOrdering::SeqCst);
         }
         Operator::MemoryCopy { src_mem, dst_mem } => {
             let src_index = MemoryIndex::from_u32(*src_mem);
@@ -3783,7 +3783,14 @@ fn translate_atomic_rmw(
         )?
     );
 
-    let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
+    let mut res = builder.ins().atomic_rmw(
+        access_ty,
+        flags,
+        op,
+        ir::AtomicOrdering::default(),
+        addr,
+        arg2,
+    );
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -3837,7 +3844,13 @@ fn translate_atomic_cas(
             environ,
         )?
     );
-    let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
+    let mut res = builder.ins().atomic_cas(
+        flags,
+        ir::AtomicOrdering::default(),
+        addr,
+        expected,
+        replacement,
+    );
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -3878,7 +3891,9 @@ fn translate_atomic_load(
             environ,
         )?
     );
-    let mut res = builder.ins().atomic_load(access_ty, flags, addr);
+    let mut res = builder
+        .ins()
+        .atomic_load(access_ty, flags, ir::AtomicOrdering::default(), addr);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -3925,7 +3940,9 @@ fn translate_atomic_store(
             environ,
         )?
     );
-    builder.ins().atomic_store(flags, data, addr);
+    builder
+        .ins()
+        .atomic_store(flags, ir::AtomicOrdering::default(), data, addr);
     Ok(())
 }
 

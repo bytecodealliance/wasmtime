@@ -208,79 +208,79 @@ function %f(i64) {
 
 function %f(i64) -> i64 {
     block0(v0: i64):
-        v1 = atomic_load.i64 big v0
+        v1 = atomic_load.i64 big seq_cst v0
         return v1
 }
 
 
 function %f(i64, i64) {
     block0(v0: i64, v1: i64):
-        atomic_store.i64 big v1, v0
+        atomic_store.i64 big seq_cst v1, v0
         return
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big add v1, v0
+        v2 = atomic_rmw.i64 big seq_cst add v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big sub v1, v0
+        v2 = atomic_rmw.i64 big seq_cst sub v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big and v1, v0
+        v2 = atomic_rmw.i64 big seq_cst and v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big nand v1, v0
+        v2 = atomic_rmw.i64 big seq_cst nand v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big or v1, v0
+        v2 = atomic_rmw.i64 big seq_cst or v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big xor v1, v0
+        v2 = atomic_rmw.i64 big seq_cst xor v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big xchg v1, v0
+        v2 = atomic_rmw.i64 big seq_cst xchg v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big smin v1, v0
+        v2 = atomic_rmw.i64 big seq_cst smin v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big umin v1, v0
+        v2 = atomic_rmw.i64 big seq_cst umin v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big smax v1, v0
+        v2 = atomic_rmw.i64 big seq_cst smax v1, v0
         return v2
 }
 
 function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
-        v2 = atomic_rmw.i64 big umax v1, v0
+        v2 = atomic_rmw.i64 big seq_cst umax v1, v0
         return v2
 }

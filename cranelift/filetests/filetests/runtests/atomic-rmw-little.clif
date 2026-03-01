@@ -18,7 +18,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little add v2, v1
+    v3 = atomic_rmw.i64 little seq_cst add v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -36,7 +36,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little add v2, v1
+    v3 = atomic_rmw.i64 little seq_cst add v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -54,7 +54,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little add v2, v1
+    v3 = atomic_rmw.i32 little seq_cst add v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -72,7 +72,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little add v2, v1
+    v3 = atomic_rmw.i32 little seq_cst add v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -92,7 +92,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little sub v2, v1
+    v3 = atomic_rmw.i64 little seq_cst sub v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -110,7 +110,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little sub v2, v1
+    v3 = atomic_rmw.i64 little seq_cst sub v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -128,7 +128,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little sub v2, v1
+    v3 = atomic_rmw.i32 little seq_cst sub v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -146,7 +146,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little sub v2, v1
+    v3 = atomic_rmw.i32 little seq_cst sub v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -166,7 +166,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little and v2, v1
+    v3 = atomic_rmw.i64 little seq_cst and v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -184,7 +184,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little and v2, v1
+    v3 = atomic_rmw.i64 little seq_cst and v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -202,7 +202,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little and v2, v1
+    v3 = atomic_rmw.i32 little seq_cst and v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -221,7 +221,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little and v2, v1
+    v3 = atomic_rmw.i32 little seq_cst and v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -242,7 +242,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little or v2, v1
+    v3 = atomic_rmw.i64 little seq_cst or v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -260,7 +260,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little or v2, v1
+    v3 = atomic_rmw.i64 little seq_cst or v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -278,7 +278,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little or v2, v1
+    v3 = atomic_rmw.i32 little seq_cst or v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -297,7 +297,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little or v2, v1
+    v3 = atomic_rmw.i32 little seq_cst or v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -318,7 +318,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little xor v2, v1
+    v3 = atomic_rmw.i64 little seq_cst xor v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -336,7 +336,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little xor v2, v1
+    v3 = atomic_rmw.i64 little seq_cst xor v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -354,7 +354,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little xor v2, v1
+    v3 = atomic_rmw.i32 little seq_cst xor v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -372,7 +372,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little xor v2, v1
+    v3 = atomic_rmw.i32 little seq_cst xor v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -392,7 +392,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little nand v2, v1
+    v3 = atomic_rmw.i64 little seq_cst nand v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -410,7 +410,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little nand v2, v1
+    v3 = atomic_rmw.i64 little seq_cst nand v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -428,7 +428,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little nand v2, v1
+    v3 = atomic_rmw.i32 little seq_cst nand v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -446,7 +446,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little nand v2, v1
+    v3 = atomic_rmw.i32 little seq_cst nand v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -466,7 +466,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little umin v2, v1
+    v3 = atomic_rmw.i64 little seq_cst umin v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -485,7 +485,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little umin v2, v1
+    v3 = atomic_rmw.i64 little seq_cst umin v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -504,7 +504,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little umin v2, v1
+    v3 = atomic_rmw.i32 little seq_cst umin v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -523,7 +523,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little umin v2, v1
+    v3 = atomic_rmw.i32 little seq_cst umin v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -544,7 +544,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little umax v2, v1
+    v3 = atomic_rmw.i64 little seq_cst umax v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -563,7 +563,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little umax v2, v1
+    v3 = atomic_rmw.i64 little seq_cst umax v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -582,7 +582,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little umax v2, v1
+    v3 = atomic_rmw.i32 little seq_cst umax v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -601,7 +601,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little umax v2, v1
+    v3 = atomic_rmw.i32 little seq_cst umax v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -622,7 +622,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little smin v2, v1
+    v3 = atomic_rmw.i64 little seq_cst smin v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -641,7 +641,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little smin v2, v1
+    v3 = atomic_rmw.i64 little seq_cst smin v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -660,7 +660,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little smin v2, v1
+    v3 = atomic_rmw.i32 little seq_cst smin v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -679,7 +679,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little smin v2, v1
+    v3 = atomic_rmw.i32 little seq_cst smin v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -700,7 +700,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little smax v2, v1
+    v3 = atomic_rmw.i64 little seq_cst smax v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -719,7 +719,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little smax v2, v1
+    v3 = atomic_rmw.i64 little seq_cst smax v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -738,7 +738,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little smax v2, v1
+    v3 = atomic_rmw.i32 little seq_cst smax v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -757,7 +757,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little smax v2, v1
+    v3 = atomic_rmw.i32 little seq_cst smax v2, v1
 
     v4 = load.i32 little v2
     return v4
@@ -778,7 +778,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little xchg v2, v1
+    v3 = atomic_rmw.i64 little seq_cst xchg v2, v1
 
     v4 = load.i64 little v2
     return v3, v4
@@ -795,7 +795,7 @@ block0(v0: i64, v1: i64):
     v2 = stack_addr.i64 ss0
     store.i64 little v0, v2
 
-    v3 = atomic_rmw.i64 little xchg v2, v1
+    v3 = atomic_rmw.i64 little seq_cst xchg v2, v1
 
     v4 = load.i64 little v2
     return v4
@@ -812,7 +812,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little xchg v2, v1
+    v3 = atomic_rmw.i32 little seq_cst xchg v2, v1
 
     v4 = load.i32 little v2
     return v3, v4
@@ -829,7 +829,7 @@ block0(v0: i32, v1: i32):
     v2 = stack_addr.i64 ss0
     store.i32 little v0, v2
 
-    v3 = atomic_rmw.i32 little xchg v2, v1
+    v3 = atomic_rmw.i32 little seq_cst xchg v2, v1
 
     v4 = load.i32 little v2
     return v4

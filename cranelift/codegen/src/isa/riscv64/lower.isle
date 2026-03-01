@@ -1675,34 +1675,34 @@
 (rule -1
   ;;
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) op addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) op _ord addr x)))
   (gen_atomic (get_atomic_rmw_op ty op) addr x (atomic_amo)))
 
 ;;; for I8 and I16
 (rule 1
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) op addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) op _ord addr x)))
   (gen_atomic_rmw_loop op ty addr x))
 
 ;;;special for I8 and I16 max min etc.
 ;;;because I need uextend or sextend the value.
 (rule 2
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op true) addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op true) _ord addr x)))
   (gen_atomic_rmw_loop op ty addr (sext x)))
 
 
 (rule 2
   ;;
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op false) addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op false) _ord addr x)))
   ;;
   (gen_atomic_rmw_loop op ty addr (zext x)))
 
 ;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) _ord addr x)))
   (let
     ((tmp WritableReg (temp_writable_reg ty))
      (x2 Reg (rv_neg x)))
@@ -1720,7 +1720,7 @@
 ;;;;;  Rules for `AtomicRmwOp.Nand`
 (rule
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Nand) addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Nand) _ord addr x)))
     (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x))
 
 (decl is_atomic_rmw_max_etc (AtomicRmwOp bool) AtomicRmwOp)
@@ -1728,13 +1728,13 @@
 
 ;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
 (rule
-  (lower (has_type (valid_atomic_transaction ty) (atomic_load (little_or_native_endian flags) p)))
+  (lower (has_type (valid_atomic_transaction ty) (atomic_load (little_or_native_endian flags) _ord p)))
   (gen_atomic_load p ty))
 
 
 ;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
 (rule
-  (lower (atomic_store (little_or_native_endian flags) src @ (value_type (valid_atomic_transaction ty)) p))
+  (lower (atomic_store (little_or_native_endian flags) _ord src @ (value_type (valid_atomic_transaction ty)) p))
   (gen_atomic_store p ty src))
 
 (decl gen_atomic_offset (XReg Type) XReg)
@@ -1754,7 +1754,7 @@
 
 ;;;;;  Rules for `atomic cas`;;;;;;;;;;;;;;;;;
 (rule
-  (lower (has_type (valid_atomic_transaction ty) (atomic_cas (little_or_native_endian flags) p e x)))
+  (lower (has_type (valid_atomic_transaction ty) (atomic_cas (little_or_native_endian flags) _ord p e x)))
   (let
     ((t0 WritableReg (temp_writable_reg ty))
       (dst WritableReg (temp_writable_reg ty))
@@ -2106,7 +2106,7 @@
 
 ;;;;;  Rules for `fence`;;;;;;;;;
 (rule
-  (lower (fence))
+  (lower (fence _ord))
   (side_effect (SideEffectNoResult.Inst (MInst.Fence 15 15))))
 
 ;;;;;  Rules for `trap`;;;;;;;;;

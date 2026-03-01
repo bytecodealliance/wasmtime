@@ -14,7 +14,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big add v4, v2
+    v5 = atomic_rmw.i16 big seq_cst add v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -32,7 +32,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big add v4, v2
+    v5 = atomic_rmw.i16 big seq_cst add v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -50,7 +50,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big add v4, v2
+    v5 = atomic_rmw.i8 big seq_cst add v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -72,7 +72,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big add v4, v2
+    v5 = atomic_rmw.i8 big seq_cst add v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -94,7 +94,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big sub v4, v2
+    v5 = atomic_rmw.i16 big seq_cst sub v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -112,7 +112,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big sub v4, v2
+    v5 = atomic_rmw.i16 big seq_cst sub v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -131,7 +131,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big sub v4, v2
+    v5 = atomic_rmw.i8 big seq_cst sub v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -153,7 +153,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big sub v4, v2
+    v5 = atomic_rmw.i8 big seq_cst sub v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -176,7 +176,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big and v4, v2
+    v5 = atomic_rmw.i16 big seq_cst and v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -194,7 +194,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big and v4, v2
+    v5 = atomic_rmw.i16 big seq_cst and v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -213,7 +213,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big and v4, v2
+    v5 = atomic_rmw.i8 big seq_cst and v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -235,7 +235,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big and v4, v2
+    v5 = atomic_rmw.i8 big seq_cst and v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -258,7 +258,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big or v4, v2
+    v5 = atomic_rmw.i16 big seq_cst or v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -276,7 +276,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big or v4, v2
+    v5 = atomic_rmw.i16 big seq_cst or v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -295,7 +295,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big or v4, v2
+    v5 = atomic_rmw.i8 big seq_cst or v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -317,7 +317,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big or v4, v2
+    v5 = atomic_rmw.i8 big seq_cst or v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -340,7 +340,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big xor v4, v2
+    v5 = atomic_rmw.i16 big seq_cst xor v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -358,7 +358,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big xor v4, v2
+    v5 = atomic_rmw.i16 big seq_cst xor v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -377,7 +377,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big xor v4, v2
+    v5 = atomic_rmw.i8 big seq_cst xor v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -399,7 +399,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big xor v4, v2
+    v5 = atomic_rmw.i8 big seq_cst xor v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -421,7 +421,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big nand v4, v2
+    v5 = atomic_rmw.i16 big seq_cst nand v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -439,7 +439,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big nand v4, v2
+    v5 = atomic_rmw.i16 big seq_cst nand v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -457,7 +457,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big nand v4, v2
+    v5 = atomic_rmw.i8 big seq_cst nand v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -479,7 +479,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big nand v4, v2
+    v5 = atomic_rmw.i8 big seq_cst nand v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -502,7 +502,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big umin v4, v2
+    v5 = atomic_rmw.i16 big seq_cst umin v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -520,7 +520,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big umin v4, v2
+    v5 = atomic_rmw.i16 big seq_cst umin v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -538,7 +538,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big umin v4, v2
+    v5 = atomic_rmw.i8 big seq_cst umin v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -560,7 +560,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big umin v4, v2
+    v5 = atomic_rmw.i8 big seq_cst umin v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -583,7 +583,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big umax v4, v2
+    v5 = atomic_rmw.i16 big seq_cst umax v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -601,7 +601,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big umax v4, v2
+    v5 = atomic_rmw.i16 big seq_cst umax v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -619,7 +619,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big umax v4, v2
+    v5 = atomic_rmw.i8 big seq_cst umax v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -641,7 +641,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big umax v4, v2
+    v5 = atomic_rmw.i8 big seq_cst umax v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -664,7 +664,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big smin v4, v2
+    v5 = atomic_rmw.i16 big seq_cst smin v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -682,7 +682,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big smin v4, v2
+    v5 = atomic_rmw.i16 big seq_cst smin v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -700,7 +700,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big smin v4, v2
+    v5 = atomic_rmw.i8 big seq_cst smin v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -722,7 +722,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big smin v4, v2
+    v5 = atomic_rmw.i8 big seq_cst smin v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -745,7 +745,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big smax v4, v2
+    v5 = atomic_rmw.i16 big seq_cst smax v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -763,7 +763,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big smax v4, v2
+    v5 = atomic_rmw.i16 big seq_cst smax v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -782,7 +782,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big smax v4, v2
+    v5 = atomic_rmw.i8 big seq_cst smax v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -804,7 +804,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big smax v4, v2
+    v5 = atomic_rmw.i8 big seq_cst smax v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -827,7 +827,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big xchg v4, v2
+    v5 = atomic_rmw.i16 big seq_cst xchg v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -845,7 +845,7 @@ block0(v0: i32, v1: i64, v2: i16):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i16 big xchg v4, v2
+    v5 = atomic_rmw.i16 big seq_cst xchg v4, v2
 
     v6 = load.i32 big v3
     return v6
@@ -864,7 +864,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big xchg v4, v2
+    v5 = atomic_rmw.i8 big seq_cst xchg v4, v2
 
     v6 = load.i32 big v3
     return v5, v6
@@ -886,7 +886,7 @@ block0(v0: i32, v1: i64, v2: i8):
     store.i32 big v0, v3
 
     v4 = iadd.i64 v3, v1
-    v5 = atomic_rmw.i8 big xchg v4, v2
+    v5 = atomic_rmw.i8 big seq_cst xchg v4, v2
 
     v6 = load.i32 big v3
     return v6

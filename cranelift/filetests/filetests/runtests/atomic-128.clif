@@ -10,7 +10,7 @@ function %atomic_load(i128) -> i128 {
 block0(v0: i128):
     stack_store.i128 v0, ss0
     v1 = stack_addr.i64 ss0
-    v2 = atomic_load.i128 v1
+    v2 = atomic_load.i128 seq_cst v1
     return v2
 }
 ; run: %atomic_load(0) == 0
@@ -27,7 +27,7 @@ function %atomic_store(i128) -> i128 {
 
 block0(v0: i128):
     v1 = stack_addr.i64 ss0
-    atomic_store.i128 v0, v1
+    atomic_store.i128 seq_cst v0, v1
     v2 = stack_load.i128 ss0
     return v2
 }
@@ -46,7 +46,7 @@ function %atomic_cas(i128, i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128, v2: i128):
     stack_store.i128 v0, ss0
     v3 = stack_addr.i64 ss0
-    v4 = atomic_cas.i128 v3, v1, v2
+    v4 = atomic_cas.i128 seq_cst v3, v1, v2
     v5 = stack_load.i128 ss0
     return v5, v4
 }
@@ -64,7 +64,7 @@ function %atomic_add(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 add v2, v1
+    v3 = atomic_rmw.i128 seq_cst add v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -83,7 +83,7 @@ function %atomic_sub(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 sub v2, v1
+    v3 = atomic_rmw.i128 seq_cst sub v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -102,7 +102,7 @@ function %atomic_and(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 and v2, v1
+    v3 = atomic_rmw.i128 seq_cst and v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -121,7 +121,7 @@ function %atomic_nand(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 nand v2, v1
+    v3 = atomic_rmw.i128 seq_cst nand v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -140,7 +140,7 @@ function %atomic_or(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 or v2, v1
+    v3 = atomic_rmw.i128 seq_cst or v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -159,7 +159,7 @@ function %atomic_xor(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 xor v2, v1
+    v3 = atomic_rmw.i128 seq_cst xor v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -178,7 +178,7 @@ function %atomic_xchg(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 xchg v2, v1
+    v3 = atomic_rmw.i128 seq_cst xchg v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -197,7 +197,7 @@ function %atomic_umin(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 umin v2, v1
+    v3 = atomic_rmw.i128 seq_cst umin v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -218,7 +218,7 @@ function %atomic_umax(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 umax v2, v1
+    v3 = atomic_rmw.i128 seq_cst umax v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -239,7 +239,7 @@ function %atomic_smin(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 smin v2, v1
+    v3 = atomic_rmw.i128 seq_cst smin v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }
@@ -260,7 +260,7 @@ function %atomic_smax(i128, i128) -> i128, i128 {
 block0(v0: i128, v1: i128):
     stack_store.i128 v0, ss0
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 smax v2, v1
+    v3 = atomic_rmw.i128 seq_cst smax v2, v1
     v4 = stack_load.i128 ss0
     return v4, v3
 }

@@ -3312,49 +3312,49 @@
 
 ;; Atomic AND for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-                (atomic_rmw flags @ (bigendian) (AtomicRmwOp.And) addr src)))
+                (atomic_rmw flags @ (bigendian) (AtomicRmwOp.And) _ord addr src)))
       (atomic_rmw_and ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic AND for 32/64-bit big-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.And) addr src)))
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.And) _ord addr src)))
       (bswap_reg ty (atomic_rmw_and ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic OR for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Or) addr src)))
+               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Or) _ord addr src)))
       (atomic_rmw_or ty (put_in_reg src)
                      (lower_address flags addr (zero_offset))))
 
 ;; Atomic OR for 32/64-bit little-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Or) addr src)))
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Or) _ord addr src)))
       (bswap_reg ty (atomic_rmw_or ty (bswap_reg ty (put_in_reg src))
                                    (lower_address flags addr (zero_offset)))))
 
 ;; Atomic XOR for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Xor) addr src)))
+               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Xor) _ord addr src)))
       (atomic_rmw_xor ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic XOR for 32/64-bit little-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Xor) addr src)))
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Xor) _ord addr src)))
       (bswap_reg ty (atomic_rmw_xor ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic ADD for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Add) addr src)))
+               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Add) _ord addr src)))
       (atomic_rmw_add ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic SUB for 32/64-bit big-endian types, using atomic ADD with negated input.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Sub) addr src)))
+               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Sub) _ord addr src)))
       (atomic_rmw_add ty (neg_reg ty (put_in_reg src))
                       (lower_address flags addr (zero_offset))))
 
@@ -3362,7 +3362,7 @@
 ;; Atomic operations that require a compare-and-swap loop.
 
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (has_type (ty_32_or_64 ty) (atomic_rmw flags op addr src)))
+(rule -1 (lower (has_type (ty_32_or_64 ty) (atomic_rmw flags op _ord addr src)))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3374,7 +3374,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (has_type (ty_8_or_16 ty) (atomic_rmw flags op addr src)))
+(rule -2 (lower (has_type (ty_8_or_16 ty) (atomic_rmw flags op _ord addr src)))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.
@@ -3568,20 +3568,20 @@
 
 ;; 32/64-bit big-endian atomic compare-and-swap instruction.
 (rule 2 (lower (has_type (ty_32_or_64 ty)
-               (atomic_cas flags @ (bigendian) addr src1 src2)))
+               (atomic_cas flags @ (bigendian) _ord addr src1 src2)))
       (atomic_cas_impl ty (put_in_reg src1) (put_in_reg src2)
                        (lower_address flags addr (zero_offset))))
 
 ;; 32/64-bit little-endian atomic compare-and-swap instruction.
 ;; Implemented by byte-swapping old/new inputs and the output.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_cas flags @ (littleendian) addr src1 src2)))
+               (atomic_cas flags @ (littleendian) _ord addr src1 src2)))
       (bswap_reg ty (atomic_cas_impl ty (bswap_reg ty (put_in_reg src1))
                                      (bswap_reg ty (put_in_reg src2))
                                      (lower_address flags addr (zero_offset)))))
 
 ;; 8/16-bit atomic compare-and-swap implemented via loop.
-(rule (lower (has_type (ty_8_or_16 ty) (atomic_cas flags addr src1 src2)))
+(rule (lower (has_type (ty_8_or_16 ty) (atomic_cas flags _ord addr src1 src2)))
       (let ((src1_reg Reg (put_in_reg src1))
             (src2_reg Reg (put_in_reg src2))
             (addr_reg Reg (put_in_reg addr))
@@ -3638,31 +3638,31 @@
 ;; Atomic loads can be implemented via regular loads on this platform.
 
 ;; 8-bit atomic load.
-(rule (lower (has_type $I8 (atomic_load flags addr)))
+(rule (lower (has_type $I8 (atomic_load flags _ord addr)))
       (zext32_mem $I8 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit big-endian atomic load.
-(rule 1 (lower (has_type $I16 (atomic_load flags @ (bigendian) addr)))
+(rule 1 (lower (has_type $I16 (atomic_load flags @ (bigendian) _ord addr)))
       (zext32_mem $I16 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit little-endian atomic load.
-(rule (lower (has_type $I16 (atomic_load flags @ (littleendian) addr)))
+(rule (lower (has_type $I16 (atomic_load flags @ (littleendian) _ord addr)))
       (loadrev16 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit big-endian atomic load.
-(rule 1 (lower (has_type $I32 (atomic_load flags @ (bigendian) addr)))
+(rule 1 (lower (has_type $I32 (atomic_load flags @ (bigendian) _ord addr)))
       (load32 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit little-endian atomic load.
-(rule (lower (has_type $I32 (atomic_load flags @ (littleendian) addr)))
+(rule (lower (has_type $I32 (atomic_load flags @ (littleendian) _ord addr)))
       (loadrev32 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit big-endian atomic load.
-(rule 1 (lower (has_type $I64 (atomic_load flags @ (bigendian) addr)))
+(rule 1 (lower (has_type $I64 (atomic_load flags @ (bigendian) _ord addr)))
       (load64 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit little-endian atomic load.
-(rule (lower (has_type $I64 (atomic_load flags @ (littleendian) addr)))
+(rule (lower (has_type $I64 (atomic_load flags @ (littleendian) _ord addr)))
       (loadrev64 (lower_address flags addr (zero_offset))))
 
 
@@ -3675,26 +3675,26 @@
          (side_effect (fence_impl))))
 
 ;; 8-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I8) addr))
+(rule (lower (atomic_store flags _ord val @ (value_type $I8) addr))
       (atomic_store_impl (istore8_impl flags val addr (zero_offset))))
 
 ;; 16-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I16) addr))
+(rule (lower (atomic_store flags _ord val @ (value_type $I16) addr))
       (atomic_store_impl (istore16_impl flags val addr (zero_offset))))
 
 ;; 32-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I32) addr))
+(rule (lower (atomic_store flags _ord val @ (value_type $I32) addr))
       (atomic_store_impl (istore32_impl flags val addr (zero_offset))))
 
 ;; 64-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I64) addr))
+(rule (lower (atomic_store flags _ord val @ (value_type $I64) addr))
       (atomic_store_impl (istore64_impl flags val addr (zero_offset))))
 
 
 ;;;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Fence to ensure sequential consistency.
-(rule (lower (fence))
+(rule (lower (fence _ord))
       (side_effect (fence_impl)))
 
 

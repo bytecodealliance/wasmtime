@@ -112,7 +112,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
             let ty = func.dfg.value_type(func.dfg.inst_results(inst)[0]);
             Some((*arg, *offset, ty))
         }
-        InstructionData::LoadNoOffset { arg, .. } => {
+        InstructionData::LoadNoOffset { arg, .. } | InstructionData::AtomicLoad { arg, .. } => {
             let ty = func.dfg.value_type(func.dfg.inst_results(inst)[0]);
             Some((*arg, 0.into(), ty))
         }
@@ -120,7 +120,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
             let ty = func.dfg.value_type(args[0]);
             Some((args[1], *offset, ty))
         }
-        InstructionData::StoreNoOffset { args, .. } => {
+        InstructionData::AtomicStore { args, .. } => {
             let ty = func.dfg.value_type(args[0]);
             Some((args[1], 0.into(), ty))
         }
@@ -131,7 +131,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
 /// Get the store data, if any, from an instruction.
 pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
     match &func.dfg.insts[inst] {
-        InstructionData::Store { args, .. } | InstructionData::StoreNoOffset { args, .. } => {
+        InstructionData::Store { args, .. } | InstructionData::AtomicStore { args, .. } => {
             Some(args[0])
         }
         _ => None,

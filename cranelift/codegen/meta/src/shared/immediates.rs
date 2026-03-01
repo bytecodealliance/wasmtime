@@ -56,6 +56,9 @@ pub(crate) struct Immediates {
 
     /// A code indicating the arithmetic operation to perform in an atomic_rmw memory access.
     pub atomic_rmw_op: OperandKind,
+
+    /// A code indicating the ordering of Atomic Operations
+    pub atomic_ordering: OperandKind,
 }
 
 fn new_imm(
@@ -195,6 +198,20 @@ impl Immediates {
                     "ir::AtomicRmwOp",
                     atomic_rmw_op_values,
                     "Atomic Read-Modify-Write Ops",
+                )
+            },
+            atomic_ordering: {
+                let mut ordering_values = HashMap::new();
+                ordering_values.insert("relaxed", "Relaxed");
+                ordering_values.insert("acquire", "Acquire");
+                ordering_values.insert("release", "Release");
+                ordering_values.insert("acq_rel", "AcqRel");
+                ordering_values.insert("seq_cst", "SeqCst");
+                new_enum(
+                    "ordering",
+                    "ir::AtomicOrdering",
+                    ordering_values,
+                    "Atomic memory ordering semantics",
                 )
             },
         }

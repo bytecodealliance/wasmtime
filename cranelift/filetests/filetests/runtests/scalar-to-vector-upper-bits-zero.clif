@@ -49,7 +49,7 @@ block0:
     store little v1, v4+24
 
     v5 = stack_addr.i64 ss1
-    atomic_store little v1, v5
+    atomic_store little seq_cst v1, v5
 
     v6 = fcvt_from_uint.f64 v1
     v7 = scalar_to_vector.f64x2 v6

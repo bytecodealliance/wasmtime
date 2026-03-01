@@ -3,7 +3,7 @@ target s390x
 
 function %atomic_store_i64(i64, i64) {
 block0(v0: i64, v1: i64):
-  atomic_store.i64 little v0, v1
+  atomic_store.i64 little seq_cst v0, v1
   return
 }
 
@@ -23,7 +23,7 @@ function %atomic_store_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  atomic_store.i64 aligned little v0, v1
+  atomic_store.i64 aligned little seq_cst v0, v1
   return
 }
 
@@ -43,7 +43,7 @@ block0(v0: i64):
 function %atomic_store_imm_i64(i64) {
 block0(v0: i64):
   v1 = iconst.i64 12345
-  atomic_store.i64 little v1, v0
+  atomic_store.i64 little seq_cst v1, v0
   return
 }
 
@@ -63,7 +63,7 @@ block0(v0: i64):
 
 function %atomic_store_i32(i32, i64) {
 block0(v0: i32, v1: i64):
-  atomic_store.i32 little v0, v1
+  atomic_store.i32 little seq_cst v0, v1
   return
 }
 
@@ -83,7 +83,7 @@ function %atomic_store_i32_sym(i32) {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  atomic_store.i32 aligned little v0, v1
+  atomic_store.i32 aligned little seq_cst v0, v1
   return
 }
 
@@ -103,7 +103,7 @@ block0(v0: i32):
 function %atomic_store_imm_i32(i64) {
 block0(v0: i64):
   v1 = iconst.i32 12345
-  atomic_store.i32 little v1, v0
+  atomic_store.i32 little seq_cst v1, v0
   return
 }
 
@@ -123,7 +123,7 @@ block0(v0: i64):
 
 function %atomic_store_i16(i16, i64) {
 block0(v0: i16, v1: i64):
-  atomic_store.i16 little v0, v1
+  atomic_store.i16 little seq_cst v0, v1
   return
 }
 
@@ -143,7 +143,7 @@ function %atomic_store_i16_sym(i16) {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
-  atomic_store.i16 aligned little v0, v1
+  atomic_store.i16 aligned little seq_cst v0, v1
   return
 }
 
@@ -163,7 +163,7 @@ block0(v0: i16):
 function %atomic_store_imm_i16(i64) {
 block0(v0: i64):
   v1 = iconst.i16 12345
-  atomic_store.i16 little v1, v0
+  atomic_store.i16 little seq_cst v1, v0
   return
 }
 
@@ -181,7 +181,7 @@ block0(v0: i64):
 
 function %atomic_store_i8(i8, i64) {
 block0(v0: i8, v1: i64):
-  atomic_store.i8 little v0, v1
+  atomic_store.i8 little seq_cst v0, v1
   return
 }
 
@@ -200,7 +200,7 @@ block0(v0: i8, v1: i64):
 function %atomic_store_imm_i8(i64) {
 block0(v0: i64):
   v1 = iconst.i8 123
-  atomic_store.i8 little v1, v0
+  atomic_store.i8 little seq_cst v1, v0
   return
 }
 

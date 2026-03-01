@@ -3,7 +3,7 @@ target x86_64
 
 function %add_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 add v0, v1
+    v2 = atomic_rmw.i64 seq_cst add v0, v1
     return v2
 }
 
@@ -30,7 +30,7 @@ block0(v0: i64, v1: i64):
 
 function %add_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 add v0, v1
+    v2 = atomic_rmw.i32 seq_cst add v0, v1
     return v2
 }
 
@@ -57,7 +57,7 @@ block0(v0: i64, v1: i32):
 
 function %add_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 add v0, v1
+    v2 = atomic_rmw.i16 seq_cst add v0, v1
     return v2
 }
 
@@ -84,7 +84,7 @@ block0(v0: i64, v1: i16):
 
 function %add_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 add v0, v1
+    v2 = atomic_rmw.i8 seq_cst add v0, v1
     return v2
 }
 
@@ -111,7 +111,7 @@ block0(v0: i64, v1: i8):
 
 function %add_i64_no_res(i64, i64) {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 add v0, v1
+    v2 = atomic_rmw.i64 seq_cst add v0, v1
     return
 }
 
@@ -136,7 +136,7 @@ block0(v0: i64, v1: i64):
 
 function %add_i32_no_res(i64, i32) {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 add v0, v1
+    v2 = atomic_rmw.i32 seq_cst add v0, v1
     return
 }
 
@@ -161,7 +161,7 @@ block0(v0: i64, v1: i32):
 
 function %add_i16_no_res(i64, i16) {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 add v0, v1
+    v2 = atomic_rmw.i16 seq_cst add v0, v1
     return
 }
 
@@ -186,7 +186,7 @@ block0(v0: i64, v1: i16):
 
 function %add_i8_no_res(i64, i8) {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 add v0, v1
+    v2 = atomic_rmw.i8 seq_cst add v0, v1
     return
 }
 
@@ -211,7 +211,7 @@ block0(v0: i64, v1: i8):
 
 function %sub_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 sub v0, v1
+    v2 = atomic_rmw.i64 seq_cst sub v0, v1
     return v2
 }
 
@@ -240,7 +240,7 @@ block0(v0: i64, v1: i64):
 
 function %sub_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 sub v0, v1
+    v2 = atomic_rmw.i32 seq_cst sub v0, v1
     return v2
 }
 
@@ -269,7 +269,7 @@ block0(v0: i64, v1: i32):
 
 function %sub_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 sub v0, v1
+    v2 = atomic_rmw.i16 seq_cst sub v0, v1
     return v2
 }
 
@@ -298,7 +298,7 @@ block0(v0: i64, v1: i16):
 
 function %sub_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 sub v0, v1
+    v2 = atomic_rmw.i8 seq_cst sub v0, v1
     return v2
 }
 
@@ -327,7 +327,7 @@ block0(v0: i64, v1: i8):
 
 function %sub_i64_no_res(i64, i64) {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 sub v0, v1
+    v2 = atomic_rmw.i64 seq_cst sub v0, v1
     return
 }
 
@@ -352,7 +352,7 @@ block0(v0: i64, v1: i64):
 
 function %sub_i32_no_res(i64, i32) {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 sub v0, v1
+    v2 = atomic_rmw.i32 seq_cst sub v0, v1
     return
 }
 
@@ -377,7 +377,7 @@ block0(v0: i64, v1: i32):
 
 function %sub_i16_no_res(i64, i16) {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 sub v0, v1
+    v2 = atomic_rmw.i16 seq_cst sub v0, v1
     return
 }
 
@@ -402,7 +402,7 @@ block0(v0: i64, v1: i16):
 
 function %sub_i8_no_res(i64, i8) {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 sub v0, v1
+    v2 = atomic_rmw.i8 seq_cst sub v0, v1
     return
 }
 
@@ -427,7 +427,7 @@ block0(v0: i64, v1: i8):
 
 function %and_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 and v0, v1
+    v2 = atomic_rmw.i64 seq_cst and v0, v1
     return v2
 }
 
@@ -456,7 +456,7 @@ block0(v0: i64, v1: i64):
 
 function %and_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 and v0, v1
+    v2 = atomic_rmw.i32 seq_cst and v0, v1
     return v2
 }
 
@@ -485,7 +485,7 @@ block0(v0: i64, v1: i32):
 
 function %and_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 and v0, v1
+    v2 = atomic_rmw.i16 seq_cst and v0, v1
     return v2
 }
 
@@ -514,7 +514,7 @@ block0(v0: i64, v1: i16):
 
 function %and_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 and v0, v1
+    v2 = atomic_rmw.i8 seq_cst and v0, v1
     return v2
 }
 
@@ -543,7 +543,7 @@ block0(v0: i64, v1: i8):
 
 function %and_i64_no_res(i64, i64) {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 and v0, v1
+    v2 = atomic_rmw.i64 seq_cst and v0, v1
     return
 }
 
@@ -568,7 +568,7 @@ block0(v0: i64, v1: i64):
 
 function %and_i32_no_res(i64, i32) {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 and v0, v1
+    v2 = atomic_rmw.i32 seq_cst and v0, v1
     return
 }
 
@@ -593,7 +593,7 @@ block0(v0: i64, v1: i32):
 
 function %and_i16_no_res(i64, i16) {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 and v0, v1
+    v2 = atomic_rmw.i16 seq_cst and v0, v1
     return
 }
 
@@ -618,7 +618,7 @@ block0(v0: i64, v1: i16):
 
 function %and_i8_no_res(i64, i8) {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 and v0, v1
+    v2 = atomic_rmw.i8 seq_cst and v0, v1
     return
 }
 
@@ -643,7 +643,7 @@ block0(v0: i64, v1: i8):
 
 function %nand_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 nand v0, v1
+    v2 = atomic_rmw.i64 seq_cst nand v0, v1
     return v2
 }
 
@@ -673,7 +673,7 @@ block0(v0: i64, v1: i64):
 
 function %nand_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 nand v0, v1
+    v2 = atomic_rmw.i32 seq_cst nand v0, v1
     return v2
 }
 
@@ -703,7 +703,7 @@ block0(v0: i64, v1: i32):
 
 function %nand_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 nand v0, v1
+    v2 = atomic_rmw.i16 seq_cst nand v0, v1
     return v2
 }
 
@@ -733,7 +733,7 @@ block0(v0: i64, v1: i16):
 
 function %nand_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 nand v0, v1
+    v2 = atomic_rmw.i8 seq_cst nand v0, v1
     return v2
 }
 
@@ -763,7 +763,7 @@ block0(v0: i64, v1: i8):
 
 function %or_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 or v0, v1
+    v2 = atomic_rmw.i64 seq_cst or v0, v1
     return v2
 }
 
@@ -792,7 +792,7 @@ block0(v0: i64, v1: i64):
 
 function %or_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 or v0, v1
+    v2 = atomic_rmw.i32 seq_cst or v0, v1
     return v2
 }
 
@@ -821,7 +821,7 @@ block0(v0: i64, v1: i32):
 
 function %or_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 or v0, v1
+    v2 = atomic_rmw.i16 seq_cst or v0, v1
     return v2
 }
 
@@ -850,7 +850,7 @@ block0(v0: i64, v1: i16):
 
 function %or_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 or v0, v1
+    v2 = atomic_rmw.i8 seq_cst or v0, v1
     return v2
 }
 
@@ -879,7 +879,7 @@ block0(v0: i64, v1: i8):
 
 function %or_i64_no_res(i64, i64) {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 or v0, v1
+    v2 = atomic_rmw.i64 seq_cst or v0, v1
     return
 }
 
@@ -904,7 +904,7 @@ block0(v0: i64, v1: i64):
 
 function %or_i32_no_res(i64, i32) {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 or v0, v1
+    v2 = atomic_rmw.i32 seq_cst or v0, v1
     return
 }
 
@@ -929,7 +929,7 @@ block0(v0: i64, v1: i32):
 
 function %or_i16_no_res(i64, i16) {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 or v0, v1
+    v2 = atomic_rmw.i16 seq_cst or v0, v1
     return
 }
 
@@ -954,7 +954,7 @@ block0(v0: i64, v1: i16):
 
 function %or_i8_no_res(i64, i8) {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 or v0, v1
+    v2 = atomic_rmw.i8 seq_cst or v0, v1
     return
 }
 
@@ -979,7 +979,7 @@ block0(v0: i64, v1: i8):
 
 function %xor_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 xor v0, v1
+    v2 = atomic_rmw.i64 seq_cst xor v0, v1
     return v2
 }
 
@@ -1008,7 +1008,7 @@ block0(v0: i64, v1: i64):
 
 function %xor_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 xor v0, v1
+    v2 = atomic_rmw.i32 seq_cst xor v0, v1
     return v2
 }
 
@@ -1037,7 +1037,7 @@ block0(v0: i64, v1: i32):
 
 function %xor_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 xor v0, v1
+    v2 = atomic_rmw.i16 seq_cst xor v0, v1
     return v2
 }
 
@@ -1066,7 +1066,7 @@ block0(v0: i64, v1: i16):
 
 function %xor_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 xor v0, v1
+    v2 = atomic_rmw.i8 seq_cst xor v0, v1
     return v2
 }
 
@@ -1095,7 +1095,7 @@ block0(v0: i64, v1: i8):
 
 function %xor_i64_no_res(i64, i64) {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 xor v0, v1
+    v2 = atomic_rmw.i64 seq_cst xor v0, v1
     return
 }
 
@@ -1120,7 +1120,7 @@ block0(v0: i64, v1: i64):
 
 function %xor_i32_no_res(i64, i32) {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 xor v0, v1
+    v2 = atomic_rmw.i32 seq_cst xor v0, v1
     return
 }
 
@@ -1145,7 +1145,7 @@ block0(v0: i64, v1: i32):
 
 function %xor_i16_no_res(i64, i16) {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 xor v0, v1
+    v2 = atomic_rmw.i16 seq_cst xor v0, v1
     return
 }
 
@@ -1170,7 +1170,7 @@ block0(v0: i64, v1: i16):
 
 function %xor_i8_no_res(i64, i8) {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 xor v0, v1
+    v2 = atomic_rmw.i8 seq_cst xor v0, v1
     return
 }
 
@@ -1195,7 +1195,7 @@ block0(v0: i64, v1: i8):
 
 function %xchg_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 xchg v0, v1
+    v2 = atomic_rmw.i64 seq_cst xchg v0, v1
     return v2
 }
 
@@ -1222,7 +1222,7 @@ block0(v0: i64, v1: i64):
 
 function %xchg_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 xchg v0, v1
+    v2 = atomic_rmw.i32 seq_cst xchg v0, v1
     return v2
 }
 
@@ -1249,7 +1249,7 @@ block0(v0: i64, v1: i32):
 
 function %xchg_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 xchg v0, v1
+    v2 = atomic_rmw.i16 seq_cst xchg v0, v1
     return v2
 }
 
@@ -1276,7 +1276,7 @@ block0(v0: i64, v1: i16):
 
 function %xchg_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 xchg v0, v1
+    v2 = atomic_rmw.i8 seq_cst xchg v0, v1
     return v2
 }
 
@@ -1303,7 +1303,7 @@ block0(v0: i64, v1: i8):
 
 function %umin_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 umin v0, v1
+    v2 = atomic_rmw.i64 seq_cst umin v0, v1
     return v2
 }
 
@@ -1333,7 +1333,7 @@ block0(v0: i64, v1: i64):
 
 function %umin_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 umin v0, v1
+    v2 = atomic_rmw.i32 seq_cst umin v0, v1
     return v2
 }
 
@@ -1363,7 +1363,7 @@ block0(v0: i64, v1: i32):
 
 function %umin_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 umin v0, v1
+    v2 = atomic_rmw.i16 seq_cst umin v0, v1
     return v2
 }
 
@@ -1393,7 +1393,7 @@ block0(v0: i64, v1: i16):
 
 function %umin_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 umin v0, v1
+    v2 = atomic_rmw.i8 seq_cst umin v0, v1
     return v2
 }
 
@@ -1423,7 +1423,7 @@ block0(v0: i64, v1: i8):
 
 function %umax_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 umax v0, v1
+    v2 = atomic_rmw.i64 seq_cst umax v0, v1
     return v2
 }
 
@@ -1453,7 +1453,7 @@ block0(v0: i64, v1: i64):
 
 function %umax_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 umax v0, v1
+    v2 = atomic_rmw.i32 seq_cst umax v0, v1
     return v2
 }
 
@@ -1483,7 +1483,7 @@ block0(v0: i64, v1: i32):
 
 function %umax_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 umax v0, v1
+    v2 = atomic_rmw.i16 seq_cst umax v0, v1
     return v2
 }
 
@@ -1513,7 +1513,7 @@ block0(v0: i64, v1: i16):
 
 function %umax_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 umax v0, v1
+    v2 = atomic_rmw.i8 seq_cst umax v0, v1
     return v2
 }
 
@@ -1543,7 +1543,7 @@ block0(v0: i64, v1: i8):
 
 function %smin_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 smin v0, v1
+    v2 = atomic_rmw.i64 seq_cst smin v0, v1
     return v2
 }
 
@@ -1573,7 +1573,7 @@ block0(v0: i64, v1: i64):
 
 function %smin_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 smin v0, v1
+    v2 = atomic_rmw.i32 seq_cst smin v0, v1
     return v2
 }
 
@@ -1603,7 +1603,7 @@ block0(v0: i64, v1: i32):
 
 function %smin_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 smin v0, v1
+    v2 = atomic_rmw.i16 seq_cst smin v0, v1
     return v2
 }
 
@@ -1633,7 +1633,7 @@ block0(v0: i64, v1: i16):
 
 function %smin_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 smin v0, v1
+    v2 = atomic_rmw.i8 seq_cst smin v0, v1
     return v2
 }
 
@@ -1663,7 +1663,7 @@ block0(v0: i64, v1: i8):
 
 function %smax_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = atomic_rmw.i64 smax v0, v1
+    v2 = atomic_rmw.i64 seq_cst smax v0, v1
     return v2
 }
 
@@ -1693,7 +1693,7 @@ block0(v0: i64, v1: i64):
 
 function %smax_i32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
-    v2 = atomic_rmw.i32 smax v0, v1
+    v2 = atomic_rmw.i32 seq_cst smax v0, v1
     return v2
 }
 
@@ -1723,7 +1723,7 @@ block0(v0: i64, v1: i32):
 
 function %smax_i16(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
-    v2 = atomic_rmw.i16 smax v0, v1
+    v2 = atomic_rmw.i16 seq_cst smax v0, v1
     return v2
 }
 
@@ -1753,7 +1753,7 @@ block0(v0: i64, v1: i16):
 
 function %smax_i8(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
-    v2 = atomic_rmw.i8 smax v0, v1
+    v2 = atomic_rmw.i8 seq_cst smax v0, v1
     return v2
 }
 

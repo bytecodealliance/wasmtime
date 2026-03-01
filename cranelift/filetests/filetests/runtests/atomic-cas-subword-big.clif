@@ -13,7 +13,7 @@ block0(v0: i32, v1: i64, v2: i16, v3: i16):
     store.i32 big v0, v4
 
     v5 = iadd.i64 v4, v1
-    v6 = atomic_cas.i16 big v5, v2, v3
+    v6 = atomic_cas.i16 big seq_cst v5, v2, v3
 
     v7 = load.i32 big v4
     return v7
@@ -31,7 +31,7 @@ block0(v0: i32, v1: i64, v2: i8, v3: i8):
     store.i32 big v0, v4
 
     v5 = iadd.i64 v4, v1
-    v6 = atomic_cas.i8 big v5, v2, v3
+    v6 = atomic_cas.i8 big seq_cst v5, v2, v3
 
     v7 = load.i32 big v4
     return v7

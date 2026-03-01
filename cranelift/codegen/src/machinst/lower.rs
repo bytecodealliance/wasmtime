@@ -1426,8 +1426,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
+            | &InstructionData::AtomicLoad { flags, .. }
             | &InstructionData::Store { flags, .. } => Some(flags),
-            &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
+            &InstructionData::AtomicStore { flags, .. } => Some(flags),
             _ => None,
         }
     }

@@ -4,7 +4,7 @@ target x86_64 has_cmpxchg16b
 
 function %load(i64) -> i128 {
 block0(v0: i64):
-    v1 = atomic_load.i128 v0
+    v1 = atomic_load.i128 seq_cst v0
     return v1
 }
 
@@ -49,7 +49,7 @@ block0(v0: i64):
 
 function %store(i128, i64) {
 block0(v0: i128, v1: i64):
-    atomic_store.i128 v0, v1
+    atomic_store.i128 seq_cst v0, v1
     return
 }
 
@@ -91,7 +91,7 @@ block0(v0: i128, v1: i64):
 
 function %cas(i64, i128, i128) -> i128 {
 block0(v0: i64, v1: i128, v2: i128):
-    v3 = atomic_cas.i128 v0, v1, v2
+    v3 = atomic_cas.i128 seq_cst v0, v1, v2
     return v3
 }
 
@@ -130,7 +130,7 @@ block0(v0: i64, v1: i128, v2: i128):
 
 function %add(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 add v0, v1
+    v2 = atomic_rmw.i128 seq_cst add v0, v1
     return v2
 }
 
@@ -172,7 +172,7 @@ block0(v0: i64, v1: i128):
 
 function %sub(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 sub v0, v1
+    v2 = atomic_rmw.i128 seq_cst sub v0, v1
     return v2
 }
 
@@ -214,7 +214,7 @@ block0(v0: i64, v1: i128):
 
 function %and(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 and v0, v1
+    v2 = atomic_rmw.i128 seq_cst and v0, v1
     return v2
 }
 
@@ -256,7 +256,7 @@ block0(v0: i64, v1: i128):
 
 function %nand(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 nand v0, v1
+    v2 = atomic_rmw.i128 seq_cst nand v0, v1
     return v2
 }
 
@@ -300,7 +300,7 @@ block0(v0: i64, v1: i128):
 
 function %or(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 or v0, v1
+    v2 = atomic_rmw.i128 seq_cst or v0, v1
     return v2
 }
 
@@ -342,7 +342,7 @@ block0(v0: i64, v1: i128):
 
 function %xor(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 xor v0, v1
+    v2 = atomic_rmw.i128 seq_cst xor v0, v1
     return v2
 }
 
@@ -384,7 +384,7 @@ block0(v0: i64, v1: i128):
 
 function %xchg(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 xchg v0, v1
+    v2 = atomic_rmw.i128 seq_cst xchg v0, v1
     return v2
 }
 
@@ -424,7 +424,7 @@ block0(v0: i64, v1: i128):
 
 function %umin(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 umin v0, v1
+    v2 = atomic_rmw.i128 seq_cst umin v0, v1
     return v2
 }
 
@@ -469,7 +469,7 @@ block0(v0: i64, v1: i128):
 
 function %umax(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 umax v0, v1
+    v2 = atomic_rmw.i128 seq_cst umax v0, v1
     return v2
 }
 
@@ -514,7 +514,7 @@ block0(v0: i64, v1: i128):
 
 function %smin(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 smin v0, v1
+    v2 = atomic_rmw.i128 seq_cst smin v0, v1
     return v2
 }
 
@@ -559,7 +559,7 @@ block0(v0: i64, v1: i128):
 
 function %umax(i64, i128) -> i128 {
 block0(v0: i64, v1: i128):
-    v2 = atomic_rmw.i128 smax v0, v1
+    v2 = atomic_rmw.i128 seq_cst smax v0, v1
     return v2
 }
 

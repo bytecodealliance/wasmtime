@@ -3755,7 +3755,7 @@
           (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
 
 (decl sink_atomic_load (Inst) Reg)
-(rule (sink_atomic_load x @ (atomic_load _ addr))
+(rule (sink_atomic_load x @ (atomic_load _ _ord addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
 

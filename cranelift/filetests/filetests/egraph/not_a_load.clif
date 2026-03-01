@@ -8,7 +8,7 @@ target x86_64
 
 function u0:1302(i64) -> i64 system_v {
   block0(v0: i64):
-    v9 = atomic_rmw.i64 add v0, v0
+    v9 = atomic_rmw.i64 seq_cst add v0, v0
     return v0
 }
 

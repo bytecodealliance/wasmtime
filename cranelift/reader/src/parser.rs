@@ -1779,8 +1779,15 @@ impl<'a> Parser<'a> {
         let data = match self.token() {
             Some(Token::Identifier("struct")) => {
                 self.consume();
-                let size: u64 = self.match_uimm64("expected u64 constant value for struct size in struct memory-type declaration")?.into();
-                self.match_token(Token::LBrace, "expected opening brace to start struct fields in struct memory-type declaration")?;
+                let size: u64 = self
+          .match_uimm64(
+            "expected u64 constant value for struct size in struct memory-type declaration",
+          )?
+          .into();
+                self.match_token(
+          Token::LBrace,
+          "expected opening brace to start struct fields in struct memory-type declaration",
+        )?;
                 let mut fields = vec![];
                 while self.token() != Some(Token::RBrace) {
                     let field = self.parse_memory_type_field()?;
@@ -1799,7 +1806,11 @@ impl<'a> Parser<'a> {
             }
             Some(Token::Identifier("memory")) => {
                 self.consume();
-                let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
+                let size: u64 = self
+          .match_uimm64(
+            "expected u64 constant value for size in static-memory memory-type declaration",
+          )?
+          .into();
                 MemoryTypeData::Memory { size }
             }
             Some(Token::Identifier("dynamic_memory")) => {
@@ -3120,6 +3131,10 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::NullAry => InstructionData::NullAry { opcode },
+            InstructionFormat::AtomicFence => {
+                let ordering = self.match_enum("expected AtomicOrdering")?;
+                InstructionData::AtomicFence { opcode, ordering }
+            }
             InstructionFormat::Jump => {
                 // Parse the destination block number.
                 let block_num = self.match_block("expected jump destination block")?;
@@ -3356,19 +3371,23 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::AtomicCas => {
                 let flags = self.optional_memflags()?;
+                let ordering = self.match_enum("expected AtomicOrdering")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let expected = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let replacement = self.match_value("expected SSA value address")?;
+
                 InstructionData::AtomicCas {
                     opcode,
                     flags,
+                    ordering,
                     args: [addr, expected, replacement],
                 }
             }
             InstructionFormat::AtomicRmw => {
                 let flags = self.optional_memflags()?;
+                let ordering = self.match_enum("expected AtomicOrdering")?;
                 let op = self.match_enum("expected AtomicRmwOp")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -3376,6 +3395,7 @@ impl<'a> Parser<'a> {
                 InstructionData::AtomicRmw {
                     opcode,
                     flags,
+                    ordering,
                     op,
                     args: [addr, arg2],
                 }
@@ -3389,14 +3409,27 @@ impl<'a> Parser<'a> {
                     arg: addr,
                 }
             }
-            InstructionFormat::StoreNoOffset => {
+            InstructionFormat::AtomicLoad => {
                 let flags = self.optional_memflags()?;
+                let ordering = self.match_enum("expected AtomicOrdering")?;
+                let addr = self.match_value("expected SSA value address")?;
+                InstructionData::AtomicLoad {
+                    opcode,
+                    flags,
+                    ordering,
+                    arg: addr,
+                }
+            }
+            InstructionFormat::AtomicStore => {
+                let flags = self.optional_memflags()?;
+                let ordering = self.match_enum("expected AtomicOrdering")?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
-                InstructionData::StoreNoOffset {
+                InstructionData::AtomicStore {
                     opcode,
                     flags,
+                    ordering,
                     args: [arg, addr],
                 }
             }

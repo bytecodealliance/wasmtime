@@ -144,7 +144,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0006                               jump block31
 
                                 block9:
-@000d                               v37 = atomic_cas.i32 v34, v35, v36
+@000d                               v37 = atomic_cas.i32 seq_cst v34, v35, v36
 @000d                               v38 = icmp eq v37, v35
 @000d                               jump block10
 
@@ -152,7 +152,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @000e                               jump block32(v37, v38)
 
                                 block11:
-@0012                               v43 = atomic_cas.i32 v40, v41, v42
+@0012                               v43 = atomic_cas.i32 seq_cst v40, v41, v42
 @0012                               v44 = icmp eq v43, v41
 @0012                               jump block12
 
@@ -160,7 +160,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0013                               jump block32(v43, v44)
 
                                 block13:
-@0017                               v49 = atomic_cas.i32 v46, v47, v48
+@0017                               v49 = atomic_cas.i32 seq_cst v46, v47, v48
 @0017                               v50 = icmp eq v49, v47
 @0017                               jump block14
 
@@ -168,7 +168,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0018                               jump block32(v49, v50)
 
                                 block15:
-@001c                               v55 = atomic_cas.i32 v52, v53, v54
+@001c                               v55 = atomic_cas.i32 seq_cst v52, v53, v54
 @001c                               v56 = icmp eq v55, v53
 @001c                               jump block16
 
@@ -176,7 +176,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @001d                               jump block32(v55, v56)
 
                                 block17:
-@0021                               v61 = atomic_cas.i32 v58, v59, v60
+@0021                               v61 = atomic_cas.i32 seq_cst v58, v59, v60
 @0021                               v62 = icmp eq v61, v59
 @0021                               jump block18
 
@@ -184,7 +184,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0022                               jump block32(v61, v62)
 
                                 block19:
-@0026                               v67 = atomic_cas.i32 v64, v65, v66
+@0026                               v67 = atomic_cas.i32 seq_cst v64, v65, v66
 @0026                               v68 = icmp eq v67, v65
 @0026                               jump block20
 
@@ -192,7 +192,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0027                               jump block32(v67, v68)
 
                                 block21:
-@002b                               v73 = atomic_cas.i32 v70, v71, v72
+@002b                               v73 = atomic_cas.i32 seq_cst v70, v71, v72
 @002b                               v74 = icmp eq v73, v71
 @002b                               jump block22
 
@@ -200,7 +200,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @002c                               jump block32(v73, v74)
 
                                 block23:
-@0030                               v79 = atomic_cas.i32 v76, v77, v78
+@0030                               v79 = atomic_cas.i32 seq_cst v76, v77, v78
 @0030                               v80 = icmp eq v79, v77
 @0030                               jump block24
 
@@ -208,7 +208,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0031                               jump block32(v79, v80)
 
                                 block25:
-@0035                               v85 = atomic_cas.i32 v82, v83, v84
+@0035                               v85 = atomic_cas.i32 seq_cst v82, v83, v84
 @0035                               v86 = icmp eq v85, v83
 @0035                               jump block26
 

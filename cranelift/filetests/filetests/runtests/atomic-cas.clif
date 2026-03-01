@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64, v2: i64):
     stack_store.i64 v0, ss0
 
     v3 = stack_addr.i64 ss0
-    v4 = atomic_cas.i64 v3, v1, v2
+    v4 = atomic_cas.i64 seq_cst v3, v1, v2
 
     v5 = stack_load.i64 ss0
     return v5
@@ -33,7 +33,7 @@ block0(v0: i32, v1: i32, v2: i32):
     stack_store.i32 v0, ss0
 
     v3 = stack_addr.i64 ss0
-    v4 = atomic_cas.i32 v3, v1, v2
+    v4 = atomic_cas.i32 seq_cst v3, v1, v2
 
     v5 = stack_load.i32 ss0
     return v5

@@ -7,7 +7,7 @@ target s390x
 
 function %atomic_cas_i64(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = atomic_cas.i64 little v2, v0, v1
+  v3 = atomic_cas.i64 little seq_cst v2, v0, v1
   return v3
 }
 
@@ -29,7 +29,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %atomic_cas_i32(i32, i32, i64) -> i32 {
 block0(v0: i32, v1: i32, v2: i64):
-  v3 = atomic_cas.i32 little v2, v0, v1
+  v3 = atomic_cas.i32 little seq_cst v2, v0, v1
   return v3
 }
 
@@ -51,7 +51,7 @@ block0(v0: i32, v1: i32, v2: i64):
 
 function %atomic_cas_i16(i64, i16, i16, i64) -> i16 {
 block0(v0: i64, v1: i16, v2: i16, v3: i64):
-  v4 = atomic_cas.i16 little v3, v1, v2
+  v4 = atomic_cas.i16 little seq_cst v3, v1, v2
   return v4
 }
 
@@ -96,7 +96,7 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
 block0(v0: i64, v1: i8, v2: i8, v3: i64):
-  v4 = atomic_cas.i8 little v3, v1, v2
+  v4 = atomic_cas.i8 little seq_cst v3, v1, v2
   return v4
 }
 

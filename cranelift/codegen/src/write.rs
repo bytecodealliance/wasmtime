@@ -400,10 +400,26 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     use crate::ir::instructions::InstructionData::*;
     let ctrl_ty = dfg.ctrl_typevar(inst);
     match dfg.insts[inst] {
-        AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
-        AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        AtomicRmw {
+            op, args, ordering, ..
+        } => write!(w, " {} {}, {} {ordering}", op, args[0], args[1]),
+        AtomicCas { args, ordering, .. } => {
+            write!(w, " {}, {}, {} {ordering}", args[0], args[1], args[2])
+        }
+        AtomicStore {
+            flags,
+            args,
+            ordering,
+            ..
+        } => write!(w, "{} {}, {} {ordering}", flags, args[0], args[1]),
+        AtomicLoad {
+            flags,
+            arg,
+            ordering,
+            ..
+        } => write!(w, "{flags} {arg} {ordering}"),
+        AtomicFence { .. } => write!(w, " "),
         LoadNoOffset { flags, arg, .. } => write!(w, "{flags} {arg}"),
-        StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
         Unary { arg, .. } => write!(w, " {arg}"),
         UnaryImm { imm, .. } => write!(w, " {}", {
             let mut imm = imm;

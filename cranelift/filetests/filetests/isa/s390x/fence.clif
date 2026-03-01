@@ -7,7 +7,7 @@ target s390x
 
 function %fence() {
 block0:
-  fence
+  fence seq_cst
   return
 }
 

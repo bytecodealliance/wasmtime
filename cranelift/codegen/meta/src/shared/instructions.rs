@@ -3775,6 +3775,7 @@ pub(crate) fn define(
         .operands_in(vec![
             Operand::new("MemFlags", &imm.memflags),
             Operand::new("AtomicRmwOp", &imm.atomic_rmw_op),
+            Operand::new("ordering", &imm.atomic_ordering),
             Operand::new("p", iAddr),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
         ])
@@ -3803,6 +3804,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![
             Operand::new("MemFlags", &imm.memflags),
+            Operand::new("ordering", &imm.atomic_ordering),
             Operand::new("p", iAddr),
             Operand::new("e", AtomicMem).with_doc("Expected value in CAS"),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
@@ -3827,10 +3829,11 @@ pub(crate) fn define(
         operation is sequentially consistent and creates happens-before edges that order normal
         (non-atomic) loads and stores.
         "#,
-            &formats.load_no_offset,
+            &formats.atomic_load,
         )
         .operands_in(vec![
             Operand::new("MemFlags", &imm.memflags),
+            Operand::new("ordering", &imm.atomic_ordering),
             Operand::new("p", iAddr),
         ])
         .operands_out(vec![
@@ -3852,10 +3855,11 @@ pub(crate) fn define(
         operation is sequentially consistent and creates happens-before edges that order normal
         (non-atomic) loads and stores.
         "#,
-            &formats.store_no_offset,
+            &formats.atomic_store,
         )
         .operands_in(vec![
             Operand::new("MemFlags", &imm.memflags),
+            Operand::new("ordering", &imm.atomic_ordering),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
             Operand::new("p", iAddr),
         ])
@@ -3871,8 +3875,9 @@ pub(crate) fn define(
         nor stores of any kind may move forwards or backwards across the fence.  This operation
         is sequentially consistent.
         "#,
-            &formats.nullary,
+            &formats.atomic_fence,
         )
+        .operands_in(vec![Operand::new("ordering", &imm.atomic_ordering)])
         .other_side_effects(),
     );
 
