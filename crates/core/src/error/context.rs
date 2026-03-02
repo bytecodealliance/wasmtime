@@ -1,8 +1,4 @@
-use crate::error::{
-    Error, ErrorExt, OutOfMemory, Result,
-    boxed::try_new_uninit_box,
-    error::{OomOrDynError, OomOrDynErrorMut, OomOrDynErrorRef},
-};
+use crate::error::{Error, ErrorExt, OutOfMemory, Result, boxed::try_new_uninit_box};
 use core::any::TypeId;
 use core::fmt;
 use core::ptr::NonNull;
@@ -245,7 +241,7 @@ where
 {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         let source = self.ext_source()?;
-        Some(source.as_dyn_core_error())
+        Some(source.inner.as_dyn_core_error())
     }
 }
 
@@ -264,19 +260,12 @@ where
         Ok(Box::write(boxed, self) as _)
     }
 
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
-        let error = self.error.as_ref()?;
-        Some(error.inner.unpack())
+    fn ext_source(&self) -> Option<&Error> {
+        self.error.as_ref()
     }
 
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-        let error = self.error.as_mut()?;
-        Some(error.inner.unpack_mut())
-    }
-
-    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
-        let error = self.error.take()?;
-        Some(error.inner)
+    fn ext_source_mut(&mut self) -> Option<&mut Error> {
+        self.error.as_mut()
     }
 
     fn ext_is(&self, type_id: TypeId) -> bool {
@@ -294,14 +283,7 @@ where
 
     #[cfg(feature = "backtrace")]
     fn take_backtrace(&mut self) -> Option<std::backtrace::Backtrace> {
-        let error = self.error.as_mut()?;
-        match error.inner.unpack_mut() {
-            OomOrDynErrorMut::Oom(_) => None,
-            OomOrDynErrorMut::DynError(mut e) => {
-                let r = unsafe { e.as_mut() };
-                r.backtrace.take()
-            }
-        }
+        self.error.as_mut()?.take_backtrace()
     }
 
     #[cfg(feature = "anyhow")]
