@@ -165,7 +165,7 @@ impl Request {
             Ok(content_length) => content_length,
             Err(err) => {
                 body.drop(&mut store).map_err(HttpError::trap)?;
-                return Err(HttpError::trap(err));
+                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))).into());
             }
         };
         // This match must appear before any potential errors handled with '?'

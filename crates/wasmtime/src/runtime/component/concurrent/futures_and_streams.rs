@@ -32,7 +32,7 @@ use std::any::{Any, TypeId};
 use std::boxed::Box;
 use std::io::Cursor;
 use std::string::String;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::vec::Vec;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
@@ -2640,11 +2640,11 @@ impl<T> StoreContextMut<'_, T> {
             }
         });
         let try_into = Box::new(move |ty| {
-            let (mine, buffer) = producer.inner.lock().ok()?.take()?;
+            let (mine, buffer) = producer.try_lock().ok()?.take()?;
             match P::try_into(mine, ty) {
                 Ok(value) => Some(value),
                 Err(mine) => {
-                    *producer.inner.lock().ok()? = Some((mine, buffer));
+                    *producer.try_lock().ok()? = Some((mine, buffer));
                     None
                 }
             }
@@ -4721,6 +4721,21 @@ impl<T> LockedState<T> {
         }
     }
 
+    /// Attempts to lock the inner mutex and return its guard.
+    ///
+    /// # Errors
+    ///
+    /// Fails if this lock is either poisoned or if it's currently locked.
+    /// As-used in this file there should never actually be contention on this
+    /// lock nor recursive access so failing to acquire the lock is a fatal
+    /// error that gets propagated upwards.
+    fn try_lock(&self) -> Result<MutexGuard<'_, Option<T>>> {
+        match self.inner.try_lock() {
+            Ok(lock) => Ok(lock),
+            Err(_) => bail_bug!("should not have contention on state lock"),
+        }
+    }
+
     /// Takes the inner `T` out of this state, returning it as a guard which
     /// will put it back when finished.
     ///
@@ -4728,7 +4743,7 @@ impl<T> LockedState<T> {
     ///
     /// Returns an error if the state `T` isn't present.
     fn take(&self) -> Result<LockedStateGuard<'_, T>> {
-        let result = self.inner.lock().unwrap().take();
+        let result = self.try_lock()?.take();
         match result {
             Some(result) => Ok(LockedStateGuard {
                 value: ManuallyDrop::new(result),
@@ -4747,7 +4762,7 @@ impl<T> LockedState<T> {
     ///
     /// Returns an error if the state `T` isn't present.
     fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> Result<R> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.try_lock()?;
         match &mut *inner {
             Some(state) => Ok(f(state)),
             None => bail_bug!("lock value unexpectedly missing"),
@@ -4783,7 +4798,13 @@ impl<T> Drop for LockedStateGuard<'_, T> {
         // means we have exclusive ownership and it is not read further in the
         // destructor, satisfying this requirement.
         let value = unsafe { ManuallyDrop::take(&mut self.value) };
-        *self.state.inner.lock().unwrap() = Some(value);
+
+        // If this fails due to contention that's a bug, but we're not in a
+        // position to panic due to this being a destructor nor return an error,
+        // so defer the bug to showing up later.
+        if let Ok(mut lock) = self.state.try_lock() {
+            *lock = Some(value);
+        }
     }
 }
 

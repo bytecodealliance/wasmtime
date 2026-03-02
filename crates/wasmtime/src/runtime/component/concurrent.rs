@@ -1513,7 +1513,7 @@ impl StoreOpaque {
         }
         let thread = match self.set_thread(CurrentThread::None)?.guest() {
             Some(t) => *t,
-            None => bail_bug!("expected task whene exiting"),
+            None => bail_bug!("expected task when exiting"),
         };
         let instance = self.concurrent_state_mut().get_mut(thread.task)?.instance;
         log::trace!("exit sync call {instance:?}");
