@@ -824,6 +824,15 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model, bool)
 
+/**
+ * \brief Specifies whether support for concurrent execution of WebAssembly is
+ * supported within this store.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.concurrency_support.
+ */
+WASMTIME_CONFIG_PROP(void, concurrency_support, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef __cplusplus

@@ -619,6 +619,17 @@ public:
     wasmtime_pooling_allocation_strategy_set(ptr.get(), config.capi());
   }
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
+
+  /**
+   * \brief Specifies whether support for concurrent execution of WebAssembly is
+   * supported within this store.
+   *
+   * For more information see the Rust documentation at
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.concurrency_support.
+   */
+  void concurrency_support(bool enable) {
+    wasmtime_config_concurrency_support_set(ptr.get(), enable);
+  }
 };
 
 } // namespace wasmtime

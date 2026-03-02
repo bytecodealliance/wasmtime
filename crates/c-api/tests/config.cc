@@ -69,6 +69,7 @@ TEST(Config, Smoke) {
   config.cranelift_flag_set("foo", "bar");
   EXPECT_TRUE(config.cache_load_default());
   EXPECT_FALSE(config.cache_load("nonexistent"));
+  config.concurrency_support(false);
 
   PoolAllocationConfig pooling_config;
   config.pooling_allocation_strategy(pooling_config);
