@@ -3925,14 +3925,16 @@ impl Instance {
             ReturnCode::Cancelled(0)
         };
 
-        let transmit = store.concurrent_state_mut().get_mut(transmit_id)?;
+        if !matches!(code, ReturnCode::Blocked) {
+            let transmit = store.concurrent_state_mut().get_mut(transmit_id)?;
 
-        match &transmit.write {
-            WriteState::GuestReady { .. } => {
-                transmit.write = WriteState::Open;
+            match &transmit.write {
+                WriteState::GuestReady { .. } => {
+                    transmit.write = WriteState::Open;
+                }
+                WriteState::HostReady { .. } => bail_bug!("support host write cancellation"),
+                WriteState::Open | WriteState::Dropped => {}
             }
-            WriteState::HostReady { .. } => bail_bug!("support host write cancellation"),
-            WriteState::Open | WriteState::Dropped => {}
         }
 
         log::trace!("cancelled write {transmit_id:?}: {code:?}");
@@ -4010,16 +4012,18 @@ impl Instance {
             ReturnCode::Cancelled(0)
         };
 
-        let transmit = store.concurrent_state_mut().get_mut(transmit_id)?;
+        if !matches!(code, ReturnCode::Blocked) {
+            let transmit = store.concurrent_state_mut().get_mut(transmit_id)?;
 
-        match &transmit.read {
-            ReadState::GuestReady { .. } => {
-                transmit.read = ReadState::Open;
+            match &transmit.read {
+                ReadState::GuestReady { .. } => {
+                    transmit.read = ReadState::Open;
+                }
+                ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
+                    bail_bug!("support host read cancellation")
+                }
+                ReadState::Open | ReadState::Dropped => {}
             }
-            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
-                bail_bug!("support host read cancellation")
-            }
-            ReadState::Open | ReadState::Dropped => {}
         }
 
         log::trace!("cancelled read {transmit_id:?}: {code:?}");

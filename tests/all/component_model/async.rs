@@ -1039,3 +1039,141 @@ async fn sync_lower_async_host_does_not_leak() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test: `stream.cancel-read` with `async` option must not corrupt
+/// the read state when it returns BLOCKED.
+///
+/// Bug: cancel_read/cancel_write unconditionally transitioned the read/write
+/// state from GuestReady to Open after the cancel, even when the cancel
+/// returned BLOCKED. This destroyed the buffer address/count info, causing
+/// an error when the host later tried to access the stream state.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_cancel_read_async_does_not_corrupt_state() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (import "" "stream.cancel-read" (func $stream.cancel-read (param i32) (result i32)))
+    (import "" "stream.drop-readable" (func $stream.drop-readable (param i32)))
+    (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+    (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
+    (import "" "waitable-set.drop" (func $waitable-set.drop (param i32)))
+    (memory (export "memory") 1)
+
+    (func (export "run") (param $sr i32)
+      (local $cancel_result i32)
+      (local $ws i32)
+
+      ;; Async read into buffer at 0x100, length 4.
+      ;; Should return BLOCKED (-1) since the host producer never writes.
+      (call $stream.read (local.get $sr) (i32.const 0x100) (i32.const 4))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+
+      ;; Async cancel-read. The host write end is HostReady, so this returns
+      ;; BLOCKED. Bug: the cancel unconditionally transitions GuestReady -> Open,
+      ;; destroying the buffer info.
+      (local.set $cancel_result (call $stream.cancel-read (local.get $sr)))
+
+      ;; If cancel returned BLOCKED (-1), wait for the cancel to complete.
+      ;; This is where the bug manifests: when the host processes the cancel,
+      ;; it accesses the read state which was corrupted from GuestReady to Open.
+      (if (i32.eq (local.get $cancel_result) (i32.const -1))
+        (then
+          (local.set $ws (call $waitable-set.new))
+          (call $waitable.join (local.get $sr) (local.get $ws))
+          ;; Wait for the stream event (cancel completion). Event buffer at 0x200.
+          (drop (call $waitable-set.wait (local.get $ws) (i32.const 0x200)))
+          ;; Unjoin stream from waitable-set (join to 0 = unjoin)
+          (call $waitable.join (local.get $sr) (i32.const 0))
+          (call $waitable-set.drop (local.get $ws))
+        )
+      )
+
+      ;; Drop the stream
+      (call $stream.drop-readable (local.get $sr))
+    )
+  )
+
+  (type $s (stream u8))
+  (core func $stream.read (canon stream.read $s async (memory $libc "memory")))
+  (core func $stream.cancel-read (canon stream.cancel-read $s async))
+  (core func $stream.drop-readable (canon stream.drop-readable $s))
+  (canon waitable.join (core func $waitable.join))
+  (canon waitable-set.new (core func $waitable-set.new))
+  (canon waitable-set.wait (memory $libc "memory") (core func $waitable-set.wait))
+  (canon waitable-set.drop (core func $waitable-set.drop))
+
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "stream.read" (func $stream.read))
+      (export "stream.cancel-read" (func $stream.cancel-read))
+      (export "stream.drop-readable" (func $stream.drop-readable))
+      (export "waitable.join" (func $waitable.join))
+      (export "waitable-set.new" (func $waitable-set.new))
+      (export "waitable-set.wait" (func $waitable-set.wait))
+      (export "waitable-set.drop" (func $waitable-set.drop))
+    ))
+  ))
+
+  (func (export "run") async (param "s" (stream u8))
+    (canon lift
+      (core func $i "run")
+      (memory $libc "memory")
+    )
+  )
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let func = instance.get_typed_func::<(StreamReader<u8>,), ()>(&mut store, "run")?;
+
+    // Create a host-side stream that never produces data (always Pending).
+    // When cancel is requested (finish=true), it acknowledges the cancellation.
+    let reader = StreamReader::new(&mut store, NeverWriteStreamProducer)?;
+    func.call_async(&mut store, (reader,)).await?;
+
+    return Ok(());
+
+    struct NeverWriteStreamProducer;
+
+    impl StreamProducer<()> for NeverWriteStreamProducer {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            _destination: Destination<'a, Self::Item, Self::Buffer>,
+            finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            if finish {
+                // Cancel requested — acknowledge it.
+                Poll::Ready(Ok(StreamResult::Cancelled))
+            } else {
+                // Never produce data.
+                Poll::Pending
+            }
+        }
+    }
+}
