@@ -1774,7 +1774,7 @@ impl OomOrDynError {
             let ret_ptr = NonNull::from(&mut ret).cast::<u8>();
             // Safety: the pointer is valid and the vtable is associated with
             // this pointer's concrete type.
-            unsafe { (vtable.r#move)(ptr, ret_ptr) }
+            unsafe { (vtable.move_into)(ptr, ret_ptr) }
         }
 
         // Safety: `ret` was fully initialized in all control-flow paths leading

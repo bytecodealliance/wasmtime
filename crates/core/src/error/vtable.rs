@@ -42,7 +42,7 @@ pub(crate) struct Vtable {
     ///
     /// Upon successful return, a `T` will have been written to that memory
     /// block.
-    pub(crate) r#move: unsafe fn(OwnedPtr<DynError>, NonNull<u8>),
+    pub(crate) move_into: unsafe fn(OwnedPtr<DynError>, NonNull<u8>),
 
     /// Conversion into `anyhow::Error` from `Box<Self>`.
     #[cfg(feature = "anyhow")]
@@ -64,7 +64,7 @@ impl Vtable {
             as_dyn_core_error: as_dyn_core_error::<E>,
             into_boxed_dyn_core_error: into_boxed_dyn_core_error::<E>,
             drop_and_deallocate: drop_and_deallocate::<E>,
-            r#move: r#move::<E>,
+            move_into: move_into::<E>,
             #[cfg(feature = "anyhow")]
             into_anyhow: into_anyhow::<E>,
         }
@@ -154,7 +154,7 @@ where
     let _ = unsafe { error.into_box() };
 }
 
-unsafe fn r#move<E>(error: OwnedPtr<DynError>, ret_ptr: NonNull<u8>)
+unsafe fn move_into<E>(error: OwnedPtr<DynError>, ret_ptr: NonNull<u8>)
 where
     E: ErrorExt,
 {
