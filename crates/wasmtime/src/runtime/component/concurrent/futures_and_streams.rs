@@ -285,21 +285,23 @@ impl<'a, T, B> Destination<'a, T, B> {
     ///
     /// [docs]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md#stream-readiness
     pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
-        let transmit = store
-            .as_context_mut()
-            .0
-            .concurrent_state_mut()
-            .get_mut(self.id)
-            .unwrap();
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.remaining_(store.as_context_mut().0).unwrap()
+    }
+
+    fn remaining_(&self, store: &mut StoreOpaque) -> Result<Option<usize>> {
+        let transmit = store.concurrent_state_mut().get_mut(self.id)?;
 
         if let &ReadState::GuestReady { count, .. } = &transmit.read {
             let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
-                unreachable!()
+                bail_bug!("expected WriteState::HostReady")
             };
 
-            Some(count - guest_offset)
+            Ok(Some(count - guest_offset))
         } else {
-            None
+            Ok(None)
         }
     }
 }
@@ -360,37 +362,45 @@ impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
 impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &mut [u8] {
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.remaining_().unwrap()
+    }
+
+    fn remaining_(&mut self) -> Result<&mut [u8]> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.get_mut()
-        } else {
-            let transmit = self
-                .store
-                .as_context_mut()
-                .0
-                .concurrent_state_mut()
-                .get_mut(self.id)
-                .unwrap();
+            return Ok(buffer.get_mut());
+        }
+        let transmit = self
+            .store
+            .as_context_mut()
+            .0
+            .concurrent_state_mut()
+            .get_mut(self.id)?;
 
-            let &ReadState::GuestReady {
-                address,
-                count,
-                options,
-                instance,
-                ..
-            } = &transmit.read
-            else {
-                unreachable!();
-            };
+        let &ReadState::GuestReady {
+            address,
+            count,
+            options,
+            instance,
+            ..
+        } = &transmit.read
+        else {
+            bail_bug!("expected ReadState::GuestReady")
+        };
 
-            let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
-                unreachable!()
-            };
+        let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
+            bail_bug!("expected WriteState::HostReady")
+        };
 
-            instance
-                .options_memory_mut(self.store.0, options)
-                .get_mut((address + guest_offset)..)
-                .and_then(|b| b.get_mut(..(count - guest_offset)))
-                .unwrap()
+        let memory = instance
+            .options_memory_mut(self.store.0, options)
+            .get_mut((address + guest_offset)..)
+            .and_then(|b| b.get_mut(..(count - guest_offset)));
+        match memory {
+            Some(memory) => Ok(memory),
+            None => bail_bug!("guest buffer unexpectedly out of bounds"),
         }
     }
 
@@ -401,8 +411,17 @@ impl<D: 'static> DirectDestination<'_, D> {
     /// This will panic if the count is larger than the size of the
     /// buffer returned by `Self::remaining`.
     pub fn mark_written(&mut self, count: usize) {
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.mark_written_(count).unwrap()
+    }
+
+    fn mark_written_(&mut self, count: usize) -> Result<()> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
             buffer.set_position(
+                // Note that these `.unwrap`s are documented panic conditions of
+                // `mark_written`.
                 buffer
                     .position()
                     .checked_add(u64::try_from(count).unwrap())
@@ -414,21 +433,22 @@ impl<D: 'static> DirectDestination<'_, D> {
                 .as_context_mut()
                 .0
                 .concurrent_state_mut()
-                .get_mut(self.id)
-                .unwrap();
+                .get_mut(self.id)?;
 
             let ReadState::GuestReady {
                 count: read_count, ..
             } = &transmit.read
             else {
-                unreachable!();
+                bail_bug!("expected ReadState::GuestReady")
             };
 
             let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                unreachable!()
+                bail_bug!("expected WriteState::HostReady");
             };
 
             if *guest_offset + count > *read_count {
+                // Note that this `panic` is a documented panic condition of
+                // `mark_written`.
                 panic!(
                     "write count ({count}) must be less than or equal to read count ({read_count})"
                 )
@@ -436,6 +456,7 @@ impl<D: 'static> DirectDestination<'_, D> {
                 *guest_offset += count;
             }
         }
+        Ok(())
     }
 }
 
@@ -819,23 +840,28 @@ impl<'a, T> Source<'a, T> {
     where
         T: 'static,
     {
-        let transmit = store
-            .as_context_mut()
-            .0
-            .concurrent_state_mut()
-            .get_mut(self.id)
-            .unwrap();
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.remaining_(store.as_context_mut().0).unwrap()
+    }
+
+    fn remaining_(&self, store: &mut StoreOpaque) -> Result<usize>
+    where
+        T: 'static,
+    {
+        let transmit = store.concurrent_state_mut().get_mut(self.id)?;
 
         if let &WriteState::GuestReady { count, .. } = &transmit.write {
             let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
-                unreachable!()
+                bail_bug!("expected ReadState::HostReady")
             };
 
-            count - guest_offset
+            Ok(count - guest_offset)
         } else if let Some(host_buffer) = &self.host_buffer {
-            host_buffer.remaining().len()
+            Ok(host_buffer.remaining().len())
         } else {
-            unreachable!()
+            bail_bug!("expected either WriteState::GuestReady or host buffer")
         }
     }
 }
@@ -872,37 +898,45 @@ impl<D: 'static> std::io::Read for DirectSource<'_, D> {
 impl<D: 'static> DirectSource<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &[u8] {
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.remaining_().unwrap()
+    }
+
+    fn remaining_(&mut self) -> Result<&[u8]> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.remaining()
-        } else {
-            let transmit = self
-                .store
-                .as_context_mut()
-                .0
-                .concurrent_state_mut()
-                .get_mut(self.id)
-                .unwrap();
+            return Ok(buffer.remaining());
+        }
+        let transmit = self
+            .store
+            .as_context_mut()
+            .0
+            .concurrent_state_mut()
+            .get_mut(self.id)?;
 
-            let &WriteState::GuestReady {
-                address,
-                count,
-                options,
-                instance,
-                ..
-            } = &transmit.write
-            else {
-                unreachable!()
-            };
+        let &WriteState::GuestReady {
+            address,
+            count,
+            options,
+            instance,
+            ..
+        } = &transmit.write
+        else {
+            bail_bug!("expected WriteState::GuestReady")
+        };
 
-            let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
-                unreachable!()
-            };
+        let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
+            bail_bug!("expected ReadState::HostReady")
+        };
 
-            instance
-                .options_memory(self.store.0, options)
-                .get((address + guest_offset)..)
-                .and_then(|b| b.get(..(count - guest_offset)))
-                .unwrap()
+        let memory = instance
+            .options_memory(self.store.0, options)
+            .get((address + guest_offset)..)
+            .and_then(|b| b.get(..(count - guest_offset)));
+        match memory {
+            Some(memory) => Ok(memory),
+            None => bail_bug!("guest buffer unexpectedly out of bounds"),
         }
     }
 
@@ -913,36 +947,43 @@ impl<D: 'static> DirectSource<'_, D> {
     /// This will panic if the count is larger than the size of the buffer
     /// returned by `Self::remaining`.
     pub fn mark_read(&mut self, count: usize) {
+        // Note that this unwrap should only trigger for bugs in Wasmtime, and
+        // this is modeled here to centralize the `.unwrap()` for this method in
+        // one location.
+        self.mark_read_(count).unwrap()
+    }
+
+    fn mark_read_(&mut self, count: usize) -> Result<()> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
             buffer.skip(count);
-        } else {
-            let transmit = self
-                .store
-                .as_context_mut()
-                .0
-                .concurrent_state_mut()
-                .get_mut(self.id)
-                .unwrap();
-
-            let WriteState::GuestReady {
-                count: write_count, ..
-            } = &transmit.write
-            else {
-                unreachable!()
-            };
-
-            let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-                unreachable!()
-            };
-
-            if *guest_offset + count > *write_count {
-                panic!(
-                    "read count ({count}) must be less than or equal to write count ({write_count})"
-                )
-            } else {
-                *guest_offset += count;
-            }
+            return Ok(());
         }
+
+        let transmit = self
+            .store
+            .as_context_mut()
+            .0
+            .concurrent_state_mut()
+            .get_mut(self.id)?;
+
+        let WriteState::GuestReady {
+            count: write_count, ..
+        } = &transmit.write
+        else {
+            bail_bug!("expected WriteState::GuestReady");
+        };
+
+        let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
+            bail_bug!("expected ReadState::HostReady");
+        };
+
+        if *guest_offset + count > *write_count {
+            // Note that this is a documented panic condition of `mark_read`.
+            panic!("read count ({count}) must be less than or equal to write count ({write_count})")
+        } else {
+            *guest_offset += count;
+        }
+        Ok(())
     }
 }
 
