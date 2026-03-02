@@ -274,7 +274,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         let listener = socket.tcp_listener_arc().unwrap().clone();
         let family = socket.address_family();
         let options = socket.non_inherited_options().clone();
-        Ok(StreamReader::new(
+        let ret = StreamReader::new(
             &mut store,
             ListenStreamProducer {
                 listener,
@@ -282,7 +282,9 @@ impl HostTcpSocketWithStore for WasiSockets {
                 options,
                 getter,
             },
-        ))
+        )
+        .map_err(SocketError::trap)?;
+        Ok(ret)
     }
 
     fn send<T: 'static>(
@@ -300,14 +302,12 @@ impl HostTcpSocketWithStore for WasiSockets {
                         stream,
                         result: Some(result_tx),
                     },
-                );
-                Ok(FutureReader::new(&mut store, result_rx))
+                )?;
+                FutureReader::new(&mut store, result_rx)
             }
             Err(err) => {
-                data.close(&mut store);
-                Ok(FutureReader::new(&mut store, async {
-                    wasmtime::error::Ok(Err(err.into()))
-                }))
+                data.close(&mut store)?;
+                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) })
             }
         }
     }
@@ -327,13 +327,13 @@ impl HostTcpSocketWithStore for WasiSockets {
                             stream,
                             result: Some(result_tx),
                         },
-                    ),
-                    FutureReader::new(&mut store, result_rx),
+                    )?,
+                    FutureReader::new(&mut store, result_rx)?,
                 ))
             }
             Err(err) => Ok((
-                StreamReader::new(&mut store, iter::empty()),
-                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) }),
+                StreamReader::new(&mut store, iter::empty())?,
+                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) })?,
             )),
         }
     }

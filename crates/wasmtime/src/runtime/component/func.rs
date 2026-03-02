@@ -596,7 +596,7 @@ impl Func {
             index: raw_options.instance,
         };
 
-        if !store.0.may_enter(instance) {
+        if !store.0.may_enter(instance)? {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
@@ -711,7 +711,7 @@ impl Func {
                 .0
                 .component_resource_tables(Some(self.instance))
                 .validate_scope_exit()?;
-            store.0.exit_guest_sync_call(false)?;
+            store.0.exit_guest_sync_call()?;
         }
         Ok(())
     }

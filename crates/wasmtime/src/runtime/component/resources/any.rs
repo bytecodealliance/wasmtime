@@ -186,7 +186,7 @@ impl ResourceAny {
         // `flags` is valid due to `store` being the owner of the flags and
         // flags are never destroyed within the store.
         if let Some(instance) = slot.instance {
-            if !store.0.may_enter(instance) {
+            if !store.0.may_enter(instance)? {
                 bail!(Trap::CannotEnterComponent);
             }
         }
@@ -217,7 +217,7 @@ impl ResourceAny {
         }
 
         if slot.instance.is_some() {
-            store.0.exit_guest_sync_call(false)?;
+            store.0.exit_guest_sync_call()?;
         }
 
         Ok(())

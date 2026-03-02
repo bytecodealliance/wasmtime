@@ -1,7 +1,7 @@
 use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyExt as _, GuestBody};
-use crate::p3::{WasiHttpCtxView, WasiHttpView};
+use crate::p3::{HttpError, HttpResult, WasiHttpCtxView, WasiHttpView};
 use bytes::Bytes;
 use core::time::Duration;
 use http::header::HOST;
@@ -134,13 +134,10 @@ impl Request {
         self,
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
-    ) -> Result<
-        (
-            http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-            Option<Arc<RequestOptions>>,
-        ),
-        ErrorCode,
-    > {
+    ) -> HttpResult<(
+        http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
+        Option<Arc<RequestOptions>>,
+    )> {
         self.into_http_with_getter(store, fut, T::http)
     }
 
@@ -150,13 +147,10 @@ impl Request {
         mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> Result<
-        (
-            http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-            Option<Arc<RequestOptions>>,
-        ),
-        ErrorCode,
-    > {
+    ) -> HttpResult<(
+        http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
+        Option<Arc<RequestOptions>>,
+    )> {
         let Request {
             method,
             scheme,
@@ -170,8 +164,8 @@ impl Request {
         let content_length = match get_content_length(&headers) {
             Ok(content_length) => content_length,
             Err(err) => {
-                body.drop(&mut store);
-                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))));
+                body.drop(&mut store).map_err(HttpError::trap)?;
+                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))).into());
             }
         };
         // This match must appear before any potential errors handled with '?'
@@ -194,6 +188,7 @@ impl Request {
                 ErrorCode::HttpRequestBodySize,
                 getter,
             )
+            .map_err(HttpError::trap)?
             .boxed_unsync(),
             Body::Host { body, result_tx } => {
                 if let Some(limit) = content_length {
@@ -227,7 +222,7 @@ impl Request {
         let scheme = match scheme {
             None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
             Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
-            Some(..) => return Err(ErrorCode::HttpProtocolError),
+            Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
         };
         let mut uri = Uri::builder().scheme(scheme);
         if let Some(authority) = authority {
@@ -579,10 +574,15 @@ mod tests {
             Empty::new().map_err(|x| match x {}).boxed_unsync(),
         );
         let mut store = Store::new(&Engine::default(), TestCtx::new());
-        let result = req.into_http(&mut store, async {
-            Err(ErrorCode::InternalError(Some("uh oh".to_string())))
-        });
-        assert!(matches!(result, Err(ErrorCode::HttpRequestUriInvalid)));
+        let result = req
+            .into_http(&mut store, async {
+                Err(ErrorCode::InternalError(Some("uh oh".to_string())))
+            })
+            .unwrap_err();
+        assert!(matches!(
+            result.downcast()?,
+            ErrorCode::HttpRequestUriInvalid,
+        ));
         let mut cx = Context::from_waker(Waker::noop());
         let result = pin!(fut).poll(&mut cx);
         assert!(matches!(

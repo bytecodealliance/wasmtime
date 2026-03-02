@@ -362,7 +362,7 @@ pub async fn async_readiness() -> Result<()> {
             },
             maybe_yield: yield_times(10).boxed(),
         },
-    );
+    )?;
     store
         .run_concurrent(async move |accessor| {
             let (rx, expected) = readiness_guest
@@ -378,7 +378,7 @@ pub async fn async_readiness() -> Result<()> {
                         maybe_yield: yield_times(10).boxed(),
                     },
                 )
-            });
+            })?;
 
             Ok(())
         })
@@ -739,13 +739,13 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
     }
 
     let (mut control_tx, control_rx) = mpsc::channel(1);
-    let control_rx = StreamReader::new(&mut store, PipeProducer::new(control_rx));
+    let control_rx = StreamReader::new(&mut store, PipeProducer::new(control_rx))?;
     let (mut caller_stream_tx, caller_stream_rx) = mpsc::channel(1);
-    let caller_stream_rx = StreamReader::new(&mut store, PipeProducer::new(caller_stream_rx));
+    let caller_stream_rx = StreamReader::new(&mut store, PipeProducer::new(caller_stream_rx))?;
     let (caller_future1_tx, caller_future1_rx) = oneshot::channel();
-    let caller_future1_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future1_rx));
+    let caller_future1_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future1_rx))?;
     let (_, caller_future2_rx) = oneshot::channel();
-    let caller_future2_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future2_rx));
+    let caller_future2_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future2_rx))?;
     let (callee_future1_tx, callee_future1_rx) = oneshot::channel();
     let (callee_stream_tx, callee_stream_rx) = mpsc::channel(1);
     store
@@ -801,11 +801,11 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             callee_stream_rx.pipe(
                                 &mut store,
                                 PipeConsumer::new(callee_stream_tx.take().unwrap()),
-                            );
+                            )?;
                             callee_future1_rx.pipe(
                                 &mut store,
                                 OneshotConsumer::new(callee_future1_tx.take().unwrap()),
-                            );
+                            )?;
                             wasmtime::error::Ok(())
                         })?;
                     }
@@ -935,9 +935,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         maybe_yield: yield_times(10).boxed(),
     };
     let stream = if procrastinate {
-        StreamReader::new(&mut store, ProcrastinatingStreamProducer(producer))
+        StreamReader::new(&mut store, ProcrastinatingStreamProducer(producer))?
     } else {
-        StreamReader::new(&mut store, producer)
+        StreamReader::new(&mut store, producer)?
     };
     let future_expected = 10;
     let producer = DelayedFutureProducer {
@@ -947,9 +947,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         maybe_yield: yield_times(10).boxed(),
     };
     let future = if procrastinate {
-        FutureReader::new(&mut store, ProcrastinatingFutureProducer(producer))
+        FutureReader::new(&mut store, ProcrastinatingFutureProducer(producer))?
     } else {
-        FutureReader::new(&mut store, producer)
+        FutureReader::new(&mut store, producer)?
     };
     store
         .run_concurrent(async move |accessor| {
@@ -958,7 +958,7 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                 .call_start(accessor, stream, stream_expected, future, future_expected)
                 .await?;
 
-            accessor.with(|mut access| {
+            accessor.with(|mut access| -> wasmtime::Result<_> {
                 let consumer = DelayedStreamConsumer {
                     inner: BufferStreamConsumer {
                         expected: stream_expected,
@@ -966,9 +966,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                     maybe_yield: yield_times(10).boxed(),
                 };
                 if procrastinate {
-                    stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer));
+                    stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer))?;
                 } else {
-                    stream.pipe(&mut access, consumer);
+                    stream.pipe(&mut access, consumer)?;
                 }
                 let consumer = DelayedFutureConsumer {
                     inner: ValueFutureConsumer {
@@ -977,11 +977,12 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                     maybe_yield: yield_times(10).boxed(),
                 };
                 if procrastinate {
-                    future.pipe(access, ProcrastinatingFutureConsumer(consumer));
+                    future.pipe(access, ProcrastinatingFutureConsumer(consumer))?;
                 } else {
-                    future.pipe(access, consumer);
+                    future.pipe(access, consumer)?;
                 }
-            });
+                Ok(())
+            })?;
 
             Ok(())
         })

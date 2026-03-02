@@ -221,8 +221,10 @@ pub fn run(mut input: ComponentAsync) {
         },
     );
 
-    let guest_caller_stream = StreamReader::new(&mut store, SharedStream(Scope::GuestCaller));
-    let guest_callee_stream = StreamReader::new(&mut store, SharedStream(Scope::GuestCallee));
+    let guest_caller_stream =
+        StreamReader::new(&mut store, SharedStream(Scope::GuestCaller)).unwrap();
+    let guest_callee_stream =
+        StreamReader::new(&mut store, SharedStream(Scope::GuestCallee)).unwrap();
     store.data_mut().guest_caller_stream = Some(guest_caller_stream);
     store.data_mut().guest_callee_stream = Some(guest_callee_stream);
     block_on(async {
@@ -400,7 +402,7 @@ async fn future_or_stream_cmd(store: &Accessor<Data>, cmd: Command) {
             store.with(|mut s| {
                 let arc = Arc::new(());
                 let weak = Arc::downgrade(&arc);
-                let future = FutureReader::new(&mut s, HostFutureProducer(id, arc));
+                let future = FutureReader::new(&mut s, HostFutureProducer(id, arc)).unwrap();
                 let data = s.get();
                 let prev = data.host_futures.insert(id, future);
                 assert!(prev.is_none());
@@ -412,7 +414,7 @@ async fn future_or_stream_cmd(store: &Accessor<Data>, cmd: Command) {
         }
         Command::FutureDropReadable(id) => {
             store.with(|mut s| match s.get().host_futures.remove(&id) {
-                Some(mut future) => future.close(&mut s),
+                Some(mut future) => future.close(&mut s).unwrap(),
                 None => {
                     let (mut state, _weak) = s.get().host_future_consumers.remove(&id).unwrap();
                     state.wake_by_ref();
@@ -471,7 +473,7 @@ async fn future_or_stream_cmd(store: &Accessor<Data>, cmd: Command) {
                     .host_future_consumers
                     .insert(id, (HostFutureConsumerState::Consuming, weak));
                 assert!(prev.is_none());
-                future.pipe(&mut s, HostFutureConsumer(id, arc));
+                future.pipe(&mut s, HostFutureConsumer(id, arc)).unwrap();
             });
 
             await_property(store, "future should be present", |s| {
@@ -547,7 +549,7 @@ async fn future_or_stream_cmd(store: &Accessor<Data>, cmd: Command) {
             store.with(|mut s| {
                 let arc = Arc::new(());
                 let weak = Arc::downgrade(&arc);
-                let stream = StreamReader::new(&mut s, HostStreamProducer(id, arc));
+                let stream = StreamReader::new(&mut s, HostStreamProducer(id, arc)).unwrap();
                 let data = s.get();
                 let prev = data.host_streams.insert(id, stream);
                 assert!(prev.is_none());
@@ -559,9 +561,7 @@ async fn future_or_stream_cmd(store: &Accessor<Data>, cmd: Command) {
         }
         Command::StreamDropReadable(id) => {
             store.with(|mut s| match s.get().host_streams.remove(&id) {
-                Some(mut stream) => {
-                    stream.close(&mut s);
-                }
+                Some(mut stream) => stream.close(&mut s).unwrap(),
                 None => {
                     let (mut state, _weak) = s.get().host_stream_consumers.remove(&id).unwrap();
                     state.wake_by_ref();
@@ -792,7 +792,7 @@ fn ensure_future_reading(store: &Accessor<Data>, id: u32) {
             .host_future_consumers
             .insert(id, (HostFutureConsumerState::Idle, weak));
         assert!(prev.is_none());
-        future.pipe(&mut s, HostFutureConsumer(id, arc));
+        future.pipe(&mut s, HostFutureConsumer(id, arc)).unwrap();
     });
 }
 
@@ -817,7 +817,7 @@ fn ensure_stream_reading(store: &Accessor<Data>, id: u32) {
         );
         assert!(prev.is_none());
         let stream = data.host_streams.remove(&id).unwrap();
-        stream.pipe(&mut s, HostStreamConsumer(id, arc));
+        stream.pipe(&mut s, HostStreamConsumer(id, arc)).unwrap();
     });
 }
 

@@ -171,7 +171,7 @@ impl StoreOpaque {
         Ok(self.enter_call_not_concurrent())
     }
 
-    pub(crate) fn exit_guest_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
+    pub(crate) fn exit_guest_sync_call(&mut self) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
 
@@ -187,7 +187,7 @@ impl StoreOpaque {
         Ok(())
     }
 
-    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> bool {
-        !self.trapped()
+    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> Result<bool> {
+        Ok(!self.trapped())
     }
 }

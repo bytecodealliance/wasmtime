@@ -13,6 +13,46 @@ pub struct TrapInformation {
     pub trap_code: Trap,
 }
 
+macro_rules! generate_trap_type {
+    (pub enum Trap {
+        $(
+            $(#[$doc:meta])*
+            $name:ident = $msg:tt,
+        )*
+    }) => {
+        #[non_exhaustive]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+        #[expect(missing_docs, reason = "self-describing variants")]
+        pub enum Trap {
+            $(
+                $(#[$doc])*
+                $name,
+            )*
+        }
+
+        impl Trap {
+            /// Converts a byte back into a `Trap` if its in-bounds
+            pub fn from_u8(byte: u8) -> Option<Trap> {
+                $(
+                    if byte == Trap::$name as u8 {
+                        return Some(Trap::$name);
+                    }
+                )*
+                None
+            }
+        }
+
+        impl fmt::Display for Trap {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let desc = match self {
+                    $(Self::$name => $msg,)*
+                };
+                write!(f, "wasm trap: {desc}")
+            }
+        }
+    }
+}
+
 // The code can be accessed from the c-api, where the possible values are
 // translated into enum values defined there:
 //
@@ -20,226 +60,164 @@ pub struct TrapInformation {
 // * `wasmtime_trap_code_enum` in c-api/include/wasmtime/trap.h.
 //
 // These need to be kept in sync.
-#[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[expect(missing_docs, reason = "self-describing variants")]
-pub enum Trap {
-    /// The current stack space was exhausted.
-    StackOverflow,
+generate_trap_type! {
+    pub enum Trap {
+        /// The current stack space was exhausted.
+        StackOverflow = "call stack exhausted",
 
-    /// An out-of-bounds memory access.
-    MemoryOutOfBounds,
+        /// An out-of-bounds memory access.
+        MemoryOutOfBounds = "out of bounds memory access",
 
-    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
-    HeapMisaligned,
+        /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+        HeapMisaligned = "unaligned atomic",
 
-    /// An out-of-bounds access to a table.
-    TableOutOfBounds,
+        /// An out-of-bounds access to a table.
+        TableOutOfBounds = "undefined element: out of bounds table access",
 
-    /// Indirect call to a null table entry.
-    IndirectCallToNull,
+        /// Indirect call to a null table entry.
+        IndirectCallToNull = "uninitialized element",
 
-    /// Signature mismatch on indirect call.
-    BadSignature,
+        /// Signature mismatch on indirect call.
+        BadSignature = "indirect call type mismatch",
 
-    /// An integer arithmetic operation caused an overflow.
-    IntegerOverflow,
+        /// An integer arithmetic operation caused an overflow.
+        IntegerOverflow = "integer overflow",
 
-    /// An integer division by zero.
-    IntegerDivisionByZero,
+        /// An integer division by zero.
+        IntegerDivisionByZero = "integer divide by zero",
 
-    /// Failed float-to-int conversion.
-    BadConversionToInteger,
+        /// Failed float-to-int conversion.
+        BadConversionToInteger = "invalid conversion to integer",
 
-    /// Code that was supposed to have been unreachable was reached.
-    UnreachableCodeReached,
+        /// Code that was supposed to have been unreachable was reached.
+        UnreachableCodeReached = "wasm `unreachable` instruction executed",
 
-    /// Execution has potentially run too long and may be interrupted.
-    Interrupt,
+        /// Execution has potentially run too long and may be interrupted.
+        Interrupt = "interrupt",
 
-    /// When wasm code is configured to consume fuel and it runs out of fuel
-    /// then this trap will be raised.
-    OutOfFuel,
+        /// When wasm code is configured to consume fuel and it runs out of fuel
+        /// then this trap will be raised.
+        OutOfFuel = "all fuel consumed by WebAssembly",
 
-    /// Used to indicate that a trap was raised by atomic wait operations on non shared memory.
-    AtomicWaitNonSharedMemory,
+        /// Used to indicate that a trap was raised by atomic wait operations on non shared memory.
+        AtomicWaitNonSharedMemory = "atomic wait on non-shared memory",
 
-    /// Call to a null reference.
-    NullReference,
+        /// Call to a null reference.
+        NullReference = "null reference",
 
-    /// Attempt to access beyond the bounds of an array.
-    ArrayOutOfBounds,
+        /// Attempt to access beyond the bounds of an array.
+        ArrayOutOfBounds = "out of bounds array access",
 
-    /// Attempted an allocation that was too large to succeed.
-    AllocationTooLarge,
+        /// Attempted an allocation that was too large to succeed.
+        AllocationTooLarge = "allocation size too large",
 
-    /// Attempted to cast a reference to a type that it is not an instance of.
-    CastFailure,
+        /// Attempted to cast a reference to a type that it is not an instance of.
+        CastFailure = "cast failure",
 
-    /// When the `component-model` feature is enabled this trap represents a
-    /// scenario where one component tried to call another component but it
-    /// would have violated the reentrance rules of the component model,
-    /// triggering a trap instead.
-    CannotEnterComponent,
+        /// When the `component-model` feature is enabled this trap represents a
+        /// scenario where one component tried to call another component but it
+        /// would have violated the reentrance rules of the component model,
+        /// triggering a trap instead.
+        CannotEnterComponent = "cannot enter component instance",
 
-    /// Async-lifted export failed to produce a result by calling `task.return`
-    /// before returning `STATUS_DONE` and/or after all host tasks completed.
-    NoAsyncResult,
+        /// Async-lifted export failed to produce a result by calling `task.return`
+        /// before returning `STATUS_DONE` and/or after all host tasks completed.
+        NoAsyncResult = "async-lifted export failed to produce a result",
 
-    /// We are suspending to a tag for which there is no active handler.
-    UnhandledTag,
+        /// We are suspending to a tag for which there is no active handler.
+        UnhandledTag = "unhandled tag",
 
-    /// Attempt to resume a continuation twice.
-    ContinuationAlreadyConsumed,
+        /// Attempt to resume a continuation twice.
+        ContinuationAlreadyConsumed = "continuation already consumed",
 
-    /// A Pulley opcode was executed at runtime when the opcode was disabled at
-    /// compile time.
-    DisabledOpcode,
+        /// A Pulley opcode was executed at runtime when the opcode was disabled at
+        /// compile time.
+        DisabledOpcode = "pulley opcode disabled at compile time was executed",
 
-    /// Async event loop deadlocked; i.e. it cannot make further progress given
-    /// that all host tasks have completed and any/all host-owned stream/future
-    /// handles have been dropped.
-    AsyncDeadlock,
+        /// Async event loop deadlocked; i.e. it cannot make further progress given
+        /// that all host tasks have completed and any/all host-owned stream/future
+        /// handles have been dropped.
+        AsyncDeadlock = "deadlock detected: event loop cannot make further progress",
 
-    /// When the `component-model` feature is enabled this trap represents a
-    /// scenario where a component instance tried to call an import or intrinsic
-    /// when it wasn't allowed to, e.g. from a post-return function.
-    CannotLeaveComponent,
+        /// When the `component-model` feature is enabled this trap represents a
+        /// scenario where a component instance tried to call an import or intrinsic
+        /// when it wasn't allowed to, e.g. from a post-return function.
+        CannotLeaveComponent = "cannot leave component instance",
 
-    /// A synchronous task attempted to make a potentially blocking call prior
-    /// to returning.
-    CannotBlockSyncTask,
+        /// A synchronous task attempted to make a potentially blocking call prior
+        /// to returning.
+        CannotBlockSyncTask = "cannot block a synchronous task before returning",
 
-    /// A component tried to lift a `char` with an invalid bit pattern.
-    InvalidChar,
+        /// A component tried to lift a `char` with an invalid bit pattern.
+        InvalidChar = "invalid `char` bit pattern",
 
-    /// Debug assertion generated for a fused adapter regarding the expected
-    /// completion of a string encoding operation.
-    DebugAssertStringEncodingFinished,
+        /// Debug assertion generated for a fused adapter regarding the expected
+        /// completion of a string encoding operation.
+        DebugAssertStringEncodingFinished = "should have finished string encoding",
 
-    /// Debug assertion generated for a fused adapter regarding a string
-    /// encoding operation.
-    DebugAssertEqualCodeUnits,
+        /// Debug assertion generated for a fused adapter regarding a string
+        /// encoding operation.
+        DebugAssertEqualCodeUnits = "code units should be equal",
 
-    /// Debug assertion generated for a fused adapter regarding the alignment of
-    /// a pointer.
-    DebugAssertPointerAligned,
+        /// Debug assertion generated for a fused adapter regarding the alignment of
+        /// a pointer.
+        DebugAssertPointerAligned = "pointer should be aligned",
 
-    /// Debug assertion generated for a fused adapter regarding the upper bits
-    /// of a 64-bit value.
-    DebugAssertUpperBitsUnset,
+        /// Debug assertion generated for a fused adapter regarding the upper bits
+        /// of a 64-bit value.
+        DebugAssertUpperBitsUnset = "upper bits should be unset",
 
-    /// A component tried to lift or lower a string past the end of its memory.
-    StringOutOfBounds,
+        /// A component tried to lift or lower a string past the end of its memory.
+        StringOutOfBounds = "string content out-of-bounds",
 
-    /// A component tried to lift or lower a list past the end of its memory.
-    ListOutOfBounds,
+        /// A component tried to lift or lower a list past the end of its memory.
+        ListOutOfBounds = "list content out-of-bounds",
 
-    /// A component used an invalid discriminant when lowering a variant value.
-    InvalidDiscriminant,
+        /// A component used an invalid discriminant when lowering a variant value.
+        InvalidDiscriminant = "invalid variant discriminant",
 
-    /// A component passed an unaligned pointer when lifting or lowering a
-    /// value.
-    UnalignedPointer,
-    // if adding a variant here be sure to update the `check!` macro below, and
-    // remember to update `trap.rs` and `trap.h` as mentioned above
-}
+        /// A component passed an unaligned pointer when lifting or lowering a
+        /// value.
+        UnalignedPointer = "unaligned pointer",
 
-impl Trap {
-    /// Converts a byte back into a `Trap` if its in-bounds
-    pub fn from_u8(byte: u8) -> Option<Trap> {
-        // FIXME: this could use some sort of derive-like thing to avoid having to
-        // deduplicate the names here.
-        //
-        // This simply converts from the a `u8`, to the `Trap` enum.
-        macro_rules! check {
-            ($($name:ident)*) => ($(if byte == Trap::$name as u8 {
-                return Some(Trap::$name);
-            })*);
-        }
+        /// `task.cancel` was called by a task which has not been cancelled.
+        TaskCancelNotCancelled = "`task.cancel` called by task which has not been cancelled",
 
-        check! {
-            StackOverflow
-            MemoryOutOfBounds
-            HeapMisaligned
-            TableOutOfBounds
-            IndirectCallToNull
-            BadSignature
-            IntegerOverflow
-            IntegerDivisionByZero
-            BadConversionToInteger
-            UnreachableCodeReached
-            Interrupt
-            OutOfFuel
-            AtomicWaitNonSharedMemory
-            NullReference
-            ArrayOutOfBounds
-            AllocationTooLarge
-            CastFailure
-            CannotEnterComponent
-            NoAsyncResult
-            UnhandledTag
-            ContinuationAlreadyConsumed
-            DisabledOpcode
-            AsyncDeadlock
-            CannotLeaveComponent
-            CannotBlockSyncTask
-            InvalidChar
-            DebugAssertStringEncodingFinished
-            DebugAssertEqualCodeUnits
-            DebugAssertPointerAligned
-            DebugAssertUpperBitsUnset
-            StringOutOfBounds
-            ListOutOfBounds
-            InvalidDiscriminant
-            UnalignedPointer
-        }
+        /// `task.return` or `task.cancel` was called more than once for the
+        /// current task.
+        TaskCancelOrReturnTwice = "`task.return` or `task.cancel` called more than once for current task",
 
-        None
-    }
-}
+        /// `subtask.cancel` was called after terminal status was already
+        /// delivered.
+        SubtaskCancelAfterTerminal = "`subtask.cancel` called after terminal status delivered",
 
-impl fmt::Display for Trap {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Trap::*;
+        /// Invalid `task.return` signature and/or options for the current task.
+        TaskReturnInvalid = "invalid `task.return` signature and/or options for current task",
 
-        let desc = match self {
-            StackOverflow => "call stack exhausted",
-            MemoryOutOfBounds => "out of bounds memory access",
-            HeapMisaligned => "unaligned atomic",
-            TableOutOfBounds => "undefined element: out of bounds table access",
-            IndirectCallToNull => "uninitialized element",
-            BadSignature => "indirect call type mismatch",
-            IntegerOverflow => "integer overflow",
-            IntegerDivisionByZero => "integer divide by zero",
-            BadConversionToInteger => "invalid conversion to integer",
-            UnreachableCodeReached => "wasm `unreachable` instruction executed",
-            Interrupt => "interrupt",
-            OutOfFuel => "all fuel consumed by WebAssembly",
-            AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
-            NullReference => "null reference",
-            ArrayOutOfBounds => "out of bounds array access",
-            AllocationTooLarge => "allocation size too large",
-            CastFailure => "cast failure",
-            CannotEnterComponent => "cannot enter component instance",
-            NoAsyncResult => "async-lifted export failed to produce a result",
-            UnhandledTag => "unhandled tag",
-            ContinuationAlreadyConsumed => "continuation already consumed",
-            DisabledOpcode => "pulley opcode disabled at compile time was executed",
-            AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
-            CannotLeaveComponent => "cannot leave component instance",
-            CannotBlockSyncTask => "cannot block a synchronous task before returning",
-            InvalidChar => "invalid `char` bit pattern",
-            DebugAssertStringEncodingFinished => "should have finished string encoding",
-            DebugAssertEqualCodeUnits => "code units should be equal",
-            DebugAssertPointerAligned => "pointer should be aligned",
-            DebugAssertUpperBitsUnset => "upper bits should be unset",
-            StringOutOfBounds => "string content out-of-bounds",
-            ListOutOfBounds => "list content out-of-bounds",
-            InvalidDiscriminant => "invalid variant discriminant",
-            UnalignedPointer => "unaligned pointer",
-        };
-        write!(f, "wasm trap: {desc}")
+        /// Cannot drop waitable set with waiters in it.
+        WaitableSetDropHasWaiters = "cannot drop waitable set with waiters",
+
+        /// Cannot drop a subtask which has not yet resolved.
+        SubtaskDropNotResolved = "cannot drop a subtask which has not yet resolved",
+
+        /// Start function does not match the expected type.
+        ThreadNewIndirectInvalidType = "start function does not match expected type (currently only `(i32) -> ()` is supported)",
+
+        /// The start function index points to an uninitialized function.
+        ThreadNewIndirectUninitialized = "the start function index points to an uninitialized function",
+
+        /// Backpressure-related intrinsics overflowed the built-in 16-bit
+        /// counter.
+        BackpressureOverflow = "backpressure counter overflow",
+
+        /// Invalid code returned from `callback` of `async`-lifted function.
+        UnsupportedCallbackCode = "unsupported callback code",
+
+        /// Cannot resume a thread which is not suspended.
+        CannotResumeThread = "cannot resume thread which is not suspended",
+
+        // if adding a variant here be sure to update `trap.rs` and `trap.h` as
+        // mentioned above
     }
 }
 

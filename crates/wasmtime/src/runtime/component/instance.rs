@@ -875,7 +875,7 @@ impl<'a> Instantiator<'a> {
                     };
 
                     if exit {
-                        store.0.exit_guest_sync_call(false)?;
+                        store.0.exit_guest_sync_call()?;
                     }
 
                     self.instance_mut(store.0).push_instance_id(i.id());
