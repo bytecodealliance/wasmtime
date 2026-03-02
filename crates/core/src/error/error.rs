@@ -1225,6 +1225,7 @@ impl Error {
         }
     }
 
+    #[cfg(feature = "backtrace")]
     pub(crate) fn take_backtrace(&mut self) -> Option<Backtrace> {
         match self.inner.unpack_mut() {
             OomOrDynErrorMut::Oom(_) => None,
