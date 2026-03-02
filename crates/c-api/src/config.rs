@@ -697,3 +697,8 @@ pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
     c.config
         .allocation_strategy(InstanceAllocationStrategy::Pooling(pc.config.clone()));
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_concurrency_support_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.concurrency_support(enable);
+}
