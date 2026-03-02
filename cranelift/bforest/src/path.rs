@@ -4,6 +4,7 @@ use super::node::Removed;
 use super::{Comparator, Forest, MAX_PATH, Node, NodeData, NodePool, slice_insert, slice_shift};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
+use wasmtime_core::error::OutOfMemory;
 
 #[cfg(test)]
 use core::fmt;
@@ -260,11 +261,16 @@ impl<F: Forest> Path<F> {
     /// The current position must be the correct insertion location for the key.
     /// This function does not check for duplicate keys. Use `find` or similar for that.
     /// Returns the new root node.
-    pub fn insert(&mut self, key: F::Key, value: F::Value, pool: &mut NodePool<F>) -> Node {
+    pub fn insert(
+        &mut self,
+        key: F::Key,
+        value: F::Value,
+        pool: &mut NodePool<F>,
+    ) -> Result<Node, OutOfMemory> {
         if !self.try_leaf_insert(key, value, pool) {
-            self.split_and_insert(key, value, pool);
+            self.split_and_insert(key, value, pool)?;
         }
-        self.node[0]
+        Ok(self.node[0])
     }
 
     /// Try to insert `key, value` at the current position, but fail and return false if the leaf
@@ -282,7 +288,12 @@ impl<F: Forest> Path<F> {
 
     /// Split the current leaf node and then insert `key, value`.
     /// This should only be used if `try_leaf_insert()` fails.
-    fn split_and_insert(&mut self, mut key: F::Key, value: F::Value, pool: &mut NodePool<F>) {
+    fn split_and_insert(
+        &mut self,
+        mut key: F::Key,
+        value: F::Value,
+        pool: &mut NodePool<F>,
+    ) -> Result<(), OutOfMemory> {
         let orig_root = self.node[0];
 
         // Loop invariant: We need to split the node at `level` and then retry a failed insertion.
@@ -294,7 +305,7 @@ impl<F: Forest> Path<F> {
             let mut node = self.node[level];
             let mut entry = self.entry[level].into();
             split = pool[node].split(entry);
-            let rhs_node = pool.alloc_node(split.rhs_data);
+            let rhs_node = pool.alloc_node(split.rhs_data)?;
 
             // Should the path be moved to the new RHS node?
             // Prefer the smaller node if we're right in the middle.
@@ -347,18 +358,19 @@ impl<F: Forest> Path<F> {
                     if node == rhs_node {
                         self.entry[level - 1] += 1;
                     }
-                    return;
+                    return Ok(());
                 }
             }
         }
 
         // If we get here we have split the original root node and need to add an extra level.
         let rhs_node = ins_node.expect("empty path");
-        let root = pool.alloc_node(NodeData::inner(orig_root, key, rhs_node));
+        let root = pool.alloc_node(NodeData::inner(orig_root, key, rhs_node))?;
         let entry = if self.node[0] == rhs_node { 1 } else { 0 };
         self.size += 1;
         slice_insert(&mut self.node[0..self.size], 0, root);
         slice_insert(&mut self.entry[0..self.size], 0, entry);
+        Ok(())
     }
 
     /// Remove the key-value pair at the current position and advance the path to the next
@@ -699,6 +711,8 @@ impl<F: Forest> fmt::Display for Path<F> {
 
 #[cfg(test)]
 mod tests {
+    use wasmtime_core::alloc::PanicOnOom;
+
     use super::*;
     use core::cmp::Ordering;
 
@@ -731,7 +745,7 @@ mod tests {
     fn search_single_leaf() {
         // Testing Path::new() for trees with a single leaf node.
         let mut pool = NodePool::<TF>::new();
-        let root = pool.alloc_node(NodeData::leaf(10, 'a'));
+        let root = pool.alloc_node(NodeData::leaf(10, 'a')).panic_on_oom();
         let mut p = Path::default();
         let comp = TC();
 
@@ -784,9 +798,11 @@ mod tests {
     fn search_single_inner() {
         // Testing Path::new() for trees with a single inner node and two leaves.
         let mut pool = NodePool::<TF>::new();
-        let leaf1 = pool.alloc_node(NodeData::leaf(10, 'a'));
-        let leaf2 = pool.alloc_node(NodeData::leaf(20, 'b'));
-        let root = pool.alloc_node(NodeData::inner(leaf1, 20, leaf2));
+        let leaf1 = pool.alloc_node(NodeData::leaf(10, 'a')).panic_on_oom();
+        let leaf2 = pool.alloc_node(NodeData::leaf(20, 'b')).panic_on_oom();
+        let root = pool
+            .alloc_node(NodeData::inner(leaf1, 20, leaf2))
+            .panic_on_oom();
         let mut p = Path::default();
         let comp = TC();
 

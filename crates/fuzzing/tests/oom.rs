@@ -1036,3 +1036,35 @@ fn index_map_shift_insert() -> Result<()> {
             Ok(())
         })
 }
+
+#[test]
+fn bforest_map() -> Result<()> {
+    use cranelift_bforest::*;
+    OomTest::new().test(|| {
+        let mut forest = MapForest::new();
+        let mut map = Map::new();
+        for i in 0..100 {
+            map.try_insert(Key(i), i, &mut forest, &())?;
+        }
+        for i in 0..100 {
+            assert_eq!(map.get(Key(i), &forest, &()), Some(i));
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn bforest_set() -> Result<()> {
+    use cranelift_bforest::*;
+    OomTest::new().test(|| {
+        let mut forest = SetForest::new();
+        let mut set = Set::new();
+        for i in 0..100 {
+            set.try_insert(Key(i), &mut forest, &())?;
+        }
+        for i in 0..100 {
+            assert!(set.contains(Key(i), &forest, &()));
+        }
+        Ok(())
+    })
+}

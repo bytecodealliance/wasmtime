@@ -7,6 +7,7 @@ use alloc::string::String;
 #[cfg(test)]
 use core::fmt;
 use core::marker::PhantomData;
+use wasmtime_core::{alloc::PanicOnOom as _, error::OutOfMemory};
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V>(PhantomData<(K, V)>);
@@ -133,6 +134,17 @@ where
         comp: &C,
     ) -> Option<V> {
         self.cursor(forest, comp).insert(key, value)
+    }
+
+    /// Like `insert` but returns an error on allocation failure.
+    pub fn try_insert<C: Comparator<K>>(
+        &mut self,
+        key: K,
+        value: V,
+        forest: &mut MapForest<K, V>,
+        comp: &C,
+    ) -> Result<Option<V>, OutOfMemory> {
+        self.cursor(forest, comp).try_insert(key, value)
     }
 
     /// Remove `key` from the map and return the removed value for `key`, if any.
@@ -345,12 +357,17 @@ where
     ///
     /// If `key` is already present, replace the existing with `value` and return the old value.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        self.try_insert(key, value).panic_on_oom()
+    }
+
+    /// Like `insert` but returns an error on allocation failure.
+    pub fn try_insert(&mut self, key: K, value: V) -> Result<Option<V>, OutOfMemory> {
         match self.root.expand() {
             None => {
-                let root = self.pool.alloc_node(NodeData::leaf(key, value));
+                let root = self.pool.alloc_node(NodeData::leaf(key, value))?;
                 *self.root = root.into();
                 self.path.set_root_node(root);
-                None
+                Ok(None)
             }
             Some(root) => {
                 // TODO: Optimize the case where `self.path` is already at the correct insert pos.
@@ -358,9 +375,9 @@ where
                 if old.is_some() {
                     *self.path.value_mut(self.pool) = value;
                 } else {
-                    *self.root = self.path.insert(key, value, self.pool).into();
+                    *self.root = self.path.insert(key, value, self.pool)?.into();
                 }
-                old
+                Ok(old)
             }
         }
     }
