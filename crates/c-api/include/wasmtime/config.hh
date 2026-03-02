@@ -620,7 +620,6 @@ public:
   }
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 
-
   /**
    * \brief Specifies whether support for concurrent execution of WebAssembly is
    * supported within this store.
