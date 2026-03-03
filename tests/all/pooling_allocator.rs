@@ -1121,6 +1121,50 @@ fn component_tables_limit() -> Result<()> {
 }
 
 #[test]
+#[cfg(feature = "component-model")]
+fn component_core_instances_aggregate_size() -> Result<()> {
+    let mut pool = crate::small_pool_config();
+    pool.max_core_instances_per_component(100)
+        // x86_64 requires 23824 bytes; we exceed this by a fair bit as there will
+        // be differences by arch.
+        .max_component_instance_size(1024);
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+
+    let core_instances = (1..100)
+        .map(|i| format!("(core instance $i{i} (instantiate $m))"))
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    match wasmtime::component::Component::new(
+        &engine,
+        format!(
+            "
+            (component
+                (core module $m
+                    (func (export \"f\") (result i32)
+                        i32.const 42
+                    )
+                )
+                {core_instances}
+            )
+        "
+        ),
+    ) {
+        Ok(_) => panic!("should have hit aggregate size limit"),
+        Err(e) => {
+            e.assert_contains("instance allocation for this component requires");
+            e.assert_contains("exceeds the configured maximum");
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 #[cfg_attr(miri, ignore)]
 fn total_memories_limit() -> Result<()> {
     const TOTAL_MEMORIES: u32 = 5;

@@ -3650,7 +3650,8 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum size, in bytes, allocated for a component instance's
-    /// `VMComponentContext` metadata.
+    /// `VMComponentContext` metadata as well as the aggregate size of this
+    /// component's core instances `VMContext` metadata.
     ///
     /// The [`wasmtime::component::Instance`][crate::component::Instance] type
     /// has a static size but its internal `VMComponentContext` is dynamically
@@ -3667,10 +3668,17 @@ impl PoolingAllocationConfig {
     /// module will fail at runtime with an error indicating how many bytes were
     /// needed.
     ///
+    /// In addition to the memory in the runtime for the component itself,
+    /// components contain one or more core module instances. Each of these
+    /// require some memory in the runtime as described in
+    /// [`PoolingAllocationConfig::max_core_instance_size`]. The limit here
+    /// applies against the sum of all of these individual allocations.
+    ///
     /// The default value for this is 1MiB.
     ///
-    /// This provides an upper-bound on the total size of component
-    /// metadata-related allocations, along with
+    /// This provides an upper-bound on the total size of all component's
+    /// metadata-related allocations (for both the component and its embedded
+    /// core module instances), along with
     /// [`PoolingAllocationConfig::total_component_instances`]. The upper bound is
     ///
     /// ```text

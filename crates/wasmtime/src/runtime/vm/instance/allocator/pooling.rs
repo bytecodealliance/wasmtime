@@ -100,8 +100,8 @@ pub struct InstanceLimits {
     /// concurrently.
     pub total_component_instances: u32,
 
-    /// The maximum size of a component's `VMComponentContext`, not including
-    /// any of its inner core modules' `VMContext` sizes.
+    /// The maximum size of a component's `VMComponentContext`, including
+    /// the aggregate size of all its inner core modules' `VMContext` sizes.
     pub component_instance_size: usize,
 
     /// The maximum number of core module instances that may be allocated
@@ -474,18 +474,21 @@ impl PoolingInstanceAllocator {
     fn validate_component_instance_size(
         &self,
         offsets: &VMComponentOffsets<HostPtr>,
+        core_instances_aggregate_size: usize,
     ) -> Result<()> {
-        if usize::try_from(offsets.size_of_vmctx()).unwrap() <= self.limits.component_instance_size
-        {
+        let vmcomponentctx_size = usize::try_from(offsets.size_of_vmctx()).unwrap();
+        let total_instance_size = core_instances_aggregate_size.saturating_add(vmcomponentctx_size);
+        if total_instance_size <= self.limits.component_instance_size {
             return Ok(());
         }
 
         // TODO: Add context with detailed accounting of what makes up all the
         // `VMComponentContext`'s space like we do for module instances.
         bail!(
-            "instance allocation for this component requires {} bytes of `VMComponentContext` \
-             space which exceeds the configured maximum of {} bytes",
-            offsets.size_of_vmctx(),
+            "instance allocation for this component requires {total_instance_size} bytes of `VMComponentContext` \
+             and aggregated core instance runtime space which exceeds the configured maximum of {} bytes. \
+             `VMComponentContext` used {vmcomponentctx_size} bytes, `core module instances` used \
+             {core_instances_aggregate_size} bytes.",
             self.limits.component_instance_size
         )
     }
@@ -559,12 +562,10 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         offsets: &VMComponentOffsets<HostPtr>,
         get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        self.validate_component_instance_size(offsets)
-            .context("component instance size does not fit in pooling allocator requirements")?;
-
         let mut num_core_instances = 0;
         let mut num_memories = 0;
         let mut num_tables = 0;
+        let mut core_instances_aggregate_size: usize = 0;
         for init in &component.initializers {
             use wasmtime_environ::component::GlobalInitializer::*;
             use wasmtime_environ::component::InstantiateModule;
@@ -577,10 +578,12 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 InstantiateModule(InstantiateModule::Static(static_module_index, _), _) => {
                     let module = get_module(*static_module_index);
                     let offsets = VMOffsets::new(HostPtr, &module);
+                    let layout = Instance::alloc_layout(&offsets);
                     self.validate_module(module, &offsets)?;
                     num_core_instances += 1;
                     num_memories += module.num_defined_memories();
                     num_tables += module.num_defined_tables();
+                    core_instances_aggregate_size += layout.size();
                 }
                 LowerImport { .. }
                 | ExtractMemory(_)
@@ -617,6 +620,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 self.limits.max_tables_per_component
             );
         }
+
+        self.validate_component_instance_size(offsets, core_instances_aggregate_size)
+            .context("component instance size does not fit in pooling allocator requirements")?;
 
         Ok(())
     }
