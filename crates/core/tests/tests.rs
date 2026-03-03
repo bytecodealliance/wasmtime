@@ -946,6 +946,7 @@ fn anyhow_source_downcast() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "anyhow")]
 fn assert_chain<T, U>(actual: impl IntoIterator<Item = T>, expected: impl IntoIterator<Item = U>)
 where
     T: PartialEq<U>,
