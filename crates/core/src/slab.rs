@@ -508,4 +508,14 @@ impl<T> Slab<T> {
                 Entry::Free { .. } => None,
             })
     }
+
+    /// Clear all of the values from inside this slab.
+    ///
+    /// Does not deallocate internal storage.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.len = 0;
+        self.free = None;
+        self.entries.clear();
+    }
 }

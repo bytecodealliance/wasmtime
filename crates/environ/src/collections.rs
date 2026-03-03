@@ -1,5 +1,6 @@
 //! Fallible, OOM-handling collections.
 
+pub mod btree_map;
 mod entity_set;
 mod hash_map;
 mod hash_set;
@@ -7,6 +8,7 @@ mod index_map;
 mod primary_map;
 mod secondary_map;
 
+pub use btree_map::BTreeMap;
 pub use entity_set::EntitySet;
 pub use hash_map::HashMap;
 pub use hash_set::HashSet;
