@@ -1,7 +1,5 @@
 use crate::error::ptr::{MutPtr, OwnedPtr, SharedPtr};
-use crate::error::{
-    ConcreteError, DynError, ErrorExt, OomOrDynErrorMut, OomOrDynErrorRef, OutOfMemory,
-};
+use crate::error::{ConcreteError, DynError, Error, ErrorExt, OutOfMemory};
 use core::{any::TypeId, fmt, ptr::NonNull};
 use std_alloc::boxed::Box;
 
@@ -27,8 +25,8 @@ use std_alloc::boxed::Box;
 pub(crate) struct Vtable {
     pub(crate) display: unsafe fn(SharedPtr<'_, DynError>, &mut fmt::Formatter<'_>) -> fmt::Result,
     pub(crate) debug: unsafe fn(SharedPtr<'_, DynError>, &mut fmt::Formatter<'_>) -> fmt::Result,
-    pub(crate) source: unsafe fn(SharedPtr<'_, DynError>) -> Option<OomOrDynErrorRef<'_>>,
-    pub(crate) source_mut: unsafe fn(MutPtr<'_, DynError>) -> Option<OomOrDynErrorMut<'_>>,
+    pub(crate) source: unsafe fn(SharedPtr<'_, DynError>) -> Option<&Error>,
+    pub(crate) source_mut: unsafe fn(MutPtr<'_, DynError>) -> Option<&mut Error>,
     pub(crate) is: unsafe fn(SharedPtr<'_, DynError>, TypeId) -> bool,
     pub(crate) as_dyn_core_error:
         unsafe fn(SharedPtr<'_, DynError>) -> &(dyn core::error::Error + Send + Sync + 'static),
@@ -44,7 +42,7 @@ pub(crate) struct Vtable {
     ///
     /// Upon successful return, a `T` will have been written to that memory
     /// block.
-    pub(crate) downcast: unsafe fn(OwnedPtr<DynError>, TypeId, NonNull<u8>),
+    pub(crate) move_into: unsafe fn(OwnedPtr<DynError>, NonNull<u8>),
 
     /// Conversion into `anyhow::Error` from `Box<Self>`.
     #[cfg(feature = "anyhow")]
@@ -66,7 +64,7 @@ impl Vtable {
             as_dyn_core_error: as_dyn_core_error::<E>,
             into_boxed_dyn_core_error: into_boxed_dyn_core_error::<E>,
             drop_and_deallocate: drop_and_deallocate::<E>,
-            downcast: downcast::<E>,
+            move_into: move_into::<E>,
             #[cfg(feature = "anyhow")]
             into_anyhow: into_anyhow::<E>,
         }
@@ -93,7 +91,7 @@ where
     fmt::Debug::fmt(error.error.ext_as_dyn_core_error(), f)
 }
 
-unsafe fn source<E>(error: SharedPtr<'_, DynError>) -> Option<OomOrDynErrorRef<'_>>
+unsafe fn source<E>(error: SharedPtr<'_, DynError>) -> Option<&Error>
 where
     E: ErrorExt,
 {
@@ -103,7 +101,7 @@ where
     error.error.ext_source()
 }
 
-unsafe fn source_mut<E>(error: MutPtr<'_, DynError>) -> Option<OomOrDynErrorMut<'_>>
+unsafe fn source_mut<E>(error: MutPtr<'_, DynError>) -> Option<&mut Error>
 where
     E: ErrorExt,
 {
@@ -156,28 +154,16 @@ where
     let _ = unsafe { error.into_box() };
 }
 
-unsafe fn downcast<E>(error: OwnedPtr<DynError>, type_id: TypeId, ret_ptr: NonNull<u8>)
+unsafe fn move_into<E>(error: OwnedPtr<DynError>, ret_ptr: NonNull<u8>)
 where
     E: ErrorExt,
 {
     let error = error.cast::<ConcreteError<E>>();
     // Safety: implied by all vtable functions' safety contract.
-    let mut error = unsafe { error.into_box() };
-
-    if error.error.ext_is(type_id) {
-        // Safety: Implied by `downcast`'s additional safety safety requirement.
-        unsafe {
-            error.error.ext_move(ret_ptr);
-        }
-    } else {
-        let source = error
-            .error
-            .ext_take_source()
-            .expect("must have a source up the chain if `E` is not our target type");
-        // Safety: implied by downcast's additional safety requirement.
-        unsafe {
-            source.downcast(type_id, ret_ptr);
-        }
+    let error = unsafe { error.into_box() };
+    // Safety: Implied by `move`'s additional safety safety requirement.
+    unsafe {
+        error.error.ext_move(ret_ptr);
     }
 }
 

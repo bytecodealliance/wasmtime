@@ -33,13 +33,10 @@ pub(crate) unsafe trait ErrorExt: Send + Sync + 'static {
     ) -> Result<Box<dyn core::error::Error + Send + Sync + 'static>, OutOfMemory>;
 
     /// Get a shared borrow of the next error in the chain.
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>>;
+    fn ext_source(&self) -> Option<&Error>;
 
     /// Get an exclusive borrow of the next error in the chain.
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>>;
-
-    /// Take ownership of the next error in the chain.
-    fn ext_take_source(&mut self) -> Option<OomOrDynError>;
+    fn ext_source_mut(&mut self) -> Option<&mut Error>;
 
     /// Is this error an instance of `T`, where `type_id == TypeId::of::<T>()`
     /// or a newtype wrapper around that type?
@@ -439,19 +436,16 @@ const _RESULT_OF_UNIT_IS_ONE_WORD_LARGE: () =
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
-            return f
-                .debug_struct("Error")
-                .field("inner", &self.inner.unpack())
-                .finish();
+            return f.debug_struct("Error").field("inner", &self.inner).finish();
         }
 
-        let inner = self.inner.unpack();
+        let inner = &self.inner;
         inner.display(f)?;
 
         if let Some(source) = inner.source() {
             f.write_str("\n\nCaused by:\n")?;
             let multiple_causes = source.source().is_some();
-            for (i, e) in Chain::new(source).enumerate() {
+            for (i, e) in source.chain().enumerate() {
                 if multiple_causes {
                     write!(f, "{i: >5}: ")?;
                 } else {
@@ -476,12 +470,12 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let inner = self.inner.unpack();
+        let inner = &self.inner;
         inner.display(f)?;
 
         if f.alternate() {
             if let Some(e) = inner.source() {
-                for e in Chain::new(e) {
+                for e in e.chain() {
                     write!(f, ": {e}")?;
                 }
             }
@@ -561,14 +555,14 @@ impl core::ops::Deref for Error {
 impl AsRef<dyn core::error::Error> for Error {
     #[inline]
     fn as_ref(&self) -> &(dyn core::error::Error + 'static) {
-        self.inner.unpack().as_dyn_core_error()
+        self.inner.as_dyn_core_error()
     }
 }
 
 impl AsRef<dyn core::error::Error + Send + Sync> for Error {
     #[inline]
     fn as_ref(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
-        self.inner.unpack().as_dyn_core_error()
+        self.inner.as_dyn_core_error()
     }
 }
 
@@ -807,7 +801,7 @@ impl Error {
     #[inline]
     #[cfg(feature = "backtrace")]
     pub fn backtrace(&self) -> &Backtrace {
-        self.inner.unpack().backtrace()
+        self.inner.backtrace()
     }
 
     /// Iterate over this error's context chain.
@@ -835,7 +829,7 @@ impl Error {
     /// ```
     #[inline]
     pub fn chain(&self) -> Chain<'_> {
-        Chain::new(self.inner.unpack())
+        Chain::new(self)
     }
 
     /// Get the last error in the context chain.
@@ -858,6 +852,56 @@ impl Error {
     #[inline]
     pub fn root_cause(&self) -> &(dyn core::error::Error + 'static) {
         self.chain().last().expect("chain is always non-empty")
+    }
+
+    #[inline]
+    fn error_ext_chain<'a>(&'a self) -> impl Iterator<Item = &'a Error> + 'a {
+        let mut cur = Some(self);
+        core::iter::from_fn(move || {
+            let ret = cur.take()?;
+            cur = ret.inner.source();
+            Some(ret)
+        })
+    }
+
+    #[inline]
+    fn error_ext_chain_mut<T>(
+        &mut self,
+        mut f: impl FnMut(&mut Error) -> Option<&mut T>,
+    ) -> Option<&mut T> {
+        let mut cur = self;
+        loop {
+            {
+                // Safety: We are running into "problem case #3" of non-lexical
+                // lifetimes: we are returning a mutable reference, which must
+                // be live for the whole function's scope, but accessing it
+                // again below in `cur.inner.source_mut()`. This is safe because
+                // control flow ensures that the borrow is not actually active
+                // anymore in the case where we didn't return.
+                //
+                // https://github.com/rust-lang/rfcs/blob/master/text/2094-nll.md#problem-case-3-conditional-control-flow-across-functions
+                let cur = unsafe { NonNull::from(&mut *cur).as_mut() };
+                if let Some(x) = f(cur) {
+                    return Some(x);
+                }
+            }
+
+            cur = cur.inner.source_mut()?;
+        }
+    }
+
+    #[inline]
+    fn error_ext_zip<T>(mut self, mut f: impl FnMut(Error) -> Result<T, Error>) -> Result<T, Self> {
+        let mut maybe_link = Some(&mut self);
+        while let Some(link) = maybe_link.take() {
+            let e = mem::replace(link, OutOfMemory::new(1).into());
+            *link = match f(e) {
+                Ok(x) => return Ok(x),
+                Err(e) => e,
+            };
+            maybe_link = link.inner.source_mut();
+        }
+        Err(self)
     }
 
     /// Is this an `E` error?
@@ -894,15 +938,17 @@ impl Error {
     where
         E: fmt::Display + fmt::Debug + Send + Sync + 'static,
     {
-        let mut error = Some(self.inner.unpack());
-        while let Some(e) = error {
-            if e.is::<E>() {
-                return true;
-            } else {
-                error = e.source();
-            }
-        }
-        false
+        self.error_ext_chain().any(|e| {
+            let result = e.inner.is::<E>();
+
+            #[cfg(feature = "anyhow")]
+            let result = result
+                || e.inner
+                    .downcast_ref::<anyhow::Error>()
+                    .is_some_and(|e| e.is::<E>());
+
+            result
+        })
     }
 
     /// Downcast this error into an `E`, taking ownership.
@@ -947,22 +993,27 @@ impl Error {
     where
         E: fmt::Display + fmt::Debug + Send + Sync + 'static,
     {
-        if !self.is::<E>() {
-            return Err(self);
-        }
+        self.error_ext_zip(|e| {
+            let result = e.inner.downcast::<E>().map_err(|inner| Self { inner });
 
-        let mut value = mem::MaybeUninit::<E>::uninit();
+            #[cfg(feature = "anyhow")]
+            let result = result.or_else(|e| {
+                if e.inner
+                    .downcast_ref::<anyhow::Error>()
+                    .is_some_and(|e| e.is::<E>())
+                {
+                    let anyhow = match e.inner.downcast::<anyhow::Error>() {
+                        Ok(e) => e,
+                        Err(_) => unreachable!(),
+                    };
+                    Ok(anyhow.downcast::<E>().unwrap())
+                } else {
+                    Err(e)
+                }
+            });
 
-        // Safety: this error is an `E` and the given pointer is valid to write
-        // an `E` to.
-        unsafe {
-            self.inner
-                .downcast(TypeId::of::<E>(), NonNull::from(&mut value).cast::<u8>());
-        }
-
-        // Safety: `OomOrDynError::downcast` guarantees that the given pointer's
-        // data is initialized upon successful return.
-        Ok(unsafe { value.assume_init() })
+            result
+        })
     }
 
     /// Downcast this error into a shared `&E` borrow.
@@ -1002,34 +1053,18 @@ impl Error {
     where
         E: fmt::Display + fmt::Debug + Send + Sync + 'static,
     {
-        let mut error = Some(self.inner.unpack());
-        while let Some(e) = error {
-            if e.is::<E>() {
-                return Some(match e {
-                    OomOrDynErrorRef::DynError(ptr) => {
-                        let ptr = ptr.cast::<ConcreteError<E>>();
-                        // Safety: we own the pointer, it is valid for reading,
-                        // and we checked that it is an `E`.
-                        let r = unsafe { ptr.as_ref() };
-                        &r.error
-                    }
-                    OomOrDynErrorRef::Oom(oom) => {
-                        // Note: Even though we know that `E == OutOfMemory`
-                        // here, we still have to do this dance to satisfy the
-                        // type system.
-                        debug_assert_eq!(TypeId::of::<E>(), TypeId::of::<OutOfMemory>());
-                        let ptr = NonNull::from(oom);
-                        let ptr = ptr.cast::<E>();
-                        // Safety: the pointer points to `oom`, which is valid
-                        // for creating a shared reference to.
-                        unsafe { ptr.as_ref() }
-                    }
-                });
-            } else {
-                error = e.source();
-            }
-        }
-        None
+        self.error_ext_chain().find_map(|e| {
+            let result = e.inner.downcast_ref::<E>();
+
+            #[cfg(feature = "anyhow")]
+            let result = result.or_else(|| {
+                e.inner
+                    .downcast_ref::<anyhow::Error>()
+                    .and_then(|anyhow| anyhow.downcast_ref::<E>())
+            });
+
+            result
+        })
     }
 
     /// Downcast this error into an exclusive `&mut E` borrow.
@@ -1071,34 +1106,35 @@ impl Error {
     where
         E: fmt::Display + fmt::Debug + Send + Sync + 'static,
     {
-        let mut error = Some(self.inner.unpack_mut());
-        while let Some(mut e) = error.take() {
-            if e.as_ref().is::<E>() {
-                return Some(match e {
-                    OomOrDynErrorMut::DynError(ptr) => {
-                        let mut ptr = ptr.cast::<ConcreteError<E>>();
-                        // Safety: we own the pointer, it is valid for reading
-                        // and writing, and we checked that it is an `E`.
-                        let r = unsafe { ptr.as_mut() };
-                        &mut r.error
-                    }
-                    OomOrDynErrorMut::Oom(oom) => {
-                        // Note: Even though we know that `E == OutOfMemory`
-                        // here, we still have to do this dance to satisfy the
-                        // type system.
-                        debug_assert_eq!(TypeId::of::<E>(), TypeId::of::<OutOfMemory>());
-                        let ptr = NonNull::from(oom);
-                        let mut ptr = ptr.cast::<E>();
-                        // Safety: the pointer points to `oom`, which is valid
-                        // for creating an exclusive reference to.
-                        unsafe { ptr.as_mut() }
-                    }
-                });
-            } else {
-                error = e.source_mut();
+        self.error_ext_chain_mut(|e| {
+            {
+                // Safety: We are running into "problem case #3" of non-lexical
+                // lifetimes: we are returning a mutable reference, which must
+                // be live for the whole function's scope, but are accessing it
+                // again below in the `anyhow` downcast. This is safe because
+                // control flow ensures that the original borrow is not actually
+                // active anymore if we didn't return.
+                //
+                // https://github.com/rust-lang/rfcs/blob/master/text/2094-nll.md#problem-case-3-conditional-control-flow-across-functions
+                let e = unsafe { NonNull::from(&mut *e).as_mut() };
+                if let Some(r) = e.inner.downcast_mut::<E>() {
+                    return Some(r);
+                }
             }
-        }
-        None
+
+            #[cfg(feature = "anyhow")]
+            {
+                if let Some(result) = e
+                    .inner
+                    .downcast_mut::<anyhow::Error>()
+                    .and_then(|anyhow| anyhow.downcast_mut::<E>())
+                {
+                    return Some(result);
+                }
+            }
+
+            None
+        })
     }
 
     /// Convert this error into a `Box<dyn core::error::Error>`.
@@ -1188,6 +1224,17 @@ impl Error {
             }
         }
     }
+
+    #[cfg(feature = "backtrace")]
+    pub(crate) fn take_backtrace(&mut self) -> Option<Backtrace> {
+        match self.inner.unpack_mut() {
+            OomOrDynErrorMut::Oom(_) => None,
+            OomOrDynErrorMut::DynError(mut e) => {
+                let r = unsafe { e.as_mut() };
+                r.backtrace.take()
+            }
+        }
+    }
 }
 
 /// `ErrorExt` wrapper for foreign `core::error::Error` implementations.
@@ -1216,15 +1263,11 @@ where
         Ok(Box::write(boxed, self.0) as _)
     }
 
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+    fn ext_source(&self) -> Option<&Error> {
         None
     }
 
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-        None
-    }
-
-    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+    fn ext_source_mut(&mut self) -> Option<&mut Error> {
         None
     }
 
@@ -1299,15 +1342,11 @@ where
         Ok(Box::write(boxed, self) as _)
     }
 
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+    fn ext_source(&self) -> Option<&Error> {
         None
     }
 
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-        None
-    }
-
-    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+    fn ext_source_mut(&mut self) -> Option<&mut Error> {
         None
     }
 
@@ -1358,15 +1397,11 @@ unsafe impl ErrorExt for BoxedError {
         Ok(self.0)
     }
 
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+    fn ext_source(&self) -> Option<&Error> {
         None
     }
 
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-        None
-    }
-
-    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+    fn ext_source_mut(&mut self) -> Option<&mut Error> {
         None
     }
 
@@ -1420,15 +1455,11 @@ unsafe impl ErrorExt for AnyhowError {
         Ok(self.0.into_boxed_dyn_error())
     }
 
-    fn ext_source(&self) -> Option<OomOrDynErrorRef<'_>> {
+    fn ext_source(&self) -> Option<&Error> {
         None
     }
 
-    fn ext_source_mut(&mut self) -> Option<OomOrDynErrorMut<'_>> {
-        None
-    }
-
-    fn ext_take_source(&mut self) -> Option<OomOrDynError> {
+    fn ext_source_mut(&mut self) -> Option<&mut Error> {
         None
     }
 
@@ -1456,6 +1487,7 @@ unsafe impl ErrorExt for AnyhowError {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum OomOrDynErrorRef<'a> {
     // Safety: this must always be a valid pointer to read a `DynError` from for
     // the `'a` lifetime.
@@ -1464,141 +1496,12 @@ pub(crate) enum OomOrDynErrorRef<'a> {
     Oom(&'a OutOfMemory),
 }
 
-impl<'a> Debug for OomOrDynErrorRef<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug(f)
-    }
-}
-
-impl<'a> OomOrDynErrorRef<'a> {
-    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OomOrDynErrorRef::DynError(e) => {
-                // Safety: invariant of this type.
-                let vtable = unsafe { e.as_ref().vtable };
-                // Safety: using the vtable associated with this pointer's
-                // concrete type and the pointer is valid.
-                unsafe { (vtable.display)(*e, f) }
-            }
-            OomOrDynErrorRef::Oom(oom) => fmt::Display::fmt(oom, f),
-        }
-    }
-
-    fn debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            OomOrDynErrorRef::Oom(oom) => f.debug_tuple("Oom").field(oom).finish(),
-            OomOrDynErrorRef::DynError(error) => {
-                struct DebugError<'a>(SharedPtr<'a, DynError>);
-                impl fmt::Debug for DebugError<'_> {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        // Safety: invariant of `OomOrDynError` that the pointer
-                        // is valid.
-                        let vtable = unsafe { self.0.as_ref().vtable };
-                        // Safety: the pointer is valid and the vtable is
-                        // associated with the pointer's concrete error type.
-                        unsafe { (vtable.debug)(self.0, f) }
-                    }
-                }
-
-                let mut f = f.debug_struct("DynError");
-                f.field("error", &DebugError(error));
-                if let Some(source) = self.source() {
-                    f.field("source", &source);
-                }
-                f.finish()
-            }
-        }
-    }
-
-    fn source(&self) -> Option<OomOrDynErrorRef<'a>> {
-        match self {
-            OomOrDynErrorRef::DynError(e) => {
-                // Safety: invariant of this type.
-                let vtable = unsafe { e.as_ref().vtable };
-                // Safety: using the vtable associated with this pointer's
-                // concrete type and the pointer is valid.
-                unsafe { (vtable.source)(*e) }
-            }
-            OomOrDynErrorRef::Oom(_) => None,
-        }
-    }
-
-    fn is<E>(&self) -> bool
-    where
-        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        match self {
-            OomOrDynErrorRef::DynError(e) => {
-                // Safety: invariant of this type.
-                let vtable = unsafe { e.as_ref().vtable };
-                // Safety: using the vtable associated with this pointer's
-                // concrete type and the pointer is valid.
-                unsafe { (vtable.is)(*e, TypeId::of::<E>()) }
-            }
-            OomOrDynErrorRef::Oom(_) => TypeId::of::<E>() == TypeId::of::<OutOfMemory>(),
-        }
-    }
-
-    pub(crate) fn as_dyn_core_error(&self) -> &'a (dyn core::error::Error + Send + Sync + 'static) {
-        match *self {
-            OomOrDynErrorRef::DynError(e) => {
-                // Safety: invariant of this type.
-                let vtable = unsafe { e.as_ref().vtable };
-                // Safety: using the vtable associated with this pointer's
-                // concrete type and the pointer is valid.
-                unsafe { (vtable.as_dyn_core_error)(e) }
-            }
-            OomOrDynErrorRef::Oom(oom) => oom as _,
-        }
-    }
-
-    #[cfg(feature = "backtrace")]
-    fn backtrace(&self) -> &'a Backtrace {
-        match self {
-            OomOrDynErrorRef::DynError(e) => {
-                // Safety: invariant of this type.
-                let r = unsafe { e.as_ref() };
-                r.backtrace
-                    .as_ref()
-                    .expect("the first error in the chain always has the backtrace")
-            }
-
-            OomOrDynErrorRef::Oom(_) => {
-                static DISABLED: Backtrace = Backtrace::disabled();
-                &DISABLED
-            }
-        }
-    }
-}
-
 pub(crate) enum OomOrDynErrorMut<'a> {
     // Safety: this must always be a valid pointer to read and write a
     // `DynError` from for the `'a` lifetime.
     DynError(MutPtr<'a, DynError>),
 
     Oom(&'a mut OutOfMemory),
-}
-
-impl<'a> OomOrDynErrorMut<'a> {
-    fn as_ref(&self) -> OomOrDynErrorRef<'_> {
-        match self {
-            OomOrDynErrorMut::DynError(e) => OomOrDynErrorRef::DynError(e.as_shared_ptr()),
-            OomOrDynErrorMut::Oom(oom) => OomOrDynErrorRef::Oom(oom),
-        }
-    }
-
-    fn source_mut(&mut self) -> Option<OomOrDynErrorMut<'a>> {
-        match self {
-            OomOrDynErrorMut::DynError(e) => {
-                // Safety: invariant of this type.
-                let vtable = unsafe { e.as_ref().vtable };
-                // Safety: using the vtable associated with this pointer's
-                // concrete type and the pointer is valid.
-                unsafe { (vtable.source_mut)(e.raw_copy()) }
-            }
-            OomOrDynErrorMut::Oom(_) => None,
-        }
-    }
 }
 
 /// Bit packed version of `enum { BoxedDynError, OutOfMemory }` that relies on
@@ -1643,6 +1546,12 @@ impl From<BoxedDynError> for OomOrDynError {
         let inner = boxed.into_owned_ptr().into_non_null().cast::<u8>();
         debug_assert!(!Self::is_oom_ptr(inner));
         OomOrDynError { inner }
+    }
+}
+
+impl fmt::Debug for OomOrDynError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug(f)
     }
 }
 
@@ -1795,29 +1704,66 @@ impl OomOrDynError {
         }
     }
 
-    /// Given that this is known to be an instance of the type associated with
-    /// the given `TypeId`, do an owning-downcast to that type, writing the
-    /// result through the given `ret_ptr`, and deallocating `self` along the
-    /// way.
-    ///
-    /// The `ret_ptr`'s storage will contain an initialized instance of the
-    /// associated type upon this method's successful return.
-    ///
-    /// # Safety
-    ///
-    /// This error (or another in its chain) must be of the type associated with
-    /// `TypeId`.
-    ///
-    /// The given `ret_ptr` must point to a valid-but-uninitialized storage
-    /// location for an instance of the type associated with the given `TypeId`.
-    pub(crate) unsafe fn downcast(self, type_id: TypeId, ret_ptr: NonNull<u8>) {
+    fn source(&self) -> Option<&Error> {
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(e) => {
+                // Safety: invariant of this type.
+                let vtable = unsafe { e.as_ref().vtable };
+                // Safety: using the vtable associated with this pointer's
+                // concrete type and the pointer is valid.
+                unsafe { (vtable.source)(e) }
+            }
+            OomOrDynErrorRef::Oom(_) => None,
+        }
+    }
+
+    fn source_mut(&mut self) -> Option<&mut Error> {
+        match self.unpack_mut() {
+            OomOrDynErrorMut::DynError(e) => {
+                // Safety: invariant of this type.
+                let vtable = unsafe { e.as_ref().vtable };
+                // Safety: using the vtable associated with this pointer's
+                // concrete type and the pointer is valid.
+                unsafe { (vtable.source_mut)(e.raw_copy()) }
+            }
+            OomOrDynErrorMut::Oom(_) => None,
+        }
+    }
+
+    fn is<E>(&self) -> bool
+    where
+        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(e) => {
+                // Safety: invariant of this type.
+                let vtable = unsafe { e.as_ref().vtable };
+                // Safety: using the vtable associated with this pointer's
+                // concrete type and the pointer is valid.
+                unsafe { (vtable.is)(e, TypeId::of::<E>()) }
+            }
+            OomOrDynErrorRef::Oom(_) => TypeId::of::<E>() == TypeId::of::<OutOfMemory>(),
+        }
+    }
+
+    pub(crate) fn downcast<E>(self) -> Result<E, Self>
+    where
+        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        if !self.is::<E>() {
+            return Err(self);
+        }
+
+        let mut ret = mem::MaybeUninit::<E>::uninit();
         if self.is_oom() {
-            debug_assert_eq!(type_id, TypeId::of::<OutOfMemory>());
+            debug_assert_eq!(TypeId::of::<E>(), TypeId::of::<OutOfMemory>());
             // Safety: this is an OOM error.
-            let oom = unsafe { self.unchecked_oom() };
-            // Safety: implied by this method's safety contract.
+            let oom = unsafe { *self.unchecked_oom() };
+            let ret_ptr = NonNull::from(&mut ret).cast::<OutOfMemory>();
+            // Safety: the pointer is valid for writing our OOM into because it
+            // is a valid pointer to space for an `E` and `E == OutOfMemory`.
             unsafe {
-                ret_ptr.cast::<OutOfMemory>().write(*oom);
+                ret_ptr.write(oom);
             }
         } else {
             debug_assert!(self.is_boxed_dyn_error());
@@ -1825,9 +1771,144 @@ impl OomOrDynError {
             let ptr = unsafe { self.unchecked_into_dyn_error() };
             // Safety: invariant of this type that the pointer is valid.
             let vtable = unsafe { ptr.as_ref().vtable };
+            let ret_ptr = NonNull::from(&mut ret).cast::<u8>();
             // Safety: the pointer is valid and the vtable is associated with
             // this pointer's concrete type.
-            unsafe { (vtable.downcast)(ptr, type_id, ret_ptr) }
+            unsafe { (vtable.move_into)(ptr, ret_ptr) }
+        }
+
+        // Safety: `ret` was fully initialized in all control-flow paths leading
+        // here.
+        Ok(unsafe { ret.assume_init() })
+    }
+
+    fn downcast_mut<E>(&mut self) -> Option<&mut E>
+    where
+        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        if !self.is::<E>() {
+            return None;
+        }
+
+        match self.unpack_mut() {
+            OomOrDynErrorMut::DynError(ptr) => {
+                let mut ptr = ptr.cast::<ConcreteError<E>>();
+                // Safety: we own the pointer, it is valid for reading
+                // and writing, and we checked that it is an `E`.
+                let r = unsafe { ptr.as_mut() };
+                Some(&mut r.error)
+            }
+            OomOrDynErrorMut::Oom(oom) => {
+                // Note: Even though we know that `E == OutOfMemory`
+                // here, we still have to do this dance to satisfy the
+                // type system.
+                debug_assert_eq!(TypeId::of::<E>(), TypeId::of::<OutOfMemory>());
+                let ptr = NonNull::from(oom);
+                let mut ptr = ptr.cast::<E>();
+                // Safety: the pointer points to `oom`, which is valid
+                // for creating an exclusive reference to.
+                Some(unsafe { ptr.as_mut() })
+            }
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(e) => {
+                // Safety: invariant of this type.
+                let vtable = unsafe { e.as_ref().vtable };
+                // Safety: using the vtable associated with this pointer's
+                // concrete type and the pointer is valid.
+                unsafe { (vtable.display)(e, f) }
+            }
+            OomOrDynErrorRef::Oom(oom) => fmt::Display::fmt(oom, f),
+        }
+    }
+
+    fn debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.unpack() {
+            OomOrDynErrorRef::Oom(oom) => f.debug_tuple("Oom").field(oom).finish(),
+            OomOrDynErrorRef::DynError(error) => {
+                struct DebugError<'a>(SharedPtr<'a, DynError>);
+                impl fmt::Debug for DebugError<'_> {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        // Safety: invariant of `OomOrDynError` that the pointer
+                        // is valid.
+                        let vtable = unsafe { self.0.as_ref().vtable };
+                        // Safety: the pointer is valid and the vtable is
+                        // associated with the pointer's concrete error type.
+                        unsafe { (vtable.debug)(self.0, f) }
+                    }
+                }
+
+                let mut f = f.debug_struct("DynError");
+                f.field("error", &DebugError(error));
+                if let Some(source) = self.source() {
+                    f.field("source", &source);
+                }
+                f.finish()
+            }
+        }
+    }
+
+    fn downcast_ref<E>(&self) -> Option<&E>
+    where
+        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        if !self.is::<E>() {
+            return None;
+        }
+
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(ptr) => {
+                let ptr = ptr.cast::<ConcreteError<E>>();
+                // Safety: we own the pointer, it is valid for reading,
+                // and we checked that it is an `E`.
+                let r = unsafe { ptr.as_ref() };
+                Some(&r.error)
+            }
+            OomOrDynErrorRef::Oom(oom) => {
+                // Note: Even though we know that `E == OutOfMemory`
+                // here, we still have to do this dance to satisfy the
+                // type system.
+                debug_assert_eq!(TypeId::of::<E>(), TypeId::of::<OutOfMemory>());
+                let ptr = NonNull::from(oom);
+                let ptr = ptr.cast::<E>();
+                // Safety: the pointer points to `oom`, which is valid
+                // for creating a shared reference to.
+                Some(unsafe { ptr.as_ref() })
+            }
+        }
+    }
+
+    pub(crate) fn as_dyn_core_error(&self) -> &(dyn core::error::Error + Send + Sync + 'static) {
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(e) => {
+                // Safety: invariant of this type.
+                let vtable = unsafe { e.as_ref().vtable };
+                // Safety: using the vtable associated with this pointer's
+                // concrete type and the pointer is valid.
+                unsafe { (vtable.as_dyn_core_error)(e) }
+            }
+            OomOrDynErrorRef::Oom(oom) => oom as _,
+        }
+    }
+
+    #[cfg(feature = "backtrace")]
+    fn backtrace(&self) -> &Backtrace {
+        match self.unpack() {
+            OomOrDynErrorRef::DynError(e) => {
+                // Safety: invariant of this type.
+                let r = unsafe { e.as_ref() };
+                r.backtrace
+                    .as_ref()
+                    .expect("the first error in the chain always has the backtrace")
+            }
+
+            OomOrDynErrorRef::Oom(_) => {
+                static DISABLED: Backtrace = Backtrace::disabled();
+                &DISABLED
+            }
         }
     }
 }
@@ -1845,12 +1926,12 @@ pub struct Chain<'a> {
 }
 
 enum ChainState<'a> {
-    Ours(OomOrDynErrorRef<'a>),
+    Ours(&'a Error),
     Core(Option<&'a (dyn core::error::Error + 'static)>),
 }
 
 impl<'a> Chain<'a> {
-    fn new(error: OomOrDynErrorRef<'a>) -> Self {
+    fn new(error: &'a Error) -> Self {
         Self {
             state: ChainState::Ours(error),
         }
@@ -1864,8 +1945,8 @@ impl<'a> Iterator for Chain<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.state {
             ChainState::Ours(e) => {
-                let core = e.as_dyn_core_error();
-                self.state = if let Some(e) = e.source() {
+                let core = e.inner.as_dyn_core_error();
+                self.state = if let Some(e) = e.inner.source() {
                     ChainState::Ours(e)
                 } else {
                     ChainState::Core(core.source())
