@@ -1,5 +1,5 @@
 //! Assembler library implementation for Aarch64.
-use super::{address::Address, regs};
+use super::regs;
 use crate::CallingConvention;
 use crate::aarch64::regs::zero;
 use crate::masm::{
@@ -12,7 +12,6 @@ use crate::{
     reg::{Reg, WritableReg, writable},
 };
 
-use cranelift_codegen::PatchRegion;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
     ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5,
@@ -31,6 +30,7 @@ use cranelift_codegen::{
     },
     settings,
 };
+use cranelift_codegen::{PatchRegion, VCodeConstant};
 use regalloc2::RegClass;
 use wasmtime_core::math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
@@ -151,14 +151,13 @@ impl Assembler {
     }
 
     /// Adds a constant to the constant pool, returning its address.
-    pub fn add_constant(&mut self, constant: &[u8]) -> Address {
+    pub fn add_constant(&mut self, constant: &[u8]) -> VCodeConstant {
         let handle = self.pool.register(constant, &mut self.buffer);
-        Address::constant(handle)
+        handle
     }
 
     /// Store a pair of registers.
-    pub fn stp(&mut self, xt1: Reg, xt2: Reg, addr: Address) {
-        let mem: PairAMode = addr.try_into().unwrap();
+    pub fn stp(&mut self, xt1: Reg, xt2: Reg, mem: PairAMode) {
         self.emit(Inst::StoreP64 {
             rt: xt1.into(),
             rt2: xt2.into(),
@@ -168,9 +167,7 @@ impl Assembler {
     }
 
     /// Store a register.
-    pub fn str(&mut self, reg: Reg, addr: Address, size: OperandSize, flags: MemFlags) {
-        let mem: AMode = addr.try_into().unwrap();
-
+    pub fn str(&mut self, reg: Reg, mem: AMode, size: OperandSize, flags: MemFlags) {
         use OperandSize::*;
         let inst = match (reg.is_int(), size) {
             (_, S8) => Inst::Store8 {
@@ -214,19 +211,19 @@ impl Assembler {
     }
 
     /// Load a signed register.
-    pub fn sload(&mut self, addr: Address, rd: WritableReg, size: OperandSize, flags: MemFlags) {
-        self.ldr(addr, rd, size, true, flags);
+    pub fn sload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlags) {
+        self.ldr(mem, rd, size, true, flags);
     }
 
     /// Load an unsigned register.
-    pub fn uload(&mut self, addr: Address, rd: WritableReg, size: OperandSize, flags: MemFlags) {
-        self.ldr(addr, rd, size, false, flags);
+    pub fn uload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlags) {
+        self.ldr(mem, rd, size, false, flags);
     }
 
     /// Load address into a register.
     fn ldr(
         &mut self,
-        addr: Address,
+        mem: AMode,
         rd: WritableReg,
         size: OperandSize,
         signed: bool,
@@ -234,7 +231,6 @@ impl Assembler {
     ) {
         use OperandSize::*;
         let writable_reg = rd.map(Into::into);
-        let mem: AMode = addr.try_into().unwrap();
 
         let inst = match (rd.to_reg().is_int(), signed, size) {
             (_, false, S8) => Inst::ULoad8 {
@@ -293,10 +289,9 @@ impl Assembler {
     }
 
     /// Load a pair of registers.
-    pub fn ldp(&mut self, xt1: Reg, xt2: Reg, addr: Address) {
+    pub fn ldp(&mut self, xt1: Reg, xt2: Reg, mem: PairAMode) {
         let writable_xt1 = Writable::from_reg(xt1.into());
         let writable_xt2 = Writable::from_reg(xt2.into());
-        let mem = addr.try_into().unwrap();
 
         self.emit(Inst::LoadP64 {
             rt: writable_xt1,
@@ -326,7 +321,8 @@ impl Assembler {
                         });
                     }
                     _ => {
-                        let addr = self.add_constant(&imm.to_bytes());
+                        let constant = self.add_constant(&imm.to_bytes());
+                        let addr = AMode::Const { addr: constant };
                         self.uload(addr, rd, size, TRUSTED_FLAGS);
                     }
                 }
