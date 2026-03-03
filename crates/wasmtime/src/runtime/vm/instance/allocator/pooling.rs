@@ -112,6 +112,10 @@ pub struct InstanceLimits {
     /// transitively contain.
     pub max_core_instances_per_component: u32,
 
+    /// The maximum aggregate memory size, in bytes, of all core module instances
+    /// that a single component may transitively contain.
+    pub max_core_instances_aggregate_size_per_component: usize,
+
     /// The maximum number of Wasm linear memories that a component may
     /// transitively contain.
     pub max_memories_per_component: u32,
@@ -168,6 +172,7 @@ impl Default for InstanceLimits {
             component_instance_size: 1 << 20, // 1 MiB
             total_core_instances: total,
             max_core_instances_per_component: u32::MAX,
+            max_core_instances_aggregate_size_per_component: usize::MAX,
             max_memories_per_component: u32::MAX,
             max_tables_per_component: u32::MAX,
             total_memories: total,
@@ -565,6 +570,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         let mut num_core_instances = 0;
         let mut num_memories = 0;
         let mut num_tables = 0;
+        let mut core_instances_aggregate_size: usize = 0;
         for init in &component.initializers {
             use wasmtime_environ::component::GlobalInitializer::*;
             use wasmtime_environ::component::InstantiateModule;
@@ -577,10 +583,12 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 InstantiateModule(InstantiateModule::Static(static_module_index, _), _) => {
                     let module = get_module(*static_module_index);
                     let offsets = VMOffsets::new(HostPtr, &module);
+                    let layout = Instance::alloc_layout(&offsets);
                     self.validate_module(module, &offsets)?;
                     num_core_instances += 1;
                     num_memories += module.num_defined_memories();
                     num_tables += module.num_defined_tables();
+                    core_instances_aggregate_size += layout.size();
                 }
                 LowerImport { .. }
                 | ExtractMemory(_)
@@ -615,6 +623,16 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 "The component transitively contains {num_tables} tables, which exceeds the \
                  configured maximum of {} in the pooling allocator",
                 self.limits.max_tables_per_component
+            );
+        }
+
+        if core_instances_aggregate_size
+            > self.limits.max_core_instances_aggregate_size_per_component
+        {
+            bail!(
+                "The component's aggregate core instances size is {core_instances_aggregate_size} \
+                 bytes, which exceeds the configured maximum of {} bytes in the pooling allocator",
+                self.limits.max_core_instances_aggregate_size_per_component
             );
         }
 

@@ -3700,6 +3700,25 @@ impl PoolingAllocationConfig {
         self
     }
 
+    /// The maximum aggregate memory size, in bytes, of all core module instances
+    /// that a single component may transitively contain (default is unlimited).
+    ///
+    /// This method allows you to cap the total memory overhead of all core
+    /// modules within a single component, regardless of how many core modules
+    /// the component contains. This protects against malicious components that
+    /// might attempt to allocate excessive metadata by instantiating many core
+    /// modules, even if each individual module is within the
+    /// [`PoolingAllocationConfig::max_core_instance_size`] limit.
+    ///
+    /// If a component's aggregate core instance size exceeds this limit, the
+    /// component will fail to instantiate.
+    pub fn max_core_instances_aggregate_size_per_component(&mut self, size: usize) -> &mut Self {
+        self.config
+            .limits
+            .max_core_instances_aggregate_size_per_component = size;
+        self
+    }
+
     /// The maximum number of Wasm linear memories that a single component may
     /// transitively contain (default is unlimited).
     ///
