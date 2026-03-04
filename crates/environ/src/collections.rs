@@ -15,8 +15,8 @@ pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;
 pub use wasmtime_core::{
     alloc::{
-        String, TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryToOwned, Vec,
-        try_new,
+        TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
+        Vec, try_new,
     },
     vec,
 };

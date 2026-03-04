@@ -179,7 +179,7 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 
 #[derive(Serialize, Deserialize)]
 pub struct Metadata<'a> {
-    target: collections::String,
+    target: TryString,
     #[serde(borrow)]
     shared_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
     #[serde(borrow)]

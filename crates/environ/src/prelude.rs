@@ -20,7 +20,8 @@
 //! and then `use crate::*` works as usual.
 
 pub use crate::collections::{
-    EntitySet, TryClone, TryCollect, TryExtend, TryFromIterator, TryNew, TryToOwned, try_new,
+    EntitySet, TryClone, TryCollect, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
+    try_new,
 };
 pub use crate::error::{Context, Error, Result, bail, ensure, format_err};
 pub use alloc::borrow::ToOwned;

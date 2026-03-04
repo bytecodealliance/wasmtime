@@ -1,7 +1,7 @@
 //! Simple string interning.
 
 use crate::{
-    collections::{HashMap, String, Vec},
+    collections::{HashMap, Vec},
     error::OutOfMemory,
     prelude::*,
 };
@@ -148,7 +148,7 @@ impl<'de> serde::de::Deserialize<'de> for StringPool {
                         .map_err(|oom| A::Error::custom(oom))?;
                 }
 
-                while let Some(s) = seq.next_element::<String>()? {
+                while let Some(s) = seq.next_element::<TryString>()? {
                     debug_assert_eq!(s.len(), s.capacity());
                     let s = s.into_boxed_str().map_err(|oom| A::Error::custom(oom))?;
                     if !pool.map.contains_key(&*s) {
@@ -179,7 +179,7 @@ impl StringPool {
         self.map.reserve(1)?;
         self.strings.reserve(1)?;
 
-        let mut owned = String::new();
+        let mut owned = TryString::new();
         owned.reserve_exact(s.len())?;
         owned.push_str(s).expect("reserved capacity");
         let owned = owned
