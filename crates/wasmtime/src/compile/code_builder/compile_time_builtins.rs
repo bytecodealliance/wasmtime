@@ -223,6 +223,7 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// See the example in [CodeBuilder::expose_unsafe_intrinsics], which uses
     /// compile-time builtins.
+    #[allow(unused_variables, reason = "`wasm_path` only used with `wat` feature")]
     pub unsafe fn compile_time_builtins_binary_or_text(
         &mut self,
         name: impl Into<Cow<'a, str>>,
