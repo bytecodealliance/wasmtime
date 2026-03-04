@@ -218,5 +218,6 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Box::pin(async move { std::future::pending::<Result<()>>().await })
         },
     )?;
+    i.func_wrap("return-hi", |_cx, (): ()| Ok(("hi".to_string(),)))?;
     Ok(())
 }

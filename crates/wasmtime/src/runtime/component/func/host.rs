@@ -378,9 +378,9 @@ where
         }
 
         // Enter the host by pushing a `HostTask` into the concurrent state.
-        store.0.enter_host_call()?;
+        let host_task = store.0.host_task_create()?;
 
-        let task_exited = if async_ {
+        let host_task_complete = if async_ {
             #[cfg(feature = "component-model-async")]
             {
                 self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)?
@@ -395,13 +395,13 @@ where
             true
         };
 
-        // If the host task exited, then it's popped and deallocated.
+        // If the host task completed, then it's deallocated.
         //
         // Note that if the host task did not exit then the `call_async_lower`
         // function transitively would have updated the current guest thread to
         // the caller of this host function.
-        if task_exited {
-            store.0.exit_host_call()?;
+        if host_task_complete {
+            store.0.host_task_delete(host_task)?;
         }
 
         Ok(())
@@ -571,6 +571,16 @@ where
         ret: Option<R>,
         dst: Destination<'_>,
     ) -> Result<()> {
+        // Before lowering below semantically ensure that the caller has dropped
+        // all of its borrows and such.
+        lower.validate_scope_exit()?;
+
+        // At this point we're transitioning back to the caller task which means
+        // that the current task needs to be updated. This will restore the
+        // currently running thread as the caller's thread, for example if
+        // lowering below calls `realloc` it'll use the right context.
+        lower.store.0.host_task_reenter_caller()?;
+
         if let Some(ret) = ret {
             let caller_instance = lower.options().instance;
             let mut flags = lower.instance_mut().instance_flags(caller_instance);
@@ -582,7 +592,6 @@ where
                 flags.set_may_leave(true);
             }
         }
-        lower.validate_scope_exit()?;
         Ok(())
     }
 }

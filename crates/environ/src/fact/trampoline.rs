@@ -840,6 +840,25 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
         result_locals.reverse();
 
+        // Handle a few things related to the concurrent task infrastructure
+        // after the callee has finished, such as:
+        //
+        // * Validate that the callee dropped all its borrows
+        // * Transition the current running task back to the caller.
+        //
+        // This is not necessary if there are no resources in this call, nor if
+        // concurrency support is disabled (no tasks). Note that this must
+        // happen before lowering below because semantically that's where the
+        // "you forgot to drop borrows" trap shows up and additionally the
+        // lowering below may call realloc which is in the context of the
+        // caller's task, not the callee.
+        //
+        // FIXME: Apply the optimizations described in #12311.
+        if self.emit_resource_call || self.module.tunables.concurrency_support {
+            let exit_sync_call = self.module.import_exit_sync_call();
+            self.instruction(Call(exit_sync_call.as_u32()));
+        }
+
         // Like above during the translation of results the caller cannot be
         // left (as we might invoke things like `realloc`). Again the precise
         // order of everything doesn't matter since intermediate states cannot
@@ -863,14 +882,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         for tmp in temps {
             self.free_temp_local(tmp);
-        }
-
-        if self.emit_resource_call || self.module.tunables.concurrency_support {
-            // Pop the task we pushed earlier off of the current task stack.
-            //
-            // FIXME: Apply the optimizations described in #12311.
-            let exit_sync_call = self.module.import_exit_sync_call();
-            self.instruction(Call(exit_sync_call.as_u32()));
         }
 
         if self.module.tunables.concurrency_support {
