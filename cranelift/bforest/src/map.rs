@@ -7,7 +7,6 @@ use alloc::string::String;
 #[cfg(test)]
 use core::fmt;
 use core::{
-    cmp::Ordering,
     marker::PhantomData,
     mem,
     ops::{Bound, RangeBounds},
@@ -251,19 +250,8 @@ where
         R: RangeBounds<K>,
         C: Comparator<K>,
     {
-        let mut cursor = self.cursor(forest, comp);
-        match range.start_bound() {
-            Bound::Included(k) => {
-                cursor.goto(*k);
-                cursor.prev();
-            }
-            Bound::Excluded(k) => {
-                cursor.goto(*k);
-            }
-            Bound::Unbounded => {}
-        }
         MapRange {
-            cursor,
+            cursor: self.cursor(forest, comp),
             range,
             started: false,
         }
@@ -713,19 +701,41 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let started = mem::replace(&mut self.started, true);
 
-        let (key, val) = if !started && matches!(self.range.start_bound(), Bound::Unbounded) {
-            let val = self.cursor.goto_first()?;
-            let key = self.cursor.key().unwrap();
-            (key, val)
-        } else {
-            self.cursor.next()?
-        };
+        let key_val = (|| {
+            if started {
+                self.cursor.next()
+            } else {
+                match self.range.start_bound() {
+                    Bound::Included(k) => {
+                        self.cursor.goto(*k);
+                        Some((self.cursor.key()?, self.cursor.value()?))
+                    }
+                    Bound::Excluded(k) => {
+                        self.cursor.goto(*k);
+                        if self
+                            .cursor
+                            .key()
+                            .is_some_and(|key| self.cursor.comp.cmp(*k, key).is_eq())
+                        {
+                            self.cursor.next()
+                        } else {
+                            Some((self.cursor.key()?, self.cursor.value()?))
+                        }
+                    }
+                    Bound::Unbounded => {
+                        let val = self.cursor.goto_first()?;
+                        Some((self.cursor.key()?, val))
+                    }
+                }
+            }
+        })();
 
-        if self.is_in_bounds(key) {
-            Some((key, val))
-        } else {
-            self.cursor.goto_end();
-            None
+        match key_val {
+            Some((key, val)) if self.is_in_bounds(key) => Some((key, val)),
+            _ => {
+                self.cursor.goto_end();
+                None
+            }
         }
     }
 }
@@ -738,35 +748,24 @@ where
     C: Comparator<K>,
 {
     fn is_in_bounds(&self, key: K) -> bool {
+        debug_assert!(self.is_in_start_bound(key));
+        self.is_in_end_bound(key)
+    }
+
+    fn is_in_start_bound(&self, key: K) -> bool {
         match self.range.start_bound() {
-            Bound::Included(k) => match self.cursor.comp.cmp(key, *k) {
-                Ordering::Less => {
-                    return false;
-                }
-                Ordering::Equal | Ordering::Greater => {}
-            },
-            Bound::Excluded(k) => match self.cursor.comp.cmp(key, *k) {
-                Ordering::Less | Ordering::Equal => {
-                    return false;
-                }
-                Ordering::Greater => {}
-            },
-            Bound::Unbounded => {}
+            Bound::Included(k) => self.cursor.comp.cmp(key, *k).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(key, *k).is_gt(),
+            Bound::Unbounded => true,
         }
+    }
 
+    fn is_in_end_bound(&self, key: K) -> bool {
         match self.range.end_bound() {
-            Bound::Included(k) => match self.cursor.comp.cmp(*k, key) {
-                Ordering::Less => return false,
-                Ordering::Equal | Ordering::Greater => {}
-            },
-            Bound::Excluded(k) => match self.cursor.comp.cmp(*k, key) {
-                Ordering::Less | Ordering::Equal => return false,
-                Ordering::Greater => {}
-            },
-            Bound::Unbounded => {}
+            Bound::Included(k) => self.cursor.comp.cmp(*k, key).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(*k, key).is_gt(),
+            Bound::Unbounded => true,
         }
-
-        true
     }
 }
 
@@ -1415,6 +1414,16 @@ mod tests {
         );
 
         assert_eq!(
+            m.range(5..12, &f, &()).collect::<Vec<_>>(),
+            vec![(10, 10.0), (11, 11.0)],
+        );
+
+        assert_eq!(
+            m.range(18..30, &f, &()).collect::<Vec<_>>(),
+            vec![(18, 18.0), (19, 19.0)],
+        );
+
+        assert_eq!(
             m.range(..13, &f, &()).collect::<Vec<_>>(),
             vec![(10, 10.0), (11, 11.0), (12, 12.0)],
         );
@@ -1427,6 +1436,29 @@ mod tests {
         assert_eq!(
             m.range(12..=15, &f, &()).collect::<Vec<_>>(),
             vec![(12, 12.0), (13, 13.0), (14, 14.0), (15, 15.0)],
+        );
+
+        // Check when the query range is outside the entry range.
+        assert_eq!(m.range(0..5, &f, &()).collect::<Vec<_>>(), vec![]);
+        assert_eq!(m.range(30..40, &f, &()).collect::<Vec<_>>(), vec![]);
+
+        // Check when the query range's start and end land in between entries.
+        for i in 30..40 {
+            if i % 2 == 0 {
+                m.insert(i, i as f32, &mut f, &());
+            }
+        }
+        assert_eq!(
+            m.range(31..35, &f, &()).collect::<Vec<_>>(),
+            vec![(32, 32.0), (34, 34.0)],
+        );
+        assert_eq!(
+            m.range(29..33, &f, &()).collect::<Vec<_>>(),
+            vec![(30, 30.0), (32, 32.0)],
+        );
+        assert_eq!(
+            m.range(35..40, &f, &()).collect::<Vec<_>>(),
+            vec![(36, 36.0), (38, 38.0)],
         );
     }
 }
