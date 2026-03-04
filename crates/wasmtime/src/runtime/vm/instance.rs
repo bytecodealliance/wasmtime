@@ -130,11 +130,11 @@ pub struct Instance {
 
     /// Stores the dropped passive element segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
-    dropped_elements: EntitySet<ElemIndex>,
+    dropped_elements: TryEntitySet<ElemIndex>,
 
     /// Stores the dropped passive data segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
-    dropped_data: EntitySet<DataIndex>,
+    dropped_data: TryEntitySet<DataIndex>,
 
     // TODO: add support for multiple memories; `wmemcheck_state` corresponds to
     // memory 0.
@@ -171,8 +171,8 @@ impl Instance {
     ) -> Result<InstanceHandle, OutOfMemory> {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
-        let dropped_elements = EntitySet::with_capacity(module.passive_elements.len())?;
-        let dropped_data = EntitySet::with_capacity(module.passive_data_map.len())?;
+        let dropped_elements = TryEntitySet::with_capacity(module.passive_elements.len())?;
+        let dropped_data = TryEntitySet::with_capacity(module.passive_data_map.len())?;
 
         #[cfg(feature = "wmemcheck")]
         let wmemcheck_state = if req.store.engine().config().wmemcheck {
@@ -1626,12 +1626,12 @@ impl Instance {
         unsafe { &mut self.get_unchecked_mut().store }
     }
 
-    fn dropped_elements_mut(self: Pin<&mut Self>) -> &mut EntitySet<ElemIndex> {
+    fn dropped_elements_mut(self: Pin<&mut Self>) -> &mut TryEntitySet<ElemIndex> {
         // SAFETY: see `store_mut` above.
         unsafe { &mut self.get_unchecked_mut().dropped_elements }
     }
 
-    fn dropped_data_mut(self: Pin<&mut Self>) -> &mut EntitySet<DataIndex> {
+    fn dropped_data_mut(self: Pin<&mut Self>) -> &mut TryEntitySet<DataIndex> {
         // SAFETY: see `store_mut` above.
         unsafe { &mut self.get_unchecked_mut().dropped_data }
     }
