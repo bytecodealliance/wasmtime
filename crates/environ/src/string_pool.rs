@@ -1,6 +1,6 @@
 //! Simple string interning.
 
-use crate::{collections::HashMap, error::OutOfMemory, prelude::*};
+use crate::{error::OutOfMemory, prelude::*};
 use core::{fmt, mem, num::NonZeroU32};
 
 /// An interned string associated with a particular string in a `StringPool`.
@@ -28,7 +28,7 @@ pub struct Atom {
 pub struct StringPool {
     /// A map from each string in this pool (as an unsafe borrow from
     /// `self.strings`) to its `Atom`.
-    map: mem::ManuallyDrop<HashMap<&'static str, Atom>>,
+    map: mem::ManuallyDrop<TryHashMap<&'static str, Atom>>,
 
     /// Strings in this pool. These must never be mutated or reallocated once
     /// inserted.
