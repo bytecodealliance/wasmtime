@@ -723,40 +723,40 @@ fn try_vec_and_boxed_slice() -> Result<()> {
     OomTest::new().test(|| {
         // Nonzero-sized type.
         let mut vec = TryVec::new();
-        try_vec.push(1)?;
-        let slice = try_vec.into_boxed_slice()?; // len > 0, cap > 0
+        vec.push(1)?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
 
         let mut vec = TryVec::from(slice);
-        try_vec.pop();
-        let slice = try_vec.into_boxed_slice()?; // len = 0, cap > 0
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
 
         let vec = TryVec::from(slice);
-        let _slice = try_vec.into_boxed_slice()?; // len = 0, cap = 0
+        let _slice = vec.into_boxed_slice()?; // len = 0, cap = 0
 
         let mut vec = TryVec::new();
-        try_vec.reserve_exact(3)?;
-        try_vec.push(2)?;
-        try_vec.push(2)?;
-        try_vec.push(2)?;
-        let _slice = try_vec.into_boxed_slice()?; // len = cap, len > 0
+        vec.reserve_exact(3)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        vec.push(2)?;
+        let _slice = vec.into_boxed_slice()?; // len = cap, len > 0
 
         for i in 0..12 {
             let mut vec = TryVec::new();
             for j in 0..i {
-                try_vec.push(j)?;
+                vec.push(j)?;
             }
-            let _slice = try_vec.into_boxed_slice()?; // len ?= cap
+            let _slice = vec.into_boxed_slice()?; // len ?= cap
         }
 
         // Zero-sized type.
         let mut vec = TryVec::new();
-        try_vec.push(())?;
-        let slice = try_vec.into_boxed_slice()?; // len > 0, cap > 0
+        vec.push(())?;
+        let slice = vec.into_boxed_slice()?; // len > 0, cap > 0
         let mut vec = TryVec::from(slice);
-        try_vec.pop();
-        let slice = try_vec.into_boxed_slice()?; // len = 0, cap > 0
+        vec.pop();
+        let slice = vec.into_boxed_slice()?; // len = 0, cap > 0
         let vec = TryVec::from(slice);
-        let _ = try_vec.into_boxed_slice()?; // len = 0, cap = 0
+        let _ = vec.into_boxed_slice()?; // len = 0, cap = 0
 
         Ok(())
     })
@@ -832,14 +832,14 @@ fn try_vec_extend() -> Result<()> {
     use wasmtime_core::alloc::{TryExtend, TryVec};
     OomTest::new().test(|| {
         let mut vec = TryVec::new();
-        try_vec.try_extend([])?;
-        try_vec.try_extend([1])?;
-        try_vec.try_extend([1, 2, 3, 4])?;
+        vec.try_extend([])?;
+        vec.try_extend([1])?;
+        vec.try_extend([1, 2, 3, 4])?;
 
         let mut vec = TryVec::new();
-        try_vec.try_extend([])?;
-        try_vec.try_extend([()])?;
-        try_vec.try_extend([(), (), ()])?;
+        vec.try_extend([])?;
+        vec.try_extend([()])?;
+        vec.try_extend([(), (), ()])?;
         Ok(())
     })
 }
