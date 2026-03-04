@@ -195,18 +195,18 @@ fn secondary_map_try_insert() -> Result<()> {
 }
 
 #[test]
-fn entity_set_ensure_capacity() -> Result<()> {
+fn try_entity_set_ensure_capacity() -> Result<()> {
     OomTest::new().test(|| {
-        let mut set = EntitySet::<Key>::new();
+        let mut set = TryEntitySet::<Key>::new();
         set.ensure_capacity(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn entity_set_insert() -> Result<()> {
+fn try_entity_set_insert() -> Result<()> {
     OomTest::new().test(|| {
-        let mut set = EntitySet::<Key>::new();
+        let mut set = TryEntitySet::<Key>::new();
         set.insert(Key::from_u32(256))?;
         Ok(())
     })
