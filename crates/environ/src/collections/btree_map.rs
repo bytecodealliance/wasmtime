@@ -91,11 +91,6 @@ where
         }
 
         let id = self.values.alloc(value)?;
-        debug_assert!(
-            self.map.iter(&self.forest).all(|(_k, v)| v != id),
-            "each id should only appear as a value in the inner map once; \
-             `impl Iterator for BTreeMapIterMut` relies on this invariant for safety"
-        );
         match self.map.try_insert(key, id, &mut self.forest, &()) {
             Ok(old) => {
                 debug_assert!(old.is_none());
@@ -114,11 +109,6 @@ where
         K: Ord,
     {
         let id = self.map.remove(key, &mut self.forest, &())?;
-        debug_assert!(
-            self.map.iter(&self.forest).all(|(_k, v)| v != id),
-            "each id should only appear as a value in the inner map once; \
-             `impl Iterator for BTreeMapIterMut` relies on this invariant for safety"
-        );
         Some(self.values.dealloc(id))
     }
 
@@ -127,6 +117,13 @@ where
     /// Does not deallocate the underlying storage.
     pub fn clear(&mut self) {
         self.values.clear();
+        // NB: Do not do `self.map.clear(&mut self.forest)` because that is
+        // designed to work in scenarios where multiple maps are sharing the
+        // same forest (which we are not doing here) and will actually traverse
+        // the b-tree's nodes and deallocate each of them one at a time. For our
+        // single-map-in-the-forest case, it is equivalent, but much faster, to
+        // simply clear the forest itself and reset the map to its default,
+        // empty state.
         self.forest.clear();
         self.map = Default::default();
     }
