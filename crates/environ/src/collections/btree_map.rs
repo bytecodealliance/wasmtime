@@ -217,7 +217,7 @@ where
     }
 }
 
-/// An iterator over `(K, &V)` pairs returned by [`BTreemap::iter`].
+/// An iterator over `(K, &V)` pairs returned by [`BTreeMap::iter`].
 pub struct BTreeMapIter<'a, K, V>
 where
     K: Copy,
@@ -254,7 +254,7 @@ where
     }
 }
 
-/// An iterator over `(K, &mut V)` pairs returned by [`BTreemap::iter_mut`].
+/// An iterator over `(K, &mut V)` pairs returned by [`BTreeMap::iter_mut`].
 pub struct BTreeMapIterMut<'a, K, V>
 where
     K: Copy,
@@ -301,7 +301,7 @@ where
     }
 }
 
-/// An iterator over `(K, V)` pairs returned by [`BTreemap::into_iter`].
+/// An iterator over `(K, V)` pairs returned by [`BTreeMap::into_iter`].
 pub struct BTreeMapIntoIter<K, V>
 where
     K: Copy,
