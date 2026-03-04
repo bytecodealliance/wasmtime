@@ -235,3 +235,15 @@
 (rule (simplify (bor ty (bnot ty (bxor ty x y)) (band ty y x))) (bnot ty (bxor ty x y)))
 (rule (simplify (bor ty (band ty y x) (bnot ty (bxor ty y x)))) (bnot ty (bxor ty x y)))
 (rule (simplify (bor ty (bnot ty (bxor ty y x)) (band ty y x))) (bnot ty (bxor ty x y)))
+
+; (x | y) + (-y) --> x & ~y
+(rule (simplify (iadd ty (bor ty x y) (ineg ty y)))
+      (band ty x (bnot ty y)))
+(rule (simplify (iadd ty (ineg ty y) (bor ty x y)))
+      (band ty x (bnot ty y)))
+(rule (simplify (iadd ty (bor ty y x) (ineg ty y)))
+      (band ty x (bnot ty y)))
+(rule (simplify (iadd ty (ineg ty y) (bor ty y x)))
+      (band ty x (bnot ty y)))
+
+
