@@ -1956,7 +1956,7 @@
 (decl imm12_from_value (Imm12) Value)
 (extractor
   (imm12_from_value n)
-  (iconst (u64_from_imm64 (imm12_from_u64 n))))
+  (iconst _ (u64_from_imm64 (imm12_from_u64 n))))
 ;; Conceptually the same as `imm12_from_value`, but tries negating the constant
 ;; value (first sign-extending to handle narrow widths).
 (spec (imm12_from_negated_value arg)
@@ -1980,7 +1980,7 @@
 )
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
-  (imm12_from_negated_value (has_type ty (iconst n)))
+  (imm12_from_negated_value (has_type ty (iconst _ n)))
   (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_checked_neg (i64_sextend_imm64 ty n))))
   imm)
 
@@ -3755,7 +3755,7 @@
           (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
 
 (decl sink_atomic_load (Inst) Reg)
-(rule (sink_atomic_load x @ (atomic_load _ addr))
+(rule (sink_atomic_load x @ (atomic_load _ _ addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
 
@@ -3777,18 +3777,18 @@
       (alu_rrr op ty x y))
 
 ;; Special cases for when one operand is a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (iconst k))
+(rule (alu_rs_imm_logic_commutative op ty x (iconst _ k))
       (if-let imm (imm_logic_from_imm64 ty k))
       (alu_rr_imm_logic op ty x imm))
-(rule 1 (alu_rs_imm_logic_commutative op ty (iconst k) x)
+(rule 1 (alu_rs_imm_logic_commutative op ty (iconst _ k) x)
       (if-let imm (imm_logic_from_imm64 ty k))
       (alu_rr_imm_logic op ty x imm))
 
 ;; Special cases for when one operand is shifted left by a constant.
-(rule (alu_rs_imm_logic_commutative op ty x (ishl y (iconst k)))
+(rule (alu_rs_imm_logic_commutative op ty x (ishl _ y (iconst _ k)))
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty x y amt))
-(rule 1 (alu_rs_imm_logic_commutative op ty (ishl x (iconst k)) y)
+(rule 1 (alu_rs_imm_logic_commutative op ty (ishl _ x (iconst _ k)) y)
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty y x amt))
 
@@ -3805,10 +3805,10 @@
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
 (rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
-(rule (alu_rs_imm_logic op ty x (iconst k))
+(rule (alu_rs_imm_logic op ty x (iconst _ k))
       (if-let imm (imm_logic_from_imm64 ty k))
       (alu_rr_imm_logic op ty x imm))
-(rule (alu_rs_imm_logic op ty x (ishl y (iconst k)))
+(rule (alu_rs_imm_logic op ty x (ishl _ y (iconst _ k)))
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty x y amt))
 
@@ -3905,15 +3905,15 @@
 
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
-(rule 1 (amode ty (iadd x (i32_from_iconst y)) offset)
+(rule 1 (amode ty (iadd _ x (i32_from_iconst y)) offset)
         (if-let new_offset (i32_checked_add y offset))
         (amode_no_more_iconst ty x new_offset))
-(rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
+(rule 2 (amode ty (iadd _ (i32_from_iconst x) y) offset)
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
 
 (rule 3
-      (amode ty (stack_addr slot offset1) offset2)
+      (amode ty (stack_addr _ slot offset1) offset2)
       (AMode.SlotOffset
        (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
@@ -3939,15 +3939,15 @@
 ;; instructions. Constants on the other hand added to the amode represent only
 ;; a single instruction folded in, so fewer instructions should be generated
 ;; with these higher priority than the rules above.
-(rule 3 (amode_no_more_iconst ty (iadd x y) offset)
+(rule 3 (amode_no_more_iconst ty (iadd _ x y) offset)
         (AMode.RegReg (amode_add x offset) y))
-(rule 4 (amode_no_more_iconst ty (iadd x (uextend y @ (value_type $I32))) offset)
+(rule 4 (amode_no_more_iconst ty (iadd _ x (uextend _ y @ (value_type $I32))) offset)
         (AMode.RegExtended (amode_add x offset) y (ExtendOp.UXTW)))
-(rule 4 (amode_no_more_iconst ty (iadd x (sextend y @ (value_type $I32))) offset)
+(rule 4 (amode_no_more_iconst ty (iadd _ x (sextend _ y @ (value_type $I32))) offset)
         (AMode.RegExtended (amode_add x offset) y (ExtendOp.SXTW)))
-(rule 5 (amode_no_more_iconst ty (iadd (uextend x @ (value_type $I32)) y) offset)
+(rule 5 (amode_no_more_iconst ty (iadd _ (uextend _ x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.UXTW)))
-(rule 5 (amode_no_more_iconst ty (iadd (sextend x @ (value_type $I32)) y) offset)
+(rule 5 (amode_no_more_iconst ty (iadd _ (sextend _ x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.SXTW)))
 
 ;; `RegScaled*` rules where this matches an addition of an "index register" to a
@@ -3957,19 +3957,19 @@
 ;; Note that this can additionally bundle an extending operation but the
 ;; extension must happen before the shift. This will pattern-match the shift
 ;; first and then if that succeeds afterwards try to find an extend.
-(rule 6 (amode_no_more_iconst ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
+(rule 6 (amode_no_more_iconst ty (iadd _ x (ishl _ y (iconst _ (u64_from_imm64 n)))) offset)
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
         (amode_reg_scaled (amode_add x offset) y))
-(rule 7 (amode_no_more_iconst ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
+(rule 7 (amode_no_more_iconst ty (iadd _ (ishl _ y (iconst _ (u64_from_imm64 n))) x) offset)
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 
 (decl amode_reg_scaled (Reg Value) AMode)
 (rule 0 (amode_reg_scaled base index)
         (AMode.RegScaled base index))
-(rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)))
+(rule 1 (amode_reg_scaled base (uextend _ index @ (value_type $I32)))
         (AMode.RegScaledExtended base index (ExtendOp.UXTW)))
-(rule 1 (amode_reg_scaled base (sextend index @ (value_type $I32)))
+(rule 1 (amode_reg_scaled base (sextend _ index @ (value_type $I32)))
         (AMode.RegScaledExtended base index (ExtendOp.SXTW)))
 
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
@@ -4007,7 +4007,7 @@
 
 
 (decl sink_load_into_addr (Type Inst) Reg)
-(rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
+(rule (sink_load_into_addr ty x @ (load _ _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
         (add_imm_to_addr addr (i64_cast_unsigned offset))))
 

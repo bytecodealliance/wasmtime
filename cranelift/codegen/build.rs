@@ -224,12 +224,12 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
             }));
         }
 
-        if let Ok(out_dir) = std::env::var("OUT_DIR") {
-            options.prefixes.push(isle::codegen::Prefix {
-                prefix: out_dir,
-                name: "<OUT_DIR>".to_string(),
-            })
-        };
+        // if let Ok(out_dir) = std::env::var("OUT_DIR") {
+        //     options.prefixes.push(isle::codegen::Prefix {
+        //         prefix: out_dir,
+        //         name: "<OUT_DIR>".to_string(),
+        //     })
+        // };
 
         isle::compile::from_files(file_paths, &options)?
     };
