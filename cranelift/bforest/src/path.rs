@@ -646,7 +646,7 @@ impl<F: Forest> Path<F> {
 
     /// Normalize the path position such that it is either pointing at a real entry or `size=0`
     /// indicating "off-the-end".
-    pub fn normalize(&mut self, pool: &mut NodePool<F>) {
+    pub fn normalize(&mut self, pool: &NodePool<F>) {
         if let Some((leaf, entry)) = self.leaf_pos() {
             if entry >= pool[leaf].entries() {
                 let leaf_level = self.size - 1;

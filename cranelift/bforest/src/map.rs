@@ -6,7 +6,11 @@ use crate::packed_option::PackedOption;
 use alloc::string::String;
 #[cfg(test)]
 use core::fmt;
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    mem,
+    ops::{Bound, RangeBounds},
+};
 use wasmtime_core::{alloc::PanicOnOom as _, error::OutOfMemory};
 
 /// Tag type defining forest types for a map.
@@ -133,7 +137,7 @@ where
         forest: &mut MapForest<K, V>,
         comp: &C,
     ) -> Option<V> {
-        self.cursor(forest, comp).insert(key, value)
+        self.cursor_mut(forest, comp).insert(key, value)
     }
 
     /// Like `insert` but returns an error on allocation failure.
@@ -144,7 +148,7 @@ where
         forest: &mut MapForest<K, V>,
         comp: &C,
     ) -> Result<Option<V>, OutOfMemory> {
-        self.cursor(forest, comp).try_insert(key, value)
+        self.cursor_mut(forest, comp).try_insert(key, value)
     }
 
     /// Remove `key` from the map and return the removed value for `key`, if any.
@@ -154,7 +158,7 @@ where
         forest: &mut MapForest<K, V>,
         comp: &C,
     ) -> Option<V> {
-        let mut c = self.cursor(forest, comp);
+        let mut c = self.cursor_mut(forest, comp);
         if c.goto(key).is_some() {
             c.remove()
         } else {
@@ -195,14 +199,26 @@ where
         }
     }
 
-    /// Create a cursor for navigating this map. The cursor is initially positioned off the end of
-    /// the map.
+    /// Create an immutable cursor for navigating this map.
+    ///
+    /// The cursor is initially positioned off the end of the map.
     pub fn cursor<'a, C: Comparator<K>>(
-        &'a mut self,
-        forest: &'a mut MapForest<K, V>,
+        &'a self,
+        forest: &'a MapForest<K, V>,
         comp: &'a C,
     ) -> MapCursor<'a, K, V, C> {
         MapCursor::new(self, forest, comp)
+    }
+
+    /// Create a mutable cursor for navigating this map.
+    ///
+    /// The cursor is initially positioned off the end of the map.
+    pub fn cursor_mut<'a, C: Comparator<K>>(
+        &'a mut self,
+        forest: &'a mut MapForest<K, V>,
+        comp: &'a C,
+    ) -> MapCursorMut<'a, K, V, C> {
+        MapCursorMut::new(self, forest, comp)
     }
 
     /// Create an iterator traversing this map. The iterator type is `(K, V)`.
@@ -211,6 +227,33 @@ where
             root: self.root,
             pool: &forest.nodes,
             path: Path::default(),
+        }
+    }
+
+    /// Consume this map and its forest, yielding `(K, V)` pairs from the map.
+    pub fn into_iter(self, forest: MapForest<K, V>) -> MapIntoIter<K, V> {
+        MapIntoIter {
+            root: self.root,
+            pool: forest.nodes,
+            path: Path::default(),
+        }
+    }
+
+    /// Iterate over the enties within the given range.
+    pub fn range<'a, R, C>(
+        &'a self,
+        range: R,
+        forest: &'a MapForest<K, V>,
+        comp: &'a C,
+    ) -> MapRange<'a, K, V, R, C>
+    where
+        R: RangeBounds<K>,
+        C: Comparator<K>,
+    {
+        MapRange {
+            cursor: self.cursor(forest, comp),
+            range,
+            started: false,
         }
     }
 }
@@ -255,6 +298,139 @@ where
     }
 }
 
+struct MapCursorRaw<K, V>
+where
+    K: Copy,
+    V: Copy,
+{
+    path: Path<MapTypes<K, V>>,
+}
+
+impl<K, V> MapCursorRaw<K, V>
+where
+    K: Copy,
+    V: Copy,
+{
+    fn new() -> Self {
+        Self {
+            path: Path::default(),
+        }
+    }
+
+    fn is_empty(&self, root: &PackedOption<Node>) -> bool {
+        root.is_none()
+    }
+
+    fn next(&mut self, pool: &NodePool<MapTypes<K, V>>) -> Option<(K, V)> {
+        self.path.next(pool)
+    }
+
+    fn prev(
+        &mut self,
+        root: &PackedOption<Node>,
+        pool: &NodePool<MapTypes<K, V>>,
+    ) -> Option<(K, V)> {
+        root.expand().and_then(|root| self.path.prev(root, pool))
+    }
+
+    fn key(&self, pool: &NodePool<MapTypes<K, V>>) -> Option<K> {
+        self.path
+            .leaf_pos()
+            .and_then(|(node, entry)| pool[node].unwrap_leaf().0.get(entry).cloned())
+    }
+
+    fn value(&self, pool: &NodePool<MapTypes<K, V>>) -> Option<V> {
+        self.path
+            .leaf_pos()
+            .and_then(|(node, entry)| pool[node].unwrap_leaf().1.get(entry).cloned())
+    }
+
+    fn value_mut<'a>(&self, pool: &'a mut NodePool<MapTypes<K, V>>) -> Option<&'a mut V> {
+        self.path
+            .leaf_pos()
+            .and_then(move |(node, entry)| pool[node].unwrap_leaf_mut().1.get_mut(entry))
+    }
+
+    fn goto(
+        &mut self,
+        root: &PackedOption<Node>,
+        pool: &NodePool<MapTypes<K, V>>,
+        elem: K,
+        comp: &impl Comparator<K>,
+    ) -> Option<V> {
+        root.expand().and_then(|root| {
+            let v = self.path.find(elem, root, pool, comp);
+            if v.is_none() {
+                self.path.normalize(pool);
+            }
+            v
+        })
+    }
+
+    fn goto_first(
+        &mut self,
+        root: &PackedOption<Node>,
+        pool: &NodePool<MapTypes<K, V>>,
+    ) -> Option<V> {
+        root.map(|root| self.path.first(root, pool).1)
+    }
+
+    fn goto_end(&mut self) {
+        self.path = Path::default();
+    }
+
+    fn insert(
+        &mut self,
+        root: &mut PackedOption<Node>,
+        pool: &mut NodePool<MapTypes<K, V>>,
+        key: K,
+        value: V,
+        comp: &impl Comparator<K>,
+    ) -> Option<V> {
+        self.try_insert(root, pool, key, value, comp).panic_on_oom()
+    }
+
+    fn try_insert(
+        &mut self,
+        root: &mut PackedOption<Node>,
+        pool: &mut NodePool<MapTypes<K, V>>,
+        key: K,
+        value: V,
+        comp: &impl Comparator<K>,
+    ) -> Result<Option<V>, OutOfMemory> {
+        match root.expand() {
+            None => {
+                let node = pool.alloc_node(NodeData::leaf(key, value))?;
+                *root = node.into();
+                self.path.set_root_node(node);
+                Ok(None)
+            }
+            Some(r) => {
+                // TODO: Optimize the case where `self.path` is already at the correct insert pos.
+                let old = self.path.find(key, r, pool, comp);
+                if old.is_some() {
+                    *self.path.value_mut(pool) = value;
+                } else {
+                    *root = self.path.insert(key, value, pool)?.into();
+                }
+                Ok(old)
+            }
+        }
+    }
+
+    fn remove(
+        &mut self,
+        root: &mut PackedOption<Node>,
+        pool: &mut NodePool<MapTypes<K, V>>,
+    ) -> Option<V> {
+        let value = self.value(pool);
+        if value.is_some() {
+            *root = self.path.remove(pool).into();
+        }
+        value
+    }
+}
+
 /// A position in a `Map` used to navigate and modify the ordered map.
 ///
 /// A cursor always points at a key-value pair in the map, or "off the end" which is a position
@@ -265,13 +441,96 @@ where
     V: 'a + Copy,
     C: 'a + Comparator<K>,
 {
-    root: &'a mut PackedOption<Node>,
-    pool: &'a mut NodePool<MapTypes<K, V>>,
+    root: &'a PackedOption<Node>,
+    pool: &'a NodePool<MapTypes<K, V>>,
     comp: &'a C,
-    path: Path<MapTypes<K, V>>,
+    raw: MapCursorRaw<K, V>,
 }
 
 impl<'a, K, V, C> MapCursor<'a, K, V, C>
+where
+    K: Copy,
+    V: Copy,
+    C: Comparator<K>,
+{
+    /// Create a cursor with a default (off-the-end) location.
+    fn new(container: &'a Map<K, V>, forest: &'a MapForest<K, V>, comp: &'a C) -> Self {
+        Self {
+            root: &container.root,
+            pool: &forest.nodes,
+            comp,
+            raw: MapCursorRaw::new(),
+        }
+    }
+
+    /// Is this cursor pointing to an empty map?
+    pub fn is_empty(&self) -> bool {
+        self.raw.is_empty(self.root)
+    }
+
+    /// Move cursor to the next key-value pair and return it.
+    ///
+    /// If the cursor reaches the end, return `None` and leave the cursor at the off-the-end
+    /// position.
+    pub fn next(&mut self) -> Option<(K, V)> {
+        self.raw.next(self.pool)
+    }
+
+    /// Move cursor to the previous key-value pair and return it.
+    ///
+    /// If the cursor is already pointing at the first entry, leave it there and return `None`.
+    pub fn prev(&mut self) -> Option<(K, V)> {
+        self.raw.prev(self.root, self.pool)
+    }
+
+    /// Get the current key, or `None` if the cursor is at the end.
+    pub fn key(&self) -> Option<K> {
+        self.raw.key(self.pool)
+    }
+
+    /// Get the current value, or `None` if the cursor is at the end.
+    pub fn value(&self) -> Option<V> {
+        self.raw.value(self.pool)
+    }
+
+    /// Move this cursor to `key`.
+    ///
+    /// If `key` is in the map, place the cursor at `key` and return the corresponding value.
+    ///
+    /// If `key` is not in the set, place the cursor at the next larger element (or the end) and
+    /// return `None`.
+    pub fn goto(&mut self, elem: K) -> Option<V> {
+        self.raw.goto(self.root, self.pool, elem, self.comp)
+    }
+
+    /// Move this cursor to the first element.
+    pub fn goto_first(&mut self) -> Option<V> {
+        self.raw.goto_first(self.root, self.pool)
+    }
+
+    /// Move the cursor to the off-the-end location.
+    pub fn goto_end(&mut self) {
+        self.raw.goto_end();
+    }
+}
+
+/// A position in a `Map` used to navigate and modify the ordered map.
+///
+/// A cursor always points at a key-value pair in the map, or "off the end" which is a position
+/// after the last entry in the map.
+pub struct MapCursorMut<'a, K, V, C>
+where
+    K: 'a + Copy,
+    V: 'a + Copy,
+    C: 'a + Comparator<K>,
+{
+    root: &'a mut PackedOption<Node>,
+    pool: &'a mut NodePool<MapTypes<K, V>>,
+    comp: &'a C,
+    raw: MapCursorRaw<K, V>,
+}
+
+impl<'a, K, V, C> MapCursorMut<'a, K, V, C>
 where
     K: Copy,
     V: Copy,
@@ -283,13 +542,13 @@ where
             root: &mut container.root,
             pool: &mut forest.nodes,
             comp,
-            path: Path::default(),
+            raw: MapCursorRaw::new(),
         }
     }
 
     /// Is this cursor pointing to an empty map?
     pub fn is_empty(&self) -> bool {
-        self.root.is_none()
+        self.raw.is_empty(self.root)
     }
 
     /// Move cursor to the next key-value pair and return it.
@@ -297,37 +556,29 @@ where
     /// If the cursor reaches the end, return `None` and leave the cursor at the off-the-end
     /// position.
     pub fn next(&mut self) -> Option<(K, V)> {
-        self.path.next(self.pool)
+        self.raw.next(self.pool)
     }
 
     /// Move cursor to the previous key-value pair and return it.
     ///
     /// If the cursor is already pointing at the first entry, leave it there and return `None`.
     pub fn prev(&mut self) -> Option<(K, V)> {
-        self.root
-            .expand()
-            .and_then(|root| self.path.prev(root, self.pool))
+        self.raw.prev(self.root, self.pool)
     }
 
     /// Get the current key, or `None` if the cursor is at the end.
     pub fn key(&self) -> Option<K> {
-        self.path
-            .leaf_pos()
-            .and_then(|(node, entry)| self.pool[node].unwrap_leaf().0.get(entry).cloned())
+        self.raw.key(self.pool)
     }
 
     /// Get the current value, or `None` if the cursor is at the end.
     pub fn value(&self) -> Option<V> {
-        self.path
-            .leaf_pos()
-            .and_then(|(node, entry)| self.pool[node].unwrap_leaf().1.get(entry).cloned())
+        self.raw.value(self.pool)
     }
 
     /// Get a mutable reference to the current value, or `None` if the cursor is at the end.
     pub fn value_mut(&mut self) -> Option<&mut V> {
-        self.path
-            .leaf_pos()
-            .and_then(move |(node, entry)| self.pool[node].unwrap_leaf_mut().1.get_mut(entry))
+        self.raw.value_mut(self.pool)
     }
 
     /// Move this cursor to `key`.
@@ -337,18 +588,12 @@ where
     /// If `key` is not in the set, place the cursor at the next larger element (or the end) and
     /// return `None`.
     pub fn goto(&mut self, elem: K) -> Option<V> {
-        self.root.expand().and_then(|root| {
-            let v = self.path.find(elem, root, self.pool, self.comp);
-            if v.is_none() {
-                self.path.normalize(self.pool);
-            }
-            v
-        })
+        self.raw.goto(self.root, self.pool, elem, self.comp)
     }
 
     /// Move this cursor to the first element.
     pub fn goto_first(&mut self) -> Option<V> {
-        self.root.map(|root| self.path.first(root, self.pool).1)
+        self.raw.goto_first(self.root, self.pool)
     }
 
     /// Insert `(key, value))` into the map and leave the cursor at the inserted pair.
@@ -357,39 +602,19 @@ where
     ///
     /// If `key` is already present, replace the existing with `value` and return the old value.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.try_insert(key, value).panic_on_oom()
+        self.raw.insert(self.root, self.pool, key, value, self.comp)
     }
 
     /// Like `insert` but returns an error on allocation failure.
     pub fn try_insert(&mut self, key: K, value: V) -> Result<Option<V>, OutOfMemory> {
-        match self.root.expand() {
-            None => {
-                let root = self.pool.alloc_node(NodeData::leaf(key, value))?;
-                *self.root = root.into();
-                self.path.set_root_node(root);
-                Ok(None)
-            }
-            Some(root) => {
-                // TODO: Optimize the case where `self.path` is already at the correct insert pos.
-                let old = self.path.find(key, root, self.pool, self.comp);
-                if old.is_some() {
-                    *self.path.value_mut(self.pool) = value;
-                } else {
-                    *self.root = self.path.insert(key, value, self.pool)?.into();
-                }
-                Ok(old)
-            }
-        }
+        self.raw
+            .try_insert(self.root, self.pool, key, value, self.comp)
     }
 
     /// Remove the current entry (if any) and return the mapped value.
     /// This advances the cursor to the next entry after the removed one.
     pub fn remove(&mut self) -> Option<V> {
-        let value = self.value();
-        if value.is_some() {
-            *self.root = self.path.remove(self.pool).into();
-        }
-        value
+        self.raw.remove(self.root, self.pool)
     }
 }
 
@@ -422,29 +647,151 @@ where
     }
 }
 
+/// A consuming iterator of a `Map`, yielding its key-value pairs.
+pub struct MapIntoIter<K, V>
+where
+    K: Copy,
+    V: Copy,
+{
+    root: PackedOption<Node>,
+    pool: NodePool<MapTypes<K, V>>,
+    path: Path<MapTypes<K, V>>,
+}
+
+impl<K, V> Iterator for MapIntoIter<K, V>
+where
+    K: Copy,
+    V: Copy,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // We use `self.root` to indicate if we need to go to the first element. Reset to `None`
+        // once we've returned the first element. This also works for an empty tree since the
+        // `path.next()` call returns `None` when the path is empty. This also fuses the iterator.
+        match self.root.take() {
+            Some(root) => Some(self.path.first(root, &self.pool)),
+            None => self.path.next(&self.pool),
+        }
+    }
+}
+
+/// An immutable iterator over a range of values, returned by `Map::range`.
+pub struct MapRange<'a, K, V, R, C>
+where
+    K: Copy,
+    V: Copy,
+    R: RangeBounds<K>,
+    C: Comparator<K>,
+{
+    cursor: MapCursor<'a, K, V, C>,
+    range: R,
+    started: bool,
+}
+
+impl<'a, K, V, R, C> Iterator for MapRange<'a, K, V, R, C>
+where
+    K: Copy,
+    V: Copy,
+    R: RangeBounds<K>,
+    C: Comparator<K>,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let started = mem::replace(&mut self.started, true);
+
+        let key_val = (|| {
+            if started {
+                self.cursor.next()
+            } else {
+                match self.range.start_bound() {
+                    Bound::Included(k) => {
+                        self.cursor.goto(*k);
+                        Some((self.cursor.key()?, self.cursor.value()?))
+                    }
+                    Bound::Excluded(k) => {
+                        self.cursor.goto(*k);
+                        if self
+                            .cursor
+                            .key()
+                            .is_some_and(|key| self.cursor.comp.cmp(*k, key).is_eq())
+                        {
+                            self.cursor.next()
+                        } else {
+                            Some((self.cursor.key()?, self.cursor.value()?))
+                        }
+                    }
+                    Bound::Unbounded => {
+                        let val = self.cursor.goto_first()?;
+                        Some((self.cursor.key()?, val))
+                    }
+                }
+            }
+        })();
+
+        match key_val {
+            Some((key, val)) if self.is_in_bounds(key) => Some((key, val)),
+            _ => {
+                self.cursor.goto_end();
+                None
+            }
+        }
+    }
+}
+
+impl<'a, K, V, R, C> MapRange<'a, K, V, R, C>
+where
+    K: Copy,
+    V: Copy,
+    R: RangeBounds<K>,
+    C: Comparator<K>,
+{
+    fn is_in_bounds(&self, key: K) -> bool {
+        debug_assert!(self.is_in_start_bound(key));
+        self.is_in_end_bound(key)
+    }
+
+    fn is_in_start_bound(&self, key: K) -> bool {
+        match self.range.start_bound() {
+            Bound::Included(k) => self.cursor.comp.cmp(key, *k).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(key, *k).is_gt(),
+            Bound::Unbounded => true,
+        }
+    }
+
+    fn is_in_end_bound(&self, key: K) -> bool {
+        match self.range.end_bound() {
+            Bound::Included(k) => self.cursor.comp.cmp(*k, key).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(*k, key).is_gt(),
+            Bound::Unbounded => true,
+        }
+    }
+}
+
 #[cfg(test)]
-impl<'a, K, V, C> MapCursor<'a, K, V, C>
+impl<'a, K, V, C> MapCursorMut<'a, K, V, C>
 where
     K: Copy + fmt::Display,
     V: Copy + fmt::Display,
     C: Comparator<K>,
 {
     fn verify(&self) {
-        self.path.verify(self.pool);
+        self.raw.path.verify(self.pool);
         self.root.map(|root| self.pool.verify_tree(root, self.comp));
     }
 
     /// Get a text version of the path to the current position.
     fn tpath(&self) -> String {
         use alloc::string::ToString;
-        self.path.to_string()
+        self.raw.path.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec::Vec;
+    use alloc::{vec, vec::Vec};
     use core::mem;
 
     #[test]
@@ -468,7 +815,7 @@ mod tests {
         assert_eq!(m.get_or_less(7, &f, &()), None);
         m.retain(&mut f, |_, _| unreachable!());
 
-        let mut c = m.cursor(&mut f, &());
+        let mut c = m.cursor_mut(&mut f, &());
         assert!(c.is_empty());
         assert_eq!(c.key(), None);
         assert_eq!(c.value(), None);
@@ -528,7 +875,7 @@ mod tests {
         assert_eq!(m.get_or_less(201, f, &()), Some((200, 20.0)));
 
         {
-            let mut c = m.cursor(f, &());
+            let mut c = m.cursor_mut(f, &());
             assert_eq!(c.prev(), Some((200, 20.0)));
             assert_eq!(c.prev(), Some((90, 9.0)));
             assert_eq!(c.prev(), Some((80, 8.0)));
@@ -561,7 +908,7 @@ mod tests {
         // [ 40 50 60 90 200 ]
 
         {
-            let mut c = m.cursor(f, &());
+            let mut c = m.cursor_mut(f, &());
             assert_eq!(c.goto_first(), Some(4.0));
             assert_eq!(c.key(), Some(40));
             assert_eq!(c.value(), Some(4.0));
@@ -682,7 +1029,7 @@ mod tests {
         assert_eq!(m.tpath(870, f, &()), "node2[7]--node8[6]");
 
         {
-            let mut c = m.cursor(f, &());
+            let mut c = m.cursor_mut(f, &());
             assert_eq!(c.goto_first(), Some(1.1));
             assert_eq!(c.key(), Some(110));
         }
@@ -934,5 +1281,184 @@ mod tests {
         }
 
         assert!(m.is_empty());
+    }
+
+    #[test]
+    fn immutable_cursor() {
+        let f = &mut MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
+
+        for i in 100..200 {
+            m.insert(i, i as f32, f, &());
+        }
+
+        let mut c = m.cursor(f, &());
+
+        let v = c.goto_first().unwrap();
+        assert_eq!(v, 100.0);
+        assert_eq!(c.key(), Some(100));
+        assert_eq!(c.value(), Some(100.0));
+
+        let (k, v) = c.next().unwrap();
+        assert_eq!(k, 101);
+        assert_eq!(v, 101.0);
+        assert_eq!(c.key(), Some(101));
+        assert_eq!(c.value(), Some(101.0));
+
+        let (k, v) = c.next().unwrap();
+        assert_eq!(k, 102);
+        assert_eq!(v, 102.0);
+        assert_eq!(c.key(), Some(102));
+        assert_eq!(c.value(), Some(102.0));
+
+        let (k, v) = c.prev().unwrap();
+        assert_eq!(k, 101);
+        assert_eq!(v, 101.0);
+        assert_eq!(c.key(), Some(101));
+        assert_eq!(c.value(), Some(101.0));
+
+        let v = c.goto(175).unwrap();
+        assert_eq!(v, 175.0);
+        assert_eq!(c.key(), Some(175));
+        assert_eq!(c.value(), Some(175.0));
+
+        let (k, v) = c.next().unwrap();
+        assert_eq!(k, 176);
+        assert_eq!(v, 176.0);
+        assert_eq!(c.key(), Some(176));
+        assert_eq!(c.value(), Some(176.0));
+
+        let (k, v) = c.prev().unwrap();
+        assert_eq!(k, 175);
+        assert_eq!(v, 175.0);
+        assert_eq!(c.key(), Some(175));
+        assert_eq!(c.value(), Some(175.0));
+
+        let v = c.goto(200);
+        assert!(v.is_none());
+        assert!(c.key().is_none());
+        assert!(c.value().is_none());
+
+        for i in (100..200).rev() {
+            let (k, v) = c.prev().unwrap();
+            assert_eq!(k, i);
+            assert_eq!(v, i as f32);
+            assert_eq!(c.key(), Some(i));
+            assert_eq!(c.value(), Some(i as f32));
+        }
+        assert!(c.prev().is_none());
+
+        assert_eq!(c.key(), Some(100));
+        assert_eq!(c.value(), Some(100.0));
+        for i in 101..200 {
+            let (k, v) = c.next().unwrap();
+            assert_eq!(k, i);
+            assert_eq!(v, i as f32);
+            assert_eq!(c.key(), Some(i));
+            assert_eq!(c.value(), Some(i as f32));
+        }
+        assert!(c.next().is_none());
+        assert!(c.key().is_none());
+        assert!(c.value().is_none());
+    }
+
+    #[test]
+    fn into_iter() {
+        let mut f = MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
+
+        for i in 10..20 {
+            m.insert(i, i as f32, &mut f, &());
+        }
+
+        assert_eq!(
+            m.into_iter(f).collect::<Vec<_>>(),
+            vec![
+                (10, 10.0),
+                (11, 11.0),
+                (12, 12.0),
+                (13, 13.0),
+                (14, 14.0),
+                (15, 15.0),
+                (16, 16.0),
+                (17, 17.0),
+                (18, 18.0),
+                (19, 19.0),
+            ],
+        );
+    }
+
+    #[test]
+    fn range() {
+        let mut f = MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
+
+        for i in 10..20 {
+            m.insert(i, i as f32, &mut f, &());
+        }
+
+        assert_eq!(
+            m.range(.., &f, &()).collect::<Vec<_>>(),
+            vec![
+                (10, 10.0),
+                (11, 11.0),
+                (12, 12.0),
+                (13, 13.0),
+                (14, 14.0),
+                (15, 15.0),
+                (16, 16.0),
+                (17, 17.0),
+                (18, 18.0),
+                (19, 19.0),
+            ],
+        );
+
+        assert_eq!(
+            m.range(5..12, &f, &()).collect::<Vec<_>>(),
+            vec![(10, 10.0), (11, 11.0)],
+        );
+
+        assert_eq!(
+            m.range(18..30, &f, &()).collect::<Vec<_>>(),
+            vec![(18, 18.0), (19, 19.0)],
+        );
+
+        assert_eq!(
+            m.range(..13, &f, &()).collect::<Vec<_>>(),
+            vec![(10, 10.0), (11, 11.0), (12, 12.0)],
+        );
+
+        assert_eq!(
+            m.range(18.., &f, &()).collect::<Vec<_>>(),
+            vec![(18, 18.0), (19, 19.0)],
+        );
+
+        assert_eq!(
+            m.range(12..=15, &f, &()).collect::<Vec<_>>(),
+            vec![(12, 12.0), (13, 13.0), (14, 14.0), (15, 15.0)],
+        );
+
+        // Check when the query range is outside the entry range.
+        assert_eq!(m.range(0..5, &f, &()).collect::<Vec<_>>(), vec![]);
+        assert_eq!(m.range(30..40, &f, &()).collect::<Vec<_>>(), vec![]);
+
+        // Check when the query range's start and end land in between entries.
+        for i in 30..40 {
+            if i % 2 == 0 {
+                m.insert(i, i as f32, &mut f, &());
+            }
+        }
+        assert_eq!(
+            m.range(31..35, &f, &()).collect::<Vec<_>>(),
+            vec![(32, 32.0), (34, 34.0)],
+        );
+        assert_eq!(
+            m.range(29..33, &f, &()).collect::<Vec<_>>(),
+            vec![(30, 30.0), (32, 32.0)],
+        );
+        assert_eq!(
+            m.range(35..40, &f, &()).collect::<Vec<_>>(),
+            vec![(36, 36.0), (38, 38.0)],
+        );
     }
 }
