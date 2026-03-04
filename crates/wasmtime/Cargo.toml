@@ -379,7 +379,7 @@ reexport-wasmparser = []
 
 # Enables instances of the traits defined in the wasm-wave crate, which
 # provides a human-readable text format for component values.
-wave = ["dep:wasm-wave", 'component-model']
+wave = ["dep:wasm-wave", "component-model", "std"]
 
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
@@ -402,7 +402,13 @@ custom-sync-primitives = []
 # Off-by-default support to profile the Pulley interpreter. This has a
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
-profile-pulley = ['anyhow', 'pulley', 'profiling', 'pulley-interpreter/profile']
+profile-pulley = [
+    "anyhow",
+    "profiling",
+    "pulley",
+    "pulley-interpreter/interp",
+    "pulley-interpreter/profile",
+]
 
 # Enables support for the Component Model Async ABI, along with `future`,
 # `stream`, and `error-context` types.
