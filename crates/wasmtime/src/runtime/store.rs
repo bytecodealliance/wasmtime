@@ -473,7 +473,7 @@ pub struct StoreOpaque {
     #[cfg(feature = "stack-switching")]
     continuations: Vec<Box<VMContRef>>,
 
-    instances: wasmtime_environ::collections::PrimaryMap<InstanceId, StoreInstance>,
+    instances: TryPrimaryMap<InstanceId, StoreInstance>,
 
     signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
@@ -744,7 +744,7 @@ impl<T> Store<T> {
             vm_store_context: Default::default(),
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
-            instances: wasmtime_environ::collections::PrimaryMap::new(),
+            instances: TryPrimaryMap::new(),
             signal_handler: None,
             gc_store: None,
             gc_roots: RootSet::default(),

@@ -10,7 +10,7 @@ use crate::{
     ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, SizeOverflow,
     StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex,
     Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
-    WasmValType, WasmparserTypeConverter, collections,
+    WasmValType, WasmparserTypeConverter,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -1107,7 +1107,7 @@ impl ModuleTranslation<'_> {
         // memory initialization image is built here from the page data and then
         // it's converted to a single initializer.
         let data = mem::replace(&mut self.data, Vec::new());
-        let mut map = collections::PrimaryMap::with_capacity(info.len()).panic_on_oom();
+        let mut map = TryPrimaryMap::with_capacity(info.len()).panic_on_oom();
         let mut module_data_size = 0u32;
         for (memory, info) in info.iter() {
             // Create the in-memory `image` which is the initialized contents of
