@@ -133,7 +133,7 @@
 //! }
 //! ```
 
-use crate::alloc::Vec;
+use crate::alloc::TryVec;
 use crate::error::OutOfMemory;
 use core::fmt;
 use core::num::NonZeroU32;
@@ -171,7 +171,7 @@ impl Id {
 pub struct Slab<T> {
     /// The slab's entries, each is either occupied and holding a `T` or vacant
     /// and is a link the free list.
-    entries: Vec<Entry<T>>,
+    entries: TryVec<Entry<T>>,
 
     /// The index of the first free entry in the free list.
     free: Option<EntryIndex>,
@@ -224,7 +224,7 @@ impl<T> Default for Slab<T> {
     #[inline]
     fn default() -> Self {
         Self {
-            entries: Vec::default(),
+            entries: TryVec::default(),
             free: None,
             len: 0,
         }

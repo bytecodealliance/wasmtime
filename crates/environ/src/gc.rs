@@ -17,7 +17,7 @@ pub mod null;
 
 use crate::{
     WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmExnType, WasmStorageType,
-    WasmStructType, WasmValType, collections, error::OutOfMemory, prelude::*,
+    WasmStructType, WasmValType, error::OutOfMemory, prelude::*,
 };
 use alloc::sync::Arc;
 use core::alloc::Layout;
@@ -122,7 +122,7 @@ fn common_struct_or_exn_layout(
     fields: &[crate::WasmFieldType],
     header_size: u32,
     header_align: u32,
-) -> (u32, u32, collections::Vec<GcStructLayoutField>) {
+) -> (u32, u32, TryVec<GcStructLayoutField>) {
     use crate::PanicOnOom as _;
 
     // Process each field, aligning it to its natural alignment.
@@ -145,7 +145,7 @@ fn common_struct_or_exn_layout(
             let is_gc_ref = f.element_type.is_vmgcref_type_and_not_i31();
             GcStructLayoutField { offset, is_gc_ref }
         })
-        .try_collect::<collections::Vec<_>, _>()
+        .try_collect::<TryVec<_>, _>()
         .panic_on_oom();
 
     // Ensure that the final size is a multiple of the alignment, for
@@ -377,7 +377,7 @@ pub struct GcStructLayout {
 
     /// The fields of this struct. The `i`th entry contains information about
     /// the `i`th struct field's layout.
-    pub fields: collections::Vec<GcStructLayoutField>,
+    pub fields: TryVec<GcStructLayoutField>,
 
     /// Whether this is an exception object layout.
     pub is_exception: bool,

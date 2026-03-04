@@ -34,7 +34,7 @@ use object::{
     read::elf::{ElfFile64, FileHeader, SectionHeader},
 };
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_environ::{FlagValue, ObjectKind, OperatorCostStrategy, Tunables, collections, obj};
+use wasmtime_environ::{FlagValue, ObjectKind, OperatorCostStrategy, Tunables, obj};
 
 const VERSION: u8 = 0;
 
@@ -181,9 +181,9 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 pub struct Metadata<'a> {
     target: TryString,
     #[serde(borrow)]
-    shared_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
+    shared_flags: TryVec<(&'a str, FlagValue<'a>)>,
     #[serde(borrow)]
-    isa_flags: collections::Vec<(&'a str, FlagValue<'a>)>,
+    isa_flags: TryVec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: u64,
 }

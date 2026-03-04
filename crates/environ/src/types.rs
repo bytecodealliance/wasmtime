@@ -752,7 +752,7 @@ impl WasmFuncType {
     where
         D: serde::de::Deserializer<'de>,
     {
-        let tys: crate::collections::Vec<WasmValType> =
+        let tys: crate::collections::TryVec<WasmValType> =
             serde::Deserialize::deserialize(deserializer)?;
         let tys = tys
             .into_boxed_slice()
@@ -766,7 +766,7 @@ impl WasmFuncType {
         params: impl IntoIterator<Item = WasmValType>,
         results: impl IntoIterator<Item = WasmValType>,
     ) -> Result<Self, OutOfMemory> {
-        let mut params_results: crate::collections::Vec<_> = params.into_iter().try_collect()?;
+        let mut params_results: crate::collections::TryVec<_> = params.into_iter().try_collect()?;
         let non_i31_gc_ref_params_count = params_results
             .iter()
             .filter(|p| p.is_vmgcref_type_and_not_i31())

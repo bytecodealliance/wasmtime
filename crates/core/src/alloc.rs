@@ -19,7 +19,7 @@ pub use try_clone::TryClone;
 pub use try_collect::{TryCollect, TryExtend, TryFromIterator};
 pub use try_cow::{TryCow, TryToOwned};
 pub use try_new::{TryNew, try_new};
-pub use vec::Vec;
+pub use vec::TryVec;
 
 use crate::error::OutOfMemory;
 use core::{alloc::Layout, ptr::NonNull};
