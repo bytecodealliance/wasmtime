@@ -213,26 +213,26 @@ fn try_entity_set_insert() -> Result<()> {
 }
 
 #[test]
-fn hash_set_with_capacity() -> Result<()> {
+fn try_hash_set_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
-        let _s = HashSet::<usize>::with_capacity(100)?;
+        let _s = TryHashSet::<usize>::with_capacity(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn hash_set_reserve() -> Result<()> {
+fn try_hash_set_reserve() -> Result<()> {
     OomTest::new().test(|| {
-        let mut set = HashSet::<usize>::new();
+        let mut set = TryHashSet::<usize>::new();
         set.reserve(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn hash_set_insert() -> Result<()> {
+fn try_hash_set_insert() -> Result<()> {
     OomTest::new().test(|| {
-        let mut set = HashSet::<usize>::new();
+        let mut set = TryHashSet::<usize>::new();
         for i in 0..1024 {
             set.insert(i)?;
         }
