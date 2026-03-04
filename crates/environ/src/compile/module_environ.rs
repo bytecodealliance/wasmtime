@@ -403,7 +403,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.module.tables.push(table)?;
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {
-                            precomputed: collections::Vec::new(),
+                            precomputed: TryVec::new(),
                         },
                         wasmparser::TableInit::Expr(expr) => {
                             let (init, escaped) = ConstExpr::from_wasmparser(self, expr)?;
@@ -1230,7 +1230,7 @@ impl ModuleTranslation<'_> {
             if let TableInitialValue::Expr(expr) = init {
                 if let [ConstOp::RefFunc(f)] = expr.ops() {
                     *init = TableInitialValue::Null {
-                        precomputed: collections::vec![*f; table_size as usize].panic_on_oom(),
+                        precomputed: try_vec![*f; table_size as usize].panic_on_oom(),
                     };
                 }
             }

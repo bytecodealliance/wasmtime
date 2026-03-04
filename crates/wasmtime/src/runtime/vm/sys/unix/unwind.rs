@@ -3,11 +3,10 @@
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
 use core::ptr::NonNull;
-use wasmtime_environ::collections::Vec;
 
 /// Represents a registration of function unwind information for System V ABI.
 pub struct UnwindRegistration {
-    registrations: Vec<SendSyncPtr<u8>>,
+    registrations: TryVec<SendSyncPtr<u8>>,
 }
 
 cfg_if::cfg_if! {
@@ -79,7 +78,7 @@ impl UnwindRegistration {
             "The unwind info must always be aligned to a page"
         );
 
-        let mut registrations = Vec::new();
+        let mut registrations = TryVec::new();
         unsafe {
             if using_libunwind() {
                 // For libunwind, `__register_frame` takes a pointer to a single

@@ -12,7 +12,6 @@ use wasmtime_environ::{
     PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
     WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
     WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
-    collections::Vec as FallibleVec,
 };
 
 pub(crate) mod matching;
@@ -2448,7 +2447,7 @@ impl FuncType {
         let params = params.into_iter();
         let results = results.into_iter();
 
-        let mut wasmtime_params = FallibleVec::with_capacity({
+        let mut wasmtime_params = TryVec::with_capacity({
             let size_hint = params.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Only reserve space if we have a supertype, as that is the only time
@@ -2456,7 +2455,7 @@ impl FuncType {
             supertype.is_some() as usize * cap
         })?;
 
-        let mut wasmtime_results = FallibleVec::with_capacity({
+        let mut wasmtime_results = TryVec::with_capacity({
             let size_hint = results.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Same as above.
@@ -2468,10 +2467,10 @@ impl FuncType {
         // the only thing keeping a type in the registry, we don't want to
         // unregister it when we convert the `ValType` into a `WasmValType` just
         // before we register our new `WasmFuncType` that will reference it.
-        let mut registrations = FallibleVec::new();
+        let mut registrations = TryVec::new();
 
         let mut to_wasm_type =
-            |ty: ValType, vec: &mut FallibleVec<_>| -> Result<WasmValType, OutOfMemory> {
+            |ty: ValType, vec: &mut TryVec<_>| -> Result<WasmValType, OutOfMemory> {
                 assert!(ty.comes_from_same_engine(engine));
 
                 if supertype.is_some() {

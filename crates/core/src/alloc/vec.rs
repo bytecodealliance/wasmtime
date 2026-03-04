@@ -17,10 +17,10 @@ use std_alloc::vec::Vec as StdVec;
 
 /// Same as the [`std::vec!`] macro but returns an error on allocation failure.
 #[macro_export]
-macro_rules! vec {
+macro_rules! try_vec {
     ( $( $elem:expr ),* ) => {{
         let len = $crate::private_len!( $( $elem ),* );
-        $crate::alloc::Vec::with_capacity(len).and_then(|mut v| {
+        $crate::alloc::TryVec::with_capacity(len).and_then(|mut v| {
             $( v.push($elem)?; )*
             let _ = &mut v;
             Ok(v)
@@ -31,9 +31,9 @@ macro_rules! vec {
         let len: usize = $len;
         if let Some(len) = ::core::num::NonZeroUsize::new(len) {
             let elem = $elem;
-            $crate::alloc::Vec::from_elem(elem, len)
+            $crate::alloc::TryVec::from_elem(elem, len)
         } else {
-            Ok($crate::alloc::Vec::new())
+            Ok($crate::alloc::TryVec::new())
         }
     }};
 
@@ -50,11 +50,11 @@ macro_rules! private_len {
 /// Like `std::vec::Vec` but all methods that allocate force handling allocation
 /// failure.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Vec<T> {
+pub struct TryVec<T> {
     inner: StdVec<T>,
 }
 
-impl<T> Default for Vec<T> {
+impl<T> Default for TryVec<T> {
     fn default() -> Self {
         Self {
             inner: Default::default(),
@@ -62,18 +62,18 @@ impl<T> Default for Vec<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Vec<T> {
+impl<T: fmt::Debug> fmt::Debug for TryVec<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.inner, f)
     }
 }
 
-impl<T> TryClone for Vec<T>
+impl<T> TryClone for TryVec<T>
 where
     T: TryClone,
 {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        let mut v = Vec::with_capacity(self.len())?;
+        let mut v = TryVec::with_capacity(self.len())?;
         for x in self {
             v.push(x.try_clone()?).expect("reserved capacity");
         }
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<T> Vec<T> {
+impl<T> TryVec<T> {
     /// Same as [`std::vec::Vec::new`].
     pub const fn new() -> Self {
         Self {
@@ -214,7 +214,7 @@ impl<T> Vec<T> {
 
     /// Same as [`std::vec::Vec::from_raw_parts`].
     pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Self {
-        Vec {
+        TryVec {
             // Safety: Same as our unsafe contract.
             inner: unsafe { StdVec::from_raw_parts(ptr, length, capacity) },
         }
@@ -274,7 +274,7 @@ impl<T> Vec<T> {
                 // SAFETY: If reallocation fails then it's guaranteed that the
                 // original allocation is not tampered with, so it's safe to
                 // reassemble the original vector.
-                *self = unsafe { Vec::from_raw_parts(ptr, len, cap) };
+                *self = unsafe { TryVec::from_raw_parts(ptr, len, cap) };
                 Err(oom)
             }
         }
@@ -296,7 +296,7 @@ impl<T> Vec<T> {
     }
 }
 
-impl<T> Deref for Vec<T> {
+impl<T> Deref for TryVec<T> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
@@ -304,25 +304,25 @@ impl<T> Deref for Vec<T> {
     }
 }
 
-impl<T> DerefMut for Vec<T> {
+impl<T> DerefMut for TryVec<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl<T> AsRef<[T]> for Vec<T> {
+impl<T> AsRef<[T]> for TryVec<T> {
     fn as_ref(&self) -> &[T] {
         self
     }
 }
 
-impl<T> Borrow<[T]> for Vec<T> {
+impl<T> Borrow<[T]> for TryVec<T> {
     fn borrow(&self) -> &[T] {
         self
     }
 }
 
-impl<T, I> Index<I> for Vec<T>
+impl<T, I> Index<I> for TryVec<T>
 where
     I: SliceIndex<[T]>,
 {
@@ -333,7 +333,7 @@ where
     }
 }
 
-impl<T, I> IndexMut<I> for Vec<T>
+impl<T, I> IndexMut<I> for TryVec<T>
 where
     I: SliceIndex<[T]>,
 {
@@ -342,7 +342,7 @@ where
     }
 }
 
-impl<T> IntoIterator for Vec<T> {
+impl<T> IntoIterator for TryVec<T> {
     type Item = T;
     type IntoIter = std_alloc::vec::IntoIter<T>;
 
@@ -351,7 +351,7 @@ impl<T> IntoIterator for Vec<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a Vec<T> {
+impl<'a, T> IntoIterator for &'a TryVec<T> {
     type Item = &'a T;
 
     type IntoIter = core::slice::Iter<'a, T>;
@@ -361,7 +361,7 @@ impl<'a, T> IntoIterator for &'a Vec<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut Vec<T> {
+impl<'a, T> IntoIterator for &'a mut TryVec<T> {
     type Item = &'a mut T;
 
     type IntoIter = core::slice::IterMut<'a, T>;
@@ -371,25 +371,25 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
     }
 }
 
-impl<T> From<Vec<T>> for StdVec<T> {
-    fn from(v: Vec<T>) -> Self {
+impl<T> From<TryVec<T>> for StdVec<T> {
+    fn from(v: TryVec<T>) -> Self {
         v.inner
     }
 }
 
-impl<T> From<StdVec<T>> for Vec<T> {
+impl<T> From<StdVec<T>> for TryVec<T> {
     fn from(inner: StdVec<T>) -> Self {
         Self { inner }
     }
 }
 
-impl<T> From<Box<[T]>> for Vec<T> {
+impl<T> From<Box<[T]>> for TryVec<T> {
     fn from(boxed_slice: Box<[T]>) -> Self {
         Self::from(StdVec::from(boxed_slice))
     }
 }
 
-impl<T> serde::ser::Serialize for Vec<T>
+impl<T> serde::ser::Serialize for TryVec<T>
 where
     T: serde::ser::Serialize,
 {
@@ -405,7 +405,7 @@ where
     }
 }
 
-impl<'de, T> serde::de::Deserialize<'de> for Vec<T>
+impl<'de, T> serde::de::Deserialize<'de> for TryVec<T>
 where
     T: serde::de::Deserialize<'de>,
 {
@@ -413,13 +413,13 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        struct Visitor<T>(PhantomData<fn() -> Vec<T>>);
+        struct Visitor<T>(PhantomData<fn() -> TryVec<T>>);
 
         impl<'de, T> serde::de::Visitor<'de> for Visitor<T>
         where
             T: serde::de::Deserialize<'de>,
         {
-            type Value = Vec<T>;
+            type Value = TryVec<T>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("a `wasmtime_core::alloc::Vec` sequence")
@@ -431,7 +431,7 @@ where
             {
                 use serde::de::Error as _;
 
-                let mut v = Vec::new();
+                let mut v = TryVec::new();
 
                 if let Some(len) = seq.size_hint() {
                     v.reserve_exact(len).map_err(|oom| A::Error::custom(oom))?;
@@ -451,32 +451,32 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Vec;
+    use super::TryVec;
     use crate::error::OutOfMemory;
 
     #[test]
     fn test_into_boxed_slice() -> Result<(), OutOfMemory> {
-        assert_eq!(*Vec::<i32>::new().into_boxed_slice()?, []);
+        assert_eq!(*TryVec::<i32>::new().into_boxed_slice()?, []);
 
-        let mut vec = Vec::new();
-        vec.push(1)?;
+        let mut vec = TryVec::new();
+        try_vec.push(1)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
-        let mut vec = Vec::with_capacity(2)?;
-        vec.push(1)?;
+        let mut vec = TryVec::with_capacity(2)?;
+        try_vec.push(1)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
-        let mut vec = Vec::with_capacity(2)?;
-        vec.push(1_u128)?;
+        let mut vec = TryVec::with_capacity(2)?;
+        try_vec.push(1_u128)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
-        assert_eq!(*Vec::<()>::new().into_boxed_slice()?, []);
+        assert_eq!(*TryVec::<()>::new().into_boxed_slice()?, []);
 
-        let mut vec = Vec::new();
-        vec.push(())?;
+        let mut vec = TryVec::new();
+        try_vec.push(())?;
         assert_eq!(*vec.into_boxed_slice()?, [()]);
 
-        let vec = Vec::<i32>::with_capacity(2)?;
+        let vec = TryVec::<i32>::with_capacity(2)?;
         assert_eq!(*vec.into_boxed_slice()?, []);
         Ok(())
     }
