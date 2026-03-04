@@ -1,7 +1,6 @@
 use crate::{
     ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PanicOnOom as _, TypeTrace, WasmSubType,
-    collections::{PrimaryMap, SecondaryMap},
-    packed_option::PackedOption,
+    collections::SecondaryMap, packed_option::PackedOption, prelude::*,
 };
 use core::ops::{Index, Range};
 use serde_derive::{Deserialize, Serialize};
@@ -12,8 +11,8 @@ use serde_derive::{Deserialize, Serialize};
 /// implementations for this type.
 #[derive(Default, Serialize, Deserialize)]
 pub struct ModuleTypes {
-    rec_groups: PrimaryMap<ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>>,
-    wasm_types: PrimaryMap<ModuleInternedTypeIndex, WasmSubType>,
+    rec_groups: TryPrimaryMap<ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>>,
+    wasm_types: TryPrimaryMap<ModuleInternedTypeIndex, WasmSubType>,
     trampoline_types: SecondaryMap<ModuleInternedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
 }
 

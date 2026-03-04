@@ -4,7 +4,7 @@
 use crate::prelude::*;
 use crate::{
     EntityRef, FilePos, FuncIndex, FuncKey, FuncKeyIndex, FuncKeyKind, FuncKeyNamespace, Module,
-    PanicOnOom as _, collections::PrimaryMap,
+    PanicOnOom as _,
 };
 use core::ops::Range;
 use core::{fmt, u32};
@@ -78,13 +78,13 @@ impl CompiledFunctionsTableBuilder {
     pub fn new() -> Self {
         Self {
             inner: CompiledFunctionsTable {
-                namespaces: PrimaryMap::new(),
-                func_loc_starts: PrimaryMap::new(),
-                sparse_starts: PrimaryMap::new(),
-                src_loc_starts: PrimaryMap::new(),
-                sparse_indices: PrimaryMap::new(),
-                func_locs: PrimaryMap::new(),
-                src_locs: PrimaryMap::new(),
+                namespaces: TryPrimaryMap::new(),
+                func_loc_starts: TryPrimaryMap::new(),
+                sparse_starts: TryPrimaryMap::new(),
+                src_loc_starts: TryPrimaryMap::new(),
+                sparse_indices: TryPrimaryMap::new(),
+                func_locs: TryPrimaryMap::new(),
+                src_locs: TryPrimaryMap::new(),
             },
         }
     }
@@ -289,7 +289,7 @@ pub struct CompiledFunctionsTable {
     /// their associated `NamespaceIndex`. That `NamespaceIndex` can then be
     /// used to find the range of other entity indices that are specific to that
     /// namespace.
-    namespaces: PrimaryMap<NamespaceIndex, FuncKeyNamespace>,
+    namespaces: TryPrimaryMap<NamespaceIndex, FuncKeyNamespace>,
 
     /// `self.func_loc_starts[i]..self.func_loc_starts[i+1]` describes the range
     /// within `self.func_locs` whose entries are associated with the namespace
@@ -297,7 +297,7 @@ pub struct CompiledFunctionsTable {
     ///
     /// When `self.func_loc_starts[i+1]` is out of bounds, then the range is to
     /// the end of `self.func_locs`.
-    func_loc_starts: PrimaryMap<NamespaceIndex, FuncLocIndex>,
+    func_loc_starts: TryPrimaryMap<NamespaceIndex, FuncLocIndex>,
 
     /// `self.sparse_starts[i]..self.sparse_starts[i+1]` describes the range
     /// within `self.sparse_indices` whose entries are associated with the
@@ -307,7 +307,7 @@ pub struct CompiledFunctionsTable {
     /// the end of `self.sparse_indices`.
     ///
     /// Entries are only valid for sparse, non-dense namespaces.
-    sparse_starts: PrimaryMap<NamespaceIndex, SparseIndex>,
+    sparse_starts: TryPrimaryMap<NamespaceIndex, SparseIndex>,
 
     /// `self.src_loc_starts[i]..self.src_loc_starts[i+1]` describes the range
     /// within `self.src_loc_indices` whose entries are associated with the
@@ -318,7 +318,7 @@ pub struct CompiledFunctionsTable {
     ///
     /// Entries are only valid for namespaces whose functions have source
     /// locations.
-    src_loc_starts: PrimaryMap<NamespaceIndex, SrcLocIndex>,
+    src_loc_starts: TryPrimaryMap<NamespaceIndex, SrcLocIndex>,
 
     /// `self.sparse_indices[i]` contains the index part of
     /// `FuncKey::from_parts(ns, index)` where `ns` is determined by
@@ -327,7 +327,7 @@ pub struct CompiledFunctionsTable {
     /// the namespace's start index.)
     ///
     /// This is sorted to allow for binary searches.
-    sparse_indices: PrimaryMap<SparseIndex, FuncKeyIndex>,
+    sparse_indices: TryPrimaryMap<SparseIndex, FuncKeyIndex>,
 
     /// `self.func_locs[i]` contains the location within the text section of
     /// `FuncKey::from_parts(self.namespaces[ns], i - start)`'s function, where
@@ -338,14 +338,14 @@ pub struct CompiledFunctionsTable {
     ///
     /// The absence of a function location (for gaps in dense namespaces) is
     /// represented with `FunctionLoc::none()`.
-    func_locs: PrimaryMap<FuncLocIndex, FunctionLoc>,
+    func_locs: TryPrimaryMap<FuncLocIndex, FunctionLoc>,
 
     /// `self.src_locs[i]` contains the initial source location of
     /// `FuncKey::from_parts(self.namespaces[ns], i - start)`'s function, where
     /// `ns` and `start` are determined by `self.src_loc_starts`.
     ///
     /// The absence of a source location is represented by `FilePos::none()`.
-    src_locs: PrimaryMap<SrcLocIndex, FilePos>,
+    src_locs: TryPrimaryMap<SrcLocIndex, FilePos>,
 }
 
 impl CompiledFunctionsTable {
