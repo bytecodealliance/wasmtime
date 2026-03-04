@@ -649,6 +649,13 @@ impl Func {
             )?;
         }
 
+        // Validate that the task, after returning, has no more active borrows
+        // as they're required to have been dropped by this point.
+        store
+            .0
+            .component_resource_tables(Some(self.instance))
+            .validate_scope_exit()?;
+
         // SAFETY: We're relying on the correctness of the structure of
         // `LowerReturn` and the type-checking performed to acquire the
         // `TypedFunc` to make this safe. It should be the case that
@@ -706,11 +713,6 @@ impl Func {
 
         unsafe {
             call_post_return(&mut store, post_return, arg, flags)?;
-
-            store
-                .0
-                .component_resource_tables(Some(self.instance))
-                .validate_scope_exit()?;
             store.0.exit_guest_sync_call()?;
         }
         Ok(())

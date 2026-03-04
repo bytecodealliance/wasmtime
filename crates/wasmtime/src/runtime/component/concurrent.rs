@@ -1547,34 +1547,50 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
-    pub fn enter_host_call(&mut self) -> Result<()> {
+    pub(crate) fn host_task_create(&mut self) -> Result<Option<TableId<HostTask>>> {
         if !self.concurrency_support() {
             self.enter_call_not_concurrent();
-            return Ok(());
+            return Ok(None);
         }
         let state = self.concurrent_state_mut();
         let caller = state.current_guest_thread()?;
         let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task)?;
+        Ok(Some(task))
+    }
+
+    /// Invoked before lowering the results of a host task to the guest.
+    ///
+    /// This is used to update the current thread annotations within the store
+    /// to ensure that it reflects the guest task, not the host task, since
+    /// lowering may execute guest code.
+    pub fn host_task_reenter_caller(&mut self) -> Result<()> {
+        if !self.concurrency_support() {
+            return Ok(());
+        }
+        let task = self.concurrent_state_mut().current_host_thread()?;
+        let caller = self.concurrent_state_mut().get_mut(task)?.caller;
+        self.set_thread(caller)?;
         Ok(())
     }
 
-    /// Dual of `enter_host_call` and signifies that the host has finished and
+    /// Dual of `host_task_create` and signifies that the host has finished and
     /// will be cleaned up.
     ///
     /// Note that this isn't invoked when the host is invoked asynchronously and
     /// the host isn't complete yet. In that situation the host task persists
-    /// and will be cleaned up separately.
-    pub fn exit_host_call(&mut self) -> Result<()> {
-        if !self.concurrency_support() {
-            self.exit_call_not_concurrent();
-            return Ok(());
+    /// and will be cleaned up separately in `subtask_drop`
+    pub(crate) fn host_task_delete(&mut self, task: Option<TableId<HostTask>>) -> Result<()> {
+        match task {
+            Some(task) => {
+                log::trace!("delete host task {task:?}");
+                self.concurrent_state_mut().delete(task)?;
+            }
+            None => {
+                self.exit_call_not_concurrent();
+            }
         }
-        let task = self.concurrent_state_mut().current_host_thread()?;
-        log::trace!("delete host task {task:?}");
-        let task = self.concurrent_state_mut().delete(task)?;
-        self.set_thread(task.caller)?;
         Ok(())
     }
 
@@ -4183,7 +4199,7 @@ type HostTaskFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
 /// Represents the state of a pending host task.
 ///
 /// This is used to represent tasks when the guest calls into the host.
-struct HostTask {
+pub(crate) struct HostTask {
     common: WaitableCommon,
 
     /// Guest thread which called the host.
