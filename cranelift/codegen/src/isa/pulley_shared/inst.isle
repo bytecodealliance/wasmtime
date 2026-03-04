@@ -182,7 +182,7 @@
 (type ValueOffset (enum (Both (value Value) (offset i32))))
 (decl pure amode_base (Value Offset32) ValueOffset)
 (rule (amode_base addr (offset32 offset)) (ValueOffset.Both addr offset))
-(rule 1 (amode_base (iadd addr (i32_from_iconst b)) (offset32 offset))
+(rule 1 (amode_base (iadd _ addr (i32_from_iconst b)) (offset32 offset))
   (if-let new_offset (i32_checked_add b offset))
   (ValueOffset.Both addr new_offset))
 
@@ -270,7 +270,7 @@
 (type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
 (decl pure partial sinkable_load (Value) SinkableLoad)
 (rule (sinkable_load value @ (value_type ty))
-  (if-let inst @ (load flags addr (offset32 offset)) (is_sinkable_inst value))
+  (if-let inst @ (load _ flags addr (offset32 offset)) (is_sinkable_inst value))
   (if-let true (is_native_endianness (endianness flags)))
   (if-let true (memflags_nontrapping flags))
   (if-let offset8 (i32_try_into_u8 offset))
@@ -345,7 +345,7 @@
 ;; used if the oob condition is true. Otherwise the raw address is used for the
 ;; load/store.
 (decl pure partial wasm_g32 (Value Offset32 MemFlags Type) G32)
-(rule (wasm_g32 (select oob (u64_from_iconst 0) raw_addr) (offset32 0) flags ty)
+(rule (wasm_g32 (select _ oob (u64_from_iconst 0) raw_addr) (offset32 0) flags ty)
   ;; This must be a wasm load/store according to `MemFlags`, namely that it's
   ;; got a "HEAP_OUT_OF_BOUNDS" trap code and it's little-endian.
   (if-let true (memflags_is_wasm flags))
@@ -381,8 +381,8 @@
 (decl pure host_offset (Value) HostOffset)
 (type HostOffset (enum (All (a Value) (b i32))))
 (rule 0 (host_offset val) (HostOffset.All val 0))
-(rule 1 (host_offset (iadd val @ (iadd _ _) (i32_from_iconst n))) (HostOffset.All val n))
-(rule 2 (host_offset (iadd (i32_from_iconst n) val @ (iadd _ _))) (HostOffset.All val n))
+(rule 1 (host_offset (iadd _ val @ (iadd _ _ _) (i32_from_iconst n))) (HostOffset.All val n))
+(rule 2 (host_offset (iadd _ (i32_from_iconst n) val @ (iadd _ _ _))) (HostOffset.All val n))
 
 ;; Helper to test whether the first argument `oob` contains a condition for
 ;; matching whether second argument `addr` is out-of-bounds. Searches for a
@@ -392,23 +392,23 @@
 
 ;; 32-bit hosts: search either side of the `iadd` for the base address within
 ;; `oob` to see if it's a matching condition.
-(rule 0 (wasm_oob_select oob (iadd base wasm_addr @ (value_type $I32)))
+(rule 0 (wasm_oob_select oob (iadd _ base wasm_addr @ (value_type $I32)))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr oob))
   (if-let (PointerWidth.PointerWidth32) (pointer_width))
   (OobSelect.All base bound wasm_addr n))
-(rule 1 (wasm_oob_select oob (iadd wasm_addr @ (value_type $I32) base))
+(rule 1 (wasm_oob_select oob (iadd _ wasm_addr @ (value_type $I32) base))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr oob))
   (if-let (PointerWidth.PointerWidth32) (pointer_width))
   (OobSelect.All base bound wasm_addr n))
 
 ;; 64-bit hosts: also search either side, but the wasm address must also be
 ;; a `uextend` from a 32-bit value.
-(rule 0 (wasm_oob_select oob (iadd base wasm_addr_ext @ (value_type $I64)))
+(rule 0 (wasm_oob_select oob (iadd _ base wasm_addr_ext @ (value_type $I64)))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
   (if-let wasm_addr (wasm32_addr_for_host64 wasm_addr_ext))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
   (OobSelect.All base bound wasm_addr n))
-(rule 1 (wasm_oob_select oob (iadd wasm_addr_ext @ (value_type $I64) base))
+(rule 1 (wasm_oob_select oob (iadd _ wasm_addr_ext @ (value_type $I64) base))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
   (if-let wasm_addr (wasm32_addr_for_host64 wasm_addr_ext))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
@@ -419,7 +419,7 @@
 ;; extended from 32-bits. That means that this only matches `(uextend ...)` or
 ;; an `iconst` which already fits in 32 bits.
 (decl pure partial wasm32_addr_for_host64 (Value) Value)
-(rule (wasm32_addr_for_host64 (uextend addr @ (value_type $I32))) addr)
+(rule (wasm32_addr_for_host64 (uextend _ addr @ (value_type $I32))) addr)
 (rule (wasm32_addr_for_host64 val @ (u32_from_iconst _)) val)
 
 ;; Helper to search for the first argument, `wasm_addr`, within the oob
@@ -427,9 +427,9 @@
 ;; of the address against a particular bound.
 (decl pure partial wasm_oob_cond (Value Value) OobCond)
 (type OobCond (enum (All (a Value) (b u64))))
-(rule (wasm_oob_cond wasm_addr (ugt wasm_addr (isub bound (u64_from_iconst n))))
+(rule (wasm_oob_cond wasm_addr (ugt wasm_addr (isub _ bound (u64_from_iconst n))))
   (OobCond.All bound n))
-(rule (wasm_oob_cond wasm_addr (ult (isub bound (u64_from_iconst n)) wasm_addr))
+(rule (wasm_oob_cond wasm_addr (ult (isub _ bound (u64_from_iconst n)) wasm_addr))
   (OobCond.All bound n))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

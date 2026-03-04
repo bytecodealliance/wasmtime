@@ -358,13 +358,13 @@
 (extractor (ne x y) (icmp (IntCC.NotEqual) x y))
 
 (decl ult (Value Value) Value)
-(extractor (ult x y) (icmp (IntCC.UnsignedLessThan) x y))
+(extractor (ult x y) (icmp _ (IntCC.UnsignedLessThan) x y))
 
 (decl ule (Value Value) Value)
 (extractor (ule x y) (icmp (IntCC.UnsignedLessThanOrEqual) x y))
 
 (decl ugt (Value Value) Value)
-(extractor (ugt x y) (icmp (IntCC.UnsignedGreaterThan) x y))
+(extractor (ugt x y) (icmp _ (IntCC.UnsignedGreaterThan) x y))
 
 (decl uge (Value Value) Value)
 (extractor (uge x y) (icmp (IntCC.UnsignedGreaterThanOrEqual) x y))
