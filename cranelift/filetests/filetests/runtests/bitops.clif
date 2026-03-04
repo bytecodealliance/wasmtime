@@ -245,3 +245,16 @@ block0(v0: i32, v1: i32):
 ; run: %test_bor_band_bnot_bxor(1, 1) == 0xffffffff
 ; run: %test_bor_band_bnot_bxor(0, 1) == 0xfffffffe
 ; run: %test_bor_band_bnot_bxor(2, 1) == 0xfffffffc
+
+function %test_iadd_bor_ineg(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = ineg v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %test_iadd_bor_ineg(0, 0) == 0
+; run: %test_iadd_bor_ineg(1, 1) == 0
+; run: %test_iadd_bor_ineg(2, 1) == 2
+; run: %test_iadd_bor_ineg(0xffffffff, 0) == -1

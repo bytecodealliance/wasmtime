@@ -90,3 +90,20 @@ block0(v0: i32, v1: i32):
 ;     v7 = bnot v6
 ;     return v7
 ; }
+
+;; (iadd ty (bor ty x y) (ineg ty y)) -> (band ty x (bnot ty y))
+function %test_iadd_bor_ineg(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = ineg v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %test_iadd_bor_ineg(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = bor v0, v1
+;     v7 = isub v2, v1
+;     return v7
+; }
+
