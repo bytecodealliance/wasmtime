@@ -8,7 +8,7 @@ mod primary_map;
 mod secondary_map;
 
 pub use entity_set::TryEntitySet;
-pub use hash_map::HashMap;
+pub use hash_map::TryHashMap;
 pub use hash_set::HashSet;
 pub use index_map::IndexMap;
 pub use primary_map::PrimaryMap;

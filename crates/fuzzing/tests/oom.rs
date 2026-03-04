@@ -244,26 +244,26 @@ fn hash_set_insert() -> Result<()> {
 }
 
 #[test]
-fn hash_map_with_capacity() -> Result<()> {
+fn try_hash_map_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
-        let _s = HashMap::<usize, usize>::with_capacity(100)?;
+        let _s = TryHashMap::<usize, usize>::with_capacity(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn hash_map_reserve() -> Result<()> {
+fn try_hash_map_reserve() -> Result<()> {
     OomTest::new().test(|| {
-        let mut map = HashMap::<usize, usize>::new();
+        let mut map = TryHashMap::<usize, usize>::new();
         map.reserve(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn hash_map_insert() -> Result<()> {
+fn try_hash_map_insert() -> Result<()> {
     OomTest::new().test(|| {
-        let mut map = HashMap::<usize, usize>::new();
+        let mut map = TryHashMap::<usize, usize>::new();
         for i in 0..1024 {
             map.insert(i, i * 2)?;
         }
@@ -275,9 +275,9 @@ fn hash_map_insert() -> Result<()> {
 }
 
 #[test]
-fn hash_map_try_clone() -> Result<()> {
+fn try_hash_map_try_clone() -> Result<()> {
     OomTest::new().test(|| {
-        let mut map = HashMap::new();
+        let mut map = TryHashMap::new();
         for i in 0..10 {
             map.insert(i, i * 2)?;
         }

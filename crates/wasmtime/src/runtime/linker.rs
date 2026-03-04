@@ -13,7 +13,7 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{Atom, StringPool, collections::HashMap};
+use wasmtime_environ::{Atom, StringPool};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -84,7 +84,7 @@ use wasmtime_environ::{Atom, StringPool, collections::HashMap};
 pub struct Linker<T> {
     engine: Engine,
     pool: StringPool,
-    map: HashMap<ImportKey, Definition>,
+    map: TryHashMap<ImportKey, Definition>,
     allow_shadowing: bool,
     allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
@@ -160,7 +160,7 @@ impl<T> Linker<T> {
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
-            map: HashMap::new(),
+            map: TryHashMap::new(),
             pool: StringPool::new(),
             allow_shadowing: false,
             allow_unknown_exports: false,
