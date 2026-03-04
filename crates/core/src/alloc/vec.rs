@@ -459,21 +459,21 @@ mod tests {
         assert_eq!(*TryVec::<i32>::new().into_boxed_slice()?, []);
 
         let mut vec = TryVec::new();
-        try_vec.push(1)?;
+        vec.push(1)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
         let mut vec = TryVec::with_capacity(2)?;
-        try_vec.push(1)?;
+        vec.push(1)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
         let mut vec = TryVec::with_capacity(2)?;
-        try_vec.push(1_u128)?;
+        vec.push(1_u128)?;
         assert_eq!(*vec.into_boxed_slice()?, [1]);
 
         assert_eq!(*TryVec::<()>::new().into_boxed_slice()?, []);
 
         let mut vec = TryVec::new();
-        try_vec.push(())?;
+        vec.push(())?;
         assert_eq!(*vec.into_boxed_slice()?, [()]);
 
         let vec = TryVec::<i32>::with_capacity(2)?;
