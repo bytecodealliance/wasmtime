@@ -3,7 +3,7 @@ use core::{fmt, ops::Index};
 use cranelift_entity::{EntityRef, SecondaryMap as Inner};
 
 /// Like [`cranelift_entity::SecondaryMap`] but all allocation is fallible.
-pub struct SecondaryMap<K, V>
+pub struct TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -11,7 +11,7 @@ where
     inner: Inner<K, V>,
 }
 
-impl<K, V> fmt::Debug for SecondaryMap<K, V>
+impl<K, V> fmt::Debug for TrySecondaryMap<K, V>
 where
     K: EntityRef + fmt::Debug,
     V: fmt::Debug + Clone,
@@ -21,7 +21,7 @@ where
     }
 }
 
-impl<K, V> SecondaryMap<K, V>
+impl<K, V> TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -125,19 +125,19 @@ where
     }
 }
 
-impl<K, V> Default for SecondaryMap<K, V>
+impl<K, V> Default for TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone + Default,
 {
-    fn default() -> SecondaryMap<K, V> {
-        SecondaryMap::new()
+    fn default() -> TrySecondaryMap<K, V> {
+        TrySecondaryMap::new()
     }
 }
 
 // NB: no `IndexMut` implementation because it requires allocation but the trait
 // doesn't allow for fallibility.
-impl<K, V> Index<K> for SecondaryMap<K, V>
+impl<K, V> Index<K> for TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -149,7 +149,7 @@ where
     }
 }
 
-impl<K, V> From<TryVec<V>> for SecondaryMap<K, V>
+impl<K, V> From<TryVec<V>> for TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone + Default,
@@ -161,7 +161,7 @@ where
     }
 }
 
-impl<K, V> serde::ser::Serialize for SecondaryMap<K, V>
+impl<K, V> serde::ser::Serialize for TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone + PartialEq + serde::ser::Serialize,
@@ -197,7 +197,7 @@ where
     }
 }
 
-impl<'de, K, V> serde::de::Deserialize<'de> for SecondaryMap<K, V>
+impl<'de, K, V> serde::de::Deserialize<'de> for TrySecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone + serde::de::Deserialize<'de>,
@@ -206,7 +206,7 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        struct Visitor<K, V>(core::marker::PhantomData<fn() -> SecondaryMap<K, V>>)
+        struct Visitor<K, V>(core::marker::PhantomData<fn() -> TrySecondaryMap<K, V>>)
         where
             K: EntityRef,
             V: Clone;
@@ -216,7 +216,7 @@ where
             K: EntityRef,
             V: Clone + serde::de::Deserialize<'de>,
         {
-            type Value = SecondaryMap<K, V>;
+            type Value = TrySecondaryMap<K, V>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("struct SecondaryMap")
@@ -234,7 +234,7 @@ where
                     return Err(serde::de::Error::custom("Default value required"));
                 };
 
-                let mut map = SecondaryMap::<K, V>::with_default(default.clone());
+                let mut map = TrySecondaryMap::<K, V>::with_default(default.clone());
 
                 if let Some(n) = size_hint {
                     map.resize(n).map_err(|oom| serde::de::Error::custom(oom))?;
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn serialize_deserialize() -> Result<()> {
-        let mut map = SecondaryMap::<K, u32>::with_default(99);
+        let mut map = TrySecondaryMap::<K, u32>::with_default(99);
         map.insert(k(0), 33)?;
         map.insert(k(1), 44)?;
         map.insert(k(2), 55)?;
@@ -287,7 +287,7 @@ mod tests {
         map.insert(k(4), 99)?;
 
         let bytes = postcard::to_allocvec(&map)?;
-        let map2: SecondaryMap<K, u32> = postcard::from_bytes(&bytes)?;
+        let map2: TrySecondaryMap<K, u32> = postcard::from_bytes(&bytes)?;
 
         for i in 0..10 {
             assert_eq!(map[k(i)], map2[k(i)]);

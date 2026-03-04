@@ -12,7 +12,7 @@ pub use hash_map::TryHashMap;
 pub use hash_set::TryHashSet;
 pub use index_map::TryIndexMap;
 pub use primary_map::TryPrimaryMap;
-pub use secondary_map::SecondaryMap;
+pub use secondary_map::TrySecondaryMap;
 pub use wasmtime_core::{
     alloc::{
         TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
