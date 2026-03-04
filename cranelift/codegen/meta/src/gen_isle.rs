@@ -274,7 +274,7 @@ fn gen_common_isle(
                 if ty_in_decl {
                     "ty "
                 } else if isle_target == IsleTarget::Lower {
-                    "_"
+                    "_ "
                 } else {
                     ""
                 },
