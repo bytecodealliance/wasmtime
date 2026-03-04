@@ -13,10 +13,10 @@ pub trait TryToOwned {
 }
 
 impl TryToOwned for str {
-    type Owned = String;
+    type Owned = TryString;
 
     fn try_to_owned(&self) -> Result<Self::Owned, OutOfMemory> {
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.push_str(self)?;
         Ok(s)
     }

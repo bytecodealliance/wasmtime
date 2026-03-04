@@ -323,67 +323,67 @@ fn vec_push() -> Result<()> {
 }
 
 #[test]
-fn string_with_capacity() -> Result<()> {
+fn try_string_with_capacity() -> Result<()> {
     OomTest::new().test(|| {
-        let _s = String::with_capacity(100)?;
+        let _s = TryString::with_capacity(100)?;
         Ok(())
     })
 }
 
 #[test]
-fn string_reserve() -> Result<()> {
+fn try_string_reserve() -> Result<()> {
     OomTest::new().test(|| {
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.reserve(10)?;
         Ok(())
     })
 }
 
 #[test]
-fn string_reserve_exact() -> Result<()> {
+fn try_string_reserve_exact() -> Result<()> {
     OomTest::new().test(|| {
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.reserve_exact(3)?;
         Ok(())
     })
 }
 
 #[test]
-fn string_push() -> Result<()> {
+fn try_string_push() -> Result<()> {
     OomTest::new().test(|| {
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.push('c')?;
         Ok(())
     })
 }
 
 #[test]
-fn string_push_str() -> Result<()> {
+fn try_string_push_str() -> Result<()> {
     OomTest::new().test(|| {
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.push_str("hello")?;
         Ok(())
     })
 }
 
 #[test]
-fn string_shrink_to_fit() -> Result<()> {
+fn try_string_shrink_to_fit() -> Result<()> {
     OomTest::new().test(|| {
         // len == cap == 0
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.shrink_to_fit()?;
 
         // len == 0 < cap
-        let mut s = String::with_capacity(4)?;
+        let mut s = TryString::with_capacity(4)?;
         s.shrink_to_fit()?;
 
         // 0 < len < cap
-        let mut s = String::with_capacity(4)?;
+        let mut s = TryString::with_capacity(4)?;
         s.push('a')?;
         s.shrink_to_fit()?;
 
         // 0 < len == cap
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.reserve_exact(2)?;
         s.push('a')?;
         s.push('a')?;
@@ -394,23 +394,23 @@ fn string_shrink_to_fit() -> Result<()> {
 }
 
 #[test]
-fn string_into_boxed_str() -> Result<()> {
+fn try_string_into_boxed_str() -> Result<()> {
     OomTest::new().test(|| {
         // len == cap == 0
-        let s = String::new();
+        let s = TryString::new();
         let _ = s.into_boxed_str()?;
 
         // len == 0 < cap
-        let s = String::with_capacity(4)?;
+        let s = TryString::with_capacity(4)?;
         let _ = s.into_boxed_str()?;
 
         // 0 < len < cap
-        let mut s = String::with_capacity(4)?;
+        let mut s = TryString::with_capacity(4)?;
         s.push('a')?;
         let _ = s.into_boxed_str()?;
 
         // 0 < len == cap
-        let mut s = String::new();
+        let mut s = TryString::new();
         s.reserve_exact(2)?;
         s.push('a')?;
         s.push('a')?;
