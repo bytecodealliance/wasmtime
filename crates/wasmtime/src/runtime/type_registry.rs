@@ -25,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{SecondaryMap, TryCow},
+    collections::TryCow,
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -90,7 +90,7 @@ pub struct TypeCollection {
     engine: Engine,
     rec_groups: TryVec<RecGroupEntry>,
     types: TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
-    trampolines: SecondaryMap<VMSharedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
+    trampolines: TrySecondaryMap<VMSharedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
 }
 
 impl Debug for TypeCollection {
@@ -148,7 +148,7 @@ impl Engine {
         // module-index in a compiled module, and doing this engine-to-module
         // resolution now means we don't need to do it on the function call hot
         // path.
-        let mut trampolines = SecondaryMap::with_capacity(types.len())?;
+        let mut trampolines = TrySecondaryMap::with_capacity(types.len())?;
         for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
             let shared_ty = types[module_ty];
             let trampoline_shared_ty = registry.trampoline_type(shared_ty);
@@ -607,7 +607,7 @@ struct TypeRegistryInner {
 
     // A map that lets you walk backwards from a `VMSharedTypeIndex` to its
     // `RecGroupEntry`.
-    type_to_rec_group: SecondaryMap<VMSharedTypeIndex, Option<RecGroupEntry>>,
+    type_to_rec_group: TrySecondaryMap<VMSharedTypeIndex, Option<RecGroupEntry>>,
 
     // A map from a registered type to its complete list of supertypes.
     //
@@ -618,7 +618,7 @@ struct TypeRegistryInner {
     // Types without any supertypes are omitted from this map. This means that
     // we never allocate any backing storage for this map when Wasm GC is not in
     // use.
-    type_to_supertypes: SecondaryMap<VMSharedTypeIndex, Option<Box<[VMSharedTypeIndex]>>>,
+    type_to_supertypes: TrySecondaryMap<VMSharedTypeIndex, Option<Box<[VMSharedTypeIndex]>>>,
 
     // A map from each registered function type to its trampoline type.
     //
@@ -628,14 +628,14 @@ struct TypeRegistryInner {
     // backing storage for this map. As a nice bonus, this also avoids cycles (a
     // function type referencing itself) that our naive reference counting
     // doesn't play well with.
-    type_to_trampoline: SecondaryMap<VMSharedTypeIndex, PackedOption<VMSharedTypeIndex>>,
+    type_to_trampoline: TrySecondaryMap<VMSharedTypeIndex, PackedOption<VMSharedTypeIndex>>,
 
     // A map from each registered GC type to its layout.
     //
     // Function types do not have an entry in this map. Similar to the
     // `type_to_{supertypes,trampoline}` maps, we completely omit the `None`
     // entries for these types as a memory optimization.
-    type_to_gc_layout: SecondaryMap<VMSharedTypeIndex, Option<GcLayout>>,
+    type_to_gc_layout: TrySecondaryMap<VMSharedTypeIndex, Option<GcLayout>>,
 
     // An explicit stack of entries that we are in the middle of dropping. Used
     // to avoid recursion when dropping a type that is holding the last
