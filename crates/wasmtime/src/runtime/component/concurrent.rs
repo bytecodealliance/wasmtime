@@ -781,18 +781,22 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 
     match poll {
         // It completed immediately; check the result and delete the task.
-        Poll::Ready(result) => result?,
+        Poll::Ready(result) => {
+            log::trace!("host task {task:?} completed immediately");
+            result?
+        },
 
         // It did not complete immediately; add it to
         // `ConcurrentState::futures` so it will be polled via the event loop;
-        // then use `GuestTask::sync_call_set` to wait for the task to
+        // then use `GuestThread::sync_call_set` to wait for the task to
         // complete, suspending the current fiber until it does so.
         Poll::Pending => {
+            log::trace!("host task {task:?} did not complete immediately, blocking until completion");
             let state = store.concurrent_state_mut();
             state.push_future(future);
 
             let caller = state.get_mut(task)?.caller;
-            let set = state.get_mut(caller.task)?.sync_call_set;
+            let set = state.get_mut(caller.thread)?.sync_call_set;
             Waitable::Host(task).join(state, Some(set))?;
 
             store.suspend(SuspendReason::Waiting {
@@ -809,13 +813,14 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     }
 
     // Retrieve and return the result.
+    log::trace!("host task {task:?} completed, retrieving result");
     let host_state = &mut store.concurrent_state_mut().get_mut(task)?.state;
     match mem::replace(host_state, HostTaskState::CalleeDone) {
         HostTaskState::CalleeFinished(result) => Ok(match result.downcast() {
             Ok(result) => *result,
             Err(_) => bail_bug!("host task finished with wrong type of result"),
         }),
-        _ => bail_bug!("unexpected host task state after completion"),
+        other => bail_bug!("unexpected host task state after completion: {:?}", other),
     }
 }
 
@@ -1464,7 +1469,6 @@ impl StoreOpaque {
             debug_assert_eq!(instance, guest_caller);
         }
         let task = GuestTask::new(
-            state,
             Box::new(move |_, _| bail_bug!("cannot lower params in sync call")),
             LiftResult {
                 lift: Box::new(move |_, _| bail_bug!("cannot lift result in sync call")),
@@ -1487,7 +1491,7 @@ impl StoreOpaque {
         )?;
 
         let guest_task = state.push(task)?;
-        let new_thread = GuestThread::new_implicit(guest_task);
+        let new_thread = GuestThread::new_implicit(state, guest_task)?;
         let guest_thread = state.push(new_thread)?;
         Instance::from_wasmtime(self, callee.instance).add_guest_thread_to_instance_table(
             guest_thread,
@@ -1879,7 +1883,7 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
         let caller = state.current_guest_thread()?;
         let old_set = waitable.common(state)?.set;
-        let set = state.get_mut(caller.task)?.sync_call_set;
+        let set = state.get_mut(caller.thread)?.sync_call_set;
         waitable.join(state, Some(set))?;
         self.suspend(SuspendReason::Waiting {
             set,
@@ -2075,14 +2079,24 @@ impl Instance {
         guest_thread: QualifiedThreadId,
         runtime_instance: RuntimeComponentInstanceIndex,
     ) -> Result<()> {
-        let guest_id = match store
-            .concurrent_state_mut()
-            .get_mut(guest_thread.thread)?
-            .instance_rep
-        {
+        let state = store.concurrent_state_mut();
+        let thread_data = state.get_mut(guest_thread.thread)?;
+        let guest_id = match thread_data.instance_rep {
             Some(id) => id,
             None => bail_bug!("thread must have instance_rep set by now"),
         };
+        let sync_call_set = thread_data.sync_call_set;
+        
+        // Clean up any pending subtasks in the sync_call_set
+        for waitable in mem::take(&mut state.get_mut(sync_call_set)?.ready) {
+            if let Some(Event::Subtask {
+                status: Status::Returned | Status::ReturnCancelled,
+            }) = waitable.common(state)?.event
+            {
+                waitable.delete_from(state)?;
+            }
+        }
+        
         store
             .instance_state(RuntimeInstance {
                 instance: self.id().instance(),
@@ -2092,6 +2106,7 @@ impl Instance {
             .guest_thread_remove(guest_id)?;
 
         store.concurrent_state_mut().delete(guest_thread.thread)?;
+        store.concurrent_state_mut().delete(sync_call_set)?;
         let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
         task.threads.remove(&guest_thread.thread);
         Ok(())
@@ -2437,7 +2452,6 @@ impl Instance {
         );
 
         let new_task = GuestTask::new(
-            state,
             Box::new(move |store, dst| {
                 let mut store = token.as_context_mut(store);
                 assert!(dst.len() <= MAX_FLAT_PARAMS);
@@ -2542,7 +2556,7 @@ impl Instance {
         )?;
 
         let guest_task = state.push(new_task)?;
-        let new_thread = GuestThread::new_implicit(guest_task);
+        let new_thread = GuestThread::new_implicit(state, guest_task)?;
         let guest_thread = state.push(new_thread)?;
         state.get_mut(guest_task)?.threads.insert(guest_thread);
 
@@ -2660,11 +2674,11 @@ impl Instance {
 
         let state = store.0.concurrent_state_mut();
 
-        // Use the caller's `GuestTask::sync_call_set` to register interest in
+        // Use the caller's `GuestThread::sync_call_set` to register interest in
         // the subtask...
         let guest_waitable = Waitable::Guest(guest_thread.task);
         let old_set = guest_waitable.common(state)?.set;
-        let set = state.get_mut(caller.task)?.sync_call_set;
+        let set = state.get_mut(caller.thread)?.sync_call_set;
         guest_waitable.join(state, Some(set))?;
 
         // ... and suspend this fiber temporarily while we wait for it to start.
@@ -2841,6 +2855,7 @@ impl Instance {
 
                 lower(store.as_context_mut(), result)?;
                 let state = store.0.concurrent_state_mut();
+                log::trace!("task complete for {task:?}, setting status {status:?}");
                 state.get_mut(task)?.state = HostTaskState::CalleeDone;
                 Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
 
@@ -3281,7 +3296,7 @@ impl Instance {
         let current_thread = state.current_guest_thread()?;
         let parent_task = current_thread.task;
 
-        let new_thread = GuestThread::new_explicit(parent_task, start_func);
+        let new_thread = GuestThread::new_explicit(state,parent_task, start_func)?;
         let thread_id = state.push(new_thread)?;
         state.get_mut(parent_task)?.threads.insert(thread_id);
 
@@ -4235,6 +4250,19 @@ enum HostTaskState {
     CalleeDone,
 }
 
+impl std::fmt::Debug for HostTaskState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HostTaskState::CalleeStarted => f.debug_tuple("CalleeStarted").finish(),
+            HostTaskState::CalleeRunning(_) => f.debug_tuple("CalleeRunning").finish(),
+            HostTaskState::CalleeFinished(_result) => f
+                .debug_tuple("CalleeFinished")
+                .finish(),
+            HostTaskState::CalleeDone => f.debug_tuple("CalleeDone").finish(),
+        }
+    }
+}
+
 impl HostTask {
     fn new(caller: QualifiedThreadId, state: HostTaskState) -> Self {
         Self {
@@ -4339,6 +4367,8 @@ pub struct GuestThread {
     /// The index of this thread in the component instance's handle table.
     /// This must always be `Some` after initialization.
     instance_rep: Option<u32>,
+    /// Scratch waitable set used to watch subtasks during synchronous calls.
+    sync_call_set: TableId<WaitableSet>,
 }
 
 impl GuestThread {
@@ -4355,29 +4385,34 @@ impl GuestThread {
         Ok(TableId::new(rep))
     }
 
-    fn new_implicit(parent_task: TableId<GuestTask>) -> Self {
-        Self {
+    fn new_implicit(state: &mut ConcurrentState, parent_task: TableId<GuestTask>) -> Result<Self> {
+        let sync_call_set = state.push(WaitableSet::default())?;
+        Ok(Self {
             context: [0; 2],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedImplicit,
             instance_rep: None,
-        }
+            sync_call_set,
+        })
     }
 
     fn new_explicit(
+        state: &mut ConcurrentState,
         parent_task: TableId<GuestTask>,
         start_func: Box<
             dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync,
         >,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let sync_call_set = state.push(WaitableSet::default())?;
+        Ok(Self {
             context: [0; 2],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedExplicit(start_func),
             instance_rep: None,
-        }
+            sync_call_set,
+        })
     }
 }
 
@@ -4442,8 +4477,6 @@ pub(crate) struct GuestTask {
     /// Whether or not we've sent a `Status::Starting` event to any current or
     /// future waiters for this waitable.
     starting_sent: bool,
-    /// Scratch waitable set used to watch subtasks during synchronous calls.
-    sync_call_set: TableId<WaitableSet>,
     /// The runtime instance to which the exported function for this guest task
     /// belongs.
     ///
@@ -4501,7 +4534,6 @@ impl GuestTask {
     }
 
     fn new(
-        state: &mut ConcurrentState,
         lower_params: RawLower,
         lift_result: LiftResult,
         caller: Caller,
@@ -4509,7 +4541,6 @@ impl GuestTask {
         instance: RuntimeInstance,
         async_function: bool,
     ) -> Result<Self> {
-        let sync_call_set = state.push(WaitableSet::default())?;
         let host_future_state = match &caller {
             Caller::Guest { .. } => HostFutureState::NotApplicable,
             Caller::Host {
@@ -4534,7 +4565,6 @@ impl GuestTask {
             sync_result: SyncResult::NotProduced,
             cancel_sent: false,
             starting_sent: false,
-            sync_call_set,
             instance,
             event: None,
             exited: false,
@@ -4546,22 +4576,8 @@ impl GuestTask {
 
     /// Dispose of this guest task, reparenting any pending subtasks to the
     /// caller.
-    fn dispose(self, state: &mut ConcurrentState) -> Result<()> {
-        // If there are not-yet-delivered completion events for subtasks in
-        // `self.sync_call_set`, recursively dispose of those subtasks as well.
-        for waitable in mem::take(&mut state.get_mut(self.sync_call_set)?.ready) {
-            if let Some(Event::Subtask {
-                status: Status::Returned | Status::ReturnCancelled,
-            }) = waitable.common(state)?.event
-            {
-                waitable.delete_from(state)?;
-            }
-        }
-
+    fn dispose(self, _state: &mut ConcurrentState) -> Result<()> {
         assert!(self.threads.is_empty());
-
-        state.delete(self.sync_call_set)?;
-
         Ok(())
     }
 }
@@ -5346,7 +5362,6 @@ pub(crate) fn prepare_call<T, R>(
     };
     let caller = state.current_thread;
     let task = GuestTask::new(
-        state,
         Box::new(for_any_lower(move |store, params| {
             lower_params(handle, token.as_context_mut(store), params)
         })),
@@ -5378,7 +5393,8 @@ pub(crate) fn prepare_call<T, R>(
     )?;
 
     let task = state.push(task)?;
-    let thread = state.push(GuestThread::new_implicit(task))?;
+    let new_thread = GuestThread::new_implicit(state, task)?;
+    let thread = state.push(new_thread)?;
     state.get_mut(task)?.threads.insert(thread);
 
     if !store.0.may_enter(instance)? {
