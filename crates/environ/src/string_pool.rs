@@ -1,10 +1,6 @@
 //! Simple string interning.
 
-use crate::{
-    collections::{HashMap, Vec},
-    error::OutOfMemory,
-    prelude::*,
-};
+use crate::{collections::HashMap, error::OutOfMemory, prelude::*};
 use core::{fmt, mem, num::NonZeroU32};
 
 /// An interned string associated with a particular string in a `StringPool`.
@@ -36,7 +32,7 @@ pub struct StringPool {
 
     /// Strings in this pool. These must never be mutated or reallocated once
     /// inserted.
-    strings: mem::ManuallyDrop<Vec<Box<str>>>,
+    strings: mem::ManuallyDrop<TryVec<Box<str>>>,
 }
 
 impl Drop for StringPool {
@@ -338,7 +334,7 @@ mod tests {
         let n = if cfg!(miri) { 100 } else { 10_000 };
 
         for _ in 0..2 {
-            let atoms: Vec<_> = (0..n).map(|i| pool.insert(&i.to_string())).try_collect()?;
+            let atoms: TryVec<_> = (0..n).map(|i| pool.insert(&i.to_string())).try_collect()?;
 
             for atom in atoms {
                 assert!(pool.contains(atom));

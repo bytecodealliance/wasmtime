@@ -26,10 +26,10 @@ impl<T> TryToOwned for [T]
 where
     T: TryClone,
 {
-    type Owned = Vec<T>;
+    type Owned = TryVec<T>;
 
     fn try_to_owned(&self) -> Result<Self::Owned, OutOfMemory> {
-        let mut v = Vec::with_capacity(self.len())?;
+        let mut v = TryVec::with_capacity(self.len())?;
         for x in self {
             v.push(x.try_clone()?)?;
         }
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn into_owned() -> Result<()> {
         let v = TryCow::Borrowed(&[42u8, 36][..]);
-        let v: Vec<u8> = v.into_owned()?;
+        let v: TryVec<u8> = v.into_owned()?;
         assert_eq!(&*v, &[42, 36]);
         Ok(())
     }

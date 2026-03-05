@@ -1,4 +1,5 @@
-use crate::{collections::TryExtend, error::OutOfMemory};
+use crate::error::OutOfMemory;
+use crate::prelude::*;
 use core::{
     fmt,
     ops::{Index, IndexMut},
@@ -37,11 +38,11 @@ where
     }
 }
 
-impl<K, V> From<crate::collections::Vec<V>> for PrimaryMap<K, V>
+impl<K, V> From<TryVec<V>> for PrimaryMap<K, V>
 where
     K: EntityRef,
 {
-    fn from(values: crate::collections::Vec<V>) -> Self {
+    fn from(values: TryVec<V>) -> Self {
         let values: ::alloc::vec::Vec<V> = values.into();
         let inner = cranelift_entity::PrimaryMap::from(values);
         Self { inner }
@@ -74,7 +75,7 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        let v: crate::collections::Vec<V> = serde::de::Deserialize::deserialize(deserializer)?;
+        let v: TryVec<V> = serde::de::Deserialize::deserialize(deserializer)?;
         Ok(Self::from(v))
     }
 }

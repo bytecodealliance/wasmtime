@@ -25,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryCow, Vec},
+    collections::{HashSet, PrimaryMap, SecondaryMap, TryCow},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -88,7 +88,7 @@ use wasmtime_environ::{
 /// when dropped.
 pub struct TypeCollection {
     engine: Engine,
-    rec_groups: Vec<RecGroupEntry>,
+    rec_groups: TryVec<RecGroupEntry>,
     types: PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
     trampolines: SecondaryMap<VMSharedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
 }
@@ -640,7 +640,7 @@ struct TypeRegistryInner {
     // An explicit stack of entries that we are in the middle of dropping. Used
     // to avoid recursion when dropping a type that is holding the last
     // reference to another type, etc...
-    drop_stack: Vec<RecGroupEntry>,
+    drop_stack: TryVec<RecGroupEntry>,
 }
 
 impl TypeRegistryInner {
@@ -681,7 +681,7 @@ impl TypeRegistryInner {
         types: &ModuleTypes,
     ) -> Result<
         (
-            Vec<RecGroupEntry>,
+            TryVec<RecGroupEntry>,
             PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         ),
         OutOfMemory,
@@ -689,7 +689,7 @@ impl TypeRegistryInner {
         log::trace!("Start registering module types");
 
         // The engine's type registry entries for these module types.
-        let mut entries = Vec::with_capacity(types.rec_groups().len())?;
+        let mut entries = TryVec::with_capacity(types.rec_groups().len())?;
 
         // The map from a module type index to an engine type index for these
         // module types.
@@ -766,7 +766,7 @@ impl TypeRegistryInner {
         // canonicalize for runtime usage in this engine, we must still eagerly
         // clone and set aside the original, non-canonicalized types for that
         // potential engine canonicalization eventuality.
-        let mut non_canon_types = Vec::with_capacity(types.len())?;
+        let mut non_canon_types = TryVec::with_capacity(types.len())?;
         let hash_consing_key = WasmRecGroup {
             types: types
                 .zip(iter_entity_range(range.clone()))
@@ -812,7 +812,7 @@ impl TypeRegistryInner {
         map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
         hash_consing_key: WasmRecGroup,
-        mut non_canon_types: Vec<(ModuleInternedTypeIndex, WasmSubType)>,
+        mut non_canon_types: TryVec<(ModuleInternedTypeIndex, WasmSubType)>,
     ) -> Result<RecGroupEntry, OutOfMemory> {
         debug_assert!(hash_consing_key.is_canonicalized_for_hash_consing());
         debug_assert_eq!(self.hash_consing_map.contains(&hash_consing_key), false);
@@ -824,7 +824,7 @@ impl TypeRegistryInner {
             // much as possible.
             let num_types = non_canon_types.len();
             self.reserve_capacity_for_rec_group(num_types)?;
-            let mut shared_type_indices = Vec::new();
+            let mut shared_type_indices = TryVec::new();
             shared_type_indices.reserve_exact(num_types)?;
             let entry_inner = RecGroupEntry::new_inner()?;
 
@@ -1158,7 +1158,7 @@ impl TypeRegistryInner {
     fn assign_shared_type_indices(
         &mut self,
         non_canon_types: &[(ModuleInternedTypeIndex, WasmSubType)],
-        mut shared_type_indices: Vec<VMSharedTypeIndex>,
+        mut shared_type_indices: TryVec<VMSharedTypeIndex>,
     ) -> Box<[VMSharedTypeIndex]> {
         debug_assert_eq!(non_canon_types.len(), shared_type_indices.capacity());
         debug_assert!(shared_type_indices.is_empty());

@@ -18,9 +18,9 @@ pub use secondary_map::SecondaryMap;
 pub use wasmtime_core::{
     alloc::{
         TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
-        Vec, try_new,
+        TryVec, try_new,
     },
-    vec,
+    try_vec,
 };
 
 /// Collections which abort on OOM.

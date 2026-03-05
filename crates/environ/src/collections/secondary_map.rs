@@ -1,4 +1,4 @@
-use crate::{collections::Vec, error::OutOfMemory};
+use crate::{error::OutOfMemory, prelude::*};
 use core::{fmt, ops::Index};
 use cranelift_entity::{EntityRef, SecondaryMap as Inner};
 
@@ -149,12 +149,12 @@ where
     }
 }
 
-impl<K, V> From<Vec<V>> for SecondaryMap<K, V>
+impl<K, V> From<TryVec<V>> for SecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone + Default,
 {
-    fn from(values: Vec<V>) -> Self {
+    fn from(values: TryVec<V>) -> Self {
         let values: alloc::vec::Vec<V> = values.into();
         let inner = Inner::from(values);
         Self { inner }

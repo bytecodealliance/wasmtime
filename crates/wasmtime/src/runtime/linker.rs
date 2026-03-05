@@ -13,10 +13,7 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{
-    Atom, StringPool,
-    collections::{HashMap, Vec},
-};
+use wasmtime_environ::{Atom, StringPool, collections::HashMap};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -636,7 +633,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let mut store = store.as_context_mut();
-        let exports: Vec<_> = instance
+        let exports: TryVec<_> = instance
             .exports(&mut store)
             .map(|e| {
                 Ok((
@@ -991,7 +988,7 @@ impl<T> Linker<T> {
     pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
         let module = self.pool.insert(module)?;
         let as_module = self.pool.insert(as_module)?;
-        let items: Vec<_> = self
+        let items: TryVec<_> = self
             .map
             .iter()
             .filter(|(key, _def)| key.module == module)
@@ -1180,7 +1177,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let mut imports: Vec<_> = module
+        let mut imports: TryVec<_> = module
             .imports()
             .map(|import| Ok(self._get_by_import(&import)?))
             .try_collect::<_, Error>()?;
