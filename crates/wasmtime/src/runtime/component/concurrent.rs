@@ -1835,7 +1835,7 @@ impl StoreOpaque {
         } else {
             CurrentThread::None
         };
-
+                
         // We should not have reached here unless either there's no current
         // task, or the current task is permitted to block.  In addition, we
         // special-case `thread.switch-to` and waiting for a subtask to go from
@@ -4028,10 +4028,12 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
+        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
+                caller_thread,
                 TransmitIndex::Future(ty),
                 options,
                 None,
@@ -4076,10 +4078,12 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
+        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
+                caller_thread,
                 TransmitIndex::Stream(ty),
                 options,
                 None,
@@ -4140,10 +4144,12 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
+        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
+                caller_thread,
                 TransmitIndex::Stream(ty),
                 options,
                 Some(FlatAbi {

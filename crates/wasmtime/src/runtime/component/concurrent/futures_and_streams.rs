@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::types;
@@ -143,6 +143,7 @@ fn get_mut_by_index_from(
 fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
+    caller_thread: QualifiedThreadId,
     options: OptionsIndex,
     ty: TransmitIndex,
     address: usize,
@@ -152,6 +153,7 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     let count = buffer.remaining().len().min(count);
 
     let lower = &mut if T::MAY_REQUIRE_REALLOC {
+        store.0.set_thread(caller_thread)?;
         LowerContext::new
     } else {
         LowerContext::new_without_realloc
@@ -2196,7 +2198,8 @@ enum ReadState {
     /// The read end is owned by a guest task and a read is pending.
     GuestReady {
         ty: TransmitIndex,
-        caller: RuntimeComponentInstanceIndex,
+        caller_instance: RuntimeComponentInstanceIndex,
+        caller_thread: QualifiedThreadId,
         flat_abi: Option<FlatAbi>,
         instance: Instance,
         options: OptionsIndex,
@@ -2930,7 +2933,8 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             count,
             handle,
             instance,
-            caller,
+            caller_instance,
+            caller_thread
         } => {
             let guest_offset = match guest_offset {
                 Some(i) => i,
@@ -2952,6 +2956,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     lower::<T, B, D>(
                         store.as_context_mut(),
                         instance,
+                        caller_thread,
                         options,
                         ty,
                         address + (T::SIZE32 * guest_offset),
@@ -3008,7 +3013,8 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     count,
                     handle,
                     instance,
-                    caller,
+                    caller_instance,
+                    caller_thread
                 };
 
                 crate::error::Ok(())
@@ -3178,11 +3184,12 @@ impl Instance {
         self,
         mut store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
-        write_caller: RuntimeComponentInstanceIndex,
+        write_caller_instance: RuntimeComponentInstanceIndex,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
-        read_caller: RuntimeComponentInstanceIndex,
+        read_caller_instance: RuntimeComponentInstanceIndex,
+        read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
         read_address: usize,
@@ -3198,7 +3205,7 @@ impl Instance {
 
                 let payload = types[types[write_ty].ty].payload;
 
-                if write_caller == read_caller && !allow_intra_component_read_write(payload) {
+                if write_caller_instance == read_caller_instance && !allow_intra_component_read_write(payload) {
                     bail!(
                         "cannot read from and write to intra-component future with non-numeric payload"
                     )
@@ -3228,6 +3235,7 @@ impl Instance {
                     .transpose()?;
 
                 if let Some(val) = val {
+                    store.0.set_thread(read_caller_thread)?;
                     let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
                     let types = lower.types;
                     let ty = match types[types[read_ty].ty].payload {
@@ -3243,7 +3251,7 @@ impl Instance {
                 }
             }
             (TransmitIndex::Stream(write_ty), TransmitIndex::Stream(read_ty)) => {
-                if write_caller == read_caller
+                if write_caller_instance == read_caller_instance
                     && !allow_intra_component_read_write(types[types[write_ty].ty].payload)
                 {
                     bail!(
@@ -3284,7 +3292,7 @@ impl Instance {
                             // SAFETY: Both `src` and `dst` have been validated
                             // above.
                             unsafe {
-                                if write_caller == read_caller {
+                                if write_caller_instance == read_caller_instance {
                                     // If the same instance owns both ends of
                                     // the stream, the source and destination
                                     // buffers might overlap.
@@ -3326,6 +3334,7 @@ impl Instance {
                     let id = TableId::<TransmitHandle>::new(rep);
                     log::trace!("copy values {values:?} for {id:?}");
 
+                    store.0.set_thread(read_caller_thread)?;
                     let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
                     let ty = match lower.types[lower.types[read_ty].ty].payload {
                         Some(ty) => ty,
@@ -3469,7 +3478,8 @@ impl Instance {
                 count: read_count,
                 handle: read_handle,
                 instance: read_instance,
-                caller: read_caller,
+                caller_instance: read_caller_instance,
+                caller_thread: read_caller_thread,
             } => {
                 if flat_abi != read_flat_abi {
                     bail_bug!("expected flat ABI calculations to be the same");
@@ -3515,7 +3525,8 @@ impl Instance {
                     ty,
                     options,
                     address,
-                    read_caller,
+                    read_caller_instance,
+                    read_caller_thread,
                     read_ty,
                     read_options,
                     read_address,
@@ -3557,7 +3568,8 @@ impl Instance {
                         count: read_count - count,
                         handle: read_handle,
                         instance: read_instance,
-                        caller: read_caller,
+                        caller_instance: read_caller_instance,
+                        caller_thread: read_caller_thread,
                     };
                 }
 
@@ -3634,7 +3646,8 @@ impl Instance {
     pub(super) fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
-        caller: RuntimeComponentInstanceIndex,
+        caller_instance: RuntimeComponentInstanceIndex,
+        caller_thread: QualifiedThreadId,
         ty: TransmitIndex,
         options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
@@ -3694,7 +3707,8 @@ impl Instance {
                 count,
                 handle,
                 instance: self,
-                caller,
+                caller_instance,
+                caller_thread,
             };
             Ok::<_, crate::Error>(())
         };
@@ -3737,7 +3751,8 @@ impl Instance {
                     write_ty,
                     write_options,
                     write_address,
-                    caller,
+                    caller_instance,
+                    caller_thread,
                     ty,
                     options,
                     address,
