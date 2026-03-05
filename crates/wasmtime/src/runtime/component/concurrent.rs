@@ -4555,8 +4555,7 @@ impl GuestTask {
         })
     }
 
-    /// Dispose of this guest task, reparenting any pending subtasks to the
-    /// caller.
+    /// Dispose of this guest task.
     fn dispose(self, _state: &mut ConcurrentState) -> Result<()> {
         assert!(self.threads.is_empty());
         Ok(())
