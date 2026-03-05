@@ -258,3 +258,29 @@ block0(v0: i32, v1: i32):
 ; run: %test_iadd_bor_ineg(1, 1) == 0
 ; run: %test_iadd_bor_ineg(2, 1) == 2
 ; run: %test_iadd_bor_ineg(0xffffffff, 0) == -1
+
+function %test_band_bor_bor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bor v0, v2
+    v4 = bor v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %test_band_bor_bor(0, 0, 0) == 0
+; run: %test_band_bor_bor(1, 0, 0) == 0
+; run: %test_band_bor_bor(1, 0, 1) == 1
+
+function %test_bor_band_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v2
+    v4 = band v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %test_bor_band_band(0, 0, 0) == 0
+; run: %test_bor_band_band(1, 0, 0) == 0
+; run: %test_bor_band_band(1, 0, 1) == 1
+; run: %test_bor_band_band(2, 1, 1) == 1
+; run: %test_bor_band_band(0xf0, 0x0f, 0xaa) == 0xaa
