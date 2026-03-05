@@ -9,7 +9,7 @@ mod primary_map;
 mod secondary_map;
 
 pub use btree_map::BTreeMap;
-pub use entity_set::EntitySet;
+pub use entity_set::TryEntitySet;
 pub use hash_map::HashMap;
 pub use hash_set::HashSet;
 pub use index_map::IndexMap;
