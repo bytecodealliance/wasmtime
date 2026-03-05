@@ -246,4 +246,24 @@
 (rule (simplify (iadd ty (ineg ty y) (bor ty y x)))
       (band ty x (bnot ty y)))
 
+; (x | z) & (y | z) --> (x & y) | z
+(rule (simplify (band ty (bor ty x z) (bor ty y z))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty y z) (bor ty x z))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty x z) (bor ty z y))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty z y) (bor ty x z))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty z x) (bor ty y z))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty y z) (bor ty z x))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty z x) (bor ty z y))) (bor ty (band ty x y) z))
+(rule (simplify (band ty (bor ty z y) (bor ty z x))) (bor ty (band ty x y) z))
+
+; (x & z) | (y & z) --> (x | y) & z
+(rule (simplify (bor ty (band ty x z) (band ty y z))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty y z) (band ty x z))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty x z) (band ty z y))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty z y) (band ty x z))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty z x) (band ty y z))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty y z) (band ty z x))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty z x) (band ty z y))) (band ty (bor ty x y) z))
+(rule (simplify (bor ty (band ty z y) (band ty z x))) (band ty (bor ty x y) z))
+
 
