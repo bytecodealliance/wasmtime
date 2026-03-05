@@ -1,55 +1,8 @@
-//! Memory operation flags.
-
-use super::TrapCode;
-use core::fmt;
+use crate::ir::{AliasRegion, AtomicOrdering, Endianness, MemFlags, TrapCode};
 use core::num::NonZeroU8;
 use core::str::FromStr;
 
-#[cfg(feature = "enable-serde")]
-use serde_derive::{Deserialize, Serialize};
-
-/// Endianness of a memory access.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum Endianness {
-    /// Little-endian
-    Little,
-    /// Big-endian
-    Big,
-}
-
-/// Which disjoint region of aliasing memory is accessed in this memory
-/// operation.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[repr(u8)]
-#[expect(missing_docs, reason = "self-describing variants")]
-#[rustfmt::skip]
-pub enum AliasRegion {
-    // None = 0b00;
-    Heap    = 0b01,
-    Table   = 0b10,
-    Vmctx   = 0b11,
-}
-
-impl AliasRegion {
-    pub(crate) const fn from_bits(bits: u8) -> Option<Self> {
-        match bits {
-            0b00 => None,
-            0b01 => Some(Self::Heap),
-            0b10 => Some(Self::Table),
-            0b11 => Some(Self::Vmctx),
-            _ => panic!("invalid alias region bits"),
-        }
-    }
-
-    pub(crate) const fn to_bits(region: Option<Self>) -> u8 {
-        match region {
-            None => 0b00,
-            Some(r) => r as u8,
-        }
-    }
-}
-
-/// Flags for memory operations like load/store.
+/// Flags for AtomicCas instruction
 ///
 /// Each of these flags introduce a limited form of undefined behavior. The flags each enable
 /// certain optimizations that need to make additional assumptions. Generally, the semantics of a
@@ -60,20 +13,24 @@ impl AliasRegion {
 /// be overridden for individual accesses by explicitly specifying little- or big-endian
 /// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemFlags {
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AtomicCasMemFlags {
     // Initialized to all zeros to have all flags have their default value.
     // This is interpreted through various methods below. Currently the bits of
     // this are defined as:
     //
-    // * 0 - aligned flag
-    // * 1 - readonly flag
-    // * 2 - little endian flag
-    // * 3 - big endian flag
-    // * 4 - checked flag
-    // * 5/6 - alias region
-    // * 7/8/9/10/11/12/13/14 - trap code
-    // * 15 - can_move flag
+    // * 0/1/2/3/4/5/6/7 - trap code
+    // * 8/9/10/11/12/13/14/15 - Permutation based storage
+    //
+    // Permutation based storage
+    //
+    // * atomic ordering (5 states)
+    // * alias region (3 states)
+    // * endianness (3 states)
+    // * aligned flag (2 states)
+    // * checked bit (2 states)
+    //
+    // So, mathematically, its `180` different states
     //
     // Current properties upheld are:
     //
@@ -82,77 +39,62 @@ pub struct MemFlags {
     bits: u16,
 }
 
-/// Guaranteed to use "natural alignment" for the given type. This
-/// may enable better instruction selection.
-const BIT_ALIGNED: u16 = 1 << 0;
+// The "Weights" for our Mixed-Radix system
+const WEIGHT_BEFORE_ORDERING: u16 = 180; // 5 * 3 * 3 * 2 * 2
 
-/// A load that reads data in memory that does not change for the
-/// duration of the function's execution. This may enable
-/// additional optimizations to be performed.
-const BIT_READONLY: u16 = 1 << 1;
+const WEIGHT_ORDERING: u16 = 36; // 3 * 3 * 2 * 2
+const WEIGHT_ALIAS_REGION: u16 = 12; // 3 * 2 * 2
+const WEIGHT_ENDIANNESS: u16 = 4; // 2 * 2
 
-/// Load multi-byte values from memory in a little-endian format.
-const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
-
-/// Load multi-byte values from memory in a big-endian format.
-const BIT_BIG_ENDIAN: u16 = 1 << 3;
-
-/// Check this load or store for safety when using the
-/// proof-carrying-code framework. The address must have a
-/// `PointsTo` fact attached with a sufficiently large valid range
-/// for the accessed size.
-const BIT_CHECKED: u16 = 1 << 4;
-
-/// Used for alias analysis, indicates which disjoint part of the abstract state
-/// is being accessed.
-const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
-const ALIAS_REGION_OFFSET: u16 = 5;
+const WEIGHT_ALIGNED: u16 = 2; // 2
+const WEIGHT_CHECKED: u16 = 1;
 
 /// Trap code, if any, for this memory operation.
 const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
-const TRAP_CODE_OFFSET: u16 = 7;
+const TRAP_CODE_OFFSET: u16 = 0;
 
-/// Whether this memory operation may be freely moved by the optimizer so long
-/// as its data dependencies are satisfied. That is, by setting this flag, the
-/// producer is guaranteeing that this memory operation's safety is not guarded
-/// by outside-the-data-flow-graph properties, like implicit bounds-checking
-/// control dependencies.
-const BIT_CAN_MOVE: u16 = 1 << 15;
-
-impl MemFlags {
+impl AtomicCasMemFlags {
     /// Create a new empty set of flags.
-    pub const fn new() -> Self {
-        Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
+    pub const fn new(ordering: AtomicOrdering) -> Self {
+        Self { bits: 0 }
+            .with_ordering(ordering)
+            .with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
     }
 
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
     /// known to be aligned and non-trapping.
-    pub const fn trusted() -> Self {
-        Self::new().with_notrap().with_aligned()
+    pub const fn trusted(ordering: AtomicOrdering) -> Self {
+        Self::new(ordering).with_notrap().with_aligned()
     }
 
-    /// Read a flag bit.
-    const fn read_bit(self, bit: u16) -> bool {
-        self.bits & bit != 0
+    /// Read a state as encoded
+    const fn read_state(self, state_const: u16, before_state_const: u16) -> u8 {
+        let higher_state = self.bits >> 8;
+
+        ((higher_state % before_state_const) / state_const)
     }
 
-    /// Return a new `MemFlags` with this flag bit set.
-    const fn with_bit(mut self, bit: u16) -> Self {
-        self.bits |= bit;
+    /// Return a new `AtomicCasMemFlags` with this flag bit set.
+    const fn with_state(mut self, data: u16, state_const: u16, before_state_const: u16) -> Self {
+        let out = (self.bits >> 8) - self.read_state(state_const, before_state_const) + data*state_const;
+
+        self.bits &= 0x00FF; // Mask the lower bits
+        self.bits |= out << 8;
         self
     }
 
     /// Reads the alias region that this memory operation works with.
     pub const fn alias_region(self) -> Option<AliasRegion> {
-        AliasRegion::from_bits(((self.bits & MASK_ALIAS_REGION) >> ALIAS_REGION_OFFSET) as u8)
+        AliasRegion::from_bits(
+            self.read_state(WEIGHT_ALIAS_REGION, WEIGHT_ORDERING)
+        )
     }
 
     /// Sets the alias region that this works on to the specified `region`.
     pub const fn with_alias_region(mut self, region: Option<AliasRegion>) -> Self {
         let bits = AliasRegion::to_bits(region);
-        self.bits &= !MASK_ALIAS_REGION;
-        self.bits |= (bits as u16) << ALIAS_REGION_OFFSET;
-        self
+        
+        self.with_state(bits, WEIGHT_ALIAS_REGION, WEIGHT_ORDERING)
     }
 
     /// Sets the alias region that this works on to the specified `region`.
@@ -173,7 +115,6 @@ impl MemFlags {
         *self = match name {
             "notrap" => self.with_trap_code(None),
             "aligned" => self.with_aligned(),
-            "readonly" => self.with_readonly(),
             "little" => {
                 if self.read_bit(BIT_BIG_ENDIAN) {
                     return Err("cannot set both big and little endian bits");
@@ -205,7 +146,6 @@ impl MemFlags {
                 self.with_alias_region(Some(AliasRegion::Vmctx))
             }
             "checked" => self.with_checked(),
-            "can_move" => self.with_can_move(),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -213,6 +153,44 @@ impl MemFlags {
             },
         };
         Ok(true)
+    }
+
+    /// Express this struct as a standard [MemFlags]
+    pub fn as_memflags(self) -> MemFlags {
+        let mut flags = MemFlags::new();
+
+        if self.aligned() {
+            flags.set_aligned();
+        }
+        match self.explicit_endianness() {
+            Some(Endianness::Little) => flags.set_endianness(Endianness::Little),
+            Some(Endianness::Big) => flags.set_endianness(Endianness::Big),
+            None => {}
+        }
+        if self.checked() {
+            flags.set_checked();
+        }
+
+        flags.set_alias_region(self.alias_region());
+
+        flags = flags.with_trap_code(self.trap_code());
+
+        flags
+    }
+
+    /// Gets the [AtomicOrdering] of this operation
+    pub const fn atomic_ordering(self) -> AtomicOrdering {
+        AtomicOrdering::from_u8(self.read_state(WEIGHT_ORDERING, WEIGHT_BEFORE_ORDERING))
+    }
+
+    /// Sets the [AtomicOrdering] of this operation
+    pub fn set_ordering(&mut self, ordering: AtomicOrdering) {
+        *self = self.with_ordering(ordering);
+    }
+
+    /// Sets the [AtomicOrdering] of this operation
+    pub const fn with_ordering(mut self, ordering: AtomicOrdering) -> Self {
+        self.with(AtomicOrdering.to_u8(ordering), WEIGHT_ORDERING, WEIGHT_BEFORE_ORDERING)
     }
 
     /// Return endianness of the memory access.  This will return the endianness
@@ -261,7 +239,7 @@ impl MemFlags {
 
     /// Test if this memory operation cannot trap.
     ///
-    /// By default `MemFlags` will assume that any load/store can trap and is
+    /// By default `AtomicCasMemFlags` will assume that any load/store can trap and is
     /// associated with a `TrapCode::HeapOutOfBounds` code. If the trap code is
     /// configured to `None` though then this method will return `true` and
     /// indicates that the memory operation will not trap.
@@ -279,44 +257,15 @@ impl MemFlags {
         self.trap_code().is_none()
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`.
+    /// Sets the trap code for this `AtomicCasMemFlags` to `None`.
     pub fn set_notrap(&mut self) {
         *self = self.with_notrap();
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`, returning the new
+    /// Sets the trap code for this `AtomicCasMemFlags` to `None`, returning the new
     /// flags.
     pub const fn with_notrap(self) -> Self {
         self.with_trap_code(None)
-    }
-
-    /// Is this memory operation safe to move so long as its data dependencies
-    /// remain satisfied?
-    ///
-    /// If this is `true`, then it is okay to code motion this instruction to
-    /// arbitrary locations, in the function, including across blocks and
-    /// conditional branches, so long as data dependencies (and trap ordering,
-    /// if any) are upheld.
-    ///
-    /// If this is `false`, then this memory operation's safety potentially
-    /// relies upon invariants that are not reflected in its data dependencies,
-    /// and therefore it is not safe to code motion this operation. For example,
-    /// this operation could be in a block that is dominated by a control-flow
-    /// bounds check, which is not reflected in its operands, and it would be
-    /// unsafe to code motion it above the bounds check, even if its data
-    /// dependencies would still be satisfied.
-    pub const fn can_move(self) -> bool {
-        self.read_bit(BIT_CAN_MOVE)
-    }
-
-    /// Set the `can_move` flag.
-    pub const fn set_can_move(&mut self) {
-        *self = self.with_can_move();
-    }
-
-    /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(self) -> Self {
-        self.with_bit(BIT_CAN_MOVE)
     }
 
     /// Test if the `aligned` flag is set.
@@ -336,25 +285,6 @@ impl MemFlags {
     /// Set the `aligned` flag, returning new flags.
     pub const fn with_aligned(self) -> Self {
         self.with_bit(BIT_ALIGNED)
-    }
-
-    /// Test if the `readonly` flag is set.
-    ///
-    /// Loads with this flag have no memory dependencies.
-    /// This results in undefined behavior if the dereferenced memory is mutated at any time
-    /// between when the function is called and when it is exited.
-    pub const fn readonly(self) -> bool {
-        self.read_bit(BIT_READONLY)
-    }
-
-    /// Set the `readonly` flag.
-    pub fn set_readonly(&mut self) {
-        *self = self.with_readonly();
-    }
-
-    /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(self) -> Self {
-        self.with_bit(BIT_READONLY)
     }
 
     /// Test if the `checked` bit is set.
@@ -410,78 +340,65 @@ impl MemFlags {
     }
 }
 
-impl fmt::Display for MemFlags {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.trap_code() {
-            None => write!(f, " notrap")?,
-            // This is the default trap code, so don't print anything extra
-            // for this.
-            Some(TrapCode::HEAP_OUT_OF_BOUNDS) => {}
-            Some(t) => write!(f, " {t}")?,
-        }
-        if self.aligned() {
-            write!(f, " aligned")?;
-        }
-        if self.readonly() {
-            write!(f, " readonly")?;
-        }
-        if self.can_move() {
-            write!(f, " can_move")?;
-        }
-        if self.read_bit(BIT_BIG_ENDIAN) {
-            write!(f, " big")?;
-        }
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            write!(f, " little")?;
-        }
-        if self.checked() {
-            write!(f, " checked")?;
-        }
-        match self.alias_region() {
-            None => {}
-            Some(AliasRegion::Heap) => write!(f, " heap")?,
-            Some(AliasRegion::Table) => write!(f, " table")?,
-            Some(AliasRegion::Vmctx) => write!(f, " vmctx")?,
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn roundtrip_traps() {
-        for trap in TrapCode::non_user_traps().iter().copied() {
-            let flags = MemFlags::new().with_trap_code(Some(trap));
-            assert_eq!(flags.trap_code(), Some(trap));
+        for ordering in AtomicOrdering::all() {
+            for trap in TrapCode::non_user_traps().iter().copied() {
+                let flags = AtomicCasMemFlags::new(*ordering).with_trap_code(Some(trap));
+                assert_eq!(flags.trap_code(), Some(trap));
+            }
+
+            let flags = AtomicCasMemFlags::new(*ordering).with_trap_code(None);
+            assert_eq!(flags.trap_code(), None);
         }
-        let flags = MemFlags::new().with_trap_code(None);
-        assert_eq!(flags.trap_code(), None);
     }
 
     #[test]
     fn cannot_set_big_and_little() {
-        let mut big = MemFlags::new().with_endianness(Endianness::Big);
-        assert!(big.set_by_name("little").is_err());
+        for ordering in AtomicOrdering::all() {
+            let mut big = AtomicCasMemFlags::new(*ordering).with_endianness(Endianness::Big);
+            assert!(big.set_by_name("little").is_err());
 
-        let mut little = MemFlags::new().with_endianness(Endianness::Little);
-        assert!(little.set_by_name("big").is_err());
+            let mut little = AtomicCasMemFlags::new(*ordering).with_endianness(Endianness::Little);
+            assert!(little.set_by_name("big").is_err());
+        }
     }
 
     #[test]
     fn only_one_region() {
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Heap));
-        assert!(big.set_by_name("table").is_err());
-        assert!(big.set_by_name("vmctx").is_err());
+        for ordering in AtomicOrdering::all() {
+            let mut big =
+                AtomicCasMemFlags::new(*ordering).with_alias_region(Some(AliasRegion::Heap));
+            assert!(big.set_by_name("table").is_err());
+            assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Table));
-        assert!(big.set_by_name("heap").is_err());
-        assert!(big.set_by_name("vmctx").is_err());
+            let mut big =
+                AtomicCasMemFlags::new(*ordering).with_alias_region(Some(AliasRegion::Table));
+            assert!(big.set_by_name("heap").is_err());
+            assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Vmctx));
-        assert!(big.set_by_name("heap").is_err());
-        assert!(big.set_by_name("table").is_err());
+            let mut big =
+                AtomicCasMemFlags::new(*ordering).with_alias_region(Some(AliasRegion::Vmctx));
+            assert!(big.set_by_name("heap").is_err());
+            assert!(big.set_by_name("table").is_err());
+        }
+    }
+
+    #[test]
+    fn check_atomic_ordering() {
+        for ordering in AtomicOrdering::all() {
+            let mut big = AtomicCasMemFlags::new(*ordering);
+
+            assert!(big.get_ordering() == *ordering);
+
+            for ordering in AtomicOrdering::all() {
+                big.set_ordering(*ordering);
+                assert!(big.get_ordering() == *ordering);
+            }
+        }
     }
 }

@@ -312,6 +312,25 @@
 (decl little_or_native_endian (MemFlags) MemFlags)
 (extern extractor little_or_native_endian little_or_native_endian)
 
+;;;; Helpers for Working with BitPacked RMW ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type AtomicRmwOp extern (enum
+    Add
+    Sub
+    And
+    Nand
+    Or
+    Xor
+    Xchg
+    Umin
+    Umax
+    Smin
+    Smax
+))
+
+(decl atomic_rmw_op (AtomicRmwOp) AtomicRmwData)
+(extern extractor atomic_rmw_op atomic_rmw_op)
+
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Swap args of an IntCC flag.

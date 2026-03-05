@@ -1675,34 +1675,34 @@
 (rule -1
   ;;
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) op _ord addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op op) addr x)))
   (gen_atomic (get_atomic_rmw_op ty op) addr x (atomic_amo)))
 
 ;;; for I8 and I16
 (rule 1
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) op _ord addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op op) addr x)))
   (gen_atomic_rmw_loop op ty addr x))
 
 ;;;special for I8 and I16 max min etc.
 ;;;because I need uextend or sextend the value.
 (rule 2
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op true) _ord addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op (is_atomic_rmw_max_etc op true)) addr x)))
   (gen_atomic_rmw_loop op ty addr (sext x)))
 
 
 (rule 2
   ;;
   (lower
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (is_atomic_rmw_max_etc op false) _ord addr x)))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op (is_atomic_rmw_max_etc op false)) addr x)))
   ;;
   (gen_atomic_rmw_loop op ty addr (zext x)))
 
 ;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) _ord addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op (AtomicRmwOp.Sub)) addr x)))
   (let
     ((tmp WritableReg (temp_writable_reg ty))
      (x2 Reg (rv_neg x)))
@@ -1720,7 +1720,7 @@
 ;;;;;  Rules for `AtomicRmwOp.Nand`
 (rule
   (lower
-    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Nand) _ord addr x)))
+    (has_type (valid_atomic_transaction ty) (atomic_rmw (little_or_native_endian flags) (atomic_rmw_op (AtomicRmwOp.Nand)) addr x)))
     (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x))
 
 (decl is_atomic_rmw_max_etc (AtomicRmwOp bool) AtomicRmwOp)

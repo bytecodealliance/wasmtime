@@ -639,6 +639,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn atomic_rmw_op(&mut self, data: AtomicRmwData) -> Option<AtomicRmwOp> {
+            Some(data.op())
+        }
+
+        #[inline]
         fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
             match flags.explicit_endianness() {
                 Some(crate::ir::Endianness::Little) | None => Some(flags),

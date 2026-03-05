@@ -3774,8 +3774,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![
             Operand::new("MemFlags", &imm.memflags),
-            Operand::new("AtomicRmwOp", &imm.atomic_rmw_op),
-            Operand::new("ordering", &imm.atomic_ordering),
+            Operand::new("AtomicRmwData", &imm.atomic_rmw_data),
             Operand::new("p", iAddr),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
         ])
@@ -3803,8 +3802,7 @@ pub(crate) fn define(
             &formats.atomic_cas,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
-            Operand::new("ordering", &imm.atomic_ordering),
+            Operand::new("MemFlags", &imm.atomic_cas_memflags),
             Operand::new("p", iAddr),
             Operand::new("e", AtomicMem).with_doc("Expected value in CAS"),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),

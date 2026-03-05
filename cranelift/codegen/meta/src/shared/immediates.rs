@@ -55,7 +55,9 @@ pub(crate) struct Immediates {
     pub trapcode: OperandKind,
 
     /// A code indicating the arithmetic operation to perform in an atomic_rmw memory access.
-    pub atomic_rmw_op: OperandKind,
+    pub atomic_rmw_data: OperandKind,
+
+    pub atomic_cas_memflags: OperandKind,
 
     /// A code indicating the ordering of Atomic Operations
     pub atomic_ordering: OperandKind,
@@ -180,26 +182,12 @@ impl Immediates {
                     "A trap reason code.",
                 )
             },
-            atomic_rmw_op: {
-                let mut atomic_rmw_op_values = HashMap::new();
-                atomic_rmw_op_values.insert("add", "Add");
-                atomic_rmw_op_values.insert("sub", "Sub");
-                atomic_rmw_op_values.insert("and", "And");
-                atomic_rmw_op_values.insert("nand", "Nand");
-                atomic_rmw_op_values.insert("or", "Or");
-                atomic_rmw_op_values.insert("xor", "Xor");
-                atomic_rmw_op_values.insert("xchg", "Xchg");
-                atomic_rmw_op_values.insert("umin", "Umin");
-                atomic_rmw_op_values.insert("umax", "Umax");
-                atomic_rmw_op_values.insert("smin", "Smin");
-                atomic_rmw_op_values.insert("smax", "Smax");
-                new_enum(
-                    "op",
-                    "ir::AtomicRmwOp",
-                    atomic_rmw_op_values,
-                    "Atomic Read-Modify-Write Ops",
-                )
-            },
+            atomic_rmw_data: new_imm(
+                "data",
+                "ir::AtomicRmwData",
+                "Atomic Read-Modify-Write Options",
+            ),
+            atomic_cas_memflags: new_imm("cas_flags", "ir::AtomicCasMemFlags", "Atomic Compare & Swap Memory Flags"),
             atomic_ordering: {
                 let mut ordering_values = HashMap::new();
                 ordering_values.insert("relaxed", "Relaxed");

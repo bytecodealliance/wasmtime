@@ -3312,49 +3312,49 @@
 
 ;; Atomic AND for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-                (atomic_rmw flags @ (bigendian) (AtomicRmwOp.And) _ord addr src)))
+                (atomic_rmw flags @ (bigendian) (atomic_rmw_op (AtomicRmwOp.And)) addr src)))
       (atomic_rmw_and ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic AND for 32/64-bit big-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.And) _ord addr src)))
+               (atomic_rmw flags @ (littleendian) (atomic_rmw_op (AtomicRmwOp.And)) addr src)))
       (bswap_reg ty (atomic_rmw_and ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic OR for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Or) _ord addr src)))
+               (atomic_rmw flags @ (bigendian) (atomic_rmw_op (AtomicRmwOp.Or)) addr src)))
       (atomic_rmw_or ty (put_in_reg src)
                      (lower_address flags addr (zero_offset))))
 
 ;; Atomic OR for 32/64-bit little-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Or) _ord addr src)))
+               (atomic_rmw flags @ (littleendian) (atomic_rmw_op (AtomicRmwOp.Or)) addr src)))
       (bswap_reg ty (atomic_rmw_or ty (bswap_reg ty (put_in_reg src))
                                    (lower_address flags addr (zero_offset)))))
 
 ;; Atomic XOR for 32/64-bit big-endian types, using a single instruction.
 (rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Xor) _ord addr src)))
+               (atomic_rmw flags @ (bigendian) (atomic_rmw_op (AtomicRmwOp.Xor)) addr src)))
       (atomic_rmw_xor ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic XOR for 32/64-bit little-endian types, using byte-swapped input/output.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Xor) _ord addr src)))
+               (atomic_rmw flags @ (littleendian) (atomic_rmw_op (AtomicRmwOp.Xor)) addr src)))
       (bswap_reg ty (atomic_rmw_xor ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic ADD for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Add) _ord addr src)))
+               (atomic_rmw flags @ (bigendian) (atomic_rmw_op (AtomicRmwOp.Add)) addr src)))
       (atomic_rmw_add ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic SUB for 32/64-bit big-endian types, using atomic ADD with negated input.
 (rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Sub) _ord addr src)))
+               (atomic_rmw flags @ (bigendian) (atomic_rmw_op (AtomicRmwOp.Sub)) addr src)))
       (atomic_rmw_add ty (neg_reg ty (put_in_reg src))
                       (lower_address flags addr (zero_offset))))
 
@@ -3362,7 +3362,7 @@
 ;; Atomic operations that require a compare-and-swap loop.
 
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (has_type (ty_32_or_64 ty) (atomic_rmw flags op _ord addr src)))
+(rule -1 (lower (has_type (ty_32_or_64 ty) (atomic_rmw flags (atomic_rmw_op op) addr src)))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3374,7 +3374,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (has_type (ty_8_or_16 ty) (atomic_rmw flags op _ord addr src)))
+(rule -2 (lower (has_type (ty_8_or_16 ty) (atomic_rmw flags (atomic_rmw_op op) addr src)))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.

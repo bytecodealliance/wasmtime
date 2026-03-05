@@ -162,15 +162,13 @@ impl Formats {
 
             atomic_rmw: Builder::new("AtomicRmw")
                 .imm(&imm.memflags)
-                .imm(&imm.atomic_rmw_op)
-                .imm(&imm.atomic_ordering)
+                .imm(&imm.atomic_rmw_data)
                 .value()
                 .value()
                 .build(),
 
             atomic_cas: Builder::new("AtomicCas")
-                .imm(&imm.memflags)
-                .imm(&imm.atomic_ordering)
+                .imm(&imm.atomic_cas_memflags)
                 .value()
                 .value()
                 .value()
