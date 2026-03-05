@@ -784,14 +784,16 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
         Poll::Ready(result) => {
             log::trace!("host task {task:?} completed immediately");
             result?
-        },
+        }
 
         // It did not complete immediately; add it to
         // `ConcurrentState::futures` so it will be polled via the event loop;
         // then use `GuestThread::sync_call_set` to wait for the task to
         // complete, suspending the current fiber until it does so.
         Poll::Pending => {
-            log::trace!("host task {task:?} did not complete immediately, blocking until completion");
+            log::trace!(
+                "host task {task:?} did not complete immediately, blocking until completion"
+            );
             let state = store.concurrent_state_mut();
             state.push_future(future);
 
@@ -2086,7 +2088,7 @@ impl Instance {
             None => bail_bug!("thread must have instance_rep set by now"),
         };
         let sync_call_set = thread_data.sync_call_set;
-        
+
         // Clean up any pending subtasks in the sync_call_set
         for waitable in mem::take(&mut state.get_mut(sync_call_set)?.ready) {
             if let Some(Event::Subtask {
@@ -2096,7 +2098,7 @@ impl Instance {
                 waitable.delete_from(state)?;
             }
         }
-        
+
         store
             .instance_state(RuntimeInstance {
                 instance: self.id().instance(),
@@ -3296,7 +3298,7 @@ impl Instance {
         let current_thread = state.current_guest_thread()?;
         let parent_task = current_thread.task;
 
-        let new_thread = GuestThread::new_explicit(state,parent_task, start_func)?;
+        let new_thread = GuestThread::new_explicit(state, parent_task, start_func)?;
         let thread_id = state.push(new_thread)?;
         state.get_mut(parent_task)?.threads.insert(thread_id);
 
@@ -4255,9 +4257,7 @@ impl std::fmt::Debug for HostTaskState {
         match self {
             HostTaskState::CalleeStarted => f.debug_tuple("CalleeStarted").finish(),
             HostTaskState::CalleeRunning(_) => f.debug_tuple("CalleeRunning").finish(),
-            HostTaskState::CalleeFinished(_result) => f
-                .debug_tuple("CalleeFinished")
-                .finish(),
+            HostTaskState::CalleeFinished(_result) => f.debug_tuple("CalleeFinished").finish(),
             HostTaskState::CalleeDone => f.debug_tuple("CalleeDone").finish(),
         }
     }
