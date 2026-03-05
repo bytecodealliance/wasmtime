@@ -781,19 +781,13 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 
     match poll {
         // It completed immediately; check the result and delete the task.
-        Poll::Ready(result) => {
-            log::trace!("host task {task:?} completed immediately");
-            result?
-        }
+        Poll::Ready(result) => result?,
 
         // It did not complete immediately; add it to
         // `ConcurrentState::futures` so it will be polled via the event loop;
         // then use `GuestThread::sync_call_set` to wait for the task to
         // complete, suspending the current fiber until it does so.
         Poll::Pending => {
-            log::trace!(
-                "host task {task:?} did not complete immediately, blocking until completion"
-            );
             let state = store.concurrent_state_mut();
             state.push_future(future);
 
@@ -815,14 +809,13 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     }
 
     // Retrieve and return the result.
-    log::trace!("host task {task:?} completed, retrieving result");
     let host_state = &mut store.concurrent_state_mut().get_mut(task)?.state;
     match mem::replace(host_state, HostTaskState::CalleeDone) {
         HostTaskState::CalleeFinished(result) => Ok(match result.downcast() {
             Ok(result) => *result,
             Err(_) => bail_bug!("host task finished with wrong type of result"),
         }),
-        other => bail_bug!("unexpected host task state after completion: {:?}", other),
+        _ => bail_bug!("unexpected host task state after completion"),
     }
 }
 
@@ -2857,7 +2850,6 @@ impl Instance {
 
                 lower(store.as_context_mut(), result)?;
                 let state = store.0.concurrent_state_mut();
-                log::trace!("task complete for {task:?}, setting status {status:?}");
                 state.get_mut(task)?.state = HostTaskState::CalleeDone;
                 Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
 
@@ -4250,17 +4242,6 @@ enum HostTaskState {
     /// Terminal state for host tasks meaning that the task was cancelled or the
     /// result was taken.
     CalleeDone,
-}
-
-impl std::fmt::Debug for HostTaskState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            HostTaskState::CalleeStarted => f.debug_tuple("CalleeStarted").finish(),
-            HostTaskState::CalleeRunning(_) => f.debug_tuple("CalleeRunning").finish(),
-            HostTaskState::CalleeFinished(_result) => f.debug_tuple("CalleeFinished").finish(),
-            HostTaskState::CalleeDone => f.debug_tuple("CalleeDone").finish(),
-        }
-    }
 }
 
 impl HostTask {
