@@ -246,4 +246,8 @@
 (rule (simplify (iadd ty (ineg ty y) (bor ty y x)))
       (band ty x (bnot ty y)))
 
-
+; x & (x | y) --> x
+(rule (simplify (band ty (bor ty x y) x)) x)
+(rule (simplify (band ty x (bor ty x y))) x)
+(rule (simplify (band ty (bor ty y x) x)) x)
+(rule (simplify (band ty x (bor ty y x))) x)
