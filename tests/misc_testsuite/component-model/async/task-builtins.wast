@@ -381,9 +381,15 @@
   (instance $a (instantiate $A))
   (instance $b (instantiate $B (with "a" (instance $a))))
   (export "sync-to-sync" (func $b "sync-to-sync"))
+  (export "sync-to-async" (func $b "sync-to-async"))
+  (export "async-to-sync" (func $b "async-to-sync"))
+  (export "async-to-async" (func $b "async-to-async"))
 )
 
 (assert_return (invoke "sync-to-sync"))
+(assert_return (invoke "sync-to-async"))
+(assert_return (invoke "async-to-sync"))
+(assert_return (invoke "async-to-async"))
 
 ;; Same as above, but when calling the host.
 (component
