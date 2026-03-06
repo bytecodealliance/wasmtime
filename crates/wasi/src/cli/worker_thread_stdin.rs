@@ -121,7 +121,8 @@ fn create() -> GlobalStdin {
                 *state.state.lock().unwrap(),
                 StdinState::ReadRequested
             ));
-            *state.state.lock().unwrap() = new_state;
+            let mut lock = state.state.lock().unwrap();
+            *lock = new_state;
             state.read_completed.notify_waiters();
             if done {
                 break;
@@ -205,6 +206,14 @@ impl AsyncRead for WasiStdinAsyncRead {
     ) -> Poll<io::Result<()>> {
         let g = GlobalStdin::get();
 
+        // Everything below is executed under the global stdin lock. It's not
+        // going to block below so that's semantically fine. Optimization-wise
+        // it's probably possible to move this within the loop around just a
+        // small part of reading/writing the state, but that was done
+        // historically and it resulted in lost wakeups with `Notify`, so this
+        // is conservatively hoisted up here.
+        let mut locked = g.state.lock().unwrap();
+
         // Perform everything below in a `loop` to handle the case that a read
         // was stolen by another thread, for example, or perhaps a spurious
         // notification to `Notified`.
@@ -222,7 +231,6 @@ impl AsyncRead for WasiStdinAsyncRead {
 
             // Once we're in the "ready" state then take a look at the global
             // state of stdin.
-            let mut locked = g.state.lock().unwrap();
             match mem::replace(&mut *locked, StdinState::ReadRequested) {
                 // If data is available then drain what we can into `buf`.
                 StdinState::Data(mut data) => {
@@ -260,11 +268,6 @@ impl AsyncRead for WasiStdinAsyncRead {
             }
 
             self.set(WasiStdinAsyncRead::Waiting(g.read_completed.notified()));
-
-            // Intentionally drop the lock after the `notified()` future
-            // creation just above as to work correctly this needs to happen
-            // within the lock.
-            drop(locked);
         }
     }
 }
