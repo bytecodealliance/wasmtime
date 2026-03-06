@@ -344,18 +344,18 @@ wit-bindgen = { version = "0.53.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.53.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.245.0", default-features = false, features = ['simd'] }
-wat = "1.245.0"
-wast = "245.0.0"
-wasmprinter = "0.245.0"
-wasm-encoder = "0.245.0"
-wasm-smith = "0.245.0"
-wasm-mutate = "0.245.0"
-wit-parser = "0.245.0"
-wit-component = "0.245.0"
-wasm-wave = "0.245.0"
-wasm-compose = "0.245.0"
-json-from-wast = "0.245.0"
+wasmparser = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements", default-features = false, features = ['simd'] }
+wat = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wast = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasmprinter = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasm-encoder = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasm-smith = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasm-mutate = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wit-parser = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wit-component = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasm-wave = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+wasm-compose = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
+json-from-wast = { git = "https://github.com/ricochet/wasm-tools.git", branch = "wasmparser-implements" }
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

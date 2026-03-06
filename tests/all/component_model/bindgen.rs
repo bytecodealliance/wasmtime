@@ -1001,3 +1001,194 @@ mod anyhow_errors {
         Ok(())
     }
 }
+
+mod implements_single_import {
+    use super::*;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface store {
+                get: func() -> u32;
+            }
+
+            world implements-single {
+                import primary: store;
+                export p: func() -> u32;
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"(component
+                (type $store-type (instance
+                    (export "get" (func (result u32)))
+                ))
+                (import "[implements=<foo:foo/store>]primary" (instance $primary (type $store-type)))
+
+                (alias export $primary "get" (func $get))
+                (core func $get-lowered (canon lower (func $get)))
+
+                (core module $m
+                    (import "" "get" (func $get (result i32)))
+                    (func (export "p") (result i32) (call $get))
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "get" (func $get-lowered))))
+                ))
+
+                (func (export "p") (result u32) (canon lift (core func $i "p")))
+            )"#,
+        )?;
+
+        struct MyImports;
+
+        impl primary::Host for MyImports {
+            fn get(&mut self) -> u32 {
+                42
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        primary::add_to_linker::<_, HasSelf<_>>(&mut linker, "primary", |f| f)?;
+        let mut store = Store::new(&engine, MyImports);
+        let instance = ImplementsSingle::instantiate(&mut store, &component, &linker)?;
+
+        let result = instance.call_p(&mut store)?;
+        assert_eq!(result, 42);
+
+        Ok(())
+    }
+}
+
+mod implements_multi_import {
+    use super::*;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface store {
+                id: func() -> u32;
+            }
+
+            world implements-multi {
+                import primary: store;
+                import secondary: store;
+                export p: func() -> u32;
+                export s: func() -> u32;
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"(component
+                (type $store-type (instance
+                    (export "id" (func (result u32)))
+                ))
+                (import "[implements=<foo:foo/store>]primary" (instance $primary (type $store-type)))
+                (import "[implements=<foo:foo/store>]secondary" (instance $secondary (type $store-type)))
+
+                (alias export $primary "id" (func $primary-id))
+                (alias export $secondary "id" (func $secondary-id))
+
+                (core func $primary-lowered (canon lower (func $primary-id)))
+                (core func $secondary-lowered (canon lower (func $secondary-id)))
+
+                (core module $m
+                    (import "" "p" (func $p (result i32)))
+                    (import "" "s" (func $s (result i32)))
+                    (func (export "p") (result i32) (call $p))
+                    (func (export "s") (result i32) (call $s))
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "p" (func $primary-lowered))
+                        (export "s" (func $secondary-lowered))
+                    ))
+                ))
+
+                (func (export "p") (result u32) (canon lift (core func $i "p")))
+                (func (export "s") (result u32) (canon lift (core func $i "s")))
+            )"#,
+        )?;
+
+        struct PrimaryBackend;
+        impl primary::Host for PrimaryBackend {
+            fn id(&mut self) -> u32 {
+                1
+            }
+        }
+
+        struct SecondaryBackend;
+        impl primary::Host for SecondaryBackend {
+            fn id(&mut self) -> u32 {
+                2
+            }
+        }
+
+        struct MyState {
+            primary: PrimaryBackend,
+            secondary: SecondaryBackend,
+        }
+
+        let mut linker = Linker::new(&engine);
+        primary::add_to_linker::<_, HasSelf<_>>(&mut linker, "primary", |s: &mut MyState| {
+            &mut s.primary
+        })?;
+        primary::add_to_linker::<_, HasSelf<_>>(&mut linker, "secondary", |s: &mut MyState| {
+            &mut s.secondary
+        })?;
+        let mut store = Store::new(
+            &engine,
+            MyState {
+                primary: PrimaryBackend,
+                secondary: SecondaryBackend,
+            },
+        );
+        let instance = ImplementsMulti::instantiate(&mut store, &component, &linker)?;
+
+        let result = instance.call_p(&mut store)?;
+        assert_eq!(result, 1);
+
+        let result = instance.call_s(&mut store)?;
+        assert_eq!(result, 2);
+
+        Ok(())
+    }
+}
+
+mod implements_shared_types {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface store {
+                enum color {
+                    red,
+                    green,
+                    blue,
+                }
+                get-color: func() -> color;
+            }
+
+            world implements-shared-types {
+                import primary: store;
+                import secondary: store;
+            }
+        ",
+    });
+}
