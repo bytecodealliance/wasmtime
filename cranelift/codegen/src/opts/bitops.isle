@@ -246,6 +246,16 @@
 (rule (simplify (iadd ty (ineg ty y) (bor ty y x)))
       (band ty x (bnot ty y)))
 
+; (x | y) ^ (x | ~y) --> ~x
+(rule (simplify (bxor ty (bor ty x y) (bor ty x (bnot ty y)))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty x (bnot ty y)) (bor ty x y))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty x y) (bor ty (bnot ty y) x))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty (bnot ty y) x) (bor ty x y))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty y x) (bor ty x (bnot ty y)))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty x (bnot ty y)) (bor ty y x))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty y x) (bor ty (bnot ty y) x))) (bnot ty x))
+(rule (simplify (bxor ty (bor ty (bnot ty y) x) (bor ty y x))) (bnot ty x))
+
 ; x & (x | y) --> x
 (rule (simplify (band ty (bor ty x y) x)) x)
 (rule (simplify (band ty x (bor ty x y))) x)

@@ -259,6 +259,21 @@ block0(v0: i32, v1: i32):
 ; run: %test_iadd_bor_ineg(2, 1) == 2
 ; run: %test_iadd_bor_ineg(0xffffffff, 0) == -1
 
+function %test_bxor_bor_bor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v1
+    v4 = bor v0, v3
+    v5 = bxor v2, v4
+    return v5
+}
+
+; run: %test_bxor_bor_bor_bnot(0, 0) == 0xffffffff
+; run: %test_bxor_bor_bor_bnot(1, 0) == 0xfffffffe
+; run: %test_bxor_bor_bor_bnot(1, 1) == 0xfffffffe
+; run: %test_bxor_bor_bor_bnot(0x12345678, 0x9abcdef0) == 0xedcba987
+; run: %test_bxor_bor_bor_bnot(0xffffffff, 0) == 0
+
 function %test_band_bor_absorb_x(i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32):
     v2 = bor v0, v1
