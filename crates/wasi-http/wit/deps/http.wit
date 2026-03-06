@@ -1,4 +1,4 @@
-package wasi:http@0.2.6;
+package wasi:http@0.2.10;
 
 /// This interface defines all of the types and methods for implementing
 /// HTTP Requests and Responses, both incoming and outgoing, as well as
@@ -6,13 +6,13 @@ package wasi:http@0.2.6;
 @since(version = 0.2.0)
 interface types {
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.6.{duration};
+  use wasi:clocks/monotonic-clock@0.2.10.{duration};
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.6.{input-stream, output-stream};
+  use wasi:io/streams@0.2.10.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/error@0.2.6.{error as io-error};
+  use wasi:io/error@0.2.10.{error as io-error};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.6.{pollable};
+  use wasi:io/poll@0.2.10.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.2.0)
@@ -619,8 +619,8 @@ interface types {
   /// provided.
   ///
   /// Stream operations which return
-  /// `wasi:io/stream/stream-error::last-operation-failed` have a payload of
-  /// type `wasi:io/error/error` with more information about the operation
+  /// `wasi:io/stream.stream-error.last-operation-failed` have a payload of
+  /// type `wasi:io/error.error` with more information about the operation
   /// that failed. This payload can be passed through to this function to see
   /// if there's http-related information about the error to return.
   ///
@@ -677,23 +677,23 @@ interface outgoing-handler {
 @since(version = 0.2.0)
 world imports {
   @since(version = 0.2.0)
-  import wasi:io/poll@0.2.6;
+  import wasi:io/poll@0.2.10;
   @since(version = 0.2.0)
-  import wasi:clocks/monotonic-clock@0.2.6;
+  import wasi:clocks/monotonic-clock@0.2.10;
   @since(version = 0.2.0)
-  import wasi:clocks/wall-clock@0.2.6;
+  import wasi:clocks/wall-clock@0.2.10;
   @since(version = 0.2.0)
-  import wasi:random/random@0.2.6;
+  import wasi:random/random@0.2.10;
   @since(version = 0.2.0)
-  import wasi:io/error@0.2.6;
+  import wasi:io/error@0.2.10;
   @since(version = 0.2.0)
-  import wasi:io/streams@0.2.6;
+  import wasi:io/streams@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stdout@0.2.6;
+  import wasi:cli/stdout@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stderr@0.2.6;
+  import wasi:cli/stderr@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stdin@0.2.6;
+  import wasi:cli/stdin@0.2.10;
   @since(version = 0.2.0)
   import types;
   @since(version = 0.2.0)
@@ -706,23 +706,23 @@ world imports {
 @since(version = 0.2.0)
 world proxy {
   @since(version = 0.2.0)
-  import wasi:io/poll@0.2.6;
+  import wasi:io/poll@0.2.10;
   @since(version = 0.2.0)
-  import wasi:clocks/monotonic-clock@0.2.6;
+  import wasi:clocks/monotonic-clock@0.2.10;
   @since(version = 0.2.0)
-  import wasi:clocks/wall-clock@0.2.6;
+  import wasi:clocks/wall-clock@0.2.10;
   @since(version = 0.2.0)
-  import wasi:random/random@0.2.6;
+  import wasi:random/random@0.2.10;
   @since(version = 0.2.0)
-  import wasi:io/error@0.2.6;
+  import wasi:io/error@0.2.10;
   @since(version = 0.2.0)
-  import wasi:io/streams@0.2.6;
+  import wasi:io/streams@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stdout@0.2.6;
+  import wasi:cli/stdout@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stderr@0.2.6;
+  import wasi:cli/stderr@0.2.10;
   @since(version = 0.2.0)
-  import wasi:cli/stdin@0.2.6;
+  import wasi:cli/stdin@0.2.10;
   @since(version = 0.2.0)
   import types;
   @since(version = 0.2.0)

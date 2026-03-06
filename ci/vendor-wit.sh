@@ -33,7 +33,7 @@ get_github() {
   cp -r $cached_extracted_dir/wit/* $path
 }
 
-p2=0.2.6
+p2=0.2.10
 p3=0.3.0-rc-2026-02-09
 
 rm -rf crates/wasi-io/wit/deps
