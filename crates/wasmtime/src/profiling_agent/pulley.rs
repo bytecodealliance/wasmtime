@@ -35,6 +35,7 @@
 use crate::ToWasmtimeResult as _;
 use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
+#[cfg(feature = "runtime")]
 use crate::vm::Interpreter;
 use pulley_interpreter::profile::{ExecutingPc, Recorder, Samples};
 use std::mem;
@@ -141,6 +142,7 @@ impl ProfilingAgent for PulleyAgent {
     /// Registers a new interpreter coming online. Interpreters, with
     /// `pulley-profile` enabled, store a shadow program counter updated on each
     /// instruction which we can read from a different thread.
+    #[cfg(feature = "runtime")]
     fn register_interpreter(&self, interpreter: &Interpreter) {
         let pc = interpreter.pulley().executing_pc();
         self.state

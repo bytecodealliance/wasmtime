@@ -121,4 +121,16 @@ block0(v0: i32, v1: i32):
 ; block0(v0: i32, v1: i32):
 ;     v6 = bnot v0
 ;     return v6
+
+;; (band ty (bor ty x y) x) -> x
+function %test_band_bor_absorb_x(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v2, v0
+    return v3
+}
+
+; function %test_band_bor_absorb_x(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v0
 ; }

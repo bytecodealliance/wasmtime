@@ -255,3 +255,9 @@
 (rule (simplify (bxor ty (bor ty x (bnot ty y)) (bor ty y x))) (bnot ty x))
 (rule (simplify (bxor ty (bor ty y x) (bor ty (bnot ty y) x))) (bnot ty x))
 (rule (simplify (bxor ty (bor ty (bnot ty y) x) (bor ty y x))) (bnot ty x))
+
+; x & (x | y) --> x
+(rule (simplify (band ty (bor ty x y) x)) x)
+(rule (simplify (band ty x (bor ty x y))) x)
+(rule (simplify (band ty (bor ty y x) x)) x)
+(rule (simplify (band ty x (bor ty y x))) x)

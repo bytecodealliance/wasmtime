@@ -1392,7 +1392,7 @@ pub mod disas;
 pub mod encode;
 #[cfg(feature = "interp")]
 pub mod interp;
-#[cfg(feature = "profile")]
+#[cfg(all(feature = "profile", feature = "interp"))]
 pub mod profile;
 #[cfg(all(not(feature = "profile"), feature = "interp"))]
 mod profile_disabled;
@@ -1411,7 +1411,7 @@ pub use op::*;
 pub mod opcode;
 pub use opcode::*;
 
-#[cfg(any(feature = "encode", feature = "decode"))]
+#[cfg(feature = "decode")]
 pub(crate) unsafe fn unreachable_unchecked() -> ! {
     #[cfg(debug_assertions)]
     unreachable!();
