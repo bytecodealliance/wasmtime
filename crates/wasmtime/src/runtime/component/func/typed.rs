@@ -2342,9 +2342,9 @@ where
     K: Lift + Eq + Hash,
     V: Lift,
 {
-    let mut result = HashMap::with_capacity(len)?;
+    let mut result = HashMap::with_capacity(len);
     lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
-        result.insert(k, v)?;
+        result.insert(k, v);
         Ok(())
     })?;
     Ok(result)

@@ -227,7 +227,7 @@ impl Type {
             10 => Type::String,
             11 => {
                 let amt = u.int_in_range(1..=(*fuel).max(1).min(257))?;
-                *fuel -= amt;
+                *fuel = fuel.saturating_sub(amt);
                 Type::Enum(amt)
             }
             _ => unreachable!(),
