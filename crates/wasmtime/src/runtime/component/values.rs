@@ -7,8 +7,8 @@ use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, TypeEnum, TypeFlags, TypeListIndex, TypeMapIndex, TypeOption,
-    TypeResult, TypeVariant, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, TypeEnum, TypeFlags, TypeListIndex, TypeMap, TypeMapIndex,
+    TypeOption, TypeResult, TypeVariant, VariantInfo,
 };
 
 /// Represents possible runtime values which a component function can either
@@ -443,7 +443,7 @@ impl Val {
             (InterfaceType::List(_), _) => unexpected(ty, self),
             (InterfaceType::Map(ty), Val::Map(pairs)) => {
                 let map_ty = &cx.types[ty];
-                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, pairs)?;
+                let (ptr, len) = lower_map(cx, map_ty, pairs)?;
                 next_mut(dst).write(ValRaw::i64(ptr as i64));
                 next_mut(dst).write(ValRaw::i64(len as i64));
                 Ok(())
@@ -580,7 +580,7 @@ impl Val {
             (InterfaceType::List(_), _) => unexpected(ty, self),
             (InterfaceType::Map(ty_idx), Val::Map(values)) => {
                 let map_ty = &cx.types[ty_idx];
-                let (ptr, len) = lower_map(cx, map_ty.key, map_ty.value, values)?;
+                let (ptr, len) = lower_map(cx, map_ty, values)?;
                 // FIXME(#4311): needs memory64 handling
                 *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
                 *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
@@ -981,22 +981,13 @@ fn load_map(cx: &mut LiftContext<'_>, ty: TypeMapIndex, ptr: usize, len: usize) 
     let key_ty = map_ty.key;
     let value_ty = map_ty.value;
 
-    // Calculate tuple layout using canonical ABI alignment rules
     let key_abi = cx.types.canonical_abi(&key_ty);
     let value_abi = cx.types.canonical_abi(&value_ty);
     let key_size = usize::try_from(key_abi.size32).unwrap();
     let value_size = usize::try_from(value_abi.size32).unwrap();
-
-    // Calculate value offset: align key_size to value alignment
-    let mut offset = u32::try_from(key_size).unwrap();
-    let value_offset = value_abi.next_field32(&mut offset);
-    let value_offset = usize::try_from(value_offset).unwrap();
-
-    // Tuple size is the final offset aligned to max alignment
-    let tuple_alignment = key_abi.align32.max(value_abi.align32);
-    let tuple_size = usize::try_from(offset).unwrap();
-    let tuple_size = (tuple_size + usize::try_from(tuple_alignment)? - 1)
-        & !(usize::try_from(tuple_alignment)? - 1);
+    let value_offset = usize::try_from(map_ty.value_offset32).unwrap();
+    let tuple_alignment = map_ty.entry_abi.align32;
+    let tuple_size = usize::try_from(map_ty.entry_abi.size32).unwrap();
 
     // Bounds check
     match len
@@ -1119,25 +1110,14 @@ fn lower_list<T>(
 /// Lower a map as list<tuple<k, v>> with the specified key and value types.
 fn lower_map<T>(
     cx: &mut LowerContext<'_, T>,
-    key_type: InterfaceType,
-    value_type: InterfaceType,
+    map_ty: &TypeMap,
     pairs: &[(Val, Val)],
 ) -> Result<(usize, usize)> {
-    // Calculate tuple layout using canonical ABI alignment rules
-    let key_abi = cx.types.canonical_abi(&key_type);
-    let value_abi = cx.types.canonical_abi(&value_type);
-    let key_size = usize::try_from(key_abi.size32)?;
-
-    // Calculate value offset: align key_size to value alignment
-    let mut offset = u32::try_from(key_size).unwrap();
-    let value_offset = value_abi.next_field32(&mut offset);
-    let value_offset = usize::try_from(value_offset).unwrap();
-
-    // Tuple size is the final offset aligned to max alignment
-    let tuple_align = key_abi.align32.max(value_abi.align32);
-    let tuple_size = usize::try_from(offset).unwrap();
-    let tuple_size =
-        (tuple_size + usize::try_from(tuple_align)? - 1) & !(usize::try_from(tuple_align)? - 1);
+    let key_type = map_ty.key;
+    let value_type = map_ty.value;
+    let value_offset = usize::try_from(map_ty.value_offset32).unwrap();
+    let tuple_align = map_ty.entry_abi.align32;
+    let tuple_size = usize::try_from(map_ty.entry_abi.size32).unwrap();
 
     let size = pairs
         .len()

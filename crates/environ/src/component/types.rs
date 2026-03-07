@@ -1195,6 +1195,14 @@ pub struct TypeMap {
     pub key: InterfaceType,
     /// The value type of the map.
     pub value: InterfaceType,
+    /// Byte information for each map entry represented as `tuple<key, value>`.
+    pub entry_abi: CanonicalAbiInfo,
+    /// Offset in bytes from the start of the entry tuple to the value field in
+    /// memory32.
+    pub value_offset32: u32,
+    /// Offset in bytes from the start of the entry tuple to the value field in
+    /// memory64.
+    pub value_offset64: u32,
 }
 
 /// Shape of a "fixed size list" interface type.
