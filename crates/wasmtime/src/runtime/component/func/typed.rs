@@ -14,8 +14,8 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
-    StringEncoding, VariantInfo,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    OptionsIndex, StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -2111,6 +2111,31 @@ where
     }
 }
 
+#[derive(Copy, Clone)]
+struct MapAbi32 {
+    key_ty: InterfaceType,
+    value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: u32,
+    value_offset: usize,
+}
+
+fn map_abi32(ty: InterfaceType, types: &ComponentTypes) -> MapAbi32 {
+    match ty {
+        InterfaceType::Map(i) => {
+            let m = &types[i];
+            MapAbi32 {
+                key_ty: m.key,
+                value_ty: m.value,
+                tuple_size: usize::try_from(m.entry_abi.size32).unwrap(),
+                tuple_align: m.entry_abi.align32,
+                value_offset: usize::try_from(m.value_offset32).unwrap(),
+            }
+        }
+        _ => bad_type_info(),
+    }
+}
+
 #[cfg(not(feature = "std"))]
 unsafe impl<K, V> ComponentType for HashMap<K, V>
 where
@@ -2153,11 +2178,7 @@ where
 
 fn lower_map_iter<'a, K, V, U>(
     cx: &mut LowerContext<'_, U>,
-    key_ty: InterfaceType,
-    value_ty: InterfaceType,
-    tuple_size: usize,
-    tuple_align: u32,
-    value_offset: usize,
+    map: MapAbi32,
     len: usize,
     iter: impl Iterator<Item = (&'a K, &'a V)>,
 ) -> Result<(usize, usize)>
@@ -2166,17 +2187,22 @@ where
     V: Lower + 'a,
 {
     let size = len
-        .checked_mul(tuple_size)
+        .checked_mul(map.tuple_size)
         .ok_or_else(|| format_err!("size overflow copying a map"))?;
-    let ptr = cx.realloc(0, 0, tuple_align, size)?;
+    let ptr = cx.realloc(0, 0, map.tuple_align, size)?;
 
     let mut entry_offset = ptr;
     for (key, value) in iter {
         // Keys are the first field in each entry tuple.
-        <K as Lower>::linear_lower_to_memory(key, cx, key_ty, entry_offset)?;
+        <K as Lower>::linear_lower_to_memory(key, cx, map.key_ty, entry_offset)?;
         // Values start at the precomputed value offset within the tuple.
-        <V as Lower>::linear_lower_to_memory(value, cx, value_ty, entry_offset + value_offset)?;
-        entry_offset += tuple_size;
+        <V as Lower>::linear_lower_to_memory(
+            value,
+            cx,
+            map.value_ty,
+            entry_offset + map.value_offset,
+        )?;
+        entry_offset += map.tuple_size;
     }
 
     Ok((ptr, len))
@@ -2193,29 +2219,8 @@ where
     K: Lower + 'a,
     V: Lower + 'a,
 {
-    let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-        InterfaceType::Map(i) => {
-            let m = &cx.types[i];
-            (
-                m.key,
-                m.value,
-                usize::try_from(m.entry_abi.size32).unwrap(),
-                m.entry_abi.align32,
-                usize::try_from(m.value_offset32).unwrap(),
-            )
-        }
-        _ => bad_type_info(),
-    };
-    let (ptr, len) = lower_map_iter(
-        cx,
-        key_ty,
-        value_ty,
-        tuple_size,
-        tuple_align,
-        value_offset,
-        len,
-        iter,
-    )?;
+    let map = map_abi32(ty, &cx.types);
+    let (ptr, len) = lower_map_iter(cx, map, len, iter)?;
     // See "WRITEPTR64" above for why this is always storing a 64-bit integer.
     map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
     map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
@@ -2233,30 +2238,9 @@ where
     K: Lower + 'a,
     V: Lower + 'a,
 {
-    let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-        InterfaceType::Map(i) => {
-            let m = &cx.types[i];
-            (
-                m.key,
-                m.value,
-                usize::try_from(m.entry_abi.size32).unwrap(),
-                m.entry_abi.align32,
-                usize::try_from(m.value_offset32).unwrap(),
-            )
-        }
-        _ => bad_type_info(),
-    };
+    let map = map_abi32(ty, &cx.types);
     debug_assert!(offset % (CanonicalAbiInfo::POINTER_PAIR.align32 as usize) == 0);
-    let (ptr, len) = lower_map_iter(
-        cx,
-        key_ty,
-        value_ty,
-        tuple_size,
-        tuple_align,
-        value_offset,
-        len,
-        iter,
-    )?;
+    let (ptr, len) = lower_map_iter(cx, map, len, iter)?;
     *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
     *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
     Ok(())
@@ -2273,33 +2257,12 @@ where
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
-        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (
-                    m.key,
-                    m.value,
-                    usize::try_from(m.entry_abi.size32).unwrap(),
-                    usize::try_from(m.entry_abi.align32).unwrap(),
-                    usize::try_from(m.value_offset32).unwrap(),
-                )
-            }
-            _ => bad_type_info(),
-        };
+        let map = map_abi32(ty, &cx.types);
         // FIXME(#4311): needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_map(
-            cx,
-            key_ty,
-            value_ty,
-            tuple_size,
-            tuple_align,
-            value_offset,
-            ptr,
-            len,
-        )
+        lift_map(cx, map, ptr, len)
     }
 
     fn linear_lift_from_memory(
@@ -2307,34 +2270,13 @@ where
         ty: InterfaceType,
         bytes: &[u8],
     ) -> Result<Self> {
-        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (
-                    m.key,
-                    m.value,
-                    usize::try_from(m.entry_abi.size32).unwrap(),
-                    usize::try_from(m.entry_abi.align32).unwrap(),
-                    usize::try_from(m.value_offset32).unwrap(),
-                )
-            }
-            _ => bad_type_info(),
-        };
+        let map = map_abi32(ty, &cx.types);
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         // FIXME(#4311): needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_map(
-            cx,
-            key_ty,
-            value_ty,
-            tuple_size,
-            tuple_align,
-            value_offset,
-            ptr,
-            len,
-        )
+        lift_map(cx, map, ptr, len)
     }
 }
 
@@ -2342,11 +2284,7 @@ where
 /// (key, value) pair, forwarding them to `insert`.
 fn lift_map_pairs<K, V>(
     cx: &mut LiftContext<'_>,
-    key_ty: InterfaceType,
-    value_ty: InterfaceType,
-    tuple_size: usize,
-    tuple_align: usize,
-    value_offset: usize,
+    map: MapAbi32,
     ptr: usize,
     len: usize,
     mut insert: impl FnMut(K, V) -> Result<()>,
@@ -2356,24 +2294,24 @@ where
     V: Lift,
 {
     match len
-        .checked_mul(tuple_size)
+        .checked_mul(map.tuple_size)
         .and_then(|total| ptr.checked_add(total))
     {
         Some(n) if n <= cx.memory().len() => {}
         _ => bail!("map pointer/length out of bounds of memory"),
     }
-    if ptr % tuple_align != 0 {
+    if ptr % (map.tuple_align as usize) != 0 {
         bail!("map pointer is not aligned");
     }
 
     for i in 0..len {
-        let entry_base = ptr + (i * tuple_size);
+        let entry_base = ptr + (i * map.tuple_size);
 
         let key_bytes = &cx.memory()[entry_base..][..K::SIZE32];
-        let key = K::linear_lift_from_memory(cx, key_ty, key_bytes)?;
+        let key = K::linear_lift_from_memory(cx, map.key_ty, key_bytes)?;
 
-        let value_bytes = &cx.memory()[entry_base + value_offset..][..V::SIZE32];
-        let value = V::linear_lift_from_memory(cx, value_ty, value_bytes)?;
+        let value_bytes = &cx.memory()[entry_base + map.value_offset..][..V::SIZE32];
+        let value = V::linear_lift_from_memory(cx, map.value_ty, value_bytes)?;
 
         insert(key, value)?;
     }
@@ -2384,11 +2322,7 @@ where
 #[cfg(not(feature = "std"))]
 fn lift_map<K, V>(
     cx: &mut LiftContext<'_>,
-    key_ty: InterfaceType,
-    value_ty: InterfaceType,
-    tuple_size: usize,
-    tuple_align: usize,
-    value_offset: usize,
+    map: MapAbi32,
     ptr: usize,
     len: usize,
 ) -> Result<HashMap<K, V>>
@@ -2397,20 +2331,10 @@ where
     V: Lift,
 {
     let mut result = HashMap::with_capacity(len);
-    lift_map_pairs(
-        cx,
-        key_ty,
-        value_ty,
-        tuple_size,
-        tuple_align,
-        value_offset,
-        ptr,
-        len,
-        |k, v| {
-            result.insert(k, v);
-            Ok(())
-        },
-    )?;
+    lift_map_pairs(cx, map, ptr, len, |k, v| {
+        result.insert(k, v);
+        Ok(())
+    })?;
     Ok(result)
 }
 
@@ -2539,33 +2463,12 @@ where
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
-        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (
-                    m.key,
-                    m.value,
-                    usize::try_from(m.entry_abi.size32).unwrap(),
-                    usize::try_from(m.entry_abi.align32).unwrap(),
-                    usize::try_from(m.value_offset32).unwrap(),
-                )
-            }
-            _ => bad_type_info(),
-        };
+        let map = map_abi32(ty, &cx.types);
         // FIXME(#4311): needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_try_map(
-            cx,
-            key_ty,
-            value_ty,
-            tuple_size,
-            tuple_align,
-            value_offset,
-            ptr,
-            len,
-        )
+        lift_try_map(cx, map, ptr, len)
     }
 
     fn linear_lift_from_memory(
@@ -2573,45 +2476,20 @@ where
         ty: InterfaceType,
         bytes: &[u8],
     ) -> Result<Self> {
-        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (
-                    m.key,
-                    m.value,
-                    usize::try_from(m.entry_abi.size32).unwrap(),
-                    usize::try_from(m.entry_abi.align32).unwrap(),
-                    usize::try_from(m.value_offset32).unwrap(),
-                )
-            }
-            _ => bad_type_info(),
-        };
+        let map = map_abi32(ty, &cx.types);
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         // FIXME(#4311): needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_try_map(
-            cx,
-            key_ty,
-            value_ty,
-            tuple_size,
-            tuple_align,
-            value_offset,
-            ptr,
-            len,
-        )
+        lift_try_map(cx, map, ptr, len)
     }
 }
 
 #[cfg(feature = "std")]
 fn lift_try_map<K, V>(
     cx: &mut LiftContext<'_>,
-    key_ty: InterfaceType,
-    value_ty: InterfaceType,
-    tuple_size: usize,
-    tuple_align: usize,
-    value_offset: usize,
+    map: MapAbi32,
     ptr: usize,
     len: usize,
 ) -> Result<TryHashMap<K, V>>
@@ -2620,17 +2498,9 @@ where
     V: Lift,
 {
     let mut result = TryHashMap::with_capacity(len)?;
-    lift_map_pairs(
-        cx,
-        key_ty,
-        value_ty,
-        tuple_size,
-        tuple_align,
-        value_offset,
-        ptr,
-        len,
-        |k, v| result.insert(k, v).map(drop).map_err(Into::into),
-    )?;
+    lift_map_pairs(cx, map, ptr, len, |k, v| {
+        result.insert(k, v).map(drop).map_err(Into::into)
+    })?;
     Ok(result)
 }
 
