@@ -2,21 +2,27 @@ use crate::component::Instance;
 use crate::component::func::{Func, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
+#[cfg(not(feature = "std"))]
+use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use core::fmt;
+use core::hash::Hash;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
-    StringEncoding, VariantInfo,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    OptionsIndex, StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
+
+#[cfg(feature = "std")]
+use wasmtime_environ::collections::TryHashMap;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -617,6 +623,7 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 /// | `result<T, E>`                    | `Result<T, E>`                       |
 /// | `string`                          | `String`, `&str`, or [`WasmStr`]     |
 /// | `list<T>`                         | `Vec<T>`, `&[T]`, or [`WasmList`]    |
+/// | `map<K, V>`                       | `HashMap<K, V>`                      |
 /// | `own<T>`, `borrow<T>`             | [`Resource<T>`] or [`ResourceAny`]   |
 /// | `record`                          | [`#[derive(ComponentType)]`][d-cm]   |
 /// | `variant`                         | [`#[derive(ComponentType)]`][d-cm]   |
@@ -2082,6 +2089,421 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
     }
 }
 
+// =============================================================================
+// HashMap<K, V> support for component model `map<K, V>`
+//
+// Maps are represented as `list<tuple<K, V>>` in the canonical ABI, so the
+// lowered form is a (pointer, length) pair just like lists.
+
+fn typecheck_map<K, V>(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    match ty {
+        InterfaceType::Map(t) => {
+            let map_ty = &types.types[*t];
+            K::typecheck(&map_ty.key, types)?;
+            V::typecheck(&map_ty.value, types)?;
+            Ok(())
+        }
+        other => bail!("expected `map` found `{}`", desc(other)),
+    }
+}
+
+#[derive(Copy, Clone)]
+struct MapAbi32 {
+    key_ty: InterfaceType,
+    value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: u32,
+    value_offset: usize,
+}
+
+fn map_abi32(ty: InterfaceType, types: &ComponentTypes) -> MapAbi32 {
+    match ty {
+        InterfaceType::Map(i) => {
+            let m = &types[i];
+            MapAbi32 {
+                key_ty: m.key,
+                value_ty: m.value,
+                tuple_size: usize::try_from(m.entry_abi.size32).unwrap(),
+                tuple_align: m.entry_abi.align32,
+                value_offset: usize::try_from(m.value_offset32).unwrap(),
+            }
+        }
+        _ => bad_type_info(),
+    }
+}
+
+#[cfg(not(feature = "std"))]
+unsafe impl<K, V> ComponentType for HashMap<K, V>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    type Lower = [ValRaw; 2];
+
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        typecheck_map::<K, V>(ty, types)
+    }
+}
+
+#[cfg(not(feature = "std"))]
+unsafe impl<K, V> Lower for HashMap<K, V>
+where
+    K: Lower,
+    V: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
+    }
+}
+
+fn lower_map_iter<'a, K, V, U>(
+    cx: &mut LowerContext<'_, U>,
+    map: MapAbi32,
+    len: usize,
+    iter: impl Iterator<Item = (&'a K, &'a V)>,
+) -> Result<(usize, usize)>
+where
+    K: Lower + 'a,
+    V: Lower + 'a,
+{
+    let size = len
+        .checked_mul(map.tuple_size)
+        .ok_or_else(|| format_err!("size overflow copying a map"))?;
+    let ptr = cx.realloc(0, 0, map.tuple_align, size)?;
+
+    let mut entry_offset = ptr;
+    for (key, value) in iter {
+        // Keys are the first field in each entry tuple.
+        <K as Lower>::linear_lower_to_memory(key, cx, map.key_ty, entry_offset)?;
+        // Values start at the precomputed value offset within the tuple.
+        <V as Lower>::linear_lower_to_memory(
+            value,
+            cx,
+            map.value_ty,
+            entry_offset + map.value_offset,
+        )?;
+        entry_offset += map.tuple_size;
+    }
+
+    Ok((ptr, len))
+}
+
+fn linear_lower_map_to_flat<'a, K, V, U>(
+    cx: &mut LowerContext<'_, U>,
+    ty: InterfaceType,
+    len: usize,
+    iter: impl Iterator<Item = (&'a K, &'a V)>,
+    dst: &mut MaybeUninit<[ValRaw; 2]>,
+) -> Result<()>
+where
+    K: Lower + 'a,
+    V: Lower + 'a,
+{
+    let map = map_abi32(ty, &cx.types);
+    let (ptr, len) = lower_map_iter(cx, map, len, iter)?;
+    // See "WRITEPTR64" above for why this is always storing a 64-bit integer.
+    map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
+    map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
+    Ok(())
+}
+
+fn linear_lower_map_to_memory<'a, K, V, U>(
+    cx: &mut LowerContext<'_, U>,
+    ty: InterfaceType,
+    len: usize,
+    iter: impl Iterator<Item = (&'a K, &'a V)>,
+    offset: usize,
+) -> Result<()>
+where
+    K: Lower + 'a,
+    V: Lower + 'a,
+{
+    let map = map_abi32(ty, &cx.types);
+    debug_assert!(offset % (CanonicalAbiInfo::POINTER_PAIR.align32 as usize) == 0);
+    let (ptr, len) = lower_map_iter(cx, map, len, iter)?;
+    *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
+    *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
+    Ok(())
+}
+
+#[cfg(not(feature = "std"))]
+unsafe impl<K, V> Lift for HashMap<K, V>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let map = map_abi32(ty, &cx.types);
+        // FIXME(#4311): needs memory64 treatment
+        let ptr = src[0].get_u32();
+        let len = src[1].get_u32();
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        lift_map(cx, map, ptr, len)
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let map = map_abi32(ty, &cx.types);
+        debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
+        // FIXME(#4311): needs memory64 treatment
+        let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        lift_map(cx, map, ptr, len)
+    }
+}
+
+/// Shared helper that validates a map's memory region and lifts each
+/// (key, value) pair, forwarding them to `insert`.
+fn lift_map_pairs<K, V>(
+    cx: &mut LiftContext<'_>,
+    map: MapAbi32,
+    ptr: usize,
+    len: usize,
+    mut insert: impl FnMut(K, V) -> Result<()>,
+) -> Result<()>
+where
+    K: Lift,
+    V: Lift,
+{
+    match len
+        .checked_mul(map.tuple_size)
+        .and_then(|total| ptr.checked_add(total))
+    {
+        Some(n) if n <= cx.memory().len() => {}
+        _ => bail!("map pointer/length out of bounds of memory"),
+    }
+    if ptr % (map.tuple_align as usize) != 0 {
+        bail!("map pointer is not aligned");
+    }
+
+    for i in 0..len {
+        let entry_base = ptr + (i * map.tuple_size);
+
+        let key_bytes = &cx.memory()[entry_base..][..K::SIZE32];
+        let key = K::linear_lift_from_memory(cx, map.key_ty, key_bytes)?;
+
+        let value_bytes = &cx.memory()[entry_base + map.value_offset..][..V::SIZE32];
+        let value = V::linear_lift_from_memory(cx, map.value_ty, value_bytes)?;
+
+        insert(key, value)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "std"))]
+fn lift_map<K, V>(
+    cx: &mut LiftContext<'_>,
+    map: MapAbi32,
+    ptr: usize,
+    len: usize,
+) -> Result<HashMap<K, V>>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    let mut result = HashMap::with_capacity(len);
+    lift_map_pairs(cx, map, ptr, len, |k, v| {
+        result.insert(k, v);
+        Ok(())
+    })?;
+    Ok(result)
+}
+
+// =============================================================================
+// std::collections::HashMap<K, V> support for component model `map<K, V>`
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> ComponentType for std::collections::HashMap<K, V>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    type Lower = [ValRaw; 2];
+
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        typecheck_map::<K, V>(ty, types)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lower for std::collections::HashMap<K, V>
+where
+    K: Lower,
+    V: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lift for std::collections::HashMap<K, V>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let try_map =
+            <wasmtime_environ::collections::TryHashMap<K, V> as Lift>::linear_lift_from_flat(
+                cx, ty, src,
+            )?;
+        Ok(try_map.into_iter().collect())
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let try_map =
+            <wasmtime_environ::collections::TryHashMap<K, V> as Lift>::linear_lift_from_memory(
+                cx, ty, bytes,
+            )?;
+        Ok(try_map.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> ComponentType for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    type Lower = [ValRaw; 2];
+
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        typecheck_map::<K, V>(ty, types)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lower for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: Lower,
+    V: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lift for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let map = map_abi32(ty, &cx.types);
+        // FIXME(#4311): needs memory64 treatment
+        let ptr = src[0].get_u32();
+        let len = src[1].get_u32();
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        lift_try_map(cx, map, ptr, len)
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let map = map_abi32(ty, &cx.types);
+        debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
+        // FIXME(#4311): needs memory64 treatment
+        let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
+        lift_try_map(cx, map, ptr, len)
+    }
+}
+
+#[cfg(feature = "std")]
+fn lift_try_map<K, V>(
+    cx: &mut LiftContext<'_>,
+    map: MapAbi32,
+    ptr: usize,
+    len: usize,
+) -> Result<TryHashMap<K, V>>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    let mut result = TryHashMap::with_capacity(len)?;
+    lift_map_pairs(cx, map, ptr, len, |k, v| {
+        result.insert(k, v).map(drop).map_err(Into::into)
+    })?;
+    Ok(result)
+}
+
 /// Verify that the given wasm type is a tuple with the expected fields in the right order.
 fn typecheck_tuple(
     ty: &InterfaceType,
@@ -2909,6 +3331,7 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Future(_) => "future",
         InterfaceType::Stream(_) => "stream",
         InterfaceType::ErrorContext(_) => "error-context",
+        InterfaceType::Map(_) => "map",
         InterfaceType::FixedLengthList(_) => "list<_, N>",
     }
 }
