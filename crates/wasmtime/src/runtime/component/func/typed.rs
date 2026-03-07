@@ -11,7 +11,8 @@ use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
-use wasmtime_environ::collections::HashMap;
+#[cfg(not(feature = "std"))]
+use crate::hash_map::HashMap;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
     StringEncoding, VariantInfo,
@@ -2091,6 +2092,23 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
 // Maps are represented as `list<tuple<K, V>>` in the canonical ABI, so the
 // lowered form is a (pointer, length) pair just like lists.
 
+fn typecheck_map<K, V>(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    match ty {
+        InterfaceType::Map(t) => {
+            let map_ty = &types.types[*t];
+            K::typecheck(&map_ty.key, types)?;
+            V::typecheck(&map_ty.value, types)?;
+            Ok(())
+        }
+        other => bail!("expected `map` found `{}`", desc(other)),
+    }
+}
+
+#[cfg(not(feature = "std"))]
 unsafe impl<K, V> ComponentType for HashMap<K, V>
 where
     K: ComponentType,
@@ -2101,18 +2119,11 @@ where
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
-        match ty {
-            InterfaceType::Map(t) => {
-                let map_ty = &types.types[*t];
-                K::typecheck(&map_ty.key, types)?;
-                V::typecheck(&map_ty.value, types)?;
-                Ok(())
-            }
-            other => bail!("expected `map` found `{}`", desc(other)),
-        }
+        typecheck_map::<K, V>(ty, types)
     }
 }
 
+#[cfg(not(feature = "std"))]
 unsafe impl<K, V> Lower for HashMap<K, V>
 where
     K: Lower,
@@ -2196,6 +2207,7 @@ where
     Ok((ptr, len))
 }
 
+#[cfg(not(feature = "std"))]
 unsafe impl<K, V> Lift for HashMap<K, V>
 where
     K: Lift + Eq + Hash,
@@ -2288,6 +2300,7 @@ where
     Ok(())
 }
 
+#[cfg(not(feature = "std"))]
 fn lift_map<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
@@ -2321,15 +2334,7 @@ where
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
-        match ty {
-            InterfaceType::Map(t) => {
-                let map_ty = &types.types[*t];
-                K::typecheck(&map_ty.key, types)?;
-                V::typecheck(&map_ty.value, types)?;
-                Ok(())
-            }
-            other => bail!("expected `map` found `{}`", desc(other)),
-        }
+        typecheck_map::<K, V>(ty, types)
     }
 }
 
