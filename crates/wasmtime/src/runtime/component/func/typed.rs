@@ -2135,19 +2135,7 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (key_ty, value_ty) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (m.key, m.value)
-            }
-            _ => bad_type_info(),
-        };
-        let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, self.len(), self.iter())?;
-        // See "WRITEPTR64" above for why this is always storing a 64-bit
-        // integer.
-        map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
-        map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
-        Ok(())
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -2156,18 +2144,7 @@ where
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        let (key_ty, value_ty) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (m.key, m.value)
-            }
-            _ => bad_type_info(),
-        };
-        debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
-        let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, self.len(), self.iter())?;
-        *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
-        *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
-        Ok(())
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
     }
 }
 
@@ -2205,6 +2182,56 @@ where
     }
 
     Ok((ptr, len))
+}
+
+fn linear_lower_map_to_flat<'a, K, V, U>(
+    cx: &mut LowerContext<'_, U>,
+    ty: InterfaceType,
+    len: usize,
+    iter: impl Iterator<Item = (&'a K, &'a V)>,
+    dst: &mut MaybeUninit<[ValRaw; 2]>,
+) -> Result<()>
+where
+    K: Lower + 'a,
+    V: Lower + 'a,
+{
+    let (key_ty, value_ty) = match ty {
+        InterfaceType::Map(i) => {
+            let m = &cx.types[i];
+            (m.key, m.value)
+        }
+        _ => bad_type_info(),
+    };
+    let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, len, iter)?;
+    // See "WRITEPTR64" above for why this is always storing a 64-bit integer.
+    map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
+    map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
+    Ok(())
+}
+
+fn linear_lower_map_to_memory<'a, K, V, U>(
+    cx: &mut LowerContext<'_, U>,
+    ty: InterfaceType,
+    len: usize,
+    iter: impl Iterator<Item = (&'a K, &'a V)>,
+    offset: usize,
+) -> Result<()>
+where
+    K: Lower + 'a,
+    V: Lower + 'a,
+{
+    let (key_ty, value_ty) = match ty {
+        InterfaceType::Map(i) => {
+            let m = &cx.types[i];
+            (m.key, m.value)
+        }
+        _ => bad_type_info(),
+    };
+    debug_assert!(offset % (CanonicalAbiInfo::POINTER_PAIR.align32 as usize) == 0);
+    let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, len, iter)?;
+    *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
+    *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
+    Ok(())
 }
 
 #[cfg(not(feature = "std"))]
@@ -2350,19 +2377,7 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<[ValRaw; 2]>,
     ) -> Result<()> {
-        let (key_ty, value_ty) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (m.key, m.value)
-            }
-            _ => bad_type_info(),
-        };
-        let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, self.len(), self.iter())?;
-        // See "WRITEPTR64" above for why this is always storing a 64-bit
-        // integer.
-        map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
-        map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
-        Ok(())
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -2371,18 +2386,7 @@ where
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        let (key_ty, value_ty) = match ty {
-            InterfaceType::Map(i) => {
-                let m = &cx.types[i];
-                (m.key, m.value)
-            }
-            _ => bad_type_info(),
-        };
-        debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
-        let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, self.len(), self.iter())?;
-        *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
-        *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
-        Ok(())
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
     }
 }
 
