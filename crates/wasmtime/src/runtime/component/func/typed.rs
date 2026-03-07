@@ -2,6 +2,8 @@ use crate::component::Instance;
 use crate::component::func::{Func, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
+#[cfg(not(feature = "std"))]
+use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
@@ -11,8 +13,6 @@ use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
-#[cfg(not(feature = "std"))]
-use crate::hash_map::HashMap;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex,
     StringEncoding, VariantInfo,
@@ -20,6 +20,9 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
+
+#[cfg(feature = "std")]
+use wasmtime_environ::collections::TryHashMap;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -2401,6 +2404,77 @@ where
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
+        let try_map =
+            <wasmtime_environ::collections::TryHashMap<K, V> as Lift>::linear_lift_from_flat(
+                cx, ty, src,
+            )?;
+        Ok(try_map.into_iter().collect())
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let try_map =
+            <wasmtime_environ::collections::TryHashMap<K, V> as Lift>::linear_lift_from_memory(
+                cx, ty, bytes,
+            )?;
+        Ok(try_map.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> ComponentType for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: ComponentType,
+    V: ComponentType,
+{
+    type Lower = [ValRaw; 2];
+
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        typecheck_map::<K, V>(ty, types)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lower for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: Lower,
+    V: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<[ValRaw; 2]>,
+    ) -> Result<()> {
+        linear_lower_map_to_flat(cx, ty, self.len(), self.iter(), dst)
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        linear_lower_map_to_memory(cx, ty, self.len(), self.iter(), offset)
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl<K, V> Lift for wasmtime_environ::collections::TryHashMap<K, V>
+where
+    K: Lift + Eq + Hash,
+    V: Lift,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         let (key_ty, value_ty) = match ty {
             InterfaceType::Map(i) => {
                 let m = &cx.types[i];
@@ -2412,7 +2486,7 @@ where
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_std_map(cx, key_ty, value_ty, ptr, len)
+        lift_try_map(cx, key_ty, value_ty, ptr, len)
     }
 
     fn linear_lift_from_memory(
@@ -2432,26 +2506,25 @@ where
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_std_map(cx, key_ty, value_ty, ptr, len)
+        lift_try_map(cx, key_ty, value_ty, ptr, len)
     }
 }
 
 #[cfg(feature = "std")]
-fn lift_std_map<K, V>(
+fn lift_try_map<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
     ptr: usize,
     len: usize,
-) -> Result<std::collections::HashMap<K, V>>
+) -> Result<TryHashMap<K, V>>
 where
     K: Lift + Eq + Hash,
     V: Lift,
 {
-    let mut result = std::collections::HashMap::with_capacity(len);
+    let mut result = TryHashMap::with_capacity(len)?;
     lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
-        result.insert(k, v);
-        Ok(())
+        result.insert(k, v).map(drop).map_err(Into::into)
     })?;
     Ok(result)
 }
