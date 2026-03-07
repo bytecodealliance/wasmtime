@@ -2155,6 +2155,9 @@ fn lower_map_iter<'a, K, V, U>(
     cx: &mut LowerContext<'_, U>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: u32,
+    value_offset: usize,
     len: usize,
     iter: impl Iterator<Item = (&'a K, &'a V)>,
 ) -> Result<(usize, usize)>
@@ -2162,11 +2165,6 @@ where
     K: Lower + 'a,
     V: Lower + 'a,
 {
-    // Calculate the tuple layout: each entry is a (key, value) record.
-    let tuple_abi = CanonicalAbiInfo::record_static(&[K::ABI, V::ABI]);
-    let tuple_size = tuple_abi.size32 as usize;
-    let tuple_align = tuple_abi.align32;
-
     let size = len
         .checked_mul(tuple_size)
         .ok_or_else(|| format_err!("size overflow copying a map"))?;
@@ -2174,13 +2172,10 @@ where
 
     let mut entry_offset = ptr;
     for (key, value) in iter {
-        // Lower key at the start of the tuple
-        let mut field_offset = 0usize;
-        let key_field = K::ABI.next_field32_size(&mut field_offset);
-        <K as Lower>::linear_lower_to_memory(key, cx, key_ty, entry_offset + key_field)?;
-        // Lower value at its aligned offset within the tuple
-        let value_field = V::ABI.next_field32_size(&mut field_offset);
-        <V as Lower>::linear_lower_to_memory(value, cx, value_ty, entry_offset + value_field)?;
+        // Keys are the first field in each entry tuple.
+        <K as Lower>::linear_lower_to_memory(key, cx, key_ty, entry_offset)?;
+        // Values start at the precomputed value offset within the tuple.
+        <V as Lower>::linear_lower_to_memory(value, cx, value_ty, entry_offset + value_offset)?;
         entry_offset += tuple_size;
     }
 
@@ -2198,14 +2193,29 @@ where
     K: Lower + 'a,
     V: Lower + 'a,
 {
-    let (key_ty, value_ty) = match ty {
+    let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
         InterfaceType::Map(i) => {
             let m = &cx.types[i];
-            (m.key, m.value)
+            (
+                m.key,
+                m.value,
+                usize::try_from(m.entry_abi.size32).unwrap(),
+                m.entry_abi.align32,
+                usize::try_from(m.value_offset32).unwrap(),
+            )
         }
         _ => bad_type_info(),
     };
-    let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, len, iter)?;
+    let (ptr, len) = lower_map_iter(
+        cx,
+        key_ty,
+        value_ty,
+        tuple_size,
+        tuple_align,
+        value_offset,
+        len,
+        iter,
+    )?;
     // See "WRITEPTR64" above for why this is always storing a 64-bit integer.
     map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
     map_maybe_uninit!(dst[1]).write(ValRaw::i64(len as i64));
@@ -2223,15 +2233,30 @@ where
     K: Lower + 'a,
     V: Lower + 'a,
 {
-    let (key_ty, value_ty) = match ty {
+    let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
         InterfaceType::Map(i) => {
             let m = &cx.types[i];
-            (m.key, m.value)
+            (
+                m.key,
+                m.value,
+                usize::try_from(m.entry_abi.size32).unwrap(),
+                m.entry_abi.align32,
+                usize::try_from(m.value_offset32).unwrap(),
+            )
         }
         _ => bad_type_info(),
     };
     debug_assert!(offset % (CanonicalAbiInfo::POINTER_PAIR.align32 as usize) == 0);
-    let (ptr, len) = lower_map_iter(cx, key_ty, value_ty, len, iter)?;
+    let (ptr, len) = lower_map_iter(
+        cx,
+        key_ty,
+        value_ty,
+        tuple_size,
+        tuple_align,
+        value_offset,
+        len,
+        iter,
+    )?;
     *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
     *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
     Ok(())
@@ -2248,10 +2273,16 @@ where
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
-        let (key_ty, value_ty) = match ty {
+        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
             InterfaceType::Map(i) => {
                 let m = &cx.types[i];
-                (m.key, m.value)
+                (
+                    m.key,
+                    m.value,
+                    usize::try_from(m.entry_abi.size32).unwrap(),
+                    usize::try_from(m.entry_abi.align32).unwrap(),
+                    usize::try_from(m.value_offset32).unwrap(),
+                )
             }
             _ => bad_type_info(),
         };
@@ -2259,7 +2290,16 @@ where
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_map(cx, key_ty, value_ty, ptr, len)
+        lift_map(
+            cx,
+            key_ty,
+            value_ty,
+            tuple_size,
+            tuple_align,
+            value_offset,
+            ptr,
+            len,
+        )
     }
 
     fn linear_lift_from_memory(
@@ -2267,10 +2307,16 @@ where
         ty: InterfaceType,
         bytes: &[u8],
     ) -> Result<Self> {
-        let (key_ty, value_ty) = match ty {
+        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
             InterfaceType::Map(i) => {
                 let m = &cx.types[i];
-                (m.key, m.value)
+                (
+                    m.key,
+                    m.value,
+                    usize::try_from(m.entry_abi.size32).unwrap(),
+                    usize::try_from(m.entry_abi.align32).unwrap(),
+                    usize::try_from(m.value_offset32).unwrap(),
+                )
             }
             _ => bad_type_info(),
         };
@@ -2279,7 +2325,16 @@ where
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_map(cx, key_ty, value_ty, ptr, len)
+        lift_map(
+            cx,
+            key_ty,
+            value_ty,
+            tuple_size,
+            tuple_align,
+            value_offset,
+            ptr,
+            len,
+        )
     }
 }
 
@@ -2289,6 +2344,9 @@ fn lift_map_pairs<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: usize,
+    value_offset: usize,
     ptr: usize,
     len: usize,
     mut insert: impl FnMut(K, V) -> Result<()>,
@@ -2297,10 +2355,6 @@ where
     K: Lift,
     V: Lift,
 {
-    let tuple_abi = CanonicalAbiInfo::record_static(&[K::ABI, V::ABI]);
-    let tuple_size = tuple_abi.size32 as usize;
-    let tuple_align = tuple_abi.align32 as usize;
-
     match len
         .checked_mul(tuple_size)
         .and_then(|total| ptr.checked_add(total))
@@ -2315,13 +2369,10 @@ where
     for i in 0..len {
         let entry_base = ptr + (i * tuple_size);
 
-        let mut field_offset = 0usize;
-        let key_field = K::ABI.next_field32_size(&mut field_offset);
-        let key_bytes = &cx.memory()[entry_base + key_field..][..K::SIZE32];
+        let key_bytes = &cx.memory()[entry_base..][..K::SIZE32];
         let key = K::linear_lift_from_memory(cx, key_ty, key_bytes)?;
 
-        let value_field = V::ABI.next_field32_size(&mut field_offset);
-        let value_bytes = &cx.memory()[entry_base + value_field..][..V::SIZE32];
+        let value_bytes = &cx.memory()[entry_base + value_offset..][..V::SIZE32];
         let value = V::linear_lift_from_memory(cx, value_ty, value_bytes)?;
 
         insert(key, value)?;
@@ -2335,6 +2386,9 @@ fn lift_map<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: usize,
+    value_offset: usize,
     ptr: usize,
     len: usize,
 ) -> Result<HashMap<K, V>>
@@ -2343,10 +2397,20 @@ where
     V: Lift,
 {
     let mut result = HashMap::with_capacity(len);
-    lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
-        result.insert(k, v);
-        Ok(())
-    })?;
+    lift_map_pairs(
+        cx,
+        key_ty,
+        value_ty,
+        tuple_size,
+        tuple_align,
+        value_offset,
+        ptr,
+        len,
+        |k, v| {
+            result.insert(k, v);
+            Ok(())
+        },
+    )?;
     Ok(result)
 }
 
@@ -2475,10 +2539,16 @@ where
         ty: InterfaceType,
         src: &Self::Lower,
     ) -> Result<Self> {
-        let (key_ty, value_ty) = match ty {
+        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
             InterfaceType::Map(i) => {
                 let m = &cx.types[i];
-                (m.key, m.value)
+                (
+                    m.key,
+                    m.value,
+                    usize::try_from(m.entry_abi.size32).unwrap(),
+                    usize::try_from(m.entry_abi.align32).unwrap(),
+                    usize::try_from(m.value_offset32).unwrap(),
+                )
             }
             _ => bad_type_info(),
         };
@@ -2486,7 +2556,16 @@ where
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_try_map(cx, key_ty, value_ty, ptr, len)
+        lift_try_map(
+            cx,
+            key_ty,
+            value_ty,
+            tuple_size,
+            tuple_align,
+            value_offset,
+            ptr,
+            len,
+        )
     }
 
     fn linear_lift_from_memory(
@@ -2494,10 +2573,16 @@ where
         ty: InterfaceType,
         bytes: &[u8],
     ) -> Result<Self> {
-        let (key_ty, value_ty) = match ty {
+        let (key_ty, value_ty, tuple_size, tuple_align, value_offset) = match ty {
             InterfaceType::Map(i) => {
                 let m = &cx.types[i];
-                (m.key, m.value)
+                (
+                    m.key,
+                    m.value,
+                    usize::try_from(m.entry_abi.size32).unwrap(),
+                    usize::try_from(m.entry_abi.align32).unwrap(),
+                    usize::try_from(m.value_offset32).unwrap(),
+                )
             }
             _ => bad_type_info(),
         };
@@ -2506,7 +2591,16 @@ where
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
-        lift_try_map(cx, key_ty, value_ty, ptr, len)
+        lift_try_map(
+            cx,
+            key_ty,
+            value_ty,
+            tuple_size,
+            tuple_align,
+            value_offset,
+            ptr,
+            len,
+        )
     }
 }
 
@@ -2515,6 +2609,9 @@ fn lift_try_map<K, V>(
     cx: &mut LiftContext<'_>,
     key_ty: InterfaceType,
     value_ty: InterfaceType,
+    tuple_size: usize,
+    tuple_align: usize,
+    value_offset: usize,
     ptr: usize,
     len: usize,
 ) -> Result<TryHashMap<K, V>>
@@ -2523,9 +2620,17 @@ where
     V: Lift,
 {
     let mut result = TryHashMap::with_capacity(len)?;
-    lift_map_pairs(cx, key_ty, value_ty, ptr, len, |k, v| {
-        result.insert(k, v).map(drop).map_err(Into::into)
-    })?;
+    lift_map_pairs(
+        cx,
+        key_ty,
+        value_ty,
+        tuple_size,
+        tuple_align,
+        value_offset,
+        ptr,
+        len,
+        |k, v| result.insert(k, v).map(drop).map_err(Into::into),
+    )?;
     Ok(result)
 }
 

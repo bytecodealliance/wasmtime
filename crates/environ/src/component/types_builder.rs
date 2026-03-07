@@ -701,9 +701,24 @@ impl ComponentTypesBuilder {
         assert_eq!(types.id(), self.module_types.validator_id());
         let key_ty = self.valtype(types, key)?;
         let value_ty = self.valtype(types, value)?;
+        let key_abi = self.component_types.canonical_abi(&key_ty);
+        let value_abi = self.component_types.canonical_abi(&value_ty);
+        let entry_abi = CanonicalAbiInfo::record([key_abi, value_abi].into_iter());
+
+        let mut offset32 = 0;
+        key_abi.next_field32(&mut offset32);
+        let value_offset32 = value_abi.next_field32(&mut offset32);
+
+        let mut offset64 = 0;
+        key_abi.next_field64(&mut offset64);
+        let value_offset64 = value_abi.next_field64(&mut offset64);
+
         Ok(self.add_map_type(TypeMap {
             key: key_ty,
             value: value_ty,
+            entry_abi,
+            value_offset32,
+            value_offset64,
         }))
     }
 
