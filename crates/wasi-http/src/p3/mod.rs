@@ -198,7 +198,7 @@ pub trait WasiHttpView: Send {
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi_http::p3::{DefaultWasiHttpCtx, WasiHttpCtxView, WasiHttpView};
+/// use wasmtime_wasi_http::{WasiHttpCtx, p3::{WasiHttpCtxView, WasiHttpView}};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -221,7 +221,7 @@ pub trait WasiHttpView: Send {
 ///
 /// #[derive(Default)]
 /// struct MyState {
-///     http: DefaultWasiHttpCtx,
+///     http: WasiHttpCtx,
 ///     table: ResourceTable,
 /// }
 ///
@@ -230,6 +230,7 @@ pub trait WasiHttpView: Send {
 ///         WasiHttpCtxView {
 ///             ctx: &mut self.http,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
