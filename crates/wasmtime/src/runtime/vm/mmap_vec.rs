@@ -303,16 +303,17 @@ impl MmapVec {
                 crate::bail!("Cannot clone an externally-owned code memory.");
             }
             #[cfg(has_virtual_memory)]
+            #[allow(
+                unused_variables,
+                reason = "`mmap` and `len` only used with `std` feature"
+            )]
             MmapVec::Mmap { mmap, len } => {
+                #[cfg(feature = "std")]
                 if let Some(original_file) = mmap.original_file() {
                     let mmap = Mmap::from_file(original_file.clone())?;
-                    Ok(MmapVec::Mmap { mmap, len: *len })
-                } else {
-                    MmapVec::from_slice_with_alignment(
-                        &self[..],
-                        crate::runtime::vm::host_page_size(),
-                    )
+                    return Ok(MmapVec::Mmap { mmap, len: *len });
                 }
+                MmapVec::from_slice_with_alignment(&self[..], crate::runtime::vm::host_page_size())
             }
         }
     }
