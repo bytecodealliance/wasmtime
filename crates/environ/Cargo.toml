@@ -20,7 +20,7 @@ all-features = true
 [dependencies]
 anyhow = { workspace = true }
 postcard = { workspace = true }
-cpp_demangle = { version = "0.4.3", optional = true }
+cpp_demangle = { version = "0.4.3", default-features = false, features = ['alloc'], optional = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
 cranelift-bforest = { workspace = true }
@@ -32,7 +32,7 @@ serde_derive = { workspace = true }
 log = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true }
-rustc-demangle = { version = "0.1.16", optional = true }
+rustc-demangle = { version = "0.1.16", default-features = false, optional = true }
 target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
@@ -70,7 +70,7 @@ component-model = [
   "dep:semver",
   "wasmparser/component-model",
 ]
-demangle = ['std', 'dep:rustc-demangle', 'dep:cpp_demangle']
+demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 gc-drc = ["gc"]
 gc-null = ["gc"]
@@ -90,6 +90,8 @@ std = [
   'wasmparser/std',
   'indexmap/std',
   'wasmtime-core/std',
+  'cpp_demangle?/std',
+  'rustc-demangle?/std',
 ]
 rr = [
   "component-model"

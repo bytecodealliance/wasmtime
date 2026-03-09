@@ -83,6 +83,11 @@ Cargo features are:
 * `gc`
 * `component-model`
 * `pulley`
+* `async`
+* `debug`
+* `debug-builtins`
+* `demangle`
+* `anyhow`
 
 This notably does not include the `default` feature which means that when
 depending on Wasmtime you'll need to specify `default-features = false`. This
