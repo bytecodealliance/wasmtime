@@ -5,7 +5,7 @@
     allow(irrefutable_let_patterns, unreachable_patterns)
 )]
 
-use crate::common::{Profile, RunCommon, RunTarget};
+use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -182,17 +182,7 @@ impl RunCommand {
             }
         }
 
-        let host = Host {
-            #[cfg(feature = "wasi-http")]
-            wasi_http_outgoing_body_buffer_chunks: self
-                .run
-                .common
-                .wasi
-                .http_outgoing_body_buffer_chunks,
-            #[cfg(feature = "wasi-http")]
-            wasi_http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
-            ..Default::default()
-        };
+        let host = Host::default();
 
         let mut store = Store::new(&engine, host);
         self.populate_with_wasi(&mut linker, &mut store, &main)?;
@@ -1195,6 +1185,10 @@ impl RunCommand {
 /// not compatible with `wasi-threads`.
 #[derive(Default, Clone)]
 pub struct Host {
+    limits: StoreLimits,
+    #[cfg(feature = "profiling")]
+    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
+
     // Legacy wasip1 context using `wasi_common`, not set unless opted-in-to
     // with the CLI.
     legacy_p1_ctx: Option<wasi_common::WasiCtx>,
@@ -1218,14 +1212,7 @@ pub struct Host {
     #[cfg(feature = "wasi-http")]
     wasi_http: Option<Arc<WasiHttpCtx>>,
     #[cfg(feature = "wasi-http")]
-    wasi_http_outgoing_body_buffer_chunks: Option<usize>,
-    #[cfg(feature = "wasi-http")]
-    wasi_http_outgoing_body_chunk_size: Option<usize>,
-    #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-    p3_http: crate::common::DefaultP3Ctx,
-    limits: StoreLimits,
-    #[cfg(feature = "profiling")]
-    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
+    wasi_http_hooks: HttpHooks,
 
     #[cfg(feature = "wasi-config")]
     wasi_config: Option<Arc<WasiConfigVariables>>,
@@ -1257,32 +1244,26 @@ impl WasiView for Host {
 
 #[cfg(feature = "wasi-http")]
 impl wasmtime_wasi_http::p2::WasiHttpView for Host {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
+    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
         let ctx = self.wasi_http.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
-    }
-
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        WasiView::ctx(self).table
-    }
-
-    fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.wasi_http_outgoing_body_buffer_chunks
-            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
-    }
-
-    fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.wasi_http_outgoing_body_chunk_size
-            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+        let ctx = Arc::get_mut(ctx).expect("wasmtime_wasi_http is not compatible with threads");
+        wasmtime_wasi_http::p2::WasiHttpCtxView {
+            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            ctx,
+            hooks: &mut self.wasi_http_hooks,
+        }
     }
 }
 
 #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
 impl wasmtime_wasi_http::p3::WasiHttpView for Host {
     fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
+        let ctx = self.wasi_http.as_mut().unwrap();
+        let ctx = Arc::get_mut(ctx).expect("wasmtime_wasi_http is not compatible with threads");
         wasmtime_wasi_http::p3::WasiHttpCtxView {
             table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
-            ctx: &mut self.p3_http,
+            ctx,
+            hooks: &mut self.wasi_http_hooks,
         }
     }
 }

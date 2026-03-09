@@ -19,20 +19,20 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p3::{
-    self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
+    self, Request, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
+use wasmtime_wasi_http::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
 
 foreach_p3_http!(assert_test_exists);
 
-struct TestHttpCtx {
+struct TestHooks {
     request_body_tx: Option<oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>>,
 }
 
-impl WasiHttpCtx for TestHttpCtx {
+impl WasiHttpHooks for TestHooks {
     fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
         name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
@@ -83,7 +83,8 @@ impl WasiHttpCtx for TestHttpCtx {
 struct Ctx {
     table: ResourceTable,
     wasi: WasiCtx,
-    http: TestHttpCtx,
+    http: WasiHttpCtx,
+    hooks: TestHooks,
 }
 
 impl Ctx {
@@ -91,7 +92,8 @@ impl Ctx {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-            http: TestHttpCtx {
+            http: WasiHttpCtx::new(),
+            hooks: TestHooks {
                 request_body_tx: Some(request_body_tx),
             },
         }
@@ -112,6 +114,7 @@ impl WasiHttpView for Ctx {
         WasiHttpCtxView {
             ctx: &mut self.http,
             table: &mut self.table,
+            hooks: &mut self.hooks,
         }
     }
 }

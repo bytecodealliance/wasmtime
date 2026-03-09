@@ -189,7 +189,7 @@ impl HostFields for WasiHttpCtxView<'_> {
         let mut fields = http::HeaderMap::default();
         for (name, value) in entries {
             let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-            if self.ctx.is_forbidden_header(&name) {
+            if self.hooks.is_forbidden_header(&name) {
                 return Err(HeaderError::Forbidden.into());
             }
             let value = parse_header_value(&name, value)?;
@@ -225,7 +225,7 @@ impl HostFields for WasiHttpCtxView<'_> {
         value: Vec<FieldValue>,
     ) -> HeaderResult<()> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let mut values = Vec::with_capacity(value.len());
@@ -244,7 +244,7 @@ impl HostFields for WasiHttpCtxView<'_> {
 
     fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
@@ -259,7 +259,7 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
     ) -> HeaderResult<Vec<FieldValue>> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
@@ -278,7 +278,7 @@ impl HostFields for WasiHttpCtxView<'_> {
         value: FieldValue,
     ) -> HeaderResult<()> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let value = parse_header_value(&name, value)?;

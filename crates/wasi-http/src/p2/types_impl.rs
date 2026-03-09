@@ -8,7 +8,7 @@ use crate::p2::types::{
     HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
     remove_forbidden_headers,
 };
-use crate::p2::{HttpError, HttpResult, WasiHttpImpl, WasiHttpView};
+use crate::p2::{HttpError, HttpResult, WasiHttpCtxView};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::bail;
@@ -16,10 +16,7 @@ use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
 use wasmtime::{error::Context as _, format_err};
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
-impl<T> types::Host for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::Host for WasiHttpCtxView<'_> {
     fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
         err.downcast()
     }
@@ -28,7 +25,7 @@ where
         &mut self,
         err: wasmtime::component::Resource<types::IoError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
-        let e = self.table().get(&err)?;
+        let e = self.table.get(&err)?;
         Ok(e.downcast_ref::<types::ErrorCode>().cloned())
     }
 }
@@ -78,14 +75,11 @@ fn get_fields_mut<'a>(
     }
 }
 
-impl<T> types::HostFields for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostFields for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<HostFields>> {
-        let limit = self.ctx().field_size_limit;
+        let limit = self.ctx.field_size_limit;
         let id = self
-            .table()
+            .table
             .push(HostFields::Owned {
                 fields: FieldMap::empty(limit),
             })
@@ -106,7 +100,7 @@ where
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
-            if self.is_forbidden_header(&header) {
+            if self.hooks.is_forbidden_header(&header) {
                 return Ok(Err(types::HeaderError::Forbidden));
             }
 
@@ -119,15 +113,15 @@ where
         }
 
         let size = FieldMap::content_size(&fields);
-        if size > self.ctx().field_size_limit {
+        if size > self.ctx.field_size_limit {
             bail!(FieldSizeLimitError {
                 size,
-                limit: self.ctx().field_size_limit,
+                limit: self.ctx.field_size_limit,
             });
         }
-        let fields = FieldMap::new(fields, self.ctx().field_size_limit);
+        let fields = FieldMap::new(fields, self.ctx.field_size_limit);
         let id = self
-            .table()
+            .table
             .push(HostFields::Owned { fields })
             .context("[new_fields] pushing fields")?;
 
@@ -135,7 +129,7 @@ where
     }
 
     fn drop(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<()> {
-        self.table()
+        self.table
             .delete(fields)
             .context("[drop_fields] deleting fields")?;
         Ok(())
@@ -146,7 +140,7 @@ where
         fields: Resource<HostFields>,
         name: String,
     ) -> wasmtime::Result<Vec<Vec<u8>>> {
-        let fields = get_fields(self.table(), &fields).context("[fields_get] getting fields")?;
+        let fields = get_fields(self.table, &fields).context("[fields_get] getting fields")?;
 
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
@@ -167,7 +161,7 @@ where
     }
 
     fn has(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<bool> {
-        let fields = get_fields(self.table(), &fields).context("[fields_get] getting fields")?;
+        let fields = get_fields(self.table, &fields).context("[fields_get] getting fields")?;
 
         match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => Ok(fields.as_ref().contains_key(&header)),
@@ -186,7 +180,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if self.is_forbidden_header(&header) {
+        if self.hooks.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -198,9 +192,7 @@ where
             }
         }
 
-        match get_fields_mut(self.table(), &fields)
-            .context("[fields_set] getting mutable fields")?
-        {
+        match get_fields_mut(self.table, &fields).context("[fields_set] getting mutable fields")? {
             Ok(fields) => {
                 fields.remove_all(&header);
                 for value in values {
@@ -222,11 +214,11 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if self.is_forbidden_header(&header) {
+        if self.hooks.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
-        Ok(get_fields_mut(self.table(), &fields)?.map(|fields| {
+        Ok(get_fields_mut(self.table, &fields)?.map(|fields| {
             fields.remove_all(&header);
         }))
     }
@@ -242,7 +234,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if self.is_forbidden_header(&header) {
+        if self.hooks.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -251,7 +243,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        match get_fields_mut(self.table(), &fields)
+        match get_fields_mut(self.table, &fields)
             .context("[fields_append] getting mutable fields")?
         {
             Ok(fields) => {
@@ -266,7 +258,7 @@ where
         &mut self,
         fields: Resource<HostFields>,
     ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        Ok(get_fields(self.table(), &fields)?
+        Ok(get_fields(self.table, &fields)?
             .as_ref()
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
@@ -274,12 +266,12 @@ where
     }
 
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields = get_fields(self.table(), &fields)
+        let fields = get_fields(self.table, &fields)
             .context("[fields_clone] getting fields")?
             .clone();
 
         let id = self
-            .table()
+            .table
             .push(HostFields::Owned { fields })
             .context("[fields_clone] pushing fields")?;
 
@@ -287,30 +279,27 @@ where
     }
 }
 
-impl<T> types::HostIncomingRequest for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostIncomingRequest for WasiHttpCtxView<'_> {
     fn method(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Method> {
-        let method = self.table().get(&id)?.method.clone();
+        let method = self.table.get(&id)?.method.clone();
         Ok(method.into())
     }
     fn path_with_query(
         &mut self,
         id: Resource<HostIncomingRequest>,
     ) -> wasmtime::Result<Option<String>> {
-        let req = self.table().get(&id)?;
+        let req = self.table.get(&id)?;
         Ok(req
             .uri
             .path_and_query()
             .map(|path_and_query| path_and_query.as_str().to_owned()))
     }
     fn scheme(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Option<Scheme>> {
-        let req = self.table().get(&id)?;
+        let req = self.table.get(&id)?;
         Ok(Some(req.scheme.clone()))
     }
     fn authority(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Option<String>> {
-        let req = self.table().get(&id)?;
+        let req = self.table.get(&id)?;
         Ok(Some(req.authority.clone()))
     }
 
@@ -318,13 +307,13 @@ where
         &mut self,
         id: Resource<HostIncomingRequest>,
     ) -> wasmtime::Result<Resource<Headers>> {
-        let _ = self.table().get(&id)?;
+        let _ = self.table.get(&id)?;
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             &mut elem.downcast_mut::<HostIncomingRequest>().unwrap().headers
         }
 
-        let headers = self.table().push_child(
+        let headers = self.table.push_child(
             HostFields::Ref {
                 parent: id.rep(),
                 get_fields,
@@ -339,10 +328,10 @@ where
         &mut self,
         id: Resource<HostIncomingRequest>,
     ) -> wasmtime::Result<Result<Resource<HostIncomingBody>, ()>> {
-        let req = self.table().get_mut(&id)?;
+        let req = self.table.get_mut(&id)?;
         match req.body.take() {
             Some(body) => {
-                let id = self.table().push(body)?;
+                let id = self.table.push(body)?;
                 Ok(Ok(id))
             }
 
@@ -351,22 +340,19 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let _ = self.table.delete(id)?;
         Ok(())
     }
 }
 
-impl<T> types::HostOutgoingRequest for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     fn new(
         &mut self,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingRequest>> {
-        let headers = move_fields(self.table(), headers)?;
+        let headers = move_fields(self.table, headers)?;
 
-        self.table()
+        self.table
             .push(HostOutgoingRequest {
                 path_with_query: None,
                 authority: None,
@@ -382,10 +368,10 @@ where
         &mut self,
         request: Resource<HostOutgoingRequest>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
-        let buffer_chunks = self.outgoing_body_buffer_chunks();
-        let chunk_size = self.outgoing_body_chunk_size();
+        let buffer_chunks = self.hooks.outgoing_body_buffer_chunks();
+        let chunk_size = self.hooks.outgoing_body_chunk_size();
         let req = self
-            .table()
+            .table
             .get_mut(&request)
             .context("[outgoing_request_write] getting request")?;
 
@@ -405,13 +391,13 @@ where
 
         // The output stream will necessarily outlive the request, because we could be still
         // writing to the stream after `outgoing-handler.handle` is called.
-        let outgoing_body = self.table().push(host_body)?;
+        let outgoing_body = self.table.push(host_body)?;
 
         Ok(Ok(outgoing_body))
     }
 
     fn drop(&mut self, request: Resource<HostOutgoingRequest>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(request)?;
+        let _ = self.table.delete(request)?;
         Ok(())
     }
 
@@ -419,7 +405,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Method> {
-        Ok(self.table().get(&request)?.method.clone())
+        Ok(self.table.get(&request)?.method.clone())
     }
 
     fn set_method(
@@ -427,7 +413,7 @@ where
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         method: Method,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = self.table().get_mut(&request)?;
+        let req = self.table.get_mut(&request)?;
 
         if let Method::Other(s) = &method {
             if let Err(_) = http::Method::from_str(s) {
@@ -444,7 +430,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Option<String>> {
-        Ok(self.table().get(&request)?.path_with_query.clone())
+        Ok(self.table.get(&request)?.path_with_query.clone())
     }
 
     fn set_path_with_query(
@@ -452,7 +438,7 @@ where
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = self.table().get_mut(&request)?;
+        let req = self.table.get_mut(&request)?;
 
         if let Some(s) = path_with_query.as_ref() {
             if let Err(_) = http::uri::PathAndQuery::from_str(s) {
@@ -469,7 +455,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Option<Scheme>> {
-        Ok(self.table().get(&request)?.scheme.clone())
+        Ok(self.table.get(&request)?.scheme.clone())
     }
 
     fn set_scheme(
@@ -477,7 +463,7 @@ where
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         scheme: Option<Scheme>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = self.table().get_mut(&request)?;
+        let req = self.table.get_mut(&request)?;
 
         if let Some(types::Scheme::Other(s)) = scheme.as_ref() {
             if let Err(_) = http::uri::Scheme::from_str(s.as_str()) {
@@ -494,7 +480,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Option<String>> {
-        Ok(self.table().get(&request)?.authority.clone())
+        Ok(self.table.get(&request)?.authority.clone())
     }
 
     fn set_authority(
@@ -502,7 +488,7 @@ where
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         authority: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = self.table().get_mut(&request)?;
+        let req = self.table.get_mut(&request)?;
 
         if let Some(s) = authority.as_ref() {
             if let Err(_) = http::uri::Authority::from_str(s.as_str()) {
@@ -520,7 +506,7 @@ where
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<wasmtime::component::Resource<Headers>> {
         let _ = self
-            .table()
+            .table
             .get(&request)
             .context("[outgoing_request_headers] getting request")?;
 
@@ -531,7 +517,7 @@ where
                 .headers
         }
 
-        let id = self.table().push_child(
+        let id = self.table.push_child(
             HostFields::Ref {
                 parent: request.rep(),
                 get_fields,
@@ -543,12 +529,9 @@ where
     }
 }
 
-impl<T> types::HostResponseOutparam for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostResponseOutparam for WasiHttpCtxView<'_> {
     fn drop(&mut self, id: Resource<HostResponseOutparam>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let _ = self.table.delete(id)?;
         Ok(())
     }
     fn set(
@@ -557,11 +540,11 @@ where
         resp: Result<Resource<HostOutgoingResponse>, types::ErrorCode>,
     ) -> wasmtime::Result<()> {
         let val = match resp {
-            Ok(resp) => Ok(self.table().delete(resp)?.try_into()?),
+            Ok(resp) => Ok(self.table.delete(resp)?.try_into()?),
             Err(e) => Err(e),
         };
 
-        let resp = self.table().delete(id)?;
+        let resp = self.table.delete(id)?;
         // Giving the API doesn't return any error, it's probably
         // better to ignore the error than trap the guest, in case of
         // host timeout and dropped the receiver side of the channel.
@@ -580,13 +563,10 @@ where
     }
 }
 
-impl<T> types::HostIncomingResponse for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostIncomingResponse for WasiHttpCtxView<'_> {
     fn drop(&mut self, response: Resource<HostIncomingResponse>) -> wasmtime::Result<()> {
         let _ = self
-            .table()
+            .table
             .delete(response)
             .context("[drop_incoming_response] deleting response")?;
         Ok(())
@@ -594,7 +574,7 @@ where
 
     fn status(&mut self, response: Resource<HostIncomingResponse>) -> wasmtime::Result<StatusCode> {
         let r = self
-            .table()
+            .table
             .get(&response)
             .context("[incoming_response_status] getting response")?;
         Ok(r.status)
@@ -605,7 +585,7 @@ where
         response: Resource<HostIncomingResponse>,
     ) -> wasmtime::Result<Resource<Headers>> {
         let _ = self
-            .table()
+            .table
             .get(&response)
             .context("[incoming_response_headers] getting response")?;
 
@@ -613,7 +593,7 @@ where
             &mut elem.downcast_mut::<HostIncomingResponse>().unwrap().headers
         }
 
-        let id = self.table().push_child(
+        let id = self.table.push_child(
             HostFields::Ref {
                 parent: response.rep(),
                 get_fields,
@@ -628,14 +608,14 @@ where
         &mut self,
         response: Resource<HostIncomingResponse>,
     ) -> wasmtime::Result<Result<Resource<HostIncomingBody>, ()>> {
-        let table = self.table();
-        let r = table
+        let r = self
+            .table
             .get_mut(&response)
             .context("[incoming_response_consume] getting response")?;
 
         match r.body.take() {
             Some(body) => {
-                let id = self.table().push(body)?;
+                let id = self.table.push(body)?;
                 Ok(Ok(id))
             }
 
@@ -644,13 +624,10 @@ where
     }
 }
 
-impl<T> types::HostFutureTrailers for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
     fn drop(&mut self, id: Resource<HostFutureTrailers>) -> wasmtime::Result<()> {
         let _ = self
-            .table()
+            .table
             .delete(id)
             .context("[drop future-trailers] deleting future-trailers")?;
         Ok(())
@@ -660,7 +637,7 @@ where
         &mut self,
         index: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        wasmtime_wasi::p2::subscribe(self.table(), index)
+        wasmtime_wasi::p2::subscribe(self.table, index)
     }
 
     fn get(
@@ -668,7 +645,7 @@ where
         id: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Option<Result<Result<Option<Resource<Trailers>>, types::ErrorCode>, ()>>>
     {
-        let trailers = self.table().get_mut(&id)?;
+        let trailers = self.table.get_mut(&id)?;
         match trailers {
             HostFutureTrailers::Waiting { .. } => return Ok(None),
             HostFutureTrailers::Consumed => return Ok(Some(Err(()))),
@@ -686,27 +663,24 @@ where
             Err(e) => return Ok(Some(Ok(Err(e)))),
         };
 
-        remove_forbidden_headers(self, &mut fields);
+        remove_forbidden_headers(self.hooks, &mut fields);
 
-        let ts = self.table().push(HostFields::Owned { fields })?;
+        let ts = self.table.push(HostFields::Owned { fields })?;
 
         Ok(Some(Ok(Ok(Some(ts)))))
     }
 }
 
-impl<T> types::HostIncomingBody for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostIncomingBody for WasiHttpCtxView<'_> {
     fn stream(
         &mut self,
         id: Resource<HostIncomingBody>,
     ) -> wasmtime::Result<Result<Resource<DynInputStream>, ()>> {
-        let body = self.table().get_mut(&id)?;
+        let body = self.table.get_mut(&id)?;
 
         if let Some(stream) = body.take_stream() {
             let stream: DynInputStream = Box::new(stream);
-            let stream = self.table().push_child(stream, &id)?;
+            let stream = self.table.push_child(stream, &id)?;
             return Ok(Ok(stream));
         }
 
@@ -717,28 +691,25 @@ where
         &mut self,
         id: Resource<HostIncomingBody>,
     ) -> wasmtime::Result<Resource<HostFutureTrailers>> {
-        let body = self.table().delete(id)?;
-        let trailers = self.table().push(body.into_future_trailers())?;
+        let body = self.table.delete(id)?;
+        let trailers = self.table.push(body.into_future_trailers())?;
         Ok(trailers)
     }
 
     fn drop(&mut self, id: Resource<HostIncomingBody>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let _ = self.table.delete(id)?;
         Ok(())
     }
 }
 
-impl<T> types::HostOutgoingResponse for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostOutgoingResponse for WasiHttpCtxView<'_> {
     fn new(
         &mut self,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingResponse>> {
-        let fields = move_fields(self.table(), headers)?;
+        let fields = move_fields(self.table, headers)?;
 
-        let id = self.table().push(HostOutgoingResponse {
+        let id = self.table.push(HostOutgoingResponse {
             status: http::StatusCode::OK,
             headers: fields,
             body: None,
@@ -751,9 +722,9 @@ where
         &mut self,
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
-        let buffer_chunks = self.outgoing_body_buffer_chunks();
-        let chunk_size = self.outgoing_body_chunk_size();
-        let resp = self.table().get_mut(&id)?;
+        let buffer_chunks = self.hooks.outgoing_body_buffer_chunks();
+        let chunk_size = self.hooks.outgoing_body_chunk_size();
+        let resp = self.table.get_mut(&id)?;
 
         if resp.body.is_some() {
             return Ok(Err(()));
@@ -769,7 +740,7 @@ where
 
         resp.body.replace(body);
 
-        let id = self.table().push(host)?;
+        let id = self.table.push(host)?;
 
         Ok(Ok(id))
     }
@@ -778,7 +749,7 @@ where
         &mut self,
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<types::StatusCode> {
-        Ok(self.table().get(&id)?.status.into())
+        Ok(self.table.get(&id)?.status.into())
     }
 
     fn set_status_code(
@@ -786,7 +757,7 @@ where
         id: Resource<HostOutgoingResponse>,
         status: types::StatusCode,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let resp = self.table().get_mut(&id)?;
+        let resp = self.table.get_mut(&id)?;
 
         match http::StatusCode::from_u16(status) {
             Ok(status) => resp.status = status,
@@ -801,14 +772,14 @@ where
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<Resource<types::Headers>> {
         // Trap if the outgoing-response doesn't exist.
-        let _ = self.table().get(&id)?;
+        let _ = self.table.get(&id)?;
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             let resp = elem.downcast_mut::<HostOutgoingResponse>().unwrap();
             &mut resp.headers
         }
 
-        Ok(self.table().push_child(
+        Ok(self.table.push_child(
             HostFields::Ref {
                 parent: id.rep(),
                 get_fields,
@@ -818,17 +789,14 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingResponse>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let _ = self.table.delete(id)?;
         Ok(())
     }
 }
 
-impl<T> types::HostFutureIncomingResponse for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
     fn drop(&mut self, id: Resource<HostFutureIncomingResponse>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let _ = self.table.delete(id)?;
         Ok(())
     }
 
@@ -838,8 +806,8 @@ where
     ) -> wasmtime::Result<
         Option<Result<Result<Resource<HostIncomingResponse>, types::ErrorCode>, ()>>,
     > {
-        let field_size_limit = self.ctx().field_size_limit;
-        let resp = self.table().get_mut(&id)?;
+        let field_size_limit = self.ctx.field_size_limit;
+        let resp = self.table.get_mut(&id)?;
 
         match resp {
             HostFutureIncomingResponse::Pending(_) => return Ok(None),
@@ -862,9 +830,9 @@ where
         let (parts, body) = resp.resp.into_parts();
 
         let mut headers = FieldMap::new(parts.headers, field_size_limit);
-        remove_forbidden_headers(self, &mut headers);
+        remove_forbidden_headers(self.hooks, &mut headers);
 
-        let resp = self.table().push(HostIncomingResponse {
+        let resp = self.table.push(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers,
             body: Some({
@@ -884,21 +852,18 @@ where
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        wasmtime_wasi::p2::subscribe(self.table(), id)
+        wasmtime_wasi::p2::subscribe(self.table, id)
     }
 }
 
-impl<T> types::HostOutgoingBody for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostOutgoingBody for WasiHttpCtxView<'_> {
     fn write(
         &mut self,
         id: Resource<HostOutgoingBody>,
     ) -> wasmtime::Result<Result<Resource<DynOutputStream>, ()>> {
-        let body = self.table().get_mut(&id)?;
+        let body = self.table.get_mut(&id)?;
         if let Some(stream) = body.take_output_stream() {
-            let id = self.table().push_child(stream, &id)?;
+            let id = self.table.push_child(stream, &id)?;
             Ok(Ok(id))
         } else {
             Ok(Err(()))
@@ -910,10 +875,10 @@ where
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
     ) -> HttpResult<()> {
-        let body = self.table().delete(id)?;
+        let body = self.table.delete(id)?;
 
         let ts = if let Some(ts) = ts {
-            Some(move_fields(self.table(), ts)?)
+            Some(move_fields(self.table, ts)?)
         } else {
             None
         };
@@ -923,17 +888,14 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingBody>) -> wasmtime::Result<()> {
-        self.table().delete(id)?.abort();
+        self.table.delete(id)?.abort();
         Ok(())
     }
 }
 
-impl<T> types::HostRequestOptions for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl types::HostRequestOptions for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<types::RequestOptions>> {
-        let id = self.table().push(types::RequestOptions::default())?;
+        let id = self.table.push(types::RequestOptions::default())?;
         Ok(id)
     }
 
@@ -941,11 +903,7 @@ where
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
-        let nanos = self
-            .table()
-            .get(&opts)?
-            .connect_timeout
-            .map(|d| d.as_nanos());
+        let nanos = self.table.get(&opts)?.connect_timeout.map(|d| d.as_nanos());
 
         if let Some(nanos) = nanos {
             Ok(Some(nanos.try_into()?))
@@ -959,8 +917,7 @@ where
         opts: Resource<types::RequestOptions>,
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.connect_timeout =
-            duration.map(std::time::Duration::from_nanos);
+        self.table.get_mut(&opts)?.connect_timeout = duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
 
@@ -969,7 +926,7 @@ where
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
         let nanos = self
-            .table()
+            .table
             .get(&opts)?
             .first_byte_timeout
             .map(|d| d.as_nanos());
@@ -986,7 +943,7 @@ where
         opts: Resource<types::RequestOptions>,
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.first_byte_timeout =
+        self.table.get_mut(&opts)?.first_byte_timeout =
             duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
@@ -996,7 +953,7 @@ where
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
         let nanos = self
-            .table()
+            .table
             .get(&opts)?
             .between_bytes_timeout
             .map(|d| d.as_nanos());
@@ -1013,13 +970,13 @@ where
         opts: Resource<types::RequestOptions>,
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.between_bytes_timeout =
+        self.table.get_mut(&opts)?.between_bytes_timeout =
             duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
 
     fn drop(&mut self, rep: Resource<types::RequestOptions>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(rep)?;
+        let _ = self.table.delete(rep)?;
         Ok(())
     }
 }
