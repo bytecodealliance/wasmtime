@@ -1852,7 +1852,7 @@ impl StoreOpaque {
         } else {
             CurrentThread::None
         };
-        
+
         // We should not have reached here unless either there's no current
         // task, or the current task is permitted to block.  In addition, we
         // special-case `thread.switch-to` and waiting for a subtask to go from
