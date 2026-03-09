@@ -18,9 +18,9 @@ impl Map for BTreeMap<Key, Value> {
     }
 }
 
-impl Map for collections::BTreeMap<Key, Value> {
+impl Map for collections::TryBTreeMap<Key, Value> {
     fn insert(&mut self, key: Key, value: Value) -> Result<()> {
-        collections::BTreeMap::insert(self, key, value)?;
+        collections::TryBTreeMap::insert(self, key, value)?;
         Ok(())
     }
 }
@@ -32,7 +32,7 @@ fn main() -> Result<()> {
 
     let mut map: Box<dyn Map> = match kind.as_str() {
         "std" => Box::new(BTreeMap::new()),
-        "bforest" => Box::new(collections::BTreeMap::new()),
+        "bforest" => Box::new(collections::TryBTreeMap::new()),
         _ => bail!("first argument must be either 'std' or 'bforest', got: '{kind}'"),
     };
 

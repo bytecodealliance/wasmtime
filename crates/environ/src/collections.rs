@@ -8,7 +8,7 @@ mod index_map;
 mod primary_map;
 mod secondary_map;
 
-pub use btree_map::BTreeMap;
+pub use btree_map::TryBTreeMap;
 pub use entity_set::TryEntitySet;
 pub use hash_map::TryHashMap;
 pub use hash_set::TryHashSet;

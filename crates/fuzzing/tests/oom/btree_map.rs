@@ -1,8 +1,8 @@
 use wasmtime::Result;
-use wasmtime_environ::collections::{BTreeMap, btree_map::Entry};
+use wasmtime_environ::collections::{TryBTreeMap, btree_map::Entry};
 use wasmtime_fuzzing::oom::OomTest;
 
-type M = BTreeMap<usize, f32>;
+type M = TryBTreeMap<usize, f32>;
 
 #[test]
 fn btree_map() -> Result<()> {

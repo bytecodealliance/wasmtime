@@ -6,7 +6,7 @@ use wasmtime_core::slab::{Id, Slab};
 
 /// Like `std::collections::BTreeMap` but its methods return errors on
 /// allocation failure.
-pub struct BTreeMap<K, V>
+pub struct TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -15,7 +15,7 @@ where
     map: cranelift_bforest::Map<K, Id>,
 }
 
-impl<K, V> Default for BTreeMap<K, V>
+impl<K, V> Default for TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<K, V> BTreeMap<K, V>
+impl<K, V> TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -205,7 +205,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a BTreeMap<K, V>
+impl<'a, K, V> IntoIterator for &'a TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -242,7 +242,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut BTreeMap<K, V>
+impl<'a, K, V> IntoIterator for &'a mut TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<K, V> IntoIterator for BTreeMap<K, V>
+impl<K, V> IntoIterator for TryBTreeMap<K, V>
 where
     K: Copy + Ord,
 {
@@ -651,7 +651,7 @@ mod tests {
     use crate::error::Result;
     use alloc::{vec, vec::Vec};
 
-    type M = BTreeMap<usize, f32>;
+    type M = TryBTreeMap<usize, f32>;
 
     #[test]
     fn new() -> Result<()> {
