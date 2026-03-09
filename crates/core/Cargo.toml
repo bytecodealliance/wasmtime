@@ -13,7 +13,7 @@ version.workspace = true
 anyhow = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 libm = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true
@@ -26,3 +26,4 @@ backtrace = ["std"]
 # Enable the `From<Error> for anyhow::Error` implementation and
 # `Error::from_anyhow` constructor.
 anyhow = ["dep:anyhow"]
+serde = ["dep:serde"]
