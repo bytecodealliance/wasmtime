@@ -11,7 +11,7 @@ mod secondary_map;
 pub use btree_map::BTreeMap;
 pub use entity_set::TryEntitySet;
 pub use hash_map::TryHashMap;
-pub use hash_set::HashSet;
+pub use hash_set::TryHashSet;
 pub use index_map::IndexMap;
 pub use primary_map::PrimaryMap;
 pub use secondary_map::SecondaryMap;

@@ -25,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{HashSet, PrimaryMap, SecondaryMap, TryCow},
+    collections::{PrimaryMap, SecondaryMap, TryCow},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -592,7 +592,7 @@ struct TypeRegistryInner {
     // registered. Before registering new rec groups, we first check this map to
     // see if we've already registered an identical rec group that we should
     // reuse instead.
-    hash_consing_map: HashSet<RecGroupEntry>,
+    hash_consing_map: TryHashSet<RecGroupEntry>,
 
     // A map from `VMSharedTypeIndex::bits()` to the type index's associated
     // Wasm type.
