@@ -89,3 +89,142 @@ block0(v0: i32, v1: i32):
 ;     return v7  ; v7 = 0
 ; }
 
+function %select_eq_xy_xy_to_y(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; function %select_eq_xy_xy_to_y(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v1
+; }
+
+;; (x | (y != z)) ? y : z  ==> y
+function %select_bor_ne_to_y(i8, i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = icmp ne v1, v2
+    v4 = bor v0, v3
+    v5 = select v4, v1, v2
+    return v5
+}
+
+; function %select_bor_ne_to_y(i8, i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8, v2: i8):
+;     return v1
+; }
+
+;; (x == y) ? x : (x | y)  ==> (x | y)
+function %select_eq_xy_x_borxy_to_borxy(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = bor v0, v1
+    v4 = select v2, v0, v3
+    return v4
+}
+
+; function %select_eq_xy_x_borxy_to_borxy(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = bor v0, v1
+;     return v3
+; }
+
+;; (x != y) ? (x & y) : y  ==> (x & y)
+function %select_ne_xy_bandxy_y_to_bandxy(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = band v0, v1
+    v4 = select v2, v3, v1
+    return v4
+}
+
+; function %select_ne_xy_bandxy_y_to_bandxy(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = band v0, v1
+;     return v3
+; }
+
+;; (x <_u y) ? 1 : (x == y)  ==> (x <=_u y)
+function %select_ult_one_eq_to_ule(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = icmp ult v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp eq v0, v1
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_ult_one_eq_to_ule(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = icmp ule v0, v1
+;     return v6
+; }
+
+;; (x < y) ? 1 : (x > y)  ==> (x != y)
+function %select_slt_one_sgt_to_ne(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = icmp slt v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp sgt v0, v1
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_slt_one_sgt_to_ne(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = icmp ne v0, v1
+;     return v6
+; }
+
+;; (x ? 1 : (x | y))  ==>  (x ? 1 : y)
+function %select_x_one_borxy_to_select_x_one_y(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 1
+    v3 = bor v0, v1
+    v4 = select v0, v2, v3
+    return v4
+}
+
+; function %select_x_one_borxy_to_select_x_one_y(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v2 = iconst.i8 1
+;     v5 = select v0, v2, v1  ; v2 = 1
+;     return v5
+; }
+
+;; if x == 1 then (y - 1) else (y - x)  ==>  (y - x)
+function %select_eq_x1_yminus1_yminusx_to_yminusx(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = icmp eq v0, v2
+    v4 = isub v1, v2
+    v5 = isub v1, v0
+    v6 = select v3, v4, v5
+    return v6
+}
+
+; function %select_eq_x1_yminus1_yminusx_to_yminusx(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = isub v1, v0
+;     return v5
+; }
+
+;; select(cond, eq(z, y), eq(p, y))  ==>  eq(y, select(cond, z, p))
+function %select_eq_eq_to_eq_select(i8, i32, i32) -> i8 fast {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = icmp eq v2, v1
+    v4 = iconst.i32 7
+    v5 = icmp eq v4, v1
+    v6 = select v0, v3, v5
+    return v6
+}
+
+; function %select_eq_eq_to_eq_select(i8, i32, i32) -> i8 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v4 = iconst.i32 7
+;     v9 = select v0, v2, v4  ; v4 = 7
+;     v10 = icmp eq v1, v9
+;     return v10
+; }
+
