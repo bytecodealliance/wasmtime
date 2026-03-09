@@ -82,7 +82,7 @@ pub enum MemoryInitialization {
         ///
         /// The offset, range base, and range end are all guaranteed to be page
         /// aligned to the page size passed in to `try_static_init`.
-        map: collections::PrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
+        map: TryPrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
     },
 }
 
@@ -226,7 +226,7 @@ pub struct TableInitialization {
     /// initialization. For example table initializers to a table that are all
     /// in-bounds will get removed from `segment` and moved into
     /// `initial_values` here.
-    pub initial_values: collections::PrimaryMap<DefinedTableIndex, TableInitialValue>,
+    pub initial_values: TryPrimaryMap<DefinedTableIndex, TableInitialValue>,
 
     /// Element segments present in the initial wasm module which are executed
     /// at instantiation time.
@@ -325,7 +325,7 @@ pub struct Module {
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
-    pub types: collections::PrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
+    pub types: TryPrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
 
     /// Number of imported or aliased functions in the module.
     pub num_imported_funcs: usize,
@@ -353,22 +353,22 @@ pub struct Module {
     pub num_escaped_funcs: usize,
 
     /// Types of functions, imported and local.
-    pub functions: collections::PrimaryMap<FuncIndex, FunctionType>,
+    pub functions: TryPrimaryMap<FuncIndex, FunctionType>,
 
     /// WebAssembly tables.
-    pub tables: collections::PrimaryMap<TableIndex, Table>,
+    pub tables: TryPrimaryMap<TableIndex, Table>,
 
     /// WebAssembly linear memory plans.
-    pub memories: collections::PrimaryMap<MemoryIndex, Memory>,
+    pub memories: TryPrimaryMap<MemoryIndex, Memory>,
 
     /// WebAssembly global variables.
-    pub globals: collections::PrimaryMap<GlobalIndex, Global>,
+    pub globals: TryPrimaryMap<GlobalIndex, Global>,
 
     /// WebAssembly global initializers for locally-defined globals.
-    pub global_initializers: collections::PrimaryMap<DefinedGlobalIndex, ConstExpr>,
+    pub global_initializers: TryPrimaryMap<DefinedGlobalIndex, ConstExpr>,
 
     /// WebAssembly exception and control tags.
-    pub tags: collections::PrimaryMap<TagIndex, Tag>,
+    pub tags: TryPrimaryMap<TagIndex, Tag>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,

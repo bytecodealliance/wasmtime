@@ -10,14 +10,14 @@ use serde::{Serialize, ser::SerializeSeq};
 /// Like [`cranelift_entity::PrimaryMap`] but enforces fallible allocation for
 /// all methods that allocate.
 #[derive(Hash, PartialEq, Eq)]
-pub struct PrimaryMap<K, V>
+pub struct TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
     inner: cranelift_entity::PrimaryMap<K, V>,
 }
 
-impl<K, V> Default for PrimaryMap<K, V>
+impl<K, V> Default for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<K, V> fmt::Debug for PrimaryMap<K, V>
+impl<K, V> fmt::Debug for TryPrimaryMap<K, V>
 where
     K: EntityRef + fmt::Debug,
     V: fmt::Debug,
@@ -38,7 +38,7 @@ where
     }
 }
 
-impl<K, V> From<TryVec<V>> for PrimaryMap<K, V>
+impl<K, V> From<TryVec<V>> for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -49,7 +49,7 @@ where
     }
 }
 
-impl<K, V> serde::ser::Serialize for PrimaryMap<K, V>
+impl<K, V> serde::ser::Serialize for TryPrimaryMap<K, V>
 where
     K: EntityRef,
     V: Serialize,
@@ -66,7 +66,7 @@ where
     }
 }
 
-impl<'de, K, V> serde::de::Deserialize<'de> for PrimaryMap<K, V>
+impl<'de, K, V> serde::de::Deserialize<'de> for TryPrimaryMap<K, V>
 where
     K: EntityRef,
     V: serde::de::Deserialize<'de>,
@@ -80,7 +80,7 @@ where
     }
 }
 
-impl<K, V> PrimaryMap<K, V>
+impl<K, V> TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -218,7 +218,7 @@ where
     }
 }
 
-impl<K, V> TryExtend<V> for PrimaryMap<K, V>
+impl<K, V> TryExtend<V> for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -237,7 +237,7 @@ where
     }
 }
 
-impl<K, V> Index<K> for PrimaryMap<K, V>
+impl<K, V> Index<K> for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -248,7 +248,7 @@ where
     }
 }
 
-impl<K, V> IndexMut<K> for PrimaryMap<K, V>
+impl<K, V> IndexMut<K> for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -257,7 +257,7 @@ where
     }
 }
 
-impl<K, V> IntoIterator for PrimaryMap<K, V>
+impl<K, V> IntoIterator for TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -268,7 +268,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a PrimaryMap<K, V>
+impl<'a, K, V> IntoIterator for &'a TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {
@@ -279,7 +279,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut PrimaryMap<K, V>
+impl<'a, K, V> IntoIterator for &'a mut TryPrimaryMap<K, V>
 where
     K: EntityRef,
 {

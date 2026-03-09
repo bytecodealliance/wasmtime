@@ -25,7 +25,7 @@ use wasmtime_core::slab::{Id as SlabId, Slab};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityRef, GcLayout, ModuleInternedTypeIndex, ModuleTypes, TypeTrace,
     Undo, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
-    collections::{PrimaryMap, SecondaryMap, TryCow},
+    collections::{SecondaryMap, TryCow},
     iter_entity_range,
     packed_option::{PackedOption, ReservedValue},
 };
@@ -89,7 +89,7 @@ use wasmtime_environ::{
 pub struct TypeCollection {
     engine: Engine,
     rec_groups: TryVec<RecGroupEntry>,
-    types: PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+    types: TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
     trampolines: SecondaryMap<VMSharedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
 }
 
@@ -184,7 +184,7 @@ impl TypeCollection {
     ///
     /// This is used for looking up module shared type indexes during module
     /// instantiation.
-    pub fn as_module_map(&self) -> &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex> {
+    pub fn as_module_map(&self) -> &TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex> {
         &self.types
     }
 
@@ -682,7 +682,7 @@ impl TypeRegistryInner {
     ) -> Result<
         (
             TryVec<RecGroupEntry>,
-            PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+            TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         ),
         OutOfMemory,
     > {
@@ -693,7 +693,7 @@ impl TypeRegistryInner {
 
         // The map from a module type index to an engine type index for these
         // module types.
-        let mut map = PrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::with_capacity(
+        let mut map = TryPrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::with_capacity(
             types.wasm_types().len(),
         )?;
 
@@ -751,7 +751,7 @@ impl TypeRegistryInner {
     fn register_rec_group(
         &mut self,
         gc_runtime: Option<&dyn GcRuntime>,
-        map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+        map: &TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
         types: impl ExactSizeIterator<Item = Result<WasmSubType, OutOfMemory>>,
     ) -> Result<RecGroupEntry, OutOfMemory> {
@@ -809,7 +809,7 @@ impl TypeRegistryInner {
     fn register_new_rec_group(
         &mut self,
         gc_runtime: Option<&(dyn GcRuntime + 'static)>,
-        map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+        map: &TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
         hash_consing_key: WasmRecGroup,
         mut non_canon_types: TryVec<(ModuleInternedTypeIndex, WasmSubType)>,
@@ -1258,7 +1258,7 @@ impl TypeRegistryInner {
     /// this registry.
     fn canonicalize_entry_types_for_runtime_usage<'a>(
         &self,
-        map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+        map: &TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         entry: &RecGroupEntry,
         sub_tys: impl ExactSizeIterator<Item = &'a mut WasmSubType>,
         range: Range<ModuleInternedTypeIndex>,
@@ -1272,7 +1272,7 @@ impl TypeRegistryInner {
     /// Canonicalize one type for runtime usage within this registry.
     fn canonicalize_type_for_runtime_usage(
         &self,
-        map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+        map: &TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         entry: &RecGroupEntry,
         engine_index: VMSharedTypeIndex,
         ty: &mut WasmSubType,
@@ -1346,7 +1346,7 @@ impl TypeRegistryInner {
         // This type doesn't have any module-level type references, since it is
         // already canonicalized for runtime usage in this registry, so an empty
         // map suffices.
-        let map = PrimaryMap::default();
+        let map = TryPrimaryMap::default();
 
         // This must have `range.len() == 1`, even though we know this type
         // doesn't have any intra-group type references, to satisfy
