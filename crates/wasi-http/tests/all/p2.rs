@@ -19,7 +19,7 @@ use wasmtime_wasi_http::{
     io::TokioIo,
     p2::bindings::http::types::{ErrorCode, Scheme},
     p2::body::HyperOutgoingBody,
-    p2::types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    p2::types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
     p2::{HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView},
 };
 
@@ -620,10 +620,10 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
-    use crate::p2::types::FieldSizeLimitError;
     use http::{HeaderName, HeaderValue, Request};
     use http_body_util::combinators::BoxBody;
     use hyper::Error;
+    use wasmtime_wasi_http::FieldMapError;
 
     fn request_with_header_size(uri: &str, total: usize) -> Request<BoxBody<Bytes, Error>> {
         let mut builder = hyper::Request::builder().uri(uri).method(http::Method::GET);
@@ -684,7 +684,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
     .await
     .err()
     .expect("new_fields exceeding the size limit");
-    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+    assert!(err.downcast_ref::<FieldMapError>().is_some());
 
     let resp = run_wasi_http(
         test_programs_artifacts::P2_API_PROXY_COMPONENT,
@@ -708,7 +708,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
     .await
     .err()
     .expect("run_wasi_http should give error");
-    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+    assert!(err.downcast_ref::<FieldMapError>().is_some());
 
     Ok(())
 }

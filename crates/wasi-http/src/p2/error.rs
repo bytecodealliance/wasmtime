@@ -1,4 +1,5 @@
-use crate::p2::bindings::http::types::ErrorCode;
+use crate::FieldMapError;
+use crate::p2::bindings::http::types::{self, ErrorCode};
 use std::error::Error;
 use std::fmt;
 use wasmtime::component::ResourceTableError;
@@ -57,6 +58,81 @@ impl fmt::Display for HttpError {
 }
 
 impl Error for HttpError {}
+
+/// A [`Result`] type where the error type defaults to [`HeaderError`].
+pub type HeaderResult<T, E = HeaderError> = Result<T, E>;
+
+/// A `wasi:http`-specific error type used to represent either a trap or an
+/// [`types::HeaderError`].
+///
+/// Modeled after [`TrappableError`](wasmtime_wasi::TrappableError).
+#[repr(transparent)]
+pub struct HeaderError {
+    err: wasmtime::Error,
+}
+
+impl HeaderError {
+    /// Create a new `HeaderError` that represents a trap.
+    pub fn trap(err: impl Into<wasmtime::Error>) -> HeaderError {
+        HeaderError { err: err.into() }
+    }
+
+    /// Downcast this error to an [`ErrorCode`].
+    pub fn downcast(self) -> wasmtime::Result<types::HeaderError> {
+        self.err.downcast()
+    }
+
+    /// Downcast this error to a reference to an [`ErrorCode`]
+    pub fn downcast_ref(&self) -> Option<&types::HeaderError> {
+        self.err.downcast_ref()
+    }
+}
+
+impl From<types::HeaderError> for HeaderError {
+    fn from(error: types::HeaderError) -> Self {
+        Self { err: error.into() }
+    }
+}
+
+impl From<ResourceTableError> for HeaderError {
+    fn from(error: ResourceTableError) -> Self {
+        HeaderError::trap(error)
+    }
+}
+
+impl From<http::header::InvalidHeaderName> for HeaderError {
+    fn from(_: http::header::InvalidHeaderName) -> Self {
+        HeaderError::from(types::HeaderError::InvalidSyntax)
+    }
+}
+
+impl From<http::header::InvalidHeaderValue> for HeaderError {
+    fn from(_: http::header::InvalidHeaderValue) -> Self {
+        HeaderError::from(types::HeaderError::InvalidSyntax)
+    }
+}
+
+impl From<FieldMapError> for HeaderError {
+    fn from(err: FieldMapError) -> Self {
+        match err {
+            FieldMapError::Immutable => types::HeaderError::Immutable.into(),
+            FieldMapError::InvalidHeaderName => types::HeaderError::InvalidSyntax.into(),
+            FieldMapError::TooManyFields | FieldMapError::TotalSizeTooBig => HeaderError::trap(err),
+        }
+    }
+}
+
+impl fmt::Debug for HeaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.err.fmt(f)
+    }
+}
+
+impl fmt::Display for HeaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.err.fmt(f)
+    }
+}
 
 #[cfg(feature = "default-send-request")]
 pub(crate) fn dns_error(rcode: String, info_code: u16) -> ErrorCode {

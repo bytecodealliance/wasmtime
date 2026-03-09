@@ -1,23 +1,26 @@
 //! Implementation for the `wasi:http/types` interface.
 
+use crate::FieldMap;
 use crate::get_content_length;
-use crate::p2::bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::p2::bindings::http::types::{self, Method, Scheme, StatusCode, Trailers};
 use crate::p2::body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext};
 use crate::p2::types::{
-    FieldMap, FieldSizeLimitError, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
-    HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
-    remove_forbidden_headers,
+    HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
+    HostOutgoingResponse, HostResponseOutparam, remove_forbidden_headers,
 };
-use crate::p2::{HttpError, HttpResult, WasiHttpCtxView};
-use std::any::Any;
+use crate::p2::{HeaderError, HeaderResult, HttpError, HttpResult, WasiHttpCtxView};
+use http::{HeaderName, HeaderValue};
 use std::str::FromStr;
-use wasmtime::bail;
-use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
+use wasmtime::component::Resource;
 use wasmtime::{error::Context as _, format_err};
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
 impl types::Host for WasiHttpCtxView<'_> {
     fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
+        err.downcast()
+    }
+
+    fn convert_header_error(&mut self, err: HeaderError) -> wasmtime::Result<types::HeaderError> {
         err.downcast()
     }
 
@@ -30,129 +33,52 @@ impl types::Host for WasiHttpCtxView<'_> {
     }
 }
 
-/// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
-/// fields resource references another fields, the returned [`FieldMap`] will be cloned.
-fn move_fields(
-    table: &mut ResourceTable,
-    id: Resource<HostFields>,
-) -> Result<FieldMap, ResourceTableError> {
-    match table.delete(id)? {
-        HostFields::Ref { parent, get_fields } => {
-            let entry = table.get_any_mut(parent)?;
-            Ok(get_fields(entry).clone())
-        }
-
-        HostFields::Owned { fields } => Ok(fields),
-    }
-}
-
-fn get_fields<'a>(
-    table: &'a mut ResourceTable,
-    id: &Resource<HostFields>,
-) -> wasmtime::Result<&'a FieldMap> {
-    let fields = table.get(&id)?;
-    if let HostFields::Ref { parent, get_fields } = *fields {
-        let entry = table.get_any_mut(parent)?;
-        return Ok(get_fields(entry));
-    }
-
-    match table.get_mut(&id)? {
-        HostFields::Owned { fields } => Ok(fields),
-        // NB: ideally the `if let` above would go here instead. That makes
-        // the borrow-checker unhappy. Unclear why. If you, dear reader, can
-        // refactor this to remove the `unreachable!` please do.
-        HostFields::Ref { .. } => unreachable!(),
-    }
-}
-
-fn get_fields_mut<'a>(
-    table: &'a mut ResourceTable,
-    id: &Resource<HostFields>,
-) -> wasmtime::Result<Result<&'a mut FieldMap, types::HeaderError>> {
-    match table.get_mut(&id)? {
-        HostFields::Owned { fields } => Ok(Ok(fields)),
-        HostFields::Ref { .. } => Ok(Err(types::HeaderError::Immutable)),
-    }
-}
-
 impl types::HostFields for WasiHttpCtxView<'_> {
-    fn new(&mut self) -> wasmtime::Result<Resource<HostFields>> {
+    fn new(&mut self) -> wasmtime::Result<Resource<FieldMap>> {
         let limit = self.ctx.field_size_limit;
         let id = self
             .table
-            .push(HostFields::Owned {
-                fields: FieldMap::empty(limit),
-            })
+            .push(FieldMap::new_mutable(limit))
             .context("[new_fields] pushing fields")?;
 
         Ok(id)
     }
 
-    fn from_list(
-        &mut self,
-        entries: Vec<(String, Vec<u8>)>,
-    ) -> wasmtime::Result<Result<Resource<HostFields>, types::HeaderError>> {
-        let mut fields = hyper::HeaderMap::new();
+    fn from_list(&mut self, entries: Vec<(String, Vec<u8>)>) -> HeaderResult<Resource<FieldMap>> {
+        let mut fields = FieldMap::new_mutable(self.ctx.field_size_limit);
 
         for (header, value) in entries {
-            let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
-                Ok(header) => header,
-                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-            };
-
+            let header = HeaderName::from_bytes(header.as_bytes())?;
             if self.hooks.is_forbidden_header(&header) {
-                return Ok(Err(types::HeaderError::Forbidden));
+                return Err(types::HeaderError::Forbidden.into());
             }
-
-            let value = match hyper::header::HeaderValue::from_bytes(&value) {
-                Ok(value) => value,
-                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-            };
-
-            fields.append(header, value);
+            let value = HeaderValue::from_bytes(&value)?;
+            fields.append(header, value)?;
         }
 
-        let size = FieldMap::content_size(&fields);
-        if size > self.ctx.field_size_limit {
-            bail!(FieldSizeLimitError {
-                size,
-                limit: self.ctx.field_size_limit,
-            });
-        }
-        let fields = FieldMap::new(fields, self.ctx.field_size_limit);
-        let id = self
-            .table
-            .push(HostFields::Owned { fields })
-            .context("[new_fields] pushing fields")?;
-
-        Ok(Ok(id))
+        Ok(self.table.push(fields)?)
     }
 
-    fn drop(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<()> {
+    fn drop(&mut self, fields: Resource<FieldMap>) -> wasmtime::Result<()> {
         self.table
             .delete(fields)
             .context("[drop_fields] deleting fields")?;
         Ok(())
     }
 
-    fn get(
-        &mut self,
-        fields: Resource<HostFields>,
-        name: String,
-    ) -> wasmtime::Result<Vec<Vec<u8>>> {
-        let fields = get_fields(self.table, &fields).context("[fields_get] getting fields")?;
+    fn get(&mut self, fields: Resource<FieldMap>, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
+        let fields = self.table.get(&fields)?;
 
-        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+        let header = match HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
             Err(_) => return Ok(vec![]),
         };
 
-        if !fields.as_ref().contains_key(&header) {
+        if !fields.contains_key(&header) {
             return Ok(vec![]);
         }
 
         let res = fields
-            .as_ref()
             .get_all(&header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
@@ -160,121 +86,81 @@ impl types::HostFields for WasiHttpCtxView<'_> {
         Ok(res)
     }
 
-    fn has(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<bool> {
-        let fields = get_fields(self.table, &fields).context("[fields_get] getting fields")?;
+    fn has(&mut self, fields: Resource<FieldMap>, name: String) -> wasmtime::Result<bool> {
+        let fields = self.table.get(&fields)?;
 
-        match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => Ok(fields.as_ref().contains_key(&header)),
+        match HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => Ok(fields.contains_key(&header)),
             Err(_) => Ok(false),
         }
     }
 
     fn set(
         &mut self,
-        fields: Resource<HostFields>,
+        fields: Resource<FieldMap>,
         name: String,
         byte_values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
-        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => header,
-            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-        };
+    ) -> HeaderResult<()> {
+        let header = HeaderName::from_bytes(name.as_bytes())?;
 
         if self.hooks.is_forbidden_header(&header) {
-            return Ok(Err(types::HeaderError::Forbidden));
+            return Err(types::HeaderError::Forbidden.into());
         }
 
         let mut values = Vec::with_capacity(byte_values.len());
         for value in byte_values {
-            match hyper::header::HeaderValue::from_bytes(&value) {
-                Ok(value) => values.push(value),
-                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-            }
+            values.push(HeaderValue::from_bytes(&value)?);
         }
 
-        match get_fields_mut(self.table, &fields).context("[fields_set] getting mutable fields")? {
-            Ok(fields) => {
-                fields.remove_all(&header);
-                for value in values {
-                    fields.append(&header, value)?;
-                }
-                Ok(Ok(()))
-            }
-            Err(e) => Ok(Err(e)),
-        }
+        let fields = self.table.get_mut(&fields)?;
+        fields.set(header, values)?;
+        Ok(())
     }
 
-    fn delete(
-        &mut self,
-        fields: Resource<HostFields>,
-        name: String,
-    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
-        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => header,
-            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-        };
+    fn delete(&mut self, fields: Resource<FieldMap>, name: String) -> HeaderResult<()> {
+        let header = HeaderName::from_bytes(name.as_bytes())?;
 
         if self.hooks.is_forbidden_header(&header) {
-            return Ok(Err(types::HeaderError::Forbidden));
+            return Err(types::HeaderError::Forbidden.into());
         }
 
-        Ok(get_fields_mut(self.table, &fields)?.map(|fields| {
-            fields.remove_all(&header);
-        }))
+        let fields = self.table.get_mut(&fields)?;
+        fields.remove_all(header)?;
+        Ok(())
     }
 
     fn append(
         &mut self,
-        fields: Resource<HostFields>,
+        fields: Resource<FieldMap>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
-        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => header,
-            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-        };
+    ) -> HeaderResult<()> {
+        let header = HeaderName::from_bytes(name.as_bytes())?;
 
         if self.hooks.is_forbidden_header(&header) {
-            return Ok(Err(types::HeaderError::Forbidden));
+            return Err(types::HeaderError::Forbidden.into());
         }
 
-        let value = match hyper::header::HeaderValue::from_bytes(&value) {
-            Ok(value) => value,
-            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
-        };
+        let value = HeaderValue::from_bytes(&value)?;
 
-        match get_fields_mut(self.table, &fields)
-            .context("[fields_append] getting mutable fields")?
-        {
-            Ok(fields) => {
-                fields.append(&header, value)?;
-                Ok(Ok(()))
-            }
-            Err(e) => Ok(Err(e)),
-        }
+        let fields = self.table.get_mut(&fields)?;
+        fields.append(header, value)?;
+        Ok(())
     }
 
-    fn entries(
-        &mut self,
-        fields: Resource<HostFields>,
-    ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        Ok(get_fields(self.table, &fields)?
-            .as_ref()
+    fn entries(&mut self, fields: Resource<FieldMap>) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
+        Ok(self
+            .table
+            .get(&fields)?
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
             .collect())
     }
 
-    fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields = get_fields(self.table, &fields)
-            .context("[fields_clone] getting fields")?
-            .clone();
-
-        let id = self
-            .table
-            .push(HostFields::Owned { fields })
-            .context("[fields_clone] pushing fields")?;
-
+    fn clone(&mut self, fields: Resource<FieldMap>) -> wasmtime::Result<Resource<FieldMap>> {
+        let mut fields = self.table.get(&fields)?.clone();
+        fields.set_mutable(self.ctx.field_size_limit);
+        let id = self.table.push(fields)?;
         Ok(id)
     }
 }
@@ -306,22 +192,9 @@ impl types::HostIncomingRequest for WasiHttpCtxView<'_> {
     fn headers(
         &mut self,
         id: Resource<HostIncomingRequest>,
-    ) -> wasmtime::Result<Resource<Headers>> {
-        let _ = self.table.get(&id)?;
-
-        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            &mut elem.downcast_mut::<HostIncomingRequest>().unwrap().headers
-        }
-
-        let headers = self.table.push_child(
-            HostFields::Ref {
-                parent: id.rep(),
-                get_fields,
-            },
-            &id,
-        )?;
-
-        Ok(headers)
+    ) -> wasmtime::Result<Resource<FieldMap>> {
+        let req = self.table.get(&id)?;
+        Ok(self.table.push(req.headers.clone())?)
     }
 
     fn consume(
@@ -348,9 +221,10 @@ impl types::HostIncomingRequest for WasiHttpCtxView<'_> {
 impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     fn new(
         &mut self,
-        headers: Resource<Headers>,
+        headers: Resource<FieldMap>,
     ) -> wasmtime::Result<Resource<HostOutgoingRequest>> {
-        let headers = move_fields(self.table, headers)?;
+        let mut headers = self.table.delete(headers)?;
+        headers.set_immutable();
 
         self.table
             .push(HostOutgoingRequest {
@@ -379,7 +253,7 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
             return Ok(Err(()));
         }
 
-        let size = match get_content_length(req.headers.as_ref()) {
+        let size = match get_content_length(&req.headers) {
             Ok(size) => size,
             Err(..) => return Ok(Err(())),
         };
@@ -504,27 +378,9 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     fn headers(
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
-    ) -> wasmtime::Result<wasmtime::component::Resource<Headers>> {
-        let _ = self
-            .table
-            .get(&request)
-            .context("[outgoing_request_headers] getting request")?;
-
-        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            &mut elem
-                .downcast_mut::<types::OutgoingRequest>()
-                .unwrap()
-                .headers
-        }
-
-        let id = self.table.push_child(
-            HostFields::Ref {
-                parent: request.rep(),
-                get_fields,
-            },
-            &request,
-        )?;
-
+    ) -> wasmtime::Result<wasmtime::component::Resource<FieldMap>> {
+        let req = self.table.get(&request)?;
+        let id = self.table.push(req.headers.clone())?;
         Ok(id)
     }
 }
@@ -557,7 +413,7 @@ impl types::HostResponseOutparam for WasiHttpCtxView<'_> {
         &mut self,
         _id: Resource<HostResponseOutparam>,
         _status: u16,
-        _headers: Resource<Headers>,
+        _headers: Resource<FieldMap>,
     ) -> HttpResult<()> {
         Err(HttpError::trap(format_err!("not implemented")))
     }
@@ -583,24 +439,9 @@ impl types::HostIncomingResponse for WasiHttpCtxView<'_> {
     fn headers(
         &mut self,
         response: Resource<HostIncomingResponse>,
-    ) -> wasmtime::Result<Resource<Headers>> {
-        let _ = self
-            .table
-            .get(&response)
-            .context("[incoming_response_headers] getting response")?;
-
-        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            &mut elem.downcast_mut::<HostIncomingResponse>().unwrap().headers
-        }
-
-        let id = self.table.push_child(
-            HostFields::Ref {
-                parent: response.rep(),
-                get_fields,
-            },
-            &response,
-        )?;
-
+    ) -> wasmtime::Result<Resource<FieldMap>> {
+        let resp = self.table.get(&response)?;
+        let id = self.table.push(resp.headers.clone())?;
         Ok(id)
     }
 
@@ -665,7 +506,7 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
 
         remove_forbidden_headers(self.hooks, &mut fields);
 
-        let ts = self.table.push(HostFields::Owned { fields })?;
+        let ts = self.table.push(FieldMap::new_immutable(fields))?;
 
         Ok(Some(Ok(Ok(Some(ts)))))
     }
@@ -705,9 +546,10 @@ impl types::HostIncomingBody for WasiHttpCtxView<'_> {
 impl types::HostOutgoingResponse for WasiHttpCtxView<'_> {
     fn new(
         &mut self,
-        headers: Resource<Headers>,
+        headers: Resource<FieldMap>,
     ) -> wasmtime::Result<Resource<HostOutgoingResponse>> {
-        let fields = move_fields(self.table, headers)?;
+        let mut fields = self.table.delete(headers)?;
+        fields.set_immutable();
 
         let id = self.table.push(HostOutgoingResponse {
             status: http::StatusCode::OK,
@@ -730,7 +572,7 @@ impl types::HostOutgoingResponse for WasiHttpCtxView<'_> {
             return Ok(Err(()));
         }
 
-        let size = match get_content_length(resp.headers.as_ref()) {
+        let size = match get_content_length(&resp.headers) {
             Ok(size) => size,
             Err(..) => return Ok(Err(())),
         };
@@ -770,22 +612,9 @@ impl types::HostOutgoingResponse for WasiHttpCtxView<'_> {
     fn headers(
         &mut self,
         id: Resource<HostOutgoingResponse>,
-    ) -> wasmtime::Result<Resource<types::Headers>> {
-        // Trap if the outgoing-response doesn't exist.
-        let _ = self.table.get(&id)?;
-
-        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            let resp = elem.downcast_mut::<HostOutgoingResponse>().unwrap();
-            &mut resp.headers
-        }
-
-        Ok(self.table.push_child(
-            HostFields::Ref {
-                parent: id.rep(),
-                get_fields,
-            },
-            &id,
-        )?)
+    ) -> wasmtime::Result<Resource<FieldMap>> {
+        let resp = self.table.get(&id)?;
+        Ok(self.table.push(resp.headers.clone())?)
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingResponse>) -> wasmtime::Result<()> {
@@ -806,7 +635,6 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<
         Option<Result<Result<Resource<HostIncomingResponse>, types::ErrorCode>, ()>>,
     > {
-        let field_size_limit = self.ctx.field_size_limit;
         let resp = self.table.get_mut(&id)?;
 
         match resp {
@@ -827,17 +655,15 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
                 Ok(Err(e)) => return Ok(Some(Ok(Err(e)))),
             };
 
-        let (parts, body) = resp.resp.into_parts();
-
-        let mut headers = FieldMap::new(parts.headers, field_size_limit);
-        remove_forbidden_headers(self.hooks, &mut headers);
+        let (mut parts, body) = resp.resp.into_parts();
+        remove_forbidden_headers(self.hooks, &mut parts.headers);
+        let headers = FieldMap::new_immutable(parts.headers);
 
         let resp = self.table.push(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers,
             body: Some({
-                let mut body =
-                    HostIncomingBody::new(body, resp.between_bytes_timeout, field_size_limit);
+                let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
                 if let Some(worker) = resp.worker {
                     body.retain_worker(worker);
                 }
@@ -878,7 +704,7 @@ impl types::HostOutgoingBody for WasiHttpCtxView<'_> {
         let body = self.table.delete(id)?;
 
         let ts = if let Some(ts) = ts {
-            Some(move_fields(self.table, ts)?)
+            Some(self.table.delete(ts)?)
         } else {
             None
         };

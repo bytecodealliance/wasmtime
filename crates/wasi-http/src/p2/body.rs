@@ -1,7 +1,7 @@
 //! Implementation of the `wasi:http/types` interface's various body types.
 
+use crate::FieldMap;
 use crate::p2::bindings::http::types;
-use crate::p2::types::FieldMap;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
@@ -25,7 +25,6 @@ pub type HyperOutgoingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
 #[derive(Debug)]
 pub struct HostIncomingBody {
     body: IncomingBodyState,
-    field_size_limit: usize,
     /// An optional worker task to keep alive while this body is being read.
     /// This ensures that if the parent of this body is dropped before the body
     /// then the backing data behind this worker is kept alive.
@@ -34,15 +33,10 @@ pub struct HostIncomingBody {
 
 impl HostIncomingBody {
     /// Create a new `HostIncomingBody` with the given `body` and a per-frame timeout
-    pub fn new(
-        body: HyperIncomingBody,
-        between_bytes_timeout: Duration,
-        field_size_limit: usize,
-    ) -> HostIncomingBody {
+    pub fn new(body: HyperIncomingBody, between_bytes_timeout: Duration) -> HostIncomingBody {
         let body = BodyWithTimeout::new(body, between_bytes_timeout);
         HostIncomingBody {
             body: IncomingBodyState::Start(body),
-            field_size_limit,
             worker: None,
         }
     }
@@ -325,7 +319,7 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<FieldMap>, types::ErrorCode>),
+    Done(Result<Option<http::HeaderMap>, types::ErrorCode>),
 
     /// Trailers have been consumed by `future-trailers.get`.
     Consumed,
@@ -347,7 +341,7 @@ impl Pollable for HostFutureTrailers {
                 // Trailers were read for us and here they are, so store the
                 // result.
                 Ok(StreamEnd::Trailers(Some(t))) => {
-                    *self = Self::Done(Ok(Some(FieldMap::new(t, body.field_size_limit))));
+                    *self = Self::Done(Ok(Some(t)));
                 }
                 // The body wasn't fully read and was dropped before trailers
                 // were reached. It's up to us now to complete the body.
@@ -379,7 +373,7 @@ impl Pollable for HostFutureTrailers {
                     // If this frame is a data frame ignore it as we're only
                     // interested in trailers.
                     if let Ok(header_map) = frame.into_trailers() {
-                        break Ok(Some(FieldMap::new(header_map, body.field_size_limit)));
+                        break Ok(Some(header_map));
                     }
                 }
             }
@@ -529,7 +523,7 @@ impl HostOutgoingBody {
         }
 
         let message = if let Some(ts) = trailers {
-            FinishMessage::Trailers(ts.into_inner())
+            FinishMessage::Trailers(ts.into())
         } else {
             FinishMessage::Finished
         };

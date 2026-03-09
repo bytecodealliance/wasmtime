@@ -12,6 +12,7 @@
 use http::{HeaderName, header};
 
 mod ctx;
+mod field_map;
 #[cfg(feature = "component-model-async")]
 pub mod handler;
 pub mod io;
@@ -21,6 +22,7 @@ pub mod p2;
 pub mod p3;
 
 pub use ctx::*;
+pub use field_map::*;
 
 /// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`

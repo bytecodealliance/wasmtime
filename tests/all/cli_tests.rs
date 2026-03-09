@@ -2312,44 +2312,59 @@ start a print 1234
 
     #[test]
     fn p2_cli_http_headers() -> Result<()> {
-        for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+        let td = tempfile::TempDir::new()?;
+        let cwasm = td.path().join("http_headers.cwasm");
+        let cwasm = cwasm.to_str().unwrap();
+        run_wasmtime(&["compile", P2_CLI_HTTP_HEADERS_COMPONENT, "-o", cwasm])?;
+        for wasi in ["p2", "p3"] {
+            for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+                let err = run_wasmtime(&[
+                    "run",
+                    "-Shttp,p3",
+                    "-Smax-http-fields-size=1048576",
+                    "--allow-precompiled",
+                    cwasm,
+                    &format!("{wasi}-{test}"),
+                ])
+                .unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("total size of fields exceeds limit")
+                        || err.to_string().contains("too many fields in the field map"),
+                    "bad error message: {err:?}"
+                );
+
+                // gated by default too
+                let err = run_wasmtime(&[
+                    "run",
+                    "-Shttp,p3",
+                    "--allow-precompiled",
+                    cwasm,
+                    &format!("{wasi}-{test}"),
+                ])
+                .unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("total size of fields exceeds limit"),
+                    "bad error message: {err:?}"
+                );
+            }
+
+            // With an extremely large limit Wasmtime still shouldn't panic.
             let err = run_wasmtime(&[
                 "run",
-                "-Shttp",
-                "-Smax-http-fields-size=1048576",
-                P2_CLI_HTTP_HEADERS_COMPONENT,
-                test,
+                "-Shttp,p3",
+                &format!("-Smax-http-fields-size={}", 1 << 30),
+                "--allow-precompiled",
+                cwasm,
+                &format!("{wasi}-append"),
             ])
             .unwrap_err();
             assert!(
-                err.to_string()
-                    .contains("Field size limit 1048576 exceeded")
-                    || err.to_string().contains("max size reached"),
-                "bad error message: {err:?}"
-            );
-
-            // gated by default too
-            let err =
-                run_wasmtime(&["run", "-Shttp", P2_CLI_HTTP_HEADERS_COMPONENT, test]).unwrap_err();
-            assert!(
-                err.to_string().contains("Field size limit"),
+                err.to_string().contains("too many fields in the field map"),
                 "bad error message: {err:?}"
             );
         }
-
-        // With an extremely large limit Wasmtime still shouldn't panic.
-        let err = run_wasmtime(&[
-            "run",
-            "-Shttp",
-            &format!("-Smax-http-fields-size={}", 1 << 30),
-            P2_CLI_HTTP_HEADERS_COMPONENT,
-            "append",
-        ])
-        .unwrap_err();
-        assert!(
-            err.to_string().contains("max size reached"),
-            "bad error message: {err:?}"
-        );
         Ok(())
     }
 
