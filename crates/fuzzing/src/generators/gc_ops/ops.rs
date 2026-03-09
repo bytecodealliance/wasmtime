@@ -105,7 +105,8 @@ impl GcOps {
 
         let struct_type_base: u32 = types.len();
 
-        let type_order: Vec<TypeId> = self.types.sort_types_by_supertype();
+        let mut type_order: Vec<TypeId> = Vec::with_capacity(self.types.type_defs.len());
+        self.types.sort_types_by_supertype(&mut type_order);
 
         // Build per-group member lists in `type_order` order (each group's list is a subsequence
         // of `type_order`, so within-group supertypes come before subtypes when possible).
@@ -123,7 +124,9 @@ impl GcOps {
         }
 
         // Topological sort of rec-groups based on cross-group supertype edges.
-        let group_order: Vec<RecGroupId> = self.types.sort_rec_groups_topo(&rec_groups);
+        let mut group_order: Vec<RecGroupId> = Vec::with_capacity(rec_groups.len());
+        self.types
+            .sort_rec_groups_topo(&mut group_order, &rec_groups);
 
         // Build the actual emission order and index map from it.
         let encoding_order: Vec<TypeId> = group_order

@@ -2,9 +2,10 @@
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
 use crate::generators::gc_ops::ops::GcOp;
-use crate::generators::gc_ops::scc::StronglyConnectedComponents;
+use cranelift_entity::{PrimaryMap, SecondaryMap};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
+use wasmtime_environ::graphs::{Dfs, DfsEvent, Graph, StronglyConnectedComponents};
 
 /// RecGroup ID struct definition.
 #[derive(
@@ -46,6 +47,104 @@ pub struct Types {
     pub(crate) type_defs: BTreeMap<TypeId, SubType>,
 }
 
+/// Supertype graph definition.
+struct SupertypeGraph<'a> {
+    type_defs: &'a BTreeMap<TypeId, SubType>,
+}
+
+/// Rec-group graph definition.
+struct RecGroupGraph<'a> {
+    type_defs: &'a BTreeMap<TypeId, SubType>,
+    rec_groups: &'a BTreeMap<RecGroupId, Vec<TypeId>>,
+}
+
+impl Graph<RecGroupId> for RecGroupGraph<'_> {
+    type NodesIter<'a>
+        = std::iter::Copied<std::collections::btree_map::Keys<'a, RecGroupId, Vec<TypeId>>>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        self.rec_groups.keys().copied()
+    }
+
+    type SuccessorsIter<'a>
+        = std::vec::IntoIter<RecGroupId>
+    where
+        Self: 'a;
+
+    fn successors(&self, group: RecGroupId) -> Self::SuccessorsIter<'_> {
+        let mut deps = BTreeSet::new();
+
+        if let Some(type_ids) = self.rec_groups.get(&group) {
+            for &ty in type_ids {
+                if let Some(super_ty) = self.type_defs[&ty].supertype {
+                    let super_group = self.type_defs[&super_ty].rec_group;
+                    if super_group != group {
+                        deps.insert(super_group);
+                    }
+                }
+            }
+        }
+
+        deps.into_iter().collect::<Vec<_>>().into_iter()
+    }
+}
+
+impl Graph<TypeId> for SupertypeGraph<'_> {
+    type NodesIter<'a>
+        = std::iter::Copied<std::collections::btree_map::Keys<'a, TypeId, SubType>>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        self.type_defs.keys().copied()
+    }
+
+    type SuccessorsIter<'a>
+        = std::option::IntoIter<TypeId>
+    where
+        Self: 'a;
+
+    fn successors(&self, node: TypeId) -> Self::SuccessorsIter<'_> {
+        self.type_defs
+            .get(&node)
+            .and_then(|def| def.supertype)
+            .into_iter()
+    }
+}
+
+/// Dense rec-group ID struct definition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct DenseGroupId(u32);
+wasmtime_environ::entity_impl!(DenseGroupId);
+
+/// Dense rec-group graph definition.
+#[derive(Debug, Default)]
+struct DenseRecGroupGraph {
+    edges: SecondaryMap<DenseGroupId, Vec<DenseGroupId>>,
+}
+
+impl Graph<DenseGroupId> for DenseRecGroupGraph {
+    type NodesIter<'a>
+        = wasmtime_environ::Keys<DenseGroupId>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        self.edges.keys()
+    }
+
+    type SuccessorsIter<'a>
+        = core::iter::Copied<core::slice::Iter<'a, DenseGroupId>>
+    where
+        Self: 'a;
+
+    fn successors(&self, node: DenseGroupId) -> Self::SuccessorsIter<'_> {
+        self.edges[node].iter().copied()
+    }
+}
+
 impl Types {
     /// Create a fresh `Types` allocator with no recursive groups defined yet.
     pub fn new() -> Self {
@@ -55,234 +154,192 @@ impl Types {
         }
     }
 
-    /// Break cycles in supertype edges within each rec-group by dropping some edges.
-    pub fn break_type_cycles_in_rec_groups(&mut self) {
-        // Kill self-edges to avoid cycles.
-        for (id, def) in self.type_defs.iter_mut() {
-            if def.supertype == Some(*id) {
+    /// Break cycles in the type -> supertype graph by dropping some supertype edges.
+    pub fn break_supertype_cycles(&mut self) {
+        let graph = SupertypeGraph {
+            type_defs: &self.type_defs,
+        };
+
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+        let mut active = BTreeSet::new();
+        let mut to_clear = BTreeSet::new();
+
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
+                    active.insert(id);
+                }
+                DfsEvent::Post(id) => {
+                    active.remove(&id);
+                }
+                DfsEvent::AfterEdge(from, to) => {
+                    if active.contains(&to) {
+                        to_clear.insert(from);
+                    }
+                }
+            }
+        }
+
+        for id in to_clear {
+            if let Some(def) = self.type_defs.get_mut(&id) {
                 def.supertype = None;
             }
         }
+    }
 
-        // Build group -> member list from current truth.
-        let mut members: BTreeMap<RecGroupId, Vec<TypeId>> = BTreeMap::new();
-        for (id, def) in self.type_defs.iter() {
-            members.entry(def.rec_group).or_default().push(*id);
-        }
+    /// Topological sort of rec-groups in place.
+    pub fn sort_rec_groups_topo(
+        &self,
+        groups: &mut Vec<RecGroupId>,
+        rec_groups: &BTreeMap<RecGroupId, Vec<TypeId>>,
+    ) {
+        let graph = RecGroupGraph {
+            type_defs: &self.type_defs,
+            rec_groups,
+        };
 
-        // For each group, break cycles in the TypeId supertype graph.
-        for (_g, ids) in members.iter() {
-            if ids.len() <= 1 {
-                continue;
-            }
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+        let mut active = BTreeSet::new();
 
-            let id_set: BTreeSet<TypeId> = ids.iter().copied().collect();
+        groups.clear();
+        groups.reserve(rec_groups.len());
 
-            // DFS from each node, if we revisit a node in the
-            // current path, we found a cycle. Break it by clearing supertype.
-            let mut visited = BTreeSet::new();
-            for &start in ids {
-                if visited.contains(&start) {
-                    continue;
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
+                    active.insert(id);
                 }
-
-                let mut path = Vec::new();
-                let mut path_set = BTreeSet::new();
-                let mut cur = start;
-
-                loop {
-                    if path_set.contains(&cur) {
-                        // Found a cycle. Clear supertype to break it.
-                        if let Some(def) = self.type_defs.get_mut(&cur) {
-                            def.supertype = None;
-                        }
-                        break;
-                    }
-
-                    if visited.contains(&cur) {
-                        break;
-                    }
-
-                    path.push(cur);
-                    path_set.insert(cur);
-                    visited.insert(cur);
-
-                    let next = self.type_defs.get(&cur).and_then(|d| d.supertype);
-                    match next {
-                        Some(st) if id_set.contains(&st) => cur = st,
-                        _ => break,
-                    }
+                DfsEvent::Post(id) => {
+                    active.remove(&id);
+                    groups.push(id);
+                }
+                DfsEvent::AfterEdge(from, to) => {
+                    debug_assert!(
+                        !active.contains(&to),
+                        "cycle in rec-group dependency graph: {:?} -> {:?}",
+                        from,
+                        to
+                    );
                 }
             }
         }
     }
 
-    /// Get the successors of the given rec-group.
-    /// It is used to find the SCCs.
-    fn rec_group_successors<'a>(
-        &'a self,
-        rec_groups: &'a BTreeMap<RecGroupId, Vec<TypeId>>,
-        g: RecGroupId,
-    ) -> impl Iterator<Item = RecGroupId> + 'a {
-        let mut deps = BTreeSet::<RecGroupId>::new();
+    /// Topological sort of types by their supertype (supertype before subtype) in place.
+    pub fn sort_types_by_supertype(&self, out: &mut Vec<TypeId>) {
+        let graph = SupertypeGraph {
+            type_defs: &self.type_defs,
+        };
 
-        for &ty in &rec_groups[&g] {
-            if let Some(st) = self.type_defs[&ty].supertype {
-                let h = self.type_defs[&st].rec_group;
-                if h != g {
-                    deps.insert(h);
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+
+        out.clear();
+        out.reserve(self.type_defs.len());
+
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
                 }
+                DfsEvent::Post(id) => {
+                    out.push(id);
+                }
+                DfsEvent::AfterEdge(_, _) => {}
             }
         }
-
-        deps.into_iter()
     }
 
     /// Merge rec-groups that participate in dependency cycles.
-    pub fn merge_rec_groups_via_scc(&mut self, rec_groups: &BTreeMap<RecGroupId, Vec<TypeId>>) {
-        let nodes = rec_groups.keys().copied();
-        let sccs =
-            StronglyConnectedComponents::new(nodes, |g| self.rec_group_successors(rec_groups, g));
+    pub fn merge_rec_group_sccs(&mut self) {
+        let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = self
+            .rec_groups
+            .iter()
+            .copied()
+            .map(|g| (g, Vec::new()))
+            .collect();
 
-        for groups in sccs.iter() {
+        for (&id, def) in &self.type_defs {
+            rec_groups.entry(def.rec_group).or_default().push(id);
+        }
+
+        let sccs = self.rec_group_sccs(&rec_groups);
+
+        for groups in sccs {
             if groups.len() <= 1 {
                 continue;
             }
 
-            // Deterministic canonical "keep" group.
-            // Smallest RecGroupId in the SCC.
             let keep = *groups.iter().min().unwrap();
 
-            // Merge every other group into "keep" group by rewriting only the members of that group.
-            for &g in groups {
-                if g == keep {
+            for &group in &groups {
+                if group == keep {
                     continue;
                 }
 
-                if let Some(members) = rec_groups.get(&g) {
-                    for &ty in members {
+                if let Some(type_ids) = rec_groups.get(&group) {
+                    for &ty in type_ids {
                         if let Some(def) = self.type_defs.get_mut(&ty) {
                             def.rec_group = keep;
                         }
                     }
                 }
 
-                // Drop g from the rec-group set.
-                self.rec_groups.remove(&g);
+                self.rec_groups.remove(&group);
             }
         }
-
-        debug_assert!(
-            self.type_defs
-                .values()
-                .all(|d| self.rec_groups.contains(&d.rec_group)),
-            "after rec-group merge, some type_defs still reference removed rec-groups"
-        );
     }
 
-    /// Topological sort of rec-groups.
-    pub fn sort_rec_groups_topo(
+    /// Find strongly-connected components in the rec-group dependency graph.
+    fn rec_group_sccs(
         &self,
         rec_groups: &BTreeMap<RecGroupId, Vec<TypeId>>,
-    ) -> Vec<RecGroupId> {
-        // deps[g] = set of groups that must come before g
-        let mut deps: BTreeMap<RecGroupId, BTreeSet<RecGroupId>> = rec_groups
-            .keys()
-            .copied()
-            .map(|g| (g, BTreeSet::new()))
-            .collect();
+    ) -> Vec<Vec<RecGroupId>> {
+        let mut dense_to_group = PrimaryMap::<DenseGroupId, RecGroupId>::new();
+        let mut group_to_dense = BTreeMap::<RecGroupId, DenseGroupId>::new();
 
-        for (&g, members) in rec_groups {
-            for &id in members {
-                let def = &self.type_defs[&id];
-                if let Some(st) = def.supertype {
-                    let st_group = self.type_defs[&st].rec_group;
-                    if st_group != g {
-                        deps.get_mut(&g).unwrap().insert(st_group);
+        for &group in rec_groups.keys() {
+            let dense = dense_to_group.push(group);
+            group_to_dense.insert(group, dense);
+        }
+
+        let mut graph = DenseRecGroupGraph::default();
+
+        for dense in dense_to_group.keys() {
+            let _ = &graph.edges[dense];
+        }
+
+        for (&group, type_ids) in rec_groups {
+            let from = group_to_dense[&group];
+            let mut succs = BTreeSet::new();
+
+            for &ty in type_ids {
+                if let Some(super_ty) = self.type_defs[&ty].supertype {
+                    let super_group = self.type_defs[&super_ty].rec_group;
+                    if super_group != group {
+                        succs.insert(group_to_dense[&super_group]);
                     }
                 }
             }
+
+            graph.edges[from].extend(succs.into_iter());
         }
 
-        // indeg[g] = number of prerequisites
-        let mut indeg: BTreeMap<RecGroupId, usize> = deps.keys().copied().map(|g| (g, 0)).collect();
-        for (&g, ds) in &deps {
-            *indeg.get_mut(&g).unwrap() = ds.len();
-        }
+        let sccs = StronglyConnectedComponents::new(&graph);
 
-        //  Prerequisite -> dependents
-        let mut users: BTreeMap<RecGroupId, Vec<RecGroupId>> = BTreeMap::new();
-        for (&g, ds) in &deps {
-            for &d in ds {
-                users.entry(d).or_default().push(g);
-            }
-        }
-
-        // Kahn queue
-        let mut q = VecDeque::new();
-        for (&g, &d) in &indeg {
-            if d == 0 {
-                q.push_back(g);
-            }
-        }
-
-        let mut out = Vec::with_capacity(indeg.len());
-        while let Some(g) = q.pop_front() {
-            out.push(g);
-            if let Some(us) = users.get(&g) {
-                for &u in us {
-                    let e = indeg.get_mut(&u).unwrap();
-                    *e -= 1;
-                    if *e == 0 {
-                        q.push_back(u);
-                    }
-                }
-            }
-        }
-
-        debug_assert_eq!(out.len(), indeg.len(), "cycle in rec-group dependencies");
-        out
-    }
-
-    /// Topological sort of types by their supertype (supertype before subtype).
-    pub fn sort_types_by_supertype(&self) -> Vec<TypeId> {
-        #[derive(Copy, Clone, Debug)]
-        enum Event {
-            Enter,
-            Exit,
-        }
-
-        let mut stack: Vec<(Event, TypeId)> = self
-            .type_defs
-            .keys()
-            .copied()
-            .map(|id| (Event::Enter, id))
-            .collect();
-
-        stack.reverse();
-
-        let mut sorted = Vec::with_capacity(self.type_defs.len());
-        let mut seen = BTreeSet::<TypeId>::new();
-
-        while let Some((event, id)) = stack.pop() {
-            match event {
-                Event::Enter => {
-                    if seen.insert(id) {
-                        stack.push((Event::Exit, id));
-
-                        if let Some(super_id) = self.type_defs[&id].supertype {
-                            if !seen.contains(&super_id) {
-                                stack.push((Event::Enter, super_id));
-                            }
-                        }
-                    }
-                }
-                Event::Exit => {
-                    sorted.push(id);
-                }
-            }
-        }
-        sorted
+        sccs.iter()
+            .map(|(_, nodes)| {
+                nodes
+                    .iter()
+                    .copied()
+                    .map(|dense| dense_to_group[dense])
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 
     /// Returns a fresh rec-group id that is not already in use.
@@ -371,20 +428,8 @@ impl Types {
             }
         }
 
-        // Build rec_groups map for cycle detection and merging.
-        let mut rec_groups_map: BTreeMap<RecGroupId, Vec<TypeId>> = self
-            .rec_groups
-            .iter()
-            .copied()
-            .map(|g| (g, Vec::new()))
-            .collect();
-
-        for (id, ty) in self.type_defs.iter() {
-            rec_groups_map.entry(ty.rec_group).or_default().push(*id);
-        }
-
-        self.merge_rec_groups_via_scc(&rec_groups_map);
-        self.break_type_cycles_in_rec_groups();
+        self.break_supertype_cycles();
+        self.merge_rec_group_sccs();
 
         debug_assert!(
             self.type_defs

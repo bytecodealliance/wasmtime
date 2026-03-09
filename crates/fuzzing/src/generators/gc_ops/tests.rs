@@ -6,7 +6,6 @@ use crate::generators::gc_ops::{
 use mutatis;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::collections::BTreeMap;
 use wasmparser;
 use wasmprinter;
 
@@ -308,7 +307,8 @@ fn sort_types_by_supertype_orders_supertype_before_subtype() {
     types.insert_empty_struct(c, g, false, Some(a)); // C <: A
     types.insert_empty_struct(d, g, false, None); // D
 
-    let sorted = types.sort_types_by_supertype();
+    let mut sorted = Vec::new();
+    types.sort_types_by_supertype(&mut sorted);
 
     // D(3) root, B(1)<:D, A(0)<:B, C(2)<:A => supertype-before-subtype order.
     assert_eq!(
@@ -319,8 +319,97 @@ fn sort_types_by_supertype_orders_supertype_before_subtype() {
 }
 
 #[test]
-fn merge_rec_groups_via_scc_merges_three_cycle() {
+fn fixup_preserves_subtyping_within_same_rec_group() {
+    let _ = env_logger::try_init();
+
     let mut types = Types::new();
+    let g = RecGroupId(0);
+    types.insert_rec_group(g);
+
+    let super_ty = TypeId(0);
+    let sub_ty = TypeId(1);
+
+    // Both types are in the same rec group.
+    // The second subtypes the first.
+    types.insert_empty_struct(super_ty, g, false, None);
+    types.insert_empty_struct(sub_ty, g, false, Some(super_ty));
+
+    let limits = GcOpsLimits {
+        num_params: 0,
+        num_globals: 0,
+        table_size: 0,
+        max_rec_groups: 10,
+        max_types: 10,
+    };
+
+    types.fixup(&limits);
+
+    assert_eq!(types.type_defs.get(&super_ty).unwrap().rec_group, g);
+    assert_eq!(types.type_defs.get(&sub_ty).unwrap().rec_group, g);
+    assert_eq!(
+        types.type_defs.get(&sub_ty).unwrap().supertype,
+        Some(super_ty)
+    );
+}
+
+#[test]
+fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+
+    let g_a = RecGroupId(0);
+    let g_bc = RecGroupId(1);
+    let g_d = RecGroupId(2);
+
+    types.insert_rec_group(g_a);
+    types.insert_rec_group(g_bc);
+    types.insert_rec_group(g_d);
+
+    let a = TypeId(0);
+    let b = TypeId(1);
+    let c = TypeId(2);
+    let d = TypeId(3);
+
+    // Rec(a)
+    types.insert_empty_struct(a, g_a, false, Some(d));
+
+    // Rec(b, c)
+    types.insert_empty_struct(b, g_bc, false, None);
+    types.insert_empty_struct(c, g_bc, false, Some(a));
+
+    // Rec(d)
+    types.insert_empty_struct(d, g_d, false, Some(c));
+
+    let limits = GcOpsLimits {
+        num_params: 0,
+        num_globals: 0,
+        table_size: 0,
+        max_rec_groups: 10,
+        max_types: 10,
+    };
+
+    types.fixup(&limits);
+
+    let a_super = types.type_defs.get(&a).unwrap().supertype;
+    let c_super = types.type_defs.get(&c).unwrap().supertype;
+    let d_super = types.type_defs.get(&d).unwrap().supertype;
+
+    let cleared = [a_super, c_super, d_super]
+        .into_iter()
+        .filter(|st| st.is_none())
+        .count();
+
+    assert!(
+        cleared == 1,
+        "fixup should clear exactly one edge to break the cycle"
+    );
+}
+
+#[test]
+fn merge_rec_groups_via_scc_merges_group_cycle_without_type_cycle() {
+    let mut types = Types::new();
+
     let g0 = RecGroupId(0);
     let g1 = RecGroupId(1);
     let g2 = RecGroupId(2);
@@ -329,40 +418,66 @@ fn merge_rec_groups_via_scc_merges_three_cycle() {
     types.insert_rec_group(g1);
     types.insert_rec_group(g2);
 
-    // One type per group:
-    //
-    // t0 in g0, supertype = t1 (in g1)  => g0 depends on g1
-    // t1 in g1, supertype = t2 (in g2)  => g1 depends on g2
-    // t2 in g2, supertype = t0 (in g0)  => g2 depends on g0
-    //
-    // This makes a 3-cycle among rec-groups: g0 -> g1 -> g2 -> g0
-    // Merge should fuse all into one group (canonical keep = min = g0).
+    let a0 = TypeId(0);
+    let a1 = TypeId(1);
+    let b0 = TypeId(2);
+    let b1 = TypeId(3);
+    let c0 = TypeId(4);
+    let c1 = TypeId(5);
 
-    types.insert_empty_struct(TypeId(0), g0, false, Some(TypeId(1)));
-    types.insert_empty_struct(TypeId(1), g1, false, Some(TypeId(2)));
-    types.insert_empty_struct(TypeId(2), g2, false, Some(TypeId(0)));
+    // g0 = {a0, a1}
+    // g1 = {b0, b1}
+    // g2 = {c0, c1}
+    //
+    // Cross-group subtype edges:
+    //   a0 <: b0   => g0 -> g1
+    //   b1 <: c0   => g1 -> g2
+    //   c1 <: a1   => g2 -> g0
+    //
+    // This creates a cycle in the rec-group dependency graph:
+    //   g0 -> g1 -> g2 -> g0
+    //
+    // But the type graph itself is acyclic, because these are three separate
+    // subtype edges on different types:
+    //   a0 -> b0
+    //   b1 -> c0
+    //   c1 -> a1
+    //
+    // Therefore, breaking type cycles is not enough here. Merging rec-group
+    // SCCs is what resolves the cyclic dependency among rec groups.
 
-    // Build RecGroupId -> Vec<TypeId> member lists for merge input.
-    let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = types
-        .rec_groups
-        .iter()
-        .copied()
-        .map(|g| (g, Vec::new()))
-        .collect();
-    for (id, def) in types.type_defs.iter() {
-        rec_groups.entry(def.rec_group).or_default().push(*id);
-    }
+    types.insert_empty_struct(a0, g0, false, Some(b0));
+    types.insert_empty_struct(a1, g0, false, None);
+
+    types.insert_empty_struct(b0, g1, false, None);
+    types.insert_empty_struct(b1, g1, false, Some(c0));
+
+    types.insert_empty_struct(c0, g2, false, None);
+    types.insert_empty_struct(c1, g2, false, Some(a1));
+
+    // There is no type cycle, so breaking supertype cycles should not change anything.
+    types.break_supertype_cycles();
+
+    assert_eq!(types.type_defs.get(&a0).unwrap().supertype, Some(b0));
+    assert_eq!(types.type_defs.get(&b1).unwrap().supertype, Some(c0));
+    assert_eq!(types.type_defs.get(&c1).unwrap().supertype, Some(a1));
 
     assert_eq!(types.rec_groups.len(), 3);
-    types.merge_rec_groups_via_scc(&rec_groups);
 
-    // After merge: one group (g0), all three types in it.
+    types.merge_rec_group_sccs();
+
+    // After merge: one canonical group (g0), all types in it.
     assert_eq!(types.rec_groups.len(), 1);
     assert!(types.rec_groups.contains(&g0));
     assert!(!types.rec_groups.contains(&g1));
     assert!(!types.rec_groups.contains(&g2));
 
-    assert_eq!(types.type_defs.get(&TypeId(0)).unwrap().rec_group, g0);
-    assert_eq!(types.type_defs.get(&TypeId(1)).unwrap().rec_group, g0);
-    assert_eq!(types.type_defs.get(&TypeId(2)).unwrap().rec_group, g0);
+    for ty in [a0, a1, b0, b1, c0, c1] {
+        assert_eq!(types.type_defs.get(&ty).unwrap().rec_group, g0);
+    }
+
+    // And importantly, the valid supertype edges should still be preserved.
+    assert_eq!(types.type_defs.get(&a0).unwrap().supertype, Some(b0));
+    assert_eq!(types.type_defs.get(&b1).unwrap().supertype, Some(c0));
+    assert_eq!(types.type_defs.get(&c1).unwrap().supertype, Some(a1));
 }
