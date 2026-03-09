@@ -1433,23 +1433,6 @@ impl<T> StoreContextMut<'_, T> {
             closure(&mut accessor).await
         }
     }
-
-    /// Execute a closure with the specified thread temporarily set as the
-    /// current thread.
-    ///
-    /// This is a convenience wrapper around `StoreOpaque::set_thread` that
-    /// ensures the original thread is always restored after the closure
-    /// completes, even in the face of early returns or panics.
-    pub(crate) fn with_thread<R>(
-        mut self,
-        thread: impl Into<CurrentThread>,
-        f: impl FnOnce(StoreContextMut<'_, T>) -> Result<R>,
-    ) -> Result<R> {
-        let old_thread = self.0.set_thread(thread)?;
-        let result = f(self.as_context_mut());
-        self.0.set_thread(old_thread)?;
-        result
-    }
 }
 
 impl StoreOpaque {
