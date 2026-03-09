@@ -20,8 +20,8 @@ use crate::component::{
     InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
     TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
-    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeOptionIndex,
+    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
     TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
@@ -1146,6 +1146,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             // Iteration of a loop is along the lines of the cost of a string
             // so give it the same cost
             InterfaceType::List(_) => 40,
+            // Maps are similar to lists in terms of iteration cost
+            InterfaceType::Map(_) => 40,
 
             InterfaceType::Flags(i) => {
                 let count = self.module.types[*i].names.len();
@@ -1196,6 +1198,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     InterfaceType::Char => self.translate_char(src, dst_ty, dst),
                     InterfaceType::String => self.translate_string(src, dst_ty, dst),
                     InterfaceType::List(t) => self.translate_list(*t, src, dst_ty, dst),
+                    InterfaceType::Map(t) => self.translate_map(*t, src, dst_ty, dst),
                     InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
                     InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
                     InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
@@ -2500,6 +2503,197 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(End);
     }
 
+    /// Shared preamble for translating list-like sequences (lists and maps).
+    ///
+    /// Emits: load ptr/len from source, compute byte lengths, malloc
+    /// destination, validate bounds, and if element sizes are non-zero opens
+    /// Block + Loop and initializes iteration locals.
+    ///
+    /// Returns a `SequenceTranslation` that the caller uses to emit the
+    /// loop body before calling `end_translate_sequence`.
+    fn begin_translate_sequence<'c>(
+        &mut self,
+        src: &Source<'c>,
+        dst: &Destination<'c>,
+        src_element_size: u32,
+        src_element_align: u32,
+        dst_element_size: u32,
+        dst_element_align: u32,
+    ) -> SequenceTranslation<'c> {
+        let src_mem_opts = match &src.opts().data_model {
+            DataModel::Gc {} => todo!("CM+GC"),
+            DataModel::LinearMemory(opts) => opts,
+        };
+        let dst_mem_opts = match &dst.opts().data_model {
+            DataModel::Gc {} => todo!("CM+GC"),
+            DataModel::LinearMemory(opts) => opts,
+        };
+
+        let src_opts = src.opts();
+        let dst_opts = dst.opts();
+
+        // Load the pointer/length of this sequence into temporary locals.
+        // These will be referenced a good deal so this just makes it easier
+        // to deal with them consistently below rather than trying to reload
+        // from memory for example.
+        match src {
+            Source::Stack(s) => {
+                assert_eq!(s.locals.len(), 2);
+                self.stack_get(&s.slice(0..1), src_mem_opts.ptr());
+                self.stack_get(&s.slice(1..2), src_mem_opts.ptr());
+            }
+            Source::Memory(mem) => {
+                self.ptr_load(mem);
+                self.ptr_load(&mem.bump(src_mem_opts.ptr_size().into()));
+            }
+            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+        }
+        let src_len = self.local_set_new_tmp(src_mem_opts.ptr());
+        let src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+
+        // Create a `Memory` operand which will internally assert that the
+        // `src_ptr` value is properly aligned.
+        let src_mem = self.memory_operand(src_opts, src_ptr, src_element_align);
+
+        // Calculate the source/destination byte lengths into unique locals.
+        let src_byte_len =
+            self.calculate_list_byte_len(src_mem_opts, src_len.idx, src_element_size);
+        let dst_byte_len = if src_element_size == dst_element_size {
+            self.convert_src_len_to_dst(src_byte_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
+            self.local_set_new_tmp(dst_mem_opts.ptr())
+        } else if src_mem_opts.ptr() == dst_mem_opts.ptr() {
+            self.calculate_list_byte_len(dst_mem_opts, src_len.idx, dst_element_size)
+        } else {
+            self.convert_src_len_to_dst(src_byte_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
+            let tmp = self.local_set_new_tmp(dst_mem_opts.ptr());
+            let ret = self.calculate_list_byte_len(dst_mem_opts, tmp.idx, dst_element_size);
+            self.free_temp_local(tmp);
+            ret
+        };
+
+        // Here `realloc` is invoked (in a `malloc`-like fashion) to allocate
+        // space for the sequence in the destination memory. This will also
+        // internally insert checks that the returned pointer is aligned
+        // correctly for the destination.
+        let dst_mem = self.malloc(
+            dst_opts,
+            MallocSize::Local(dst_byte_len.idx),
+            dst_element_align,
+        );
+
+        // With all the pointers and byte lengths verify that both the source
+        // and the destination buffers are in-bounds.
+        self.validate_memory_inbounds(
+            src_mem_opts,
+            src_mem.addr.idx,
+            src_byte_len.idx,
+            Trap::ListOutOfBounds,
+        );
+        self.validate_memory_inbounds(
+            dst_mem_opts,
+            dst_mem.addr.idx,
+            dst_byte_len.idx,
+            Trap::ListOutOfBounds,
+        );
+
+        self.free_temp_local(src_byte_len);
+        self.free_temp_local(dst_byte_len);
+
+        // If both element sizes are 0 then there's nothing to copy so the
+        // loop is skipped entirely. Otherwise open a Block (for early exit
+        // on zero-length) and a Loop for the per-element iteration.
+        let loop_state = if src_element_size > 0 || dst_element_size > 0 {
+            self.instruction(Block(BlockType::Empty));
+
+            // Set the `remaining` local and only continue if it's > 0.
+            self.instruction(LocalGet(src_len.idx));
+            let remaining = self.local_tee_new_tmp(src_mem_opts.ptr());
+            self.ptr_eqz(src_mem_opts);
+            self.instruction(BrIf(0));
+
+            // Initialize the two iteration pointers to their starting values.
+            self.instruction(LocalGet(src_mem.addr.idx));
+            let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+            self.instruction(LocalGet(dst_mem.addr.idx));
+            let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
+
+            self.instruction(Loop(BlockType::Empty));
+
+            Some(SequenceLoopState {
+                remaining,
+                cur_src_ptr,
+                cur_dst_ptr,
+            })
+        } else {
+            None
+        };
+
+        SequenceTranslation {
+            src_len,
+            src_mem,
+            dst_mem,
+            src_opts,
+            dst_opts,
+            src_mem_opts,
+            dst_mem_opts,
+            loop_state,
+        }
+    }
+
+    /// Shared epilogue for translating list-like sequences.
+    ///
+    /// If a loop was opened, emits: decrement remaining, BrIf to loop
+    /// head, End loop, End block, and frees iteration locals. Then stores
+    /// the ptr/len pair into the destination and frees all temporaries.
+    fn end_translate_sequence(&mut self, seq: SequenceTranslation<'_>, dst: &Destination) {
+        if let Some(loop_state) = seq.loop_state {
+            // Update the remaining count, falling through to break out if
+            // it's zero now.
+            self.instruction(LocalGet(loop_state.remaining.idx));
+            self.ptr_iconst(seq.src_mem_opts, -1);
+            self.ptr_add(seq.src_mem_opts);
+            self.instruction(LocalTee(loop_state.remaining.idx));
+            self.ptr_br_if(seq.src_mem_opts, 0);
+            self.instruction(End); // end of loop
+            self.instruction(End); // end of block
+
+            self.free_temp_local(loop_state.cur_dst_ptr);
+            self.free_temp_local(loop_state.cur_src_ptr);
+            self.free_temp_local(loop_state.remaining);
+        }
+
+        // Store the ptr/length in the desired destination.
+        match dst {
+            Destination::Stack(s, _) => {
+                self.instruction(LocalGet(seq.dst_mem.addr.idx));
+                self.stack_set(&s[..1], seq.dst_mem_opts.ptr());
+                self.convert_src_len_to_dst(
+                    seq.src_len.idx,
+                    seq.src_mem_opts.ptr(),
+                    seq.dst_mem_opts.ptr(),
+                );
+                self.stack_set(&s[1..], seq.dst_mem_opts.ptr());
+            }
+            Destination::Memory(mem) => {
+                self.instruction(LocalGet(mem.addr.idx));
+                self.instruction(LocalGet(seq.dst_mem.addr.idx));
+                self.ptr_store(mem);
+                self.instruction(LocalGet(mem.addr.idx));
+                self.convert_src_len_to_dst(
+                    seq.src_len.idx,
+                    seq.src_mem_opts.ptr(),
+                    seq.dst_mem_opts.ptr(),
+                );
+                self.ptr_store(&mem.bump(seq.dst_mem_opts.ptr_size().into()));
+            }
+            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+        }
+
+        self.free_temp_local(seq.src_len);
+        self.free_temp_local(seq.src_mem.addr);
+        self.free_temp_local(seq.dst_mem.addr);
+    }
+
     fn translate_list(
         &mut self,
         src_ty: TypeListIndex,
@@ -2521,159 +2715,192 @@ impl<'a, 'b> Compiler<'a, 'b> {
             InterfaceType::List(r) => &self.types[*r].element,
             _ => panic!("expected a list"),
         };
-        let src_opts = src.opts();
-        let dst_opts = dst.opts();
         let (src_size, src_align) = self.types.size_align(src_mem_opts, src_element_ty);
         let (dst_size, dst_align) = self.types.size_align(dst_mem_opts, dst_element_ty);
 
-        // Load the pointer/length of this list into temporary locals. These
-        // will be referenced a good deal so this just makes it easier to deal
-        // with them consistently below rather than trying to reload from memory
-        // for example.
-        match src {
-            Source::Stack(s) => {
-                assert_eq!(s.locals.len(), 2);
-                self.stack_get(&s.slice(0..1), src_mem_opts.ptr());
-                self.stack_get(&s.slice(1..2), src_mem_opts.ptr());
-            }
-            Source::Memory(mem) => {
-                self.ptr_load(mem);
-                self.ptr_load(&mem.bump(src_mem_opts.ptr_size().into()));
-            }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
-        }
-        let src_len = self.local_set_new_tmp(src_mem_opts.ptr());
-        let src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
+        let seq = self.begin_translate_sequence(src, dst, src_size, src_align, dst_size, dst_align);
 
-        // Create a `Memory` operand which will internally assert that the
-        // `src_ptr` value is properly aligned.
-        let src_mem = self.memory_operand(src_opts, src_ptr, src_align);
-
-        // Calculate the source/destination byte lengths into unique locals.
-        let src_byte_len = self.calculate_list_byte_len(src_mem_opts, src_len.idx, src_size);
-        let dst_byte_len = if src_size == dst_size {
-            self.convert_src_len_to_dst(src_byte_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
-            self.local_set_new_tmp(dst_mem_opts.ptr())
-        } else if src_mem_opts.ptr() == dst_mem_opts.ptr() {
-            self.calculate_list_byte_len(dst_mem_opts, src_len.idx, dst_size)
-        } else {
-            self.convert_src_len_to_dst(src_byte_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
-            let tmp = self.local_set_new_tmp(dst_mem_opts.ptr());
-            let ret = self.calculate_list_byte_len(dst_mem_opts, tmp.idx, dst_size);
-            self.free_temp_local(tmp);
-            ret
-        };
-
-        // Here `realloc` is invoked (in a `malloc`-like fashion) to allocate
-        // space for the list in the destination memory. This will also
-        // internally insert checks that the returned pointer is aligned
-        // correctly for the destination.
-        let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len.idx), dst_align);
-
-        // With all the pointers and byte lengths verity that both the source
-        // and the destination buffers are in-bounds.
-        self.validate_memory_inbounds(
-            src_mem_opts,
-            src_mem.addr.idx,
-            src_byte_len.idx,
-            Trap::ListOutOfBounds,
-        );
-        self.validate_memory_inbounds(
-            dst_mem_opts,
-            dst_mem.addr.idx,
-            dst_byte_len.idx,
-            Trap::ListOutOfBounds,
-        );
-
-        self.free_temp_local(src_byte_len);
-        self.free_temp_local(dst_byte_len);
-
-        // This is the main body of the loop to actually translate list types.
-        // Note that if both element sizes are 0 then this won't actually do
-        // anything so the loop is removed entirely.
-        if src_size > 0 || dst_size > 0 {
-            // This block encompasses the entire loop and is use to exit before even
-            // entering the loop if the list size is zero.
-            self.instruction(Block(BlockType::Empty));
-
-            // Set the `remaining` local and only continue if it's > 0
-            self.instruction(LocalGet(src_len.idx));
-            let remaining = self.local_tee_new_tmp(src_mem_opts.ptr());
-            self.ptr_eqz(src_mem_opts);
-            self.instruction(BrIf(0));
-
-            // Initialize the two destination pointers to their initial values
-            self.instruction(LocalGet(src_mem.addr.idx));
-            let cur_src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
-            self.instruction(LocalGet(dst_mem.addr.idx));
-            let cur_dst_ptr = self.local_set_new_tmp(dst_mem_opts.ptr());
-
-            self.instruction(Loop(BlockType::Empty));
-
-            // Translate the next element in the list
+        if let Some(ref loop_state) = seq.loop_state {
             let element_src = Source::Memory(Memory {
-                opts: src_opts,
+                opts: seq.src_opts,
                 offset: 0,
-                addr: TempLocal::new(cur_src_ptr.idx, cur_src_ptr.ty),
+                addr: TempLocal::new(loop_state.cur_src_ptr.idx, loop_state.cur_src_ptr.ty),
             });
             let element_dst = Destination::Memory(Memory {
-                opts: dst_opts,
+                opts: seq.dst_opts,
                 offset: 0,
-                addr: TempLocal::new(cur_dst_ptr.idx, cur_dst_ptr.ty),
+                addr: TempLocal::new(loop_state.cur_dst_ptr.idx, loop_state.cur_dst_ptr.ty),
             });
             self.translate(src_element_ty, &element_src, dst_element_ty, &element_dst);
 
-            // Update the two loop pointers
             if src_size > 0 {
-                self.instruction(LocalGet(cur_src_ptr.idx));
+                self.instruction(LocalGet(loop_state.cur_src_ptr.idx));
                 self.ptr_uconst(src_mem_opts, src_size);
                 self.ptr_add(src_mem_opts);
-                self.instruction(LocalSet(cur_src_ptr.idx));
+                self.instruction(LocalSet(loop_state.cur_src_ptr.idx));
             }
             if dst_size > 0 {
-                self.instruction(LocalGet(cur_dst_ptr.idx));
+                self.instruction(LocalGet(loop_state.cur_dst_ptr.idx));
                 self.ptr_uconst(dst_mem_opts, dst_size);
                 self.ptr_add(dst_mem_opts);
-                self.instruction(LocalSet(cur_dst_ptr.idx));
+                self.instruction(LocalSet(loop_state.cur_dst_ptr.idx));
             }
-
-            // Update the remaining count, falling through to break out if it's zero
-            // now.
-            self.instruction(LocalGet(remaining.idx));
-            self.ptr_iconst(src_mem_opts, -1);
-            self.ptr_add(src_mem_opts);
-            self.instruction(LocalTee(remaining.idx));
-            self.ptr_br_if(src_mem_opts, 0);
-            self.instruction(End); // end of loop
-            self.instruction(End); // end of block
-
-            self.free_temp_local(cur_dst_ptr);
-            self.free_temp_local(cur_src_ptr);
-            self.free_temp_local(remaining);
         }
 
-        // Store the ptr/length in the desired destination
-        match dst {
-            Destination::Stack(s, _) => {
-                self.instruction(LocalGet(dst_mem.addr.idx));
-                self.stack_set(&s[..1], dst_mem_opts.ptr());
-                self.convert_src_len_to_dst(src_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
-                self.stack_set(&s[1..], dst_mem_opts.ptr());
+        self.end_translate_sequence(seq, dst);
+    }
+
+    /// Translates a map from one component's memory to another.
+    ///
+    /// In the Component Model, a `map<K, V>` is stored in memory as
+    /// `list<tuple<K, V>>`, so the translation reuses the same sequence
+    /// scaffolding as lists but with a two-field (key, value) loop body.
+    fn translate_map(
+        &mut self,
+        src_ty: TypeMapIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_mem_opts = match &src.opts().data_model {
+            DataModel::Gc {} => todo!("CM+GC"),
+            DataModel::LinearMemory(opts) => opts,
+        };
+        let dst_mem_opts = match &dst.opts().data_model {
+            DataModel::Gc {} => todo!("CM+GC"),
+            DataModel::LinearMemory(opts) => opts,
+        };
+
+        let src_map_ty = &self.types[src_ty];
+        let dst_map_ty = match dst_ty {
+            InterfaceType::Map(r) => &self.types[*r],
+            _ => panic!("expected a map"),
+        };
+
+        // Each map entry is a tuple<K, V> following record layout rules.
+        let src_key_abi = self.types.canonical_abi(&src_map_ty.key);
+        let src_value_abi = self.types.canonical_abi(&src_map_ty.value);
+        let src_entry_abi = CanonicalAbiInfo::record([src_key_abi, src_value_abi].into_iter());
+        let (_, src_key_align) = self.types.size_align(src_mem_opts, &src_map_ty.key);
+        let (_, src_value_align) = self.types.size_align(src_mem_opts, &src_map_ty.value);
+        let (src_tuple_size, src_entry_align) = if src_mem_opts.memory64 {
+            (src_entry_abi.size64, src_entry_abi.align64)
+        } else {
+            (src_entry_abi.size32, src_entry_abi.align32)
+        };
+        let src_value_offset = {
+            let mut offset = 0u32;
+            if src_mem_opts.memory64 {
+                src_key_abi.next_field64(&mut offset);
+                src_value_abi.next_field64(&mut offset)
+            } else {
+                src_key_abi.next_field32(&mut offset);
+                src_value_abi.next_field32(&mut offset)
             }
-            Destination::Memory(mem) => {
-                self.instruction(LocalGet(mem.addr.idx));
-                self.instruction(LocalGet(dst_mem.addr.idx));
-                self.ptr_store(mem);
-                self.instruction(LocalGet(mem.addr.idx));
-                self.convert_src_len_to_dst(src_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
-                self.ptr_store(&mem.bump(dst_mem_opts.ptr_size().into()));
+        };
+
+        let dst_key_abi = self.types.canonical_abi(&dst_map_ty.key);
+        let dst_value_abi = self.types.canonical_abi(&dst_map_ty.value);
+        let dst_entry_abi = CanonicalAbiInfo::record([dst_key_abi, dst_value_abi].into_iter());
+        let (_, dst_key_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.key);
+        let (_, dst_value_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.value);
+        let (dst_tuple_size, dst_entry_align) = if dst_mem_opts.memory64 {
+            (dst_entry_abi.size64, dst_entry_abi.align64)
+        } else {
+            (dst_entry_abi.size32, dst_entry_abi.align32)
+        };
+        let dst_value_offset = {
+            let mut offset = 0u32;
+            if dst_mem_opts.memory64 {
+                dst_key_abi.next_field64(&mut offset);
+                dst_value_abi.next_field64(&mut offset)
+            } else {
+                dst_key_abi.next_field32(&mut offset);
+                dst_value_abi.next_field32(&mut offset)
             }
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+        };
+
+        let seq = self.begin_translate_sequence(
+            src,
+            dst,
+            src_tuple_size,
+            src_entry_align,
+            dst_tuple_size,
+            dst_entry_align,
+        );
+
+        if let Some(ref loop_state) = seq.loop_state {
+            let key_src = Source::Memory(self.memory_operand(
+                seq.src_opts,
+                TempLocal {
+                    idx: loop_state.cur_src_ptr.idx,
+                    ty: src_mem_opts.ptr(),
+                    needs_free: false,
+                },
+                src_key_align,
+            ));
+            let key_dst = Destination::Memory(self.memory_operand(
+                seq.dst_opts,
+                TempLocal {
+                    idx: loop_state.cur_dst_ptr.idx,
+                    ty: dst_mem_opts.ptr(),
+                    needs_free: false,
+                },
+                dst_key_align,
+            ));
+            self.translate(&src_map_ty.key, &key_src, &dst_map_ty.key, &key_dst);
+
+            if src_value_offset > 0 {
+                self.instruction(LocalGet(loop_state.cur_src_ptr.idx));
+                self.ptr_uconst(src_mem_opts, src_value_offset);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalSet(loop_state.cur_src_ptr.idx));
+            }
+            if dst_value_offset > 0 {
+                self.instruction(LocalGet(loop_state.cur_dst_ptr.idx));
+                self.ptr_uconst(dst_mem_opts, dst_value_offset);
+                self.ptr_add(dst_mem_opts);
+                self.instruction(LocalSet(loop_state.cur_dst_ptr.idx));
+            }
+
+            let value_src = Source::Memory(self.memory_operand(
+                seq.src_opts,
+                TempLocal {
+                    idx: loop_state.cur_src_ptr.idx,
+                    ty: src_mem_opts.ptr(),
+                    needs_free: false,
+                },
+                src_value_align,
+            ));
+            let value_dst = Destination::Memory(self.memory_operand(
+                seq.dst_opts,
+                TempLocal {
+                    idx: loop_state.cur_dst_ptr.idx,
+                    ty: dst_mem_opts.ptr(),
+                    needs_free: false,
+                },
+                dst_value_align,
+            ));
+            self.translate(&src_map_ty.value, &value_src, &dst_map_ty.value, &value_dst);
+
+            // Advance past value + trailing padding to the next entry
+            let src_advance_to_next = src_tuple_size - src_value_offset;
+            if src_advance_to_next > 0 {
+                self.instruction(LocalGet(loop_state.cur_src_ptr.idx));
+                self.ptr_uconst(src_mem_opts, src_advance_to_next);
+                self.ptr_add(src_mem_opts);
+                self.instruction(LocalSet(loop_state.cur_src_ptr.idx));
+            }
+            let dst_advance_to_next = dst_tuple_size - dst_value_offset;
+            if dst_advance_to_next > 0 {
+                self.instruction(LocalGet(loop_state.cur_dst_ptr.idx));
+                self.ptr_uconst(dst_mem_opts, dst_advance_to_next);
+                self.ptr_add(dst_mem_opts);
+                self.instruction(LocalSet(loop_state.cur_dst_ptr.idx));
+            }
         }
 
-        self.free_temp_local(src_len);
-        self.free_temp_local(src_mem.addr);
-        self.free_temp_local(dst_mem.addr);
+        self.end_translate_sequence(seq, dst);
     }
 
     fn calculate_list_byte_len(
@@ -4122,6 +4349,27 @@ where
             .map(|ty| ty.map(|ty| types.canonical_abi(ty))),
     )
     .0
+}
+
+/// State for the iteration loop inside a sequence translation.
+struct SequenceLoopState {
+    remaining: TempLocal,
+    cur_src_ptr: TempLocal,
+    cur_dst_ptr: TempLocal,
+}
+
+/// Holds all temporaries created by `begin_translate_sequence` so the
+/// caller can emit a custom loop body before calling
+/// `end_translate_sequence`.
+struct SequenceTranslation<'a> {
+    src_len: TempLocal,
+    src_mem: Memory<'a>,
+    dst_mem: Memory<'a>,
+    src_opts: &'a Options,
+    dst_opts: &'a Options,
+    src_mem_opts: &'a LinearMemoryOptions,
+    dst_mem_opts: &'a LinearMemoryOptions,
+    loop_state: Option<SequenceLoopState>,
 }
 
 enum MallocSize {
