@@ -1,4 +1,4 @@
-//! OOM-handling `BTreeMap` implementation.
+//! OOM-handling `TryBTreeMap` implementation.
 
 use crate::error::OutOfMemory;
 use core::{mem, ops::RangeBounds, ptr::NonNull};
@@ -6,7 +6,7 @@ use wasmtime_core::slab::{Id, Slab};
 
 /// Like `std::collections::BTreeMap` but its methods return errors on
 /// allocation failure.
-pub struct BTreeMap<K, V>
+pub struct TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -15,7 +15,7 @@ where
     map: cranelift_bforest::Map<K, Id>,
 }
 
-impl<K, V> Default for BTreeMap<K, V>
+impl<K, V> Default for TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<K, V> BTreeMap<K, V>
+impl<K, V> TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -205,7 +205,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a BTreeMap<K, V>
+impl<'a, K, V> IntoIterator for &'a TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -217,7 +217,7 @@ where
     }
 }
 
-/// An iterator over `(K, &V)` pairs returned by [`BTreeMap::iter`].
+/// An iterator over `(K, &V)` pairs returned by [`TryBTreeMap::iter`].
 pub struct BTreeMapIter<'a, K, V>
 where
     K: Copy,
@@ -242,7 +242,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut BTreeMap<K, V>
+impl<'a, K, V> IntoIterator for &'a mut TryBTreeMap<K, V>
 where
     K: Copy,
 {
@@ -254,7 +254,7 @@ where
     }
 }
 
-/// An iterator over `(K, &mut V)` pairs returned by [`BTreeMap::iter_mut`].
+/// An iterator over `(K, &mut V)` pairs returned by [`TryBTreeMap::iter_mut`].
 pub struct BTreeMapIterMut<'a, K, V>
 where
     K: Copy,
@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<K, V> IntoIterator for BTreeMap<K, V>
+impl<K, V> IntoIterator for TryBTreeMap<K, V>
 where
     K: Copy + Ord,
 {
@@ -301,7 +301,7 @@ where
     }
 }
 
-/// An iterator over `(K, V)` pairs returned by [`BTreeMap::into_iter`].
+/// An iterator over `(K, V)` pairs returned by [`TryBTreeMap::into_iter`].
 pub struct BTreeMapIntoIter<K, V>
 where
     K: Copy,
@@ -328,7 +328,7 @@ where
     }
 }
 
-/// An iterator over keys returned by [`BTreeMap::keys`].
+/// An iterator over keys returned by [`TryBTreeMap::keys`].
 pub struct BTreeMapKeys<'a, K, V>
 where
     K: Copy,
@@ -348,7 +348,7 @@ where
     }
 }
 
-/// An iterator over shared values returned by [`BTreeMap::values`].
+/// An iterator over shared values returned by [`TryBTreeMap::values`].
 pub struct BTreeMapValues<'a, K, V>
 where
     K: Copy,
@@ -368,7 +368,7 @@ where
     }
 }
 
-/// An iterator over mutable values returned by [`BTreeMap::values_mut`].
+/// An iterator over mutable values returned by [`TryBTreeMap::values_mut`].
 pub struct BTreeMapValuesMut<'a, K, V>
 where
     K: Copy,
@@ -388,7 +388,7 @@ where
     }
 }
 
-/// A range iterator of `(K, &'a V)` items returned by [`BTreeMap::range`].
+/// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
 pub struct BTreeMapRange<'a, K, V, R>
 where
     K: Copy + Ord,
@@ -411,7 +411,7 @@ where
     }
 }
 
-/// A range iterator of `(K, &'a V)` items returned by [`BTreeMap::range`].
+/// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
 pub struct BTreeMapRangeMut<'a, K, V, R>
 where
     K: Copy + Ord,
@@ -651,7 +651,7 @@ mod tests {
     use crate::error::Result;
     use alloc::{vec, vec::Vec};
 
-    type M = BTreeMap<usize, f32>;
+    type M = TryBTreeMap<usize, f32>;
 
     #[test]
     fn new() -> Result<()> {
