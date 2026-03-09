@@ -15,11 +15,12 @@ use wasmtime::{
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::{
-    HttpResult, WasiHttpCtx, WasiHttpView,
-    bindings::http::types::{ErrorCode, Scheme},
-    body::HyperOutgoingBody,
+    WasiHttpCtx,
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    p2::bindings::http::types::{ErrorCode, Scheme},
+    p2::body::HyperOutgoingBody,
+    p2::types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    p2::{HttpResult, WasiHttpView},
 };
 
 type RequestSender = Arc<
@@ -75,7 +76,7 @@ impl WasiHttpView for Ctx {
     }
 
     fn is_forbidden_header(&mut self, name: &hyper::header::HeaderName) -> bool {
-        types::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+        wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
             || name.as_str() == "custom-forbidden-header"
     }
 }
@@ -158,9 +159,9 @@ async fn run_wasi_http(
     let mut store = Store::new(&engine, ctx);
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::add_to_linker_async(&mut linker).context("add crate to linker")?;
+    wasmtime_wasi_http::p2::add_to_linker_async(&mut linker).context("add crate to linker")?;
     let proxy =
-        wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
+        wasmtime_wasi_http::p2::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
             .await
             .context("instantiate proxy")?;
 
@@ -298,7 +299,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponse {
                         resp: resp.map(|body| {
-                            body.map_err(wasmtime_wasi_http::hyper_response_error)
+                            body.map_err(wasmtime_wasi_http::p2::hyper_response_error)
                                 .boxed_unsync()
                         }),
                         worker: None,

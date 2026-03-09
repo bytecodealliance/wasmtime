@@ -1,10 +1,12 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::{
+use crate::p2::{
+    HttpResult,
     bindings::http::types::{self, ErrorCode, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
+use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 use http_body_util::BodyExt;
@@ -20,46 +22,10 @@ use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 #[cfg(feature = "default-send-request")]
 use {
     crate::io::TokioIo,
-    crate::{error::dns_error, hyper_request_error},
+    crate::p2::{error::dns_error, hyper_request_error},
     tokio::net::TcpStream,
     tokio::time::timeout,
 };
-
-/// Default maximum size for the contents of a fields resource.
-///
-/// Typically, HTTP proxies limit headers to 8k. This number is higher than that
-/// because it not only includes the wire-size of headers but it additionally
-/// includes factors for the in-memory representation of `HeaderMap`. This is in
-/// theory high enough that no one runs into it but low enough such that a
-/// completely full `HeaderMap` doesn't break the bank in terms of memory
-/// consumption.
-const DEFAULT_FIELD_SIZE_LIMIT: usize = 128 * 1024;
-
-/// Capture the state necessary for use in the wasi-http API implementation.
-#[derive(Debug)]
-pub struct WasiHttpCtx {
-    pub(crate) field_size_limit: usize,
-}
-
-impl WasiHttpCtx {
-    /// Create a new context.
-    pub fn new() -> Self {
-        Self {
-            field_size_limit: DEFAULT_FIELD_SIZE_LIMIT,
-        }
-    }
-
-    /// Set the maximum size for any fields resources created by this context.
-    ///
-    /// The limit specified here is roughly a byte limit for the size of the
-    /// in-memory representation of headers. This means that the limit needs to
-    /// be larger than the literal representation of headers on the wire to
-    /// account for in-memory Rust-side data structures representing the header
-    /// names/values/etc.
-    pub fn set_field_size_limit(&mut self, limit: usize) {
-        self.field_size_limit = limit;
-    }
-}
 
 /// A trait which provides internal WASI HTTP state.
 ///
@@ -68,7 +34,7 @@ impl WasiHttpCtx {
 /// ```
 /// use wasmtime::component::ResourceTable;
 /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+/// use wasmtime_wasi_http::{WasiHttpCtx, p2::WasiHttpView};
 ///
 /// struct MyState {
 ///     ctx: WasiCtx,
@@ -151,7 +117,7 @@ pub trait WasiHttpView {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> crate::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         Ok(default_send_request(request, config))
     }
 
@@ -161,7 +127,7 @@ pub trait WasiHttpView {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> crate::HttpResult<HostFutureIncomingResponse>;
+    ) -> HttpResult<HostFutureIncomingResponse>;
 
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
@@ -209,7 +175,7 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> crate::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         T::send_request(self, request, config)
     }
 
@@ -248,7 +214,7 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> crate::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         T::send_request(self, request, config)
     }
 
@@ -302,7 +268,7 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> crate::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         self.0.send_request(request, config)
     }
 
@@ -318,20 +284,6 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
         self.0.outgoing_body_chunk_size()
     }
 }
-
-/// Set of [http::header::HeaderName], that are forbidden by default
-/// for requests and responses originating in the guest.
-pub const DEFAULT_FORBIDDEN_HEADERS: [http::header::HeaderName; 9] = [
-    hyper::header::CONNECTION,
-    HeaderName::from_static("keep-alive"),
-    hyper::header::PROXY_AUTHENTICATE,
-    hyper::header::PROXY_AUTHORIZATION,
-    HeaderName::from_static("proxy-connection"),
-    hyper::header::TRANSFER_ENCODING,
-    hyper::header::UPGRADE,
-    hyper::header::HOST,
-    HeaderName::from_static("http2-settings"),
-];
 
 /// Removes forbidden headers from a [`FieldMap`].
 pub(crate) fn remove_forbidden_headers(view: &mut dyn WasiHttpView, headers: &mut FieldMap) {

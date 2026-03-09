@@ -21,9 +21,7 @@ use wasmtime_wasi::{WasiCtxView, WasiView};
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 #[cfg(feature = "wasi-http")]
-use wasmtime_wasi_http::{
-    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
-};
+use wasmtime_wasi_http::WasiHttpCtx;
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
@@ -1050,7 +1048,7 @@ impl RunCommand {
                         bail!("Cannot enable wasi-http for core wasm modules");
                     }
                     CliLinker::Component(linker) => {
-                        wasmtime_wasi_http::add_only_http_to_linker_sync(linker)?;
+                        wasmtime_wasi_http::p2::add_only_http_to_linker_async(linker)?;
                         #[cfg(feature = "component-model-async")]
                         if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
                             wasmtime_wasi_http::p3::add_to_linker(linker)?;
@@ -1258,7 +1256,7 @@ impl WasiView for Host {
 }
 
 #[cfg(feature = "wasi-http")]
-impl wasmtime_wasi_http::types::WasiHttpView for Host {
+impl wasmtime_wasi_http::p2::WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         let ctx = self.wasi_http.as_mut().unwrap();
         Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
@@ -1270,12 +1268,12 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
         self.wasi_http_outgoing_body_buffer_chunks
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
+            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
     }
 
     fn outgoing_body_chunk_size(&mut self) -> usize {
         self.wasi_http_outgoing_body_chunk_size
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
     }
 }
 

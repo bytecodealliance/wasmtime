@@ -15,6 +15,9 @@ include = ["src/**/*", "README.md", "LICENSE", "witx/*", "wit/**/*", "tests/*"]
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 wasmtime = { workspace = true, features = ["runtime", "std"] }
 wasmtime-wasi-io = { workspace = true, features = ["std"] }

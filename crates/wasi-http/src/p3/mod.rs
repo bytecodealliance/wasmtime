@@ -21,8 +21,8 @@ pub use request::default_send_request;
 pub use request::{Request, RequestOptions};
 pub use response::Response;
 
+use crate::DEFAULT_FORBIDDEN_HEADERS;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::types::DEFAULT_FORBIDDEN_HEADERS;
 use bindings::http::{client, types};
 use bytes::Bytes;
 use core::ops::Deref;

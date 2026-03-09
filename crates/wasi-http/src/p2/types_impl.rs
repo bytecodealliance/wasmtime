@@ -1,13 +1,14 @@
 //! Implementation for the `wasi:http/types` interface.
 
-use crate::bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers};
-use crate::body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext};
-use crate::types::{
+use crate::get_content_length;
+use crate::p2::bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::p2::body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext};
+use crate::p2::types::{
     FieldMap, FieldSizeLimitError, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
     HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
     remove_forbidden_headers,
 };
-use crate::{HttpError, HttpResult, WasiHttpImpl, WasiHttpView, get_content_length};
+use crate::p2::{HttpError, HttpResult, WasiHttpImpl, WasiHttpView};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::bail;
@@ -15,11 +16,11 @@ use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
 use wasmtime::{error::Context as _, format_err};
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
-impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
+impl<T> types::Host for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
-    fn convert_error_code(&mut self, err: crate::HttpError) -> wasmtime::Result<types::ErrorCode> {
+    fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
         err.downcast()
     }
 
@@ -77,7 +78,7 @@ fn get_fields_mut<'a>(
     }
 }
 
-impl<T> crate::bindings::http::types::HostFields for WasiHttpImpl<T>
+impl<T> types::HostFields for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -286,7 +287,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingRequest for WasiHttpImpl<T>
+impl<T> types::HostIncomingRequest for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -355,7 +356,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingRequest for WasiHttpImpl<T>
+impl<T> types::HostOutgoingRequest for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -542,7 +543,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostResponseOutparam for WasiHttpImpl<T>
+impl<T> types::HostResponseOutparam for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -579,7 +580,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingResponse for WasiHttpImpl<T>
+impl<T> types::HostIncomingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -643,7 +644,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostFutureTrailers for WasiHttpImpl<T>
+impl<T> types::HostFutureTrailers for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -693,7 +694,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingBody for WasiHttpImpl<T>
+impl<T> types::HostIncomingBody for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -727,7 +728,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingResponse for WasiHttpImpl<T>
+impl<T> types::HostOutgoingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -822,7 +823,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostFutureIncomingResponse for WasiHttpImpl<T>
+impl<T> types::HostFutureIncomingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -887,7 +888,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingBody for WasiHttpImpl<T>
+impl<T> types::HostOutgoingBody for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -908,7 +909,7 @@ where
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> crate::HttpResult<()> {
+    ) -> HttpResult<()> {
         let body = self.table().delete(id)?;
 
         let ts = if let Some(ts) = ts {
@@ -927,7 +928,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostRequestOptions for WasiHttpImpl<T>
+impl<T> types::HostRequestOptions for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {

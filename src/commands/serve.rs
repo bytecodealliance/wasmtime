@@ -31,10 +31,7 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{HandlerState, Proxy, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
-use wasmtime_wasi_http::{
-    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
-    WasiHttpView,
-};
+use wasmtime_wasi_http::{WasiHttpCtx, p2::WasiHttpView};
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -91,12 +88,12 @@ impl WasiHttpView for Host {
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
         self.http_outgoing_body_buffer_chunks
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
+            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
     }
 
     fn outgoing_body_chunk_size(&mut self) -> usize {
         self.http_outgoing_body_chunk_size
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+            .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
     }
 }
 
@@ -337,13 +334,13 @@ impl ServeCommand {
         // uses.
         if cli == Some(true) {
             self.run.add_wasmtime_wasi_to_linker(linker)?;
-            wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
+            wasmtime_wasi_http::p2::add_only_http_to_linker_async(linker)?;
             #[cfg(feature = "component-model-async")]
             if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
                 wasmtime_wasi_http::p3::add_to_linker(linker)?;
             }
         } else {
-            wasmtime_wasi_http::add_to_linker_async(linker)?;
+            wasmtime_wasi_http::p2::add_to_linker_async(linker)?;
             #[cfg(feature = "component-model-async")]
             if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
                 wasmtime_wasi_http::p3::add_to_linker(linker)?;
@@ -854,7 +851,7 @@ async fn handle_request(
     // `wasmtime::Error`.
 
     type P2Response = Result<
-        hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        hyper::Response<wasmtime_wasi_http::p2::body::HyperOutgoingBody>,
         p2::http::types::ErrorCode,
     >;
     type P3Response = hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;

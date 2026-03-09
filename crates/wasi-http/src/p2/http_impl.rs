@@ -1,7 +1,7 @@
 //! Implementation of the `wasi:http/outgoing-handler` interface.
 
-use crate::{
-    WasiHttpImpl, WasiHttpView,
+use crate::p2::{
+    HttpResult, WasiHttpImpl, WasiHttpView,
     bindings::http::{
         outgoing_handler,
         types::{self, Scheme},
@@ -23,7 +23,7 @@ where
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
         options: Option<Resource<types::RequestOptions>>,
-    ) -> crate::HttpResult<Resource<HostFutureIncomingResponse>> {
+    ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
         let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
         let connect_timeout = opts

@@ -19,12 +19,12 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p3::{
     self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
 };
-use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 
 foreach_p3_http!(assert_test_exists);
 

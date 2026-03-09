@@ -35,7 +35,7 @@ pub mod p2 {
             require_store_data_send: true,
             with: {
                 // http is in this crate
-                "wasi:http": crate::bindings::http,
+                "wasi:http": crate::p2::bindings::http,
                 // Upstream package dependencies
                 "wasi:io": wasmtime_wasi::p2::bindings::io,
             }
