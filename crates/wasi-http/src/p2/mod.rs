@@ -357,7 +357,8 @@ pub struct WasiHttpCtxView<'a> {
     pub hooks: &'a mut dyn WasiHttpHooks,
 }
 
-struct WasiHttp;
+/// The type for which this crate implements the `wasi:http` interfaces.
+pub struct WasiHttp;
 
 impl HasData for WasiHttp {
     type Data<'a> = WasiHttpCtxView<'a>;
