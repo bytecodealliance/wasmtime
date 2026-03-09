@@ -3,13 +3,12 @@ use crate::error::OutOfMemory;
 use core::borrow::Borrow;
 use core::{
     cmp::Ordering,
-    fmt,
-    marker::PhantomData,
-    mem,
+    fmt, mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut, Index, IndexMut},
     slice::SliceIndex,
 };
+#[cfg(feature = "serde")]
 use serde::ser::SerializeSeq;
 use std_alloc::alloc::Layout;
 use std_alloc::boxed::Box;
@@ -389,6 +388,7 @@ impl<T> From<Box<[T]>> for Vec<T> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<T> serde::ser::Serialize for Vec<T>
 where
     T: serde::ser::Serialize,
@@ -405,6 +405,7 @@ where
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de, T> serde::de::Deserialize<'de> for Vec<T>
 where
     T: serde::de::Deserialize<'de>,
@@ -413,6 +414,8 @@ where
     where
         D: serde::Deserializer<'de>,
     {
+        use core::marker::PhantomData;
+
         struct Visitor<T>(PhantomData<fn() -> Vec<T>>);
 
         impl<'de, T> serde::de::Visitor<'de> for Visitor<T>
