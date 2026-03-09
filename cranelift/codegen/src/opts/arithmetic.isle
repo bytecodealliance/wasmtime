@@ -291,3 +291,32 @@
   (if-let 0 (u64_checked_rem z x))
   (if-let 1 (u64_rem x 2))
   (eq ty y (iconst ty1 (imm64 (u64_div z x)))))
+
+;; (x + y) + (-y) ==> x
+;; and equivalent operand-order variants.
+(rule (simplify (iadd ty (iadd ty x y) (ineg ty y))) x)
+(rule (simplify (iadd ty (ineg ty y) (iadd ty x y))) x)
+(rule (simplify (iadd ty (iadd ty y x) (ineg ty y))) x)
+(rule (simplify (iadd ty (ineg ty y) (iadd ty y x))) x)
+
+;; (x | y) - (x & y)  ==>  (x ^ y)
+(rule (simplify (isub ty (bor ty x y) (band ty x y))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty x y) (band ty y x))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty y x) (band ty x y))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty y x) (band ty y x))) (bxor ty x y))
+
+;; (x + y) - (x & y)  ==>  (x | y)
+(rule (simplify (isub ty (iadd ty x y) (band ty x y))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty x y) (band ty y x))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty y x) (band ty x y))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty y x) (band ty y x))) (bor ty x y))
+
+;; (x | y) - (x ^ y)  ==>  (x & y)
+(rule (simplify (isub ty (bor ty x y) (bxor ty x y))) (band ty x y))
+(rule (simplify (isub ty (bor ty x y) (bxor ty y x))) (band ty x y))
+(rule (simplify (isub ty (bor ty y x) (bxor ty x y))) (band ty x y))
+(rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
+
+;; (~x) + x == -1
+(rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
+(rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
