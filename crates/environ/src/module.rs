@@ -304,7 +304,7 @@ pub struct Module {
     pub initializers: TryVec<Initializer>,
 
     /// Exported entities.
-    pub exports: collections::IndexMap<Atom, EntityIndex>,
+    pub exports: TryIndexMap<Atom, EntityIndex>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
