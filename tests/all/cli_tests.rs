@@ -2780,6 +2780,27 @@ start a print 1234
 
         Ok(())
     }
+
+    #[test]
+    fn p3_cli_read_stdin() -> Result<()> {
+        let mut cmd = get_wasmtime_command()?;
+        let mut child = cmd
+            .arg("-Sp3")
+            .arg("-Wcomponent-model-async")
+            .arg(P3_CLI_READ_STDIN_COMPONENT)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"hello!").unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+
+        Ok(())
+    }
 }
 
 #[test]
