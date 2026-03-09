@@ -5,7 +5,7 @@
     allow(irrefutable_let_patterns, unreachable_patterns)
 )]
 
-use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
+use crate::common::{Profile, RunCommon, RunTarget};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -1212,7 +1212,7 @@ pub struct Host {
     #[cfg(feature = "wasi-http")]
     wasi_http: Option<Arc<WasiHttpCtx>>,
     #[cfg(feature = "wasi-http")]
-    wasi_http_hooks: HttpHooks,
+    wasi_http_hooks: crate::common::HttpHooks,
 
     #[cfg(feature = "wasi-config")]
     wasi_config: Option<Arc<WasiConfigVariables>>,
