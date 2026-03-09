@@ -119,3 +119,84 @@ block0(v0: i32, v1: i32):
 ; block0(v0: i32, v1: i32):
 ;     return v0
 ; }
+
+;; (band ty (bor ty x z) (bor ty y z)) -> (bor ty (band ty x y) z)
+function %test_band_bor_bor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bor v0, v2
+    v4 = bor v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %test_band_bor_bor(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v8 = band v1, v0
+;     v9 = bor v8, v2
+;     return v9
+; }
+
+;; (bor ty (band ty x z) (band ty y z)) -> (band ty (bor ty x y) z)
+function %test_bor_band_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v2
+    v4 = band v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; function %test_bor_band_band(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v8 = bor v1, v0
+;     v9 = band v8, v2
+;     return v9
+; }
+
+;; (bxor ty (bor ty x y) (bor ty x (bnot ty y))) -> (bnot ty x)
+function %test_bxor_bor_bor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v1
+    v4 = bor v0, v3
+    v5 = bxor v2, v4
+    return v5
+}
+
+; function %test_bxor_bor_bor_bnot(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bnot v0
+;     return v6
+; }
+
+;; (band ty (bnot ty x) (bnot ty y)) -> (bnot ty (bor ty x y))
+function %test_band_bnot_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bnot v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %test_band_bnot_bnot(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = bor v1, v0
+;     v8 = bnot v7
+;     return v8
+; }
+
+;; (bor ty (bnot ty x) (bnot ty y)) -> (bnot ty (band ty x y))
+function %test_bor_bnot_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bnot v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; function %test_bor_bnot_bnot(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = band v1, v0
+;     v8 = bnot v7
+;     return v8
+; }
+
