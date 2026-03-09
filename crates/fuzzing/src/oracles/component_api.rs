@@ -118,13 +118,19 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
                 .collect::<arbitrary::Result<_>>()?,
         ),
 
-        // Resources, futures, streams, error contexts, and maps aren't fuzzed at this time.
-        Type::Own(_)
-        | Type::Borrow(_)
-        | Type::Future(_)
-        | Type::Stream(_)
-        | Type::ErrorContext
-        | Type::Map(_) => {
+        Type::Map(map) => {
+            let mut pairs = Vec::new();
+            input.arbitrary_loop(Some(MIN_LIST_LENGTH), Some(MAX_LIST_LENGTH), |input| {
+                let key = arbitrary_val(&map.key(), input)?;
+                let value = arbitrary_val(&map.value(), input)?;
+                pairs.push((key, value));
+                Ok(ControlFlow::Continue(()))
+            })?;
+            Val::Map(pairs)
+        }
+
+        // Resources, futures, streams, and error contexts aren't fuzzed at this time.
+        Type::Own(_) | Type::Borrow(_) | Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
             unreachable!()
         }
     })
@@ -140,6 +146,7 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
     config.module_config.config.max_memories = 2;
     config.module_config.component_model_async = true;
     config.module_config.component_model_async_stackful = true;
+    config.module_config.component_model_map = true;
     if config.wasmtime.compiler_strategy == CompilerStrategy::Winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
     }
