@@ -576,6 +576,7 @@ serve = [
   "dep:http-body-util",
   "dep:http",
   "wasmtime-cli-flags/async",
+  "wasmtime-wasi-http?/p2",
 ]
 explore = ["dep:wasmtime-explorer", "dep:tempfile"]
 wast = ["dep:wasmtime-wast"]
@@ -589,6 +590,7 @@ run = [
   "dep:wasi-common",
   "dep:tokio",
   "wasmtime-cli-flags/async",
+  "wasmtime-wasi-http?/p2",
 ]
 completion = ["dep:clap_complete"]
 objdump = [
