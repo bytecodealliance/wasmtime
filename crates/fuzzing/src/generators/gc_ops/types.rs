@@ -220,9 +220,7 @@ impl Types {
                 DfsEvent::AfterEdge(from, to) => {
                     debug_assert!(
                         !active.contains(&to),
-                        "cycle in rec-group dependency graph: {:?} -> {:?}",
-                        from,
-                        to
+                        "cycle in rec-group dependency graph: {from:?} -> {to:?}"
                     );
                 }
             }
