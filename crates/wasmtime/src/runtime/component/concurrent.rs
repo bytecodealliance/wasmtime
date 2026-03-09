@@ -1433,6 +1433,23 @@ impl<T> StoreContextMut<'_, T> {
             closure(&mut accessor).await
         }
     }
+
+    /// Execute a closure with the specified thread temporarily set as the
+    /// current thread.
+    ///
+    /// This is a convenience wrapper around `StoreOpaque::set_thread` that
+    /// ensures the original thread is always restored after the closure
+    /// completes, even in the face of early returns or panics.
+    pub(crate) fn with_thread<R>(
+        mut self,
+        thread: impl Into<CurrentThread>,
+        f: impl FnOnce(StoreContextMut<'_, T>) -> Result<R>,
+    ) -> Result<R> {
+        let old_thread = self.0.set_thread(thread)?;
+        let result = f(self.as_context_mut());
+        self.0.set_thread(old_thread)?;
+        result
+    }
 }
 
 impl StoreOpaque {
@@ -1835,7 +1852,7 @@ impl StoreOpaque {
         } else {
             CurrentThread::None
         };
-                
+        
         // We should not have reached here unless either there's no current
         // task, or the current task is permitted to block.  In addition, we
         // special-case `thread.switch-to` and waiting for a subtask to go from
@@ -4028,12 +4045,10 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         future: u32,
         address: u32,
     ) -> Result<u32> {
-        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
-                caller_thread,
                 TransmitIndex::Future(ty),
                 options,
                 None,
@@ -4078,12 +4093,10 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
-                caller_thread,
                 TransmitIndex::Stream(ty),
                 options,
                 None,
@@ -4144,12 +4157,10 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         address: u32,
         count: u32,
     ) -> Result<u32> {
-        let caller_thread = self.concurrent_state_mut().current_guest_thread()?;
         instance
             .guest_read(
                 StoreContextMut(self),
                 caller,
-                caller_thread,
                 TransmitIndex::Stream(ty),
                 options,
                 Some(FlatAbi {
@@ -4799,7 +4810,7 @@ impl ConcurrentInstanceState {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum CurrentThread {
+pub(crate) enum CurrentThread {
     Guest(QualifiedThreadId),
     Host(TableId<HostTask>),
     None,
