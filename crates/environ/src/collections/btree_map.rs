@@ -1,4 +1,4 @@
-//! OOM-handling `BTreeMap` implementation.
+//! OOM-handling `TryBTreeMap` implementation.
 
 use crate::error::OutOfMemory;
 use core::{mem, ops::RangeBounds, ptr::NonNull};
@@ -217,7 +217,7 @@ where
     }
 }
 
-/// An iterator over `(K, &V)` pairs returned by [`BTreeMap::iter`].
+/// An iterator over `(K, &V)` pairs returned by [`TryBTreeMap::iter`].
 pub struct BTreeMapIter<'a, K, V>
 where
     K: Copy,
@@ -254,7 +254,7 @@ where
     }
 }
 
-/// An iterator over `(K, &mut V)` pairs returned by [`BTreeMap::iter_mut`].
+/// An iterator over `(K, &mut V)` pairs returned by [`TryBTreeMap::iter_mut`].
 pub struct BTreeMapIterMut<'a, K, V>
 where
     K: Copy,
@@ -301,7 +301,7 @@ where
     }
 }
 
-/// An iterator over `(K, V)` pairs returned by [`BTreeMap::into_iter`].
+/// An iterator over `(K, V)` pairs returned by [`TryBTreeMap::into_iter`].
 pub struct BTreeMapIntoIter<K, V>
 where
     K: Copy,
@@ -328,7 +328,7 @@ where
     }
 }
 
-/// An iterator over keys returned by [`BTreeMap::keys`].
+/// An iterator over keys returned by [`TryBTreeMap::keys`].
 pub struct BTreeMapKeys<'a, K, V>
 where
     K: Copy,
@@ -348,7 +348,7 @@ where
     }
 }
 
-/// An iterator over shared values returned by [`BTreeMap::values`].
+/// An iterator over shared values returned by [`TryBTreeMap::values`].
 pub struct BTreeMapValues<'a, K, V>
 where
     K: Copy,
@@ -368,7 +368,7 @@ where
     }
 }
 
-/// An iterator over mutable values returned by [`BTreeMap::values_mut`].
+/// An iterator over mutable values returned by [`TryBTreeMap::values_mut`].
 pub struct BTreeMapValuesMut<'a, K, V>
 where
     K: Copy,
@@ -388,7 +388,7 @@ where
     }
 }
 
-/// A range iterator of `(K, &'a V)` items returned by [`BTreeMap::range`].
+/// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
 pub struct BTreeMapRange<'a, K, V, R>
 where
     K: Copy + Ord,
@@ -411,7 +411,7 @@ where
     }
 }
 
-/// A range iterator of `(K, &'a V)` items returned by [`BTreeMap::range`].
+/// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
 pub struct BTreeMapRangeMut<'a, K, V, R>
 where
     K: Copy + Ord,
