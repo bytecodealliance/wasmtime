@@ -191,6 +191,26 @@ fn resource_any() -> Result<()> {
         );
     }
 
+    {
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &c)?;
+        let t_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t")?;
+        let t_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-t")?;
+
+        // `t0` is placed at host index 0
+        let (t0,) = t_ctor.call(&mut store, (100,))?;
+        t_dtor.call(&mut store, (t0,))?;
+
+        // `t1` is also placed at host index 0 since `t0` was deallocated
+        let (_t1,) = t_ctor.call(&mut store, (100,))?;
+
+        // reuse of `t0` should fail, despite it pointing to a valid resource
+        assert_eq!(
+            t_dtor.call(&mut store, (t0,)).unwrap_err().to_string(),
+            "host-owned resource is being used with the wrong type"
+        );
+    }
+
     Ok(())
 }
 
