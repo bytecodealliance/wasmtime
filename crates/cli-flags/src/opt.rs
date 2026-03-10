@@ -9,6 +9,8 @@ use crate::{KeyValuePair, WasiNnGraph};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{fmt, marker};
 use wasmtime::{Result, bail};
@@ -341,6 +343,20 @@ impl WasmtimeOptionValue for String {
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self)
+    }
+}
+
+impl WasmtimeOptionValue for PathBuf {
+    const VAL_HELP: &'static str = "=path";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            Some(val) => Ok(PathBuf::from_str(val)?),
+            None => bail!("value must be specified with key=val syntax"),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 

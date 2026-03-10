@@ -1,0 +1,387 @@
+package bytecodealliance:wasmtime@44.0.0;
+
+world debug-main {
+  include wasi:cli/imports@0.2.6;
+  import debuggee;
+  export debugger;
+}
+
+interface debugger {
+  use debuggee.{debuggee};
+
+  /// Launch the debugger top-half (e.g., protocol server or UI)
+  /// implemented by this component, given the provided interface
+  /// to a debuggee. The debuggee will be paused and awaiting
+  /// a resumption.
+  ///
+  /// `args` contains the command-line arguments of the debugger,
+  /// starting with the program name (args[0]).
+  debug: func(d: borrow<debuggee>, args: list<string>);
+}
+
+interface debuggee {
+  use wasi:io/poll@0.2.6.{pollable};
+
+  /// A debuggee consisting of one Store over which we have
+  /// debugging control.
+  ///
+  /// A debuggee is always either "paused" or "running", and certain
+  /// methods below are only available in one or the other state.
+  resource debuggee {
+    /// List all modules that exist in the Store.
+    ///
+    /// If invoked while already running, causes a trap.
+    all-modules: func() -> list<module>;
+
+    /// List of all instances that exist in the Store.
+    ///
+    /// If invoked while already running, causes a trap.
+    all-instances: func() -> list<instance>;
+
+    /// Force an interruption event in any running code.
+    ///
+    /// Usable in paused or running states. If invoked in
+    /// the paused state, the next execution will immediately
+    /// yield an "interrupted" event.
+    interrupt: func();
+
+    /// Single-step, returning a future that will yield an event
+    /// when the single-step execution is complete.
+    ///
+    /// The `resumption` value indicates any mutations to
+    /// perform to execution state as part of resuming:
+    /// for example, injecting a call to another function,
+    /// or throwing an exception, or forcing an early return
+    /// from the current function.
+    ///
+    /// Usable in paused state; transitions to running state.
+    /// Debuggee remains in running state until the returned
+    /// future completes.
+    ///
+    /// If invoked while already running, causes a trap.
+    single-step: func(resumption: resumption-value) -> event-future;
+
+    /// Continue execution, returning a future that will
+    /// yield an event when the resumed execution
+    /// is complete.
+    ///
+    /// The `resumption` value indicates any mutations to
+    /// perform to execution state as part of resuming:
+    /// for example, injecting a call to another function,
+    /// or throwing an exception, or forcing an early return
+    /// from the current function.
+    ///
+    /// Usable in paused state; transitions to running state.
+    /// Debuggee remains in running state until the returned
+    /// future completes.
+    ///
+    /// If invoked while already running, causes a trap.
+    continue: func(resumption: resumption-value) -> event-future;
+
+    /// Get the current exit frames for each activation.
+    ///
+    /// If invoked while already running, causes a trap.
+    exit-frames: func() -> list<frame>;
+  }
+
+  /// A future that represents asynchronous execution of the
+  /// debuggee until the next debug event pausing execution.
+  ///
+  /// When complete, yields the resulting debug event.
+  resource event-future {
+    /// Subscribe to this future, returning a wasi-io pollable.
+    subscribe: func() -> pollable;
+
+    /// Consume this future, producing the resulting
+    /// event. Blocks if not ready. The debuggee
+    /// must be provided as well.
+    finish: static func(self: event-future, debuggee: borrow<debuggee>) -> result<event, error>;
+  }
+
+  /// A `resumption` value indicates how we want to continue
+  /// execution after a pause.
+  ///
+  /// By default, if we are a "read-only" debugger, there is only
+  /// one answer: with no mutation, according to the abstract
+  /// Wasm machine semantics and current machine state.
+  ///
+  /// However, this interface also supports various kinds of mutations.
+  /// For example, the debugger can ask to insert a call to an arbitrary
+  /// Wasm function, it can force an early return from the current function,
+  /// or it can throw an exception.
+  ///
+  /// This `resumption` value is orthogonal to the
+  /// `continue` vs. `single-step` resume axis:
+  /// the resumption value indicates whether we want to mutate
+  /// the executing abstract machine's *state*, while the single-step
+  /// vs. continue axis indicates how we want to step that machine
+  /// forward from whatever state is indicated (i.e., one step or
+  /// many until an event).
+  variant resumption-value {
+    /// Resume normally: do not alter the machine state.
+    normal,
+    /// Inject a call to a Wasm function at the current point, as-if
+    /// the program contained a `call` instruction with the given
+    /// values on the operand stack.
+    ///
+    /// Execution is subject to ordinary debugger events as with
+    /// any other; e.g., the function we call may experience breakpoint
+    /// pauses, may be single-stepped if we resume with `single-step`,
+    /// etc.
+    ///
+    /// If the injected function call completes normally, an
+    /// `injected-call-return` debug event is raised with the
+    /// return value(s).
+    inject-call(inject-call),
+    /// Resume as-if an exception were thrown at the current point.
+    throw-exception(wasm-exception),
+    /// Force a return from the current function frame, with the given
+    /// value(s) as return value(s).
+    early-return(list<wasm-value>),
+  }
+
+  /// A function call to be injected upon resumption.
+  record inject-call {
+    callee: wasm-func,
+    arguments: list<wasm-value>,
+  }
+
+  /// A debug event.
+  variant event {
+    /// Execution of the debuggee has completed.
+    complete,
+    /// A trap occurred in the debuggee. Execution
+    /// is paused at the trap-point, and will terminate
+    /// when resuming execution.
+    trap,
+    /// A breakpoint was hit in the debuggee, pausing
+    /// execution.
+    breakpoint,
+    /// An interruption due to `debuggee.interrupt` occurred.
+    interrupted,
+    /// An exception was thrown and caught by Wasm.
+    caught-exception-thrown(wasm-exception),
+    /// An exception was thrown and not caught by Wasm.
+    uncaught-exception-thrown(wasm-exception),
+    /// An injected call completed with return value(s).
+    injected-call-return(list<wasm-value>),
+  }
+
+  resource instance {
+    /// Get this instance's module.
+    get-module: func(d: borrow<debuggee>) -> module;
+
+    /// Get a memory from this instance's memory index space.
+    get-memory: func(d: borrow<debuggee>, memory-index: u32) -> result<memory, error>;
+
+    /// Get a global from this instance's global index space.
+    get-global: func(d: borrow<debuggee>, global-index: u32) -> result<global, error>;
+
+    /// Get a table from this instance's table index space.
+    get-table: func(d: borrow<debuggee>, table-index: u32) -> result<table, error>;
+
+    /// Get a function from this instance's function index space.
+    get-func: func(d: borrow<debuggee>, func-index: u32) -> result<wasm-func, error>;
+
+    /// Get a tag from this instance's tag index space.
+    get-tag: func(d: borrow<debuggee>, tag-index: u32) -> result<wasm-tag, error>;
+
+    /// Clone this handle.
+    clone: func() -> instance;
+
+    /// Get the unique ID of this instance (within the debuggee)
+    /// to allow equality and hashing.
+    unique-id: func() -> u64;
+  }
+
+  resource module {
+    /// Get the original Wasm bytecode for this module, if available.
+    bytecode: func() -> option<list<u8>>;
+
+    /// Add a breakpoint.
+    add-breakpoint: func(d: borrow<debuggee>, pc: u32) -> result<_, error>;
+
+    /// Remove a breakpoint.
+    remove-breakpoint: func(d: borrow<debuggee>, pc: u32) -> result<_, error>;
+
+    /// Clone this handle.
+    clone: func() -> module;
+
+    /// Get the unique ID of this module to allow equality and hashing.
+    unique-id: func() -> u64;
+  }
+
+  resource memory {
+    /// Get the current memory size, in bytes.
+    size-bytes: func(d: borrow<debuggee>) -> u64;
+
+    /// Get the page size, in bytes.
+    page-size-bytes: func(d: borrow<debuggee>) -> u64;
+
+    /// Increase size by the given `delta`. Returns the old size in bytes.
+    grow-to-bytes: func(d: borrow<debuggee>, delta: u64) -> result<u64, error>;
+
+    /// Get a u8 (byte) at an address. Returns `none` if out-of-bounds.
+    get-u8: func(d: borrow<debuggee>, addr: u64) -> result<u8, error>;
+    /// Get a u16 (in little endian order) at an address.
+    get-u16: func(addr: u64, d: borrow<debuggee>) -> result<u16, error>;
+    /// Get a u32 (in little endian order) at an address.
+    get-u32: func(addr: u64, d: borrow<debuggee>) -> result<u32, error>;
+    /// Get a u64 (in little endian order) at an address.
+    get-u64: func(addr: u64, d: borrow<debuggee>) -> result<u64, error>;
+
+    /// Set a u8 (byte) at an address. Returns `none` if out-of-bounds.
+    set-u8: func(addr: u64, d: borrow<debuggee>, value: u8) -> result<_, error>;
+    /// Set a u16 (in little endian order) at an address.
+    set-u16: func(addr: u64, d: borrow<debuggee>, value: u16) -> result<_, error>;
+    /// Set a u32 (in little endian order) at an address.
+    set-u32: func(addr: u64, d: borrow<debuggee>, value: u32) -> result<_, error>;
+    /// Set a u64 (in little endian order) at an address.
+    set-u64: func(addr: u64, d: borrow<debuggee>, value: u64) -> result<_, error>;
+
+    /// Clone this handle.
+    clone: func() -> memory;
+
+    /// Get the unique ID of this memory to allow equality and hashing.
+    unique-id: func() -> u64;
+  }
+
+  resource global {
+    /// Get the value of this global.
+    get: func(d: borrow<debuggee>) -> result<wasm-value, error>;
+
+    /// Set the value of this global.
+    set: func(d: borrow<debuggee>, val: wasm-value) -> result<_, error>;
+
+    /// Clone this handle.
+    clone: func() -> global;
+
+    /// Get the unique ID of this memory to allow equality and hashing.
+    unique-id: func() -> u64;
+  }
+
+  resource table {
+    /// Get the current length of this table, in elements.
+    len: func(d: borrow<debuggee>) -> u64;
+
+    /// Get the value at the Nth slot.
+    get-element: func(d: borrow<debuggee>, index: u64) -> result<wasm-value, error>;
+
+    /// Set the value at the Nth slot.
+    set-element: func(d: borrow<debuggee>, index: u64, val: wasm-value) -> result<_, error>;
+
+    /// Clone this handle.
+    clone: func() -> table;
+
+    /// Get the unique ID of this memory to allow equality and hashing.
+    unique-id: func() -> u64;
+  }
+
+  resource wasm-func {
+    /// Get the parameter types.
+    params: func(d: borrow<debuggee>) -> result<list<wasm-type>, error>;
+
+    /// Get the result types.
+    results: func(d: borrow<debuggee>) -> result<list<wasm-type>, error>;
+
+    /// Clone this handle.
+    clone: func() -> wasm-func;
+  }
+
+  resource wasm-exception {
+    /// Get the tag of this exception.
+    get-tag: func(d: borrow<debuggee>) -> wasm-tag;
+
+    /// Get the payload values of this exception.
+    get-values: func(d: borrow<debuggee>) -> result<list<wasm-value>, error>;
+
+    /// Clone this reference.
+    clone: func(d: borrow<debuggee>) -> wasm-exception;
+
+    /// Allocate a new exception.
+    make: static func(
+        d: borrow<debuggee>,
+        tag: borrow<wasm-tag>,
+        values: list<wasm-value>
+    ) -> result<wasm-exception, error>;
+  }
+
+  resource wasm-tag {
+    /// Get the parameter types.
+    params: func(d: borrow<debuggee>) -> result<list<wasm-type>, error>;
+
+    /// Get the unique ID of this tag to allow equality and hashing.
+    unique-id: func() -> u64;
+
+    /// Clone this handle.
+    clone: func() -> wasm-tag;
+
+    /// Allocate a new tag.
+    make: static func(d: borrow<debuggee>, params: list<wasm-type>) -> wasm-tag;
+  }
+
+  resource frame {
+    /// Instance of this frame.
+    get-instance: func(d: borrow<debuggee>) -> result<instance, error>;
+
+    /// Function index in this frame's instance.
+    get-func-index: func(d: borrow<debuggee>) -> result<u32, error>;
+
+    /// Current PC in this frame's instance.
+    get-pc: func(d: borrow<debuggee>) -> result<u32, error>;
+
+    /// Wasm locals.
+    get-locals: func(d: borrow<debuggee>) -> result<list<wasm-value>, error>;
+
+    /// Operand stack.
+    get-stack: func(d: borrow<debuggee>) -> result<list<wasm-value>, error>;
+
+    /// parent frame (the one that called this frame), if any.
+    parent-frame: func(d: borrow<debuggee>) -> result<option<frame>, error>;
+  }
+
+  enum error {
+    invalid-entity,
+    invalid-pc,
+    invalid-frame,
+    unsupported-type,
+    mismatched-type,
+    non-wasm-frame,
+    alloc-failure,
+    breakpoint-update,
+    read-only,
+    out-of-bounds,
+    memory-grow-failure,
+    execution-trap,
+  }
+
+  resource wasm-value {
+    get-type: func() -> wasm-type;
+    unwrap-i32: func() -> u32;
+    unwrap-i64: func() -> u64;
+    unwrap-f32: func() -> f32;
+    unwrap-f64: func() -> f64;
+    unwrap-v128: func() -> list<u8>;
+    unwrap-func: func() -> option<wasm-func>;
+    unwrap-exception: func() -> option<wasm-exception>;
+
+    make-i32: static func(value: u32) -> wasm-value;
+    make-i64: static func(value: u64) -> wasm-value;
+    make-f32: static func(value: f32) -> wasm-value;
+    make-f64: static func(value: f64) -> wasm-value;
+    make-v128: static func(value: list<u8>) -> wasm-value;
+
+    clone: func() -> wasm-value;
+  }
+
+  variant wasm-type {
+    wasm-i32,
+    wasm-i64,
+    wasm-f32,
+    wasm-f64,
+    wasm-v128,
+    wasm-funcref,
+    wasm-exnref,
+    // TODO: GC structs and arrays
+  }
+}

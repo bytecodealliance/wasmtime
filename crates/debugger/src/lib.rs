@@ -10,11 +10,17 @@
 //! world in which to run debugger components.
 
 use std::{any::Any, future::Future, pin::Pin, sync::Arc};
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    task::JoinHandle,
+};
 use wasmtime::{
     AsContextMut, DebugEvent, DebugHandler, Engine, ExnRef, OwnedRooted, Result, Store,
     StoreContextMut, Trap,
 };
+
+mod host;
+pub use host::{DebuggerComponent, DebuggerImpl, DebuggerView, HasDebuggerView, add_debuggee, wit};
 
 /// A `Debugger` wraps up state associated with debugging the code
 /// running in a single `Store`.
@@ -37,6 +43,7 @@ pub struct Debugger<T: Send + 'static> {
     store: Option<Store<T>>,
     in_tx: mpsc::Sender<Command<T>>,
     out_rx: mpsc::Receiver<Response<T>>,
+    handle: Option<JoinHandle<Result<()>>>,
 }
 
 /// State machine from the perspective of the outer logic.
@@ -163,21 +170,27 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
             DebugEvent::EpochYield => DebugRunResult::EpochYield,
         };
-        self.0
-            .out_tx
-            .send(Response::Paused(result))
-            .await
-            .expect("outbound channel closed prematurely");
+        if self.0.out_tx.send(Response::Paused(result)).await.is_err() {
+            // Outer Debugger has been dropped: just continue
+            // executing.
+            return;
+        }
 
         while let Some(cmd) = in_rx.recv().await {
             match cmd {
                 Command::Query(closure) => {
                     let result = closure(store.as_context_mut());
-                    self.0
+                    if self
+                        .0
                         .out_tx
                         .send(Response::QueryResponse(result))
                         .await
-                        .expect("outbound channel closed prematurely");
+                        .is_err()
+                    {
+                        // Outer Debugger has been dropped: just
+                        // continue executing.
+                        return;
+                    }
                 }
                 Command::Continue => {
                     break;
@@ -214,7 +227,7 @@ impl<T: Send + 'static> Debugger<T> {
         let (in_tx, in_rx) = mpsc::channel(1);
         let (out_tx, out_rx) = mpsc::channel(1);
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             // Create the handler that's invoked from within the async
             // debug-event callback.
             let out_tx_clone = out_tx.clone();
@@ -245,6 +258,7 @@ impl<T: Send + 'static> Debugger<T> {
             store: None,
             in_tx,
             out_rx,
+            handle: Some(handle),
         }
     }
 
@@ -371,6 +385,9 @@ impl<T: Send + 'static> Debugger<T> {
                     log::trace!("finish: event {e:?}");
                 }
             }
+        }
+        if let Some(handle) = self.handle.take() {
+            handle.await??;
         }
         assert!(self.is_complete());
         Ok(())

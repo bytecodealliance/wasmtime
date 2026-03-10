@@ -273,6 +273,13 @@ wasmtime_option_group! {
         pub log_to_files: Option<bool>,
         /// Enable coredump generation to this file after a WebAssembly trap.
         pub coredump: Option<String>,
+        /// Load the given debugger component and attach it to the
+        /// main module or component.
+        pub debugger: Option<PathBuf>,
+        /// Pass the given command-line arguments to the debugger
+        /// component. May be specified multiple times.
+        #[serde(default)]
+        pub debugger_arg: Vec<String>,
     }
 
     enum Debug {
@@ -491,6 +498,9 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
+        /// Inherit stdin/stdout from the parent process. On by
+        /// default.
+        pub inherit_stdin_stdout: Option<bool>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,

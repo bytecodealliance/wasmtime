@@ -4672,6 +4672,7 @@ dependencies = [
  "wasmtime-internal-cache",
  "wasmtime-internal-component-util",
  "wasmtime-internal-cranelift",
+ "wasmtime-internal-debugger",
  "wasmtime-internal-explorer",
  "wasmtime-internal-unwinder",
  "wasmtime-test-macros",
@@ -4917,10 +4918,13 @@ dependencies = [
 name = "wasmtime-internal-debugger"
 version = "44.0.0"
 dependencies = [
+ "async-trait",
  "env_logger 0.11.5",
  "log",
  "tokio",
  "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-io",
 ]
 
 [[package]]

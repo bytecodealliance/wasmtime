@@ -9,6 +9,8 @@ use crate::common::{Profile, RunCommon, RunTarget};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "debug")]
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
@@ -16,6 +18,8 @@ use wasmtime::{
     Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
     error::Context as _, format_err,
 };
+#[cfg(feature = "debug")]
+use wasmtime_debugger::DebuggerView;
 use wasmtime_wasi::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-config")]
@@ -72,6 +76,45 @@ pub struct RunCommand {
     pub module_and_args: Vec<OsString>,
 }
 
+impl RunCommand {
+    /// Split off a sub-command representing the invocation of a
+    /// debugger component side-car to this execution.
+    ///
+    /// This is used to factor out most of the environment bringup for
+    /// the debugger component environment.
+    ///
+    /// This also adjusts the guest options as needed to enable
+    /// debugging (e.g., implictly set `-D guest-debug=y`).
+    #[cfg(feature = "debug")]
+    pub(crate) fn debugger_run(&mut self) -> Result<Option<RunCommand>> {
+        if let Some(debugger_component_path) = self.run.common.debug.debugger.as_ref() {
+            self.run.common.debug.guest_debug = Some(true);
+            self.run.common.wasm.epoch_interruption = Some(true);
+            let mut debugger_run = RunCommand::try_parse_from(
+                ["run".into(), debugger_component_path.into()]
+                    .into_iter()
+                    .chain(
+                        self.run
+                            .common
+                            .debug
+                            .debugger_arg
+                            .iter()
+                            .map(OsString::from),
+                    ),
+            )?;
+            // Explicitly permit TCP sockets for the debugger-main environment.
+            debugger_run.run.common.wasi.tcp = Some(true);
+            debugger_run.run.common.wasi.inherit_network = Some(true);
+            // Do not inherit stdin/stdout (stderr is always
+            // inherited) in the debugger-main environment.
+            debugger_run.run.common.wasi.inherit_stdin_stdout = Some(false);
+            Ok(Some(debugger_run))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
 #[derive(Parser, Default, Clone)]
 pub struct Preloads {
@@ -113,11 +156,63 @@ impl RunCommand {
         runtime.block_on(async {
             self.run.common.init_logging()?;
 
+            #[cfg(feature = "debug")]
+            let debug_run = self.debugger_run()?;
+
             let engine = self.new_engine()?;
             let main = self
                 .run
                 .load_module(&engine, self.module_and_args[0].as_ref())?;
             let (mut store, mut linker) = self.new_store_and_linker(&engine, &main)?;
+
+            #[cfg(feature = "debug")]
+            if let Some(mut debug_run) = debug_run {
+                let debug_engine = debug_run.new_engine()?;
+                let debug_main = debug_run
+                    .run
+                    .load_module(&debug_engine, debug_run.module_and_args[0].as_ref())?;
+                let (mut debug_store, debug_linker) =
+                    debug_run.new_store_and_linker(&debug_engine, &debug_main)?;
+
+                let debug_component = match debug_main {
+                    RunTarget::Core(_) => wasmtime::bail!(
+                        "Debugger component is a core module; only components are supported"
+                    ),
+                    RunTarget::Component(c) => c,
+                };
+                let mut debug_linker = match debug_linker {
+                    CliLinker::Core(_) => unreachable!(),
+                    CliLinker::Component(l) => l,
+                };
+                debug_run.add_debugger_api(&mut debug_linker)?;
+
+                debug_run
+                    .invoke_debugger(
+                        &mut debug_store,
+                        &debug_component,
+                        &mut debug_linker,
+                        store,
+                        move |store| {
+                            Box::pin(async move {
+                                let engine_clone = store.engine().clone();
+                                let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                                let cancel_clone = cancel.clone();
+                                thread::spawn(move || {
+                                    while !cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                                        thread::sleep(std::time::Duration::from_millis(1));
+                                        engine_clone.increment_epoch();
+                                    }
+                                });
+                                self.instantiate_and_run(&engine, &mut linker, &main, store)
+                                    .await?;
+                                cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                                Ok(())
+                            })
+                        },
+                    )
+                    .await?;
+                return Ok(());
+            }
 
             self.instantiate_and_run(&engine, &mut linker, &main, &mut store)
                 .await?;
@@ -146,7 +241,7 @@ impl RunCommand {
         Engine::new(&config)
     }
 
-    /// Populatse a new `Store` and `CliLinker` with the configuration in this
+    /// Populates a new `Store` and `CliLinker` with the configuration in this
     /// command.
     ///
     /// The `engine` provided is used to for the store/linker and the `main`
@@ -197,6 +292,15 @@ impl RunCommand {
         }
 
         Ok((store, linker))
+    }
+
+    #[cfg(feature = "debug")]
+    fn add_debugger_api(&mut self, linker: &mut wasmtime::component::Linker<Host>) -> Result<()> {
+        wasmtime_debugger::wit::add_to_linker::<_, wasmtime_debugger::HasDebuggerView>(
+            linker,
+            |x| wasmtime_debugger::DebuggerImpl(x.wasip1_ctx().ctx().table),
+        )?;
+        Ok(())
     }
 
     /// Executes the `main` after instantiating it within `store`.
@@ -337,30 +441,39 @@ impl RunCommand {
         store: &mut Store<Host>,
         main_target: &RunTarget,
         profiled_modules: Vec<(String, Module)>,
-    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
-        if let Some(Profile::Guest { path, interval }) = &self.run.profile {
-            #[cfg(feature = "profiling")]
-            return Ok(self.setup_guest_profiler(
-                store,
-                main_target,
-                profiled_modules,
-                path,
-                *interval,
-            )?);
-            #[cfg(not(feature = "profiling"))]
-            {
-                let _ = (profiled_modules, path, interval, main_target);
-                bail!("support for profiling disabled at compile time");
+    ) -> Result<Box<dyn FnOnce(&mut Store<Host>) + Send>> {
+        // If a debugger component is attached, we set up epoch
+        // interruptions in `debugger_run()` above when enabling guest
+        // instrumentation; we need to ensure that epoch interruptions
+        // cause a debug event but no trap here. This overrides other
+        // behavior below.
+        if self.run.common.debug.debugger.is_some() {
+            store.epoch_deadline_async_yield_and_update(1);
+        } else {
+            if let Some(Profile::Guest { path, interval }) = &self.run.profile {
+                #[cfg(feature = "profiling")]
+                return Ok(self.setup_guest_profiler(
+                    store,
+                    main_target,
+                    profiled_modules,
+                    path,
+                    *interval,
+                )?);
+                #[cfg(not(feature = "profiling"))]
+                {
+                    let _ = (profiled_modules, path, interval, main_target);
+                    bail!("support for profiling disabled at compile time");
+                }
             }
-        }
 
-        if let Some(timeout) = self.run.common.wasm.timeout {
-            store.set_epoch_deadline(1);
-            let engine = store.engine().clone();
-            thread::spawn(move || {
-                thread::sleep(timeout);
-                engine.increment_epoch();
-            });
+            if let Some(timeout) = self.run.common.wasm.timeout {
+                store.set_epoch_deadline(1);
+                let engine = store.engine().clone();
+                thread::spawn(move || {
+                    thread::sleep(timeout);
+                    engine.increment_epoch();
+                });
+            }
         }
 
         Ok(Box::new(|_store| {}))
@@ -374,7 +487,7 @@ impl RunCommand {
         profiled_modules: Vec<(String, Module)>,
         path: &str,
         interval: std::time::Duration,
-    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
+    ) -> Result<Box<dyn FnOnce(&mut Store<Host>) + Send>> {
         use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
@@ -679,6 +792,42 @@ impl RunCommand {
             Ok(()) => Ok(instance),
             Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
         }
+    }
+
+    #[cfg(feature = "debug")]
+    async fn invoke_debugger<
+        F: for<'a> FnOnce(
+                &'a mut Store<Host>,
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+            + Send
+            + 'static,
+    >(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &mut wasmtime::component::Linker<Host>,
+        debuggee_host: Store<Host>,
+        body: F,
+    ) -> Result<()> {
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+        let command = wasmtime_debugger::DebuggerComponent::new(&mut *store, &instance)?;
+        let debugger = wasmtime_debugger::Debugger::new(debuggee_host, body);
+        let debuggee = wasmtime_debugger::add_debuggee(store.data_mut(), debugger)?;
+        {
+            // Manually construct a borrow -- wasmtime-wit-bindgen
+            // generates code that consumes the `Resource<T>` for
+            // `call_debug()` below even though the WIT type is a
+            // `borrow<debuggee>`.
+            let borrowed = wasmtime::component::Resource::new_borrow(debuggee.rep());
+            let args = self.compute_argv()?;
+            command
+                .bytecodealliance_wasmtime_debugger()
+                .call_debug(&mut *store, borrowed, &args)
+                .await?;
+        }
+        let mut debuggee = store.data_mut().table().delete(debuggee)?;
+        debuggee.finish().await?;
+        Ok(())
     }
 
     #[cfg(feature = "component-model")]
@@ -1085,7 +1234,12 @@ impl RunCommand {
 
     fn set_legacy_p1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?)?;
+        builder.args(&self.compute_argv()?)?;
+
+        builder.inherit_stderr();
+        if self.run.common.wasi.inherit_stdin_stdout.unwrap_or(true) {
+            builder.inherit_stdin().inherit_stdout();
+        }
 
         if self.run.common.wasi.inherit_env == Some(true) {
             for (k, v) in std::env::vars() {
@@ -1223,7 +1377,7 @@ pub struct Host {
 }
 
 impl Host {
-    fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
+    pub(crate) fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
         unwrap_singlethread_context(&mut self.wasip1_ctx)
     }
 }
@@ -1265,6 +1419,13 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
             ctx,
             hooks: &mut self.wasi_http_hooks,
         }
+    }
+}
+
+#[cfg(feature = "debug")]
+impl wasmtime_debugger::DebuggerView for Host {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        WasiView::ctx(self).table
     }
 }
 
