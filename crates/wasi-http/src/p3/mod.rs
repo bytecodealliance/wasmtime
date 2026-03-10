@@ -22,7 +22,7 @@ pub use request::{Request, RequestOptions};
 pub use response::Response;
 
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::types::DEFAULT_FORBIDDEN_HEADERS;
+use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
 use bindings::http::{client, types};
 use bytes::Bytes;
 use core::ops::Deref;
@@ -50,7 +50,7 @@ impl HasData for WasiHttp {
 }
 
 /// A trait which provides internal WASI HTTP state.
-pub trait WasiHttpCtx: Send {
+pub trait WasiHttpHooks: Send {
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
         DEFAULT_FORBIDDEN_HEADERS.contains(name)
@@ -150,21 +150,35 @@ pub trait WasiHttpCtx: Send {
     >;
 }
 
-/// Default implementation of [WasiHttpCtx].
 #[cfg(feature = "default-send-request")]
-#[derive(Clone, Default)]
-pub struct DefaultWasiHttpCtx;
+impl<'a> Default for &'a mut dyn WasiHttpHooks {
+    fn default() -> Self {
+        let x: &mut [(); 0] = &mut [];
+        x
+    }
+}
 
+#[doc(hidden)]
 #[cfg(feature = "default-send-request")]
-impl WasiHttpCtx for DefaultWasiHttpCtx {}
+impl WasiHttpHooks for [(); 0] {}
+
+/// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
+/// the default behavior for `wasi:http`.
+#[cfg(feature = "default-send-request")]
+pub fn default_hooks() -> &'static mut dyn WasiHttpHooks {
+    Default::default()
+}
 
 /// View into [WasiHttpCtx] implementation and [ResourceTable].
 pub struct WasiHttpCtxView<'a> {
-    /// Mutable reference to the WASI HTTP context.
-    pub ctx: &'a mut dyn WasiHttpCtx,
+    /// Mutable reference to the WASI HTTP hooks.
+    pub hooks: &'a mut dyn WasiHttpHooks,
 
     /// Mutable reference to table used to manage resources.
     pub table: &'a mut ResourceTable,
+
+    /// Mutable reference to the WASI HTTP context.
+    pub ctx: &'a mut WasiHttpCtx,
 }
 
 /// A trait which provides internal WASI HTTP state.
@@ -184,7 +198,7 @@ pub trait WasiHttpView: Send {
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi_http::p3::{DefaultWasiHttpCtx, WasiHttpCtxView, WasiHttpView};
+/// use wasmtime_wasi_http::{WasiHttpCtx, p3::{WasiHttpCtxView, WasiHttpView}};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -207,7 +221,7 @@ pub trait WasiHttpView: Send {
 ///
 /// #[derive(Default)]
 /// struct MyState {
-///     http: DefaultWasiHttpCtx,
+///     http: WasiHttpCtx,
 ///     table: ResourceTable,
 /// }
 ///
@@ -216,6 +230,7 @@ pub trait WasiHttpView: Send {
 ///         WasiHttpCtxView {
 ///             ctx: &mut self.http,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
