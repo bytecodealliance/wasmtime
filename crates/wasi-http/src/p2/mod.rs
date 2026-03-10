@@ -233,9 +233,7 @@ pub mod bindings;
 pub mod body;
 pub mod types;
 
-pub use self::error::{
-    HttpError, HttpResult, http_request_error, hyper_request_error, hyper_response_error,
-};
+pub use self::error::*;
 
 /// A trait which provides hooks into internal WASI HTTP operations.
 ///

@@ -22,7 +22,7 @@ pub use request::{Request, RequestOptions};
 pub use response::Response;
 
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
+use crate::{DEFAULT_FORBIDDEN_HEADERS, FieldMapError, WasiHttpCtx};
 use bindings::http::{client, types};
 use bytes::Bytes;
 use core::ops::Deref;
@@ -38,6 +38,18 @@ pub(crate) type HttpError = TrappableError<types::ErrorCode>;
 
 pub(crate) type HeaderResult<T> = Result<T, HeaderError>;
 pub(crate) type HeaderError = TrappableError<types::HeaderError>;
+
+impl From<FieldMapError> for HeaderError {
+    fn from(e: FieldMapError) -> Self {
+        match e {
+            FieldMapError::Immutable => types::HeaderError::Immutable.into(),
+            FieldMapError::InvalidHeaderName => types::HeaderError::InvalidSyntax.into(),
+            // FIXME(WebAssembly/WASI#889): these ideally would map to an error
+            // code instead of trapping.
+            FieldMapError::TooManyFields | FieldMapError::TotalSizeTooBig => HeaderError::trap(e),
+        }
+    }
+}
 
 pub(crate) type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
 pub(crate) type RequestOptionsError = TrappableError<types::RequestOptionsError>;

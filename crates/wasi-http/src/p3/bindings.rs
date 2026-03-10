@@ -30,7 +30,7 @@ mod generated {
     });
 
     mod with {
-        pub type Fields = crate::p3::MaybeMutable<http::HeaderMap>;
+        pub type Fields = crate::FieldMap;
         pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
     }
 }

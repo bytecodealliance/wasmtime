@@ -1,11 +1,11 @@
-use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
+use crate::FieldMap;
+use crate::p3::bindings::http::types::{ErrorCode, Trailers};
 use crate::p3::{WasiHttp, WasiHttpCtxView};
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
-use http::HeaderMap;
 use http_body::Body as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
@@ -259,7 +259,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
 /// [http_body::Body] implementation for bodies originating in the guest.
 pub(crate) struct GuestBody {
     contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
-    trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
+    trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<FieldMap>>, ErrorCode>>>,
     content_length: Option<u64>,
 }
 
@@ -364,7 +364,7 @@ impl http_body::Body for GuestBody {
         self.trailers_rx = None;
         match res {
             Ok(Ok(Some(trailers))) => Poll::Ready(Some(Ok(http_body::Frame::trailers(
-                Arc::unwrap_or_clone(trailers),
+                Arc::unwrap_or_clone(trailers).into(),
             )))),
             Ok(Ok(None)) => Poll::Ready(None),
             Ok(Err(err)) => Poll::Ready(Some(Err(err))),
@@ -404,7 +404,7 @@ impl http_body::Body for GuestBody {
 
 /// [FutureConsumer] implementation for trailers originating in the guest.
 struct GuestTrailerConsumer<T> {
-    tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
+    tx: Option<oneshot::Sender<Result<Option<Arc<FieldMap>>, ErrorCode>>>,
     getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
@@ -520,9 +520,11 @@ where
                             return Poll::Ready(Ok(StreamResult::Completed));
                         }
                         Err(Ok(trailers)) => {
-                            let trailers = (self.getter)(store.data_mut())
+                            let view = (self.getter)(store.data_mut());
+                            let trailers = FieldMap::new_immutable(trailers);
+                            let trailers = view
                                 .table
-                                .push(Fields::new_mutable(trailers))
+                                .push(trailers)
                                 .context("failed to push trailers to table")?;
                             break 'result Ok(Some(trailers));
                         }
