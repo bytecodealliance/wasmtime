@@ -14,25 +14,31 @@
 //!
 //! The crate also contains an implementation of the [`wasi:http/proxy`] world.
 //!
-//! [`wasi:http/proxy`]: crate::bindings::Proxy
-//! [`wasi:http/outgoing-handler`]: crate::bindings::http::outgoing_handler::Host
-//! [`wasi:http/types`]: crate::bindings::http::types::Host
-//! [`wasi:http/incoming-handler`]: crate::bindings::exports::wasi::http::incoming_handler::Guest
+//! [`wasi:http/proxy`]: crate::p2::bindings::Proxy
+//! [`wasi:http/outgoing-handler`]: crate::p2::bindings::http::outgoing_handler::Host
+//! [`wasi:http/types`]: crate::p2::bindings::http::types::Host
+//! [`wasi:http/incoming-handler`]: crate::p2::bindings::exports::wasi::http::incoming_handler::Guest
 //!
 //! This crate is very similar to [`wasmtime_wasi`] in the it uses the
 //! `bindgen!` macro in Wasmtime to generate bindings to interfaces. Bindings
 //! are located in the [`bindings`] module.
 //!
-//! # The `WasiHttpView` trait
+//! # The `WasiHttp{View,Hooks}` traits
 //!
-//! All `bindgen!`-generated `Host` traits are implemented in terms of a
-//! [`WasiHttpView`] trait which provides basic access to [`WasiHttpCtx`],
-//! configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`], the
-//! state for all host-defined component model resources.
+//! All `bindgen!`-generated `Host` traits are implemented for the
+//! [`WasiHttpCtxView`] type. This type is created from a store's data `T`
+//! through the [`WasiHttpView`] trait. The [`add_to_linker_async`] function,
+//! for example, uses [`WasiHttpView`] to acquire the context view.
 //!
-//! The [`WasiHttpView`] trait additionally offers a few other configuration
-//! methods such as [`WasiHttpView::send_request`] to customize how outgoing
-//! HTTP requests are handled.
+//! The [`WasiHttpCtxView`] structure requires that a [`ResourceTable`] and
+//! [`WasiHttpCtx`] live within the store. This is store-specific state that is
+//! used to implement various APIs and store host state.
+//!
+//! The final `hooks` field within [`WasiHttpCtxView`] is a trait object of
+//! [`WasiHttpHooks`]. This provides a few more hooks, dynamically, to configure
+//! how `wasi:http` behaves. For example [`WasiHttpHooks::send_request`] can
+//! customize how outgoing HTTP requests are handled. The `hooks` field can be
+//! initialized with the [`default_hooks`] function for the default behavior.
 //!
 //! # Async and Sync
 //!
@@ -335,9 +341,9 @@ pub fn default_hooks() -> &'static mut dyn WasiHttpHooks {
     Default::default()
 }
 
-/// The default value configured for [`WasiHttpView::outgoing_body_buffer_chunks`] in [`WasiHttpView`].
+/// The default value configured for [`WasiHttpHooks::outgoing_body_buffer_chunks`] in [`WasiHttpView`].
 pub const DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS: usize = 1;
-/// The default value configured for [`WasiHttpView::outgoing_body_chunk_size`] in [`WasiHttpView`].
+/// The default value configured for [`WasiHttpHooks::outgoing_body_chunk_size`] in [`WasiHttpView`].
 pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 
 /// Structure which `wasi:http` `Host`-style traits are implemented for.

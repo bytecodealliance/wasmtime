@@ -1,5 +1,5 @@
-//! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
-//! implementation of the wasi-http API.
+//! Implements the base structure that will provide the implementation of the
+//! wasi-http API.
 
 use crate::p2::{
     WasiHttpCtxView, WasiHttpHooks,
