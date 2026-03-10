@@ -183,7 +183,7 @@
 
 ;; if x == 1 then (y - 1) else (y - x)  ==>  (y - x)
 ;; and equivalent operand-order variants.
-(rule (simplify (select ty (eq cty x (iconst_u ty 1)) (isub ty y (iconst_u ty 1)) (isub ty y x))) (isub ty y x))
+(rule (simplify (select ty (eq cty x (iconst_u ty n)) (isub ty y (iconst_u ty n)) (isub ty y x))) (isub ty y x))
 (rule (simplify (select ty (ne cty x (iconst_u ty 1)) (isub ty y x) (isub ty y (iconst_u ty 1)))) (isub ty y x))
 (rule (simplify (select ty (eq cty (iconst_u ty 1) x) (isub ty y (iconst_u ty 1)) (isub ty y x))) (isub ty y x))
 (rule (simplify (select ty (ne cty (iconst_u ty 1) x) (isub ty y x) (isub ty y (iconst_u ty 1)))) (isub ty y x))
