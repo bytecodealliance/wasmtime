@@ -187,7 +187,7 @@ fn resource_any() -> Result<()> {
         // reuse of `t` should fail, despite it pointing to a valid resource
         assert_eq!(
             t_dtor.call(&mut store, (t,)).unwrap_err().to_string(),
-            "host-owned resource is being used with the wrong type"
+            "host-owned resource was already de-allocated"
         );
     }
 
@@ -207,7 +207,7 @@ fn resource_any() -> Result<()> {
         // reuse of `t0` should fail, despite it pointing to a valid resource
         assert_eq!(
             t_dtor.call(&mut store, (t0,)).unwrap_err().to_string(),
-            "host-owned resource is being used with the wrong type"
+            "host-owned resource was already de-allocated"
         );
     }
 

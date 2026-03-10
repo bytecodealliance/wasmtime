@@ -177,7 +177,7 @@ impl<'a> HostResourceTables<'a> {
         // precise error, such as a lift operation.
         if let Some(actual) = actual {
             if actual.generation != idx.generation() {
-                bail!("host-owned resource is being used with the wrong type");
+                bail!("host-owned resource was already de-allocated");
             }
         }
 
