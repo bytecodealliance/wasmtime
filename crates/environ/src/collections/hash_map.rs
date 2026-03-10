@@ -252,3 +252,9 @@ impl<K, V, S> IntoIterator for TryHashMap<K, V, S> {
         self.inner.into_iter()
     }
 }
+
+impl<K, V, S> From<TryHashMap<K, V, S>> for inner::HashMap<K, V, S> {
+    fn from(map: TryHashMap<K, V, S>) -> Self {
+        map.inner
+    }
+}
