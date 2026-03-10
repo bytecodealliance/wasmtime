@@ -343,7 +343,7 @@ impl HostRequestWithStore for WasiHttp {
             scheme: None,
             authority: None,
             path_with_query: None,
-            headers: headers.into(),
+            headers,
             options: options.map(Into::into),
             body,
         };
@@ -619,7 +619,7 @@ impl HostResponseWithStore for WasiHttp {
         let headers = delete_fields(table, headers)?;
         let res = Response {
             status: http::StatusCode::OK,
-            headers: headers.into(),
+            headers,
             body,
         };
         let res = table
