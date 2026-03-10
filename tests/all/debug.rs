@@ -109,7 +109,7 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                 );
                 assert_eq!(
                     stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-                    65
+                    67
                 );
 
                 assert_eq!(stack.num_locals(&mut caller)?, 2);
@@ -130,7 +130,7 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                 );
                 assert_eq!(
                     stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-                    55
+                    57
                 );
 
                 let stack = stack.parent(&mut caller)?;
@@ -290,7 +290,7 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
         );
         assert_eq!(
             stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-            56
+            58
         );
         assert!(Module::same(
             stack.module(&mut caller)?.unwrap(),
@@ -318,7 +318,7 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
         );
         assert_eq!(
             stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-            56
+            58
         );
         assert!(Module::same(
             stack.module(&mut caller)?.unwrap(),

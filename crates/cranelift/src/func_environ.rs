@@ -223,6 +223,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
     pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
+
+    /// The next-srcloc: the location of the operator *after* this one
+    /// (in original bytecode order, i.e., not accounting for
+    /// nonlinear control flow). This is useful in cases where we need
+    /// to e.g. record the return-address of a callsite for debuginfo.
+    pub(crate) next_srcloc: ir::SourceLoc,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -284,6 +290,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             stack_switching_values_buffer: None,
 
             state_slot: None,
+            next_srcloc: ir::SourceLoc::default(),
         }
     }
 
