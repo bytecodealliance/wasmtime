@@ -1,4 +1,4 @@
-use crate::common::{Profile, RunCommon, RunTarget};
+use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
 use bytes::Bytes;
 use clap::Parser;
 use futures::future::FutureExt;
@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
-use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::component::{Component, Linker};
 use wasmtime::{
     Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail, error::Context as _,
 };
@@ -31,10 +31,7 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{HandlerState, Proxy, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
-use wasmtime_wasi_http::{
-    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
-    WasiHttpView,
-};
+use wasmtime_wasi_http::{WasiHttpCtx, p2::WasiHttpView};
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -51,11 +48,7 @@ struct Host {
     table: wasmtime::component::ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
-    http_outgoing_body_buffer_chunks: Option<usize>,
-    http_outgoing_body_chunk_size: Option<usize>,
-
-    #[cfg(feature = "component-model-async")]
-    p3_http: crate::common::DefaultP3Ctx,
+    hooks: HttpHooks,
 
     limits: StoreLimits,
 
@@ -81,22 +74,13 @@ impl WasiView for Host {
     }
 }
 
-impl WasiHttpView for Host {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
-    }
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-
-    fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.http_outgoing_body_buffer_chunks
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
-    }
-
-    fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.http_outgoing_body_chunk_size
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+impl wasmtime_wasi_http::p2::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p2::WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: &mut self.hooks,
+        }
     }
 }
 
@@ -105,7 +89,8 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
     fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
         wasmtime_wasi_http::p3::WasiHttpCtxView {
             table: &mut self.table,
-            ctx: &mut self.p3_http,
+            ctx: &mut self.http,
+            hooks: &mut self.hooks,
         }
     }
 }
@@ -240,8 +225,7 @@ impl ServeCommand {
             table,
             ctx: builder.build(),
             http: self.run.wasi_http_ctx()?,
-            http_outgoing_body_buffer_chunks: self.run.common.wasi.http_outgoing_body_buffer_chunks,
-            http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
+            hooks: self.run.wasi_http_hooks(),
 
             limits: StoreLimits::default(),
 
@@ -253,8 +237,6 @@ impl ServeCommand {
             wasi_keyvalue: None,
             #[cfg(feature = "profiling")]
             guest_profiler: None,
-            #[cfg(feature = "component-model-async")]
-            p3_http: crate::common::DefaultP3Ctx,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -337,13 +319,13 @@ impl ServeCommand {
         // uses.
         if cli == Some(true) {
             self.run.add_wasmtime_wasi_to_linker(linker)?;
-            wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
+            wasmtime_wasi_http::p2::add_only_http_to_linker_async(linker)?;
             #[cfg(feature = "component-model-async")]
             if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
                 wasmtime_wasi_http::p3::add_to_linker(linker)?;
             }
         } else {
-            wasmtime_wasi_http::add_to_linker_async(linker)?;
+            wasmtime_wasi_http::p2::add_to_linker_async(linker)?;
             #[cfg(feature = "component-model-async")]
             if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
                 wasmtime_wasi_http::p3::add_to_linker(linker)?;
@@ -854,7 +836,7 @@ async fn handle_request(
     // `wasmtime::Error`.
 
     type P2Response = Result<
-        hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        hyper::Response<wasmtime_wasi_http::p2::body::HyperOutgoingBody>,
         p2::http::types::ErrorCode,
     >;
     type P3Response = hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;
@@ -895,8 +877,9 @@ async fn handle_request(
                             let (req, out) = store.with(move |mut store| {
                                 let req = store
                                     .data_mut()
+                                    .http()
                                     .new_incoming_request(p2::http::types::Scheme::Http, req)?;
-                                let out = store.data_mut().new_response_outparam(tx)?;
+                                let out = store.data_mut().http().new_response_outparam(tx)?;
                                 wasmtime::error::Ok((req, out))
                             })?;
 

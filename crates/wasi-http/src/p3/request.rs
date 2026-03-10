@@ -209,8 +209,8 @@ impl Request {
         };
         let mut headers = Arc::unwrap_or_clone(headers);
         let mut store = store.as_context_mut();
-        let WasiHttpCtxView { ctx, .. } = getter(store.data_mut());
-        if ctx.set_host_header() {
+        let WasiHttpCtxView { hooks, .. } = getter(store.data_mut());
+        if hooks.set_host_header() {
             let host = if let Some(authority) = authority.as_ref() {
                 HeaderValue::try_from(authority.as_str())
                     .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?
@@ -220,8 +220,8 @@ impl Request {
             headers.insert(HOST, host);
         }
         let scheme = match scheme {
-            None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
-            Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
+            None => hooks.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
+            Some(scheme) if hooks.is_supported_scheme(&scheme) => scheme,
             Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
         };
         let mut uri = Uri::builder().scheme(scheme);
@@ -478,7 +478,7 @@ pub async fn default_send_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::p3::DefaultWasiHttpCtx;
+    use crate::WasiHttpCtx;
     use core::future::Future;
     use core::pin::pin;
     use core::str::FromStr;
@@ -491,7 +491,7 @@ mod tests {
     struct TestCtx {
         table: ResourceTable,
         wasi: WasiCtx,
-        http: DefaultWasiHttpCtx,
+        http: WasiHttpCtx,
     }
 
     impl TestCtx {
@@ -499,7 +499,7 @@ mod tests {
             Self {
                 table: ResourceTable::default(),
                 wasi: WasiCtxBuilder::new().build(),
-                http: DefaultWasiHttpCtx,
+                http: Default::default(),
             }
         }
     }
@@ -518,6 +518,7 @@ mod tests {
             WasiHttpCtxView {
                 ctx: &mut self.http,
                 table: &mut self.table,
+                hooks: crate::p3::default_hooks(),
             }
         }
     }

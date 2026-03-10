@@ -341,6 +341,22 @@ impl RunCommon {
         Ok(http)
     }
 
+    #[cfg(feature = "wasi-http")]
+    pub fn wasi_http_hooks(&self) -> HttpHooks {
+        HttpHooks {
+            p2_outgoing_body_buffer_chunks: self
+                .common
+                .wasi
+                .http_outgoing_body_buffer_chunks
+                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
+            p2_outgoing_body_chunk_size: self
+                .common
+                .wasi
+                .http_outgoing_body_chunk_size
+                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
+        }
+    }
+
     pub fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
         let mut listeners = vec![];
 
@@ -444,8 +460,34 @@ impl Profile {
     }
 }
 
-#[derive(Default, Clone)]
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-pub struct DefaultP3Ctx;
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-impl wasmtime_wasi_http::p3::WasiHttpCtx for DefaultP3Ctx {}
+#[derive(Copy, Clone, Debug)]
+#[cfg(feature = "wasi-http")]
+pub struct HttpHooks {
+    p2_outgoing_body_buffer_chunks: usize,
+    p2_outgoing_body_chunk_size: usize,
+}
+
+#[cfg(feature = "wasi-http")]
+impl Default for HttpHooks {
+    fn default() -> Self {
+        Self {
+            p2_outgoing_body_buffer_chunks:
+                wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
+            p2_outgoing_body_chunk_size: wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+        }
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+impl wasmtime_wasi_http::p2::WasiHttpHooks for HttpHooks {
+    fn outgoing_body_buffer_chunks(&mut self) -> usize {
+        self.p2_outgoing_body_buffer_chunks
+    }
+
+    fn outgoing_body_chunk_size(&mut self) -> usize {
+        self.p2_outgoing_body_chunk_size
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+impl wasmtime_wasi_http::p3::WasiHttpHooks for HttpHooks {}

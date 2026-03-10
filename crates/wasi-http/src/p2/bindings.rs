@@ -2,8 +2,8 @@
 
 #[expect(missing_docs, reason = "bindgen-generated code")]
 mod generated {
-    use crate::body;
-    use crate::types;
+    use crate::p2::body;
+    use crate::p2::types;
 
     wasmtime::component::bindgen!({
         path: "wit",
@@ -30,7 +30,7 @@ mod generated {
             "wasi:http/types.request-options": types::HostRequestOptions,
         },
         trappable_error_type: {
-            "wasi:http/types.error-code" => crate::HttpError,
+            "wasi:http/types.error-code" => crate::p2::HttpError,
         },
     });
 }
@@ -52,7 +52,7 @@ pub mod sync {
             imports: { default: tracing },
             with: {
                 // http is in this crate
-                "wasi:http": crate::bindings::http,
+                "wasi:http": crate::p2::bindings::http,
                 // sync requires the wrapper in the wasmtime_wasi crate, in
                 // order to have in_tokio
                 "wasi:io": wasmtime_wasi::p2::bindings::sync::io,

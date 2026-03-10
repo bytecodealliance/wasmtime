@@ -413,6 +413,7 @@ jobs:
           - name: wasmtime-wasi-http
             checks: |
               -p wasmtime-wasi-http --no-default-features
+              -p wasmtime-wasi-http --no-default-features --features p2
               -p wasmtime-wasi-http --no-default-features --features p3
               -p wasmtime-wasi-http --no-default-features --features p3 --all-targets
 
