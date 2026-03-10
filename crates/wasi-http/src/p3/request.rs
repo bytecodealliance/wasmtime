@@ -1,12 +1,12 @@
-use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::p3::{HttpError, HttpResult, WasiHttpCtxView, WasiHttpView};
+use crate::{FieldMap, get_content_length};
 use bytes::Bytes;
 use core::time::Duration;
 use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
-use http::{HeaderMap, HeaderValue, Method, Uri};
+use http::{HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub struct Request {
     /// The path and query of the request.
     pub path_with_query: Option<PathAndQuery>,
     /// The request headers.
-    pub headers: Arc<HeaderMap>,
+    pub headers: FieldMap,
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
@@ -55,7 +55,7 @@ impl Request {
         scheme: Option<Scheme>,
         authority: Option<Authority>,
         path_with_query: Option<PathAndQuery>,
-        headers: impl Into<Arc<HeaderMap>>,
+        headers: impl Into<FieldMap>,
         options: Option<Arc<RequestOptions>>,
         body: impl Into<UnsyncBoxBody<Bytes, ErrorCode>>,
     ) -> (
@@ -119,7 +119,7 @@ impl Request {
             scheme,
             authority,
             path_and_query,
-            headers,
+            FieldMap::new_immutable(headers),
             None,
             body.map_err(Into::into).boxed_unsync(),
         )
@@ -156,7 +156,7 @@ impl Request {
             scheme,
             authority,
             path_with_query,
-            headers,
+            mut headers,
             options,
             body,
         } = self;
@@ -207,9 +207,9 @@ impl Request {
                 }
             }
         };
-        let mut headers = Arc::unwrap_or_clone(headers);
         let mut store = store.as_context_mut();
-        let WasiHttpCtxView { hooks, .. } = getter(store.data_mut());
+        let WasiHttpCtxView { hooks, ctx, .. } = getter(store.data_mut());
+        headers.set_mutable(ctx.field_size_limit);
         if hooks.set_host_header() {
             let host = if let Some(authority) = authority.as_ref() {
                 HeaderValue::try_from(authority.as_str())
@@ -217,7 +217,7 @@ impl Request {
             } else {
                 HeaderValue::from_static("")
             };
-            headers.insert(HOST, host);
+            headers.append(HOST, host).map_err(HttpError::trap)?;
         }
         let scheme = match scheme {
             None => hooks.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
@@ -236,7 +236,7 @@ impl Request {
             ErrorCode::HttpRequestUriInvalid
         })?;
         let mut req = http::Request::builder();
-        *req.headers_mut().unwrap() = headers;
+        *req.headers_mut().unwrap() = headers.into();
         let req = req
             .method(method)
             .uri(uri)
@@ -534,7 +534,7 @@ mod tests {
                 scheme.clone(),
                 Some(Authority::from_static("example.com")),
                 Some(PathAndQuery::from_static("/path?query=1")),
-                HeaderMap::new(),
+                FieldMap::default(),
                 None,
                 Full::new(Bytes::from_static(b"body"))
                     .map_err(|x| match x {})
@@ -570,7 +570,7 @@ mod tests {
             Some(Scheme::HTTP),
             Some(Authority::from_static("example.com")),
             None, // <-- should fail, must be Some(_) when authority is set
-            HeaderMap::new(),
+            FieldMap::default(),
             None,
             Empty::new().map_err(|x| match x {}).boxed_unsync(),
         );
