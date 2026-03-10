@@ -147,7 +147,7 @@ fn pulley_provenance_test() -> Result<()> {
                 .unwrap()
                 .unwrap();
             assert_eq!(caller_func.as_u32(), 3);
-            assert_eq!(pc, 416);
+            assert_eq!(pc, 418);
             let parent_frame = caller_frame.parent(&mut caller).unwrap();
             assert!(parent_frame.is_none());
 

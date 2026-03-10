@@ -664,8 +664,13 @@ pub fn translate_operator(
             let mut args = environ.stacks.peekn(num_args).to_vec();
             bitcast_wasm_params(environ, sig_ref, &mut args, builder);
 
-            let inst_results =
-                environ.translate_call(builder, srcloc, function_index, sig_ref, &args)?;
+            let inst_results = environ.translate_call(
+                builder,
+                environ.next_srcloc,
+                function_index,
+                sig_ref,
+                &args,
+            )?;
 
             debug_assert_eq!(
                 inst_results.len(),
@@ -693,7 +698,7 @@ pub fn translate_operator(
 
             let inst_results = environ.translate_call_indirect(
                 builder,
-                srcloc,
+                environ.next_srcloc,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
@@ -2632,7 +2637,7 @@ pub fn translate_operator(
             bitcast_wasm_params(environ, sigref, &mut args, builder);
 
             let inst_results =
-                environ.translate_call_ref(builder, srcloc, sigref, callee, &args)?;
+                environ.translate_call_ref(builder, environ.next_srcloc, sigref, callee, &args)?;
 
             debug_assert_eq!(
                 inst_results.len(),
