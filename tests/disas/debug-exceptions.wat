@@ -116,7 +116,7 @@
 ;;       ldr     x2, [x1, #0x40]
 ;;       ldur    x3, [sp, #0x10]
 ;;       blr     x0
-;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 72, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 74, slot at FP-0xc0, locals , stack I32 @ slot+0x8
 ;;  158: ldur    x0, [sp, #0x10]
 ;;       nop
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 74, slot at FP-0xc0, locals , stack I32 @ slot+0x8
