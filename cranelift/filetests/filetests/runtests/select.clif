@@ -539,18 +539,18 @@ block0(v0: i8, v1: i8):
 ; run: %select_x_one_borxy_to_select_x_one_y_rt(1, 5) == 1
 ; run: %select_x_one_borxy_to_select_x_one_y_rt(2, 5) == 1
 
-function %select_eq_x1_yminus1_yminusx_to_yminusx_rt(i32, i32) -> i32 fast {
+function %select_eq_xn_yminusn_yminusx_to_yminusx_rt(i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32):
-  v2 = iconst.i32 1
+  v2 = iconst.i32 7
   v3 = icmp eq v0, v2
   v4 = isub v1, v2
   v5 = isub v1, v0
   v6 = select v3, v4, v5
   return v6
 }
-; run: %select_eq_x1_yminus1_yminusx_to_yminusx_rt(1, 10) == 9
-; run: %select_eq_x1_yminus1_yminusx_to_yminusx_rt(3, 10) == 7
-; run: %select_eq_x1_yminus1_yminusx_to_yminusx_rt(0, 10) == 10
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(7, 10) == 3
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(3, 10) == 7
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(0, 10) == 10
 
 function %select_eq_eq_to_eq_select_rt(i8, i32, i32) -> i8 fast {
 block0(v0: i8, v1: i32, v2: i32):

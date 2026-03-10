@@ -193,10 +193,10 @@ block0(v0: i8, v1: i8):
 ;     return v5
 ; }
 
-;; if x == 1 then (y - 1) else (y - x)  ==>  (y - x)
-function %select_eq_x1_yminus1_yminusx_to_yminusx(i32, i32) -> i32 fast {
+;; if x == n then (y - n) else (y - x)  ==>  (y - x)
+function %select_eq_xn_yminusn_yminusx_to_yminusx(i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32):
-    v2 = iconst.i32 1
+    v2 = iconst.i32 7
     v3 = icmp eq v0, v2
     v4 = isub v1, v2
     v5 = isub v1, v0
@@ -204,7 +204,7 @@ block0(v0: i32, v1: i32):
     return v6
 }
 
-; function %select_eq_x1_yminus1_yminusx_to_yminusx(i32, i32) -> i32 fast {
+; function %select_eq_xn_yminusn_yminusx_to_yminusx(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = isub v1, v0
 ;     return v5
