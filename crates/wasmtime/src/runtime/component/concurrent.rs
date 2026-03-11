@@ -4311,7 +4311,7 @@ struct LiftResult {
 /// This exists to minimize table lookups and the necessity to pass stores around mutably
 /// for the common case of identifying the task to which a thread belongs.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-struct QualifiedThreadId {
+pub(crate) struct QualifiedThreadId {
     task: TableId<GuestTask>,
     thread: TableId<GuestThread>,
 }
@@ -4806,7 +4806,7 @@ impl ConcurrentInstanceState {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum CurrentThread {
+pub(crate) enum CurrentThread {
     Guest(QualifiedThreadId),
     Host(TableId<HostTask>),
     None,
