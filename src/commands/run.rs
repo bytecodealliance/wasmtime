@@ -1144,7 +1144,7 @@ impl RunCommand {
         let mut ctx = builder.build_p1();
         if let Some(max) = self.run.common.wasi.max_resources {
             ctx.ctx().table.set_max_capacity(max);
-            #[cfg(feature = "component-model")]
+            #[cfg(feature = "component-model-async")]
             if let Some(table) = store.concurrent_resource_table() {
                 table.set_max_capacity(max);
             }

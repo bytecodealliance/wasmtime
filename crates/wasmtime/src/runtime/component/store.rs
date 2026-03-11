@@ -416,6 +416,7 @@ impl StoreOpaque {
         self.component_data_mut().hostcall_fuel = fuel;
     }
 
+    #[cfg(feature = "component-model-async")]
     fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
         if self.concurrency_support() {
             Some(self.concurrent_state_mut().table())
@@ -470,6 +471,7 @@ impl<T> Store<T> {
     /// Returns `None` if [`Config::concurrency_support`] is disabled.
     ///
     /// [`Config::concurrency_support`]: crate::Config::concurrency_support
+    #[cfg(feature = "component-model-async")]
     pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
         self.as_context_mut().0.concurrent_resource_table()
     }
@@ -487,6 +489,7 @@ impl<T> StoreContextMut<'_, T> {
     }
 
     /// See [`Store::concurrent_resource_table`].
+    #[cfg(feature = "component-model-async")]
     pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
         self.0.concurrent_resource_table()
     }
