@@ -785,6 +785,16 @@ impl NumericOp<'_> {
                 body: r#"a.checked_shr(b).unwrap_or_else(|| panic!("shr overflow: {a} >> {b}"))"#,
                 ..shift.clone()
             },
+            NumericOp {
+                name: "rotl",
+                body: "a.rotate_left(b)",
+                ..shift.clone()
+            },
+            NumericOp {
+                name: "rotr",
+                body: "a.rotate_right(b)",
+                ..shift.clone()
+            },
             // Predicates.
             //
             // We generate both pure constructors and a variety of extractors
