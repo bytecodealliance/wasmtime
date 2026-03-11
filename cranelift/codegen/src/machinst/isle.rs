@@ -203,8 +203,13 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn inst_data_value(&mut self, inst: Inst) -> InstructionData {
-            self.lower_ctx.dfg().insts[inst]
+        fn inst_data_value(&mut self, inst: Inst) -> (Type, InstructionData) {
+            let ty = match self.first_result(inst) {
+                Some(v) => self.value_type(v),
+                None => types::INVALID,
+            };
+            let data = self.lower_ctx.dfg().insts[inst];
+            (ty, data)
         }
 
         #[inline]
