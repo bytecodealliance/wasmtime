@@ -499,6 +499,8 @@
       (global $state (mut i32) (i32.const 0))
       (global $future-subtask (mut i32) (i32.const 0))
       (global $stream-subtask (mut i32) (i32.const 0))
+      (global $future-retp i32 (i32.const 0x60))
+      (global $stream-retp i32 (i32.const 0x70))
 
       (func (export "run") (result i32)
         (local $ret i32) (local $ret64 i64)
@@ -515,13 +517,13 @@
         (local.set $sr (i32.wrap_i64 (local.get $ret64)))
         (global.set $sw (i32.wrap_i64 (i64.shr_u (local.get $ret64) (i64.const 32))))
 
-        (local.set $ret (call $run-reader-future (local.get $fr) (i32.const 60)))
+        (local.set $ret (call $run-reader-future (local.get $fr) (global.get $future-retp)))
         (global.set $future-subtask (i32.shr_u (local.get $ret) (i32.const 4)))
         (local.set $ret (call $future.write (global.get $fw) (i32.const 40)))
         (if (i32.ne (i32.const 0 (; COMPLETED ;)) (local.get $ret))
           (then unreachable))
 
-        (local.set $ret (call $run-reader-stream (local.get $sr) (i32.const 60)))
+        (local.set $ret (call $run-reader-stream (local.get $sr) (global.get $stream-retp)))
         (global.set $stream-subtask (i32.shr_u (local.get $ret) (i32.const 4)))
         (local.set $ret (call $stream.write (global.get $sw) (i32.const 40) (i32.const 1)))
         (if (i32.ne (i32.const 0x10 (; COMPLETED | 1<<4 ;)) (local.get $ret)) (then (unreachable)))
@@ -546,10 +548,13 @@
         ;; Track which subtask completed
         (if (i32.eq (local.get $index) (global.get $future-subtask))
           (then
+            (if (i32.ne (i32.load (global.get $future-retp)) (i32.const 42)) (then (unreachable)))
             (global.set $future-completed (i32.const 1)))
           (else
             (if (i32.eq (local.get $index) (global.get $stream-subtask))
-              (then (global.set $stream-completed (i32.const 1)))
+              (then
+              (if (i32.ne (i32.load (global.get $stream-retp)) (i32.const 42)) (then (unreachable))) 
+                (global.set $stream-completed (i32.const 1)))
               (else unreachable))))
         
         ;; If both completed, exit; otherwise keep waiting
