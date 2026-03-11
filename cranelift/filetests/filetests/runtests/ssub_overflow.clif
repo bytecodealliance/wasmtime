@@ -3,6 +3,7 @@ test run
 set enable_llvm_abi_extensions=true
 target aarch64
 set enable_multi_ret_implicit_sret
+target s390x
 target x86_64
 
 function %ssubof_i128(i128, i128) -> i128, i8 {

@@ -956,8 +956,8 @@ block0(v0: i128, v1: i128):
 ;   vlgvg %r12, %v3, 1
 ;   lgr %r3, %r5
 ;   mlgr %r2, %r12
-;   msgr %r5, %r10
-;   msgr %r4, %r12
+;   msgrkc %r5, %r5, %r10
+;   msgrkc %r4, %r4, %r12
 ;   agrk %r2, %r5, %r2
 ;   agrk %r2, %r4, %r2
 ;   vlvgp %v25, %r2, %r3
@@ -979,8 +979,8 @@ block0(v0: i128, v1: i128):
 ;   vlgvg %r12, %v3, 1
 ;   lgr %r3, %r5
 ;   mlgr %r2, %r12
-;   msgr %r5, %r10
-;   msgr %r4, %r12
+;   msgrkc %r5, %r5, %r10
+;   msgrkc %r4, %r4, %r12
 ;   agrk %r2, %r5, %r2
 ;   agrk %r2, %r4, %r2
 ;   vlvgp %v25, %r2, %r3
@@ -997,12 +997,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   msgr %r2, %r3
+;   msgrkc %r2, %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   msgr %r2, %r3
+;   msgrkc %r2, %r2, %r3
 ;   br %r14
 
 function %imul_i64_imm16(i64) -> i64 {
@@ -1098,12 +1098,12 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 
 function %imul_i32_imm16(i32) -> i32 {
@@ -1216,12 +1216,12 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 
 function %imul_i16_imm(i16) -> i16 {
@@ -1266,12 +1266,12 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   msr %r2, %r3
+;   msrkc %r2, %r2, %r3
 ;   br %r14
 
 function %imul_i8_imm(i8) -> i8 {
@@ -1301,13 +1301,13 @@ block0(v0: i8, v1: i64):
 ; VCode:
 ; block0:
 ;   llc %r4, 0(%r3)
-;   msr %r2, %r4
+;   msrkc %r2, %r2, %r4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llc %r4, 0(%r3) ; trap: heap_oob
-;   msr %r2, %r4
+;   msrkc %r2, %r2, %r4
 ;   br %r14
 
 function %umulhi_i64(i64, i64) -> i64 {

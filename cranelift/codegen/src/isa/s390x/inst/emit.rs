@@ -1515,8 +1515,8 @@ impl Inst {
                     ALUOp::Sub64 => (0xb9e9, true),        // SGRK
                     ALUOp::SubLogical32 => (0xb9fb, true), // SLRK
                     ALUOp::SubLogical64 => (0xb9eb, true), // SLGRK
-                    ALUOp::Mul32 => (0xb9fd, true),        // MSRKC
-                    ALUOp::Mul64 => (0xb9ed, true),        // MSGRKC
+                    ALUOp::Mul32 => (0xb9fd, false),       // MSRKC
+                    ALUOp::Mul64 => (0xb9ed, false),       // MSGRKC
                     ALUOp::And32 => (0xb9f4, true),        // NRK
                     ALUOp::And64 => (0xb9e4, true),        // NGRK
                     ALUOp::Orr32 => (0xb9f6, true),        // ORK
@@ -2719,11 +2719,13 @@ impl Inst {
                     VecBinaryOp::Add32x4 => (0xe7f3, 2),       // VAF
                     VecBinaryOp::Add64x2 => (0xe7f3, 3),       // VAG
                     VecBinaryOp::Add128 => (0xe7f3, 4),        // VAQ
+                    VecBinaryOp::Add128Cout => (0xe7f1, 4),    // VACCQ
                     VecBinaryOp::Sub8x16 => (0xe7f7, 0),       // VSB
                     VecBinaryOp::Sub16x8 => (0xe7f7, 1),       // VSH
                     VecBinaryOp::Sub32x4 => (0xe7f7, 2),       // VSF
                     VecBinaryOp::Sub64x2 => (0xe7f7, 3),       // VSG
                     VecBinaryOp::Sub128 => (0xe7f7, 4),        // VSQ
+                    VecBinaryOp::Sub128Cout => (0xe7f5, 4),    // VSCBI
                     VecBinaryOp::Mul8x16 => (0xe7a2, 0),       // VMLB
                     VecBinaryOp::Mul16x8 => (0xe7a2, 1),       // VMLHW
                     VecBinaryOp::Mul32x4 => (0xe7a2, 2),       // VMLF
