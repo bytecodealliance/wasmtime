@@ -507,7 +507,7 @@
         (local $fr i32) (local $sr i32)
 
         ;; store address and length of string
-        (i32.store offset=0 (i32.const 40) (i32.const 100))
+        (i32.store offset=0 (i32.const 40) (i32.const 0x100))
         (i32.store offset=4 (i32.const 40) (i32.const 2))
 
         (local.set $ret64 (call $future.new))
@@ -568,7 +568,7 @@
               (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (global.get $ws) (i32.const 4)))))
       )
 
-      (data (i32.const 100) "hi")
+      (data (i32.const 0x100) "hi")
     )
     (canon future.new $FT (core func $future.new))
     (canon future.write $FT async
