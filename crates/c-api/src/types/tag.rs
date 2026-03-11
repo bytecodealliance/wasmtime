@@ -43,9 +43,7 @@ impl LazyTagType {
 
     fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         match self {
-            LazyTagType::Lazy { params } => {
-                LazyTagTypeIter::Lazy(params.iter())
-            }
+            LazyTagType::Lazy { params } => LazyTagTypeIter::Lazy(params.iter()),
             LazyTagType::Resolved(t) => LazyTagTypeIter::Resolved(t.ty().params()),
         }
     }
@@ -119,9 +117,7 @@ impl wasm_tagtype_t {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasm_tagtype_new(
-    params: &mut wasm_valtype_vec_t,
-) -> Box<wasm_tagtype_t> {
+pub extern "C" fn wasm_tagtype_new(params: &mut wasm_valtype_vec_t) -> Box<wasm_tagtype_t> {
     let params = params
         .take()
         .into_iter()

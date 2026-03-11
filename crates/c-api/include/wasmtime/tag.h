@@ -52,17 +52,23 @@ WASM_API_EXTERN wasm_tagtype_t *wasm_tagtype_copy(const wasm_tagtype_t *);
  * Does not take ownership; the returned vector is valid for the lifetime of
  * the tag type.
  */
-WASM_API_EXTERN const wasm_valtype_vec_t *wasm_tagtype_params(const wasm_tagtype_t *);
+WASM_API_EXTERN const wasm_valtype_vec_t *
+wasm_tagtype_params(const wasm_tagtype_t *);
 
 /// \brief Converts a #wasm_tagtype_t to a #wasm_externtype_t (borrowed).
 WASM_API_EXTERN wasm_externtype_t *wasm_tagtype_as_externtype(wasm_tagtype_t *);
-/// \brief Converts a const #wasm_tagtype_t to a const #wasm_externtype_t (borrowed).
-WASM_API_EXTERN const wasm_externtype_t *wasm_tagtype_as_externtype_const(const wasm_tagtype_t *);
+/// \brief Converts a const #wasm_tagtype_t to a const #wasm_externtype_t
+/// (borrowed).
+WASM_API_EXTERN const wasm_externtype_t *
+wasm_tagtype_as_externtype_const(const wasm_tagtype_t *);
 
-/// \brief Converts a #wasm_externtype_t to a #wasm_tagtype_t, or NULL if not a tag.
+/// \brief Converts a #wasm_externtype_t to a #wasm_tagtype_t, or NULL if not a
+/// tag.
 WASM_API_EXTERN wasm_tagtype_t *wasm_externtype_as_tagtype(wasm_externtype_t *);
-/// \brief Converts a const #wasm_externtype_t to a const #wasm_tagtype_t, or NULL if not a tag.
-WASM_API_EXTERN const wasm_tagtype_t *wasm_externtype_as_tagtype_const(const wasm_externtype_t *);
+/// \brief Converts a const #wasm_externtype_t to a const #wasm_tagtype_t, or
+/// NULL if not a tag.
+WASM_API_EXTERN const wasm_tagtype_t *
+wasm_externtype_as_tagtype_const(const wasm_externtype_t *);
 
 #ifdef __cplusplus
 } // extern "C"

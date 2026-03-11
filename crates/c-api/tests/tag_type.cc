@@ -36,13 +36,11 @@ TEST(TagType, ModuleExportEnumeration) {
 
   // Compile a module that exports a tag.  The tag has an i32 payload.
   // The WAT syntax for tags: (tag $t (param i32)) + (export "t" (tag $t))
-  Module module =
-      Module::compile(engine,
-                      "(module"
-                      "  (tag $t (param i32))"
-                      "  (export \"t\" (tag $t))"
-                      ")")
-          .unwrap();
+  Module module = Module::compile(engine, "(module"
+                                          "  (tag $t (param i32))"
+                                          "  (export \"t\" (tag $t))"
+                                          ")")
+                      .unwrap();
 
   auto exports = module.exports();
   ASSERT_EQ(exports.size(), 1);
@@ -66,13 +64,11 @@ TEST(TagType, ExternTypeKindAndCast) {
   config.wasm_exceptions(true);
   Engine engine(std::move(config));
 
-  Module module =
-      Module::compile(engine,
-                      "(module"
-                      "  (tag $t)"
-                      "  (export \"t\" (tag $t))"
-                      ")")
-          .unwrap();
+  Module module = Module::compile(engine, "(module"
+                                          "  (tag $t)"
+                                          "  (export \"t\" (tag $t))"
+                                          ")")
+                      .unwrap();
 
   auto exports = module.exports();
   ASSERT_EQ(exports.size(), 1);
