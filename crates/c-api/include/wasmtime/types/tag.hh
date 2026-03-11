@@ -5,6 +5,7 @@
 #ifndef WASMTIME_TYPES_TAG_HH
 #define WASMTIME_TYPES_TAG_HH
 
+#include <wasmtime/tag.h>
 #include <wasmtime/types/val.hh>
 
 namespace wasmtime {

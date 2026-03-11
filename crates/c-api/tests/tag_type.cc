@@ -1,3 +1,4 @@
+#include <wasmtime/tag.h>
 #include <wasmtime/types/tag.hh>
 
 #include <gtest/gtest.h>

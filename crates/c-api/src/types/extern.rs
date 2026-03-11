@@ -37,7 +37,7 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
-pub const WASM_EXTERN_TAG: wasm_externkind_t = 4;
+pub const WASM_EXTERN_TAG: wasm_externkind_t = 4; // from wasmtime/tag.h; not yet in vendored wasm.h
 
 impl wasm_externtype_t {
     pub(crate) fn from_extern_type(ty: ExternType) -> wasm_externtype_t {
