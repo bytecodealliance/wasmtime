@@ -5179,6 +5179,10 @@ impl ConcurrentState {
             None => bail_bug!("futures field of concurrent state is currently taken"),
         }
     }
+
+    pub(crate) fn table(&mut self) -> &mut ResourceTable {
+        self.table.get_mut()
+    }
 }
 
 /// Provide a type hint to compiler about the shape of a parameter lower
