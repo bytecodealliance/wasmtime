@@ -6,16 +6,24 @@
 
 using namespace wasmtime;
 
-// Basic TagType construction and param inspection.
+// Basic TagType construction and param inspection via functype.
 TEST(TagType, Simple) {
-  // Tag with no payload.
-  TagType empty({});
-  EXPECT_EQ(empty->params().size(), 0);
+  Config config;
+  config.wasm_exceptions(true);
+  Engine engine(std::move(config));
+
+  // Tag with no payload: empty functype.
+  FuncType empty_ft({}, {});
+  TagType empty(engine, empty_ft);
+  auto empty_func = empty->functype();
+  EXPECT_EQ(empty_func->params().size(), 0u);
 
   // Tag with i32 and i64 payload types.
-  TagType t({ValKind::I32, ValKind::I64});
-  auto params = t->params();
-  EXPECT_EQ(params.size(), 2);
+  FuncType ft({ValKind::I32, ValKind::I64}, {});
+  TagType t(engine, ft);
+  auto func = t->functype();
+  auto params = func->params();
+  EXPECT_EQ(params.size(), 2u);
   auto it = params.begin();
   EXPECT_EQ(it->kind(), ValKind::I32);
   ++it;
@@ -23,7 +31,7 @@ TEST(TagType, Simple) {
 
   // Copy.
   auto t2 = t;
-  EXPECT_EQ(t2->params().size(), 2);
+  EXPECT_EQ(t2->functype()->params().size(), 2u);
 }
 
 // Verify that a module exporting an exception tag can have its exports
@@ -35,7 +43,6 @@ TEST(TagType, ModuleExportEnumeration) {
   Engine engine(std::move(config));
 
   // Compile a module that exports a tag.  The tag has an i32 payload.
-  // The WAT syntax for tags: (tag $t (param i32)) + (export "t" (tag $t))
   Module module = Module::compile(engine, "(module"
                                           "  (tag $t (param i32))"
                                           "  (export \"t\" (tag $t))"
@@ -52,13 +59,14 @@ TEST(TagType, ModuleExportEnumeration) {
   ASSERT_TRUE(std::holds_alternative<TagType::Ref>(extern_ty));
 
   auto tag_ref = std::get<TagType::Ref>(extern_ty);
-  auto params = tag_ref.params();
-  ASSERT_EQ(params.size(), 1);
+  auto func = tag_ref.functype();
+  auto params = func->params();
+  ASSERT_EQ(params.size(), 1u);
   EXPECT_EQ(params.begin()->kind(), ValKind::I32);
 }
 
-// Verify that wasm_externtype_kind returns WASM_EXTERN_TAG for tag exports
-// and that the C-level cast functions work correctly.
+// Verify that wasm_externtype_kind returns WASMTIME_EXTERNTYPE_TAG for tag
+// exports and that the C-level cast functions work correctly.
 TEST(TagType, ExternTypeKindAndCast) {
   Config config;
   config.wasm_exceptions(true);
@@ -80,8 +88,8 @@ TEST(TagType, ExternTypeKindAndCast) {
       *reinterpret_cast<const wasm_exporttype_t *const *>(&e);
   const wasm_externtype_t *ext = wasm_exporttype_type(raw_et);
 
-  EXPECT_EQ(wasm_externtype_kind(ext), WASM_EXTERN_TAG);
-  EXPECT_NE(wasm_externtype_as_tagtype_const(ext), nullptr);
+  EXPECT_EQ(wasm_externtype_kind(ext), WASMTIME_EXTERNTYPE_TAG);
+  EXPECT_NE(wasmtime_externtype_as_tagtype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_functype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_globaltype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_memorytype_const(ext), nullptr);

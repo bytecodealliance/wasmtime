@@ -37,7 +37,9 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
-pub const WASM_EXTERN_TAG: wasm_externkind_t = 4; // from wasmtime/tag.h; not yet in vendored wasm.h
+/// Value returned by `wasm_externtype_kind` for exception tags.
+/// This extends the `wasm_externkind_t` range (0-3 in wasm.h) with tag support.
+pub const WASMTIME_EXTERNTYPE_TAG: wasm_externkind_t = 4;
 
 impl wasm_externtype_t {
     pub(crate) fn from_extern_type(ty: ExternType) -> wasm_externtype_t {
@@ -58,7 +60,7 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
         CExternType::Table(_) => WASM_EXTERN_TABLE,
         CExternType::Global(_) => WASM_EXTERN_GLOBAL,
         CExternType::Memory(_) => WASM_EXTERN_MEMORY,
-        CExternType::Tag(_) => WASM_EXTERN_TAG,
+        CExternType::Tag(_) => WASMTIME_EXTERNTYPE_TAG,
     }
 }
 

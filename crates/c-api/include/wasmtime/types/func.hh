@@ -15,6 +15,7 @@ namespace wasmtime {
 class FuncType {
   friend class Func;
   friend class Linker;
+  friend class TagType;
 
   struct deleter {
     void operator()(wasm_functype_t *p) const { wasm_functype_delete(p); }

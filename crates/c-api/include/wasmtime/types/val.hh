@@ -68,8 +68,6 @@ class ValType {
   friend class TableType;
   friend class GlobalType;
   friend class FuncType;
-  friend class TagType;
-
   struct deleter {
     void operator()(wasm_valtype_t *p) const { wasm_valtype_delete(p); }
   };
