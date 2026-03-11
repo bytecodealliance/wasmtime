@@ -1,7 +1,7 @@
 use crate::{CExternType, wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t};
 use std::cell::OnceCell;
 use std::sync::{Arc, Mutex};
-use wasmtime::{Engine, FuncType, TagType, ValType};
+use wasmtime::{TagType, ValType};
 
 #[repr(transparent)]
 #[derive(Clone)]
@@ -28,19 +28,6 @@ enum LazyTagType {
 }
 
 impl LazyTagType {
-    fn force(&mut self, engine: &Engine) -> TagType {
-        match self {
-            LazyTagType::Resolved(t) => t.clone(),
-            LazyTagType::Lazy { params } => {
-                let params = std::mem::take(params);
-                let func_ty = FuncType::new(engine, params, []);
-                let tag_ty = TagType::new(func_ty);
-                *self = LazyTagType::Resolved(tag_ty.clone());
-                tag_ty
-            }
-        }
-    }
-
     fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         match self {
             LazyTagType::Lazy { params } => LazyTagTypeIter::Lazy(params.iter()),
@@ -88,19 +75,9 @@ impl CTagType {
             params_cache: OnceCell::new(),
         }
     }
-
-    pub(crate) fn ty(&self, engine: &Engine) -> TagType {
-        self.ty.lock().unwrap().force(engine)
-    }
 }
 
 impl wasm_tagtype_t {
-    pub(crate) fn new(ty: TagType) -> wasm_tagtype_t {
-        wasm_tagtype_t {
-            ext: wasm_externtype_t::from_extern_type(ty.into()),
-        }
-    }
-
     pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasm_tagtype_t> {
         match &e.which {
             CExternType::Tag(_) => Some(unsafe { &*(e as *const _ as *const _) }),

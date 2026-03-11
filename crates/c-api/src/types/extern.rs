@@ -1,7 +1,5 @@
 use crate::{CFuncType, CGlobalType, CMemoryType, CTableType, CTagType};
-use crate::{
-    wasm_functype_t, wasm_globaltype_t, wasm_memorytype_t, wasm_tabletype_t, wasm_tagtype_t,
-};
+use crate::{wasm_functype_t, wasm_globaltype_t, wasm_memorytype_t, wasm_tabletype_t};
 use wasmtime::ExternType;
 
 #[repr(C)]
