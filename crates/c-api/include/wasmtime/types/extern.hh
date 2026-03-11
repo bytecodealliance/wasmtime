@@ -13,6 +13,7 @@
 #include <wasmtime/types/import.hh>
 #include <wasmtime/types/memory.hh>
 #include <wasmtime/types/table.hh>
+#include <wasmtime/types/tag.hh>
 
 namespace wasmtime {
 
@@ -31,7 +32,7 @@ public:
   /// otherwise this is used to determine what the actual type of the outer item
   /// is.
   typedef std::variant<FuncType::Ref, GlobalType::Ref, TableType::Ref,
-                       MemoryType::Ref>
+                       MemoryType::Ref, TagType::Ref>
       Ref;
 
   /// Extract the type of the item imported by the provided type.
@@ -59,6 +60,8 @@ private:
       return wasm_externtype_as_tabletype_const(ptr);
     case WASM_EXTERN_MEMORY:
       return wasm_externtype_as_memorytype_const(ptr);
+    case WASM_EXTERN_TAG:
+      return wasm_externtype_as_tagtype_const(ptr);
     }
     std::abort();
   }

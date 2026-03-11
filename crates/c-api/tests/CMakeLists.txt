@@ -30,6 +30,7 @@ add_capi_test(tests FILES
   import_type.cc
   export_type.cc
   extern_type.cc
+  tag_type.cc
   func.cc
   component/instantiate.cc
   component/define_module.cc
