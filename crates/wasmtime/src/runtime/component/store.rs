@@ -1,6 +1,8 @@
 use crate::prelude::*;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::ResourceTable;
 use crate::runtime::component::concurrent::ConcurrentState;
-use crate::runtime::component::{HostResourceData, Instance, ResourceTable};
+use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
