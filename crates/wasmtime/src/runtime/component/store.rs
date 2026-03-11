@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::component::concurrent::ConcurrentState;
-use crate::runtime::component::{HostResourceData, Instance};
+use crate::runtime::component::{HostResourceData, Instance, ResourceTable};
 use crate::runtime::vm;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
@@ -415,6 +415,14 @@ impl StoreOpaque {
     pub(crate) fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.component_data_mut().hostcall_fuel = fuel;
     }
+
+    fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
+        if self.concurrency_support() {
+            Some(self.concurrent_state_mut().table())
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> Store<T> {
@@ -455,6 +463,16 @@ impl<T> Store<T> {
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.as_context_mut().set_hostcall_fuel(fuel)
     }
+
+    /// Returns the underlying [`ResourceTable`] that the implementation of
+    /// concurrency in the component model is using.
+    ///
+    /// Returns `None` if [`Config::concurrency_support`] is disabled.
+    ///
+    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
+    pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
+        self.as_context_mut().0.concurrent_resource_table()
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -466,6 +484,11 @@ impl<T> StoreContextMut<'_, T> {
     /// See [`Store::set_hostcall_fuel`].
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.0.set_hostcall_fuel(fuel)
+    }
+
+    /// See [`Store::concurrent_resource_table`].
+    pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
+        self.0.concurrent_resource_table()
     }
 }
 

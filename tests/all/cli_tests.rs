@@ -2683,7 +2683,29 @@ start a print 1234
 
     #[test]
     fn p2_cli_many_resources() -> Result<()> {
-        let err = run_wasmtime(&["run", P2_CLI_MANY_RESOURCES_COMPONENT]).unwrap_err();
+        let err = run_wasmtime(&[
+            "run",
+            "-Smax-resources=100",
+            P2_CLI_MANY_RESOURCES_COMPONENT,
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("resource table has no free keys"),
+            "bad error message: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn p3_cli_many_tasks() -> Result<()> {
+        let err = run_wasmtime(&[
+            "run",
+            "-Smax-resources=100",
+            "-Sp3",
+            "-Wcomponent-model-async",
+            dbg!(P3_CLI_MANY_TASKS_COMPONENT),
+        ])
+        .unwrap_err();
         assert!(
             err.to_string().contains("resource table has no free keys"),
             "bad error message: {err}"
