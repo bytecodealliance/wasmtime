@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: ./.github/actions/fetch-run-id
     - run: |
         gh run download ${COMMIT_RUN_ID}

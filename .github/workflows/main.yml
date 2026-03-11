@@ -40,7 +40,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -53,7 +53,7 @@ jobs:
     name: Check JS
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: npm install
       working-directory: ./crates/explorer
     - run: npm run lint
@@ -68,7 +68,7 @@ jobs:
     name: Clang format
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - run: |
@@ -89,7 +89,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -118,7 +118,7 @@ jobs:
     outputs:
       outcome: ${{ steps.vet.outcome }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -179,7 +179,7 @@ jobs:
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - id: calculate
       env:
         GH_TOKEN: ${{ github.token }}
@@ -264,7 +264,7 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -281,7 +281,7 @@ jobs:
     - run: cmake --build target/c-api --target doc
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: ${{ runner.tool_cache }}/mdbook
         key: cargo-mdbook-${{ env.MDBOOK_VERSION }}-langtabs-${{ env.MDBOOK_LANGTABS_VERSION }}
@@ -313,7 +313,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -435,7 +435,7 @@ jobs:
               -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -454,7 +454,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -468,7 +468,7 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -485,7 +485,7 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -589,7 +589,7 @@ jobs:
           test: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -613,7 +613,7 @@ jobs:
     name: Nightly tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -694,7 +694,7 @@ jobs:
             flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
             name: Linux (ASAN)
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -731,7 +731,7 @@ jobs:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -769,13 +769,13 @@ jobs:
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
       if: matrix.gcc != ''
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: ${{ runner.tool_cache }}/sde
         key: sde-${{ env.SDE_BUILD_VERSION }}
@@ -918,7 +918,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -960,7 +960,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -988,7 +988,7 @@ jobs:
     name: Test wasmtime-fuzzing
     runs-on: 'ubuntu-latest'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1004,7 +1004,7 @@ jobs:
     name: Test DWARF debugging
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1034,7 +1034,7 @@ jobs:
       deployments: write
       contents: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1051,7 +1051,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -1061,7 +1061,7 @@ jobs:
     needs: build-preview1-component-adapter
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1076,7 +1076,7 @@ jobs:
     if: needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1103,7 +1103,7 @@ jobs:
         MIN_PLATFORM_TEST_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: wasmtime-platform-header
         path: examples/min-platform/embedding/wasmtime-platform.h
@@ -1114,7 +1114,7 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1128,7 +1128,7 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1140,7 +1140,7 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1187,14 +1187,14 @@ jobs:
       CARGO_NEXTEST_VERSION: 0.9.88
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
         toolchain: wasmtime-ci-pinned-nightly
     - run: rustup component add rust-src miri
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: ${{ runner.tool_cache }}/cargo-nextest
         key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
@@ -1221,7 +1221,7 @@ jobs:
       matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
 
@@ -1249,7 +1249,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: bins-${{ matrix.build }}
         path: dist
@@ -1335,7 +1335,7 @@ jobs:
       && startsWith(github.ref, 'refs/heads/release-')
       && github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
         fetch-depth: 0
