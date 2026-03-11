@@ -2,7 +2,7 @@
 
 use crate::files::Files;
 use crate::sema::{
-    BuiltinType, ExternalSig, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv, TypeId,
+    BuiltinType, ExternalSig, IntType, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv, TypeId,
 };
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::stablemapset::StableSet;
@@ -1068,9 +1068,55 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
     ) -> Result<(), std::fmt::Error> {
         let ty_data = &self.typeenv.types[ty.index()];
         match ty_data {
-            Type::Builtin(BuiltinType::Int(ty)) if ty.is_signed() => write!(ctx.out, "{val}_{ty}"),
-            Type::Builtin(BuiltinType::Int(ty)) => write!(ctx.out, "{val:#x}_{ty}"),
+            Type::Builtin(BuiltinType::Int(ty)) => {
+                write!(ctx.out, "{}", rust_int_literal(*ty, val))
+            }
             _ => write!(ctx.out, "{val:#x}"),
         }
+    }
+}
+
+fn rust_int_literal(ty: IntType, val: i128) -> String {
+    match ty {
+        IntType::U8 => format!("{:#x}_u8", val as u8),
+        IntType::U16 => format!("{:#x}_u16", val as u16),
+        IntType::U32 => format!("{:#x}_u32", val as u32),
+        IntType::U64 => format!("{:#x}_u64", val as u64),
+        IntType::U128 => format!("{:#x}_u128", val as u128),
+        IntType::USize => format!("{val:#x}_usize"),
+        IntType::I8 => format!("{}_i8", val as i8),
+        IntType::I16 => format!("{}_i16", val as i16),
+        IntType::I32 => format!("{}_i32", val as i32),
+        IntType::I64 => format!("{}_i64", val as i64),
+        IntType::I128 => format!("{val}_i128"),
+        IntType::ISize => format!("{val}_isize"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rust_int_literal;
+    use crate::sema::IntType;
+
+    #[test]
+    fn formats_wrapped_unsigned_literals() {
+        assert_eq!(rust_int_literal(IntType::U8, -2), "0xfe_u8");
+        assert_eq!(rust_int_literal(IntType::U64, -1), "0xffffffffffffffff_u64");
+        assert_eq!(
+            rust_int_literal(IntType::U128, -1),
+            "0xffffffffffffffffffffffffffffffff_u128"
+        );
+    }
+
+    #[test]
+    fn formats_wrapped_signed_literals() {
+        assert_eq!(rust_int_literal(IntType::I8, 255), "-1_i8");
+        assert_eq!(rust_int_literal(IntType::I64, -1), "-1_i64");
+        assert_eq!(rust_int_literal(IntType::I16, 65535), "-1_i16");
+    }
+
+    #[test]
+    fn preserves_positive_unsigned_literals() {
+        assert_eq!(rust_int_literal(IntType::U64, 5), "0x5_u64");
     }
 }
