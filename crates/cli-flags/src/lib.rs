@@ -279,7 +279,7 @@ wasmtime_option_group! {
         /// Pass the given command-line arguments to the debugger
         /// component. May be specified multiple times.
         #[serde(default)]
-        pub debugger_arg: Vec<String>,
+        pub arg: Vec<String>,
     }
 
     enum Debug {

@@ -91,14 +91,7 @@ impl RunCommand {
             let mut debugger_run = RunCommand::try_parse_from(
                 ["run".into(), debugger_component_path.into()]
                     .into_iter()
-                    .chain(
-                        self.run
-                            .common
-                            .debug
-                            .debugger_arg
-                            .iter()
-                            .map(OsString::from),
-                    ),
+                    .chain(self.run.common.debug.arg.iter().map(OsString::from)),
             )?;
             // Explicitly permit TCP sockets for the debugger-main environment.
             debugger_run.run.common.wasi.tcp = Some(true);
