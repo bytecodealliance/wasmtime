@@ -11,6 +11,7 @@ mod component_model;
 mod coredump;
 mod custom_code_memory;
 mod debug;
+mod debug_component;
 mod defaults;
 mod engine;
 mod epoch_interruption;

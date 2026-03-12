@@ -56,6 +56,8 @@ impl Artifacts {
         self.build_rust_tests(&mut tests);
         self.build_non_rust_tests(&mut tests);
 
+        generated_code.push_str(&self.build_debugger_test_component());
+
         // With all our `tests` now compiled generate various macos for each
         // test along with constants pointing to various paths. Note that
         // components are created here as well from core modules.
@@ -93,6 +95,7 @@ impl Artifacts {
                 s if s.starts_with("p3_") => "p3",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",
+                s if s.starts_with("debugger_") => "debugger",
                 s if s.starts_with("dwarf_") => "dwarf",
                 s if s.starts_with("config_") => "config",
                 s if s.starts_with("keyvalue_") => "keyvalue",
@@ -171,6 +174,7 @@ impl Artifacts {
         let status = cmd.status().unwrap();
         assert!(status.success());
 
+        const EXCLUDED: &[&str] = &["debugger_component"];
         let meta = cargo_metadata::MetadataCommand::new().exec().unwrap();
         let targets = meta
             .packages
@@ -180,6 +184,7 @@ impl Artifacts {
             .targets
             .iter()
             .filter(move |t| t.kind == &[cargo_metadata::TargetKind::Bin])
+            .filter(move |t| !EXCLUDED.iter().any(|e| t.name.contains(*e)))
             .map(|t| &t.name)
             .collect::<Vec<_>>();
 
@@ -254,6 +259,29 @@ impl Artifacts {
         let component_path = out_dir.join(format!("{stem}.component.wasm"));
         fs::write(&component_path, component).expect("write component to disk");
         component_path
+    }
+
+    fn build_debugger_test_component(&mut self) -> String {
+        let mut cmd = cargo();
+        cmd.arg("build")
+            .arg("--target=wasm32-wasip2")
+            .arg("--package=test-programs")
+            .arg("--bin=debugger_component")
+            .env("CARGO_TARGET_DIR", &self.out_dir)
+            .env("RUSTFLAGS", rustflags())
+            .env_remove("CARGO_ENCODED_RUSTFLAGS");
+        eprintln!("running: {cmd:?}");
+        let status = cmd.status().unwrap();
+        assert!(status.success());
+
+        let wasm = self
+            .out_dir
+            .join("wasm32-wasip2")
+            .join("debug")
+            .join("debugger_component.wasm");
+        self.read_deps_of(&wasm);
+
+        format!("pub const DEBUGGER_COMPONENT: &'static str = {wasm:?};\n")
     }
 
     fn build_non_rust_tests(&mut self, tests: &mut Vec<Test>) {
