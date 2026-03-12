@@ -758,6 +758,21 @@ block0(v0: i8, v1: i8):
 
 ; check: return v0
 
+function %rotr_iconst_select_iconsts(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 1
+    v2 = iconst.i8 1
+    v3 = iconst.i8 2
+    v4 = select v0, v2, v3
+    v5 = rotr.i8 v1, v4
+    return v5
+}
+
+; check: v6 = iconst.i8 -128
+; check: v7 = iconst.i8 64
+; check: v8 = select v0, v6, v7
+; check: return v8
+
 function %shifts_to_rotl(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i16 3
