@@ -739,7 +739,7 @@ jobs:
         toolchain: ${{ matrix.rust }}
 
     # Install targets in order to build various tests throughout the repo
-    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown ${{ matrix.target }}
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown wasm32-wasip2 ${{ matrix.target }}
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
@@ -937,7 +937,7 @@ jobs:
       if: (runner.os == 'Windows') && (matrix.feature == 'winml')
 
     # Install Rust targets.
-    - run: rustup target add wasm32-wasip1
+    - run: rustup target add wasm32-wasip1 wasm32-wasip2
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
