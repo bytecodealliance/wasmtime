@@ -221,23 +221,31 @@ interface debuggee {
     /// Increase size by the given `delta`. Returns the old size in bytes.
     grow-to-bytes: func(d: borrow<debuggee>, delta: u64) -> result<u64, error>;
 
+    /// Read `len` bytes starting at `addr`. Returns `out-of-bounds` if any
+    /// byte in the range is out-of-bounds.
+    get-bytes: func(d: borrow<debuggee>, addr: u64, len: u64) -> result<list<u8>, error>;
+
+    /// Write `bytes` starting at `addr`. Returns `out-of-bounds` if any
+    /// byte in the range is out-of-bounds.
+    set-bytes: func(d: borrow<debuggee>, addr: u64, bytes: list<u8>) -> result<_, error>;
+
     /// Get a u8 (byte) at an address. Returns `none` if out-of-bounds.
     get-u8: func(d: borrow<debuggee>, addr: u64) -> result<u8, error>;
     /// Get a u16 (in little endian order) at an address.
-    get-u16: func(addr: u64, d: borrow<debuggee>) -> result<u16, error>;
+    get-u16: func(d: borrow<debuggee>, addr: u64) -> result<u16, error>;
     /// Get a u32 (in little endian order) at an address.
-    get-u32: func(addr: u64, d: borrow<debuggee>) -> result<u32, error>;
+    get-u32: func(d: borrow<debuggee>, addr: u64) -> result<u32, error>;
     /// Get a u64 (in little endian order) at an address.
-    get-u64: func(addr: u64, d: borrow<debuggee>) -> result<u64, error>;
+    get-u64: func(d: borrow<debuggee>, addr: u64) -> result<u64, error>;
 
     /// Set a u8 (byte) at an address. Returns `none` if out-of-bounds.
-    set-u8: func(addr: u64, d: borrow<debuggee>, value: u8) -> result<_, error>;
+    set-u8: func(d: borrow<debuggee>, addr: u64, value: u8) -> result<_, error>;
     /// Set a u16 (in little endian order) at an address.
-    set-u16: func(addr: u64, d: borrow<debuggee>, value: u16) -> result<_, error>;
+    set-u16: func(d: borrow<debuggee>, addr: u64, value: u16) -> result<_, error>;
     /// Set a u32 (in little endian order) at an address.
-    set-u32: func(addr: u64, d: borrow<debuggee>, value: u32) -> result<_, error>;
+    set-u32: func(d: borrow<debuggee>, addr: u64, value: u32) -> result<_, error>;
     /// Set a u64 (in little endian order) at an address.
-    set-u64: func(addr: u64, d: borrow<debuggee>, value: u64) -> result<_, error>;
+    set-u64: func(d: borrow<debuggee>, addr: u64, value: u64) -> result<_, error>;
 
     /// Clone this handle.
     clone: func() -> memory;

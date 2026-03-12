@@ -114,6 +114,18 @@ trait OpaqueDebugger {
     async fn memory_size_bytes(&mut self, memory: Memory) -> Result<u64>;
     async fn memory_page_size(&mut self, memory: Memory) -> Result<u64>;
     async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<u64>;
+    async fn memory_read_bytes(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        len: u64,
+    ) -> Result<Option<Vec<u8>>>;
+    async fn memory_write_bytes(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        bytes: Vec<u8>,
+    ) -> Result<Option<()>>;
     async fn memory_read_u8(&mut self, memory: Memory, addr: u64) -> Result<Option<u8>>;
     async fn memory_read_u16(&mut self, memory: Memory, addr: u64) -> Result<Option<u16>>;
     async fn memory_read_u32(&mut self, memory: Memory, addr: u64) -> Result<Option<u32>>;
@@ -327,6 +339,37 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
             Ok(old_pages * page_size)
         })
         .await?
+    }
+
+    async fn memory_read_bytes(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        len: u64,
+    ) -> Result<Option<Vec<u8>>> {
+        self.with_store(move |store| {
+            let data = memory.data(&store);
+            let addr = usize::try_from(addr).unwrap();
+            let len = usize::try_from(len).unwrap();
+            data.get(addr..addr + len).map(|s| s.to_vec())
+        })
+        .await
+    }
+
+    async fn memory_write_bytes(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        bytes: Vec<u8>,
+    ) -> Result<Option<()>> {
+        self.with_store(move |mut store| {
+            let data = memory.data_mut(&mut store);
+            let addr = usize::try_from(addr).unwrap();
+            let dest = data.get_mut(addr..addr + bytes.len())?;
+            dest.copy_from_slice(&bytes);
+            Some(())
+        })
+        .await
     }
 
     async fn memory_read_u8(&mut self, memory: Memory, addr: u64) -> Result<Option<u8>> {
@@ -1048,6 +1091,35 @@ impl wit::HostMemory for ResourceTable {
         d.memory_grow(memory, delta_bytes).await
     }
 
+    async fn get_bytes(
+        &mut self,
+        self_: Resource<Memory>,
+        d: Resource<Debuggee>,
+        addr: u64,
+        len: u64,
+    ) -> Result<Vec<u8>> {
+        let memory = *self.get(&self_)?;
+        let d = debugger(self, &d)?;
+        Ok(d.memory_read_bytes(memory, addr, len)
+            .await?
+            .ok_or(wit::Error::OutOfBounds)?)
+    }
+
+    async fn set_bytes(
+        &mut self,
+        self_: Resource<Memory>,
+        d: Resource<Debuggee>,
+        addr: u64,
+        bytes: Vec<u8>,
+    ) -> Result<()> {
+        let memory = *self.get(&self_)?;
+        let d = debugger(self, &d)?;
+        d.memory_write_bytes(memory, addr, bytes)
+            .await?
+            .ok_or(wit::Error::OutOfBounds)?;
+        Ok(())
+    }
+
     async fn get_u8(
         &mut self,
         self_: Resource<Memory>,
@@ -1064,8 +1136,8 @@ impl wit::HostMemory for ResourceTable {
     async fn get_u16(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
     ) -> Result<u16> {
         let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
@@ -1077,8 +1149,8 @@ impl wit::HostMemory for ResourceTable {
     async fn get_u32(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
     ) -> Result<u32> {
         let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
@@ -1090,8 +1162,8 @@ impl wit::HostMemory for ResourceTable {
     async fn get_u64(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
     ) -> Result<u64> {
         let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
@@ -1103,8 +1175,8 @@ impl wit::HostMemory for ResourceTable {
     async fn set_u8(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
         value: u8,
     ) -> Result<()> {
         let memory = *self.get(&self_)?;
@@ -1118,8 +1190,8 @@ impl wit::HostMemory for ResourceTable {
     async fn set_u16(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
         value: u16,
     ) -> Result<()> {
         let memory = *self.get(&self_)?;
@@ -1133,8 +1205,8 @@ impl wit::HostMemory for ResourceTable {
     async fn set_u32(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
         value: u32,
     ) -> Result<()> {
         let memory = *self.get(&self_)?;
@@ -1148,8 +1220,8 @@ impl wit::HostMemory for ResourceTable {
     async fn set_u64(
         &mut self,
         self_: Resource<Memory>,
-        addr: u64,
         d: Resource<Debuggee>,
+        addr: u64,
         value: u64,
     ) -> Result<()> {
         let memory = *self.get(&self_)?;
