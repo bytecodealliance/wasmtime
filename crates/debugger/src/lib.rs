@@ -20,7 +20,7 @@ use wasmtime::{
 };
 
 mod host;
-pub use host::{DebuggerComponent, DebuggerImpl, DebuggerView, HasDebuggerView, add_debuggee, wit};
+pub use host::{DebuggerComponent, DebuggerView, add_debuggee, add_to_linker, wit};
 
 /// A `Debugger` wraps up state associated with debugging the code
 /// running in a single `Store`.

@@ -18,8 +18,6 @@ use wasmtime::{
     Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
     error::Context as _, format_err,
 };
-#[cfg(feature = "debug")]
-use wasmtime_debugger::DebuggerView;
 use wasmtime_wasi::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-config")]
@@ -197,7 +195,7 @@ impl RunCommand {
                                 let engine_clone = store.engine().clone();
                                 let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
                                 let cancel_clone = cancel.clone();
-                                thread::spawn(move || {
+                                let epoch_thread = thread::spawn(move || {
                                     while !cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
                                         thread::sleep(std::time::Duration::from_millis(1));
                                         engine_clone.increment_epoch();
@@ -206,6 +204,9 @@ impl RunCommand {
                                 self.instantiate_and_run(&engine, &mut linker, &main, store)
                                     .await?;
                                 cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                                epoch_thread
+                                    .join()
+                                    .map_err(|_| wasmtime::Error::msg("epoch thread panicked"))?;
                                 Ok(())
                             })
                         },
@@ -296,10 +297,7 @@ impl RunCommand {
 
     #[cfg(feature = "debug")]
     fn add_debugger_api(&mut self, linker: &mut wasmtime::component::Linker<Host>) -> Result<()> {
-        wasmtime_debugger::wit::add_to_linker::<_, wasmtime_debugger::HasDebuggerView>(
-            linker,
-            |x| wasmtime_debugger::DebuggerImpl(x.wasip1_ctx().ctx().table),
-        )?;
+        wasmtime_debugger::add_to_linker(linker, |x| x.ctx().table)?;
         Ok(())
     }
 
@@ -812,7 +810,7 @@ impl RunCommand {
         let instance = linker.instantiate_async(&mut *store, component).await?;
         let command = wasmtime_debugger::DebuggerComponent::new(&mut *store, &instance)?;
         let debugger = wasmtime_debugger::Debugger::new(debuggee_host, body);
-        let debuggee = wasmtime_debugger::add_debuggee(store.data_mut(), debugger)?;
+        let debuggee = wasmtime_debugger::add_debuggee(store.data_mut().ctx().table, debugger)?;
         {
             // Manually construct a borrow -- wasmtime-wit-bindgen
             // generates code that consumes the `Resource<T>` for
@@ -825,7 +823,7 @@ impl RunCommand {
                 .call_debug(&mut *store, borrowed, &args)
                 .await?;
         }
-        let mut debuggee = store.data_mut().table().delete(debuggee)?;
+        let mut debuggee = store.data_mut().ctx().table.delete(debuggee)?;
         debuggee.finish().await?;
         Ok(())
     }
@@ -1419,13 +1417,6 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
             ctx,
             hooks: &mut self.wasi_http_hooks,
         }
-    }
-}
-
-#[cfg(feature = "debug")]
-impl wasmtime_debugger::DebuggerView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        WasiView::ctx(self).table
     }
 }
 

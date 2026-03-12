@@ -3,7 +3,7 @@
 use wasmtime::{
     Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Memory,
     Module, OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
-    component::{HasData, Resource, ResourceTable},
+    component::{Resource, ResourceTable},
 };
 
 mod generated {
@@ -36,6 +36,9 @@ mod generated {
             "bytecodealliance:wasmtime/debuggee.wasm-value": super::WasmValue,
 
             "wasi": wasmtime_wasi::p2::bindings,
+        },
+        trappable_error_type: {
+            "bytecodealliance:wasmtime/debuggee.error" => wasmtime::Error,
         },
         require_store_data_send: true,
     });
@@ -72,11 +75,6 @@ impl Debuggee {
     }
 }
 
-/// A result to be returned via the WIT API rather than converted into
-/// a trap. Often nested within an outer `Result` that indicates an
-/// error with the debugger itself and becomes a trap.
-type WitResult<T> = Result<T, wit::Error>;
-
 /// Type-erased interface to the `Debugger<T>` implementing all
 /// functionality necessary for the interfaces here. This needs to be
 /// type-erased because the host-side resource APIs do not support
@@ -85,11 +83,10 @@ type WitResult<T> = Result<T, wit::Error>;
 /// resource essentially needs to carry a vtable for the kind of store
 /// the debuggee has.
 ///
-/// Methods here generally return an outer `Result` whose failure case
-/// is propagated out to the debugger component as a Wasm trap, and in
-/// many cases an inner `Result`/`Option` whose failure/absence means
-/// an error (like out-of-bounds or no such entity) is propagated out
-/// to the debugger component as an in-band `wit::Error`.
+/// Methods here return `wasmtime::Result<T>`, where `Err` may wrap
+/// either a `wit::Error` (which `convert_error` will extract and
+/// return as an in-band WIT-level error to the component) or any
+/// other error (which becomes a trap).
 ///
 /// These methods do not handle the "wrong state" errors (i.e.,
 /// execution is continuing so we cannot query store state): those are
@@ -116,7 +113,7 @@ trait OpaqueDebugger {
 
     async fn memory_size_bytes(&mut self, memory: Memory) -> Result<u64>;
     async fn memory_page_size(&mut self, memory: Memory) -> Result<u64>;
-    async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<WitResult<u64>>;
+    async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<u64>;
     async fn memory_read_u8(&mut self, memory: Memory, addr: u64) -> Result<Option<u8>>;
     async fn memory_read_u16(&mut self, memory: Memory, addr: u64) -> Result<Option<u16>>;
     async fn memory_read_u32(&mut self, memory: Memory, addr: u64) -> Result<Option<u32>>;
@@ -141,50 +138,38 @@ trait OpaqueDebugger {
         data: u64,
     ) -> Result<Option<()>>;
 
-    async fn global_get(&mut self, global: Global) -> Result<WitResult<WasmValue>>;
-    async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<WitResult<()>>;
+    async fn global_get(&mut self, global: Global) -> Result<WasmValue>;
+    async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<()>;
 
     async fn table_len(&mut self, table: Table) -> Result<u64>;
-    async fn table_get_element(&mut self, table: Table, index: u64)
-    -> Result<WitResult<WasmValue>>;
-    async fn table_set_element(
-        &mut self,
-        table: Table,
-        index: u64,
-        val: WasmValue,
-    ) -> Result<WitResult<()>>;
+    async fn table_get_element(&mut self, table: Table, index: u64) -> Result<WasmValue>;
+    async fn table_set_element(&mut self, table: Table, index: u64, val: WasmValue) -> Result<()>;
 
-    async fn func_params(&mut self, func: Func) -> Result<WitResult<Vec<wit::WasmType>>>;
-    async fn func_results(&mut self, func: Func) -> Result<WitResult<Vec<wit::WasmType>>>;
+    async fn func_params(&mut self, func: Func) -> Result<Vec<wit::WasmType>>;
+    async fn func_results(&mut self, func: Func) -> Result<Vec<wit::WasmType>>;
 
-    async fn tag_params(&mut self, tag: Tag) -> Result<WitResult<Vec<wit::WasmType>>>;
+    async fn tag_params(&mut self, tag: Tag) -> Result<Vec<wit::WasmType>>;
     async fn tag_new(&mut self, engine: Engine, params: Vec<ValType>) -> Result<Tag>;
 
     async fn exnref_get_tag(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Tag>;
-    async fn exnref_get_fields(
-        &mut self,
-        exn: OwnedRooted<ExnRef>,
-    ) -> Result<WitResult<Vec<WasmValue>>>;
-    async fn exnref_new(
-        &mut self,
-        tag: Tag,
-        fields: Vec<WasmValue>,
-    ) -> Result<WitResult<OwnedRooted<ExnRef>>>;
+    async fn exnref_get_fields(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Vec<WasmValue>>;
+    async fn exnref_new(&mut self, tag: Tag, fields: Vec<WasmValue>)
+    -> Result<OwnedRooted<ExnRef>>;
 
-    async fn frame_instance(&mut self, frame: FrameHandle) -> Result<WitResult<Instance>>;
-    async fn frame_func_and_pc(&mut self, frame: FrameHandle) -> Result<WitResult<(u32, u32)>>;
-    async fn frame_locals(&mut self, frame: FrameHandle) -> Result<WitResult<Vec<WasmValue>>>;
-    async fn frame_stack(&mut self, frame: FrameHandle) -> Result<WitResult<Vec<WasmValue>>>;
-    async fn frame_parent(&mut self, frame: FrameHandle) -> Result<WitResult<Option<FrameHandle>>>;
+    async fn frame_instance(&mut self, frame: FrameHandle) -> Result<Instance>;
+    async fn frame_func_and_pc(&mut self, frame: FrameHandle) -> Result<(u32, u32)>;
+    async fn frame_locals(&mut self, frame: FrameHandle) -> Result<Vec<WasmValue>>;
+    async fn frame_stack(&mut self, frame: FrameHandle) -> Result<Vec<WasmValue>>;
+    async fn frame_parent(&mut self, frame: FrameHandle) -> Result<Option<FrameHandle>>;
 
-    async fn module_add_breakpoint(&mut self, module: Module, pc: u32) -> Result<WitResult<()>>;
-    async fn module_remove_breakpoint(&mut self, module: Module, pc: u32) -> Result<WitResult<()>>;
+    async fn module_add_breakpoint(&mut self, module: Module, pc: u32) -> Result<()>;
+    async fn module_remove_breakpoint(&mut self, module: Module, pc: u32) -> Result<()>;
 
     async fn finish(&mut self) -> Result<()>;
 }
 
 impl WasmValue {
-    fn new(store: impl wasmtime::AsContextMut, val: Val) -> WitResult<WasmValue> {
+    fn new(store: impl wasmtime::AsContextMut, val: Val) -> Result<WasmValue> {
         Ok(match val {
             Val::ExnRef(Some(rooted)) => {
                 WasmValue::Exn(Some(rooted.to_owned_rooted(store).unwrap()))
@@ -193,7 +178,7 @@ impl WasmValue {
             Val::FuncRef(Some(f)) => WasmValue::Func(Some(f)),
             Val::FuncRef(None) => WasmValue::Func(None),
             Val::ExternRef(_) | Val::AnyRef(_) | Val::ContRef(_) => {
-                return Err(wit::Error::UnsupportedType);
+                return Err(wit::Error::UnsupportedType.into());
             }
             Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => {
                 WasmValue::Primitive(val)
@@ -212,7 +197,7 @@ impl WasmValue {
     }
 }
 
-fn val_type_to_wasm_type(vt: &ValType) -> WitResult<wit::WasmType> {
+fn val_type_to_wasm_type(vt: &ValType) -> Result<wit::WasmType> {
     match vt {
         ValType::I32 => Ok(wit::WasmType::WasmI32),
         ValType::I64 => Ok(wit::WasmType::WasmI64),
@@ -221,7 +206,7 @@ fn val_type_to_wasm_type(vt: &ValType) -> WitResult<wit::WasmType> {
         ValType::V128 => Ok(wit::WasmType::WasmV128),
         ValType::Ref(rt) if rt.heap_type().is_exn() => Ok(wit::WasmType::WasmExnref),
         ValType::Ref(rt) if rt.heap_type().is_func() => Ok(wit::WasmType::WasmFuncref),
-        ValType::Ref(_) => Err(wit::Error::UnsupportedType),
+        ValType::Ref(_) => Err(wit::Error::UnsupportedType.into()),
     }
 }
 
@@ -329,11 +314,11 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
         self.with_store(move |store| memory.page_size(&store)).await
     }
 
-    async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<WitResult<u64>> {
-        self.with_store(move |mut store| {
+    async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<u64> {
+        self.with_store(move |mut store| -> Result<u64> {
             let page_size = memory.page_size(&store);
             if delta_bytes & (page_size - 1) != 0 {
-                return Err(wit::Error::MemoryGrowFailure);
+                return Err(wit::Error::MemoryGrowFailure.into());
             }
             let delta_pages = delta_bytes / page_size;
             let old_pages = memory
@@ -341,7 +326,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
                 .map_err(|_| wit::Error::MemoryGrowFailure)?;
             Ok(old_pages * page_size)
         })
-        .await
+        .await?
     }
 
     async fn memory_read_u8(&mut self, memory: Memory, addr: u64) -> Result<Option<u8>> {
@@ -457,87 +442,80 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
         .await
     }
 
-    async fn global_get(&mut self, global: Global) -> Result<WitResult<WasmValue>> {
+    async fn global_get(&mut self, global: Global) -> Result<WasmValue> {
         self.with_store(move |mut store| {
             let val = global.get(&mut store);
             WasmValue::new(&mut store, val)
         })
-        .await
+        .await?
     }
 
-    async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<WitResult<()>> {
-        self.with_store(move |mut store| {
+    async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<()> {
+        self.with_store(move |mut store| -> Result<()> {
             let v = val.into_val(&mut store);
             global
                 .set(&mut store, v)
-                .map_err(|_| wit::Error::MismatchedType)
+                .map_err(|_| wit::Error::MismatchedType)?;
+            Ok(())
         })
-        .await
+        .await?
     }
 
     async fn table_len(&mut self, table: Table) -> Result<u64> {
         self.with_store(move |store| table.size(&store)).await
     }
 
-    async fn table_get_element(
-        &mut self,
-        table: Table,
-        index: u64,
-    ) -> Result<WitResult<WasmValue>> {
-        self.with_store(move |mut store| {
+    async fn table_get_element(&mut self, table: Table, index: u64) -> Result<WasmValue> {
+        self.with_store(move |mut store| -> Result<WasmValue> {
             let val = table
                 .get(&mut store, index)
                 .ok_or(wit::Error::OutOfBounds)?;
             WasmValue::new(&mut store, val.into())
         })
-        .await
+        .await?
     }
 
-    async fn table_set_element(
-        &mut self,
-        table: Table,
-        index: u64,
-        val: WasmValue,
-    ) -> Result<WitResult<()>> {
-        self.with_store(move |mut store| {
+    async fn table_set_element(&mut self, table: Table, index: u64, val: WasmValue) -> Result<()> {
+        self.with_store(move |mut store| -> Result<()> {
             let v = val.into_val(&mut store);
             let r = v.ref_().ok_or(wit::Error::MismatchedType)?;
             table
                 .set(&mut store, index, r)
-                .map_err(|_| wit::Error::MismatchedType)
+                .map_err(|_| wit::Error::MismatchedType)?;
+            Ok(())
         })
-        .await
+        .await?
     }
 
-    async fn func_params(&mut self, func: Func) -> Result<WitResult<Vec<wit::WasmType>>> {
+    async fn func_params(&mut self, func: Func) -> Result<Vec<wit::WasmType>> {
         self.with_store(move |store| {
             let ty = func.ty(&store);
             ty.params()
                 .map(|ty| val_type_to_wasm_type(&ty))
-                .collect::<WitResult<Vec<_>>>()
+                .collect::<Result<Vec<_>>>()
         })
-        .await
+        .await?
     }
 
-    async fn func_results(&mut self, func: Func) -> Result<WitResult<Vec<wit::WasmType>>> {
+    async fn func_results(&mut self, func: Func) -> Result<Vec<wit::WasmType>> {
         self.with_store(move |store| {
             let ty = func.ty(&store);
             ty.results()
                 .map(|ty| val_type_to_wasm_type(&ty))
-                .collect::<WitResult<Vec<_>>>()
+                .collect::<Result<Vec<_>>>()
         })
-        .await
+        .await?
     }
 
-    async fn tag_params(&mut self, tag: Tag) -> Result<WitResult<Vec<wit::WasmType>>> {
+    async fn tag_params(&mut self, tag: Tag) -> Result<Vec<wit::WasmType>> {
         self.with_store(move |store| {
             let ty = tag.ty(&store);
             ty.ty()
                 .params()
                 .map(|ty| val_type_to_wasm_type(&ty))
-                .collect::<WitResult<Vec<_>>>()
+                .collect::<Result<Vec<_>>>()
         })
-        .await
+        .await?
     }
 
     async fn tag_new(&mut self, engine: Engine, params: Vec<ValType>) -> Result<Tag> {
@@ -554,10 +532,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
             .await
     }
 
-    async fn exnref_get_fields(
-        &mut self,
-        exn: OwnedRooted<ExnRef>,
-    ) -> Result<WitResult<Vec<WasmValue>>> {
+    async fn exnref_get_fields(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Vec<WasmValue>> {
         self.with_store(move |mut store| {
             let fields = exn
                 .fields(&mut store)
@@ -566,17 +541,17 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
             fields
                 .into_iter()
                 .map(|v| WasmValue::new(&mut store, v))
-                .collect::<WitResult<Vec<_>>>()
+                .collect::<Result<Vec<_>>>()
         })
-        .await
+        .await?
     }
 
     async fn exnref_new(
         &mut self,
         tag: Tag,
         fields: Vec<WasmValue>,
-    ) -> Result<WitResult<OwnedRooted<ExnRef>>> {
-        self.with_store(move |mut store| {
+    ) -> Result<OwnedRooted<ExnRef>> {
+        self.with_store(move |mut store| -> Result<OwnedRooted<ExnRef>> {
             let exn_ty =
                 ExnType::from_tag_type(&tag.ty(&store)).expect("tag type is already validated");
             let allocator = ExnRefPre::new(&mut store, exn_ty);
@@ -588,31 +563,31 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
                 .map_err(|_| wit::Error::AllocFailure)?;
             Ok(exn.to_owned_rooted(&mut store).unwrap())
         })
-        .await
+        .await?
     }
 
-    async fn frame_instance(&mut self, frame: FrameHandle) -> Result<WitResult<Instance>> {
-        self.with_store(move |mut store| {
-            frame
+    async fn frame_instance(&mut self, frame: FrameHandle) -> Result<Instance> {
+        self.with_store(move |mut store| -> Result<Instance> {
+            Ok(frame
                 .instance(&mut store)
-                .map_err(|_| wit::Error::InvalidFrame)
+                .map_err(|_| wit::Error::InvalidFrame)?)
         })
-        .await
+        .await?
     }
 
-    async fn frame_func_and_pc(&mut self, frame: FrameHandle) -> Result<WitResult<(u32, u32)>> {
-        self.with_store(move |mut store| {
+    async fn frame_func_and_pc(&mut self, frame: FrameHandle) -> Result<(u32, u32)> {
+        self.with_store(move |mut store| -> Result<(u32, u32)> {
             let (func, pc) = frame
                 .wasm_function_index_and_pc(&mut store)
                 .map_err(|_| wit::Error::InvalidFrame)?
                 .ok_or(wit::Error::NonWasmFrame)?;
             Ok((func.as_u32(), pc))
         })
-        .await
+        .await?
     }
 
-    async fn frame_locals(&mut self, frame: FrameHandle) -> Result<WitResult<Vec<WasmValue>>> {
-        self.with_store(move |mut store| {
+    async fn frame_locals(&mut self, frame: FrameHandle) -> Result<Vec<WasmValue>> {
+        self.with_store(move |mut store| -> Result<Vec<WasmValue>> {
             let n_locals = frame
                 .num_locals(&mut store)
                 .map_err(|_| wit::Error::InvalidFrame)?;
@@ -625,11 +600,11 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
             }
             Ok(result)
         })
-        .await
+        .await?
     }
 
-    async fn frame_stack(&mut self, frame: FrameHandle) -> Result<WitResult<Vec<WasmValue>>> {
-        self.with_store(move |mut store| -> WitResult<Vec<WasmValue>> {
+    async fn frame_stack(&mut self, frame: FrameHandle) -> Result<Vec<WasmValue>> {
+        self.with_store(move |mut store| -> Result<Vec<WasmValue>> {
             let n_stacks = frame
                 .num_stacks(&mut store)
                 .map_err(|_| wit::Error::InvalidFrame)?;
@@ -642,38 +617,40 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
             }
             Ok(result)
         })
-        .await
+        .await?
     }
 
-    async fn frame_parent(&mut self, frame: FrameHandle) -> Result<WitResult<Option<FrameHandle>>> {
-        self.with_store(move |mut store| {
-            frame
+    async fn frame_parent(&mut self, frame: FrameHandle) -> Result<Option<FrameHandle>> {
+        self.with_store(move |mut store| -> Result<Option<FrameHandle>> {
+            Ok(frame
                 .parent(&mut store)
-                .map_err(|_| wit::Error::InvalidFrame)
+                .map_err(|_| wit::Error::InvalidFrame)?)
         })
-        .await
+        .await?
     }
 
-    async fn module_add_breakpoint(&mut self, module: Module, pc: u32) -> Result<WitResult<()>> {
-        self.with_store(move |store| {
+    async fn module_add_breakpoint(&mut self, module: Module, pc: u32) -> Result<()> {
+        self.with_store(move |store| -> Result<()> {
             store
                 .edit_breakpoints()
                 .expect("guest debugging is enabled")
                 .add_breakpoint(&module, pc)
-                .map_err(|_| wit::Error::InvalidPc)
+                .map_err(|_| wit::Error::InvalidPc)?;
+            Ok(())
         })
-        .await
+        .await?
     }
 
-    async fn module_remove_breakpoint(&mut self, module: Module, pc: u32) -> Result<WitResult<()>> {
-        self.with_store(move |store| {
+    async fn module_remove_breakpoint(&mut self, module: Module, pc: u32) -> Result<()> {
+        self.with_store(move |store| -> Result<()> {
             store
                 .edit_breakpoints()
                 .expect("guest debugging is enabled")
                 .remove_breakpoint(&module, pc)
-                .map_err(|_| wit::Error::InvalidPc)
+                .map_err(|_| wit::Error::InvalidPc)?;
+            Ok(())
         })
-        .await
+        .await?
     }
 
     async fn finish(&mut self) -> Result<()> {
@@ -751,39 +728,34 @@ pub enum WasmValue {
     // TODO: GC structs and arrays.
 }
 
-/// Register a debuggee in a `DebuggerView`.
-pub fn add_debuggee<V: DebuggerView, T: Send + 'static>(
-    v: &mut V,
+/// Register a debuggee in a resource table.
+pub fn add_debuggee<T: Send + 'static>(
+    table: &mut ResourceTable,
     debuggee: Debugger<T>,
 ) -> Result<Resource<Debuggee>> {
     let engine = debuggee.engine().clone();
     let inner: Option<Box<dyn OpaqueDebugger + Send + 'static>> = Some(Box::new(debuggee));
-    Ok(v.table().push(Debuggee { inner, engine })?)
+    Ok(table.push(Debuggee { inner, engine })?)
 }
 
 /// Get the `OpaqueDebugger` or raise an error.
-fn debugger<'a, V: DebuggerView>(
-    v: &'a mut V,
+fn debugger<'a>(
+    table: &'a mut ResourceTable,
     debuggee: &Resource<Debuggee>,
 ) -> Result<&'a mut dyn OpaqueDebugger> {
-    let d = v
-        .table()
-        .get_mut(&debuggee)?
-        .inner
-        .as_mut()
-        .ok_or_else(|| {
-            wasmtime::error::format_err!("Attempt to use debuggee API while a future is pending")
-        })?;
+    let d = table.get_mut(&debuggee)?.inner.as_mut().ok_or_else(|| {
+        wasmtime::error::format_err!("Attempt to use debuggee API while a future is pending")
+    })?;
     Ok(&mut **d)
 }
 
-impl<T: DebuggerView> wit::HostDebuggee for DebuggerImpl<T> {
+impl wit::HostDebuggee for ResourceTable {
     async fn all_modules(&mut self, debuggee: Resource<Debuggee>) -> Result<Vec<Resource<Module>>> {
         let d = debugger(self, &debuggee)?;
         let modules = d.all_modules().await?;
         let mut resources = vec![];
         for module in modules {
-            resources.push(self.table().push_child(module, &debuggee)?);
+            resources.push(self.push_child(module, &debuggee)?);
         }
         Ok(resources)
     }
@@ -796,13 +768,13 @@ impl<T: DebuggerView> wit::HostDebuggee for DebuggerImpl<T> {
         let instances = d.all_instances().await?;
         let mut resources = vec![];
         for instance in instances {
-            resources.push(self.table().push_child(instance, &debuggee)?);
+            resources.push(self.push_child(instance, &debuggee)?);
         }
         Ok(resources)
     }
 
     async fn interrupt(&mut self, debuggee: Resource<Debuggee>) -> Result<()> {
-        let d = self.table().get_mut(&debuggee)?;
+        let d = self.get_mut(&debuggee)?;
         d.engine.increment_epoch();
         Ok(())
     }
@@ -812,14 +784,8 @@ impl<T: DebuggerView> wit::HostDebuggee for DebuggerImpl<T> {
         debuggee: Resource<Debuggee>,
         resumption: wit::ResumptionValue,
     ) -> Result<Resource<EventFuture>> {
-        let d = self
-            .table()
-            .get_mut(&debuggee)
-            .unwrap()
-            .inner
-            .take()
-            .unwrap();
-        Ok(self.table().push_child(
+        let d = self.get_mut(&debuggee).unwrap().inner.take().unwrap();
+        Ok(self.push_child(
             EventFuture {
                 inner: d,
                 state: EventFutureState::SingleStep(Some(resumption)),
@@ -833,14 +799,8 @@ impl<T: DebuggerView> wit::HostDebuggee for DebuggerImpl<T> {
         debuggee: Resource<Debuggee>,
         resumption: wit::ResumptionValue,
     ) -> Result<Resource<EventFuture>> {
-        let d = self
-            .table()
-            .get_mut(&debuggee)
-            .unwrap()
-            .inner
-            .take()
-            .unwrap();
-        Ok(self.table().push_child(
+        let d = self.get_mut(&debuggee).unwrap().inner.take().unwrap();
+        Ok(self.push_child(
             EventFuture {
                 inner: d,
                 state: EventFutureState::Continue(Some(resumption)),
@@ -854,18 +814,18 @@ impl<T: DebuggerView> wit::HostDebuggee for DebuggerImpl<T> {
         let frames = d.exit_frames().await?;
         let mut result = vec![];
         for frame in frames {
-            result.push(self.table().push_child(Frame(frame), &debuggee)?);
+            result.push(self.push_child(Frame(frame), &debuggee)?);
         }
         Ok(result)
     }
 
     async fn drop(&mut self, debuggee: Resource<Debuggee>) -> Result<()> {
-        self.table().delete(debuggee)?;
+        self.delete(debuggee)?;
         Ok(())
     }
 }
 
-fn result_to_event<V: DebuggerView>(v: &mut V, value: DebugRunResult) -> Result<wit::Event> {
+fn result_to_event(table: &mut ResourceTable, value: DebugRunResult) -> Result<wit::Event> {
     Ok(match value {
         DebugRunResult::Finished => wit::Event::Complete,
         DebugRunResult::HostcallError => wit::Event::Trap,
@@ -873,55 +833,55 @@ fn result_to_event<V: DebuggerView>(v: &mut V, value: DebugRunResult) -> Result<
         DebugRunResult::Breakpoint => wit::Event::Breakpoint,
         DebugRunResult::EpochYield => wit::Event::Interrupted,
         DebugRunResult::CaughtExceptionThrown(e) => {
-            let e = v.table().push(WasmException(e))?;
+            let e = table.push(WasmException(e))?;
             wit::Event::CaughtExceptionThrown(e)
         }
         DebugRunResult::UncaughtExceptionThrown(e) => {
-            let e = v.table().push(WasmException(e))?;
+            let e = table.push(WasmException(e))?;
             wit::Event::UncaughtExceptionThrown(e)
         }
     })
 }
 
-impl<T: DebuggerView> wit::HostEventFuture for DebuggerImpl<T> {
+impl wit::HostEventFuture for ResourceTable {
     async fn finish(
         &mut self,
         self_: Resource<EventFuture>,
         debuggee: Resource<Debuggee>,
-    ) -> Result<WitResult<wit::Event>> {
-        let mut f = self.table().delete(self_)?;
+    ) -> Result<wit::Event> {
+        let mut f = self.delete(self_)?;
         f.ready().await;
         let EventFuture { inner, state } = f;
-        self.table().get_mut(&debuggee)?.inner = Some(inner);
+        self.get_mut(&debuggee)?.inner = Some(inner);
         match state {
             EventFutureState::SingleStep(..) | EventFutureState::Continue(..) => {
                 unreachable!("ready() cannot return until setting Done state")
             }
-            EventFutureState::Done(Ok(result)) => Ok(Ok(result_to_event(self, result)?)),
+            EventFutureState::Done(Ok(result)) => Ok(result_to_event(self, result)?),
             EventFutureState::Done(Err(e)) => Err(e),
         }
     }
 
     async fn drop(&mut self, rep: Resource<EventFuture>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 
     async fn subscribe(&mut self, self_: Resource<EventFuture>) -> Result<Resource<DynPollable>> {
-        subscribe(&mut self.table(), self_)
+        subscribe(self, self_)
     }
 }
 
-impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
+impl wit::HostInstance for ResourceTable {
     async fn get_module(
         &mut self,
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
     ) -> Result<Resource<Module>> {
-        let i = *self.table().get(&self_)?;
+        let i = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         let module = d.get_instance_module(i).await?;
-        let module = self.table().push(module)?;
+        let module = self.push(module)?;
         Ok(module)
     }
 
@@ -930,13 +890,14 @@ impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
         memory_index: u32,
-    ) -> Result<WitResult<Resource<Memory>>> {
-        let instance = *self.table().get(&self_)?;
+    ) -> Result<Resource<Memory>> {
+        let instance = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.instance_get_memory(instance, memory_index).await? {
-            Some(memory) => Ok(Ok(self.table().push(memory)?)),
-            None => Ok(Err(wit::Error::InvalidEntity)),
-        }
+        let memory = d
+            .instance_get_memory(instance, memory_index)
+            .await?
+            .ok_or(wit::Error::InvalidEntity)?;
+        Ok(self.push(memory)?)
     }
 
     async fn get_global(
@@ -944,13 +905,14 @@ impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
         global_index: u32,
-    ) -> Result<WitResult<Resource<Global>>> {
-        let instance = *self.table().get(&self_)?;
+    ) -> Result<Resource<Global>> {
+        let instance = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.instance_get_global(instance, global_index).await? {
-            Some(global) => Ok(Ok(self.table().push(global)?)),
-            None => Ok(Err(wit::Error::InvalidEntity)),
-        }
+        let global = d
+            .instance_get_global(instance, global_index)
+            .await?
+            .ok_or(wit::Error::InvalidEntity)?;
+        Ok(self.push(global)?)
     }
 
     async fn get_table(
@@ -958,13 +920,14 @@ impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
         table_index: u32,
-    ) -> Result<WitResult<Resource<Table>>> {
-        let instance = *self.table().get(&self_)?;
+    ) -> Result<Resource<Table>> {
+        let instance = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.instance_get_table(instance, table_index).await? {
-            Some(table) => Ok(Ok(self.table().push(table)?)),
-            None => Ok(Err(wit::Error::InvalidEntity)),
-        }
+        let table = d
+            .instance_get_table(instance, table_index)
+            .await?
+            .ok_or(wit::Error::InvalidEntity)?;
+        Ok(self.push(table)?)
     }
 
     async fn get_func(
@@ -972,13 +935,14 @@ impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
         func_index: u32,
-    ) -> Result<WitResult<Resource<Func>>> {
-        let instance = *self.table().get(&self_)?;
+    ) -> Result<Resource<Func>> {
+        let instance = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.instance_get_func(instance, func_index).await? {
-            Some(func) => Ok(Ok(self.table().push(func)?)),
-            None => Ok(Err(wit::Error::InvalidEntity)),
-        }
+        let func = d
+            .instance_get_func(instance, func_index)
+            .await?
+            .ok_or(wit::Error::InvalidEntity)?;
+        Ok(self.push(func)?)
     }
 
     async fn get_tag(
@@ -986,39 +950,40 @@ impl<T: DebuggerView> wit::HostInstance for DebuggerImpl<T> {
         self_: Resource<Instance>,
         d: Resource<Debuggee>,
         tag_index: u32,
-    ) -> Result<WitResult<Resource<Tag>>> {
-        let instance = *self.table().get(&self_)?;
+    ) -> Result<Resource<Tag>> {
+        let instance = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.instance_get_tag(instance, tag_index).await? {
-            Some(tag) => Ok(Ok(self.table().push(tag)?)),
-            None => Ok(Err(wit::Error::InvalidEntity)),
-        }
+        let tag = d
+            .instance_get_tag(instance, tag_index)
+            .await?
+            .ok_or(wit::Error::InvalidEntity)?;
+        Ok(self.push(tag)?)
     }
 
     async fn clone(&mut self, self_: Resource<Instance>) -> Result<Resource<Instance>> {
-        let instance = *self.table().get(&self_)?;
-        Ok(self.table().push(instance)?)
+        let instance = *self.get(&self_)?;
+        Ok(self.push(instance)?)
     }
 
     async fn unique_id(&mut self, self_: Resource<Instance>) -> Result<u64> {
-        let instance = self.table().get(&self_)?;
+        let instance = self.get(&self_)?;
         Ok(u64::from(instance.debug_index_in_store()))
     }
 
     async fn drop(&mut self, rep: Resource<Instance>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostModule for DebuggerImpl<T> {
+impl wit::HostModule for ResourceTable {
     async fn add_breakpoint(
         &mut self,
         self_: Resource<Module>,
         d: Resource<Debuggee>,
         pc: u32,
-    ) -> Result<WitResult<()>> {
-        let module = self.table().get(&self_)?.clone();
+    ) -> Result<()> {
+        let module = self.get(&self_)?.clone();
         let d = debugger(self, &d)?;
         d.module_add_breakpoint(module, pc).await
     }
@@ -1028,36 +993,36 @@ impl<T: DebuggerView> wit::HostModule for DebuggerImpl<T> {
         self_: Resource<Module>,
         d: Resource<Debuggee>,
         pc: u32,
-    ) -> Result<WitResult<()>> {
-        let module = self.table().get(&self_)?.clone();
+    ) -> Result<()> {
+        let module = self.get(&self_)?.clone();
         let d = debugger(self, &d)?;
         d.module_remove_breakpoint(module, pc).await
     }
 
     async fn bytecode(&mut self, self_: Resource<Module>) -> Result<Option<Vec<u8>>> {
-        let module = self.table().get(&self_)?;
+        let module = self.get(&self_)?;
         Ok(module.debug_bytecode().map(|b| b.to_vec()))
     }
 
     async fn clone(&mut self, self_: Resource<Module>) -> Result<Resource<Module>> {
-        let module = self.table().get(&self_)?.clone();
-        Ok(self.table().push(module)?)
+        let module = self.get(&self_)?.clone();
+        Ok(self.push(module)?)
     }
 
     async fn unique_id(&mut self, self_: Resource<Module>) -> Result<u64> {
-        let module = self.table().get(&self_)?;
+        let module = self.get(&self_)?;
         Ok(module.debug_index_in_engine())
     }
 
     async fn drop(&mut self, rep: Resource<Module>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
+impl wit::HostMemory for ResourceTable {
     async fn size_bytes(&mut self, self_: Resource<Memory>, d: Resource<Debuggee>) -> Result<u64> {
-        let memory = *self.table().get(&self_)?;
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.memory_size_bytes(memory).await
     }
@@ -1067,7 +1032,7 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         d: Resource<Debuggee>,
     ) -> Result<u64> {
-        let memory = *self.table().get(&self_)?;
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.memory_page_size(memory).await
     }
@@ -1077,8 +1042,8 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         d: Resource<Debuggee>,
         delta_bytes: u64,
-    ) -> Result<WitResult<u64>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<u64> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.memory_grow(memory, delta_bytes).await
     }
@@ -1088,12 +1053,12 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         d: Resource<Debuggee>,
         addr: u64,
-    ) -> Result<WitResult<u8>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<u8> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         Ok(d.memory_read_u8(memory, addr)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?)
     }
 
     async fn get_u16(
@@ -1101,12 +1066,12 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         addr: u64,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<u16>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<u16> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         Ok(d.memory_read_u16(memory, addr)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?)
     }
 
     async fn get_u32(
@@ -1114,12 +1079,12 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         addr: u64,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<u32>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<u32> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         Ok(d.memory_read_u32(memory, addr)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?)
     }
 
     async fn get_u64(
@@ -1127,12 +1092,12 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         self_: Resource<Memory>,
         addr: u64,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<u64>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<u64> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         Ok(d.memory_read_u64(memory, addr)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?)
     }
 
     async fn set_u8(
@@ -1141,12 +1106,13 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         addr: u64,
         d: Resource<Debuggee>,
         value: u8,
-    ) -> Result<WitResult<()>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<()> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        Ok(d.memory_write_u8(memory, addr, value)
+        d.memory_write_u8(memory, addr, value)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?;
+        Ok(())
     }
 
     async fn set_u16(
@@ -1155,12 +1121,13 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         addr: u64,
         d: Resource<Debuggee>,
         value: u16,
-    ) -> Result<WitResult<()>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<()> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        Ok(d.memory_write_u16(memory, addr, value)
+        d.memory_write_u16(memory, addr, value)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?;
+        Ok(())
     }
 
     async fn set_u32(
@@ -1169,12 +1136,13 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         addr: u64,
         d: Resource<Debuggee>,
         value: u32,
-    ) -> Result<WitResult<()>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<()> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        Ok(d.memory_write_u32(memory, addr, value)
+        d.memory_write_u32(memory, addr, value)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?;
+        Ok(())
     }
 
     async fn set_u64(
@@ -1183,41 +1151,43 @@ impl<T: DebuggerView> wit::HostMemory for DebuggerImpl<T> {
         addr: u64,
         d: Resource<Debuggee>,
         value: u64,
-    ) -> Result<WitResult<()>> {
-        let memory = *self.table().get(&self_)?;
+    ) -> Result<()> {
+        let memory = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        Ok(d.memory_write_u64(memory, addr, value)
+        d.memory_write_u64(memory, addr, value)
             .await?
-            .ok_or(wit::Error::OutOfBounds))
+            .ok_or(wit::Error::OutOfBounds)?;
+        Ok(())
     }
 
     async fn clone(&mut self, self_: Resource<Memory>) -> Result<Resource<Memory>> {
-        let memory = *self.table().get(&self_)?;
-        Ok(self.table().push(memory)?)
+        let memory = *self.get(&self_)?;
+        Ok(self.push(memory)?)
     }
 
     async fn unique_id(&mut self, self_: Resource<Memory>) -> Result<u64> {
-        Ok(self.table().get(&self_)?.debug_index_in_store())
+        Ok(self.get(&self_)?.debug_index_in_store())
     }
 
     async fn drop(&mut self, rep: Resource<Memory>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostGlobal for DebuggerImpl<T> {
+impl wit::HostGlobal for ResourceTable {
     async fn get(
         &mut self,
         self_: Resource<Global>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Resource<WasmValue>>> {
-        let global = *self.table().get(&self_)?;
+    ) -> Result<Resource<WasmValue>> {
+        // N.B.: we use UFCS here because `HostGlobal::get` conflicts
+        // with `ResourceTable::get` and we're implementing the WIT
+        // trait directly on the `ResourceTable`.
+        let global = *ResourceTable::get(self, &self_)?;
         let d = debugger(self, &d)?;
-        match d.global_get(global).await? {
-            Ok(value) => Ok(Ok(self.table().push(value)?)),
-            Err(e) => Ok(Err(e)),
-        }
+        let value = d.global_get(global).await?;
+        Ok(self.push(value)?)
     }
 
     async fn set(
@@ -1225,35 +1195,32 @@ impl<T: DebuggerView> wit::HostGlobal for DebuggerImpl<T> {
         self_: Resource<Global>,
         d: Resource<Debuggee>,
         val: Resource<WasmValue>,
-    ) -> Result<WitResult<()>> {
-        let global = *self.table().get(&self_)?;
-        let value = self.table().get(&val)?.clone();
+    ) -> Result<()> {
+        let global = *ResourceTable::get(self, &self_)?;
+        let value = ResourceTable::get(self, &val)?.clone();
         let d = debugger(self, &d)?;
-        match d.global_set(global, value).await? {
-            Ok(()) => Ok(Ok(())),
-            Err(e) => Ok(Err(e)),
-        }
+        d.global_set(global, value).await
     }
 
     async fn clone(&mut self, self_: Resource<Global>) -> Result<Resource<Global>> {
-        let global = *self.table().get(&self_)?;
-        Ok(self.table().push(global)?)
+        let global = *ResourceTable::get(self, &self_)?;
+        Ok(self.push(global)?)
     }
 
     async fn unique_id(&mut self, self_: Resource<Global>) -> Result<u64> {
-        let global = *self.table().get(&self_)?;
+        let global = *ResourceTable::get(self, &self_)?;
         Ok(global.debug_index_in_store())
     }
 
     async fn drop(&mut self, rep: Resource<Global>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostTable for DebuggerImpl<T> {
+impl wit::HostTable for ResourceTable {
     async fn len(&mut self, self_: Resource<Table>, d: Resource<Debuggee>) -> Result<u64> {
-        let table = *self.table().get(&self_)?;
+        let table = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.table_len(table).await
     }
@@ -1263,13 +1230,11 @@ impl<T: DebuggerView> wit::HostTable for DebuggerImpl<T> {
         self_: Resource<Table>,
         d: Resource<Debuggee>,
         index: u64,
-    ) -> Result<WitResult<Resource<WasmValue>>> {
-        let table = *self.table().get(&self_)?;
+    ) -> Result<Resource<WasmValue>> {
+        let table = *self.get(&self_)?;
         let d = debugger(self, &d)?;
-        match d.table_get_element(table, index).await? {
-            Ok(value) => Ok(Ok(self.table().push(value)?)),
-            Err(e) => Ok(Err(e)),
-        }
+        let value = d.table_get_element(table, index).await?;
+        Ok(self.push(value)?)
     }
 
     async fn set_element(
@@ -1278,38 +1243,35 @@ impl<T: DebuggerView> wit::HostTable for DebuggerImpl<T> {
         d: Resource<Debuggee>,
         index: u64,
         val: Resource<WasmValue>,
-    ) -> Result<WitResult<()>> {
-        let table = *self.table().get(&self_)?;
-        let value = self.table().get(&val)?.clone();
+    ) -> Result<()> {
+        let table = *self.get(&self_)?;
+        let value = self.get(&val)?.clone();
         let d = debugger(self, &d)?;
-        match d.table_set_element(table, index, value).await? {
-            Ok(()) => Ok(Ok(())),
-            Err(e) => Ok(Err(e)),
-        }
+        d.table_set_element(table, index, value).await
     }
 
     async fn clone(&mut self, self_: Resource<Table>) -> Result<Resource<Table>> {
-        let table = *self.table().get(&self_)?;
-        Ok(self.table().push(table)?)
+        let table = *self.get(&self_)?;
+        Ok(self.push(table)?)
     }
 
     async fn unique_id(&mut self, self_: Resource<Table>) -> Result<u64> {
-        Ok(self.table().get(&self_)?.debug_index_in_store())
+        Ok(self.get(&self_)?.debug_index_in_store())
     }
 
     async fn drop(&mut self, rep: Resource<Table>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostWasmFunc for DebuggerImpl<T> {
+impl wit::HostWasmFunc for ResourceTable {
     async fn params(
         &mut self,
         self_: Resource<Func>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<wit::WasmType>>> {
-        let func = *self.table().get(&self_)?;
+    ) -> Result<Vec<wit::WasmType>> {
+        let func = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.func_params(func).await
     }
@@ -1318,51 +1280,48 @@ impl<T: DebuggerView> wit::HostWasmFunc for DebuggerImpl<T> {
         &mut self,
         self_: Resource<Func>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<wit::WasmType>>> {
-        let func = *self.table().get(&self_)?;
+    ) -> Result<Vec<wit::WasmType>> {
+        let func = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.func_results(func).await
     }
 
     async fn clone(&mut self, self_: Resource<Func>) -> Result<Resource<Func>> {
-        let func = *self.table().get(&self_)?;
-        Ok(self.table().push(func)?)
+        let func = *self.get(&self_)?;
+        Ok(self.push(func)?)
     }
 
     async fn drop(&mut self, rep: Resource<Func>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostWasmException for DebuggerImpl<T> {
+impl wit::HostWasmException for ResourceTable {
     async fn get_tag(
         &mut self,
         self_: Resource<WasmException>,
         d: Resource<Debuggee>,
     ) -> Result<Resource<Tag>> {
-        let exn = self.table().get(&self_)?.clone();
+        let exn = self.get(&self_)?.clone();
         let d = debugger(self, &d)?;
         let tag = d.exnref_get_tag(exn.0).await?;
-        Ok(self.table().push(tag)?)
+        Ok(self.push(tag)?)
     }
 
     async fn get_values(
         &mut self,
         self_: Resource<WasmException>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<Resource<WasmValue>>>> {
-        let exn = self.table().get(&self_)?.clone();
+    ) -> Result<Vec<Resource<WasmValue>>> {
+        let exn = self.get(&self_)?.clone();
         let d = debugger(self, &d)?;
-        let values = match d.exnref_get_fields(exn.0).await? {
-            Ok(values) => values,
-            Err(e) => return Ok(Err(e)),
-        };
+        let values = d.exnref_get_fields(exn.0).await?;
         let mut resources = vec![];
         for v in values {
-            resources.push(self.table().push(v)?);
+            resources.push(self.push(v)?);
         }
-        Ok(Ok(resources))
+        Ok(resources)
     }
 
     async fn clone(
@@ -1370,8 +1329,8 @@ impl<T: DebuggerView> wit::HostWasmException for DebuggerImpl<T> {
         self_: Resource<WasmException>,
         _d: Resource<Debuggee>,
     ) -> Result<Resource<WasmException>> {
-        let exn = self.table().get(&self_)?.clone();
-        Ok(self.table().push(exn)?)
+        let exn = self.get(&self_)?.clone();
+        Ok(self.push(exn)?)
     }
 
     async fn make(
@@ -1379,43 +1338,41 @@ impl<T: DebuggerView> wit::HostWasmException for DebuggerImpl<T> {
         d: Resource<Debuggee>,
         tag: Resource<Tag>,
         values: Vec<Resource<WasmValue>>,
-    ) -> Result<WitResult<Resource<WasmException>>> {
-        let tag_val = *self.table().get(&tag)?;
+    ) -> Result<Resource<WasmException>> {
+        let tag_val = *self.get(&tag)?;
         let mut wasm_values = vec![];
         for v in &values {
-            wasm_values.push(self.table().get(v)?.clone());
+            wasm_values.push(self.get(v)?.clone());
         }
         let d = debugger(self, &d)?;
-        match d.exnref_new(tag_val, wasm_values).await? {
-            Ok(owned) => Ok(Ok(self.table().push(WasmException(owned))?)),
-            Err(e) => Ok(Err(e)),
-        }
+        let owned = d.exnref_new(tag_val, wasm_values).await?;
+        Ok(self.push(WasmException(owned))?)
     }
 
     async fn drop(&mut self, rep: Resource<WasmException>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostWasmTag for DebuggerImpl<T> {
+impl wit::HostWasmTag for ResourceTable {
     async fn params(
         &mut self,
         self_: Resource<Tag>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<wit::WasmType>>> {
-        let tag = *self.table().get(&self_)?;
+    ) -> Result<Vec<wit::WasmType>> {
+        let tag = *self.get(&self_)?;
         let d = debugger(self, &d)?;
         d.tag_params(tag).await
     }
 
     async fn unique_id(&mut self, self_: Resource<Tag>) -> Result<u64> {
-        Ok(self.table().get(&self_)?.debug_index_in_store())
+        Ok(self.get(&self_)?.debug_index_in_store())
     }
 
     async fn clone(&mut self, self_: Resource<Tag>) -> Result<Resource<Tag>> {
-        let tag = *self.table().get(&self_)?;
-        Ok(self.table().push(tag)?)
+        let tag = *self.get(&self_)?;
+        Ok(self.push(tag)?)
     }
 
     async fn make(
@@ -1423,120 +1380,102 @@ impl<T: DebuggerView> wit::HostWasmTag for DebuggerImpl<T> {
         d: Resource<Debuggee>,
         params: Vec<wit::WasmType>,
     ) -> Result<Resource<Tag>> {
-        let engine = self.table().get(&d)?.engine.clone();
+        let engine = self.get(&d)?.engine.clone();
         let val_types = params.into_iter().map(wasm_type_to_val_type).collect();
         let d = debugger(self, &d)?;
         let tag = d.tag_new(engine, val_types).await?;
-        Ok(self.table().push(tag)?)
+        Ok(self.push(tag)?)
     }
 
     async fn drop(&mut self, rep: Resource<Tag>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostFrame for DebuggerImpl<T> {
+impl wit::HostFrame for ResourceTable {
     async fn get_instance(
         &mut self,
         self_: Resource<Frame>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Resource<Instance>>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    ) -> Result<Resource<Instance>> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_instance(frame).await? {
-            Ok(instance) => Ok(Ok(self.table().push(instance)?)),
-            Err(e) => Ok(Err(e)),
-        }
+        let instance = d.frame_instance(frame).await?;
+        Ok(self.push(instance)?)
     }
 
     async fn get_func_index(
         &mut self,
         self_: Resource<Frame>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<u32>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    ) -> Result<u32> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_func_and_pc(frame).await? {
-            Ok((f, _)) => Ok(Ok(f)),
-            Err(e) => Ok(Err(e)),
-        }
+        let (f, _) = d.frame_func_and_pc(frame).await?;
+        Ok(f)
     }
 
-    async fn get_pc(
-        &mut self,
-        self_: Resource<Frame>,
-        d: Resource<Debuggee>,
-    ) -> Result<WitResult<u32>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    async fn get_pc(&mut self, self_: Resource<Frame>, d: Resource<Debuggee>) -> Result<u32> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_func_and_pc(frame).await? {
-            Ok((_, pc)) => Ok(Ok(pc)),
-            Err(e) => Ok(Err(e)),
-        }
+        let (_, pc) = d.frame_func_and_pc(frame).await?;
+        Ok(pc)
     }
 
     async fn get_locals(
         &mut self,
         self_: Resource<Frame>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<Resource<WasmValue>>>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    ) -> Result<Vec<Resource<WasmValue>>> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_locals(frame).await? {
-            Ok(locals) => {
-                let mut resources = vec![];
-                for local in locals {
-                    resources.push(self.table().push(local)?);
-                }
-                Ok(Ok(resources))
-            }
-            Err(e) => Ok(Err(e)),
+        let locals = d.frame_locals(frame).await?;
+        let mut resources = vec![];
+        for local in locals {
+            resources.push(self.push(local)?);
         }
+        Ok(resources)
     }
 
     async fn get_stack(
         &mut self,
         self_: Resource<Frame>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Vec<Resource<WasmValue>>>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    ) -> Result<Vec<Resource<WasmValue>>> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_stack(frame).await? {
-            Ok(stacks) => {
-                let mut resources = vec![];
-                for val in stacks {
-                    resources.push(self.table().push(val)?);
-                }
-                Ok(Ok(resources))
-            }
-            Err(e) => Ok(Err(e)),
+        let stacks = d.frame_stack(frame).await?;
+        let mut resources = vec![];
+        for val in stacks {
+            resources.push(self.push(val)?);
         }
+        Ok(resources)
     }
 
     async fn parent_frame(
         &mut self,
         self_: Resource<Frame>,
         d: Resource<Debuggee>,
-    ) -> Result<WitResult<Option<Resource<Frame>>>> {
-        let frame = self.table().get(&self_)?.0.clone();
+    ) -> Result<Option<Resource<Frame>>> {
+        let frame = self.get(&self_)?.0.clone();
         let d = debugger(self, &d)?;
-        match d.frame_parent(frame).await? {
-            Ok(Some(parent)) => Ok(Ok(Some(self.table().push(Frame(parent))?))),
-            Ok(None) => Ok(Ok(None)),
-            Err(e) => Ok(Err(e)),
+        let parent = d.frame_parent(frame).await?;
+        match parent {
+            Some(p) => Ok(Some(self.push(Frame(p))?)),
+            None => Ok(None),
         }
     }
 
     async fn drop(&mut self, rep: Resource<Frame>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
+impl wit::HostWasmValue for ResourceTable {
     async fn get_type(&mut self, self_: Resource<WasmValue>) -> Result<wit::WasmType> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::I32(_)) => Ok(wit::WasmType::WasmI32),
             WasmValue::Primitive(Val::I64(_)) => Ok(wit::WasmType::WasmI64),
@@ -1550,7 +1489,7 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_i32(&mut self, self_: Resource<WasmValue>) -> Result<u32> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::I32(x)) => Ok(x.cast_unsigned()),
             _ => wasmtime::bail!("Wasm value is not an i32."),
@@ -1558,7 +1497,7 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_i64(&mut self, self_: Resource<WasmValue>) -> Result<u64> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::I64(x)) => Ok(x.cast_unsigned()),
             _ => wasmtime::bail!("Wasm value is not an i64."),
@@ -1566,7 +1505,7 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_f32(&mut self, self_: Resource<WasmValue>) -> Result<f32> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::F32(x)) => Ok(f32::from_bits(*x)),
             _ => wasmtime::bail!("Wasm value is not an f32."),
@@ -1574,7 +1513,7 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_f64(&mut self, self_: Resource<WasmValue>) -> Result<f64> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::F64(x)) => Ok(f64::from_bits(*x)),
             _ => wasmtime::bail!("Wasm value is not an f64."),
@@ -1582,7 +1521,7 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_v128(&mut self, self_: Resource<WasmValue>) -> Result<Vec<u8>> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Primitive(Val::V128(x)) => Ok(x.as_u128().to_le_bytes().to_vec()),
             _ => wasmtime::bail!("Wasm value is not a v128."),
@@ -1590,11 +1529,11 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn unwrap_func(&mut self, self_: Resource<WasmValue>) -> Result<Option<Resource<Func>>> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Func(Some(f)) => {
                 let f = *f;
-                Ok(Some(self.table().push(f)?))
+                Ok(Some(self.push(f)?))
             }
             WasmValue::Func(None) => Ok(None),
             _ => wasmtime::bail!("Wasm value is not a funcref."),
@@ -1605,11 +1544,11 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
         &mut self,
         self_: Resource<WasmValue>,
     ) -> Result<Option<Resource<WasmException>>> {
-        let value = self.table().get(&self_)?;
+        let value = self.get(&self_)?;
         match value {
             WasmValue::Exn(Some(e)) => {
                 let e = e.clone();
-                Ok(Some(self.table().push(WasmException(e))?))
+                Ok(Some(self.push(WasmException(e))?))
             }
             WasmValue::Exn(None) => Ok(None),
             _ => wasmtime::bail!("Wasm value is not an exnref."),
@@ -1617,80 +1556,57 @@ impl<T: DebuggerView> wit::HostWasmValue for DebuggerImpl<T> {
     }
 
     async fn make_i32(&mut self, value: u32) -> Result<Resource<WasmValue>> {
-        Ok(self
-            .table()
-            .push(WasmValue::Primitive(Val::I32(value.cast_signed())))?)
+        Ok(self.push(WasmValue::Primitive(Val::I32(value.cast_signed())))?)
     }
 
     async fn make_i64(&mut self, value: u64) -> Result<Resource<WasmValue>> {
-        Ok(self
-            .table()
-            .push(WasmValue::Primitive(Val::I64(value.cast_signed())))?)
+        Ok(self.push(WasmValue::Primitive(Val::I64(value.cast_signed())))?)
     }
 
     async fn make_f32(&mut self, value: f32) -> Result<Resource<WasmValue>> {
-        Ok(self
-            .table()
-            .push(WasmValue::Primitive(Val::F32(value.to_bits())))?)
+        Ok(self.push(WasmValue::Primitive(Val::F32(value.to_bits())))?)
     }
 
     async fn make_f64(&mut self, value: f64) -> Result<Resource<WasmValue>> {
-        Ok(self
-            .table()
-            .push(WasmValue::Primitive(Val::F64(value.to_bits())))?)
+        Ok(self.push(WasmValue::Primitive(Val::F64(value.to_bits())))?)
     }
 
     async fn make_v128(&mut self, value: Vec<u8>) -> Result<Resource<WasmValue>> {
         let bytes: [u8; 16] = value
             .try_into()
             .map_err(|_| wasmtime::format_err!("v128 requires exactly 16 bytes"))?;
-        Ok(self.table().push(WasmValue::Primitive(Val::V128(
+        Ok(self.push(WasmValue::Primitive(Val::V128(
             u128::from_le_bytes(bytes).into(),
         )))?)
     }
 
     async fn clone(&mut self, self_: Resource<WasmValue>) -> Result<Resource<WasmValue>> {
-        let value = self.table().get(&self_)?.clone();
-        Ok(self.table().push(value)?)
+        let value = self.get(&self_)?.clone();
+        Ok(self.push(value)?)
     }
 
     async fn drop(&mut self, rep: Resource<WasmValue>) -> Result<()> {
-        self.table().delete(rep)?;
+        self.delete(rep)?;
         Ok(())
     }
 }
 
-/// A provider of a ResourceTable from a Store context for debuggee APIs.
+impl wit::Host for ResourceTable {
+    fn convert_error(&mut self, err: wasmtime::Error) -> Result<wit::Error> {
+        err.downcast()
+    }
+}
+
+/// A provider of a [`ResourceTable`] for debugger host APIs.
 pub trait DebuggerView: Send {
-    /// Provide a borrow of the underlying resource table.
+    /// Provide a mutable borrow of the underlying resource table.
     fn table(&mut self) -> &mut ResourceTable;
 }
 
-/// A concrete structure that all generated `Host` traits are implemented for.
-///
-/// This is a thin newtype wrapper over a `T: DebuggerView`. Use this
-/// when adding debugger host functions to a linker via `add_to_linker_*`.
-#[repr(transparent)]
-pub struct DebuggerImpl<T>(pub T);
-
-impl<T: DebuggerView> DebuggerView for DebuggerImpl<T> {
-    fn table(&mut self) -> &mut ResourceTable {
-        self.0.table()
-    }
-}
-
-impl DebuggerView for &mut ResourceTable {
-    fn table(&mut self) -> &mut ResourceTable {
-        *self
-    }
-}
-
-impl<T: DebuggerView> wit::Host for DebuggerImpl<T> {}
-
-/// A [`HasData`] helper for use with [`wit::add_to_linker`] when the host
-/// data type provides a [`ResourceTable`] via a `&mut ResourceTable` reference.
-pub struct HasDebuggerView;
-
-impl HasData for HasDebuggerView {
-    type Data<'a> = DebuggerImpl<&'a mut ResourceTable>;
+/// Add the debugger world's host functions to a [`wasmtime::component::Linker`].
+pub fn add_to_linker<T: Send + 'static>(
+    linker: &mut wasmtime::component::Linker<T>,
+    f: fn(&mut T) -> &mut ResourceTable,
+) -> wasmtime::Result<()> {
+    wit::add_to_linker::<_, wasmtime::component::HasSelf<ResourceTable>>(linker, f)
 }
