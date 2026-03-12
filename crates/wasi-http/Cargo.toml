@@ -15,8 +15,9 @@ workspace = true
 all-features = true
 
 [features]
-default = ["default-send-request"]
+default = ["default-send-request", "p2"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
+p2 = ["wasmtime-wasi/p2"]
 p3 = ["wasmtime-wasi/p3", "dep:tokio-util"]
 component-model-async = ["futures/alloc", "wasmtime/component-model-async"]
 

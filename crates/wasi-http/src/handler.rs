@@ -24,6 +24,7 @@ use wasmtime::{Result, Store, StoreContextMut, format_err};
 
 /// Alternative p2 bindings generated with `exports: { default: async | store }`
 /// so we can use `TypedFunc::call_concurrent` with both p2 and p3 instances.
+#[cfg(feature = "p2")]
 pub mod p2 {
     #[expect(missing_docs, reason = "bindgen-generated code")]
     pub mod bindings {
@@ -35,7 +36,7 @@ pub mod p2 {
             require_store_data_send: true,
             with: {
                 // http is in this crate
-                "wasi:http": crate::bindings::http,
+                "wasi:http": crate::p2::bindings::http,
                 // Upstream package dependencies
                 "wasi:io": wasmtime_wasi::p2::bindings::io,
             }
@@ -49,6 +50,7 @@ pub mod p2 {
 /// `wasi:http/handler@0.3.x` pre-instance.
 pub enum ProxyPre<T: 'static> {
     /// A `wasi:http/incoming-handler@0.2.x` pre-instance.
+    #[cfg(feature = "p2")]
     P2(p2::bindings::ProxyPre<T>),
     /// A `wasi:http/handler@0.3.x` pre-instance.
     #[cfg(feature = "p3")]
@@ -61,6 +63,7 @@ impl<T: 'static> ProxyPre<T> {
         T: Send,
     {
         Ok(match self {
+            #[cfg(feature = "p2")]
             Self::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
             #[cfg(feature = "p3")]
             Self::P3(pre) => Proxy::P3(pre.instantiate_async(store).await?),
@@ -72,6 +75,7 @@ impl<T: 'static> ProxyPre<T> {
 /// `wasi:http/handler@0.3.x` instance.
 pub enum Proxy {
     /// A `wasi:http/incoming-handler@0.2.x` instance.
+    #[cfg(feature = "p2")]
     P2(p2::bindings::Proxy),
     /// A `wasi:http/handler@0.3.x` instance.
     #[cfg(feature = "p3")]

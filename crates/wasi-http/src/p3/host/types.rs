@@ -1,3 +1,4 @@
+use crate::FieldMap;
 use crate::p3::bindings::clocks::monotonic_clock::Duration;
 use crate::p3::bindings::http::types::{
     ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Host, HostFields, HostRequest,
@@ -42,9 +43,15 @@ fn push_fields(table: &mut ResourceTable, fields: Fields) -> wasmtime::Result<Re
 }
 
 fn delete_fields(table: &mut ResourceTable, fields: Resource<Fields>) -> wasmtime::Result<Fields> {
-    table
+    let mut fields = table
         .delete(fields)
-        .context("failed to delete fields from table")
+        .context("failed to delete fields from table")?;
+    // When fields are passed by ownership to the host that flags them as
+    // immutable within `wasi:http`, and this semantically means that putting
+    // fields in a request, then getting them back out, will return an immutable
+    // view of the headers rather than mutable for example.
+    fields.set_immutable();
+    Ok(fields)
 }
 
 fn get_request<'a>(
@@ -179,24 +186,23 @@ impl<D> FutureProducer<D> for GuestBodyResultProducer {
 
 impl HostFields for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<Fields>> {
-        push_fields(self.table, Fields::new_mutable_default())
+        push_fields(self.table, FieldMap::new_mutable(self.ctx.field_size_limit))
     }
 
     fn from_list(
         &mut self,
         entries: Vec<(FieldName, FieldValue)>,
     ) -> HeaderResult<Resource<Fields>> {
-        let mut fields = http::HeaderMap::default();
+        let mut fields = FieldMap::new_mutable(self.ctx.field_size_limit);
         for (name, value) in entries {
             let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-            if self.ctx.is_forbidden_header(&name) {
+            if self.hooks.is_forbidden_header(&name) {
                 return Err(HeaderError::Forbidden.into());
             }
             let value = parse_header_value(&name, value)?;
-            fields.append(name, value);
+            fields.append(name, value)?;
         }
-        let fields = push_fields(self.table, Fields::new_mutable(fields))
-            .map_err(crate::p3::HeaderError::trap)?;
+        let fields = push_fields(self.table, fields).map_err(crate::p3::HeaderError::trap)?;
         Ok(fields)
     }
 
@@ -224,8 +230,8 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
         value: Vec<FieldValue>,
     ) -> HeaderResult<()> {
-        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        let name = name.parse().map_err(|_| HeaderError::InvalidSyntax)?;
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let mut values = Vec::with_capacity(value.len());
@@ -233,23 +239,16 @@ impl HostFields for WasiHttpCtxView<'_> {
             let value = parse_header_value(&name, value)?;
             values.push(value);
         }
-        let fields = get_fields_mut(self.table, &fields)?;
-        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
-        fields.remove(&name);
-        for value in values {
-            fields.append(&name, value);
-        }
+        get_fields_mut(self.table, &fields)?.set(name, values)?;
         Ok(())
     }
 
     fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
-        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        let name = name.parse().map_err(|_| HeaderError::InvalidSyntax)?;
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
-        let fields = get_fields_mut(self.table, &fields)?;
-        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
-        fields.remove(&name);
+        get_fields_mut(self.table, &fields)?.remove_all(name)?;
         Ok(())
     }
 
@@ -259,15 +258,12 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
     ) -> HeaderResult<Vec<FieldValue>> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
-        let fields = get_fields_mut(self.table, &fields)?;
-        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
-        let http::header::Entry::Occupied(entry) = fields.entry(name) else {
-            return Ok(Vec::default());
-        };
-        let (.., values) = entry.remove_entry_mult();
+        let values = get_fields_mut(self.table, &fields)?
+            .remove_all(name)?
+            .into_iter();
         Ok(values.map(|value| value.as_bytes().into()).collect())
     }
 
@@ -278,13 +274,11 @@ impl HostFields for WasiHttpCtxView<'_> {
         value: FieldValue,
     ) -> HeaderResult<()> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.ctx.is_forbidden_header(&name) {
+        if self.hooks.is_forbidden_header(&name) {
             return Err(HeaderError::Forbidden.into());
         }
         let value = parse_header_value(&name, value)?;
-        let fields = get_fields_mut(self.table, &fields)?;
-        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
-        fields.append(name, value);
+        get_fields_mut(self.table, &fields)?.append(name, value)?;
         Ok(())
     }
 
@@ -301,8 +295,9 @@ impl HostFields for WasiHttpCtxView<'_> {
     }
 
     fn clone(&mut self, fields: Resource<Fields>) -> wasmtime::Result<Resource<Fields>> {
-        let fields = get_fields(self.table, &fields)?;
-        push_fields(self.table, Fields::new_mutable(Arc::clone(fields)))
+        let mut fields = get_fields(self.table, &fields)?.clone();
+        fields.set_mutable(self.ctx.field_size_limit);
+        push_fields(self.table, fields)
     }
 
     fn drop(&mut self, fields: Resource<Fields>) -> wasmtime::Result<()> {
@@ -348,7 +343,7 @@ impl HostRequestWithStore for WasiHttp {
             scheme: None,
             authority: None,
             path_with_query: None,
-            headers: headers.into(),
+            headers,
             options: options.map(Into::into),
             body,
         };
@@ -496,7 +491,7 @@ impl HostRequest for WasiHttpCtxView<'_> {
 
     fn get_headers(&mut self, req: Resource<Request>) -> wasmtime::Result<Resource<Headers>> {
         let Request { headers, .. } = get_request(self.table, &req)?;
-        push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
+        push_fields(self.table, headers.clone())
     }
 }
 
@@ -624,7 +619,7 @@ impl HostResponseWithStore for WasiHttp {
         let headers = delete_fields(table, headers)?;
         let res = Response {
             status: http::StatusCode::OK,
-            headers: headers.into(),
+            headers,
             body,
         };
         let res = table
@@ -687,7 +682,7 @@ impl HostResponse for WasiHttpCtxView<'_> {
 
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
         let Response { headers, .. } = get_response(self.table, &res)?;
-        push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
+        push_fields(self.table, headers.clone())
     }
 }
 

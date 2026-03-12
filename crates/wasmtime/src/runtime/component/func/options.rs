@@ -10,6 +10,7 @@ use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, HandleTable, ResourceTables};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
+use core::fmt;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -480,11 +481,32 @@ impl<'a> LiftContext<'a> {
     pub fn consume_fuel(&mut self, amt: usize) -> Result<()> {
         match self.hostcall_fuel.checked_sub(amt) {
             Some(new) => self.hostcall_fuel = new,
-            None => bail!(
-                "too much data is being copied between the host and the guest: \
-                 fuel allocated for hostcalls has been exhausted"
-            ),
+            None => bail!(HostcallFuelExhausted),
         }
         Ok(())
     }
+
+    /// Same as [`Self::consume_fuel`], but safely multiplies `len` and `size`
+    /// together before calling that.
+    pub fn consume_fuel_array(&mut self, len: usize, size: usize) -> Result<()> {
+        match len.checked_mul(size) {
+            Some(bytes) => self.consume_fuel(bytes),
+            None => bail!(HostcallFuelExhausted),
+        }
+    }
 }
+
+#[derive(Debug)]
+struct HostcallFuelExhausted;
+
+impl fmt::Display for HostcallFuelExhausted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "too much data is being copied between the host and the guest: \
+             fuel allocated for hostcalls has been exhausted"
+        )
+    }
+}
+
+impl core::error::Error for HostcallFuelExhausted {}

@@ -1177,3 +1177,93 @@ async fn stream_cancel_read_async_does_not_corrupt_state() -> Result<()> {
         }
     }
 }
+
+/// Regression test: multiple threads may concurrently make a synchronous
+/// call into the same async host function without corrupting state.
+///
+/// Bug: waitable sets for host calls used to be shared across all threads, so if two threads
+/// called a sync-lowered async host function concurrently, the waitable set state got overwritten.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn concurrent_sync_calls_to_async_host() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, 0);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "await-three-calls" (func $await-three-calls async))
+
+            (core module $libc
+                (table (export "__indirect_function_table") 1 funcref))
+
+            (core module $m
+                (import "" "await-three-calls" (func $await-three-calls))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
+                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
+
+                (func (export "run")
+                    (call $thread-new-indirect (i32.const 0) (i32.const 0))
+                    (call $thread-unsuspend)
+                    (call $thread-new-indirect (i32.const 0) (i32.const 0))
+                    (call $thread-unsuspend)
+                    (call $await-three-calls)
+                )
+                (func $thread-entry (param i32)
+                    (call $await-three-calls)
+                )
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-entry)
+            )
+            ;; Instantiate the libc module to get the table
+            (core instance $libc (instantiate $libc))
+            ;; Get access to `thread.new-indirect` that uses the table from libc
+            (core type $start-func-ty (func (param i32)))
+            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
+            (core func $thread-new-indirect
+                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+            (core func $thread-unsuspend (canon thread.unsuspend))
+
+            (core func $await-three-calls (canon lower (func $await-three-calls) ))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "await-three-calls" (func $await-three-calls))
+                    (export "thread.new-indirect" (func $thread-new-indirect))
+                    (export "thread.unsuspend" (func $thread-unsuspend))
+                ))
+                (with "libc" (instance $libc))
+            ))
+            (func (export "run") async
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<i32>::new(&engine);
+    linker
+        .root()
+        .func_wrap_concurrent("await-three-calls", |accessor, (): ()| {
+            Box::pin(async move {
+                accessor.with(|mut s| {
+                    *s.data_mut() += 1;
+                });
+                while accessor.with(|mut s| *s.data_mut()) < 3 {
+                    tokio::task::yield_now().await;
+                }
+                Ok(())
+            })
+        })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call_async(&mut store, ()).await?;
+
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}

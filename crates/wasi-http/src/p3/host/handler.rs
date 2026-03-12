@@ -1,3 +1,4 @@
+use crate::FieldMap;
 use crate::p3::bindings::http::client::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use crate::p3::body::{Body, BodyExt as _};
@@ -58,7 +59,7 @@ impl HostWithStore for WasiHttp {
                 .map_err(HttpError::trap)?;
             let (req, options) =
                 req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
-            HttpResult::Ok(store.get().ctx.send_request(
+            HttpResult::Ok(store.get().hooks.send_request(
                 req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
                 options.as_deref().copied(),
                 Box::new(async {
@@ -97,7 +98,7 @@ impl HostWithStore for WasiHttp {
         };
         let res = Response {
             status,
-            headers: Arc::new(headers),
+            headers: FieldMap::new_immutable(headers),
             body: Body::Host {
                 body,
                 result_tx: res_result_tx,

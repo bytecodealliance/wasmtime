@@ -1,12 +1,11 @@
-use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
+use crate::{FieldMap, get_content_length};
 use bytes::Bytes;
-use http::{HeaderMap, StatusCode};
+use http::StatusCode;
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
-use std::sync::Arc;
 use wasmtime::AsContextMut;
 use wasmtime::error::Context as _;
 
@@ -15,7 +14,7 @@ pub struct Response {
     /// The status of the response.
     pub status: StatusCode,
     /// The headers of the response.
-    pub headers: Arc<HeaderMap>,
+    pub headers: FieldMap,
     /// Response body.
     pub(crate) body: Body,
 }
@@ -31,7 +30,7 @@ impl TryFrom<Response> for http::Response<Body> {
         }: Response,
     ) -> Result<Self, Self::Error> {
         let mut res = http::Response::builder().status(status);
-        *res.headers_mut().unwrap() = Arc::unwrap_or_clone(headers);
+        *res.headers_mut().unwrap() = headers.into();
         res.body(body)
     }
 }
@@ -106,7 +105,7 @@ impl Response {
 
         let wasi_response = Response {
             status: parts.status,
-            headers: Arc::new(parts.headers),
+            headers: FieldMap::new_immutable(parts.headers),
             body: Body::Host {
                 body: body.map_err(Into::into).boxed_unsync(),
                 result_tx,

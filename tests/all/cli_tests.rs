@@ -2312,44 +2312,59 @@ start a print 1234
 
     #[test]
     fn p2_cli_http_headers() -> Result<()> {
-        for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+        let td = tempfile::TempDir::new()?;
+        let cwasm = td.path().join("http_headers.cwasm");
+        let cwasm = cwasm.to_str().unwrap();
+        run_wasmtime(&["compile", P2_CLI_HTTP_HEADERS_COMPONENT, "-o", cwasm])?;
+        for wasi in ["p2", "p3"] {
+            for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+                let err = run_wasmtime(&[
+                    "run",
+                    "-Shttp,p3",
+                    "-Smax-http-fields-size=1048576",
+                    "--allow-precompiled",
+                    cwasm,
+                    &format!("{wasi}-{test}"),
+                ])
+                .unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("total size of fields exceeds limit")
+                        || err.to_string().contains("too many fields in the field map"),
+                    "bad error message: {err:?}"
+                );
+
+                // gated by default too
+                let err = run_wasmtime(&[
+                    "run",
+                    "-Shttp,p3",
+                    "--allow-precompiled",
+                    cwasm,
+                    &format!("{wasi}-{test}"),
+                ])
+                .unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("total size of fields exceeds limit"),
+                    "bad error message: {err:?}"
+                );
+            }
+
+            // With an extremely large limit Wasmtime still shouldn't panic.
             let err = run_wasmtime(&[
                 "run",
-                "-Shttp",
-                "-Smax-http-fields-size=1048576",
-                P2_CLI_HTTP_HEADERS_COMPONENT,
-                test,
+                "-Shttp,p3",
+                &format!("-Smax-http-fields-size={}", 1 << 30),
+                "--allow-precompiled",
+                cwasm,
+                &format!("{wasi}-append"),
             ])
             .unwrap_err();
             assert!(
-                err.to_string()
-                    .contains("Field size limit 1048576 exceeded")
-                    || err.to_string().contains("max size reached"),
-                "bad error message: {err:?}"
-            );
-
-            // gated by default too
-            let err =
-                run_wasmtime(&["run", "-Shttp", P2_CLI_HTTP_HEADERS_COMPONENT, test]).unwrap_err();
-            assert!(
-                err.to_string().contains("Field size limit"),
+                err.to_string().contains("too many fields in the field map"),
                 "bad error message: {err:?}"
             );
         }
-
-        // With an extremely large limit Wasmtime still shouldn't panic.
-        let err = run_wasmtime(&[
-            "run",
-            "-Shttp",
-            &format!("-Smax-http-fields-size={}", 1 << 30),
-            P2_CLI_HTTP_HEADERS_COMPONENT,
-            "append",
-        ])
-        .unwrap_err();
-        assert!(
-            err.to_string().contains("max size reached"),
-            "bad error message: {err:?}"
-        );
         Ok(())
     }
 
@@ -2668,7 +2683,29 @@ start a print 1234
 
     #[test]
     fn p2_cli_many_resources() -> Result<()> {
-        let err = run_wasmtime(&["run", P2_CLI_MANY_RESOURCES_COMPONENT]).unwrap_err();
+        let err = run_wasmtime(&[
+            "run",
+            "-Smax-resources=100",
+            P2_CLI_MANY_RESOURCES_COMPONENT,
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("resource table has no free keys"),
+            "bad error message: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn p3_cli_many_tasks() -> Result<()> {
+        let err = run_wasmtime(&[
+            "run",
+            "-Smax-resources=100",
+            "-Sp3",
+            "-Wcomponent-model-async",
+            dbg!(P3_CLI_MANY_TASKS_COMPONENT),
+        ])
+        .unwrap_err();
         assert!(
             err.to_string().contains("resource table has no free keys"),
             "bad error message: {err}"
@@ -2755,6 +2792,50 @@ start a print 1234
                 }
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn p3_cli_random_limits() -> Result<()> {
+        let c = P3_CLI_RANDOM_LIMITS_COMPONENT;
+
+        for rand in ["random", "insecure"] {
+            run_wasmtime(&["run", "-Sp3", "-Wcomponent-model-async", c, rand, "256"])?;
+            assert!(
+                run_wasmtime(&[
+                    "run",
+                    "-Sp3",
+                    "-Wcomponent-model-async",
+                    "-Smax-random-size=255",
+                    c,
+                    rand,
+                    "256"
+                ])
+                .is_err()
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn p3_cli_read_stdin() -> Result<()> {
+        let mut cmd = get_wasmtime_command()?;
+        let mut child = cmd
+            .arg("-Sp3")
+            .arg("-Wcomponent-model-async")
+            .arg(P3_CLI_READ_STDIN_COMPONENT)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"hello!").unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+
         Ok(())
     }
 }

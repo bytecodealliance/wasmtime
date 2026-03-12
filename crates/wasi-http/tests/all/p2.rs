@@ -15,11 +15,12 @@ use wasmtime::{
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::{
-    HttpResult, WasiHttpCtx, WasiHttpView,
-    bindings::http::types::{ErrorCode, Scheme},
-    body::HyperOutgoingBody,
+    WasiHttpCtx,
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    p2::bindings::http::types::{ErrorCode, Scheme},
+    p2::body::HyperOutgoingBody,
+    p2::types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+    p2::{HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView},
 };
 
 type RequestSender = Arc<
@@ -34,6 +35,10 @@ struct Ctx {
     http: WasiHttpCtx,
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
+    hooks: MyHttpHooks,
+}
+
+struct MyHttpHooks {
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
 }
@@ -48,14 +53,16 @@ impl WasiView for Ctx {
 }
 
 impl WasiHttpView for Ctx {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: &mut self.hooks,
+        }
     }
+}
 
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-
+impl WasiHttpHooks for MyHttpHooks {
     fn send_request(
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
@@ -70,12 +77,14 @@ impl WasiHttpView for Ctx {
         if let Some(send_request) = self.send_request.clone() {
             Ok(send_request(request, config))
         } else {
-            Ok(types::default_send_request(request, config))
+            Ok(wasmtime_wasi_http::p2::default_send_request(
+                request, config,
+            ))
         }
     }
 
     fn is_forbidden_header(&mut self, name: &hyper::header::HeaderName) -> bool {
-        types::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+        wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
             || name.as_str() == "custom-forbidden-header"
     }
 }
@@ -95,8 +104,10 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
         http: WasiHttpCtx::new(),
         stderr,
         stdout,
-        send_request: None,
-        rejected_authority: None,
+        hooks: MyHttpHooks {
+            send_request: None,
+            rejected_authority: None,
+        },
     };
 
     Store::new(&engine, ctx)
@@ -152,26 +163,30 @@ async fn run_wasi_http(
         http,
         stderr,
         stdout,
-        send_request,
-        rejected_authority,
+        hooks: MyHttpHooks {
+            send_request,
+            rejected_authority,
+        },
     };
     let mut store = Store::new(&engine, ctx);
 
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::add_to_linker_async(&mut linker).context("add crate to linker")?;
+    wasmtime_wasi_http::p2::add_to_linker_async(&mut linker).context("add crate to linker")?;
     let proxy =
-        wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
+        wasmtime_wasi_http::p2::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
             .await
             .context("instantiate proxy")?;
 
     let req = store
         .data_mut()
+        .http()
         .new_incoming_request(Scheme::Http, req)
         .context("new incoming request")?;
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store
         .data_mut()
+        .http()
         .new_response_outparam(sender)
         .context("new response outparam")?;
 
@@ -298,7 +313,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponse {
                         resp: resp.map(|body| {
-                            body.map_err(wasmtime_wasi_http::hyper_response_error)
+                            body.map_err(wasmtime_wasi_http::p2::hyper_response_error)
                                 .boxed_unsync()
                         }),
                         worker: None,
@@ -605,10 +620,10 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
-    use crate::p2::types::FieldSizeLimitError;
     use http::{HeaderName, HeaderValue, Request};
     use http_body_util::combinators::BoxBody;
     use hyper::Error;
+    use wasmtime_wasi_http::FieldMapError;
 
     fn request_with_header_size(uri: &str, total: usize) -> Request<BoxBody<Bytes, Error>> {
         let mut builder = hyper::Request::builder().uri(uri).method(http::Method::GET);
@@ -669,7 +684,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
     .await
     .err()
     .expect("new_fields exceeding the size limit");
-    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+    assert!(err.downcast_ref::<FieldMapError>().is_some());
 
     let resp = run_wasi_http(
         test_programs_artifacts::P2_API_PROXY_COMPONENT,
@@ -693,7 +708,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
     .await
     .err()
     .expect("run_wasi_http should give error");
-    assert!(err.downcast_ref::<FieldSizeLimitError>().is_some());
+    assert!(err.downcast_ref::<FieldMapError>().is_some());
 
     Ok(())
 }

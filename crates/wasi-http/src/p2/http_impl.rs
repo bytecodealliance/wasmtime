@@ -1,7 +1,7 @@
 //! Implementation of the `wasi:http/outgoing-handler` interface.
 
-use crate::{
-    WasiHttpImpl, WasiHttpView,
+use crate::p2::{
+    HttpResult, WasiHttpCtxView,
     bindings::http::{
         outgoing_handler,
         types::{self, Scheme},
@@ -15,16 +15,13 @@ use http_body_util::{BodyExt, Empty};
 use hyper::Method;
 use wasmtime::component::Resource;
 
-impl<T> outgoing_handler::Host for WasiHttpImpl<T>
-where
-    T: WasiHttpView,
-{
+impl outgoing_handler::Host for WasiHttpCtxView<'_> {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
         options: Option<Resource<types::RequestOptions>>,
-    ) -> crate::HttpResult<Resource<HostFutureIncomingResponse>> {
-        let opts = options.and_then(|opts| self.table().get(&opts).ok());
+    ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
+        let opts = options.and_then(|opts| self.table.get(&opts).ok());
 
         let connect_timeout = opts
             .and_then(|opts| opts.connect_timeout)
@@ -38,7 +35,7 @@ where
             .and_then(|opts| opts.between_bytes_timeout)
             .unwrap_or(std::time::Duration::from_secs(600));
 
-        let req = self.table().delete(request_id)?;
+        let req = self.table.delete(request_id)?;
         let mut builder = hyper::Request::builder();
 
         builder = builder.method(match req.method {
@@ -79,7 +76,7 @@ where
 
         builder = builder.uri(uri.build().map_err(http_request_error)?);
 
-        for (k, v) in req.headers.as_ref().iter() {
+        for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
         }
 
@@ -93,7 +90,7 @@ where
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        let future = self.send_request(
+        let future = self.hooks.send_request(
             request,
             OutgoingRequestConfig {
                 use_tls,
@@ -103,6 +100,6 @@ where
             },
         )?;
 
-        Ok(self.table().push(future)?)
+        Ok(self.table.push(future)?)
     }
 }
