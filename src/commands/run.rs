@@ -439,6 +439,12 @@ impl RunCommand {
         // cause a debug event but no trap here. This overrides other
         // behavior below.
         if self.run.common.debug.debugger.is_some() {
+            if self.run.profile.is_some() {
+                bail!("Cannot set profile options together with debugging; they are incompatible");
+            }
+            if self.run.common.wasm.timeout.is_some() {
+                bail!("Cannot set timeout options together with debugging; they are incompatible");
+            }
             store.epoch_deadline_async_yield_and_update(1);
         } else {
             if let Some(Profile::Guest { path, interval }) = &self.run.profile {
