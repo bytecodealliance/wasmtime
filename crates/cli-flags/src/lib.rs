@@ -280,6 +280,15 @@ wasmtime_option_group! {
         /// component. May be specified multiple times.
         #[serde(default)]
         pub arg: Vec<String>,
+        /// Allow the debugger component to inherit stdin.Off by
+        /// default.
+        pub inherit_stdin: Option<bool>,
+        /// Allow the debugger component to inherit stdout. Off by
+        /// default.
+        pub inherit_stdout: Option<bool>,
+        /// Allow the debugger component to inherit stderr. Off by
+        /// default.
+        pub inherit_stderr: Option<bool>,
     }
 
     enum Debug {
@@ -498,9 +507,12 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
-        /// Inherit stdin/stdout from the parent process. On by
-        /// default.
-        pub inherit_stdin_stdout: Option<bool>,
+        /// Inherit stdin from the parent process. On by default.
+        pub inherit_stdin: Option<bool>,
+        /// Inherit stdout from the parent process. On by default.
+        pub inherit_stdout: Option<bool>,
+        /// Inherit stderr from the parent process. On by default.
+        pub inherit_stderr: Option<bool>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,

@@ -106,9 +106,19 @@ impl RunCommand {
             // Explicitly permit TCP sockets for the debugger-main environment.
             debugger_run.run.common.wasi.tcp = Some(true);
             debugger_run.run.common.wasi.inherit_network = Some(true);
-            // Do not inherit stdin/stdout (stderr is always
-            // inherited) in the debugger-main environment.
-            debugger_run.run.common.wasi.inherit_stdin_stdout = Some(false);
+            // Copy over stdin/stdout/stderr inheritance settings,
+            // except default to `false` for the debugger (so it
+            // doesn't interfere with the debuggee's CLI interface, if
+            // any). We expect most debug components will serve an
+            // interface over the network; for those that want a TUI,
+            // their setup instructions can instruct the user to set
+            // these flags as needed.
+            debugger_run.run.common.wasi.inherit_stdin =
+                Some(self.run.common.debug.inherit_stdin.unwrap_or(false));
+            debugger_run.run.common.wasi.inherit_stdout =
+                Some(self.run.common.debug.inherit_stdout.unwrap_or(false));
+            debugger_run.run.common.wasi.inherit_stderr =
+                Some(self.run.common.debug.inherit_stderr.unwrap_or(false));
             Ok(Some(debugger_run))
         } else {
             Ok(None)
@@ -1244,8 +1254,14 @@ impl RunCommand {
         builder.args(&self.compute_argv()?)?;
 
         builder.inherit_stderr();
-        if self.run.common.wasi.inherit_stdin_stdout.unwrap_or(true) {
-            builder.inherit_stdin().inherit_stdout();
+        if self.run.common.wasi.inherit_stdin.unwrap_or(true) {
+            builder.inherit_stdin();
+        }
+        if self.run.common.wasi.inherit_stdout.unwrap_or(true) {
+            builder.inherit_stdout();
+        }
+        if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
+            builder.inherit_stderr();
         }
 
         if self.run.common.wasi.inherit_env == Some(true) {
