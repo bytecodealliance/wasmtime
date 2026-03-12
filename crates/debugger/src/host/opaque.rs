@@ -143,7 +143,7 @@ impl WasmValue {
 }
 
 #[async_trait::async_trait]
-impl<T: Send + 'static> OpaqueDebugger for crate::Debugger<T> {
+impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     async fn all_instances(&mut self) -> Result<Vec<Instance>> {
         self.with_store(|store| store.debug_all_instances()).await
     }

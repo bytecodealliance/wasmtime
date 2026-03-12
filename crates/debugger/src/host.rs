@@ -9,7 +9,6 @@ mod api;
 mod bindings;
 mod opaque;
 
-use crate::Debugger;
 pub use api::Debuggee;
 pub use bindings::DebugMain as DebuggerComponent;
 pub use bindings::bytecodealliance::wasmtime::debuggee as wit;
@@ -18,7 +17,7 @@ use opaque::OpaqueDebugger;
 /// Register a debuggee in a resource table.
 pub fn add_debuggee<T: Send + 'static>(
     table: &mut ResourceTable,
-    debuggee: Debugger<T>,
+    debuggee: crate::Debuggee<T>,
 ) -> Result<Resource<Debuggee>> {
     let engine = debuggee.engine().clone();
     let inner: Option<Box<dyn OpaqueDebugger + Send + 'static>> = Some(Box::new(debuggee));

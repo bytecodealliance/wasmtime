@@ -818,8 +818,8 @@ impl RunCommand {
     ) -> Result<()> {
         let instance = linker.instantiate_async(&mut *store, component).await?;
         let command = wasmtime_debugger::DebuggerComponent::new(&mut *store, &instance)?;
-        let debugger = wasmtime_debugger::Debugger::new(debuggee_host, body);
-        let debuggee = wasmtime_debugger::add_debuggee(store.data_mut().ctx().table, debugger)?;
+        let debuggee = wasmtime_debugger::Debuggee::new(debuggee_host, body);
+        let debuggee = wasmtime_debugger::add_debuggee(store.data_mut().ctx().table, debuggee)?;
         {
             // Manually construct a borrow -- wasmtime-wit-bindgen
             // generates code that consumes the `Resource<T>` for

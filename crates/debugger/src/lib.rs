@@ -22,7 +22,7 @@ use wasmtime::{
 mod host;
 pub use host::{DebuggerComponent, DebuggerView, add_debuggee, add_to_linker, wit};
 
-/// A `Debugger` wraps up state associated with debugging the code
+/// A `Debuggee` wraps up state associated with debugging the code
 /// running in a single `Store`.
 ///
 /// It acts as a Future combinator, wrapping an inner async body that
@@ -32,13 +32,13 @@ pub use host::{DebuggerComponent, DebuggerView, add_debuggee, add_to_linker, wit
 /// states: running or paused. When paused, it acts as a
 /// `StoreContextMut` and can allow examining the paused execution's
 /// state. One runs until the next event suspends execution by
-/// invoking `Debugger::run`.
-pub struct Debugger<T: Send + 'static> {
+/// invoking `Debuggee::run`.
+pub struct Debuggee<T: Send + 'static> {
     /// A handle to the Engine that the debuggee store lives within.
     engine: Engine,
     /// State: either a task handle or the store when passed out of
     /// the complete task.
-    state: DebuggerState,
+    state: DebuggeeState,
     /// The store, once complete.
     store: Option<Store<T>>,
     in_tx: mpsc::Sender<Command<T>>,
@@ -50,7 +50,7 @@ pub struct Debugger<T: Send + 'static> {
 ///
 /// The intermediate states here, and the separation of these states
 /// from the `JoinHandle` above, are what allow us to implement a
-/// cancel-safe version of `Debugger::run` below.
+/// cancel-safe version of `Debuggee::run` below.
 ///
 /// The state diagram for the outer logic is:
 ///
@@ -80,7 +80,7 @@ pub struct Debugger<T: Send + 'static> {
 /// `---<-'
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DebuggerState {
+enum DebuggeeState {
     /// Inner body has just been started.
     Initial,
     /// Inner body is running in an async task and not in a debugger
@@ -171,7 +171,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             DebugEvent::EpochYield => DebugRunResult::EpochYield,
         };
         if self.0.out_tx.send(Response::Paused(result)).await.is_err() {
-            // Outer Debugger has been dropped: just continue
+            // Outer Debuggee has been dropped: just continue
             // executing.
             return;
         }
@@ -187,7 +187,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
                         .await
                         .is_err()
                     {
-                        // Outer Debugger has been dropped: just
+                        // Outer Debuggee has been dropped: just
                         // continue executing.
                         return;
                     }
@@ -200,7 +200,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
     }
 }
 
-impl<T: Send + 'static> Debugger<T> {
+impl<T: Send + 'static> Debuggee<T> {
     /// Create a new Debugger that attaches to the given Store and
     /// runs the given inner body.
     ///
@@ -208,14 +208,14 @@ impl<T: Send + 'static> Debugger<T> {
     /// paused.
     ///
     /// When paused, the holder of this object can invoke
-    /// `Debugger::run` to enter the running state. The inner body
+    /// `Debuggee::run` to enter the running state. The inner body
     /// will run until paused by a debug event. While running, the
-    /// future returned by either of these methods owns the `Debugger`
+    /// future returned by either of these methods owns the `Debuggee`
     /// and hence no other methods can be invoked.
     ///
     /// When paused, the holder of this object can access the `Store`
     /// indirectly by providing a closure
-    pub fn new<F>(mut store: Store<T>, inner: F) -> Debugger<T>
+    pub fn new<F>(mut store: Store<T>, inner: F) -> Debuggee<T>
     where
         F: for<'a> FnOnce(
                 &'a mut Store<T>,
@@ -252,9 +252,9 @@ impl<T: Send + 'static> Debugger<T> {
             result
         });
 
-        Debugger {
+        Debuggee {
             engine,
-            state: DebuggerState::Initial,
+            state: DebuggeeState::Initial,
             store: None,
             in_tx,
             out_rx,
@@ -265,7 +265,7 @@ impl<T: Send + 'static> Debugger<T> {
     /// Is the inner body done running?
     pub fn is_complete(&self) -> bool {
         match self.state {
-            DebuggerState::Complete => true,
+            DebuggeeState::Complete => true,
             _ => false,
         }
     }
@@ -276,7 +276,7 @@ impl<T: Send + 'static> Debugger<T> {
     }
 
     async fn wait_for_initial(&mut self) -> Result<()> {
-        if let DebuggerState::Initial = &self.state {
+        if let DebuggeeState::Initial = &self.state {
             // Need to receive and discard first `Paused`.
             let response = self
                 .out_rx
@@ -284,7 +284,7 @@ impl<T: Send + 'static> Debugger<T> {
                 .await
                 .ok_or_else(|| wasmtime::format_err!("Premature close of debugger channel"))?;
             assert!(matches!(response, Response::Paused(_)));
-            self.state = DebuggerState::Paused;
+            self.state = DebuggeeState::Paused;
         }
         Ok(())
     }
@@ -298,8 +298,8 @@ impl<T: Send + 'static> Debugger<T> {
         self.wait_for_initial().await?;
 
         match self.state {
-            DebuggerState::Initial => unreachable!(),
-            DebuggerState::Paused => {
+            DebuggeeState::Initial => unreachable!(),
+            DebuggeeState::Paused => {
                 log::trace!("sending Continue");
                 self.in_tx
                     .send(Command::Continue)
@@ -311,13 +311,13 @@ impl<T: Send + 'static> Debugger<T> {
                 // sent, so it's fine to remain in `Paused`. If it
                 // succeeded and we reached here, transition to
                 // `Running` so we don't re-send.
-                self.state = DebuggerState::Running;
+                self.state = DebuggeeState::Running;
             }
-            DebuggerState::Running => {
+            DebuggeeState::Running => {
                 // Previous `run()` must have been canceled; no action
                 // to take here.
             }
-            DebuggerState::Queried => {
+            DebuggeeState::Queried => {
                 // We expect to receive a `QueryResponse`; drop it if
                 // the query was canceled, then transition back to
                 // `Paused`.
@@ -328,7 +328,7 @@ impl<T: Send + 'static> Debugger<T> {
                     })?;
                 log::trace!("in Queried; received, dropping");
                 assert!(matches!(response, Response::QueryResponse(_)));
-                self.state = DebuggerState::Paused;
+                self.state = DebuggeeState::Paused;
 
                 // Now send a `Continue`, as above.
                 log::trace!("in Paused; sending Continue");
@@ -336,10 +336,10 @@ impl<T: Send + 'static> Debugger<T> {
                     .send(Command::Continue)
                     .await
                     .map_err(|_| wasmtime::format_err!("Failed to send over debug channel"))?;
-                self.state = DebuggerState::Running;
+                self.state = DebuggeeState::Running;
             }
-            DebuggerState::Complete => {
-                panic!("Cannot `run()` an already-complete Debugger");
+            DebuggeeState::Complete => {
+                panic!("Cannot `run()` an already-complete Debuggee");
             }
         }
 
@@ -358,13 +358,13 @@ impl<T: Send + 'static> Debugger<T> {
         match response {
             Response::Finished(store) => {
                 log::trace!("got Finished");
-                self.state = DebuggerState::Complete;
+                self.state = DebuggeeState::Complete;
                 self.store = Some(store);
                 Ok(DebugRunResult::Finished)
             }
             Response::Paused(result) => {
                 log::trace!("got Paused");
-                self.state = DebuggerState::Paused;
+                self.state = DebuggeeState::Paused;
                 Ok(result)
             }
             Response::QueryResponse(_) => {
@@ -396,7 +396,7 @@ impl<T: Send + 'static> Debugger<T> {
     /// Perform some action on the contained `Store` while not running.
     ///
     /// This may only be invoked before the inner body finishes and
-    /// when it is paused; that is, when the `Debugger` is initially
+    /// when it is paused; that is, when the `Debuggee` is initially
     /// created and after any call to `run()` returns a result other
     /// than `DebugRunResult::Finished`. If an earlier `run()`
     /// invocation was canceled, it must be re-invoked and return
@@ -418,25 +418,25 @@ impl<T: Send + 'static> Debugger<T> {
         self.wait_for_initial().await?;
 
         match self.state {
-            DebuggerState::Initial => unreachable!(),
-            DebuggerState::Queried => {
+            DebuggeeState::Initial => unreachable!(),
+            DebuggeeState::Queried => {
                 // Earlier query canceled; drop its response first.
                 let response =
                     self.out_rx.recv().await.ok_or_else(|| {
                         wasmtime::format_err!("Premature close of debugger channel")
                     })?;
                 assert!(matches!(response, Response::QueryResponse(_)));
-                self.state = DebuggerState::Paused;
+                self.state = DebuggeeState::Paused;
             }
-            DebuggerState::Running => {
+            DebuggeeState::Running => {
                 // Results from a canceled `run()`; `run()` must
                 // complete before this can be invoked.
                 panic!("Cannot query in Running state");
             }
-            DebuggerState::Complete => {
+            DebuggeeState::Complete => {
                 panic!("Cannot query when complete");
             }
-            DebuggerState::Paused => {
+            DebuggeeState::Paused => {
                 // OK -- this is the state we want.
             }
         }
@@ -446,7 +446,7 @@ impl<T: Send + 'static> Debugger<T> {
             .send(Command::Query(Box::new(|store| Box::new(f(store)))))
             .await
             .map_err(|_| wasmtime::format_err!("Premature close of debugger channel"))?;
-        self.state = DebuggerState::Queried;
+        self.state = DebuggeeState::Queried;
 
         let response = self
             .out_rx
@@ -456,13 +456,13 @@ impl<T: Send + 'static> Debugger<T> {
         let Response::QueryResponse(resp) = response else {
             wasmtime::bail!("Incorrect response from debugger task");
         };
-        self.state = DebuggerState::Paused;
+        self.state = DebuggeeState::Paused;
 
         Ok(*resp.downcast::<R>().expect("type mismatch"))
     }
 }
 
-/// The result of one call to `Debugger::run()`.
+/// The result of one call to `Debuggee::run()`.
 ///
 /// This is similar to `DebugEvent` but without the lifetime, so it
 /// can be sent across async tasks, and incorporates the possibility
@@ -514,7 +514,7 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |store| {
+        let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
                 store.edit_breakpoints().unwrap().single_step(true).unwrap();
@@ -528,10 +528,10 @@ mod test {
             })
         });
 
-        let event = debugger.run().await?;
+        let event = debuggee.run().await?;
         assert!(matches!(event, DebugRunResult::Breakpoint));
         // At (before executing) first `local.get`.
-        debugger
+        debuggee
             .with_store(|mut store| {
                 let frame = store.debug_exit_frames().next().unwrap();
                 assert_eq!(
@@ -560,10 +560,10 @@ mod test {
             })
             .await?;
 
-        let event = debugger.run().await?;
+        let event = debuggee.run().await?;
         // At second `local.get`.
         assert!(matches!(event, DebugRunResult::Breakpoint));
-        debugger
+        debuggee
             .with_store(|mut store| {
                 let frame = store.debug_exit_frames().next().unwrap();
                 assert_eq!(
@@ -593,10 +593,10 @@ mod test {
             })
             .await?;
 
-        let event = debugger.run().await?;
+        let event = debuggee.run().await?;
         // At `i32.add`.
         assert!(matches!(event, DebugRunResult::Breakpoint));
-        debugger
+        debuggee
             .with_store(|mut store| {
                 let frame = store.debug_exit_frames().next().unwrap();
                 assert_eq!(
@@ -627,10 +627,10 @@ mod test {
             })
             .await?;
 
-        let event = debugger.run().await?;
+        let event = debuggee.run().await?;
         // At return point.
         assert!(matches!(event, DebugRunResult::Breakpoint));
-        debugger
+        debuggee
             .with_store(|mut store| {
                 let frame = store.debug_exit_frames().next().unwrap();
                 assert_eq!(
@@ -661,7 +661,7 @@ mod test {
             .await?;
 
         // Now disable breakpoints before continuing. Second call should proceed with no more events.
-        debugger
+        debuggee
             .with_store(|store| {
                 store
                     .edit_breakpoints()
@@ -671,10 +671,10 @@ mod test {
             })
             .await?;
 
-        let event = debugger.run().await?;
+        let event = debuggee.run().await?;
         assert!(matches!(event, DebugRunResult::Finished));
 
-        assert!(debugger.is_complete());
+        assert!(debuggee.is_complete());
 
         Ok(())
     }
@@ -702,7 +702,7 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |store| {
+        let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
                 store.edit_breakpoints().unwrap().single_step(true).unwrap();
@@ -713,15 +713,15 @@ mod test {
             })
         });
 
-        debugger.finish().await?;
-        assert!(debugger.is_complete());
+        debuggee.finish().await?;
+        assert!(debuggee.is_complete());
 
         Ok(())
     }
 
     #[tokio::test]
     #[cfg_attr(miri, ignore)]
-    async fn drop_debugger_and_store() -> Result<()> {
+    async fn drop_debuggee_and_store() -> Result<()> {
         let _ = env_logger::try_init();
 
         let mut config = Config::new();
@@ -742,7 +742,7 @@ mod test {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let main = instance.get_func(&mut store, "main").unwrap();
 
-        let mut debugger = Debugger::new(store, move |store| {
+        let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
                 store.edit_breakpoints().unwrap().single_step(true).unwrap();
@@ -757,7 +757,7 @@ mod test {
         // function. Wasmtime's fiber cleanup should safely happen
         // without attempting to raise debug async handler calls with
         // missing async context.
-        let _ = debugger.run().await?;
+        let _ = debuggee.run().await?;
 
         Ok(())
     }
