@@ -90,6 +90,15 @@ wkg get --format wit --overwrite "wasi:random@$p3" -o "crates/wasi-http/src/p3/w
 wkg get --format wit --overwrite "wasi:sockets@$p3" -o "crates/wasi-http/src/p3/wit/deps/sockets.wit"
 wkg get --format wit --overwrite "wasi:http@$p3" -o "crates/wasi-http/src/p3/wit/deps/http.wit"
 
+rm -rf crates/debugger/wit/deps
+mkdir -p crates/debugger/wit/deps
+wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/debugger/wit/deps/io.wit"
+wkg get --format wit --overwrite "wasi:clocks@$p2" -o "crates/debugger/wit/deps/clocks.wit"
+wkg get --format wit --overwrite "wasi:cli@$p2" -o "crates/debugger/wit/deps/cli.wit"
+wkg get --format wit --overwrite "wasi:filesystem@$p2" -o "crates/debugger/wit/deps/filesystem.wit"
+wkg get --format wit --overwrite "wasi:random@$p2" -o "crates/debugger/wit/deps/random.wit"
+wkg get --format wit --overwrite "wasi:sockets@$p2" -o "crates/debugger/wit/deps/sockets.wit"
+
 # wasi-nn is fetched separately since it's not in the standard WASI registry
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=0.2.0-rc-2024-10-28
