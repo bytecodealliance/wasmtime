@@ -34,6 +34,35 @@ impl Debuggee {
     }
 }
 
+impl WasmValue {
+    pub(crate) fn new(store: impl wasmtime::AsContextMut, val: Val) -> Result<WasmValue> {
+        Ok(match val {
+            Val::ExnRef(Some(rooted)) => {
+                WasmValue::Exn(Some(rooted.to_owned_rooted(store).unwrap()))
+            }
+            Val::ExnRef(None) => WasmValue::Exn(None),
+            Val::FuncRef(Some(f)) => WasmValue::Func(Some(f)),
+            Val::FuncRef(None) => WasmValue::Func(None),
+            Val::ExternRef(_) | Val::AnyRef(_) | Val::ContRef(_) => {
+                return Err(wit::Error::UnsupportedType.into());
+            }
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => {
+                WasmValue::Primitive(val)
+            }
+        })
+    }
+
+    pub(crate) fn into_val(self, store: impl wasmtime::AsContextMut) -> Val {
+        match self {
+            WasmValue::Primitive(v) => v,
+            WasmValue::Exn(Some(owned)) => Val::ExnRef(Some(owned.to_rooted(store))),
+            WasmValue::Exn(None) => Val::ExnRef(None),
+            WasmValue::Func(Some(f)) => Val::FuncRef(Some(f)),
+            WasmValue::Func(None) => Val::FuncRef(None),
+        }
+    }
+}
+
 /// Representation of an async debug event that the debugger is
 /// waiting on.
 pub struct EventFuture {

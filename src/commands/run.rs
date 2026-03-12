@@ -1253,7 +1253,6 @@ impl RunCommand {
         let mut builder = WasiCtxBuilder::new();
         builder.args(&self.compute_argv()?)?;
 
-        builder.inherit_stderr();
         if self.run.common.wasi.inherit_stdin.unwrap_or(true) {
             builder.inherit_stdin();
         }
