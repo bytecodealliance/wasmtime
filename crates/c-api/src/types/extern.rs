@@ -1,4 +1,4 @@
-use crate::{CFuncType, CGlobalType, CMemoryType, CTableType};
+use crate::{CFuncType, CGlobalType, CMemoryType, CTableType, CTagType};
 use crate::{wasm_functype_t, wasm_globaltype_t, wasm_memorytype_t, wasm_tabletype_t};
 use wasmtime::ExternType;
 
@@ -16,6 +16,7 @@ pub(crate) enum CExternType {
     Global(CGlobalType),
     Memory(CMemoryType),
     Table(CTableType),
+    Tag(CTagType),
 }
 
 impl CExternType {
@@ -25,7 +26,7 @@ impl CExternType {
             ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
             ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
             ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
-            ExternType::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
+            ExternType::Tag(t) => CExternType::Tag(CTagType::new(t)),
         }
     }
 }
@@ -36,6 +37,9 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
+/// Value returned by `wasm_externtype_kind` for exception tags.
+/// This extends the `wasm_externkind_t` range (0-3 in wasm.h) with tag support.
+pub const WASMTIME_EXTERNTYPE_TAG: wasm_externkind_t = 4;
 
 impl wasm_externtype_t {
     pub(crate) fn from_extern_type(ty: ExternType) -> wasm_externtype_t {
@@ -56,6 +60,7 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
         CExternType::Table(_) => WASM_EXTERN_TABLE,
         CExternType::Global(_) => WASM_EXTERN_GLOBAL,
         CExternType::Memory(_) => WASM_EXTERN_MEMORY,
+        CExternType::Tag(_) => WASMTIME_EXTERNTYPE_TAG,
     }
 }
 
