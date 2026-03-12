@@ -3345,6 +3345,7 @@ impl Instance {
                         .ok_or_else(|| {
                             crate::format_err!("write pointer out of bounds of memory")
                         })?;
+                    lift.consume_fuel_array(count, size_of::<Val>())?;
 
                     let values = (0..count)
                         .map(|index| Val::load(lift, ty, &bytes[(index * size)..][..size]))
