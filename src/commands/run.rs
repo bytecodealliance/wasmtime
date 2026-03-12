@@ -86,6 +86,16 @@ impl RunCommand {
     #[cfg(feature = "debug")]
     pub(crate) fn debugger_run(&mut self) -> Result<Option<RunCommand>> {
         if let Some(debugger_component_path) = self.run.common.debug.debugger.as_ref() {
+            if self.run.common.debug.guest_debug == Some(false) {
+                bail!(
+                    "Cannot explicitly disable guest-debugging while providing a debugger component; the former is necessary for the latter"
+                );
+            }
+            if self.run.common.wasm.epoch_interruption == Some(false) {
+                bail!(
+                    "Cannot explicitly disable epoch-interruption while providing a debugger component; the former is necessary for the latter"
+                );
+            }
             self.run.common.debug.guest_debug = Some(true);
             self.run.common.wasm.epoch_interruption = Some(true);
             let mut debugger_run = RunCommand::try_parse_from(
