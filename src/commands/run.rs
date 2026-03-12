@@ -85,27 +85,52 @@ impl RunCommand {
     /// debugging (e.g., implictly set `-D guest-debug=y`).
     #[cfg(feature = "debug")]
     pub(crate) fn debugger_run(&mut self) -> Result<Option<RunCommand>> {
+        fn set_implicit_option(
+            place: &str,
+            name: &str,
+            setting: &mut Option<bool>,
+            value: bool,
+        ) -> Result<()> {
+            if *setting == Some(!value) {
+                bail!(
+                    "Explicitly-set option on {place} {name}={} is not compatible with debugging-implied setting {value}",
+                    setting.unwrap()
+                );
+            }
+            *setting = Some(value);
+            Ok(())
+        }
+
         if let Some(debugger_component_path) = self.run.common.debug.debugger.as_ref() {
-            if self.run.common.debug.guest_debug == Some(false) {
-                bail!(
-                    "Cannot explicitly disable guest-debugging while providing a debugger component; the former is necessary for the latter"
-                );
-            }
-            if self.run.common.wasm.epoch_interruption == Some(false) {
-                bail!(
-                    "Cannot explicitly disable epoch-interruption while providing a debugger component; the former is necessary for the latter"
-                );
-            }
-            self.run.common.debug.guest_debug = Some(true);
-            self.run.common.wasm.epoch_interruption = Some(true);
+            set_implicit_option(
+                "debuggee",
+                "guest_debug",
+                &mut self.run.common.debug.guest_debug,
+                true,
+            )?;
+            set_implicit_option(
+                "debuggee",
+                "epoch_interruption",
+                &mut self.run.common.wasm.epoch_interruption,
+                true,
+            )?;
+
             let mut debugger_run = RunCommand::try_parse_from(
                 ["run".into(), debugger_component_path.into()]
                     .into_iter()
                     .chain(self.run.common.debug.arg.iter().map(OsString::from)),
             )?;
-            // Explicitly permit TCP sockets for the debugger-main environment.
-            debugger_run.run.common.wasi.tcp = Some(true);
-            debugger_run.run.common.wasi.inherit_network = Some(true);
+
+            // Explicitly permit TCP sockets for the debugger-main
+            // environment, if not already set.
+            debugger_run.run.common.wasi.tcp.get_or_insert(true);
+            debugger_run
+                .run
+                .common
+                .wasi
+                .inherit_network
+                .get_or_insert(true);
+
             // Copy over stdin/stdout/stderr inheritance settings,
             // except default to `false` for the debugger (so it
             // doesn't interfere with the debuggee's CLI interface, if
@@ -113,12 +138,24 @@ impl RunCommand {
             // interface over the network; for those that want a TUI,
             // their setup instructions can instruct the user to set
             // these flags as needed.
-            debugger_run.run.common.wasi.inherit_stdin =
-                Some(self.run.common.debug.inherit_stdin.unwrap_or(false));
-            debugger_run.run.common.wasi.inherit_stdout =
-                Some(self.run.common.debug.inherit_stdout.unwrap_or(false));
-            debugger_run.run.common.wasi.inherit_stderr =
-                Some(self.run.common.debug.inherit_stderr.unwrap_or(false));
+            set_implicit_option(
+                "debugger",
+                "inherit_stdin",
+                &mut debugger_run.run.common.wasi.inherit_stdin,
+                self.run.common.debug.inherit_stdin.unwrap_or(false),
+            )?;
+            set_implicit_option(
+                "debugger",
+                "inherit_stdout",
+                &mut debugger_run.run.common.wasi.inherit_stdout,
+                self.run.common.debug.inherit_stdout.unwrap_or(false),
+            )?;
+            set_implicit_option(
+                "debugger",
+                "inherit_stderr",
+                &mut debugger_run.run.common.wasi.inherit_stderr,
+                self.run.common.debug.inherit_stderr.unwrap_or(false),
+            )?;
             Ok(Some(debugger_run))
         } else {
             Ok(None)
@@ -1315,7 +1352,16 @@ impl RunCommand {
     /// `wasmtime-wasi`-vs-`wasi-common` here more than anything else.
     fn set_wasi_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?);
+        builder.args(&self.compute_argv()?);
+        if self.run.common.wasi.inherit_stdin.unwrap_or(true) {
+            builder.inherit_stdin();
+        }
+        if self.run.common.wasi.inherit_stdout.unwrap_or(true) {
+            builder.inherit_stdout();
+        }
+        if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
+            builder.inherit_stderr();
+        }
         self.run.configure_wasip2(&mut builder)?;
         let mut ctx = builder.build_p1();
         if let Some(max) = self.run.common.wasi.max_resources {
