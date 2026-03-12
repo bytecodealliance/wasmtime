@@ -1916,7 +1916,7 @@ impl<T: Lift> WasmList<T> {
             .checked_mul(T::SIZE32)
             .and_then(|len| ptr.checked_add(len))
         {
-            Some(n) if n <= cx.memory().len() => cx.consume_fuel(n - ptr)?,
+            Some(n) if n <= cx.memory().len() => cx.consume_fuel_array(len, size_of::<T>())?,
             _ => bail!("list pointer/length out of bounds of memory"),
         }
         if ptr % usize::try_from(T::ALIGN32)? != 0 {
