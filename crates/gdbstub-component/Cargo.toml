@@ -1,0 +1,26 @@
+[package]
+name = "wasmtime-internal-gdbstub-component"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+description = "gdbstub debug-component adapter"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true, features = ["macros"] }
+anyhow = { workspace = true }
+structopt = { workspace = true }
+wstd = { workspace = true }
+wasip2 = { workspace = true }
+futures = { workspace = true, default-features = true }
+gdbstub = { workspace = true }
+gdbstub_arch = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+
+[lints]
+workspace = true
