@@ -834,6 +834,16 @@ unsafe impl GcHeap for DrcHeap {
             next_over_approximated_stack_root: None,
             object_size,
         };
+
+        // Zero-fill past the header so `dealloc_uninit_*` can safely
+        // trace partially-initialized objects.
+        let header_size = core::mem::size_of::<VMDrcHeader>();
+        if layout.size() > header_size {
+            let start = gc_ref.as_heap_index().unwrap().get();
+            let start = usize::try_from(start).unwrap();
+            self.heap_slice_mut()[start + header_size..start + layout.size()].fill(0);
+        }
+
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Ok(gc_ref))
     }
@@ -857,7 +867,16 @@ unsafe impl GcHeap for DrcHeap {
         Ok(Ok(gc_ref))
     }
 
-    fn dealloc_uninit_struct_or_exn(&mut self, gcref: VMGcRef) {
+    fn dealloc_uninit_struct_or_exn(
+        &mut self,
+        host_data_table: &mut ExternRefHostDataTable,
+        gcref: VMGcRef,
+    ) {
+        let mut children = Vec::new();
+        self.trace_gc_ref(&gcref, &mut children);
+        for child in &children {
+            self.dec_ref_and_maybe_dealloc(host_data_table, child);
+        }
         self.dealloc(gcref);
     }
 
@@ -881,8 +900,18 @@ unsafe impl GcHeap for DrcHeap {
         Ok(Ok(gc_ref.into_arrayref_unchecked()))
     }
 
-    fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) {
-        self.dealloc(arrayref.into())
+    fn dealloc_uninit_array(
+        &mut self,
+        host_data_table: &mut ExternRefHostDataTable,
+        arrayref: VMArrayRef,
+    ) {
+        let gc_ref: VMGcRef = arrayref.into();
+        let mut children = Vec::new();
+        self.trace_gc_ref(&gc_ref, &mut children);
+        for child in &children {
+            self.dec_ref_and_maybe_dealloc(host_data_table, child);
+        }
+        self.dealloc(gc_ref);
     }
 
     fn array_len(&self, arrayref: &VMArrayRef) -> u32 {

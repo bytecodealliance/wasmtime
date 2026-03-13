@@ -302,7 +302,11 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// that the struct's allocation can be eagerly reclaimed, and so that the
     /// collector doesn't attempt to treat any of the uninitialized fields as
     /// valid GC references, or something like that.
-    fn dealloc_uninit_struct_or_exn(&mut self, structref: VMGcRef);
+    fn dealloc_uninit_struct_or_exn(
+        &mut self,
+        host_data_table: &mut ExternRefHostDataTable,
+        structref: VMGcRef,
+    );
 
     /// * `Ok(Ok(_))`: The allocation was successful.
     ///
@@ -328,7 +332,11 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// that the array's allocation can be eagerly reclaimed, and so that the
     /// collector doesn't attempt to treat any of the uninitialized fields as
     /// valid GC references, or something like that.
-    fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef);
+    fn dealloc_uninit_array(
+        &mut self,
+        host_data_table: &mut ExternRefHostDataTable,
+        arrayref: VMArrayRef,
+    );
 
     /// Get the length of the given array.
     ///
