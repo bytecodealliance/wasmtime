@@ -32,7 +32,7 @@ fn run_debugger_test(debugger_component: &str, debuggee: &str, test_mode: &str) 
 #[test]
 fn debugger_debuggee_simple() -> Result<()> {
     run_debugger_test(
-        DEBUGGER_COMPONENT,
+        DEBUGGER_COMPONENT_COMPONENT,
         DEBUGGER_DEBUGGEE_SIMPLE_COMPONENT,
         "simple",
     )
@@ -40,7 +40,19 @@ fn debugger_debuggee_simple() -> Result<()> {
 
 #[test]
 fn debugger_debuggee_loop() -> Result<()> {
-    run_debugger_test(DEBUGGER_COMPONENT, DEBUGGER_DEBUGGEE_LOOP_COMPONENT, "loop")
+    run_debugger_test(
+        DEBUGGER_COMPONENT_COMPONENT,
+        DEBUGGER_DEBUGGEE_LOOP_COMPONENT,
+        "loop",
+    )
+}
+
+#[test]
+fn debugger_component() -> Result<()> {
+    // This is present so that `assert_test_exists` can assert presence of unit-tests for all
+    // components. The debugger component itself exists in this list alongside all the debuggees;
+    // we only test the debuggees (with the debugger implicitly used for each).
+    Ok(())
 }
 
 macro_rules! assert_test_exists {
