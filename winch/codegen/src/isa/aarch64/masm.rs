@@ -30,8 +30,8 @@ use crate::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlags, RelSourceLoc, SourceLoc},
-    isa::aarch64::inst::{self, Cond, Imm12, ImmLogic, ImmShift, VectorSize},
+    ir::{MemFlags, RelSourceLoc, SourceLoc, types},
+    isa::aarch64::inst::{self, Cond, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VectorSize},
     settings,
 };
 use regalloc2::RegClass;
@@ -137,13 +137,20 @@ impl Masm for MacroAssembler {
         let fp = regs::fp();
         let sp = regs::sp();
 
-        let addr = Address::pre_indexed_from_sp(-16);
-        self.asm.stp(fp, lr, addr);
+        let offset = SImm7Scaled::maybe_from_i64(-16, types::I64)
+            .expect("Frame pointer offset of -16 is valid for pair addressing");
+        let addr = Address::pre_indexed_from_sp_for_pair(offset);
+        self.asm.stp(fp, lr, addr.to_pair_addressing_mode());
         self.asm.mov_rr(sp, writable!(fp), OperandSize::S64);
 
-        let addr = Address::pre_indexed_from_sp(-(SHADOW_STACK_POINTER_SLOT_SIZE as i64));
-        self.asm
-            .str(regs::shadow_sp(), addr, OperandSize::S64, TRUSTED_FLAGS);
+        let offset = SImm9::maybe_from_i64(-(SHADOW_STACK_POINTER_SLOT_SIZE as i64))
+            .expect("Shadow stack pointer slot size is valid for single addressing");
+        let addr = Address::pre_indexed_from_sp(offset);
+        addr.to_addressing_mode(self, OperandSize::S64, |masm, mem| {
+            masm.asm
+                .str(regs::shadow_sp(), mem, OperandSize::S64, TRUSTED_FLAGS);
+            Ok(())
+        })?;
 
         self.move_sp_to_shadow_sp();
         Ok(())
@@ -207,20 +214,27 @@ impl Masm for MacroAssembler {
         // Pop the shadow stack pointer. It's assumed that at this point
         // `sp_offset` is 0 and therefore the real stack pointer should be
         // 16-byte aligned.
-        let addr = Address::post_indexed_from_sp(SHADOW_STACK_POINTER_SLOT_SIZE as i64);
-        self.asm.uload(
-            addr,
-            writable!(regs::shadow_sp()),
-            OperandSize::S64,
-            TRUSTED_FLAGS,
-        );
+        let offset = SImm9::maybe_from_i64(SHADOW_STACK_POINTER_SLOT_SIZE as i64)
+            .expect("Shadow stack pointer slot size is valid for single addressing");
+        let addr = Address::post_indexed_from_sp(offset);
+        addr.to_addressing_mode(self, OperandSize::S64, |masm, mem| {
+            masm.asm.uload(
+                mem,
+                writable!(regs::shadow_sp()),
+                OperandSize::S64,
+                TRUSTED_FLAGS,
+            );
+            Ok(())
+        })?;
 
         // Restore the link register and frame pointer.
         let lr = regs::lr();
         let fp = regs::fp();
-        let addr = Address::post_indexed_from_sp(16);
+        let offset = SImm7Scaled::maybe_from_i64(16, types::I64)
+            .expect("Frame pointer offset 16 is valid for pair addressing");
+        let addr = Address::post_indexed_from_sp_for_pair(offset);
 
-        self.asm.ldp(fp, lr, addr);
+        self.asm.ldp(fp, lr, addr.to_pair_addressing_mode());
         self.asm.ret();
         Ok(())
     }
@@ -330,34 +344,40 @@ impl Masm for MacroAssembler {
             RegImm::Imm(v) => {
                 match v {
                     I::I32(_) | I::I64(_) => {
-                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| -> Result<()> {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
-                            masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-                        });
+                            dst.to_addressing_mode(masm, size, |masm, mem| {
+                                masm.asm.str(scratch.inner(), mem, size, TRUSTED_FLAGS);
+                                Ok(())
+                            })
+                        })?;
                     }
                     imm @ (I::F32(_) | I::F64(_)) => {
-                        self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                        self.with_scratch::<FloatScratch, _>(|masm, scratch| -> Result<()> {
                             masm.asm.mov_ir(scratch.writable(), imm, imm.size());
-                            masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-                        });
+                            dst.to_addressing_mode(masm, size, |masm, mem| {
+                                masm.asm.str(scratch.inner(), mem, size, TRUSTED_FLAGS);
+                                Ok(())
+                            })
+                        })?;
                     }
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 };
                 Ok(())
             }
-            RegImm::Reg(r) => {
-                self.asm.str(r, dst, size, TRUSTED_FLAGS);
+            RegImm::Reg(r) => dst.to_addressing_mode(self, size, |masm, mem| {
+                masm.asm.str(r, mem, size, TRUSTED_FLAGS);
                 Ok(())
-            }
+            }),
         }
     }
 
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, op_kind: StoreKind) -> Result<()> {
         self.with_aligned_sp(|masm| match op_kind {
-            StoreKind::Operand(size) => {
-                masm.asm.str(src, dst, size, UNTRUSTED_FLAGS);
+            StoreKind::Operand(size) => dst.to_addressing_mode(masm, size, |masm, mem| {
+                masm.asm.str(src, mem, size, UNTRUSTED_FLAGS);
                 Ok(())
-            }
+            }),
             StoreKind::Atomic(_size) => {
                 Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
             }
@@ -400,8 +420,9 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size, TRUSTED_FLAGS);
-        Ok(())
+        src.to_addressing_mode(self, size, |masm, mem| {
+            Ok(masm.asm.uload(mem, dst, size, TRUSTED_FLAGS))
+        })
     }
 
     fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) -> Result<()> {
@@ -415,19 +436,25 @@ impl Masm for MacroAssembler {
                 if size == OperandSize::S128 {
                     bail!(CodeGenError::UnimplementedWasmLoadKind)
                 } else {
-                    Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS))
+                    src.to_addressing_mode(masm, size, |masm, mem| {
+                        Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
+                    })
                 }
             }
             LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
-                    masm.asm.sload(src, dst, size, UNTRUSTED_FLAGS);
+                    src.to_addressing_mode(masm, size, |masm, mem| {
+                        masm.asm.sload(mem, dst, size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })
                 } else {
-                    // unlike x64, unused bits are set to zero so we don't need to extend
-                    masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS);
+                    src.to_addressing_mode(masm, size, |masm, mem| {
+                        // unlike x64, unused bits are set to zero so we don't need to extend
+                        masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })
                 }
-
-                Ok(())
             }
             LoadKind::VectorExtend(_vector_extend_kind) => {
                 bail!(CodeGenError::UnimplementedWasmLoadKind)
@@ -454,7 +481,10 @@ impl Masm for MacroAssembler {
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
         let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.uload(addr, dst, size, TRUSTED_FLAGS);
+        addr.to_addressing_mode(self, size, |masm, mem| {
+            masm.asm.uload(mem, dst, size, TRUSTED_FLAGS);
+            Ok(())
+        })?;
         self.free_stack(size.bytes())
     }
 
@@ -971,7 +1001,10 @@ impl Masm for MacroAssembler {
     fn push(&mut self, reg: Reg, size: OperandSize) -> Result<StackSlot> {
         self.reserve_stack(size.bytes())?;
         let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.str(reg, address, size, TRUSTED_FLAGS);
+        address.to_addressing_mode(self, size, |masm, mem| {
+            masm.asm.str(reg, mem, size, TRUSTED_FLAGS);
+            Ok(())
+        })?;
 
         Ok(StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
