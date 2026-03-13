@@ -20,8 +20,13 @@ pub fn add_debuggee<T: Send + 'static>(
     debuggee: crate::Debuggee<T>,
 ) -> Result<Resource<Debuggee>> {
     let engine = debuggee.engine().clone();
+    let interrupt_pending = debuggee.interrupt_pending().clone();
     let inner: Option<Box<dyn OpaqueDebugger + Send + 'static>> = Some(Box::new(debuggee));
-    Ok(table.push(Debuggee { inner, engine })?)
+    Ok(table.push(Debuggee {
+        inner,
+        engine,
+        interrupt_pending,
+    })?)
 }
 
 /// A provider of a [`ResourceTable`] for debugger host APIs.

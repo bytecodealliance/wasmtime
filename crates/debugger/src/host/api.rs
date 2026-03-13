@@ -4,6 +4,8 @@ use crate::host::opaque::OpaqueDebugger;
 use crate::host::wit;
 use crate::{DebugRunResult, host::bindings::wasm_type_to_val_type};
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use wasmtime::{
     Engine, ExnRef, FrameHandle, Func, Global, Instance, Memory, Module, OwnedRooted, Result,
     Table, Tag, Val, component::Resource, component::ResourceTable,
@@ -23,6 +25,10 @@ pub struct Debuggee {
     /// epoch (hence interrupting a running debuggee) without taking
     /// the mutex.
     pub(crate) engine: Engine,
+
+    /// Shared flag: set to `true` by `interrupt()` so the inner
+    /// handler treats the next epoch yield as an `Interrupted` event.
+    pub(crate) interrupt_pending: Arc<AtomicBool>,
 }
 
 impl Debuggee {
@@ -205,6 +211,7 @@ impl wit::HostDebuggee for ResourceTable {
 
     async fn interrupt(&mut self, debuggee: Resource<Debuggee>) -> Result<()> {
         let d = self.get_mut(&debuggee)?;
+        d.interrupt_pending.store(true, Ordering::SeqCst);
         d.engine.increment_epoch();
         Ok(())
     }

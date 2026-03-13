@@ -9,7 +9,15 @@
 //! In the future, this crate will also provide a WIT-level API and
 //! world in which to run debugger components.
 
-use std::{any::Any, future::Future, pin::Pin, sync::Arc};
+use std::{
+    any::Any,
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use tokio::{
     sync::{Mutex, mpsc},
     task::JoinHandle,
@@ -44,6 +52,13 @@ pub struct Debuggee<T: Send + 'static> {
     in_tx: mpsc::Sender<Command<T>>,
     out_rx: mpsc::Receiver<Response<T>>,
     handle: Option<JoinHandle<Result<()>>>,
+    /// Flag shared with the inner handler: set to `true` by
+    /// `interrupt()` so the next epoch yield is surfaced as an
+    /// `Interrupted` event rather than eaten by the handler. Epoch
+    /// yields serve two purposes, namely ensuring regular yields to
+    /// the event loop and enacting an explicit interrupt, and this
+    /// flag distinguishes those cases.
+    interrupt_pending: Arc<AtomicBool>,
 }
 
 /// State machine from the perspective of the outer logic.
@@ -145,6 +160,7 @@ enum Response<T: 'static> {
 struct HandlerInner<T: Send + 'static> {
     in_rx: Mutex<mpsc::Receiver<Command<T>>>,
     out_tx: mpsc::Sender<Response<T>>,
+    interrupt_pending: Arc<AtomicBool>,
 }
 
 struct Handler<T: Send + 'static>(Arc<HandlerInner<T>>);
@@ -168,7 +184,17 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             }
             DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
-            DebugEvent::EpochYield => DebugRunResult::EpochYield,
+            DebugEvent::EpochYield => {
+                // Only pause on epoch yields that were requested via
+                // interrupt(). Other epoch ticks simply yield to the
+                // event loop (funcionality already implemented in
+                // core Wasmtime; no need to do that yield here in the
+                // debug handler).
+                if !self.0.interrupt_pending.swap(false, Ordering::SeqCst) {
+                    return;
+                }
+                DebugRunResult::EpochYield
+            }
         };
         if self.0.out_tx.send(Response::Paused(result)).await.is_err() {
             // Outer Debuggee has been dropped: just continue
@@ -226,30 +252,35 @@ impl<T: Send + 'static> Debuggee<T> {
         let engine = store.engine().clone();
         let (in_tx, in_rx) = mpsc::channel(1);
         let (out_tx, out_rx) = mpsc::channel(1);
+        let interrupt_pending = Arc::new(AtomicBool::new(false));
 
-        let handle = tokio::spawn(async move {
-            // Create the handler that's invoked from within the async
-            // debug-event callback.
-            let out_tx_clone = out_tx.clone();
-            let handler = Handler(Arc::new(HandlerInner {
-                in_rx: Mutex::new(in_rx),
-                out_tx,
-            }));
+        let handle = tokio::spawn({
+            let interrupt_pending = interrupt_pending.clone();
+            async move {
+                // Create the handler that's invoked from within the async
+                // debug-event callback.
+                let out_tx_clone = out_tx.clone();
+                let handler = Handler(Arc::new(HandlerInner {
+                    in_rx: Mutex::new(in_rx),
+                    out_tx,
+                    interrupt_pending,
+                }));
 
-            // Emulate a breakpoint at startup.
-            log::trace!("inner debuggee task: first breakpoint");
-            handler
-                .handle(store.as_context_mut(), DebugEvent::Breakpoint)
-                .await;
-            log::trace!("inner debuggee task: first breakpoint resumed");
+                // Emulate a breakpoint at startup.
+                log::trace!("inner debuggee task: first breakpoint");
+                handler
+                    .handle(store.as_context_mut(), DebugEvent::Breakpoint)
+                    .await;
+                log::trace!("inner debuggee task: first breakpoint resumed");
 
-            // Now invoke the actual inner body.
-            store.set_debug_handler(handler);
-            log::trace!("inner debuggee task: running `inner`");
-            let result = inner(&mut store).await;
-            log::trace!("inner debuggee task: done with `inner`");
-            let _ = out_tx_clone.send(Response::Finished(store)).await;
-            result
+                // Now invoke the actual inner body.
+                store.set_debug_handler(handler);
+                log::trace!("inner debuggee task: running `inner`");
+                let result = inner(&mut store).await;
+                log::trace!("inner debuggee task: done with `inner`");
+                let _ = out_tx_clone.send(Response::Finished(store)).await;
+                result
+            }
         });
 
         Debuggee {
@@ -258,6 +289,7 @@ impl<T: Send + 'static> Debuggee<T> {
             store: None,
             in_tx,
             out_rx,
+            interrupt_pending,
             handle: Some(handle),
         }
     }
@@ -273,6 +305,12 @@ impl<T: Send + 'static> Debuggee<T> {
     /// Get the Engine associated with the debuggee.
     pub fn engine(&self) -> &Engine {
         &self.engine
+    }
+
+    /// Get the interrupt-pending flag. Setting this to `true` causes
+    /// the next epoch yield to surface as an `Interrupted` event.
+    pub fn interrupt_pending(&self) -> &Arc<AtomicBool> {
+        &self.interrupt_pending
     }
 
     async fn wait_for_initial(&mut self) -> Result<()> {
