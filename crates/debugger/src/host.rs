@@ -29,12 +29,6 @@ pub fn add_debuggee<T: Send + 'static>(
     })?)
 }
 
-/// A provider of a [`ResourceTable`] for debugger host APIs.
-pub trait DebuggerView: Send {
-    /// Provide a mutable borrow of the underlying resource table.
-    fn table(&mut self) -> &mut ResourceTable;
-}
-
 /// Add the debugger world's host functions to a [`wasmtime::component::Linker`].
 pub fn add_to_linker<T: Send + 'static>(
     linker: &mut wasmtime::component::Linker<T>,

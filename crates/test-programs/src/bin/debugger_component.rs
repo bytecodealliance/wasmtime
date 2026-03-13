@@ -5,7 +5,6 @@
 //! stderr to communicate success.
 
 use std::time::Duration;
-use wstd::runtime::AsyncPollable;
 
 mod api {
     wit_bindgen::generate!({
@@ -49,42 +48,34 @@ api::export!(Component with_types_in api);
 
 impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
     fn debug(d: &Debuggee, args: Vec<String>) {
-        wstd::runtime::block_on(async {
-            match args.get(1).map(|s| s.as_str()) {
-                Some("simple") => test_simple(d).await,
-                Some("loop") => test_loop(d).await,
-                other => panic!("unknown test mode: {other:?}"),
+        match args.get(1).map(|s| s.as_str()) {
+            Some("simple") => {
+                test_simple(d);
             }
-        });
+            Some("loop") => {
+                test_loop(d);
+            }
+            other => panic!("unknown test mode: {other:?}"),
+        }
     }
 }
 
 struct Resumption {
     future: EventFuture,
-    pollable: Option<AsyncPollable>,
 }
 
 impl Resumption {
     fn single_step(d: &Debuggee) -> Self {
         let future = d.single_step(ResumptionValue::Normal);
-        let pollable = Some(AsyncPollable::new(future.subscribe()));
-        Self { future, pollable }
+        Self { future }
     }
 
     fn continue_(d: &Debuggee) -> Self {
         let future = d.continue_(ResumptionValue::Normal);
-        let pollable = Some(AsyncPollable::new(future.subscribe()));
-        Self { future, pollable }
+        Self { future }
     }
 
-    async fn wait(&mut self) {
-        if let Some(p) = self.pollable.as_mut() {
-            p.wait_for().await;
-        }
-    }
-
-    fn result(mut self, d: &Debuggee) -> Result<Event, Error> {
-        let _ = self.pollable.take();
+    fn result(self, d: &Debuggee) -> Result<Event, Error> {
         EventFuture::finish(self.future, d)
     }
 }
@@ -92,10 +83,9 @@ impl Resumption {
 /// Tests single-stepping.
 ///
 /// Tests against `debugger_debuggee_simple.wat`.
-async fn test_simple(d: &Debuggee) {
+fn test_simple(d: &Debuggee) {
     // Step once to reach the first instruction.
-    let mut r = Resumption::single_step(d);
-    r.wait().await;
+    let r = Resumption::single_step(d);
     let _event = r.result(d).unwrap();
 
     let mut pcs = vec![];
@@ -105,8 +95,7 @@ async fn test_simple(d: &Debuggee) {
         let pc = frames[0].get_pc(d).unwrap();
         pcs.push(pc);
 
-        let mut r = Resumption::single_step(d);
-        r.wait().await;
+        let r = Resumption::single_step(d);
         match r.result(d).unwrap() {
             Event::Breakpoint => {}
             other => panic!("unexpected event: {other:?}"),
@@ -125,9 +114,9 @@ async fn test_simple(d: &Debuggee) {
 /// to completion.
 ///
 /// Tests against `debugger_debuggee_loop.wat`.
-async fn test_loop(d: &Debuggee) {
+fn test_loop(d: &Debuggee) {
     // Continue execution (the debuggee should loop).
-    let mut r = Resumption::continue_(d);
+    let r = Resumption::continue_(d);
 
     // Yield to the event loop and let it run for a bit.
     std::thread::sleep(Duration::from_millis(100));
@@ -136,7 +125,6 @@ async fn test_loop(d: &Debuggee) {
     d.interrupt();
 
     // Wait for the interrupt event.
-    r.wait().await;
     let event = r.result(d).unwrap();
     assert!(
         matches!(event, Event::Interrupted),
@@ -153,8 +141,7 @@ async fn test_loop(d: &Debuggee) {
     }
 
     // Continue; the debuggee should exit normally now.
-    let mut r = Resumption::continue_(d);
-    r.wait().await;
+    let r = Resumption::continue_(d);
     let event = r.result(d).unwrap();
     assert!(
         matches!(event, Event::Complete),
