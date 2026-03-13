@@ -1123,6 +1123,7 @@ fn component_tables_limit() -> Result<()> {
 
 #[test]
 #[cfg(feature = "component-model")]
+#[cfg_attr(miri, ignore)]
 fn component_core_instances_aggregate_size() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_core_instances_per_component(100)
