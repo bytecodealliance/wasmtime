@@ -858,10 +858,11 @@ fn component_instance_size_limit() -> Result<()> {
 
     match wasmtime::component::Component::new(&engine, "(component)") {
         Ok(_) => panic!("should have hit limit"),
-        Err(e) => e.assert_contains(
-            "instance allocation for this component requires 64 bytes of \
-            `VMComponentContext` space which exceeds the configured maximum of 1 bytes",
-        ),
+        Err(e) => {
+            e.assert_contains("instance allocation for this component requires 64 bytes");
+            e.assert_contains("which exceeds the configured maximum of 1 bytes");
+            e.assert_contains("`VMComponentContext` used 64 bytes");
+        }
     }
 
     Ok(())
@@ -1115,6 +1116,51 @@ fn component_tables_limit() -> Result<()> {
             "The component transitively contains 2 tables, which exceeds the \
              configured maximum of 1",
         ),
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "component-model")]
+#[cfg_attr(miri, ignore)]
+fn component_core_instances_aggregate_size() -> Result<()> {
+    let mut pool = crate::small_pool_config();
+    pool.max_core_instances_per_component(100)
+        // x86_64 requires 23824 bytes; we exceed this by a fair bit as there will
+        // be differences by arch.
+        .max_component_instance_size(1024);
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+
+    let core_instances = (1..100)
+        .map(|i| format!("(core instance $i{i} (instantiate $m))"))
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    match wasmtime::component::Component::new(
+        &engine,
+        format!(
+            "
+            (component
+                (core module $m
+                    (func (export \"f\") (result i32)
+                        i32.const 42
+                    )
+                )
+                {core_instances}
+            )
+        "
+        ),
+    ) {
+        Ok(_) => panic!("should have hit aggregate size limit"),
+        Err(e) => {
+            e.assert_contains("instance allocation for this component requires");
+            e.assert_contains("exceeds the configured maximum");
+        }
     }
 
     Ok(())
