@@ -93,6 +93,7 @@ impl Artifacts {
                 s if s.starts_with("p3_") => "p3",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",
+                s if s.starts_with("debugger_") => "debugger",
                 s if s.starts_with("dwarf_") => "dwarf",
                 s if s.starts_with("config_") => "config",
                 s if s.starts_with("keyvalue_") => "keyvalue",

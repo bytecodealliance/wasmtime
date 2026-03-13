@@ -739,7 +739,7 @@ jobs:
         toolchain: ${{ matrix.rust }}
 
     # Install targets in order to build various tests throughout the repo
-    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown ${{ matrix.target }}
+    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown wasm32-wasip2 ${{ matrix.target }}
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
@@ -937,7 +937,7 @@ jobs:
       if: (runner.os == 'Windows') && (matrix.feature == 'winml')
 
     # Install Rust targets.
-    - run: rustup target add wasm32-wasip1
+    - run: rustup target add wasm32-wasip1 wasm32-wasip2
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
@@ -1009,7 +1009,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - run: |
-        rustup target add wasm32-wasip1 wasm32-unknown-unknown
+        rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
         curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-30.0-x86_64-linux.tar.gz
         tar -xzf wasi-sdk-30.0-x86_64-linux.tar.gz
@@ -1038,7 +1038,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+    - run: rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
 
     - name: Install wasm-tools
       run: |
@@ -1118,7 +1118,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasip1
+    - run: rustup target add wasm32-wasip2 wasm32-wasip1
     - run: cargo test --benches --release
 
   # Verify that cranelift's code generation is deterministic

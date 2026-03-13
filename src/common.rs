@@ -19,6 +19,7 @@ use wasmtime::component::Component;
 /// future.
 pub const P3_DEFAULT: bool = cfg!(feature = "component-model-async") && false;
 
+#[derive(Clone)]
 pub enum RunTarget {
     Core(Module),
 
