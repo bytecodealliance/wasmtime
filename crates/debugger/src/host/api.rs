@@ -3,6 +3,7 @@
 use crate::host::opaque::OpaqueDebugger;
 use crate::host::wit;
 use crate::{DebugRunResult, host::bindings::wasm_type_to_val_type};
+use std::pin::Pin;
 use wasmtime::{
     Engine, ExnRef, FrameHandle, Func, Global, Instance, Memory, Module, OwnedRooted, Result,
     Table, Tag, Val, component::Resource, component::ResourceTable,
@@ -65,46 +66,81 @@ impl WasmValue {
 
 /// Representation of an async debug event that the debugger is
 /// waiting on.
+///
+/// Cancel-safety: the non-cancel-safe OpaqueDebugger async methods
+/// are called inside an `async move` block that owns the debugger.
+/// `ready()` merely polls this stored future, which is always safe to
+/// re-poll after cancelation. The debugger is returned in the `Done`
+/// state and extracted by `finish()`.
 pub struct EventFuture {
-    inner: Box<dyn OpaqueDebugger + Send + 'static>,
     state: EventFutureState,
 }
 
 enum EventFutureState {
-    SingleStep(Option<wit::ResumptionValue>),
-    Continue(Option<wit::ResumptionValue>),
-    Done(Result<DebugRunResult>),
+    /// The future is running; owns the debugger.
+    Running(
+        Pin<
+            Box<
+                dyn Future<
+                        Output = (
+                            Box<dyn OpaqueDebugger + Send + 'static>,
+                            Result<DebugRunResult>,
+                        ),
+                    > + Send,
+            >,
+        >,
+    ),
+    /// The future has completed; debugger is ready to be returned.
+    Done {
+        inner: Box<dyn OpaqueDebugger + Send + 'static>,
+        result: Option<Result<DebugRunResult>>,
+    },
+}
+
+impl EventFuture {
+    fn new_single_step(
+        mut inner: Box<dyn OpaqueDebugger + Send + 'static>,
+        resumption: wit::ResumptionValue,
+    ) -> Self {
+        EventFuture {
+            state: EventFutureState::Running(Box::pin(async move {
+                if let Err(e) = inner.handle_resumption(&resumption).await {
+                    return (inner, Err(e));
+                }
+                let result = inner.single_step().await;
+                (inner, result)
+            })),
+        }
+    }
+
+    fn new_continue(
+        mut inner: Box<dyn OpaqueDebugger + Send + 'static>,
+        resumption: wit::ResumptionValue,
+    ) -> Self {
+        EventFuture {
+            state: EventFutureState::Running(Box::pin(async move {
+                if let Err(e) = inner.handle_resumption(&resumption).await {
+                    return (inner, Err(e));
+                }
+                let result = inner.continue_().await;
+                (inner, result)
+            })),
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl wasmtime_wasi_io::poll::Pollable for EventFuture {
     async fn ready(&mut self) {
         match &mut self.state {
-            EventFutureState::SingleStep(resumption) => {
-                if let Some(r) = resumption.as_ref() {
-                    if let Err(e) = self.inner.handle_resumption(r).await {
-                        self.state = EventFutureState::Done(Err(e));
-                        return;
-                    }
-                    // Remove only after success, for cancel safety.
-                    resumption.take();
-                }
-                let result = self.inner.single_step().await;
-                self.state = EventFutureState::Done(result);
+            EventFutureState::Running(future) => {
+                let (inner, result) = future.await;
+                self.state = EventFutureState::Done {
+                    inner,
+                    result: Some(result),
+                };
             }
-            EventFutureState::Continue(resumption) => {
-                if let Some(r) = resumption.as_ref() {
-                    if let Err(e) = self.inner.handle_resumption(r).await {
-                        self.state = EventFutureState::Done(Err(e));
-                        return;
-                    }
-                    // Remove only after success, for cancel safety.
-                    resumption.take();
-                }
-                let result = self.inner.continue_().await;
-                self.state = EventFutureState::Done(result);
-            }
-            EventFutureState::Done(_) => {}
+            EventFutureState::Done { .. } => {}
         }
     }
 }
@@ -179,13 +215,7 @@ impl wit::HostDebuggee for ResourceTable {
         resumption: wit::ResumptionValue,
     ) -> Result<Resource<EventFuture>> {
         let d = self.get_mut(&debuggee).unwrap().inner.take().unwrap();
-        Ok(self.push_child(
-            EventFuture {
-                inner: d,
-                state: EventFutureState::SingleStep(Some(resumption)),
-            },
-            &debuggee,
-        )?)
+        Ok(self.push_child(EventFuture::new_single_step(d, resumption), &debuggee)?)
     }
 
     async fn continue_(
@@ -194,13 +224,7 @@ impl wit::HostDebuggee for ResourceTable {
         resumption: wit::ResumptionValue,
     ) -> Result<Resource<EventFuture>> {
         let d = self.get_mut(&debuggee).unwrap().inner.take().unwrap();
-        Ok(self.push_child(
-            EventFuture {
-                inner: d,
-                state: EventFutureState::Continue(Some(resumption)),
-            },
-            &debuggee,
-        )?)
+        Ok(self.push_child(EventFuture::new_continue(d, resumption), &debuggee)?)
     }
 
     async fn exit_frames(&mut self, debuggee: Resource<Debuggee>) -> Result<Vec<Resource<Frame>>> {
@@ -245,14 +269,17 @@ impl wit::HostEventFuture for ResourceTable {
     ) -> Result<wit::Event> {
         let mut f = self.delete(self_)?;
         f.ready().await;
-        let EventFuture { inner, state } = f;
-        self.get_mut(&debuggee)?.inner = Some(inner);
-        match state {
-            EventFutureState::SingleStep(..) | EventFutureState::Continue(..) => {
+        match f.state {
+            EventFutureState::Running(..) => {
                 unreachable!("ready() cannot return until setting Done state")
             }
-            EventFutureState::Done(Ok(result)) => Ok(result_to_event(self, result)?),
-            EventFutureState::Done(Err(e)) => Err(e),
+            EventFutureState::Done { inner, result } => {
+                self.get_mut(&debuggee)?.inner = Some(inner);
+                match result.unwrap() {
+                    Ok(result) => Ok(result_to_event(self, result)?),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 
