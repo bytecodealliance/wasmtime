@@ -1,6 +1,10 @@
 use cranelift_module::{ModuleError, ModuleResult};
 
-#[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
+#[cfg(all(
+    not(target_os = "windows"),
+    not(target_os = "uefi"),
+    feature = "selinux-fix"
+))]
 use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
