@@ -45,7 +45,7 @@ Unreleased.
   borrows the store itself and is instead represented as a handle.
   [#12566](https://github.com/bytecodealliance/wasmtime/pull/12566)
 
-* Wasmtime now unconditioanlly sets `SO_REUSEADDR` for guest-bound sockets.
+* Wasmtime now unconditionally sets `SO_REUSEADDR` for guest-bound sockets.
   [#12597](https://github.com/bytecodealliance/wasmtime/pull/12597)
 
 * Cranelift now supports more `VReg`s which means effectively that larger
