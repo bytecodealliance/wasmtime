@@ -100,6 +100,13 @@ pub struct RunCommon {
     /// cause the environment variable `FOO` to be inherited.
     #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     pub vars: Vec<(String, Option<String>)>,
+
+    /// Attach the built-in gdbstub debugger component, listening on the
+    /// given TCP port. A debugger (e.g. LLDB) can then connect via
+    /// `process connect --plugin=wasm connect://localhost:<PORT>`.
+    #[cfg(feature = "debug")]
+    #[arg(short = 'g', long = "gdbstub", value_name = "PORT")]
+    pub gdbstub_port: Option<u16>,
 }
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
@@ -162,53 +169,69 @@ impl RunCommon {
         Ok(())
     }
 
-    pub fn load_module(&self, engine: &Engine, path: &Path) -> Result<RunTarget> {
+    pub fn load_module(
+        &self,
+        engine: &Engine,
+        path: &Path,
+        preloaded_bytes: Option<&[u8]>,
+    ) -> Result<RunTarget> {
         let path = match path.to_str() {
             #[cfg(unix)]
             Some("-") => "/dev/stdin".as_ref(),
             _ => path,
         };
-        let file =
-            File::open(path).with_context(|| format!("failed to open wasm module {path:?}"))?;
-
-        // First attempt to load the module as an mmap. If this succeeds then
-        // detection can be done with the contents of the mmap and if a
-        // precompiled module is detected then `deserialize_file` can be used
-        // which is a slightly more optimal version than `deserialize` since we
-        // can leave most of the bytes on disk until they're referenced.
-        //
-        // If the mmap fails, for example if stdin is a pipe, then fall back to
-        // `std::fs::read` to load the contents. At that point precompiled
-        // modules must go through the `deserialize` functions.
-        //
-        // Note that this has the unfortunate side effect for precompiled
-        // modules on disk that they're opened once to detect what they are and
-        // then again internally in Wasmtime as part of the `deserialize_file`
-        // API. Currently there's no way to pass the `MmapVec` here through to
-        // Wasmtime itself (that'd require making `MmapVec` a public type, both
-        // which isn't ready to happen at this time). It's hoped though that
-        // opening a file twice isn't too bad in the grand scheme of things with
-        // respect to the CLI.
-        match wasmtime::_internal::MmapVec::from_file(file) {
-            Ok(map) => self.load_module_contents(
+        if let Some(bytes) = preloaded_bytes {
+            self.load_module_contents(
                 engine,
                 path,
-                &map,
-                || unsafe { Module::deserialize_file(engine, path) },
+                &bytes,
+                || unsafe { Module::deserialize(engine, &bytes) },
                 #[cfg(feature = "component-model")]
-                || unsafe { Component::deserialize_file(engine, path) },
-            ),
-            Err(_) => {
-                let bytes = std::fs::read(path)
-                    .with_context(|| format!("failed to read file: {}", path.display()))?;
-                self.load_module_contents(
+                || unsafe { Component::deserialize(engine, &bytes) },
+            )
+        } else {
+            let file =
+                File::open(path).with_context(|| format!("failed to open wasm module {path:?}"))?;
+
+            // First attempt to load the module as an mmap. If this succeeds then
+            // detection can be done with the contents of the mmap and if a
+            // precompiled module is detected then `deserialize_file` can be used
+            // which is a slightly more optimal version than `deserialize` since we
+            // can leave most of the bytes on disk until they're referenced.
+            //
+            // If the mmap fails, for example if stdin is a pipe, then fall back to
+            // `std::fs::read` to load the contents. At that point precompiled
+            // modules must go through the `deserialize` functions.
+            //
+            // Note that this has the unfortunate side effect for precompiled
+            // modules on disk that they're opened once to detect what they are and
+            // then again internally in Wasmtime as part of the `deserialize_file`
+            // API. Currently there's no way to pass the `MmapVec` here through to
+            // Wasmtime itself (that'd require making `MmapVec` a public type, both
+            // which isn't ready to happen at this time). It's hoped though that
+            // opening a file twice isn't too bad in the grand scheme of things with
+            // respect to the CLI.
+            match wasmtime::_internal::MmapVec::from_file(file) {
+                Ok(map) => self.load_module_contents(
                     engine,
                     path,
-                    &bytes,
-                    || unsafe { Module::deserialize(engine, &bytes) },
+                    &map,
+                    || unsafe { Module::deserialize_file(engine, path) },
                     #[cfg(feature = "component-model")]
-                    || unsafe { Component::deserialize(engine, &bytes) },
-                )
+                    || unsafe { Component::deserialize_file(engine, path) },
+                ),
+                Err(_) => {
+                    let bytes = std::fs::read(path)
+                        .with_context(|| format!("failed to read file: {}", path.display()))?;
+                    self.load_module_contents(
+                        engine,
+                        path,
+                        &bytes,
+                        || unsafe { Module::deserialize(engine, &bytes) },
+                        #[cfg(feature = "component-model")]
+                        || unsafe { Component::deserialize(engine, &bytes) },
+                    )
+                }
             }
         }
     }

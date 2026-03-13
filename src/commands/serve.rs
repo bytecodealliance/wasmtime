@@ -414,7 +414,7 @@ impl ServeCommand {
 
         self.add_to_linker(&mut linker)?;
 
-        let component = match self.run.load_module(&engine, &self.component)? {
+        let component = match self.run.load_module(&engine, &self.component, None)? {
             RunTarget::Core(_) => bail!("The serve command currently requires a component"),
             RunTarget::Component(c) => c,
         };
