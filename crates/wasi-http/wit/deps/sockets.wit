@@ -1,9 +1,9 @@
-package wasi:sockets@0.2.6;
+package wasi:sockets@0.2.10;
 
 @since(version = 0.2.0)
 interface network {
   @unstable(feature = network-error-code)
-  use wasi:io/error@0.2.6.{error};
+  use wasi:io/error@0.2.10.{error};
 
   /// An opaque resource that represents access to (a subset of) the network.
   /// This enables context-based security for networking.
@@ -160,7 +160,7 @@ interface instance-network {
 @since(version = 0.2.0)
 interface ip-name-lookup {
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.6.{pollable};
+  use wasi:io/poll@0.2.10.{pollable};
   @since(version = 0.2.0)
   use network.{network, error-code, ip-address};
 
@@ -216,11 +216,11 @@ interface ip-name-lookup {
 @since(version = 0.2.0)
 interface tcp {
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.6.{input-stream, output-stream};
+  use wasi:io/streams@0.2.10.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.6.{pollable};
+  use wasi:io/poll@0.2.10.{pollable};
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.6.{duration};
+  use wasi:clocks/monotonic-clock@0.2.10.{duration};
   @since(version = 0.2.0)
   use network.{network, error-code, ip-socket-address, ip-address-family};
 
@@ -617,7 +617,7 @@ interface tcp-create-socket {
 @since(version = 0.2.0)
 interface udp {
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.6.{pollable};
+  use wasi:io/poll@0.2.10.{pollable};
   @since(version = 0.2.0)
   use network.{network, error-code, ip-socket-address, ip-address-family};
 
@@ -925,21 +925,21 @@ interface udp-create-socket {
 @since(version = 0.2.0)
 world imports {
   @since(version = 0.2.0)
-  import wasi:io/error@0.2.6;
+  import wasi:io/error@0.2.10;
   @since(version = 0.2.0)
   import network;
   @since(version = 0.2.0)
   import instance-network;
   @since(version = 0.2.0)
-  import wasi:io/poll@0.2.6;
+  import wasi:io/poll@0.2.10;
   @since(version = 0.2.0)
   import udp;
   @since(version = 0.2.0)
   import udp-create-socket;
   @since(version = 0.2.0)
-  import wasi:io/streams@0.2.6;
+  import wasi:io/streams@0.2.10;
   @since(version = 0.2.0)
-  import wasi:clocks/monotonic-clock@0.2.6;
+  import wasi:clocks/monotonic-clock@0.2.10;
   @since(version = 0.2.0)
   import tcp;
   @since(version = 0.2.0)
