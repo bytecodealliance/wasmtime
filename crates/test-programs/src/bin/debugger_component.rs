@@ -51,8 +51,8 @@ impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
     fn debug(d: &Debuggee, args: Vec<String>) {
         wstd::runtime::block_on(async {
             match args.get(1).map(|s| s.as_str()) {
-                Some("single-step") => test_single_step(d).await,
-                Some("interrupt") => test_interrupt(d).await,
+                Some("simple") => test_simple(d).await,
+                Some("loop") => test_loop(d).await,
                 other => panic!("unknown test mode: {other:?}"),
             }
         });
@@ -92,7 +92,7 @@ impl Resumption {
 /// Tests single-stepping.
 ///
 /// Tests against `debugger_debuggee_simple.wat`.
-async fn test_single_step(d: &Debuggee) {
+async fn test_simple(d: &Debuggee) {
     // Step once to reach the first instruction.
     let mut r = Resumption::single_step(d);
     r.wait().await;
@@ -125,7 +125,7 @@ async fn test_single_step(d: &Debuggee) {
 /// to completion.
 ///
 /// Tests against `debugger_debuggee_loop.wat`.
-async fn test_interrupt(d: &Debuggee) {
+async fn test_loop(d: &Debuggee) {
     // Continue execution (the debuggee should loop).
     let mut r = Resumption::continue_(d);
 

@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use crate::cli_tests::get_wasmtime_command;
 use test_programs_artifacts::*;
 use wasmtime::Result;
@@ -28,21 +30,23 @@ fn run_debugger_test(debugger_component: &str, debuggee: &str, test_mode: &str) 
 }
 
 #[test]
-#[cfg(not(miri))]
-fn debugger_single_step() -> Result<()> {
+fn debugger_debuggee_simple() -> Result<()> {
     run_debugger_test(
         DEBUGGER_COMPONENT,
         DEBUGGER_DEBUGGEE_SIMPLE_COMPONENT,
-        "single-step",
+        "simple",
     )
 }
 
 #[test]
-#[cfg(not(miri))]
-fn debugger_interrupt() -> Result<()> {
-    run_debugger_test(
-        DEBUGGER_COMPONENT,
-        DEBUGGER_DEBUGGEE_LOOP_COMPONENT,
-        "interrupt",
-    )
+fn debugger_debuggee_loop() -> Result<()> {
+    run_debugger_test(DEBUGGER_COMPONENT, DEBUGGER_DEBUGGEE_LOOP_COMPONENT, "loop")
 }
+
+macro_rules! assert_test_exists {
+    ($name:ident) => {
+        #[expect(unused_imports, reason = "here to assert the test exists")]
+        use self::$name as _;
+    };
+}
+foreach_debugger!(assert_test_exists);
