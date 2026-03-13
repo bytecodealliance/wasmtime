@@ -4,7 +4,106 @@ Unreleased.
 
 ### Added
 
+* Wasmtime now supports the WASIp3 snapshot `0.3.0-rc-2026-02-09`.
+  [#12557](https://github.com/bytecodealliance/wasmtime/pull/12557)
+
+* The number of frames captured in backtrace collection can now be configured.
+  [#12542](https://github.com/bytecodealliance/wasmtime/pull/12542)
+
+* Wasmtime now supports fine-grained operator cost configuration for when fuel
+  is enabled.
+  [#12541](https://github.com/bytecodealliance/wasmtime/pull/12541)
+
+* Configuring the `gc_support` option is now possible through the C API.
+  [#12630](https://github.com/bytecodealliance/wasmtime/pull/12630)
+
+* Configuring the `concurrency_support` option is now possible through the C
+  API.
+  [#12703](https://github.com/bytecodealliance/wasmtime/pull/12703)
+
+* Debugging-related APIs have been added to access all modules and instances on
+  a store.
+  [#12637](https://github.com/bytecodealliance/wasmtime/pull/12637)
+
+* All store entities now expose a "unique ID" for debugging purposes.
+  [#12645](https://github.com/bytecodealliance/wasmtime/pull/12645)
+
+* Cranelift's x64 backend now supports the `cls` instruction for all integer
+  types.
+  [#12644](https://github.com/bytecodealliance/wasmtime/pull/12644)
+
 ### Changed
+
+* Internal refactoring and support necessary for handling OOM gracefully
+  throughout the runtime is proceeding apace. New APIs such as
+  `FuncType::try_new` are available in addition to many internal changes.
+  [#12530](https://github.com/bytecodealliance/wasmtime/pull/12530)
+  [#12537](https://github.com/bytecodealliance/wasmtime/pull/12537)
+  (... and many more ...)
+
+* Wasmtime's representation of stack frames in the debugging API no longer
+  borrows the store itself and is instead represented as a handle.
+  [#12566](https://github.com/bytecodealliance/wasmtime/pull/12566)
+
+* Wasmtime now unconditionally sets `SO_REUSEADDR` for guest-bound sockets.
+  [#12597](https://github.com/bytecodealliance/wasmtime/pull/12597)
+
+* Cranelift now supports more `VReg`s which means effectively that larger
+  functions will be compilable by default rather than returning a "function too
+  large" error.
+  [#12611](https://github.com/bytecodealliance/wasmtime/pull/12611)
+
+* WASIp3 implementations now limit returned memory by default for randomness and
+  HTTP headers.
+  [#12745](https://github.com/bytecodealliance/wasmtime/pull/12745)
+  [#12761](https://github.com/bytecodealliance/wasmtime/pull/12761)
+
+### Fixed
+
+* Running `wasmtime wizer` over components with modules that contain an
+  `_initialize` function no longer removes the function to preserve the validity
+  of the component.
+  [#12540](https://github.com/bytecodealliance/wasmtime/pull/12540)
+
+* Borrow state for host async tasks is now handled more correctly throughout
+  Wasmtime, especially in the face of cancellation.
+  [#12550](https://github.com/bytecodealliance/wasmtime/pull/12550)
+
+* Bindings generation now accounts for the fact that `future` and `stream` are
+  not cloneable types.
+  [#12155](https://github.com/bytecodealliance/wasmtime/pull/12155)
+
+* The impementation of UDP in WASIp2 has had some wakeup-related bugs fixed.
+  [#12629](https://github.com/bytecodealliance/wasmtime/pull/12629)
+
+* Cancellation of host subtasks for component-model-async has been improved and
+  works more reliably.
+  [#12640](https://github.com/bytecodealliance/wasmtime/pull/12640)
+
+* Subtask management for component-model-async now no longer reparents which
+  fixes a number spec-related divergences.
+  [#12570](https://github.com/bytecodealliance/wasmtime/pull/12570)
+
+* Converting a `wasmtime::Error` into `anyhow::Error` and using `downcast` has
+  been fixed.
+  [#12689](https://github.com/bytecodealliance/wasmtime/pull/12689)
+
+* Async stream/future read/write cancellation has had some corner cases fixed.
+  [#12704](https://github.com/bytecodealliance/wasmtime/pull/12704)
+
+* Cranelift's timing infrastructure is now more robust in the face of buggy
+  system clocks.
+  [#12709](https://github.com/bytecodealliance/wasmtime/pull/12709)
+
+* The currently running guest task has been corrected in a number of cases
+  related to component-model-async and cooperative threading.
+  [#12718](https://github.com/bytecodealliance/wasmtime/pull/12718)
+  [#12735](https://github.com/bytecodealliance/wasmtime/pull/12735)
+  [#12736](https://github.com/bytecodealliance/wasmtime/pull/12736)
+  [#12737](https://github.com/bytecodealliance/wasmtime/pull/12737)
+
+* An issue of lost wakeups with the WASIp3 stdin implementation has been fixed.
+  [#12745](https://github.com/bytecodealliance/wasmtime/pull/12745)
 
 --------------------------------------------------------------------------------
 
