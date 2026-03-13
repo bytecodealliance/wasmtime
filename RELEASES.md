@@ -42,7 +42,7 @@ Unreleased.
   (... and many more ...)
 
 * Wasmtime's representation of stack frames in the debugging API no longer
-  borrows the store itself and is instead repersented as a handle.
+  borrows the store itself and is instead represented as a handle.
   [#12566](https://github.com/bytecodealliance/wasmtime/pull/12566)
 
 * Wasmtime now unconditioanlly sets `SO_REUSEADDR` for guest-bound sockets.
