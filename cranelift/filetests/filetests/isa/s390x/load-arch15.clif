@@ -1,0 +1,80 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+target s390x arch15
+
+function %uload8_i64_i32_offset_mul_unsigned(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 8000
+  v4 = iadd v1, v3
+  v5 = uextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  v8 = uload8.i64 v7
+  return v8
+}
+
+; VCode:
+; block0:
+;   llxaq %r3, 8000(%r3,%r2)
+;   llgc %r2, 0(%r3)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe3, 0x33
+;   swr %f4, %f0
+;   .byte 0x01, 0x68
+;   llgc %r2, 0(%r3) ; trap: heap_oob
+;   br %r14
+
+function %uload8_i64_i64_offset_mul_signed(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 8000
+  v4 = iadd v1, v3
+  v5 = sextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  v8 = uload8.i64 v7
+  return v8
+}
+
+; VCode:
+; block0:
+;   lxaq %r3, 8000(%r3,%r2)
+;   llgc %r2, 0(%r3)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe3, 0x33
+;   swr %f4, %f0
+;   .byte 0x01, 0x69
+;   llgc %r2, 0(%r3) ; trap: heap_oob
+;   br %r14
+
+function %uload8_i64_i64_offset_shifted0(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 0
+  v3 = uextend.i64 v1
+  v4 = ishl v3, v2
+  v5 = iadd v0, v4
+  v6 = uload8.i64 v5+1000
+  return v6
+}
+
+; VCode:
+; block0:
+;   llgfr %r5, %r3
+;   sllg %r5, %r5, 0
+;   llgc %r2, 1000(%r5,%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llgfr %r5, %r3
+;   sllg %r5, %r5, 0
+;   llgc %r2, 0x3e8(%r5, %r2) ; trap: heap_oob
+;   br %r14
+
