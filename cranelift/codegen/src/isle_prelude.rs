@@ -132,6 +132,8 @@ macro_rules! isle_common_prelude_methods {
         fn imm64_rotl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             let bits = ty.bits();
             assert!(bits <= 64);
+            // This holds for all Cranelift types ({u/i}{8,16,32,64})
+            debug_assert!(bits.is_power_of_two());
 
             let ty_mask = self.ty_mask(ty);
             let x = (x.bits() as u64) & ty_mask;
@@ -154,6 +156,7 @@ macro_rules! isle_common_prelude_methods {
         fn imm64_rotr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             let bits = ty.bits();
             assert!(bits <= 64);
+            debug_assert!(bits.is_power_of_two());
 
             let ty_mask = self.ty_mask(ty);
             let x = (x.bits() as u64) & ty_mask;
