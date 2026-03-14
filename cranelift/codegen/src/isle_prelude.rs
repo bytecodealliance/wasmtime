@@ -129,6 +129,52 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_rotl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let bits = ty.bits();
+            assert!(bits <= 64);
+            // This holds for all Cranelift types ({u/i}{8,16,32,64})
+            debug_assert!(bits.is_power_of_two());
+
+            let ty_mask = self.ty_mask(ty);
+            let x = (x.bits() as u64) & ty_mask;
+
+            // Mask off any excess rotate bits so the rotate stays within `ty`.
+            let shift_mask = bits - 1;
+            let y = ((y.bits() as u64) & u64::from(shift_mask)) as u32;
+
+            // In Rust, x >> 64 or x << 64 panics.
+            let result = if y == 0 {
+                x
+            } else {
+                (x << y) | (x >> (u32::from(bits) - y))
+            };
+
+            Imm64::new((result & ty_mask) as i64)
+        }
+
+        #[inline]
+        fn imm64_rotr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let bits = ty.bits();
+            assert!(bits <= 64);
+            debug_assert!(bits.is_power_of_two());
+
+            let ty_mask = self.ty_mask(ty);
+            let x = (x.bits() as u64) & ty_mask;
+
+            // Mask off any excess rotate bits so the rotate stays within `ty`.
+            let shift_mask = bits - 1;
+            let y = ((y.bits() as u64) & u64::from(shift_mask)) as u32;
+
+            let result = if y == 0 {
+                x
+            } else {
+                (x >> y) | (x << (u32::from(bits) - y))
+            };
+
+            Imm64::new((result & ty_mask) as i64)
+        }
+
+        #[inline]
         fn i64_sextend_u64(&mut self, ty: Type, x: u64) -> i64 {
             let shift_amt = core::cmp::max(0, 64 - ty.bits());
             ((x as i64) << shift_amt) >> shift_amt
