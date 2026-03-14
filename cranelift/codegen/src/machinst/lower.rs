@@ -802,7 +802,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Value defined by "inst" becomes live after it in normal
             // order, and therefore **before** in reversed order.
-            self.emit_value_label_live_range_start_for_inst(inst);
+            // Only emit value label aliases if the instruction will be lowered
+            // (otherwise we want to keep using the earlier label instead).
+            self.emit_value_label_live_range_start_for_inst(inst, has_side_effect || value_needed);
 
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
@@ -949,14 +951,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_marks_for_value(&mut self, val: Value) {
+    fn emit_value_label_marks_for_value(&mut self, val: Value, allow_alias: bool) {
         let regs = self.value_regs[val];
         if regs.len() > 1 {
             return;
         }
         let reg = regs.only_reg().unwrap();
 
-        if let Some(label_starts) = self.get_value_labels(val, 0) {
+        if let Some(label_starts) = self.get_value_labels(val, if allow_alias { 0 } else { !0 }) {
             let labels = label_starts
                 .iter()
                 .map(|&ValueLabelStart { label, .. }| label)
@@ -971,7 +973,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_live_range_start_for_inst(&mut self, inst: Inst) {
+    fn emit_value_label_live_range_start_for_inst(&mut self, inst: Inst, allow_alias: bool) {
         if self.f.dfg.values_labels.is_none() {
             return;
         }
@@ -982,7 +984,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             inst
         );
         for &val in self.f.dfg.inst_results(inst) {
-            self.emit_value_label_marks_for_value(val);
+            self.emit_value_label_marks_for_value(val, allow_alias);
         }
     }
 
@@ -993,7 +995,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         trace!("value labeling: block {}", block);
         for &arg in self.f.dfg.block_params(block) {
-            self.emit_value_label_marks_for_value(arg);
+            self.emit_value_label_marks_for_value(arg, true);
         }
         self.finish_ir_inst(Default::default());
     }
