@@ -12,13 +12,19 @@ async fn test_udp_unbound_state_invariants(family: IpAddressFamily) {
 
     // Skipping: udp::bind
 
-    assert_eq!(
+    assert!(matches!(
         sock.send(b"test".into(), None).await,
         Err(ErrorCode::InvalidArgument)
-    );
-    assert_eq!(sock.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.get_local_address(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.get_remote_address(), Err(ErrorCode::InvalidState));
+    ));
+    assert!(matches!(sock.disconnect(), Err(ErrorCode::InvalidState)));
+    assert!(matches!(
+        sock.get_local_address(),
+        Err(ErrorCode::InvalidState)
+    ));
+    assert!(matches!(
+        sock.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
     assert_eq!(sock.get_address_family(), family);
 
     assert!(matches!(sock.get_unicast_hop_limit(), Ok(_)));

@@ -69,32 +69,32 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         );
 
         // Invalid inputs
-        assert_eq!(
+        assert!(matches!(
             resolve_addresses("".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses(" ".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("a.b<&>".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("127.0.0.1:80".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("[::]:80".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("http://example.com/".into())
                 .await
                 .unwrap_err(),
             ErrorCode::InvalidArgument
-        );
+        ));
         Ok(())
     }
 }
