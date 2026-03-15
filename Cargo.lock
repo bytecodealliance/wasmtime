@@ -5192,42 +5192,19 @@ name = "wasmtime-wasi-tls"
 version = "44.0.0"
 dependencies = [
  "bytes",
+ "cfg-if",
  "futures",
+ "native-tls",
+ "openssl",
  "rustls",
  "test-programs-artifacts",
  "tokio",
+ "tokio-native-tls",
+ "tokio-openssl",
  "tokio-rustls",
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",
-]
-
-[[package]]
-name = "wasmtime-wasi-tls-nativetls"
-version = "44.0.0"
-dependencies = [
- "futures",
- "native-tls",
- "test-programs-artifacts",
- "tokio",
- "tokio-native-tls",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-tls",
-]
-
-[[package]]
-name = "wasmtime-wasi-tls-openssl"
-version = "44.0.0"
-dependencies = [
- "futures",
- "openssl",
- "test-programs-artifacts",
- "tokio",
- "tokio-openssl",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-tls",
 ]
 
 [[package]]
