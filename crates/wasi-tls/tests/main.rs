@@ -72,7 +72,7 @@ mod rustls {
         };
     }
 
-    test_programs_artifacts::foreach_tls!(rustls_test_case);
+    test_programs_artifacts::foreach_p2_tls!(rustls_test_case);
 }
 
 #[cfg(feature = "openssl")]
@@ -83,7 +83,7 @@ mod openssl {
         };
     }
 
-    test_programs_artifacts::foreach_tls!(openssl_test_case);
+    test_programs_artifacts::foreach_p2_tls!(openssl_test_case);
 }
 
 #[cfg(feature = "nativetls")]
@@ -94,13 +94,13 @@ mod nativetls {
         };
     }
 
-    test_programs_artifacts::foreach_tls!(nativetls_test_case);
+    test_programs_artifacts::foreach_p2_tls!(nativetls_test_case);
 }
 
-async fn tls_sample_application(provider: Box<dyn TlsProvider>) -> Result<()> {
+async fn p2_tls_sample_application(provider: Box<dyn TlsProvider>) -> Result<()> {
     run_test(
         provider,
-        test_programs_artifacts::TLS_SAMPLE_APPLICATION_COMPONENT,
+        test_programs_artifacts::P2_TLS_SAMPLE_APPLICATION_COMPONENT,
     )
     .await
 }
