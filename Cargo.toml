@@ -165,8 +165,6 @@ members = [
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
-  "crates/wasi-tls-nativetls",
-  "crates/wasi-tls-openssl",
   "crates/debugger",
   "crates/wizer/fuzz",
   "crates/wizer/tests/regex-test",
@@ -253,8 +251,6 @@ wasmtime-wasi-config = { path = "crates/wasi-config", version = "44.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "44.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "44.0.0" }
 wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "44.0.0" }
-wasmtime-wasi-tls-nativetls = { path = "crates/wasi-tls-nativetls", version = "44.0.0" }
-wasmtime-wasi-tls-openssl = { path = "crates/wasi-tls-openssl", version = "44.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=44.0.0" }
 
 # Internal Wasmtime-specific crates.
