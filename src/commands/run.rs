@@ -31,7 +31,7 @@ use wasmtime_wasi_nn::wit::WasiNnView;
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-tls")]
-use wasmtime_wasi_tls::{WasiTls, WasiTlsCtx};
+use wasmtime_wasi_tls::{WasiTlsCtx, p2::WasiTls};
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -1265,9 +1265,9 @@ impl RunCommand {
                         bail!("Cannot enable wasi-tls for core wasm modules");
                     }
                     CliLinker::Component(linker) => {
-                        let mut opts = wasmtime_wasi_tls::LinkOptions::default();
+                        let mut opts = wasmtime_wasi_tls::p2::LinkOptions::default();
                         opts.tls(true);
-                        wasmtime_wasi_tls::add_to_linker(linker, &mut opts, |h| {
+                        wasmtime_wasi_tls::p2::add_to_linker(linker, &mut opts, |h| {
                             let ctx = h.wasip1_ctx.as_mut().expect("wasi is not configured");
                             let ctx = Arc::get_mut(ctx).unwrap().get_mut().unwrap();
                             WasiTls::new(

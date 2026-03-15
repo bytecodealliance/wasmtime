@@ -12,7 +12,8 @@ description = "Wasmtime implementation of the wasi-tls API"
 workspace = true
 
 [features]
-default = ["rustls"]
+default = ["p2", "rustls"]
+p2 = ["wasmtime-wasi/p2"]
 rustls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]
 nativetls = ["dep:native-tls", "dep:tokio-native-tls"]
 openssl = ["dep:openssl", "dep:tokio-openssl"]

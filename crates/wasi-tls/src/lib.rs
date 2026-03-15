@@ -13,7 +13,8 @@
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result,
 //! };
-//! use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
+//! use wasmtime_wasi_tls::{WasiTlsCtx, WasiTlsCtxBuilder};
+//! use wasmtime_wasi_tls::p2::{LinkOptions, WasiTls};
 //!
 //! struct Ctx {
 //!     table: ResourceTable,
@@ -54,7 +55,7 @@
 //!     // Add wasi-tls types and turn on the feature in linker
 //!     let mut opts = LinkOptions::default();
 //!     opts.tls(true);
-//!     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
+//!     wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
 //!         WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
 //!     })?;
 //!
@@ -71,44 +72,14 @@
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
 use tokio::io::{AsyncRead, AsyncWrite};
-use wasmtime::component::{HasData, ResourceTable};
 
-pub mod bindings;
-mod host;
-mod io;
 mod providers;
 
-pub use bindings::types::LinkOptions;
-pub use host::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};
+/// WASIp2 (`wasi:tls@0.2.0-draft`) host implementation.
+#[cfg(feature = "p2")]
+pub mod p2;
+
 pub use providers::*;
-
-/// Capture the state necessary for use in the `wasi-tls` API implementation.
-pub struct WasiTls<'a> {
-    ctx: &'a WasiTlsCtx,
-    table: &'a mut ResourceTable,
-}
-
-impl<'a> WasiTls<'a> {
-    /// Create a new Wasi TLS context
-    pub fn new(ctx: &'a WasiTlsCtx, table: &'a mut ResourceTable) -> Self {
-        Self { ctx, table }
-    }
-}
-
-/// Add the `wasi-tls` world's types to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: Send + 'static>(
-    l: &mut wasmtime::component::Linker<T>,
-    opts: &mut LinkOptions,
-    f: fn(&mut T) -> WasiTls<'_>,
-) -> wasmtime::Result<()> {
-    bindings::types::add_to_linker::<_, HasWasiTls>(l, &opts, f)?;
-    Ok(())
-}
-
-struct HasWasiTls;
-impl HasData for HasWasiTls {
-    type Data<'a> = WasiTls<'a>;
-}
 
 /// Builder-style structure used to create a [`WasiTlsCtx`].
 pub struct WasiTlsCtxBuilder {

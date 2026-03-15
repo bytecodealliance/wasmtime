@@ -4,13 +4,14 @@ use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoError};
 
-use crate::{
-    TlsStream, TlsTransport, WasiTls, bindings,
+use crate::p2::{
+    WasiTls, bindings,
     io::{
         AsyncReadStream, AsyncWriteStream, FutureOutput, WasiFuture, WasiStreamReader,
         WasiStreamWriter,
     },
 };
+use crate::{TlsStream, TlsTransport};
 
 impl<'a> bindings::types::Host for WasiTls<'a> {}
 
@@ -141,7 +142,7 @@ impl<'a> bindings::types::HostFutureClientStreams for WasiTls<'a> {
 
 /// Represents the client connection and used to shut down the tls stream
 pub struct HostClientConnection(
-    crate::io::AsyncWriteStream<tokio::io::WriteHalf<Box<dyn TlsStream>>>,
+    crate::p2::io::AsyncWriteStream<tokio::io::WriteHalf<Box<dyn TlsStream>>>,
 );
 
 impl<'a> bindings::types::HostClientConnection for WasiTls<'a> {
