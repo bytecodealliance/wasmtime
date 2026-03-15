@@ -78,6 +78,9 @@ mod providers;
 /// WASIp2 (`wasi:tls@0.2.0-draft`) host implementation.
 #[cfg(feature = "p2")]
 pub mod p2;
+/// WASIp3 (`wasi:tls@0.3.0-draft`) host implementation.
+#[cfg(feature = "p3")]
+pub mod p3;
 
 pub use providers::*;
 
