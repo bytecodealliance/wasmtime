@@ -6,13 +6,13 @@ mod bindings {
 package local:local;
 
 world middleware-with-chain {
-  include wasi:http/service@0.3.0-rc-2026-02-09;
+  include wasi:http/service@0.3.0-rc-2026-03-15;
 
   import chain-http;
 }
 
 interface chain-http {
-  use wasi:http/types@0.3.0-rc-2026-02-09.{request, response, error-code};
+  use wasi:http/types@0.3.0-rc-2026-03-15.{request, response, error-code};
 
   handle: async func(request: request) -> result<response, error-code>;
 }
@@ -20,18 +20,18 @@ interface chain-http {
         // workaround https://github.com/bytecodealliance/wit-bindgen/issues/1544
         // generate_all
         with: {
-            "wasi:http/types@0.3.0-rc-2026-02-09": test_programs::p3::wasi::http::types,
-            "wasi:http/client@0.3.0-rc-2026-02-09": test_programs::p3::wasi::http::client,
-            "wasi:random/random@0.3.0-rc-2026-02-09": test_programs::p3::wasi::random::random,
-            "wasi:random/insecure@0.3.0-rc-2026-02-09": test_programs::p3::wasi::random::insecure,
-            "wasi:random/insecure-seed@0.3.0-rc-2026-02-09": test_programs::p3::wasi::random::insecure_seed,
-            "wasi:cli/stdout@0.3.0-rc-2026-02-09": test_programs::p3::wasi::cli::stdout,
-            "wasi:cli/stderr@0.3.0-rc-2026-02-09": test_programs::p3::wasi::cli::stderr,
-            "wasi:cli/stdin@0.3.0-rc-2026-02-09": test_programs::p3::wasi::cli::stdin,
-            "wasi:cli/types@0.3.0-rc-2026-02-09": test_programs::p3::wasi::cli::types,
-            "wasi:clocks/monotonic-clock@0.3.0-rc-2026-02-09": test_programs::p3::wasi::clocks::monotonic_clock,
-            "wasi:clocks/system-clock@0.3.0-rc-2026-02-09": test_programs::p3::wasi::clocks::system_clock,
-            "wasi:clocks/types@0.3.0-rc-2026-02-09": test_programs::p3::wasi::clocks::types,
+            "wasi:http/types@0.3.0-rc-2026-03-15": test_programs::p3::wasi::http::types,
+            "wasi:http/client@0.3.0-rc-2026-03-15": test_programs::p3::wasi::http::client,
+            "wasi:random/random@0.3.0-rc-2026-03-15": test_programs::p3::wasi::random::random,
+            "wasi:random/insecure@0.3.0-rc-2026-03-15": test_programs::p3::wasi::random::insecure,
+            "wasi:random/insecure-seed@0.3.0-rc-2026-03-15": test_programs::p3::wasi::random::insecure_seed,
+            "wasi:cli/stdout@0.3.0-rc-2026-03-15": test_programs::p3::wasi::cli::stdout,
+            "wasi:cli/stderr@0.3.0-rc-2026-03-15": test_programs::p3::wasi::cli::stderr,
+            "wasi:cli/stdin@0.3.0-rc-2026-03-15": test_programs::p3::wasi::cli::stdin,
+            "wasi:cli/types@0.3.0-rc-2026-03-15": test_programs::p3::wasi::cli::types,
+            "wasi:clocks/monotonic-clock@0.3.0-rc-2026-03-15": test_programs::p3::wasi::clocks::monotonic_clock,
+            "wasi:clocks/system-clock@0.3.0-rc-2026-03-15": test_programs::p3::wasi::clocks::system_clock,
+            "wasi:clocks/types@0.3.0-rc-2026-03-15": test_programs::p3::wasi::clocks::types,
         },
     });
 

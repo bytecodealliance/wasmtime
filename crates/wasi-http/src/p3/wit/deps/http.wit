@@ -1,13 +1,13 @@
-package wasi:http@0.3.0-rc-2026-02-09;
+package wasi:http@0.3.0-rc-2026-03-15;
 
 /// This interface defines all of the types and methods for implementing HTTP
 /// Requests and Responses, as well as their headers, trailers, and bodies.
-@since(version = 0.3.0-rc-2026-02-09)
+@since(version = 0.3.0-rc-2026-03-15)
 interface types {
-  use wasi:clocks/types@0.3.0-rc-2026-02-09.{duration};
+  use wasi:clocks/types@0.3.0-rc-2026-03-15.{duration};
 
   /// This type corresponds to HTTP standard Methods.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   variant method {
     get,
     head,
@@ -22,7 +22,7 @@ interface types {
   }
 
   /// This type corresponds to HTTP standard Related Schemes.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   variant scheme {
     HTTP,
     HTTPS,
@@ -30,21 +30,21 @@ interface types {
   }
 
   /// Defines the case payload type for `DNS-error` above:
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   record DNS-error-payload {
     rcode: option<string>,
     info-code: option<u16>,
   }
 
   /// Defines the case payload type for `TLS-alert-received` above:
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   record TLS-alert-received-payload {
     alert-id: option<u8>,
     alert-message: option<string>,
   }
 
   /// Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   record field-size-payload {
     field-name: option<string>,
     field-size: option<u32>,
@@ -52,7 +52,7 @@ interface types {
 
   /// These cases are inspired by the IANA HTTP Proxy Error Types:
   ///   <https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types>
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   variant error-code {
     DNS-timeout,
     DNS-error(DNS-error-payload),
@@ -102,7 +102,7 @@ interface types {
 
   /// This type enumerates the different kinds of errors that may occur when
   /// setting or appending to a `fields` resource.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   variant header-error {
     /// This error indicates that a `field-name` or `field-value` was
     /// syntactically invalid when used with an operation that sets headers in a
@@ -114,30 +114,49 @@ interface types {
     /// This error indicates that the operation on the `fields` was not
     /// permitted because the fields are immutable.
     immutable,
+    /// This error indicates that the operation would exceed an
+    /// implementation-defined limit on field sizes. This may apply to
+    /// an individual `field-value`, a single `field-name` plus all its
+    /// values, or the total aggregate size of all fields.
+    size-exceeded,
+    /// This is a catch-all error for anything that doesn't fit cleanly into a
+    /// more specific case. Implementations can use this to extend the error
+    /// type without breaking existing code. It also includes an optional
+    /// string for an unstructured description of the error. Users should not
+    /// depend on the string for diagnosing errors, as it's not required to be
+    /// consistent between implementations.
+    other(option<string>),
   }
 
   /// This type enumerates the different kinds of errors that may occur when
   /// setting fields of a `request-options` resource.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   variant request-options-error {
     /// Indicates the specified field is not supported by this implementation.
     not-supported,
     /// Indicates that the operation on the `request-options` was not permitted
     /// because it is immutable.
     immutable,
+    /// This is a catch-all error for anything that doesn't fit cleanly into a
+    /// more specific case. Implementations can use this to extend the error
+    /// type without breaking existing code. It also includes an optional
+    /// string for an unstructured description of the error. Users should not
+    /// depend on the string for diagnosing errors, as it's not required to be
+    /// consistent between implementations.
+    other(option<string>),
   }
 
   /// Field names are always strings.
   ///
   /// Field names should always be treated as case insensitive by the `fields`
   /// resource for the purposes of equality checking.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   type field-name = string;
 
   /// Field values should always be ASCII strings. However, in
   /// reality, HTTP implementations often have to interpret malformed values,
   /// so they are provided as a list of bytes.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   type field-value = list<u8>;
 
   /// This following block defines the `fields` resource which corresponds to
@@ -155,7 +174,11 @@ interface types {
   /// original casing used to construct or mutate the `fields` resource. The `fields`
   /// resource should use that original casing when serializing the fields for
   /// transport or when returning them from a method.
-  @since(version = 0.3.0-rc-2026-02-09)
+  ///
+  /// Implementations may impose limits on individual field values and on total
+  /// aggregate field section size. Operations that would exceed these limits
+  /// fail with `header-error.size-exceeded`
+  @since(version = 0.3.0-rc-2026-03-15)
   resource fields {
     /// Construct an empty HTTP Fields.
     ///
@@ -175,7 +198,8 @@ interface types {
     /// well-formed, so they are represented as a raw list of bytes.
     ///
     /// An error result will be returned if any header or value was
-    /// syntactically invalid, or if a header was forbidden.
+    /// syntactically invalid, if a header was forbidden, or if the
+    /// entries would exceed an implementation size limit.
     from-list: static func(entries: list<tuple<field-name, field-value>>) -> result<fields, header-error>;
     /// Get all of the values corresponding to a name. If the name is not present
     /// in this `fields`, an empty list is returned. However, if the name is
@@ -189,6 +213,9 @@ interface types {
     /// name, if they have been set.
     ///
     /// Fails with `header-error.immutable` if the `fields` are immutable.
+    ///
+    /// Fails with `header-error.size-exceeded` if the name or values would
+    /// exceed an implementation-defined size limit.
     set: func(name: field-name, value: list<field-value>) -> result<_, header-error>;
     /// Delete all values for a name. Does nothing if no values for the name
     /// exist.
@@ -206,6 +233,9 @@ interface types {
     /// values for that name.
     ///
     /// Fails with `header-error.immutable` if the `fields` are immutable.
+    ///
+    /// Fails with `header-error.size-exceeded` if the value would exceed
+    /// an implementation-defined size limit.
     append: func(name: field-name, value: field-value) -> result<_, header-error>;
     /// Retrieve the full set of names and values in the Fields. Like the
     /// constructor, the list represents each name-value pair.
@@ -224,15 +254,15 @@ interface types {
   }
 
   /// Headers is an alias for Fields.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   type headers = fields;
 
   /// Trailers is an alias for Fields.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   type trailers = fields;
 
   /// Represents an HTTP Request.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   resource request {
     /// Construct a new `request` with a default `method` of `GET`, and
     /// `none` values for `path-with-query`, `scheme`, and `authority`.
@@ -319,7 +349,7 @@ interface types {
   ///
   /// These timeouts are separate from any the user may use to bound an
   /// asynchronous call.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   resource request-options {
     /// Construct a default `request-options` value.
     constructor();
@@ -348,11 +378,11 @@ interface types {
   }
 
   /// This type corresponds to the HTTP standard Status Code.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   type status-code = u16;
 
   /// Represents an HTTP Response.
-  @since(version = 0.3.0-rc-2026-02-09)
+  @since(version = 0.3.0-rc-2026-03-15)
   resource response {
     /// Construct a new `response`, with a default `status-code` of `200`.
     /// If a different `status-code` is needed, it must be set via the
@@ -401,7 +431,7 @@ interface types {
 ///
 /// In `wasi:http/middleware` this interface is both exported and imported as
 /// the "downstream" and "upstream" directions of the middleware chain.
-@since(version = 0.3.0-rc-2026-02-09)
+@since(version = 0.3.0-rc-2026-03-15)
 interface handler {
   use types.{request, response, error-code};
 
@@ -420,7 +450,7 @@ interface handler {
 /// (including WIT itself) is unable to represent a component importing two
 /// instances of the same interface. A `client.send` import may be linked
 /// directly to a `handler.handle` export to bypass the network.
-@since(version = 0.3.0-rc-2026-02-09)
+@since(version = 0.3.0-rc-2026-03-15)
 interface client {
   use types.{request, response, error-code};
 
@@ -432,22 +462,22 @@ interface client {
 /// The `wasi:http/service` world captures a broad category of HTTP services
 /// including web applications, API servers, and proxies. It may be `include`d
 /// in more specific worlds such as `wasi:http/middleware`.
-@since(version = 0.3.0-rc-2026-02-09)
+@since(version = 0.3.0-rc-2026-03-15)
 world service {
-  import wasi:cli/types@0.3.0-rc-2026-02-09;
-  import wasi:cli/stdout@0.3.0-rc-2026-02-09;
-  import wasi:cli/stderr@0.3.0-rc-2026-02-09;
-  import wasi:cli/stdin@0.3.0-rc-2026-02-09;
-  import wasi:clocks/types@0.3.0-rc-2026-02-09;
+  import wasi:cli/types@0.3.0-rc-2026-03-15;
+  import wasi:cli/stdout@0.3.0-rc-2026-03-15;
+  import wasi:cli/stderr@0.3.0-rc-2026-03-15;
+  import wasi:cli/stdin@0.3.0-rc-2026-03-15;
+  import wasi:clocks/types@0.3.0-rc-2026-03-15;
   import types;
   import client;
-  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-02-09;
-  import wasi:clocks/system-clock@0.3.0-rc-2026-02-09;
+  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-03-15;
+  import wasi:clocks/system-clock@0.3.0-rc-2026-03-15;
   @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0-rc-2026-02-09;
-  import wasi:random/random@0.3.0-rc-2026-02-09;
-  import wasi:random/insecure@0.3.0-rc-2026-02-09;
-  import wasi:random/insecure-seed@0.3.0-rc-2026-02-09;
+  import wasi:clocks/timezone@0.3.0-rc-2026-03-15;
+  import wasi:random/random@0.3.0-rc-2026-03-15;
+  import wasi:random/insecure@0.3.0-rc-2026-03-15;
+  import wasi:random/insecure-seed@0.3.0-rc-2026-03-15;
 
   export handler;
 }
@@ -457,23 +487,23 @@ world service {
 /// Components may implement this world to allow them to participate in handler
 /// "chains" where a `request` flows through handlers on its way to some terminal
 /// `service` and corresponding `response` flows in the opposite direction.
-@since(version = 0.3.0-rc-2026-02-09)
+@since(version = 0.3.0-rc-2026-03-15)
 world middleware {
-  import wasi:clocks/types@0.3.0-rc-2026-02-09;
+  import wasi:clocks/types@0.3.0-rc-2026-03-15;
   import types;
   import handler;
-  import wasi:cli/types@0.3.0-rc-2026-02-09;
-  import wasi:cli/stdout@0.3.0-rc-2026-02-09;
-  import wasi:cli/stderr@0.3.0-rc-2026-02-09;
-  import wasi:cli/stdin@0.3.0-rc-2026-02-09;
+  import wasi:cli/types@0.3.0-rc-2026-03-15;
+  import wasi:cli/stdout@0.3.0-rc-2026-03-15;
+  import wasi:cli/stderr@0.3.0-rc-2026-03-15;
+  import wasi:cli/stdin@0.3.0-rc-2026-03-15;
   import client;
-  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-02-09;
-  import wasi:clocks/system-clock@0.3.0-rc-2026-02-09;
+  import wasi:clocks/monotonic-clock@0.3.0-rc-2026-03-15;
+  import wasi:clocks/system-clock@0.3.0-rc-2026-03-15;
   @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0-rc-2026-02-09;
-  import wasi:random/random@0.3.0-rc-2026-02-09;
-  import wasi:random/insecure@0.3.0-rc-2026-02-09;
-  import wasi:random/insecure-seed@0.3.0-rc-2026-02-09;
+  import wasi:clocks/timezone@0.3.0-rc-2026-03-15;
+  import wasi:random/random@0.3.0-rc-2026-03-15;
+  import wasi:random/insecure@0.3.0-rc-2026-03-15;
+  import wasi:random/insecure-seed@0.3.0-rc-2026-03-15;
 
   export handler;
 }
