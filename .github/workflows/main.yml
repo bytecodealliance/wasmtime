@@ -425,6 +425,13 @@ jobs:
               -p wasmtime-wasi --no-default-features --features p2
               -p wasmtime-wasi --no-default-features --features p3
 
+          - name: wasmtime-wasi-tls
+            checks: |
+              -p wasmtime-wasi-tls --no-default-features
+              -p wasmtime-wasi-tls --no-default-features --features rustls
+              -p wasmtime-wasi-tls --no-default-features --features nativetls
+              -p wasmtime-wasi-tls --no-default-features --features openssl
+
           - name: wasmtime-wizer
             checks: |
               -p wasmtime-wizer --no-default-features
@@ -942,9 +949,9 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
-  # Test `wasmtime-wasi-tls-nativetls` & `wasmtime-wasi-tls-openssl` in their
-  # own job. This is because they depends on OpenSSL, which is not easily
-  # available on all platforms.
+  # Test `wasmtime-wasi-tls` in its own job, as not all of its providers are
+  # compatible with all targets. The primary culprit is the OpenSSL dependency,
+  # which is not easily available on all platforms.
   #
   # The Windows base image has OpenSSL installed by default, but not in a way
   # that is automatically discoverable by `openssl-sys`. We need to configure
@@ -952,7 +959,7 @@ jobs:
   # Additionally, the GH actions Windows image does not ship with a CA cert
   # bundle, so we use the one from cUrl.
   test_wasi_tls:
-    name: Test wasi-tls using native-tls & openssl providers
+    name: Test wasi-tls
     needs: determine
     if: needs.determine.outputs.run-full
     runs-on: ${{ matrix.os }}
@@ -976,8 +983,7 @@ jobs:
         "SSL_CERT_FILE=$sslCertFile" | Out-File -FilePath $env:GITHUB_ENV -Append
         "OPENSSL_DIR=$opensslDir" | Out-File -FilePath $env:GITHUB_ENV -Append
         "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: cargo test -p wasmtime-wasi-tls-openssl
-    - run: cargo test -p wasmtime-wasi-tls-nativetls
+    - run: cargo test -p wasmtime-wasi-tls --all-features
 
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
   # `--all-features` brings in OCaml, which is a pain to get setup for all

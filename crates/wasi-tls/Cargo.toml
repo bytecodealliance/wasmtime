@@ -11,6 +11,12 @@ description = "Wasmtime implementation of the wasi-tls API"
 [lints]
 workspace = true
 
+[features]
+default = ["rustls"]
+rustls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]
+nativetls = ["dep:native-tls", "dep:tokio-native-tls"]
+openssl = ["dep:openssl", "dep:tokio-openssl"]
+
 [dependencies]
 bytes = { workspace = true }
 tokio = { workspace = true, features = [
@@ -21,10 +27,14 @@ tokio = { workspace = true, features = [
 ] }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
-
-tokio-rustls = { workspace = true }
-rustls = { workspace = true }
-webpki-roots = { workspace = true }
+cfg-if = { workspace = true }
+tokio-rustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
+tokio-native-tls = { workspace = true, optional = true }
+native-tls = { workspace = true, optional = true }
+tokio-openssl = { workspace = true, optional = true }
+openssl = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
