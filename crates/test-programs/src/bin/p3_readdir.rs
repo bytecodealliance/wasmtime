@@ -62,9 +62,9 @@ async fn test_readdir(dir: &Descriptor) {
     let entries = read_dir(dir).await;
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].name, "file");
-    assert_eq!(entries[0].type_, DescriptorType::RegularFile);
+    assert!(matches!(entries[0].type_, DescriptorType::RegularFile));
     assert_eq!(entries[1].name, "nested");
-    assert_eq!(entries[1].type_, DescriptorType::Directory);
+    assert!(matches!(entries[1].type_, DescriptorType::Directory));
 
     assert_empty_dir(&nested).await;
     drop(nested);

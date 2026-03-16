@@ -47,7 +47,7 @@ async fn test_tcp_receive_stream_should_be_dropped_by_remote_shutdown(family: Ip
         let (stream_result, data) = client.receive_stream.read(Vec::with_capacity(1)).await;
         assert_eq!(data.len(), 0);
         assert_eq!(stream_result, StreamResult::Dropped);
-        assert_eq!(client.receive_result.await, Ok(()));
+        client.receive_result.await.unwrap();
     })
     .await;
 }
@@ -69,7 +69,7 @@ async fn test_tcp_receive_future_should_resolve_when_stream_dropped(family: IpAd
 
             // Dropping the stream should've caused the future to resolve even
             // though there was still data pending:
-            assert_eq!(receive_result.await, Ok(()));
+            receive_result.await.unwrap();
         }
     }).await;
 }
@@ -83,7 +83,7 @@ async fn test_tcp_send_future_should_resolve_when_stream_dropped(family: IpAddre
             ..
         } = client;
         drop(send_stream);
-        assert_eq!(send_result.await, Ok(()));
+        send_result.await.unwrap();
     })
     .await;
 }
@@ -123,7 +123,7 @@ async fn test_tcp_receive_once(family: IpAddressFamily) {
             let (stream_result, data) = reader.read(Vec::with_capacity(10)).await;
             assert_eq!(data.len(), 0);
             assert_eq!(stream_result, StreamResult::Dropped);
-            assert_eq!(future.await, Err(ErrorCode::InvalidState));
+            assert!(matches!(future.await, Err(ErrorCode::InvalidState)));
         }
     })
     .await;
@@ -142,7 +142,7 @@ async fn test_tcp_send_once(family: IpAddressFamily) {
             let (stream_result, rest) = writer.write(DATA.into()).await;
             assert_eq!(rest.into_vec(), DATA);
             assert_eq!(stream_result, StreamResult::Dropped);
-            assert_eq!(future.await, Err(ErrorCode::InvalidState));
+            assert!(matches!(future.await, Err(ErrorCode::InvalidState)));
         }
     })
     .await;
@@ -175,23 +175,23 @@ async fn test_tcp_stream_lifetimes(family: IpAddressFamily) {
             let rest = server_send_stream.write_all(b"ping".into()).await;
             assert!(rest.is_empty());
             drop(server_send_stream);
-            assert_eq!(server_send_result.await, Ok(()));
+            server_send_result.await.unwrap();
         }
         {
             let data = client_receive_stream.collect().await;
             assert_eq!(data, b"ping");
-            assert_eq!(client_receive_result.await, Ok(()));
+            client_receive_result.await.unwrap();
         }
         {
             let rest = client_send_stream.write_all(b"pong".into()).await;
             assert!(rest.is_empty());
             drop(client_send_stream);
-            assert_eq!(client_send_result.await, Ok(()));
+            client_send_result.await.unwrap();
         }
         {
             let data = server_receive_stream.collect().await;
             assert_eq!(data, b"pong");
-            assert_eq!(server_receive_result.await, Ok(()));
+            server_receive_result.await.unwrap();
         }
     })
     .await;

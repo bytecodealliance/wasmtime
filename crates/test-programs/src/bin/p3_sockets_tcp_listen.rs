@@ -25,7 +25,7 @@ fn test_tcp_listen_with_bind(family: IpAddressFamily) {
     let local_addr = sock.get_local_address().unwrap();
 
     assert!(matches!(sock.listen(), Ok(_)));
-    assert_eq!(sock.get_local_address(), Ok(local_addr));
+    assert_eq!(sock.get_local_address().unwrap(), local_addr);
 }
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {

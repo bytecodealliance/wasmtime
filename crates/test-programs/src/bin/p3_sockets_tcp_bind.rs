@@ -46,7 +46,10 @@ fn test_tcp_bind_addrinuse(ip: IpAddress) {
     let bound_addr = sock1.get_local_address().unwrap();
 
     let sock2 = TcpSocket::create(ip.family()).unwrap();
-    assert_eq!(sock2.bind(bound_addr), Err(ErrorCode::AddressInUse));
+    assert!(matches!(
+        sock2.bind(bound_addr),
+        Err(ErrorCode::AddressInUse)
+    ));
 }
 
 // The WASI runtime should set SO_REUSEADDR for us
@@ -111,7 +114,10 @@ fn test_tcp_bind_addrnotavail(ip: IpAddress) {
 
     let sock = TcpSocket::create(ip.family()).unwrap();
 
-    assert_eq!(sock.bind(bind_addr), Err(ErrorCode::AddressNotBindable));
+    assert!(matches!(
+        sock.bind(bind_addr),
+        Err(ErrorCode::AddressNotBindable)
+    ));
 }
 
 /// Bind should validate the address family.
