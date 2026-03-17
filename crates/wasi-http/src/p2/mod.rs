@@ -282,7 +282,7 @@ pub use self::error::*;
 ///     }
 /// }
 /// ```
-pub trait WasiHttpHooks {
+pub trait WasiHttpHooks: Send {
     /// Send an outgoing request.
     #[cfg(feature = "default-send-request")]
     fn send_request(
