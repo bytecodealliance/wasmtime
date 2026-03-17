@@ -4,7 +4,7 @@ Unreleased.
 
 ### Added
 
-* Wasmtime now supports the WASIp3 snapshot `0.3.0-rc-2026-02-09`.
+* Wasmtime now supports the WASIp3 snapshot `0.3.0-rc-2026-03-15`.
   [#12557](https://github.com/bytecodealliance/wasmtime/pull/12557)
 
 * The number of frames captured in backtrace collection can now be configured.
