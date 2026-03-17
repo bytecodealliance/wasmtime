@@ -2316,55 +2316,98 @@ start a print 1234
         let cwasm = td.path().join("http_headers.cwasm");
         let cwasm = cwasm.to_str().unwrap();
         run_wasmtime(&["compile", P2_CLI_HTTP_HEADERS_COMPONENT, "-o", cwasm])?;
-        for wasi in ["p2", "p3"] {
-            for test in ["append", "append-empty", "append-same", "append-same-empty"] {
-                let err = run_wasmtime(&[
-                    "run",
-                    "-Shttp,p3",
-                    "-Smax-http-fields-size=1048576",
-                    "--allow-precompiled",
-                    cwasm,
-                    &format!("{wasi}-{test}"),
-                ])
-                .unwrap_err();
-                assert!(
-                    err.to_string()
-                        .contains("total size of fields exceeds limit")
-                        || err.to_string().contains("too many fields in the field map"),
-                    "bad error message: {err:?}"
-                );
-
-                // gated by default too
-                let err = run_wasmtime(&[
-                    "run",
-                    "-Shttp,p3",
-                    "--allow-precompiled",
-                    cwasm,
-                    &format!("{wasi}-{test}"),
-                ])
-                .unwrap_err();
-                assert!(
-                    err.to_string()
-                        .contains("total size of fields exceeds limit"),
-                    "bad error message: {err:?}"
-                );
-            }
-
-            // With an extremely large limit Wasmtime still shouldn't panic.
+        // p2 traps on too-many-fields/size-too-big, so expect error messages.
+        for test in ["append", "append-empty", "append-same", "append-same-empty"] {
             let err = run_wasmtime(&[
                 "run",
                 "-Shttp,p3",
-                &format!("-Smax-http-fields-size={}", 1 << 30),
+                "-Smax-http-fields-size=1048576",
                 "--allow-precompiled",
                 cwasm,
-                &format!("{wasi}-append"),
+                &format!("p2-{test}"),
             ])
             .unwrap_err();
             assert!(
-                err.to_string().contains("too many fields in the field map"),
+                err.to_string()
+                    .contains("total size of fields exceeds limit")
+                    || err.to_string().contains("too many fields in the field map"),
+                "bad error message: {err:?}"
+            );
+
+            // gated by default too
+            let err = run_wasmtime(&[
+                "run",
+                "-Shttp,p3",
+                "--allow-precompiled",
+                cwasm,
+                &format!("p2-{test}"),
+            ])
+            .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("total size of fields exceeds limit"),
                 "bad error message: {err:?}"
             );
         }
+
+        // With an extremely large limit Wasmtime still shouldn't panic (p2).
+        let err = run_wasmtime(&[
+            "run",
+            "-Shttp,p3",
+            &format!("-Smax-http-fields-size={}", 1 << 30),
+            "--allow-precompiled",
+            cwasm,
+            "p2-append",
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("too many fields in the field map"),
+            "bad error message: {err:?}"
+        );
+
+        // p3 returns an error code instead of trapping, so the guest
+        // program exits successfully after receiving the error.
+        for test in ["append", "append-empty", "append-same", "append-same-empty"] {
+            let output = run_wasmtime(&[
+                "run",
+                "-Shttp,p3",
+                "-Smax-http-fields-size=1048576",
+                "--allow-precompiled",
+                cwasm,
+                &format!("p3-{test}"),
+            ])?;
+            assert!(
+                output.contains("error received"),
+                "p3-{test}: guest should have received an error"
+            );
+
+            // gated by default too
+            let output = run_wasmtime(&[
+                "run",
+                "-Shttp,p3",
+                "--allow-precompiled",
+                cwasm,
+                &format!("p3-{test}"),
+            ])?;
+            assert!(
+                output.contains("error received"),
+                "p3-{test} (default limit): guest should have received an error"
+            );
+        }
+
+        // With an extremely large limit Wasmtime still shouldn't panic (p3).
+        let output = run_wasmtime(&[
+            "run",
+            "-Shttp,p3",
+            &format!("-Smax-http-fields-size={}", 1 << 30),
+            "--allow-precompiled",
+            cwasm,
+            "p3-append",
+        ])?;
+        assert!(
+            output.contains("error received"),
+            "p3-append (large limit): guest should have received an error"
+        );
         Ok(())
     }
 

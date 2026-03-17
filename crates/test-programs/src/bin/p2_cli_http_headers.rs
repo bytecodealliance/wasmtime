@@ -38,7 +38,8 @@ fn main() {
             let fields = wasip3::http::types::Fields::new();
             for i in 0.. {
                 if fields.append(&format!("a{i}"), b"a").is_err() {
-                    break;
+                    println!("error received");
+                    return;
                 }
             }
         }
@@ -46,7 +47,8 @@ fn main() {
             let fields = wasip3::http::types::Fields::new();
             for i in 0.. {
                 if fields.append(&format!("a{i}"), b"").is_err() {
-                    break;
+                    println!("error received");
+                    return;
                 }
             }
         }
@@ -54,7 +56,8 @@ fn main() {
             let fields = wasip3::http::types::Fields::new();
             loop {
                 if fields.append("a", b"b").is_err() {
-                    break;
+                    println!("error received");
+                    return;
                 }
             }
         }
@@ -62,12 +65,14 @@ fn main() {
             let fields = wasip3::http::types::Fields::new();
             loop {
                 if fields.append("a", b"").is_err() {
-                    break;
+                    println!("error received");
+                    return;
                 }
             }
         }
         other => panic!("unknown test {other:?}"),
     }
 
+    // p2 cases trap before reaching here
     unreachable!();
 }
