@@ -242,6 +242,24 @@ impl<'a> Debugger<'a> {
                 ));
                 Ok(inner.report_stop_with_regs(self, stop_reason, &mut regs)?)
             }
+            api::Event::Trap => {
+                trace!("Event::Trap");
+                self.update_on_stop();
+                let pc_bytes = self.current_pc.as_raw().to_le_bytes();
+                let mut regs = core::iter::once((
+                    gdbstub_arch::wasm::reg::id::WasmRegId::Pc,
+                    pc_bytes.as_slice(),
+                ));
+                Ok(inner.report_stop_with_regs(
+                    self,
+                    // We report all traps as SIGSEGV for now.
+                    MultiThreadStopReason::SignalWithThread {
+                        tid: self.tid,
+                        signal: Signal::SIGSEGV,
+                    },
+                    &mut regs,
+                )?)
+            }
             _ => {
                 trace!("other event: {event:?}");
                 if self.interrupt {
