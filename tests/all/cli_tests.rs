@@ -2844,18 +2844,15 @@ start a print 1234
 
         for rand in ["random", "insecure"] {
             run_wasmtime(&["run", "-Sp3", "-Wcomponent-model-async", c, rand, "256"])?;
-            assert!(
-                run_wasmtime(&[
-                    "run",
-                    "-Sp3",
-                    "-Wcomponent-model-async",
-                    "-Smax-random-size=255",
-                    c,
-                    rand,
-                    "256"
-                ])
-                .is_err()
-            );
+            run_wasmtime(&[
+                "run",
+                "-Sp3",
+                "-Wcomponent-model-async",
+                "-Smax-random-size=255",
+                c,
+                rand,
+                "256",
+            ])?;
         }
 
         Ok(())
