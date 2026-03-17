@@ -407,19 +407,19 @@ pub(crate) fn define() -> TargetIsa {
 
     // Generic
 
-    settings.add_preset("x86_64", "Generic x86-64 microarchitecture.", preset!());
+    settings.add_preset("x86-64", "Generic x86-64 microarchitecture.", preset!());
     let x86_64_v2 = settings.add_preset(
-        "x86_64_v2",
+        "x86-64-v2",
         "Generic x86-64 (V2) microarchitecture.",
         preset!(sse42 && has_popcnt && has_cmpxchg16b),
     );
     let x86_64_v3 = settings.add_preset(
-        "x86_64_v3",
+        "x86-64-v3",
         "Generic x86-64 (V3) microarchitecture.",
         preset!(x86_64_v2 && has_bmi1 && has_bmi2 && has_fma && has_lzcnt && has_avx2),
     );
     settings.add_preset(
-        "x86_64_v4",
+        "x86-64-v4",
         "Generic x86-64 (V4) microarchitecture.",
         preset!(x86_64_v3 && has_avx512dq && has_avx512vl),
     );
