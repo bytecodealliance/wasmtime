@@ -3186,8 +3186,11 @@ impl MachInstEmit for Inst {
                     rm: ridx,
                 };
                 inst.emit(sink, emit_info, state);
-                // Prevent any data value speculation.
-                Inst::Csdb.emit(sink, emit_info, state);
+                // Prevent any data value speculation if spectre mitigations are
+                // enabled.
+                if emit_info.0.enable_table_access_spectre_mitigation() {
+                    Inst::Csdb.emit(sink, emit_info, state);
+                }
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
