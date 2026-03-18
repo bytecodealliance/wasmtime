@@ -383,3 +383,94 @@
 )
 
 (assert_return (invoke "run"))
+
+;; If a host task completes, but the guest doesn't actually receive the
+;; notification that it's done, it should be possible to cancel it.
+(component
+  (import "host" (instance $host
+    (export "return-two-slowly" (func async (result s32)))
+  ))
+
+  (core module $Mem (memory (export "mem") 1))
+  (core instance $mem (instantiate $Mem))
+
+  (core module $m
+    (import "" "slow-sync" (func $slow-sync (result i32)))
+    (import "" "slow-async" (func $slow-async (param i32) (result i32)))
+    (import "" "subtask.cancel" (func $subtask.cancel (param i32) (result i32)))
+    (import "" "subtask.drop" (func $subtask.drop (param i32)))
+    (func (export "run")
+      (local $subtask i32)
+
+      ;; start a subtask for `return-two-slowly`
+      (local.set $subtask (call $start-slow))
+
+      ;; Call `return-two-slowly` synchronously a few times. This gives a
+      ;; chance for the host to finish the previous task, which shouldn't
+      ;; interfere with the below...
+      (call $assert-eq (call $slow-sync) (i32.const 2))
+      (call $assert-eq (call $slow-sync) (i32.const 2))
+      (call $assert-eq (call $slow-sync) (i32.const 2))
+
+      ;; We've never seen the result of `$subtask`, so it should be safe to
+      ;; cancel. This should either yield that the subtask returned or that
+      ;; it's return was cancelled, it's up to hosts.
+      (call $assert-either (call $subtask.cancel (local.get $subtask))
+                           (i32.const 4)  ;; RETURN_CANCELLED
+                           (i32.const 2)) ;; RETURNED
+      (call $subtask.drop (local.get $subtask))
+    )
+
+    ;; asserts param 0 == param 1
+    (func $assert-eq (param i32 i32)
+      local.get 0
+      local.get 1
+      i32.ne
+      if unreachable end)
+
+    ;; Asserts that param 0 is either equal to param 1 or param 2
+    (func $assert-either (param i32 i32 i32)
+      local.get 0
+      local.get 1
+      i32.eq
+      if return end
+      local.get 0
+      local.get 2
+      i32.eq
+      if return end
+      unreachable)
+
+    (func $start-slow (result i32)
+      (local $tmp i32)
+
+      ;; Start slow, expect STARTED
+      (call $slow-async (i32.const 100))
+      local.tee $tmp
+      i32.const 0xf
+      i32.and
+      i32.const 1 ;; STARTED
+      i32.ne
+      if unreachable end
+      local.get $tmp
+      i32.const 4
+      i32.shr_u
+    )
+  )
+  (core func $slow-sync (canon lower (func $host "return-two-slowly") (memory $mem "mem")))
+  (core func $slow-async (canon lower (func $host "return-two-slowly") async (memory $mem "mem")))
+  (core func $subtask.cancel (canon subtask.cancel))
+  (core func $subtask.drop (canon subtask.drop))
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "slow-sync" (func $slow-sync))
+      (export "slow-async" (func $slow-async))
+      (export "subtask.cancel" (func $subtask.cancel))
+      (export "subtask.drop" (func $subtask.drop))
+    ))
+  ))
+
+  (func (export "run") async
+    (canon lift (core func $i "run")))
+)
+
+(assert_return (invoke "run"))
