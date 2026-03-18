@@ -97,12 +97,6 @@ const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
 /// Load multi-byte values from memory in a big-endian format.
 const BIT_BIG_ENDIAN: u16 = 1 << 3;
 
-/// Check this load or store for safety when using the
-/// proof-carrying-code framework. The address must have a
-/// `PointsTo` fact attached with a sufficiently large valid range
-/// for the accessed size.
-const BIT_CHECKED: u16 = 1 << 4;
-
 /// Used for alias analysis, indicates which disjoint part of the abstract state
 /// is being accessed.
 const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
@@ -204,7 +198,6 @@ impl MemFlags {
                 }
                 self.with_alias_region(Some(AliasRegion::Vmctx))
             }
-            "checked" => self.with_checked(),
             "can_move" => self.with_can_move(),
 
             other => match TrapCode::from_str(other) {
@@ -356,32 +349,6 @@ impl MemFlags {
     pub const fn with_readonly(self) -> Self {
         self.with_bit(BIT_READONLY)
     }
-
-    /// Test if the `checked` bit is set.
-    ///
-    /// Loads and stores with this flag are verified to access
-    /// pointers only with a validated `PointsTo` fact attached, and
-    /// with that fact validated, when using the proof-carrying-code
-    /// framework. If initial facts on program inputs are correct
-    /// (i.e., correctly denote the shape and types of data structures
-    /// in memory), and if PCC validates the compiled output, then all
-    /// `checked`-marked memory accesses are guaranteed (up to the
-    /// checker's correctness) to access valid memory. This can be
-    /// used to ensure memory safety and sandboxing.
-    pub const fn checked(self) -> bool {
-        self.read_bit(BIT_CHECKED)
-    }
-
-    /// Set the `checked` bit.
-    pub fn set_checked(&mut self) {
-        *self = self.with_checked();
-    }
-
-    /// Set the `checked` bit, returning new flags.
-    pub const fn with_checked(self) -> Self {
-        self.with_bit(BIT_CHECKED)
-    }
-
     /// Get the trap code to report if this memory access traps.
     ///
     /// A `None` trap code indicates that this memory access does not trap.
@@ -433,9 +400,6 @@ impl fmt::Display for MemFlags {
         }
         if self.read_bit(BIT_LITTLE_ENDIAN) {
             write!(f, " little")?;
-        }
-        if self.checked() {
-            write!(f, " checked")?;
         }
         match self.alias_region() {
             None => {}

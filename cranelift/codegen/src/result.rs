@@ -1,10 +1,8 @@
 //! Result and error types representing the outcome of compiling a function.
 
-use regalloc2::checker::CheckerErrors;
-
-use crate::ir::pcc::PccError;
 use crate::{ir::Function, verifier::VerifierErrors};
 use alloc::string::String;
+use regalloc2::checker::CheckerErrors;
 
 /// A compilation error.
 ///
@@ -42,9 +40,6 @@ pub enum CodegenError {
 
     /// Register allocator internal error discovered by the symbolic checker.
     Regalloc(CheckerErrors),
-
-    /// Proof-carrying-code validation error.
-    Pcc(PccError),
 }
 
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.
@@ -62,7 +57,6 @@ impl core::error::Error for CodegenError {
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError { .. } => None,
             CodegenError::Regalloc(..) => None,
-            CodegenError::Pcc(..) => None,
         }
     }
 }
@@ -77,10 +71,6 @@ impl core::fmt::Display for CodegenError {
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError(_0) => write!(f, "Register mapping error"),
             CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {errors:?}"),
-
-            // NOTE: if this is changed, please update the `is_pcc_error` function defined in
-            // `wasmtime/crates/fuzzing/src/oracles.rs`
-            CodegenError::Pcc(e) => write!(f, "Proof-carrying-code validation error: {e:?}"),
         }
     }
 }

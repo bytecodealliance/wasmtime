@@ -72,8 +72,7 @@ use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue, Inst,
-    JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
-    ValueList, types,
+    JumpTable, MemFlags, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList, types,
 };
 use crate::ir::{ExceptionTableItem, Signature};
 use crate::isa::{CallConv, TargetIsa};
@@ -408,53 +407,6 @@ impl<'a> Verifier<'a> {
         }
 
         // Invalid global values shouldn't stop us from verifying the rest of the function
-        Ok(())
-    }
-
-    fn verify_memory_types(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        // Verify that all fields are statically-sized and lie within
-        // the struct, do not overlap, and are in offset order
-        for (mt, mt_data) in &self.func.memory_types {
-            match mt_data {
-                MemoryTypeData::Struct { size, fields } => {
-                    let mut last_offset = 0;
-                    for field in fields {
-                        if field.offset < last_offset {
-                            errors.report((
-                                mt,
-                                format!(
-                                    "memory type {} has a field at offset {}, which is out-of-order",
-                                    mt, field.offset
-                                ),
-                            ));
-                        }
-                        last_offset = match field.offset.checked_add(u64::from(field.ty.bytes())) {
-                            Some(o) => o,
-                            None => {
-                                errors.report((
-                                        mt,
-                                        format!(
-                                            "memory type {} has a field at offset {} of size {}; offset plus size overflows a u64",
-                                            mt, field.offset, field.ty.bytes()),
-                                ));
-                                break;
-                            }
-                        };
-
-                        if last_offset > *size {
-                            errors.report((
-                                        mt,
-                                        format!(
-                                            "memory type {} has a field at offset {} of size {} that overflows the struct size {}",
-                                            mt, field.offset, field.ty.bytes(), *size),
-                                          ));
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
         Ok(())
     }
 
@@ -2128,7 +2080,6 @@ impl<'a> Verifier<'a> {
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
-        self.verify_memory_types(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;

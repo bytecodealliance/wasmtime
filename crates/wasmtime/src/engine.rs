@@ -489,7 +489,6 @@ information about this check\
             | "enable_nan_canonicalization"
             | "enable_float"
             | "enable_verifier"
-            | "enable_pcc"
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "regalloc_algorithm"

@@ -5,7 +5,8 @@
 
 use super::WalkCommand;
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, InstBuilder, pcc::Fact};
+use crate::ir;
+use crate::ir::InstBuilder;
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
@@ -61,7 +62,7 @@ fn const_vector_scale(
 
 /// Expand a `global_value` instruction for a vmctx global.
 fn vmctx_addr(
-    global_value: ir::GlobalValue,
+    _global_value: ir::GlobalValue,
     inst: ir::Inst,
     func: &mut ir::Function,
 ) -> WalkCommand {
@@ -75,15 +76,6 @@ fn vmctx_addr(
     func.dfg.clear_results(inst);
     func.dfg.change_to_alias(result, vmctx);
     func.layout.remove_inst(inst);
-
-    // If there was a fact on the GV, then copy it to the vmctx arg
-    // blockparam def.
-    if let Some(fact) = &func.global_value_facts[global_value] {
-        if func.dfg.facts[vmctx].is_none() {
-            let fact = fact.clone();
-            func.dfg.facts[vmctx] = Some(fact);
-        }
-    }
 
     // We removed the instruction, so `cursor.next_inst()` will fail if we
     // return `WalkCommand::Continue`; instead "revisit" the current
@@ -104,18 +96,10 @@ fn iadd_imm_addr(
 
     // Get the value for the lhs.
     let lhs = pos.ins().global_value(global_type, base);
-    if let Some(fact) = &pos.func.global_value_facts[base] {
-        pos.func.dfg.facts[lhs] = Some(fact.clone());
-    }
 
     // Generate the constant and attach a fact to the constant if
     // there is a fact on the base.
     let constant = pos.ins().iconst(global_type, offset);
-    if pos.func.global_value_facts[base].is_some() {
-        let bits = u16::try_from(global_type.bits()).unwrap();
-        let unsigned_offset = offset as u64; // Safety: reinterpret i64 bits as u64.
-        pos.func.dfg.facts[constant] = Some(Fact::constant(bits, unsigned_offset));
-    }
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
     pos.func.dfg.replace(inst).iadd(lhs, constant);
@@ -144,9 +128,6 @@ fn load_addr(
 
     // Get the value for the base.
     let base_addr = pos.ins().global_value(ptr_ty, base);
-    if let Some(fact) = &pos.func.global_value_facts[base] {
-        pos.func.dfg.facts[base_addr] = Some(fact.clone());
-    }
 
     // Perform the load.
     pos.func

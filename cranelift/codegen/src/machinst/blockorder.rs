@@ -134,6 +134,7 @@ impl LoweredBlock {
     }
 
     /// The associated out-edge successor, if this is a critical edge.
+    #[cfg(test)]
     pub fn out_edge(&self) -> Option<Block> {
         match self {
             &LoweredBlock::CriticalEdge { succ, .. } => Some(succ),

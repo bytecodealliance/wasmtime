@@ -1563,8 +1563,11 @@ impl AtomicOP {
 ///Atomic Memory ordering.
 #[derive(Copy, Clone, Debug)]
 pub enum AMO {
+    #[allow(dead_code, reason = "used only in emit tests for now")]
     Relax = 0b00,
+    #[allow(dead_code, reason = "used only in emit tests for now")]
     Release = 0b01,
+    #[allow(dead_code, reason = "used only in emit tests for now")]
     Acquire = 0b10,
     SeqCst = 0b11,
 }
