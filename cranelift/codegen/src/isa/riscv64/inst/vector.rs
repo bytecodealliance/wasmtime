@@ -1,4 +1,3 @@
-use crate::Reg;
 use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
@@ -1060,12 +1059,6 @@ impl fmt::Display for VecAluOpRImm5 {
 }
 
 impl VecAMode {
-    pub fn get_base_register(&self) -> Option<Reg> {
-        match self {
-            VecAMode::UnitStride { base, .. } => base.get_base_register(),
-        }
-    }
-
     pub fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             VecAMode::UnitStride { base, .. } => base.get_operands(collector),

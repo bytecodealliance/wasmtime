@@ -500,7 +500,6 @@ regalloc_checker = false
 regalloc_verbose_logs = false
 enable_alias_analysis = true
 enable_verifier = true
-enable_pcc = false
 is_pic = false
 use_colocated_libcalls = false
 enable_nan_canonicalization = false
