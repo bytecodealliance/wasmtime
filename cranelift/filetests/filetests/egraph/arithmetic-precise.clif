@@ -84,3 +84,168 @@ block0(v0: i128):
 ;     v4 = sextend.i128 v3  ; v3 = -1
 ;     return v4
 ; }
+
+;; ((x + y) - (x + z)) --> (y - z)
+function %test_isub_iadd_iadd_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v1
+    v4 = iadd v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_iadd_iadd_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v1, v2
+;     return v6
+; }
+
+;; ((x - z) - (y - z)) --> (x - y)
+function %test_isub_isub_isub_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v2
+    v4 = isub v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_isub_isub_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v0, v1
+;     return v6
+; }
+
+;; ((x - y) - (x - z)) --> (z - y)
+function %test_isub_isub_isub_swap_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = isub v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_isub_isub_swap_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v2, v1
+;     return v6
+; }
+
+;; umin(x, y) + umax(x, y) --> x + y
+function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+;; smin(x, y) + smax(x, y) --> x + y
+function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+;; ((x + z) - (y + z)) --> (x - y)
+function %test_isub_iadd_iadd_common_rhs(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v2
+    v4 = iadd v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_iadd_iadd_common_rhs(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v0, v1
+;     return v6
+; }
+
+;; ((x - y) + (y + z)) --> (x + z)
+function %test_iadd_isub_iadd_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = iadd v1, v2
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %test_iadd_isub_iadd_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = iadd v0, v2
+;     return v6
+; }
+
+;; (x - (x + y)) --> -y
+function %test_isub_iadd_to_ineg(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+
+; function %test_isub_iadd_to_ineg(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ineg v1
+;     return v4
+; }
+
+;; (x + (y + (z - x))) --> (y + z)
+function %test_iadd_iadd_isub_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v2, v0
+    v4 = iadd v1, v3
+    v5 = iadd v0, v4
+    return v5
+}
+
+; function %test_iadd_iadd_isub_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = iadd v1, v2
+;     return v6
+; }
+
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+;; (x - y) != x --> y != 0
+function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v1, v4  ; v4 = 0
+;     return v5
+; }
+
