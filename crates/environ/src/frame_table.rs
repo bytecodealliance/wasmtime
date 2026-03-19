@@ -297,6 +297,23 @@ impl<'a> FrameTable<'a> {
         range.map(|i| self.breakpoint_patch(i))
     }
 
+    /// Find the nearest breakpoint PC at or after the given PC.
+    pub fn nearest_breakpoint(&self, pc: u32) -> Option<u32> {
+        match self
+            .breakpoint_pcs
+            .binary_search_by_key(&pc, |p| p.get(LittleEndian))
+        {
+            Ok(_) => Some(pc),
+            Err(i) => {
+                if i < self.breakpoint_pcs.len() {
+                    Some(self.breakpoint_pcs[i].get(LittleEndian))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Return an iterator over all breakpoint patches.
     ///
     /// Returned tuples are (Wasm PC, breakpoint data).
