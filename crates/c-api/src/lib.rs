@@ -30,6 +30,7 @@ mod memory;
 mod module;
 #[cfg(feature = "profiling")]
 mod profiling;
+#[cfg(feature = "gc")]
 mod r#ref;
 mod sharedmemory;
 mod store;
@@ -51,6 +52,7 @@ pub use crate::instance::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::*;
+#[cfg(feature = "gc")]
 pub use crate::r#ref::*;
 pub use crate::store::*;
 pub use crate::table::*;

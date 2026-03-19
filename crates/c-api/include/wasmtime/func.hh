@@ -81,6 +81,7 @@ NATIVE_WASM_TYPE(double, F64, f64)
 
 #undef NATIVE_WASM_TYPE
 
+#ifdef WASMTIME_FEATURE_GC
 /// Type information for `externref`, represented on the host as an optional
 /// `ExternRef`.
 template <> struct WasmType<std::optional<ExternRef>> {
@@ -102,8 +103,9 @@ template <> struct WasmType<std::optional<ExternRef>> {
       p->externref = 0;
     }
   }
+  
   static std::optional<ExternRef> load(Store::Context cx,
-                                       wasmtime_val_raw_t *p) {
+                                      wasmtime_val_raw_t *p) {
     if (p->externref == 0) {
       return std::nullopt;
     }
@@ -112,6 +114,7 @@ template <> struct WasmType<std::optional<ExternRef>> {
     return ExternRef(val);
   }
 };
+#endif // WASMTIME_FEATURE_GC
 
 /// Type information for the `V128` host value used as a wasm value.
 template <> struct WasmType<V128> {

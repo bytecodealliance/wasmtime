@@ -1,4 +1,7 @@
-use crate::{WasmtimeStoreContextMut, abort};
+#![cfg(feature = "gc")]
+
+use crate::WasmtimeStoreContextMut;
+use crate::abort;
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::{num::NonZeroU64, os::raw::c_void, ptr};
 use wasmtime::{
@@ -423,7 +426,7 @@ pub unsafe extern "C" fn wasmtime_externref_data(
             let data = e.data(cx).ok()??;
             Some(data.downcast_ref::<crate::ForeignData>().unwrap().data)
         })
-        .unwrap_or(ptr::null_mut())
+        .unwrap_or(core::ptr::null_mut())
 }
 
 #[unsafe(no_mangle)]

@@ -1,11 +1,15 @@
+#[cfg(feature = "gc")]
 use crate::r#ref::ref_to_val;
 use crate::{
-    WASM_I32, from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_anyref_t,
-    wasmtime_exnref_t, wasmtime_externref_t, wasmtime_valkind_t,
+    WASM_I32, from_valtype, into_valtype, wasm_valkind_t, wasmtime_exnref_t, wasmtime_valkind_t,
 };
+#[cfg(feature = "gc")]
+use crate::{wasm_ref_t, wasmtime_anyref_t, wasmtime_externref_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{AsContextMut, Func, HeapType, Ref, RootScope, Val, ValType};
+use wasmtime::{AsContextMut, Func, Val, ValType};
+#[cfg(feature = "gc")]
+use wasmtime::{HeapType, Ref, RootScope};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -22,9 +26,11 @@ pub union wasm_val_union {
     pub u64: u64,
     pub f32: f32,
     pub f64: f64,
+    #[cfg(feature = "gc")]
     pub ref_: *mut wasm_ref_t,
 }
 
+#[cfg(feature = "gc")]
 impl Drop for wasm_val_t {
     fn drop(&mut self) {
         match into_valtype(self.kind) {
@@ -40,10 +46,13 @@ impl Drop for wasm_val_t {
 
 impl Clone for wasm_val_t {
     fn clone(&self) -> Self {
+        #[allow(unused_mut)]
         let mut ret = wasm_val_t {
             kind: self.kind,
             of: self.of,
         };
+
+        #[cfg(feature = "gc")]
         unsafe {
             match into_valtype(self.kind) {
                 ValType::Ref(_) if !self.of.ref_.is_null() => {
@@ -52,6 +61,7 @@ impl Clone for wasm_val_t {
                 _ => {}
             }
         }
+
         return ret;
     }
 }
@@ -84,6 +94,7 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
+            #[cfg(feature = "gc")]
             Val::FuncRef(f) => wasm_val_t {
                 kind: from_valtype(&ValType::FUNCREF),
                 of: wasm_val_union {
@@ -94,6 +105,8 @@ impl wasm_val_t {
                     }),
                 },
             },
+            #[cfg(not(feature = "gc"))]
+            Val::FuncRef(_) => crate::abort("creating a wasm_val_t from a funcref"),
             Val::AnyRef(_) => crate::abort("creating a wasm_val_t from an anyref"),
             Val::ExternRef(_) => crate::abort("creating a wasm_val_t from an externref"),
             Val::ExnRef(_) => crate::abort("creating a wasm_val_t from  an exnref"),
@@ -108,6 +121,7 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
+            #[cfg(feature = "gc")]
             ValType::Ref(r) => match r.heap_type() {
                 HeapType::Func => unsafe {
                     if self.of.ref_.is_null() {
@@ -119,6 +133,8 @@ impl wasm_val_t {
                 },
                 _ => unreachable!("wasm_val_t cannot contain non-function reference values"),
             },
+            #[cfg(not(feature = "gc"))]
+            ValType::Ref(_) => unimplemented!("wasm_val_t: reference types require gc feature"),
             ValType::V128 => unimplemented!("wasm_val_t: v128"),
         }
     }
@@ -146,9 +162,12 @@ pub union wasmtime_val_union {
     pub i64: i64,
     pub f32: u32,
     pub f64: u64,
+    #[cfg(feature = "gc")]
     pub anyref: ManuallyDrop<wasmtime_anyref_t>,
+    #[cfg(feature = "gc")]
     pub externref: ManuallyDrop<wasmtime_externref_t>,
     pub exnref: ManuallyDrop<wasmtime_exnref_t>,
+    #[cfg(feature = "gc")]
     pub funcref: wasmtime_func_t,
     pub v128: [u8; 16],
 }
@@ -159,6 +178,7 @@ const _: () = {
     assert!(std::mem::align_of::<wasmtime_val_union>() == std::mem::align_of::<u64>());
 };
 
+#[cfg(feature = "gc")]
 impl Drop for wasmtime_val_t {
     fn drop(&mut self) {
         unsafe {
@@ -179,6 +199,7 @@ impl Drop for wasmtime_val_t {
 }
 
 // The raw pointers are actually optional boxes.
+#[cfg(feature = "gc")]
 unsafe impl Send for wasmtime_val_union
 where
     Option<Box<wasmtime_anyref_t>>: Send,
@@ -186,6 +207,7 @@ where
     Option<Box<wasmtime_exnref_t>>: Send,
 {
 }
+#[cfg(feature = "gc")]
 unsafe impl Sync for wasmtime_val_union
 where
     Option<Box<wasmtime_anyref_t>>: Sync,
@@ -202,6 +224,7 @@ pub union wasmtime_func_t {
 }
 
 impl wasmtime_func_t {
+    #[cfg(feature = "gc")]
     unsafe fn as_wasmtime(&self) -> Option<Func> {
         if self.store_id == 0 {
             None
@@ -227,7 +250,16 @@ impl wasmtime_val_t {
     /// that `val` is not require to be rooted in the store itself which would
     /// prevent GC. Callers should prefer this API where possible, creating a
     /// temporary `RootScope` when needed.
+    #[cfg(feature = "gc")]
     pub fn from_val(cx: &mut RootScope<impl AsContextMut>, val: Val) -> wasmtime_val_t {
+        Self::from_val_unscoped(cx, val)
+    }
+
+    /// Creates a new `wasmtime_val_t` from a `wasmtime::Val` (non-gc version).
+    ///
+    /// When gc feature is disabled, this does not require a `RootScope`.
+    #[cfg(not(feature = "gc"))]
+    pub fn from_val(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
         Self::from_val_unscoped(cx, val)
     }
 
@@ -239,6 +271,8 @@ impl wasmtime_val_t {
     /// to the embedder. In such a situation we know we previously entered with
     /// some other call so the root scope is on the stack there.
     pub fn from_val_unscoped(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
+        #[cfg(not(feature = "gc"))]
+        let _ = cx;
         match val {
             Val::I32(i) => wasmtime_val_t {
                 kind: crate::WASMTIME_I32,
@@ -256,18 +290,21 @@ impl wasmtime_val_t {
                 kind: crate::WASMTIME_F64,
                 of: wasmtime_val_union { f64: i },
             },
+            #[cfg(feature = "gc")]
             Val::AnyRef(a) => wasmtime_val_t {
                 kind: crate::WASMTIME_ANYREF,
                 of: wasmtime_val_union {
                     anyref: ManuallyDrop::new(a.and_then(|a| a.to_owned_rooted(cx).ok()).into()),
                 },
             },
+            #[cfg(feature = "gc")]
             Val::ExternRef(e) => wasmtime_val_t {
                 kind: crate::WASMTIME_EXTERNREF,
                 of: wasmtime_val_union {
                     externref: ManuallyDrop::new(e.and_then(|e| e.to_owned_rooted(cx).ok()).into()),
                 },
             },
+            #[cfg(feature = "gc")]
             Val::FuncRef(func) => wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {
@@ -280,6 +317,10 @@ impl wasmtime_val_t {
                     exnref: ManuallyDrop::new(e.and_then(|e| e.to_owned_rooted(cx).ok()).into()),
                 },
             },
+            #[cfg(not(feature = "gc"))]
+            Val::AnyRef(_) | Val::ExternRef(_) | Val::FuncRef(_) | Val::ExnRef(_) => {
+                crate::abort("reference types require gc feature")
+            }
             Val::V128(val) => wasmtime_val_t {
                 kind: crate::WASMTIME_V128,
                 of: wasmtime_val_union {
@@ -297,7 +338,16 @@ impl wasmtime_val_t {
     /// API as the `Val` returned may contain a `Rooted<T>` which requires a
     /// `RootScope` if we don't want the value to live for the entire lifetime
     /// of the `Store`.
+    #[cfg(feature = "gc")]
     pub unsafe fn to_val(&self, cx: &mut RootScope<impl AsContextMut>) -> Val {
+        self.to_val_unscoped(cx)
+    }
+
+    /// Convert this `wasmtime_val_t` into a `wasmtime::Val` (non-gc version).
+    ///
+    /// When gc feature is disabled, this does not require a `RootScope`.
+    #[cfg(not(feature = "gc"))]
+    pub unsafe fn to_val(&self, cx: impl AsContextMut) -> Val {
         self.to_val_unscoped(cx)
     }
 
@@ -306,18 +356,23 @@ impl wasmtime_val_t {
     /// See notes on [`wasmtime_val_t::from_val_unscoped`] for notes on when to
     /// use this.
     pub unsafe fn to_val_unscoped(&self, cx: impl AsContextMut) -> Val {
+        #[cfg(not(feature = "gc"))]
+        let _ = cx;
         match self.kind {
             crate::WASMTIME_I32 => Val::I32(self.of.i32),
             crate::WASMTIME_I64 => Val::I64(self.of.i64),
             crate::WASMTIME_F32 => Val::F32(self.of.f32),
             crate::WASMTIME_F64 => Val::F64(self.of.f64),
             crate::WASMTIME_V128 => Val::V128(u128::from_le_bytes(self.of.v128).into()),
+            #[cfg(feature = "gc")]
             crate::WASMTIME_ANYREF => {
                 Val::AnyRef(self.of.anyref.as_wasmtime().map(|a| a.to_rooted(cx)))
             }
+            #[cfg(feature = "gc")]
             crate::WASMTIME_EXTERNREF => {
                 Val::ExternRef(self.of.externref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
+            #[cfg(feature = "gc")]
             crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
             crate::WASMTIME_EXNREF => {
                 Val::ExnRef(self.of.exnref.as_wasmtime().map(|e| e.to_rooted(cx)))
@@ -338,9 +393,11 @@ pub unsafe extern "C" fn wasmtime_val_clone(
     dst: &mut MaybeUninit<wasmtime_val_t>,
 ) {
     let of = match src.kind {
+        #[cfg(feature = "gc")]
         crate::WASMTIME_ANYREF => wasmtime_val_union {
             anyref: ManuallyDrop::new(src.of.anyref.as_wasmtime().into()),
         },
+        #[cfg(feature = "gc")]
         crate::WASMTIME_EXTERNREF => wasmtime_val_union {
             externref: ManuallyDrop::new(src.of.externref.as_wasmtime().into()),
         },
@@ -352,6 +409,7 @@ pub unsafe extern "C" fn wasmtime_val_clone(
         crate::WASMTIME_F32 => wasmtime_val_union { f32: src.of.f32 },
         crate::WASMTIME_F64 => wasmtime_val_union { f64: src.of.f64 },
         crate::WASMTIME_V128 => wasmtime_val_union { v128: src.of.v128 },
+        #[cfg(feature = "gc")]
         crate::WASMTIME_FUNCREF => wasmtime_val_union {
             funcref: src.of.funcref,
         },

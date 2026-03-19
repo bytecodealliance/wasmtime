@@ -249,6 +249,7 @@ pub extern "C" fn wasmtime_context_set_wasi_http(mut context: WasmtimeStoreConte
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_context_gc(
     mut context: WasmtimeStoreContextMut<'_>,
 ) -> Option<Box<wasmtime_error_t>> {

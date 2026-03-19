@@ -303,6 +303,7 @@ class Config {
     wasmtime_config_wasm_tail_call_set(ptr.get(), enable);
   }
 
+  #ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly reference types proposal is
   /// enabled
   ///
@@ -310,6 +311,7 @@ class Config {
   void wasm_reference_types(bool enable) {
     wasmtime_config_wasm_reference_types_set(ptr.get(), enable);
   }
+  #endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly simd proposal is enabled
   ///
@@ -361,11 +363,13 @@ class Config {
     wasmtime_config_wasm_memory64_set(ptr.get(), enable);
   }
 
+  #ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly Garbage Collection proposal will
   /// be enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_gc
   void wasm_gc(bool enable) { wasmtime_config_wasm_gc_set(ptr.get(), enable); }
+  #endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly function references proposal
   /// will be enabled
@@ -383,6 +387,7 @@ class Config {
     wasmtime_config_wasm_wide_arithmetic_set(ptr.get(), enable);
   }
 
+  #ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly exceptions proposal will be
   /// enabled
   ///
@@ -390,6 +395,7 @@ class Config {
   void wasm_exceptions(bool enable) {
     wasmtime_config_wasm_exceptions_set(ptr.get(), enable);
   }
+  #endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly custom-page-sizes proposal will
   /// be enabled
