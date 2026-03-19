@@ -694,18 +694,23 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
         },
         r#"
     (module
-      (func (export "main")
+      (func (export "main") (result i32)
         i32.const 0
         i32.const 0
         i32.div_u
-        drop))
+        drop
+        i32.const 42))
     "#,
     )?;
 
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {}
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
+              let frame = store.debug_exit_frames().next().unwrap();
+              let (_func, pc) = frame.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
+              assert_eq!(pc, 0x26);
+          }
         }
     );
 
@@ -714,7 +719,7 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
-    let mut results = [];
+    let mut results = [Val::I32(0)];
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
