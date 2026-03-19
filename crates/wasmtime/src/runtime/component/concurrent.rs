@@ -810,7 +810,7 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 
     // Retrieve and return the result.
     let host_state = &mut store.concurrent_state_mut().get_mut(task)?.state;
-    match mem::replace(host_state, HostTaskState::CalleeDone) {
+    match mem::replace(host_state, HostTaskState::CalleeDone { cancelled: false }) {
         HostTaskState::CalleeFinished(result) => Ok(match result.downcast() {
             Ok(result) => *result,
             Err(_) => bail_bug!("host task finished with wrong type of result"),
@@ -2863,7 +2863,14 @@ impl Instance {
 
                 lower(store.as_context_mut(), result)?;
                 let state = store.0.concurrent_state_mut();
-                state.get_mut(task)?.state = HostTaskState::CalleeDone;
+                match &mut state.get_mut(task)?.state {
+                    // The task is already flagged as finished because it was
+                    // cancelled. No need to transition further.
+                    HostTaskState::CalleeDone { .. } => {}
+
+                    // Otherwise transition this task to the done state.
+                    other => *other = HostTaskState::CalleeDone { cancelled: false },
+                }
                 Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
 
                 store.0.set_thread(old)?;
@@ -3114,7 +3121,7 @@ impl Instance {
             let task = concurrent_state.get_mut(id)?;
             match &task.state {
                 HostTaskState::CalleeRunning(_) => bail!(Trap::SubtaskDropNotResolved),
-                HostTaskState::CalleeDone => {}
+                HostTaskState::CalleeDone { .. } => {}
                 HostTaskState::CalleeStarted | HostTaskState::CalleeFinished(_) => {
                     bail_bug!("invalid state for callee in `subtask.drop`")
                 }
@@ -3593,15 +3600,28 @@ impl Instance {
         let needs_block;
         if let Waitable::Host(host_task) = waitable {
             let state = &mut concurrent_state.get_mut(host_task)?.state;
-            match mem::replace(state, HostTaskState::CalleeDone) {
+            match mem::replace(state, HostTaskState::CalleeDone { cancelled: true }) {
                 // If the callee is still running, signal an abort is requested.
-                // Then fall through to determine what to do next.
-                HostTaskState::CalleeRunning(handle) => handle.abort(),
+                //
+                // After cancelling this falls through to block waiting for the
+                // host task to actually finish assuming that `async_` is false.
+                // This blocking behavior resolves the race of `handle.abort()`
+                // with the task actually getting cancelled or finishing.
+                HostTaskState::CalleeRunning(handle) => {
+                    handle.abort();
+                    needs_block = true;
+                }
 
                 // Cancellation was already requested, so fail as the task can't
                 // be cancelled twice.
-                HostTaskState::CalleeDone => {
-                    bail!(Trap::SubtaskCancelAfterTerminal);
+                HostTaskState::CalleeDone { cancelled } => {
+                    if cancelled {
+                        bail!(Trap::SubtaskCancelAfterTerminal);
+                    } else {
+                        // The callee is already done so there's no need to
+                        // block further for an event.
+                        needs_block = false;
+                    }
                 }
 
                 // These states should not be possible for a subtask that's
@@ -3610,12 +3630,6 @@ impl Instance {
                     bail_bug!("invalid states for host callee")
                 }
             }
-
-            // Cancelling host tasks always needs to block on them to await the
-            // result of the completion set up in `first_poll`. This'll resolve
-            // the race of `handle.abort()` above to see if it actually
-            // cancelled something or if the future ended up finishing.
-            needs_block = true;
         } else {
             let caller = concurrent_state.current_guest_thread()?;
             let guest_task = TableId::<GuestTask>::new(rep);
@@ -4254,7 +4268,7 @@ enum HostTaskState {
 
     /// Terminal state for host tasks meaning that the task was cancelled or the
     /// result was taken.
-    CalleeDone,
+    CalleeDone { cancelled: bool },
 }
 
 impl HostTask {
