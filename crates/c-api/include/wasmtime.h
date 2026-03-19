@@ -201,7 +201,6 @@
 #include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
 #include <wasmtime/table.h>
-#include <wasmtime/tag.h>
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
 #include <wasmtime/async.h>

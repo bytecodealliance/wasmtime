@@ -102,6 +102,12 @@ impl wasm_functype_t {
         }
     }
 
+    pub(crate) fn from_cfunc(ty: CFuncType) -> wasm_functype_t {
+        wasm_functype_t {
+            ext: wasm_externtype_t::from_cextern_type(CExternType::Func(ty)),
+        }
+    }
+
     pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasm_functype_t> {
         match &e.which {
             CExternType::Func(_) => Some(unsafe { &*(e as *const _ as *const _) }),
