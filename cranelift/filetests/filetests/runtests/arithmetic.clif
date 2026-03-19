@@ -749,18 +749,6 @@ block0(v0: i32, v1: i32):
 ; run: %test_iadd_smin_smax(7, 7) == 14
 ; run: %test_iadd_smin_smax(-1, 1) == 0
 
-function %test_isub_iadd_iadd_common_rhs_rt(i32, i32, i32) -> i32 fast {
-block0(v0: i32, v1: i32, v2: i32):
-    v3 = iadd v0, v2
-    v4 = iadd v1, v2
-    v5 = isub v3, v4
-    return v5
-}
-
-; run: %test_isub_iadd_iadd_common_rhs_rt(0, 0, 0) == 0
-; run: %test_isub_iadd_iadd_common_rhs_rt(7, 3, 1) == 4
-; run: %test_isub_iadd_iadd_common_rhs_rt(3, 7, 1) == -4
-
 function %test_iadd_isub_iadd_cancel_rt(i32, i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32, v2: i32):
     v3 = isub v0, v1

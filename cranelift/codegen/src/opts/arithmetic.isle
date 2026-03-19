@@ -357,12 +357,6 @@
 (rule (simplify (iadd ty (smin ty y x) (smax ty y x))) (iadd ty x y))
 (rule (simplify (iadd ty (smax ty y x) (smin ty y x))) (iadd ty x y))
 
-;; ((x + z) - (y + z)) --> (x - y)
-(rule (simplify (isub ty (iadd ty x z) (iadd ty y z))) (isub ty x y))
-(rule (simplify (isub ty (iadd ty x z) (iadd ty z y))) (isub ty x y))
-(rule (simplify (isub ty (iadd ty z x) (iadd ty y z))) (isub ty x y))
-(rule (simplify (isub ty (iadd ty z x) (iadd ty z y))) (isub ty x y))
-
 ;; ((x - y) + (y + z)) --> (x + z)
 (rule (simplify (iadd ty (isub ty x y) (iadd ty y z))) (iadd ty x z))
 (rule (simplify (iadd ty (iadd ty y z) (isub ty x y))) (iadd ty x z))
