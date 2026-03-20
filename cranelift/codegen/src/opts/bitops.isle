@@ -564,3 +564,13 @@
 (rule (simplify (bor ty (band ty (bnot ty x) y) (band ty (bnot ty y) x))) (bxor ty x y))
 (rule (simplify (bor ty (band ty (bnot ty y) x) (band ty y (bnot ty x)))) (bxor ty x y))
 (rule (simplify (bor ty (band ty y (bnot ty x)) (band ty (bnot ty y) x))) (bxor ty x y))
+
+;; (x & ~y) | (x ^ y) --> (x ^ y)
+(rule (simplify (bor ty (band ty x (bnot ty y)) (bxor ty x y))) (bxor ty x y))
+(rule (simplify (bor ty (bxor ty x y) (band ty x (bnot ty y)))) (bxor ty x y))
+(rule (simplify (bor ty (band ty x (bnot ty y)) (bxor ty y x))) (bxor ty x y))
+(rule (simplify (bor ty (bxor ty y x) (band ty x (bnot ty y)))) (bxor ty x y))
+(rule (simplify (bor ty (band ty (bnot ty y) x) (bxor ty x y))) (bxor ty x y))
+(rule (simplify (bor ty (bxor ty x y) (band ty (bnot ty y) x))) (bxor ty x y))
+(rule (simplify (bor ty (band ty (bnot ty y) x) (bxor ty y x))) (bxor ty x y))
+(rule (simplify (bor ty (bxor ty y x) (band ty (bnot ty y) x))) (bxor ty x y))
