@@ -544,7 +544,7 @@ mod tests {
     // Level 1: 1 root
     // Level 2: 8 inner
     // Level 3: 64 inner
-    // Level 4: 512 leafs, up to 7680 elements
+    // Level 4: 512 leaves, up to 7680 elements
     //
     // A 3-level tree can hold at most 960 elements.
     fn dense4l(f: &mut SetForest<i32>) -> Set<i32> {

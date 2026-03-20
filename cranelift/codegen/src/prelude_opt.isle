@@ -216,7 +216,7 @@
 (decl sge (Type Value Value) Value)
 (extractor (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
-;;;;;; Divison-By-Constant Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; Division-By-Constant Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure i64_is_negative_power_of_two (i64) bool)
 (rule (i64_is_negative_power_of_two x)

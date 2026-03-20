@@ -7,7 +7,7 @@
 //! have been marked the equivalent of `#[inline(never)]`, etc... Only the
 //! Cranelift user can understand these aspects of the full compilation
 //! pipeline, and these things can be very different between (say) Wasmtime and
-//! `cg_clif`. Therefore, this module does not attempt to define hueristics for
+//! `cg_clif`. Therefore, this module does not attempt to define heuristics for
 //! when inlining a particular call is likely beneficial. This module only
 //! provides hooks for the Cranelift user to define whether a given call should
 //! be inlined or not, and the mechanics to inline a callee into a particular
@@ -60,7 +60,7 @@ pub trait Inline {
     /// A hook invoked for each direct call instruction in a function, whose
     /// result determines whether Cranelift should inline a given call.
     ///
-    /// The Cranelift user is responsible for defining their own hueristics and
+    /// The Cranelift user is responsible for defining their own heuristics and
     /// deciding whether inlining the call is beneficial.
     ///
     /// When returning a function and directing Cranelift to inline its body

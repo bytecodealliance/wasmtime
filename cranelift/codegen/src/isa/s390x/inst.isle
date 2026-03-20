@@ -1401,14 +1401,14 @@
     (UCmpHi128)
 ))
 
-;; An integer vector element comparion operation.
+;; An integer vector element comparison operation.
 (type VecIntEltCmpOp
   (enum
     (SCmp128)
     (UCmp128)
 ));
 
-;; A floatint-point vector comparison operation.
+;; A floating-point vector comparison operation.
 (type VecFloatCmpOp
   (enum
     (CmpEq32x4)

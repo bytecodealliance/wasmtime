@@ -57,7 +57,7 @@
 (extern constructor gpr_new gpr_new)
 (convert Reg Gpr gpr_new)
 
-;; To make this case study specific to Wasm, contrain to 32 or 64
+;; To make this case study specific to Wasm, constrain to 32 or 64
 (spec (uextend arg) 
   (provide (= result (zero_ext (widthof result) arg)))
   (require 

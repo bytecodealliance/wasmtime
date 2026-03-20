@@ -346,7 +346,7 @@ impl Table {
     ///
     /// # Panics
     ///
-    /// This function will panic when if the store doens't own the table.
+    /// This function will panic when if the store doesn't own the table.
     #[cfg(feature = "async")]
     pub async fn grow_async(
         &self,

@@ -239,7 +239,7 @@ where
         }
     }
 
-    /// Iterate over the enties within the given range.
+    /// Iterate over the entries within the given range.
     pub fn range<'a, R, C>(
         &'a self,
         range: R,

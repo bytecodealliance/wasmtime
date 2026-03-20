@@ -2118,7 +2118,7 @@ struct TransmitState {
     write: WriteState,
     /// See `ReadState`
     read: ReadState,
-    /// Whether futher values may be transmitted via this stream or future.
+    /// Whether further values may be transmitted via this stream or future.
     done: bool,
     /// The original creator of this stream, used for type-checking with
     /// `{Future,Stream}Any`.
@@ -2784,7 +2784,7 @@ impl<T> StoreContextMut<'_, T> {
                             &WriteState::GuestReady { count, .. } => count,
                             WriteState::HostReady { .. } => match host_buffer_remaining_before {
                                 Some(n) => n,
-                                None => bail_bug!("host_buffer_remaining_before shoudl be set"),
+                                None => bail_bug!("host_buffer_remaining_before should be set"),
                             },
                             _ => bail_bug!("invalid write state"),
                         },

@@ -82,7 +82,7 @@ impl RunCommand {
     /// the debugger component environment.
     ///
     /// This also adjusts the guest options as needed to enable
-    /// debugging (e.g., implictly set `-D guest-debug=y`).
+    /// debugging (e.g., implicitly set `-D guest-debug=y`).
     #[cfg(feature = "debug")]
     pub(crate) fn debugger_run(&mut self) -> Result<Option<RunCommand>> {
         fn set_implicit_option(

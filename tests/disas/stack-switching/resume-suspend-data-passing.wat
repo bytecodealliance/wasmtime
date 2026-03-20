@@ -11,7 +11,7 @@
     (local $i i32)
     (local.set $i (i32.const 10))
     (loop $loop
-      ;; suspend and pass countdown to our cosnumer
+      ;; suspend and pass countdown to our consumer
       (suspend $t (local.get $i))
       ;; decrement i; break if we're at 0
       (local.tee $i (i32.sub (local.get $i) (i32.const 1)))

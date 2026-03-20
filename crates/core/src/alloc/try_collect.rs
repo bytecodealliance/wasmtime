@@ -21,9 +21,9 @@ impl<I: Iterator> TryCollect for I {}
 /// Analogue of [`FromIterator`] in the standard library, but used with
 /// [`TryCollect::try_collect`] instead.
 pub trait TryFromIterator<T, E>: Sized {
-    /// Creates an intance of this collection from the `iter` provided.
+    /// Creates an instance of this collection from the `iter` provided.
     ///
-    /// Does not abort on OOM but insteads return an error.
+    /// Does not abort on OOM but instead returns an error.
     fn try_from_iter<I>(iter: I) -> Result<Self, E>
     where
         I: Iterator<Item = T>;
