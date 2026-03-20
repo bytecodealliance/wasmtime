@@ -90,6 +90,116 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_add(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new(x.bits().wrapping_add(y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_sub(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new(x.bits().wrapping_sub(y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_mul(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new(x.bits().wrapping_mul(y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_and(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((x.bits() & y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_or(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((x.bits() | y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_xor(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((x.bits() ^ y.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_not(&mut self, ty: Type, x: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((!x.bits()) & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_neg(&mut self, ty: Type, x: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new(x.bits().wrapping_neg() & ty_mask)
+        }
+
+        #[inline]
+        fn imm64_abs(&mut self, ty: Type, x: Imm64) -> Option<Imm64> {
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+
+            let x = x.sign_extend_from_width(type_width).bits();
+            let shift = 64 - type_width;
+            let min = ((self.ty_smin(ty) as i64) << shift) >> shift;
+            if x == min {
+                return None;
+            }
+
+            Some(Imm64::new(x.abs()).mask_to_width(type_width))
+        }
+
+        #[inline]
+        fn imm64_ilog2(&mut self, ty: Type, x: Imm64) -> Imm64 {
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let masked = (x.bits() as u64) & self.ty_mask(ty);
+            let result = masked
+                .checked_ilog2()
+                .unwrap_or_else(|| panic!("ilog2 overflow: {masked}"));
+            Imm64::new(result.into())
+        }
+
+        #[inline]
+        fn imm64_umin(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty);
+            let x_u = (x.bits() as u64) & ty_mask;
+            let y_u = (y.bits() as u64) & ty_mask;
+            Imm64::new((if x_u <= y_u { x_u } else { y_u }) as i64)
+        }
+
+        #[inline]
+        fn imm64_umax(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let ty_mask = self.ty_mask(ty);
+            let x_u = (x.bits() as u64) & ty_mask;
+            let y_u = (y.bits() as u64) & ty_mask;
+            Imm64::new((if x_u >= y_u { x_u } else { y_u }) as i64)
+        }
+
+        #[inline]
+        fn imm64_smin(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let x_s = x.sign_extend_from_width(type_width).bits();
+            let y_s = y.sign_extend_from_width(type_width).bits();
+            let selected = if x_s <= y_s { x_s } else { y_s };
+            Imm64::new(selected).mask_to_width(type_width)
+        }
+
+        #[inline]
+        fn imm64_smax(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let x_s = x.sign_extend_from_width(type_width).bits();
+            let y_s = y.sign_extend_from_width(type_width).bits();
+            let selected = if x_s >= y_s { x_s } else { y_s };
+            Imm64::new(selected).mask_to_width(type_width)
+        }
+
+        #[inline]
         fn imm64_shl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             // Mask off any excess shift bits.
             let shift_mask = (ty.bits() - 1) as u64;
