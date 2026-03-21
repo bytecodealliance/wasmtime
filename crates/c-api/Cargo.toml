@@ -42,7 +42,6 @@ futures = { workspace = true, optional = true }
 
 [features]
 # WASMTIME_FEATURE_LIST
-default = ["gc"]
 async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
