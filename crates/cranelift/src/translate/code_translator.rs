@@ -3651,8 +3651,7 @@ fn align_atomic_addr(
     // alignment check itself. This can probably be optimized better and we
     // should do so in the future as well.
     if loaded_bytes > 1 {
-        let addr = environ.stacks.pop1(); // "peek" via pop then push
-        environ.stacks.push1(addr);
+        let addr = environ.stacks.peek1();
         let effective_addr = if memarg.offset == 0 {
             addr
         } else {
