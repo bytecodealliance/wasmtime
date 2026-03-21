@@ -239,7 +239,15 @@ impl InputStream for AsyncReadStream {
                 self.closed = true;
                 Err(e)
             }
-            Err(TryRecvError::Empty) => Ok(Bytes::new()),
+            Err(TryRecvError::Empty) => {
+                if self.closed {
+                    // Note: if the stream is already closed it should return an error,
+                    //       returning empty list would break the wasi contract (returning 0 and ready)
+                    Err(StreamError::Closed)
+                } else {
+                    Ok(Bytes::new())
+                }
+            }
             Err(TryRecvError::Disconnected) => Err(StreamError::Trap(format_err!(
                 "AsyncReadStream sender died - should be impossible"
             ))),
