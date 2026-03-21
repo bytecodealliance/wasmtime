@@ -187,7 +187,7 @@
  * \fn wasm_name_new_empty
  * \brief Convenience alias
  *
- * \fn wasm_name_new_new_uninitialized
+ * \fn wasm_name_new_uninitialized
  * \brief Convenience alias
  *
  * \fn wasm_name_new_from_string
@@ -612,10 +612,76 @@
  */
 
 /**
+ * \struct wasm_tagtype_t
+ * \brief An opaque object representing the type of a tag.
+ *
+ * \typedef wasm_tagtype_t
+ * \brief Convenience alias for #wasm_tagtype_t
+ *
+ * \struct wasm_tagtype_vec_t
+ * \brief A list of #wasm_tagtype_t values.
+ *
+ * \var wasm_tagtype_vec_t::size
+ * \brief Length of this vector.
+ *
+ * \var wasm_tagtype_vec_t::data
+ * \brief Pointer to the base of this vector
+ *
+ * \typedef wasm_tagtype_vec_t
+ * \brief Convenience alias for #wasm_tagtype_vec_t
+ *
+ * \fn void wasm_tagtype_delete(wasm_tagtype_t *);
+ * \brief Deletes a type.
+ *
+ * \fn void wasm_tagtype_vec_new_empty(wasm_tagtype_vec_t *out);
+ * \brief Creates an empty vector.
+ *
+ * See #wasm_byte_vec_new_empty for more information.
+ *
+ * \fn void wasm_tagtype_vec_new_uninitialized(wasm_tagtype_vec_t *out, size_t);
+ * \brief Creates a vector with the given capacity.
+ *
+ * See #wasm_byte_vec_new_uninitialized for more information.
+ *
+ * \fn void wasm_tagtype_vec_new(wasm_tagtype_vec_t *out, size_t, wasm_tagtype_t *const[]);
+ * \brief Creates a vector with the provided contents.
+ *
+ * See #wasm_byte_vec_new for more information.
+ *
+ * \fn void wasm_tagtype_vec_copy(wasm_tagtype_vec_t *out, const wasm_tagtype_vec_t *)
+ * \brief Copies one vector to another
+ *
+ * See #wasm_byte_vec_copy for more information.
+ *
+ * \fn void wasm_tagtype_vec_delete(wasm_tagtype_vec_t *out)
+ * \brief Deallocates memory for a vector.
+ *
+ * See #wasm_byte_vec_delete for more information.
+ *
+ * \fn wasm_tagtype_t* wasm_tagtype_copy(const wasm_tagtype_t *)
+ * \brief Creates a new value which matches the provided one.
+ *
+ * The caller is responsible for deleting the returned value.
+ *
+ * \fn wasm_tagtype_t* wasm_tagtype_new(wasm_functype_t *)
+ * \brief Creates a new tag type.
+ *
+ * This function takes ownership of the #wasm_functype_t argument.
+ *
+ * The caller is responsible for deallocating the returned type.
+ *
+ * \fn const wasm_functype_t* wasm_tagtype_functype(const wasm_tagtype_t *);
+ * \brief Returns the function type of this tag type.
+ *
+ * The returned #wasm_functype_t is owned by the #wasm_tagtype_t parameter, the
+ * caller should not deallocate it.
+ */
+
+/**
  * \struct wasm_externtype_t
  * \brief An opaque object representing the type of a external value. Can be
  * seen as a superclass of #wasm_functype_t, #wasm_tabletype_t,
- * #wasm_globaltype_t, and #wasm_memorytype_t.
+ * #wasm_globaltype_t, #wasm_memorytype_t, and #wasm_tagtype_t.
  *
  * \typedef wasm_externtype_t
  * \brief Convenience alias for #wasm_externtype_t
@@ -675,6 +741,21 @@
  *
  * This is returned from #wasm_extern_kind and #wasm_externtype_kind to
  * determine what kind of type is wrapped.
+ *
+ * \def WASM_EXTERN_FUNC
+ * \brief Indicator that an extern is a function.
+ *
+ * \def WASM_EXTERN_GLOBAL
+ * \brief Indicator that an extern is a global.
+ *
+ * \def WASM_EXTERN_TABLE
+ * \brief Indicator that an extern is a table.
+ *
+ * \def WASM_EXTERN_MEMORY
+ * \brief Indicator that an extern is a memory.
+ *
+ * \def WASM_EXTERN_TAG
+ * \brief Indicator that an extern is a tag.
  */
 
 /**
@@ -702,6 +783,12 @@
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted.
  *
+ * \fn wasm_externtype_t* wasm_tagtype_as_externtype(wasm_tagtype_t *)
+ * \brief Converts a #wasm_tagtype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_tagtype_t argument and should not
+ * be deleted.
+ *
  * \fn const wasm_externtype_t* wasm_functype_as_externtype_const(const wasm_functype_t *)
  * \brief Converts a #wasm_functype_t to a #wasm_externtype_t
  *
@@ -726,6 +813,12 @@
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted.
  *
+ * \fn const wasm_externtype_t* wasm_tagtype_as_externtype_const(const wasm_tagtype_t *)
+ * \brief Converts a #wasm_tagtype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_tagtype_t argument and should not
+ * be deleted.
+ *
  * \fn wasm_functype_t* wasm_externtype_as_functype(wasm_externtype_t *)
  * \brief Attempts to convert a #wasm_externtype_t to a #wasm_functype_t
  *
@@ -746,6 +839,13 @@
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_memorytype_t.
+ *
+ * \fn wasm_tagtype_t* wasm_externtype_as_tagtype(wasm_externtype_t *)
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_tagtype_t
+ *
+ * The returned value is owned by the #wasm_tagtype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_tagtype_t.
  *
  * \fn wasm_globaltype_t* wasm_externtype_as_globaltype(wasm_externtype_t *)
  * \brief Attempts to convert a #wasm_externtype_t to a #wasm_globaltype_t
@@ -774,6 +874,13 @@
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_memorytype_t.
+ *
+ * \fn const wasm_tagtype_t* wasm_externtype_as_tagtype_const(const wasm_externtype_t *)
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_tagtype_t
+ *
+ * The returned value is owned by the #wasm_tagtype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_tagtype_t.
  *
  * \fn const wasm_globaltype_t* wasm_externtype_as_globaltype_const(const wasm_externtype_t *)
  * \brief Attempts to convert a #wasm_externtype_t to a #wasm_globaltype_t

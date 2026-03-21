@@ -1,4 +1,3 @@
-#include <wasmtime/tag.h>
 #include <wasmtime/types/tag.hh>
 
 #include <gtest/gtest.h>
@@ -14,13 +13,13 @@ TEST(TagType, Simple) {
 
   // Tag with no payload: empty functype.
   FuncType empty_ft({}, {});
-  TagType empty(engine, empty_ft);
+  TagType empty(empty_ft);
   auto empty_func = empty->functype();
   EXPECT_EQ(empty_func->params().size(), 0u);
 
   // Tag with i32 and i64 payload types.
   FuncType ft({ValKind::I32, ValKind::I64}, {});
-  TagType t(engine, ft);
+  TagType t(ft);
   auto func = t->functype();
   auto params = func->params();
   EXPECT_EQ(params.size(), 2u);
@@ -65,8 +64,8 @@ TEST(TagType, ModuleExportEnumeration) {
   EXPECT_EQ(params.begin()->kind(), ValKind::I32);
 }
 
-// Verify that wasm_externtype_kind returns WASMTIME_EXTERNTYPE_TAG for tag
-// exports and that the C-level cast functions work correctly.
+// Verify that wasm_externtype_kind returns WASM_EXTERN_TAG for tag exports
+// and that the C-level cast functions work correctly.
 TEST(TagType, ExternTypeKindAndCast) {
   Config config;
   config.wasm_exceptions(true);
@@ -88,8 +87,8 @@ TEST(TagType, ExternTypeKindAndCast) {
       *reinterpret_cast<const wasm_exporttype_t *const *>(&e);
   const wasm_externtype_t *ext = wasm_exporttype_type(raw_et);
 
-  EXPECT_EQ(wasm_externtype_kind(ext), WASMTIME_EXTERNTYPE_TAG);
-  EXPECT_NE(wasmtime_externtype_as_tagtype_const(ext), nullptr);
+  EXPECT_EQ(wasm_externtype_kind(ext), WASM_EXTERN_TAG);
+  EXPECT_NE(wasm_externtype_as_tagtype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_functype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_globaltype_const(ext), nullptr);
   EXPECT_EQ(wasm_externtype_as_memorytype_const(ext), nullptr);
