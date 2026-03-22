@@ -1,9 +1,8 @@
 //! The `rustls` provider.
 
+use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
 use rustls::pki_types::ServerName;
 use std::sync::{Arc, LazyLock};
-
-use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
 
 impl crate::TlsStream for tokio_rustls::client::TlsStream<Box<dyn TlsTransport>> {}
 

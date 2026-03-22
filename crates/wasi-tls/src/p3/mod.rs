@@ -10,6 +10,7 @@
 
 pub mod bindings;
 pub mod host;
+pub(crate) mod util;
 
 use crate::WasiTlsCtx;
 use bindings::tls::{client, types};
@@ -38,11 +39,6 @@ pub trait WasiTlsView: Send {
 }
 
 /// Add all interfaces from this module into the `linker` provided.
-///
-/// This function will eventually add all interfaces implemented by this module
-/// to the [`Linker`], corresponding to the `wasi:tls/imports` world.
-///
-/// At this stage the p3 host implementation is intentionally scaffolded only.
 pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiTlsView + 'static,

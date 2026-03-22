@@ -1276,6 +1276,11 @@ impl RunCommand {
                             )
                         })?;
 
+                        #[cfg(feature = "component-model-async")]
+                        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                            wasmtime_wasi_tls::p3::add_to_linker(linker)?;
+                        }
+
                         let ctx = wasmtime_wasi_tls::WasiTlsCtxBuilder::new().build();
                         store.data_mut().wasi_tls = Some(Arc::new(ctx));
                     }
@@ -1490,6 +1495,16 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
             table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
             ctx,
             hooks: &mut self.wasi_http_hooks,
+        }
+    }
+}
+
+#[cfg(all(feature = "wasi-tls", feature = "component-model-async"))]
+impl wasmtime_wasi_tls::p3::WasiTlsView for Host {
+    fn tls(&mut self) -> wasmtime_wasi_tls::p3::WasiTlsCtxView<'_> {
+        wasmtime_wasi_tls::p3::WasiTlsCtxView {
+            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            ctx: Arc::get_mut(self.wasi_tls.as_mut().unwrap()).unwrap(),
         }
     }
 }

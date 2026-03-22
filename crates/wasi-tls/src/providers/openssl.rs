@@ -2,10 +2,8 @@
 
 use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
 use openssl::ssl::{SslConnector, SslMethod};
-use std::{
-    io,
-    pin::{Pin, pin},
-};
+use std::io;
+use std::pin::{Pin, pin};
 
 /// The `openssl` provider.
 pub struct OpenSslProvider {

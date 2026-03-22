@@ -1,12 +1,9 @@
 //! The `native_tls` provider.
 
-use std::{
-    io,
-    pin::{Pin, pin},
-    task::Poll,
-};
-
 use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
+use std::io;
+use std::pin::{Pin, pin};
+use std::task::Poll;
 
 /// The `native_tls` provider.
 pub struct NativeTlsProvider {

@@ -14,7 +14,7 @@ workspace = true
 [features]
 default = ["p2", "rustls"]
 p2 = ["wasmtime-wasi/p2"]
-p3 = ["wasmtime-wasi/p3", "wasmtime/component-model-async"]
+p3 = ["wasmtime-wasi/p3", "wasmtime/component-model-async", "tracing"]
 rustls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]
 nativetls = ["dep:native-tls", "dep:tokio-native-tls"]
 openssl = ["dep:openssl", "dep:tokio-openssl"]
@@ -29,6 +29,7 @@ tokio = { workspace = true, features = [
 ] }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
+tracing = { workspace = true, optional = true }
 cfg-if = { workspace = true }
 tokio-rustls = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }

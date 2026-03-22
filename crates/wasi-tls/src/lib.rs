@@ -87,10 +87,11 @@ pub use error::Error;
 pub use providers::*;
 
 /// Builder-style structure used to create a [`WasiTlsCtx`].
+#[cfg(any(feature = "p2", feature = "p3"))]
 pub struct WasiTlsCtxBuilder {
     provider: Box<dyn TlsProvider>,
 }
-
+#[cfg(any(feature = "p2", feature = "p3"))]
 impl WasiTlsCtxBuilder {
     /// Creates a builder for a new context with default parameters set.
     pub fn new() -> Self {
@@ -115,6 +116,7 @@ impl WasiTlsCtxBuilder {
         }
     }
 }
+#[cfg(any(feature = "p2", feature = "p3"))]
 impl Default for WasiTlsCtxBuilder {
     fn default() -> Self {
         Self {
@@ -124,6 +126,7 @@ impl Default for WasiTlsCtxBuilder {
 }
 
 /// Wasi TLS context needed for internal `wasi-tls` state.
+#[cfg(any(feature = "p2", feature = "p3"))]
 pub struct WasiTlsCtx {
     pub(crate) provider: Box<dyn TlsProvider>,
 }

@@ -6,9 +6,9 @@ mod generated {
         path: "src/p3/wit",
         world: "wasi:tls/imports",
         imports: {
-            "wasi:tls/client.[method]connector.send": store | trappable,
-            "wasi:tls/client.[method]connector.receive": store | trappable,
-            default: trappable,
+            "wasi:tls/client.[method]connector.send": store | trappable | tracing,
+            "wasi:tls/client.[method]connector.receive": store | trappable | tracing,
+            default: trappable | tracing,
         },
         with: {
             "wasi:tls/client.connector": crate::p3::host::Connector,
