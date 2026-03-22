@@ -687,3 +687,126 @@ block0(v0: i32):
 ; run: %fold_iadd_bnot_x_to_allones_i32_rt(1) == -1
 ; run: %fold_iadd_bnot_x_to_allones_i32_rt(0x12345678) == -1
 
+function %test_isub_iadd_iadd_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v1
+    v4 = iadd v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_iadd_iadd_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_iadd_iadd_cancel_rt(5, 7, 3) == 4
+; run: %test_isub_iadd_iadd_cancel_rt(10, 1, 9) == -8
+
+function %test_isub_isub_isub_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v2
+    v4 = isub v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_isub_isub_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_isub_isub_cancel_rt(7, 3, 1) == 4
+; run: %test_isub_isub_isub_cancel_rt(3, 7, 1) == -4
+
+function %test_isub_isub_isub_swap_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = isub v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_isub_isub_swap_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_isub_isub_swap_cancel_rt(7, 3, 1) == -2
+; run: %test_isub_isub_isub_swap_cancel_rt(7, 1, 3) == 2
+
+function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %test_iadd_umin_umax(1, 2) == 3
+; run: %test_iadd_umin_umax(2, 1) == 3
+; run: %test_iadd_umin_umax(7, 7) == 14
+; run: %test_iadd_umin_umax(-1, 1) == 0
+
+function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %test_iadd_smin_smax(1, 2) == 3
+; run: %test_iadd_smin_smax(2, 1) == 3
+; run: %test_iadd_smin_smax(7, 7) == 14
+; run: %test_iadd_smin_smax(-1, 1) == 0
+
+function %test_iadd_isub_iadd_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = iadd v1, v2
+    v5 = iadd v3, v4
+    return v5
+}
+
+; run: %test_iadd_isub_iadd_cancel_rt(0, 0, 0) == 0
+; run: %test_iadd_isub_iadd_cancel_rt(7, 3, 1) == 8
+; run: %test_iadd_isub_iadd_cancel_rt(7, 1, 3) == 10
+
+function %test_isub_iadd_to_ineg_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+
+; run: %test_isub_iadd_to_ineg_rt(0, 0) == 0
+; run: %test_isub_iadd_to_ineg_rt(7, 3) == -3
+; run: %test_isub_iadd_to_ineg_rt(7, -3) == 3
+
+function %test_iadd_iadd_isub_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v2, v0
+    v4 = iadd v1, v3
+    v5 = iadd v0, v4
+    return v5
+}
+
+; run: %test_iadd_iadd_isub_cancel_rt(0, 0, 0) == 0
+; run: %test_iadd_iadd_isub_cancel_rt(7, 3, 1) == 4
+; run: %test_iadd_iadd_isub_cancel_rt(7, 1, 3) == 4
+; run: %test_iadd_iadd_isub_cancel_rt(-4, 6, 2) == 8
+; run: %test_iadd_iadd_isub_cancel_rt(0x1234, 0x34, 0x10) == 0x44
+
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %simplify_icmp_eq_iadd_commute(0, 0) == 1
+; run: %simplify_icmp_eq_iadd_commute(1, 2) == 1
+; run: %simplify_icmp_eq_iadd_commute(-1, 1) == 1
+
+;; (x - y) != x --> y != 0
+function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; run: %simplify_icmp_ne_isub_x(0, 0) == 0
+; run: %simplify_icmp_ne_isub_x(1, 0) == 0
+; run: %simplify_icmp_ne_isub_x(1, 1) == 1
