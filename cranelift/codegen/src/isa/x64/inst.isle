@@ -1219,7 +1219,7 @@
 ;; even not generate a zero-extended move in this case.
 (rule 2 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let true (value32_zeros_upper32 src))
-        (add_range_fact src 64 0 0xffff_ffff))
+        src)
 
 ;; Both extend instructions are guaranteed to load exactly the source type's size.
 ;; So we can use `sinkable_load_exact` here to sink loads for small types (<= 16 bits).

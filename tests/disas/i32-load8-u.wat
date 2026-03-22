@@ -14,12 +14,12 @@
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+56
+;;     gv5 = load.i64 notrap aligned readonly can_move gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0031                               v4 = uextend.i64 v2
-;; @0031                               v5 = load.i64 notrap aligned readonly can_move checked v0+56
+;; @0031                               v5 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0031                               v6 = iadd v5, v4
 ;; @0031                               v7 = uload8.i32 little heap v6
 ;; @0034                               jump block1

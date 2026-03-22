@@ -381,7 +381,6 @@ impl Context {
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
-            &fisa.flags,
             ctrl_plane,
         );
         pass.run();

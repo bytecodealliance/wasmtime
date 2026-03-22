@@ -24,7 +24,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned can_move checked gv3+56
+;;     gv5 = load.i64 notrap aligned can_move gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
@@ -34,7 +34,7 @@
 ;; @0040                               v7 = load.i64 notrap aligned v0+64
 ;; @0040                               v8 = icmp ugt v6, v7
 ;; @0040                               trapnz v8, heap_oob
-;; @0040                               v9 = load.i64 notrap aligned can_move checked v0+56
+;; @0040                               v9 = load.i64 notrap aligned can_move v0+56
 ;; @0040                               v10 = iadd v9, v4
 ;; @0040                               v11 = iconst.i64 0xffff_0000
 ;; @0040                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
@@ -51,7 +51,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned can_move checked gv3+56
+;;     gv5 = load.i64 notrap aligned can_move gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -61,7 +61,7 @@
 ;; @004c                               v7 = load.i64 notrap aligned v0+64
 ;; @004c                               v8 = icmp ugt v6, v7
 ;; @004c                               trapnz v8, heap_oob
-;; @004c                               v9 = load.i64 notrap aligned can_move checked v0+56
+;; @004c                               v9 = load.i64 notrap aligned can_move v0+56
 ;; @004c                               v10 = iadd v9, v4
 ;; @004c                               v11 = iconst.i64 0xffff_0000
 ;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000

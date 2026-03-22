@@ -82,6 +82,3 @@ wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, fea
 
 [features]
 fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
-
-# Fuzz proof-carrying code. Off by default.
-fuzz-pcc = []

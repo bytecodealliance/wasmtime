@@ -43,9 +43,6 @@ pub trait TargetEnvironment: TypeConvert {
     /// Whether to enable Spectre mitigations for heap accesses.
     fn heap_access_spectre_mitigation(&self) -> bool;
 
-    /// Whether to add proof-carrying-code facts to verify memory accesses.
-    fn proof_carrying_code(&self) -> bool;
-
     /// Get the Cranelift reference type to use for the given Wasm reference
     /// type.
     ///
