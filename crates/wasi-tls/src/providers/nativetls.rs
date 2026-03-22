@@ -1,6 +1,10 @@
 //! The `native_tls` provider.
 
-use std::{io, pin::pin};
+use std::{
+    io,
+    pin::{Pin, pin},
+    task::Poll,
+};
 
 use crate::{TlsProvider, TlsStream, TlsTransport};
 
@@ -52,7 +56,7 @@ impl tokio::io::AsyncRead for NativeTlsStream {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<io::Result<()>> {
+    ) -> Poll<io::Result<()>> {
         pin!(&mut self.as_mut().0).poll_read(cx, buf)
     }
 }
@@ -62,21 +66,30 @@ impl tokio::io::AsyncWrite for NativeTlsStream {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<io::Result<usize>> {
+    ) -> Poll<io::Result<usize>> {
         pin!(&mut self.as_mut().0).poll_write(cx, buf)
     }
 
     fn poll_flush(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), io::Error>> {
+    ) -> Poll<Result<(), io::Error>> {
         pin!(&mut self.as_mut().0).poll_flush(cx)
     }
 
     fn poll_shutdown(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), io::Error>> {
-        pin!(&mut self.as_mut().0).poll_shutdown(cx)
+    ) -> Poll<Result<(), io::Error>> {
+        match pin!(&mut self.as_mut().0).poll_shutdown(cx) {
+            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+            Poll::Pending => return Poll::Pending,
+        }
+
+        // `tokio-rustls` & `tokio-openssl` shut down the underlying transport,
+        // but `tokio-native-tls` does not, so we need to do that ourselves:
+        let inner = self.0.get_mut().get_mut().get_mut();
+        Pin::new(inner).poll_shutdown(cx)
     }
 }
