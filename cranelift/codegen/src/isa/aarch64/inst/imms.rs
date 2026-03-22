@@ -602,7 +602,7 @@ impl MoveWideConst {
         None
     }
 
-    /// Create a `MoveWideCosnt` from a given shift, if possible.
+    /// Create a `MoveWideConst` from a given shift, if possible.
     pub fn maybe_with_shift(imm: u16, shift: u8) -> Option<MoveWideConst> {
         let shift_enc = shift / 16;
         if shift_enc > 3 {

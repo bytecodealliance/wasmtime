@@ -167,7 +167,7 @@ enum ImageSlot {
     ///
     /// Future use of this slot will use `MemoryImageSlot` to continue to
     /// re-instantiate and reuse images and such. This state is entered after
-    /// and allocated slot is successfully deallcoated.
+    /// and allocated slot is successfully deallocated.
     PreviouslyUsed(MemoryImageSlot),
 }
 

@@ -114,7 +114,7 @@ use boxed_slice_builder::BoxedSliceBuilder;
 mod boxed_slice_builder {
     use super::*;
 
-    /// Builder for constructing and initalizing a boxed slice.
+    /// Builder for constructing and initializing a boxed slice.
     ///
     /// Also acts as an RAII guard to handle dropping the already-initialized
     /// elements when we get too few items or an iterator panics during

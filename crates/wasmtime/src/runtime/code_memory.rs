@@ -564,7 +564,7 @@ impl CodeMemory {
     pub fn text_mut(&mut self) -> &mut [u8] {
         assert!(!self.published);
         // SAFETY: we assert !published, which means we either have
-        // not yet applied readonly + execute permissinos, or we have
+        // not yet applied readonly + execute permissions, or we have
         // undone that and flipped back to read-write via unpublish.
         unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] }
     }

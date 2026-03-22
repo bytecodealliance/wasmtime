@@ -930,7 +930,7 @@ fn make_import_and_export(
     wat.push_str("))\n");
 
     // If the export is async, generate `task.return` as an import as well
-    // which is necesary to communicate the results.
+    // which is necessary to communicate the results.
     if export_results_loc.is_none() {
         wat.push_str(&format!("(type $task.return (func"));
         push_params(&mut wat, &result_lowered, MAX_FLAT_PARAMS);

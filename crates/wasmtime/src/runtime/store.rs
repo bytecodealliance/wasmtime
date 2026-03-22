@@ -1536,7 +1536,7 @@ impl<T> StoreInner<T> {
         // noop shim so code can assume this always exists.
     }
 
-    /// Splits this `StoreInner<T>` into a `limiter`/`StoerOpaque` borrow while
+    /// Splits this `StoreInner<T>` into a `limiter`/`StoreOpaque` borrow while
     /// validating that an async limiter is not configured.
     ///
     /// This is used for sync entrypoints which need to fail if an async limiter

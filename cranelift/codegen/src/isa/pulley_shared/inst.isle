@@ -356,7 +356,7 @@
   ;; Next see if the `oob` and `raw_addr` combination match. This will attempt
   ;; extract a full bounds check from these values. If everything succeeds the
   ;; final step is then to extract an 8-bit offset of the load/store operation,
-  ;; if appplicable, assuming that the constants used in various places all line
+  ;; if applicable, assuming that the constants used in various places all line
   ;; up just right.
   (if-let (OobSelect.All base bound wasm_addr access_size_plus_offset)
     (wasm_oob_select oob host_addr))

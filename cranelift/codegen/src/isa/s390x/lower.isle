@@ -711,7 +711,7 @@
             ;; This checks that y == -y, by using Not-Xor for bitwise
             ;; equality, producing all 0b1's (-1u128) when y == -y.
             ;; Then it uses band to include the x == -1 check as well.
-            ;; using (band x (bnot (bxor y neg_divison))) vaiant of vec eval
+            ;; using (band x (bnot (bxor y neg_division))) variant of vec eval
             (neg_divisor Reg (vec_neg $I128 y))
             (reg Reg (vec_eval $I128 0b00001001 x y neg_divisor))
             ;; finally, we check that the combination of x & y == -y is -1

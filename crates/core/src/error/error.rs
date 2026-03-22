@@ -591,7 +591,7 @@ impl Error {
     {
         if TypeId::of::<E>() == TypeId::of::<OutOfMemory>() {
             // Although we know that `E == OutOfMemory` in this block, the
-            // compiler doesn't understand that, and we have to do this litle
+            // compiler doesn't understand that, and we have to do this little
             // dance.
             union ToOom<T> {
                 oom: OutOfMemory,

@@ -156,7 +156,7 @@ impl Inst {
         Inst::External { inst }
     }
 
-    /// Writes the `simm64` immedaite into `dst`.
+    /// Writes the `simm64` immediate into `dst`.
     ///
     /// Note that if `dst_size` is less than 64-bits then the upper bits of
     /// `simm64` will be converted to zero.

@@ -54,7 +54,7 @@ impl<T> Store<T> {
     /// purposes.
     ///
     /// Guest debugging must be enabled for this accessor to return
-    /// any instances. If it is not, an empty vector is returend.
+    /// any instances. If it is not, an empty vector is returned.
     pub fn debug_all_instances(&mut self) -> Vec<Instance> {
         self.as_store_opaque().debug_all_instances()
     }
@@ -63,7 +63,7 @@ impl<T> Store<T> {
     /// purposes.
     ///
     /// Guest debugging must be enabled for this accessor to return
-    /// any modules. If it is not, an empty vector is returend.
+    /// any modules. If it is not, an empty vector is returned.
     pub fn debug_all_modules(&mut self) -> Vec<Module> {
         self.as_store_opaque().debug_all_modules()
     }

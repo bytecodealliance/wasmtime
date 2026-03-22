@@ -1571,7 +1571,7 @@ impl MacroAssembler {
         self.asm.mov_rr(sp, writable!(shadow_sp), OperandSize::S64);
     }
 
-    /// Heloper to add an immediate to a register.
+    /// Helper to add an immediate to a register.
     fn add_ir(&mut self, dst: WritableReg, lhs: Reg, rhs: I, size: OperandSize) -> Result<()> {
         let imm = rhs.unwrap_as_u64();
         match Imm12::maybe_from_u64(imm) {

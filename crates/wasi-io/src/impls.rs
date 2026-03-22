@@ -46,10 +46,10 @@ impl poll::Host for ResourceTable {
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut any_ready = false;
                 let mut results = Vec::new();
-                for (fut, readylist_indicies) in self.futures.iter_mut() {
+                for (fut, readylist_indices) in self.futures.iter_mut() {
                     match fut.as_mut().poll(cx) {
                         Poll::Ready(()) => {
-                            results.extend_from_slice(readylist_indicies);
+                            results.extend_from_slice(readylist_indices);
                             any_ready = true;
                         }
                         Poll::Pending => {}

@@ -137,7 +137,7 @@ impl Vm {
         mem::replace(&mut self.state.lr, HOST_RETURN_ADDR)
     }
 
-    /// Peforms the internal part of [`Vm::call`] where bytecode is actually
+    /// Performs the internal part of [`Vm::call`] where bytecode is actually
     /// executed.
     ///
     /// # Unsafety
@@ -156,7 +156,7 @@ impl Vm {
         self.state.done_decode(done)
     }
 
-    /// Peforms the tail end of [`Vm::call`] by returning the values as
+    /// Performs the tail end of [`Vm::call`] by returning the values as
     /// determined by `rets` according to Pulley's ABI.
     ///
     /// The `old_ret` value should have been provided from `call_start`

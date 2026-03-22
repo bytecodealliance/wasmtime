@@ -61,7 +61,7 @@
 (extern constructor gpr_new gpr_new)
 (convert Reg Gpr gpr_new)
 
-;; To make this case study specific to Wasm, contrain the widths of
+;; To make this case study specific to Wasm, constrain the widths of
 ;; the argument and returned value to 32 or 64
 (spec (uextend arg) 
   (provide (= result (zero_ext (widthof result) arg)))
