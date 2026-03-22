@@ -9,21 +9,15 @@ use wasmtime::component::{Access, Accessor, FutureReader, Resource, StreamReader
 /// Host-side state stored for `wasi:tls/client` `connector` resources.
 pub struct Connector;
 
-/// Host-side state stored for `wasi:tls/types` `error` resources.
-pub struct Error(wasmtime::Error);
-
 impl<'a> bindings::tls::client::Host for WasiTlsCtxView<'a> {}
 impl<'a> bindings::tls::types::Host for WasiTlsCtxView<'a> {}
 
 impl<'a> bindings::tls::types::HostError for WasiTlsCtxView<'a> {
-    fn to_debug_string(
-        &mut self,
-        this: Resource<bindings::tls::types::Error>,
-    ) -> wasmtime::Result<String> {
-        Ok(self.table.get(&this)?.0.to_string())
+    fn to_debug_string(&mut self, this: Resource<Error>) -> wasmtime::Result<String> {
+        Ok(self.table.get(&this)?.to_string())
     }
 
-    fn drop(&mut self, rep: Resource<bindings::tls::types::Error>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<Error>) -> wasmtime::Result<()> {
         self.table.delete(rep)?;
         Ok(())
     }

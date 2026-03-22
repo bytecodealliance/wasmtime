@@ -73,6 +73,7 @@
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
+mod error;
 mod providers;
 
 /// WASIp2 (`wasi:tls@0.2.0-draft`) host implementation.
@@ -82,6 +83,7 @@ pub mod p2;
 #[cfg(feature = "p3")]
 pub mod p3;
 
+pub use error::Error;
 pub use providers::*;
 
 /// Builder-style structure used to create a [`WasiTlsCtx`].
@@ -137,11 +139,8 @@ pub trait TlsStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 /// A TLS implementation.
 pub trait TlsProvider: Send + Sync + 'static {
     /// Set up a client TLS connection using the provided `server_name` and `transport`.
-    fn connect(
-        &self,
-        server_name: String,
-        transport: Box<dyn TlsTransport>,
-    ) -> BoxFuture<std::io::Result<Box<dyn TlsStream>>>;
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream;
 }
 
-pub(crate) type BoxFuture<T> = std::pin::Pin<Box<dyn Future<Output = T> + Send>>;
+pub(crate) type BoxFutureTlStream =
+    std::pin::Pin<Box<dyn Future<Output = Result<Box<dyn TlsStream>, Error>> + Send>>;

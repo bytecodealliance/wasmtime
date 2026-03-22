@@ -1,13 +1,11 @@
 //! The `openssl` provider.
 
-use crate::{TlsProvider, TlsStream, TlsTransport};
+use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
 use openssl::ssl::{SslConnector, SslMethod};
 use std::{
     io,
     pin::{Pin, pin},
 };
-
-type BoxFuture<T> = std::pin::Pin<Box<dyn Future<Output = T> + Send>>;
 
 /// The `openssl` provider.
 pub struct OpenSslProvider {
@@ -15,15 +13,8 @@ pub struct OpenSslProvider {
 }
 
 impl TlsProvider for OpenSslProvider {
-    fn connect(
-        &self,
-        server_name: String,
-        transport: Box<dyn TlsTransport>,
-    ) -> BoxFuture<io::Result<Box<dyn TlsStream>>> {
-        async fn connect_impl(
-            server_name: String,
-            transport: Box<dyn TlsTransport>,
-        ) -> Result<OpenSslStream, openssl::ssl::Error> {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream {
+        Box::pin(async move {
             // Per the `openssl` crate's recommendation, we're using the
             // `SslConnector` to set up a Ssl object with secure defaults:
             //
@@ -37,14 +28,7 @@ impl TlsProvider for OpenSslProvider {
             let ssl = config.into_ssl(&server_name)?;
             let mut stream = tokio_openssl::SslStream::new(ssl, transport)?;
             Pin::new(&mut stream).connect().await?;
-            Ok(OpenSslStream(stream))
-        }
-
-        Box::pin(async move {
-            let stream = connect_impl(server_name, transport)
-                .await
-                .map_err(|e| io::Error::other(e))?;
-            Ok(Box::new(stream) as Box<dyn TlsStream>)
+            Ok(Box::new(OpenSslStream(stream)) as Box<dyn TlsStream>)
         })
     }
 }
@@ -90,5 +74,16 @@ impl tokio::io::AsyncWrite for OpenSslStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), io::Error>> {
         pin!(&mut self.as_mut().0).poll_shutdown(cx)
+    }
+}
+
+impl From<openssl::ssl::Error> for Error {
+    fn from(e: openssl::ssl::Error) -> Self {
+        Error::msg(e.to_string())
+    }
+}
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(e: openssl::error::ErrorStack) -> Self {
+        openssl::ssl::Error::from(e).into()
     }
 }

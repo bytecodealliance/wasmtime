@@ -12,7 +12,7 @@ mod generated {
         },
         with: {
             "wasi:tls/client.connector": crate::p3::host::Connector,
-            "wasi:tls/types.error": crate::p3::host::Error,
+            "wasi:tls/types.error": crate::Error,
         },
         require_store_data_send: true,
     });
