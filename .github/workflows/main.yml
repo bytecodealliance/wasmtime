@@ -409,6 +409,7 @@ jobs:
               -p wasmtime-c-api --no-default-features
               -p wasmtime-c-api --no-default-features --features wat
               -p wasmtime-c-api --no-default-features --features wasi
+              -p wasmtime-c-api --no-default-features --features gc
 
           - name: wasmtime-wasi-http
             checks: |

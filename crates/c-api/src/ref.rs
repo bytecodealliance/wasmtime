@@ -1,7 +1,11 @@
 use crate::{WasmtimeStoreContextMut, abort};
 use std::mem::{ManuallyDrop, MaybeUninit};
-use std::{num::NonZeroU64, os::raw::c_void, ptr};
-use wasmtime::{AnyRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
+#[cfg(feature = "gc")]
+use std::num::NonZeroU64;
+use std::{os::raw::c_void, ptr};
+use wasmtime::{AnyRef, ExternRef, OwnedRooted, Ref, Val};
+#[cfg(feature = "gc")]
+use wasmtime::{I31, RootScope};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s
@@ -191,6 +195,7 @@ pub extern "C" fn wasm_foreign_new(_store: &crate::wasm_store_t) -> Box<wasm_for
 ///
 /// Note that this relies on the Wasmtime definition of `OwnedRooted` to have
 /// a 64-bit store_id first.
+#[cfg(feature = "gc")]
 macro_rules! ref_wrapper {
     ($wasmtime:ident => $c:ident) => {
         pub struct $c {
@@ -256,6 +261,56 @@ macro_rules! ref_wrapper {
     };
 }
 
+#[cfg(not(feature = "gc"))]
+macro_rules! ref_wrapper {
+    ($wasmtime:ident => $c:ident) => {
+        #[allow(dead_code)]
+        pub struct $c {
+            store_id: u64,
+            a: u32,
+            b: u32,
+            c: *const (),
+        }
+
+        impl $c {
+            pub unsafe fn as_wasmtime(&self) -> Option<OwnedRooted<$wasmtime>> {
+                let _ = self;
+                None
+            }
+
+            pub unsafe fn into_wasmtime(self) -> Option<OwnedRooted<$wasmtime>> {
+                let _ = self;
+                None
+            }
+
+            #[allow(dead_code)]
+            unsafe fn to_owned(&self) -> Option<OwnedRooted<$wasmtime>> {
+                let _ = self;
+                None
+            }
+        }
+
+        impl Drop for $c {
+            fn drop(&mut self) {}
+        }
+
+        impl From<Option<OwnedRooted<$wasmtime>>> for $c {
+            fn from(_rooted: Option<OwnedRooted<$wasmtime>>) -> $c {
+                $c {
+                    store_id: 0,
+                    a: 0,
+                    b: 0,
+                    c: core::ptr::null(),
+                }
+            }
+        }
+
+        // SAFETY: The `*const ()` is never dereferenced in gc-disabled mode.
+        unsafe impl Send for $c {}
+        unsafe impl Sync for $c {}
+    };
+}
+
 ref_wrapper!(AnyRef => wasmtime_anyref_t);
 ref_wrapper!(ExternRef => wasmtime_externref_t);
 
@@ -282,9 +337,18 @@ pub unsafe extern "C" fn wasmtime_anyref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_anyref_t>,
 ) -> u32 {
-    val.and_then(|v| v.as_wasmtime())
-        .and_then(|e| e.to_raw(cx).ok())
-        .unwrap_or_default()
+    #[cfg(feature = "gc")]
+    {
+        val.and_then(|v| v.as_wasmtime())
+            .and_then(|e| e.to_raw(cx).ok())
+            .unwrap_or_default()
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, val);
+        0
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -293,10 +357,19 @@ pub unsafe extern "C" fn wasmtime_anyref_from_raw(
     raw: u32,
     val: &mut MaybeUninit<wasmtime_anyref_t>,
 ) {
-    let mut scope = RootScope::new(cx);
-    let anyref =
-        AnyRef::from_raw(&mut scope, raw).map(|a| a.to_owned_rooted(&mut scope).expect("in scope"));
-    crate::initialize(val, anyref.into());
+    #[cfg(feature = "gc")]
+    {
+        let mut scope = RootScope::new(cx);
+        let anyref = AnyRef::from_raw(&mut scope, raw)
+            .map(|a| a.to_owned_rooted(&mut scope).expect("in scope"));
+        crate::initialize(val, anyref.into());
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, raw);
+        crate::initialize(val, None.into());
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -305,10 +378,19 @@ pub extern "C" fn wasmtime_anyref_from_i31(
     val: u32,
     out: &mut MaybeUninit<wasmtime_anyref_t>,
 ) {
-    let mut scope = RootScope::new(cx);
-    let anyref = AnyRef::from_i31(&mut scope, I31::wrapping_u32(val));
-    let anyref = anyref.to_owned_rooted(&mut scope).expect("in scope");
-    crate::initialize(out, Some(anyref).into())
+    #[cfg(feature = "gc")]
+    {
+        let mut scope = RootScope::new(cx);
+        let anyref = AnyRef::from_i31(&mut scope, I31::wrapping_u32(val));
+        let anyref = anyref.to_owned_rooted(&mut scope).expect("in scope");
+        crate::initialize(out, Some(anyref).into())
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, val);
+        crate::initialize(out, None.into())
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -317,16 +399,25 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_u(
     anyref: Option<&wasmtime_anyref_t>,
     dst: &mut MaybeUninit<u32>,
 ) -> bool {
-    match anyref.and_then(|a| a.as_wasmtime()) {
-        Some(anyref) if anyref.is_i31(&cx).expect("OwnedRooted always in scope") => {
-            let val = anyref
-                .unwrap_i31(&cx)
-                .expect("OwnedRooted always in scope")
-                .get_u32();
-            crate::initialize(dst, val);
-            true
+    #[cfg(feature = "gc")]
+    {
+        match anyref.and_then(|a| a.as_wasmtime()) {
+            Some(anyref) if anyref.is_i31(&cx).expect("OwnedRooted always in scope") => {
+                let val = anyref
+                    .unwrap_i31(&cx)
+                    .expect("OwnedRooted always in scope")
+                    .get_u32();
+                crate::initialize(dst, val);
+                true
+            }
+            _ => false,
         }
-        _ => false,
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, anyref, dst);
+        false
     }
 }
 
@@ -336,16 +427,25 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_s(
     anyref: Option<&wasmtime_anyref_t>,
     dst: &mut MaybeUninit<i32>,
 ) -> bool {
-    match anyref.and_then(|a| a.as_wasmtime()) {
-        Some(anyref) if anyref.is_i31(&cx).expect("OwnedRooted always in scope") => {
-            let val = anyref
-                .unwrap_i31(&cx)
-                .expect("OwnedRooted always in scope")
-                .get_i32();
-            crate::initialize(dst, val);
-            true
+    #[cfg(feature = "gc")]
+    {
+        match anyref.and_then(|a| a.as_wasmtime()) {
+            Some(anyref) if anyref.is_i31(&cx).expect("OwnedRooted always in scope") => {
+                let val = anyref
+                    .unwrap_i31(&cx)
+                    .expect("OwnedRooted always in scope")
+                    .get_i32();
+                crate::initialize(dst, val);
+                true
+            }
+            _ => false,
         }
-        _ => false,
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, anyref, dst);
+        false
     }
 }
 
@@ -356,14 +456,24 @@ pub extern "C" fn wasmtime_externref_new(
     finalizer: Option<extern "C" fn(*mut c_void)>,
     out: &mut MaybeUninit<wasmtime_externref_t>,
 ) -> bool {
-    let mut scope = RootScope::new(cx);
-    let e = match ExternRef::new(&mut scope, crate::ForeignData { data, finalizer }) {
-        Ok(e) => e,
-        Err(_) => return false,
-    };
-    let e = e.to_owned_rooted(&mut scope).expect("in scope");
-    crate::initialize(out, Some(e).into());
-    true
+    #[cfg(feature = "gc")]
+    {
+        let mut scope = RootScope::new(cx);
+        let e = match ExternRef::new(&mut scope, crate::ForeignData { data, finalizer }) {
+            Ok(e) => e,
+            Err(_) => return false,
+        };
+        let e = e.to_owned_rooted(&mut scope).expect("in scope");
+        crate::initialize(out, Some(e).into());
+        true
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, data, finalizer);
+        crate::initialize(out, None.into());
+        false
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -371,13 +481,22 @@ pub unsafe extern "C" fn wasmtime_externref_data(
     cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
 ) -> *mut c_void {
-    externref
-        .and_then(|e| e.as_wasmtime())
-        .and_then(|e| {
-            let data = e.data(cx).ok()??;
-            Some(data.downcast_ref::<crate::ForeignData>().unwrap().data)
-        })
-        .unwrap_or(ptr::null_mut())
+    #[cfg(feature = "gc")]
+    {
+        externref
+            .and_then(|e| e.as_wasmtime())
+            .and_then(|e| {
+                let data = e.data(cx).ok()??;
+                Some(data.downcast_ref::<crate::ForeignData>().unwrap().data)
+            })
+            .unwrap_or(ptr::null_mut())
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, externref);
+        ptr::null_mut()
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -405,9 +524,18 @@ pub unsafe extern "C" fn wasmtime_externref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_externref_t>,
 ) -> u32 {
-    val.and_then(|e| e.as_wasmtime())
-        .and_then(|e| e.to_raw(cx).ok())
-        .unwrap_or_default()
+    #[cfg(feature = "gc")]
+    {
+        val.and_then(|e| e.as_wasmtime())
+            .and_then(|e| e.to_raw(cx).ok())
+            .unwrap_or_default()
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, val);
+        0
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -416,8 +544,17 @@ pub unsafe extern "C" fn wasmtime_externref_from_raw(
     raw: u32,
     val: &mut MaybeUninit<wasmtime_externref_t>,
 ) {
-    let mut scope = RootScope::new(cx);
-    let rooted = ExternRef::from_raw(&mut scope, raw)
-        .map(|e| e.to_owned_rooted(&mut scope).expect("in scope"));
-    crate::initialize(val, rooted.into());
+    #[cfg(feature = "gc")]
+    {
+        let mut scope = RootScope::new(cx);
+        let rooted = ExternRef::from_raw(&mut scope, raw)
+            .map(|e| e.to_owned_rooted(&mut scope).expect("in scope"));
+        crate::initialize(val, rooted.into());
+    }
+
+    #[cfg(not(feature = "gc"))]
+    {
+        let _ = (cx, raw);
+        crate::initialize(val, None.into());
+    }
 }
