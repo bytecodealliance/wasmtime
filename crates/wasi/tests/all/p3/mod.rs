@@ -169,3 +169,13 @@ async fn p3_file_write() -> wasmtime::Result<()> {
 async fn p3_file_write_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_path_link() -> wasmtime::Result<()> {
+    run(P3_PATH_LINK_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_path_link_blocking() -> wasmtime::Result<()> {
+    run_allow_blocking_current_thread(P3_PATH_LINK_COMPONENT, true).await
+}
