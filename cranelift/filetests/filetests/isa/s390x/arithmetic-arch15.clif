@@ -327,3 +327,48 @@ block0(v0: i128):
 ;   vst %v4, 0(%r2)
 ;   br %r14
 
+function %i64_i32_offset_mul_unsigned(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 8000
+  v4 = iadd v1, v3
+  v5 = uextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  return v7
+}
+
+; VCode:
+; block0:
+;   llxaq %r2, 8000(%r3,%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe3, 0x23
+;   swr %f4, %f0
+;   .byte 0x01, 0x68
+;   br %r14
+
+function %uload8_i64_i64_offset_mul_signed(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i8 4
+  v3 = iconst.i32 8000
+  v4 = iadd v1, v3
+  v5 = sextend.i64 v4
+  v6 = ishl v5, v2
+  v7 = iadd v0, v6
+  return v7
+}
+
+; VCode:
+; block0:
+;   lxaq %r2, 8000(%r3,%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe3, 0x23
+;   swr %f4, %f0
+;   .byte 0x01, 0x69
+;   br %r14

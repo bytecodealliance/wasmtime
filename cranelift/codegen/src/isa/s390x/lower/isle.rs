@@ -479,6 +479,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn u16_from_value(&mut self, val: Value) -> Option<u16> {
+        let constant = self.u64_from_value(val)?;
+        let imm = u16::try_from(constant).ok()?;
+        Some(imm)
+    }
+
+    #[inline]
     fn u8_from_value(&mut self, val: Value) -> Option<u8> {
         let constant = self.u64_from_value(val)?;
         let imm = u8::try_from(constant).ok()?;
@@ -720,6 +727,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn memarg_imm_from_offset(&mut self, imm: Offset32) -> Option<SImm20> {
         SImm20::maybe_from_i64(i64::from(imm))
+    }
+
+    #[inline]
+    fn memarg_imm_from_shifted_offset(&mut self, imm: Offset32, shift: u8) -> Option<SImm20> {
+        if (1..=4).contains(&shift) && i64::from(imm) & ((1 << shift) - 1) == 0 {
+            SImm20::maybe_from_i64(i64::from(imm) >> shift)
+        } else {
+            None
+        }
     }
 
     #[inline]

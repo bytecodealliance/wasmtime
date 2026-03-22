@@ -2321,6 +2321,30 @@ impl Inst {
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, false, sink, emit_info, state,
                 );
             }
+            &Inst::LoadIndexedAddr {
+                rd,
+                base,
+                index,
+                offset,
+                size,
+            } => {
+                let opcode: u16 = 0xe360 | (size as u16 & 0xf) << 1;
+                let offset = offset as i32 as u32;
+                put(sink, &enc_rxy(opcode, rd.to_reg(), base, index, offset));
+            }
+            &Inst::LoadLogicalIndexedAddr {
+                rd,
+                base,
+                index,
+                offset,
+                size,
+            } => {
+                let opcode: u16 = 0xe361 | (size as u16 & 0xf) << 1;
+                put(
+                    sink,
+                    &enc_rxy(opcode, rd.to_reg(), base, index, offset.into()),
+                );
+            }
 
             &Inst::Mov64 { rd, rm } => {
                 let opcode = 0xb904; // LGR
