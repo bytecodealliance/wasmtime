@@ -13,10 +13,7 @@ fn main() {
     if !PathBuf::from("../Cargo.toml").exists() {
         std::fs::write(
             out_dir.join("gen.rs"),
-            concat!(
-                "compile_error!(\"Cannot build gdbstub Wasm artifact when ",
-                "compiled as a published crate from crates.io.\");\n"
-            ),
+            "pub const GDBSTUB_COMPONENT: &[u8] = &[];\n",
         )
         .unwrap();
         return;
