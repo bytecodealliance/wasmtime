@@ -428,4 +428,10 @@ mod tests {
         assert_eq!(fiber.resume(2.0), Err(4));
         assert_eq!(fiber.resume(3.0), Ok("hello".to_string()));
     }
+
+    #[test]
+    fn fiber_stack_max_size() {
+        assert!(FiberStack::new(usize::MAX, true).is_err());
+        assert!(FiberStack::new(usize::MAX, false).is_err());
+    }
 }

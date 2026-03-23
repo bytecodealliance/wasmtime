@@ -67,7 +67,7 @@ impl FiberStack {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
         let mut storage = Vec::new();
-        storage.reserve_exact(size);
+        storage.try_reserve_exact(size)?;
         if zeroed {
             storage.resize(size, 0);
         }
