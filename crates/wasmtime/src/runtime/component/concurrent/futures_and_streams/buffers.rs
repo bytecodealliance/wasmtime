@@ -256,7 +256,7 @@ unsafe impl WriteBuffer<u8> for SliceBuffer {
         // always be sound.
         fun(unsafe {
             mem::transmute::<&[u8], &[MaybeUninit<u8>]>(
-                &self.buffer[self.offset - count..self.limit],
+                &self.buffer[self.offset - count..self.offset],
             )
         });
     }
@@ -330,7 +330,7 @@ unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
         // ensure that if `fun` panics that the items are still considered
         // transferred.
         self.offset += count;
-        fun(&self.buffer[self.offset - count..]);
+        fun(&self.buffer[self.offset - count..self.offset]);
     }
 }
 
@@ -396,7 +396,7 @@ unsafe impl WriteBuffer<u8> for Cursor<Bytes> {
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
         assert!(count <= self.remaining().len());
-        fun(unsafe_byte_slice(self.remaining()));
+        fun(unsafe_byte_slice(&self.remaining()[..count]));
         self.skip(count);
     }
 }
@@ -420,7 +420,7 @@ unsafe impl WriteBuffer<u8> for Cursor<BytesMut> {
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
         assert!(count <= self.remaining().len());
-        fun(unsafe_byte_slice(self.remaining()));
+        fun(unsafe_byte_slice(&self.remaining()[..count]));
         self.skip(count);
     }
 }
@@ -452,4 +452,67 @@ fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
     // SAFETY: it's always safe to interpret a slice of items as a
     // possibly-initialized slice of items.
     unsafe { mem::transmute::<&[u8], &[MaybeUninit<u8>]>(slice) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::prelude::*;
+
+    #[test]
+    fn test_vec_buffer_take() {
+        let mut buf = VecBuffer::from(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        let mut dst = Vec::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 2);
+        assert_eq!(dst.len(), 1);
+        None.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 1);
+        assert_eq!(dst.len(), 1);
+    }
+
+    #[test]
+    fn test_slice_buffer_take() {
+        let mut buf = SliceBuffer::new(vec![1, 2, 3], 0, 3);
+        let mut dst = Vec::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 2);
+        assert_eq!(dst.len(), 1);
+    }
+
+    #[test]
+    #[cfg(feature = "component-model-async-bytes")]
+    fn test_cursor_bytes_take() {
+        let mut buf = Cursor::new(Bytes::from(&b"123"[..]));
+        let mut dst = Vec::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 2);
+        assert_eq!(dst.len(), 1);
+
+        let mut dst = BytesMut::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 1);
+        assert_eq!(dst.len(), 1);
+    }
+
+    #[test]
+    #[cfg(feature = "component-model-async-bytes")]
+    fn test_cursor_bytes_mut_take() {
+        let mut buf = Cursor::new(BytesMut::from(&b"123"[..]));
+        let mut dst = Vec::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 2);
+        assert_eq!(dst.len(), 1);
+
+        let mut dst = BytesMut::new();
+        dst.reserve(1);
+        dst.move_from(&mut buf, 1);
+        assert_eq!(buf.remaining().len(), 1);
+        assert_eq!(dst.len(), 1);
+    }
 }
