@@ -20,11 +20,18 @@
 
 use core::arch::naked_asm;
 
+// Android arm64 devices may execute this code on CPUs without pointer
+// authentication support. Keep the original implementation everywhere else,
+// but make the PAC instructions no-ops on Android as a targeted workaround.
 cfg_if::cfg_if! {
     if #[cfg(target_vendor = "apple")] {
         macro_rules! paci1716 { () => ("pacib1716\n"); }
         macro_rules! pacisp { () => ("pacibsp\n"); }
         macro_rules! autisp { () => ("autibsp\n"); }
+    } else if #[cfg(target_os = "android")] {
+        macro_rules! paci1716 { () => (""); }
+        macro_rules! pacisp { () => (""); }
+        macro_rules! autisp { () => (""); }
     } else {
         macro_rules! paci1716 { () => ("pacia1716\n"); }
         macro_rules! pacisp { () => ("paciasp\n"); }
@@ -160,6 +167,12 @@ pub(crate) unsafe fn wasmtime_fiber_init(
 
 /// Signs `r17` with the value in `r16` using either `paci{a,b}1716` depending
 /// on the platform.
+#[cfg(target_os = "android")]
+fn paci1716(r17: *mut u8, _r16: *mut u8) -> *mut u8 {
+    r17
+}
+
+#[cfg(not(target_os = "android"))]
 fn paci1716(mut r17: *mut u8, r16: *mut u8) -> *mut u8 {
     unsafe {
         core::arch::asm!(
