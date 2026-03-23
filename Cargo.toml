@@ -703,6 +703,8 @@ alu = "alu"
 datas = "datas"
 # library
 flate2 = "flate2"
+ExpandedOrShrinked = "ExpandedOrShrinked"
+EigthMem = "EigthMem"
 
 [workspace.metadata.typos.default.extend-words]
 # Vector ALU

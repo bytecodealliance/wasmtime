@@ -82,7 +82,7 @@ pub fn run(options: &Options) -> Result<()> {
 
 enum ProgressStatus {
     /// The mutation raised or reduced the amount of instructions or blocks.
-    ExpandedOrShrank,
+    ExpandedOrShrinked,
 
     /// The mutation only changed an instruction. Performing another round of mutations may only
     /// reduce the test case if another mutation shrank the test case.
@@ -134,7 +134,7 @@ impl Mutator for RemoveInst {
             } else {
                 format!("Remove inst {prev_inst}")
             };
-            (func, msg, ProgressStatus::ExpandedOrShrank)
+            (func, msg, ProgressStatus::ExpandedOrShrinked)
         })
     }
 }
@@ -216,7 +216,7 @@ impl Mutator for ReplaceInstWithConst {
                 let progress = if results.len() == 1 {
                     ProgressStatus::Changed
                 } else {
-                    ProgressStatus::ExpandedOrShrank
+                    ProgressStatus::ExpandedOrShrinked
                 };
 
                 (
@@ -308,7 +308,7 @@ impl Mutator for MoveInstToEntryBlock {
             (
                 func,
                 format!("Move inst {prev_inst} to entry block"),
-                ProgressStatus::ExpandedOrShrank,
+                ProgressStatus::ExpandedOrShrinked,
             )
         })
     }
@@ -342,7 +342,7 @@ impl Mutator for RemoveBlock {
             (
                 func,
                 format!("Remove block {next_block}"),
-                ProgressStatus::ExpandedOrShrank,
+                ProgressStatus::ExpandedOrShrinked,
             )
         })
     }
@@ -411,7 +411,7 @@ impl Mutator for ReplaceBlockParamWithConst {
                 "Replaced param {} of {} by {}",
                 param, self.block, new_inst_name
             ),
-            ProgressStatus::ExpandedOrShrank,
+            ProgressStatus::ExpandedOrShrinked,
         ))
     }
 }
@@ -724,7 +724,7 @@ impl Mutator for MergeBlocks {
         Some((
             func,
             format!("merged {} and {}", pred.block, block),
-            ProgressStatus::ExpandedOrShrank,
+            ProgressStatus::ExpandedOrShrinked,
         ))
     }
 
@@ -860,7 +860,7 @@ fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Fun
                         mutator.did_crash();
 
                         let verb = match mutation_kind {
-                            ProgressStatus::ExpandedOrShrank => {
+                            ProgressStatus::ExpandedOrShrinked => {
                                 should_keep_reducing = true;
                                 "shrink"
                             }

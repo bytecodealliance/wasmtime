@@ -279,7 +279,7 @@ impl dsl::Format {
             dsl::TupleType::Tuple8 => 32,
             dsl::TupleType::HalfMem => length_bytes / 2,
             dsl::TupleType::QuarterMem => length_bytes / 4,
-            dsl::TupleType::EighthMem => length_bytes / 8,
+            dsl::TupleType::EigthMem => length_bytes / 8,
             dsl::TupleType::Mem128 => 16,
             dsl::TupleType::Movddup => match evex.length {
                 dsl::Length::LZ | dsl::Length::LIG => unimplemented!(),
