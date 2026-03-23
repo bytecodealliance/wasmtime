@@ -9,6 +9,7 @@ use crate::{
     api::{WasmType, WasmValue},
 };
 use anyhow::Result;
+use clap::Parser;
 use futures::{FutureExt, select};
 use gdbstub::{
     common::{Signal, Tid},
@@ -20,7 +21,6 @@ use gdbstub::{
 };
 use gdbstub_arch::wasm::addr::WasmAddr;
 use log::trace;
-use structopt::StructOpt;
 use wstd::{
     io::{AsyncRead, AsyncWrite},
     iter::AsyncIterator,
@@ -28,12 +28,12 @@ use wstd::{
 };
 
 /// Command-line options.
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Options {
     /// The TCP address to listen on, in `<addr>:<port>` format.
     tcp_address: String,
     /// Verbose logging.
-    #[structopt(short = "v")]
+    #[clap(short = 'v')]
     verbose: bool,
 }
 
@@ -42,7 +42,7 @@ api::export!(Component with_types_in api);
 
 impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
     fn debug(d: &api::Debuggee, args: Vec<String>) {
-        let options = Options::from_iter(args);
+        let options = Options::parse_from(args);
         if options.verbose {
             env_logger::Builder::new()
                 .filter_level(log::LevelFilter::Trace)

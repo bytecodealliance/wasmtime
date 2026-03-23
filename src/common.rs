@@ -101,12 +101,15 @@ pub struct RunCommon {
     #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     pub vars: Vec<(String, Option<String>)>,
 
-    /// Attach the built-in gdbstub debugger component, listening on the
-    /// given TCP port. A debugger (e.g. LLDB) can then connect via
-    /// `process connect --plugin=wasm connect://localhost:<PORT>`.
+    /// Attach the built-in gdbstub debugger component, listening on
+    /// the given TCP address. Accepts a port number (e.g. `1234`) or
+    /// a full `address:port`. A bare port number will bind on
+    /// localhost only (`127.0.0.1`). A debugger (e.g. LLDB) can then
+    /// connect via `process connect --plugin=wasm
+    /// connect://<ADDR>:<PORT>`.
     #[cfg(feature = "debug")]
-    #[arg(short = 'g', long = "gdbstub", value_name = "PORT")]
-    pub gdbstub_port: Option<u16>,
+    #[arg(short = 'g', long = "gdbstub", value_name = "[ADDR:]PORT")]
+    pub gdbstub: Option<String>,
 }
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {

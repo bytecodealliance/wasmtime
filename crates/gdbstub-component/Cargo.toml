@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen = { workspace = true, features = ["macros"] }
 anyhow = { workspace = true }
-structopt = { workspace = true }
+clap = { workspace = true }
 wstd = { workspace = true }
 wasip2 = { workspace = true }
 futures = { workspace = true, default-features = true }

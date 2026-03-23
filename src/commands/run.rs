@@ -71,7 +71,7 @@ pub struct RunCommand {
     /// used internally to inject pre-built bytes (e.g. for an
     /// included debug adapter).
     #[arg(skip)]
-    pub module_bytes: Option<Vec<u8>>,
+    pub module_bytes: Option<&'static [u8]>,
 
     /// The WebAssembly module to run and arguments to pass to it.
     ///
@@ -111,13 +111,22 @@ impl RunCommand {
 
         // When -g is specified, set up the debugger path and args from
         // the built-in gdbstub component.
-        let override_bytes = if let Some(port) = self.run.gdbstub_port {
+        let override_bytes = if let Some(addr) = self.run.gdbstub.as_deref() {
             if self.run.common.debug.debugger.is_some() {
                 bail!("-g/--gdb cannot be combined with -Ddebugger=");
             }
+            // Accept either a bare port number or a full address:port.
+            let addr = if addr.parse::<u16>().is_ok() {
+                format!("127.0.0.1:{addr}")
+            } else {
+                use std::net::SocketAddr;
+                addr.parse::<SocketAddr>()
+                    .with_context(|| format!("invalid gdbstub address: `{addr}`"))?;
+                addr.to_string()
+            };
             self.run.common.debug.debugger = Some("<built-in gdbstub>".into());
-            self.run.common.debug.arg.push(format!("0.0.0.0:{port}"));
-            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT.to_vec())
+            self.run.common.debug.arg.push(addr);
+            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT)
         } else {
             None
         };
