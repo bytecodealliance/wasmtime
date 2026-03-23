@@ -479,7 +479,7 @@
         (i32.store
           (i32.const 1048576)
           (global.get $__data_efd)))))
-  (memory $memory (export "memroy") 17)
+  (memory $memory (export "memory") 17)
   (global $g0 (mut i32) (i32.const 1048576))
   (global $__data_efd (export "__data_efd") i32 (i32.const 1048580))
   (global $__heap_bare (export "__heap_bare") i32 (i32.const 1048580)))
