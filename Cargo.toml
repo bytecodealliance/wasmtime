@@ -686,3 +686,49 @@ debug = "line-tables-only"
 inherits = "release"
 codegen-units = 1
 lto = true
+
+# https://github.com/crate-ci/typos/blob/master/docs/reference.md
+[workspace.metadata.typos.default]
+extend-ignore-re = [
+    "\\d\\w{4,}\\d",
+]
+extend-ignore-words-re = [
+    '^[a-zA-Z]{1,3}$' # ignore words up to length 3
+]
+extend-ignore-identifiers-re = [
+    # prologue, main, epilogue
+    "set[pme]",
+]
+
+[workspace.metadata.typos.default.extend-identifiers]
+# Arithmetic Logic Unit
+alu = "alu"
+# Data Source
+datas = "datas"
+# library
+flate = "flate"
+RELA = "RELA"
+
+[workspace.metadata.typos.default.extend-words]
+# Vector ALU
+valu = "valu"
+# AND Shifted
+ANDS = "ANDS"
+# Posix EACCES error
+ACCES = "ACCES"
+# SHift Left Long
+shll = "shll"
+# elements
+eles = "eles"
+# strategy
+strat = "strat"
+# test
+thre = "thre"
+# gimli definition
+endianity = "endianity"
+# A Low
+alow = "alow"
+debug_aranges = "debug_aranges"
+
+[workspace.metadata.typos.files]
+extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt" ]
