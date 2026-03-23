@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
+description = "gdbstub debug-component adapter"
 
 [lints]
 workspace = true
