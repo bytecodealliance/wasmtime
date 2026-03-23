@@ -304,7 +304,7 @@ impl StreamAny {
     ///
     /// Panics if the `store` does not own this stream.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        futures_and_streams::future_close(store.as_context_mut().0, &mut self.id)
+        futures_and_streams::stream_close(store.as_context_mut().0, &mut self.id)
     }
 }
 
