@@ -29,7 +29,6 @@ cfg_if::cfg_if! {
         macro_rules! pacisp { () => ("pacibsp\n"); }
         macro_rules! autisp { () => ("autibsp\n"); }
     } else if #[cfg(target_os = "android")] {
-        macro_rules! paci1716 { () => (""); }
         macro_rules! pacisp { () => (""); }
         macro_rules! autisp { () => (""); }
     } else {
