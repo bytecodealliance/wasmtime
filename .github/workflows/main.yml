@@ -387,6 +387,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
               -p wasmtime-cli --no-default-features --features objdump
               -p wasmtime-cli --no-default-features --features wizer
+              -p wasmtime-cli --no-default-features --features gdbstub
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 

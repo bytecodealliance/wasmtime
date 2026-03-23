@@ -5,6 +5,23 @@ use std::process::Command;
 fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
+    // If we're not able to build our sibling crate because this is an
+    // isolated published copy of the crate (e.g. to crates.io), fail
+    // cleanly. The gdbstub component is included only in the published
+    // wasmtime build artifacts or builds from the source tree, not
+    // crates.io.
+    if !PathBuf::from("../Cargo.toml").exists() {
+        std::fs::write(
+            out_dir.join("gen.rs"),
+            concat!(
+                "compile_error!(\"Cannot build gdbstub Wasm artifact when ",
+                "compiled as a published crate from crates.io.\");\n"
+            ),
+        )
+        .unwrap();
+        return;
+    }
+
     let mut cmd = cargo();
     cmd.arg("build")
         .arg("--release")

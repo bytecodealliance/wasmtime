@@ -111,6 +111,7 @@ impl RunCommand {
 
         // When -g is specified, set up the debugger path and args from
         // the built-in gdbstub component.
+        #[cfg(feature = "gdbstub")]
         let override_bytes = if let Some(addr) = self.run.gdbstub.as_deref() {
             if self.run.common.debug.debugger.is_some() {
                 bail!("-g/--gdb cannot be combined with -Ddebugger=");
@@ -130,6 +131,8 @@ impl RunCommand {
         } else {
             None
         };
+        #[cfg(not(feature = "gdbstub"))]
+        let override_bytes = None;
 
         if let Some(debugger_component_path) = self.run.common.debug.debugger.as_ref() {
             set_implicit_option(

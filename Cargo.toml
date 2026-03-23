@@ -532,6 +532,11 @@ component-model-async = [
 ]
 rr = ["wasmtime/rr", "component-model", "wasmtime-cli-flags/rr", "run"]
 
+# Enabled in release builds. We cannot enable the built-in gdbstub component in
+# the default build because the published-to-crates.io crates cannot build the
+# artifact (a limitation caused by lack of artifact dependencies).
+gdbstub = ["debug", "dep:gdbstub-component-artifact"]
+
 # This feature, when enabled, will statically compile out all logging statements
 # throughout Wasmtime and its dependencies.
 disable-logging = ["log/max_level_off", "tracing/max_level_off"]
@@ -571,7 +576,7 @@ gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 pulley = ["wasmtime-cli-flags/pulley"]
 stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
-debug = ["wasmtime-cli-flags/debug", "wasmtime/debug", "component-model", "dep:gdbstub-component-artifact"]
+debug = ["wasmtime-cli-flags/debug", "wasmtime/debug", "component-model"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

@@ -107,7 +107,7 @@ pub struct RunCommon {
     /// localhost only (`127.0.0.1`). A debugger (e.g. LLDB) can then
     /// connect via `process connect --plugin=wasm
     /// connect://<ADDR>:<PORT>`.
-    #[cfg(feature = "debug")]
+    #[cfg(feature = "gdbstub")]
     #[arg(short = 'g', long = "gdbstub", value_name = "[ADDR:]PORT")]
     pub gdbstub: Option<String>,
 }
