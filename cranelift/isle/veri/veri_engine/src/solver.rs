@@ -1218,7 +1218,7 @@ impl SolverCtx {
         self.smt.push().unwrap();
         for (i, a) in assumptions.iter().enumerate() {
             self.smt
-                .assert(self.smt.named(format!("assum{i}"), *a))
+                .assert(self.smt.named(format!("assume{i}"), *a))
                 .unwrap();
         }
 

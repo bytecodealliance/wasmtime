@@ -702,8 +702,7 @@ alu = "alu"
 # Data Source
 datas = "datas"
 # library
-flate = "flate"
-RELA = "RELA"
+flate2 = "flate2"
 
 [workspace.metadata.typos.default.extend-words]
 # Vector ALU
@@ -724,7 +723,10 @@ thre = "thre"
 endianity = "endianity"
 # A Low
 alow = "alow"
-debug_aranges = "debug_aranges"
+aranges = "aranges"
+# literals
+lits = "lits"
+RELA = "RELA"
 
 [workspace.metadata.typos.files]
-extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt" ]
+extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]

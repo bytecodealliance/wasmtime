@@ -1440,7 +1440,7 @@ pub enum TupleType {
     Tuple8,
     HalfMem,
     QuarterMem,
-    EigthMem,
+    EighthMem,
     Mem128,
     Movddup,
 }
