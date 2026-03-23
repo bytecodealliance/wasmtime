@@ -153,14 +153,12 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn imm64_ilog2(&mut self, ty: Type, x: Imm64) -> Imm64 {
+        fn imm64_ilog2(&mut self, ty: Type, x: Imm64) -> Option<Imm64> {
             let type_width = ty.bits();
             assert!(type_width <= 64);
             let masked = (x.bits() as u64) & self.ty_mask(ty);
-            let result = masked
-                .checked_ilog2()
-                .unwrap_or_else(|| panic!("ilog2 overflow: {masked}"));
-            Imm64::new(result.into())
+            let result = masked.checked_ilog2()?;
+            Some(Imm64::new(result.into()))
         }
 
         #[inline]

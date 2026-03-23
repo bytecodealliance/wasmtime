@@ -103,7 +103,7 @@
 (decl pure partial imm64_abs (Type Imm64) Imm64)
 (extern constructor imm64_abs imm64_abs)
 
-(decl pure imm64_ilog2 (Type Imm64) Imm64)
+(decl pure partial imm64_ilog2 (Type Imm64) Imm64)
 (extern constructor imm64_ilog2 imm64_ilog2)
 
 (decl pure imm64_umin (Type Imm64 Imm64) Imm64)
