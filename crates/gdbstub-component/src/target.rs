@@ -123,7 +123,6 @@ impl<'a> MultiThreadBase for Debugger<'a> {
         Err(TargetError::NonFatal)
     }
 
-    #[inline(always)]
     fn list_active_threads(
         &mut self,
         thread_is_active: &mut dyn FnMut(Tid),

@@ -92,6 +92,12 @@ impl<'a> Debugger<'a> {
             .await
             .expect("Could not bind to TCP port");
 
+        log::info!("Debugger waiting on {}", self.options.tcp_address);
+        log::info!(
+            "In LLDB, attach with `process connect --plugin wasm connect://{}",
+            self.options.tcp_address
+        );
+
         // Only accept one connection for the run; once the debugger
         // disconnects, we'll just continue.
         let Some(connection) = listener.incoming().next().await else {
@@ -113,6 +119,7 @@ impl<'a> Debugger<'a> {
                     // Wait for an inbound network byte.
                     let Some(byte) = inner.borrow_conn().read_byte().await? else {
                         inner.borrow_conn().flush().await?;
+                        log::info!("Connection closed; debugger detached.");
                         break 'mainloop;
                     };
 
@@ -143,6 +150,7 @@ impl<'a> Debugger<'a> {
                                 // the outbound flush.
                                 let _ = inner.borrow_conn().flush().await;
                                 // Connection closed.
+                                log::info!("Connection closed; debugger detached.");
                                 break 'mainloop;
                             };
                             stub = inner.incoming_data(&mut *self, byte)?;
